@@ -298,3 +298,4 @@ For more help, see the [Environment Setup Guide](docs/environment-setup.md) or c
 ---
 
 Generated with ❤️ by the Labor Management System Team
+# LaborManagementSystem
