@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Builds & coverage
+dist
+coverage
+
+# Environment/config
+.env
+.env.*
+
+# Logs & temp
+logs
+*.log
+tmp
+temp
+*.tmp
+
+# OS metadata
+._*
+
+# Tests & docs
+src/**/*.test.ts
+src/**/*.spec.ts
+docs

@@ -1,0 +1,605 @@
+openapi: 3.0.3
+info:
+  title: Labor Management System API
+  description: |
+    API for managing daily contractors, work reports, and wage calculations.
+    Supports 8 user roles with Thai language data.
+  version: 1.0.0
+  contact:
+    name: Labor Management Team
+
+servers:
+  - url: https://api.labor-system.example.com/v1
+    description: Production
+  - url: https://staging-api.labor-system.example.com/v1
+    description: Staging
+  - url: http://localhost:3000/v1
+    description: Development
+
+tags:
+  - name: Authentication
+    description: Login, logout, session management
+  - name: Dashboard
+    description: Summary statistics and monitoring
+  - name: Users
+    description: System user management (8 roles)
+  - name: Daily Contractors
+    description: DC (แรงงานรายวัน) management
+  - name: Projects
+    description: Project location management
+  - name: Daily Reports
+    description: Work time recording with OT
+  - name: Wage Periods
+    description: 15-day wage calculation periods
+  - name: Scan Data
+    description: Fingerprint scan import and validation
+
+security:
+  - BearerAuth: []
+
+paths:
+  # Authentication
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin001"
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      responses:
+        '200':
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  # Dashboard
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard statistics
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activeWorkers:
+                    type: integer
+                  scanDiscrepancies:
+                    type: integer
+                  pendingWagePeriods:
+                    type: integer
+
+  # Daily Reports
+  /daily-reports:
+    get:
+      tags: [Daily Reports]
+      summary: List daily reports
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of daily reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DailyReport'
+
+    post:
+      tags: [Daily Reports]
+      summary: Create daily report
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyReportInput'
+      responses:
+        '201':
+          description: Report created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReport'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /daily-reports/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Daily Reports]
+      summary: Get daily report by ID
+      responses:
+        '200':
+          description: Daily report data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Daily Reports]
+      summary: Update daily report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyReportInput'
+      responses:
+        '200':
+          description: Report updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReport'
+
+    delete:
+      tags: [Daily Reports]
+      summary: Soft delete daily report
+      responses:
+        '204':
+          description: Report deleted
+
+  # Wage Periods
+  /wage-periods:
+    get:
+      tags: [Wage Periods]
+      summary: List wage periods
+      responses:
+        '200':
+          description: List of wage periods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WagePeriod'
+
+    post:
+      tags: [Wage Periods]
+      summary: Create wage period
+      security:
+        - BearerAuth: []
+      x-required-roles: [Admin, PM, PD, MD]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WagePeriodInput'
+      responses:
+        '201':
+          description: Wage period created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WagePeriod'
+
+  /wage-periods/{id}/calculate:
+    post:
+      tags: [Wage Periods]
+      summary: Calculate wages for period
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calculation complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WagePeriod'
+
+  /wage-periods/{id}/export:
+    get:
+      tags: [Wage Periods]
+      summary: Export wage period to Excel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  # Scan Data
+  /scan-data/import:
+    post:
+      tags: [Scan Data]
+      summary: Import scan data from Excel
+      security:
+        - BearerAuth: []
+      x-required-roles: [Admin]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Import successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: object
+
+  /scan-data/discrepancies:
+    get:
+      tags: [Scan Data]
+      summary: Get scan data discrepancies
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [Type1, Type2, Type3]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Verified, Fixed]
+      responses:
+        '200':
+          description: List of discrepancies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScanDataDiscrepancy'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        employeeId:
+          type: string
+        username:
+          type: string
+        name:
+          type: string
+          example: "สมชาย ใจดี"
+        role:
+          $ref: '#/components/schemas/Role'
+        department:
+          type: string
+          enum: [PD01, PD02, PD03, PD04, PD05]
+        birthDate:
+          type: string
+          format: date
+        startDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Role:
+      type: string
+      enum:
+        - Admin
+        - FM
+        - SE
+        - OE
+        - PE
+        - PM
+        - PD
+        - MD
+
+    DailyReport:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        dcIds:
+          type: array
+          items:
+            type: string
+        taskName:
+          type: string
+          example: "เทคอนกรีตเสาชั้น 2"
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: "08:00"
+        endTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: "17:00"
+        timeType:
+          type: string
+          enum: [Regular, OT_Morning, OT_Noon, OT_Evening]
+        regularHours:
+          type: number
+        otHours:
+          type: number
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DailyReportInput:
+      type: object
+      required: [projectId, dcIds, taskName, date, startTime, endTime]
+      properties:
+        projectId:
+          type: string
+        dcIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        taskName:
+          type: string
+          minLength: 1
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+        endTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+        timeType:
+          type: string
+          enum: [Regular, OT_Morning, OT_Noon, OT_Evening]
+          default: Regular
+
+    WagePeriod:
+      type: object
+      properties:
+        id:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        projectId:
+          type: string
+        status:
+          type: string
+          enum: [Draft, Calculating, Completed]
+        dcSummaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DCSummary'
+        totalAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        calculatedAt:
+          type: string
+          format: date-time
+
+    DCSummary:
+      type: object
+      properties:
+        dcId:
+          type: string
+        employeeId:
+          type: string
+        name:
+          type: string
+        regularHours:
+          type: number
+        otHours:
+          type: number
+        regularPay:
+          type: number
+        otPay:
+          type: number
+        professionalFees:
+          type: number
+        totalIncome:
+          type: number
+        totalExpense:
+          type: number
+        socialSecurity:
+          type: number
+        netPay:
+          type: number
+
+    WagePeriodInput:
+      type: object
+      required: [startDate, endDate, projectId]
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        projectId:
+          type: string
+
+    ScanDataDiscrepancy:
+      type: object
+      properties:
+        id:
+          type: string
+        employeeNumber:
+          type: string
+        date:
+          type: string
+          format: date
+        type:
+          type: string
+          enum: [Type1, Type2, Type3]
+          description: |
+            Type1: Daily Report < ScanData
+            Type2: Daily Report exists but ScanData missing
+            Type3: ScanData exists but Daily Report missing
+        dailyReportHours:
+          type: number
+        scanDataHours:
+          type: number
+        status:
+          type: string
+          enum: [Pending, Verified, Fixed]
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: string
+                example: VALIDATION_ERROR
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                    message:
+                      type: string
+                      example: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น"

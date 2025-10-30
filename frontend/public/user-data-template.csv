@@ -1,0 +1,4 @@
+Employee ID,Username,Password,Full Name,Role ID,Department,Project Location IDs (comma-separated),Start Date (YYYY-MM-DD),Date of Birth (YYYY-MM-DD),Is Active (TRUE/FALSE),Notes
+EMP001,admin,Admin123!,Admin User,AM,PD01,project-p001|project-p002,2023-01-02,,TRUE,"ตัวอย่าง: ผู้ดูแลระบบ (Admin)"
+EMP002,foreman,Foreman123!,สมชาย หัวหน้าไซต์,FM,PD01,project-p001,2023-03-15,1988-07-21,TRUE,"หัวหน้าคนงานที่ดูแลไซต์หลัก"
+EMP003,engineer,Engineer123!,นิศาชล วิศวกรไซต์,SE,PD02,project-p002,2023-05-20,1990-11-05,TRUE,"วิศวกรประจำไซต์"

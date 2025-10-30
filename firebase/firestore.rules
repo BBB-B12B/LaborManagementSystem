@@ -1,0 +1,152 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleId == 'Admin';
+    }
+
+    function hasRole(role) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleId == role;
+    }
+
+    function hasAnyRole(roles) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleId in roles;
+    }
+
+    function hasAccessToProject(projectId) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             projectId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectLocationIds;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // Roles collection
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Daily Contractors collection
+    match /dailyContractors/{contractorId} {
+      allow read: if isAuthenticated();
+      allow create: if hasAnyRole(['Admin', 'FM', 'SE', 'PM']);
+      allow update: if hasAnyRole(['Admin', 'FM', 'SE', 'PM']);
+      allow delete: if isAdmin();
+    }
+
+    // Skills collection
+    match /skills/{skillId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'SE']);
+    }
+
+    // Project Locations collection
+    match /projectLocations/{projectId} {
+      allow read: if isAuthenticated() && hasAccessToProject(projectId);
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // Daily Reports collection
+    match /dailyReports/{reportId} {
+      allow read: if isAuthenticated() &&
+                     hasAccessToProject(resource.data.projectLocationId);
+      allow create: if hasAnyRole(['Admin', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD']) &&
+                       hasAccessToProject(request.resource.data.projectLocationId);
+      allow update: if hasAnyRole(['Admin', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD']) &&
+                       hasAccessToProject(resource.data.projectLocationId);
+      allow delete: if isAdmin();
+    }
+
+    // Edit History collection
+    match /editHistory/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Edit history is immutable
+    }
+
+    // Wage Periods collection
+    match /wagePeriods/{periodId} {
+      allow read: if isAuthenticated() &&
+                     hasAccessToProject(resource.data.projectLocationId);
+      allow create: if hasAnyRole(['Admin', 'FM', 'PM']);
+      allow update: if hasAnyRole(['Admin', 'FM', 'PM']);
+      allow delete: if isAdmin();
+    }
+
+    // DC Income Details collection
+    match /dcIncomeDetails/{incomeId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // DC Expense Details collection
+    match /dcExpenseDetails/{expenseId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // Additional Income collection
+    match /additionalIncome/{incomeId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // Additional Expense collection
+    match /additionalExpense/{expenseId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // Social Security Calculation collection
+    match /socialSecurityCalculations/{calcId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // Scan Data collection
+    match /scanData/{scanId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // Scan Data Discrepancy collection
+    match /scanDataDiscrepancies/{discrepancyId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'SE', 'PM']);
+    }
+
+    // Late Records collection
+    match /lateRecords/{lateId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAnyRole(['Admin', 'FM', 'PM']);
+    }
+
+    // File Attachments collection
+    match /fileAttachments/{fileId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || request.auth.uid == resource.data.uploadedBy;
+    }
+  }
+}

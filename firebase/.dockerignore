@@ -1,0 +1,17 @@
+# Dependencies / modules
+node_modules
+npm-debug.log*
+
+# Logs & temp files
+logs
+*.log
+tmp
+temp
+*.tmp
+
+# macOS resource forks
+._*
+
+# Ignore env/config placeholders
+.env
+.env.*

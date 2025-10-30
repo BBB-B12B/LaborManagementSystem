@@ -1,0 +1,123 @@
+# Labor Management System - Docker Compose Configuration
+# Development Environment
+
+version: '3.9'
+
+services:
+  # Frontend Service (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: labor-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_FIREBASE_EMULATOR_HOST=localhost:9099
+      - NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=localhost:8080
+      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - NEXT_PUBLIC_FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
+      - NEXT_PUBLIC_FIREBASE_APP_ID=${FIREBASE_APP_ID}
+      - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID:-}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - app-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    command: npm run dev
+
+  # Backend Service (Express.js)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: labor-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+
+      # Firebase Configuration
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+
+      # Firebase Emulator Configuration
+      - FIREBASE_EMULATOR_HOST=firebase-emulator
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8080
+      - FIREBASE_AUTH_EMULATOR_HOST=firebase-emulator:9099
+
+      # Cloudflare R2 Configuration
+      - CLOUDFLARE_R2_ENDPOINT=${CLOUDFLARE_R2_ENDPOINT}
+      - CLOUDFLARE_R2_ACCESS_KEY=${CLOUDFLARE_R2_ACCESS_KEY}
+      - CLOUDFLARE_R2_SECRET_KEY=${CLOUDFLARE_R2_SECRET_KEY}
+      - CLOUDFLARE_R2_BUCKET_NAME=${CLOUDFLARE_R2_BUCKET_NAME}
+
+      # Application Settings
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+    networks:
+      - app-network
+    depends_on:
+      - firebase-emulator
+    restart: unless-stopped
+    command: npm run dev
+
+  # Firebase Emulator Suite
+  firebase-emulator:
+    build:
+      context: ./firebase
+      dockerfile: Dockerfile
+    container_name: labor-firebase-emulator
+    ports:
+      - "4001:4000"  # Emulator UI (mapped to 4001 to avoid conflict with backend)
+      - "8080:8080"  # Firestore Emulator
+      - "9099:9099"  # Authentication Emulator
+      - "9000:9000"  # Realtime Database Emulator
+    environment:
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+    volumes:
+      - ./firebase:/firebase
+      - firebase_data:/opt/data
+    working_dir: /firebase
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: >
+      sh -c "
+        if [ -d /opt/data ]; then
+          firebase emulators:start --only auth,firestore,database --project=${FIREBASE_PROJECT_ID} --import=/opt/data --export-on-exit=/opt/data
+        else
+          firebase emulators:start --only auth,firestore,database --project=${FIREBASE_PROJECT_ID} --export-on-exit=/opt/data
+        fi
+      "
+
+# Named Volumes (Docker-managed persistence)
+volumes:
+  firebase_data:
+    driver: local
+    name: labor_firebase_data
+
+# Custom Bridge Network
+networks:
+  app-network:
+    driver: bridge
+    name: labor_app_network

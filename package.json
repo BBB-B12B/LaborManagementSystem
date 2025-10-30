@@ -1,0 +1,34 @@
+{
+  "name": "labor-management-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Labor Management System - Monorepo",
+  "scripts": {
+    "setup:env": "node scripts/setup-env.js",
+    "setup:env:backend": "node scripts/generate-backend-env.js",
+    "setup:env:frontend": "node scripts/generate-frontend-env.js",
+    "dev": "docker-compose up",
+    "dev:build": "docker-compose up --build",
+    "down": "docker-compose down",
+    "logs": "docker-compose logs -f",
+    "logs:backend": "docker-compose logs -f backend",
+    "logs:frontend": "docker-compose logs -f frontend",
+    "logs:firebase": "docker-compose logs -f firebase-emulator"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/labor-management-system.git"
+  },
+  "keywords": [
+    "labor-management",
+    "firebase",
+    "nextjs",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}

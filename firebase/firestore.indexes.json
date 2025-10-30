@@ -1,0 +1,150 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "username", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "roleId", "order": "ASCENDING" },
+        { "fieldPath": "department", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "department", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectLocationId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dcId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectLocationId", "order": "ASCENDING" },
+        { "fieldPath": "dcId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "editHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dailyReportId", "order": "ASCENDING" },
+        { "fieldPath": "editedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "wagePeriods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectLocationId", "order": "ASCENDING" },
+        { "fieldPath": "periodStart", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "wagePeriods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectLocationId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scanData",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dcId", "order": "ASCENDING" },
+        { "fieldPath": "scanTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scanData",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectLocationId", "order": "ASCENDING" },
+        { "fieldPath": "scanTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scanData",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "behavior", "order": "ASCENDING" },
+        { "fieldPath": "scanTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scanDataDiscrepancies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dailyReportId", "order": "ASCENDING" },
+        { "fieldPath": "detectedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scanDataDiscrepancies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "detectedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyContractors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dailyContractors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "skillId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lateRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "wagePeriodId", "order": "ASCENDING" },
+        { "fieldPath": "dcId", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

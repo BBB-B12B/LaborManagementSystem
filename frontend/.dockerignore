@@ -1,0 +1,30 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Next.js build output
+.next
+out
+
+# Coverage & test artifacts
+coverage
+playwright-report
+.playwright
+
+# Environment/config
+.env
+.env.*
+
+# Logs & temp
+logs
+*.log
+tmp
+temp
+*.tmp
+
+# OS metadata
+._*
+**/._*
+
+# Docs & design assets
+docs
