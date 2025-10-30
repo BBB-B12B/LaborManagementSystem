@@ -17,7 +17,7 @@ import { format, isValid, parse, setHours, setMinutes } from 'date-fns';
 export interface TimePickerProps {
   label: string;
   value: Date | string | null; // Support both Date object and "HH:mm" string
-  onChange: (time: Date | null) => void;
+  onChange: (time: string | null) => void;
   error?: boolean;
   helperText?: string;
   disabled?: boolean;
@@ -78,7 +78,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
       return;
     }
 
-    onChange(newValue);
+    onChange(format(newValue, 'HH:mm'));
   };
 
   /**

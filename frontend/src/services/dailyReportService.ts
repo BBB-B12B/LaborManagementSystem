@@ -10,10 +10,8 @@
  * - Get edit history
  */
 
-import axios from 'axios';
+import apiClient from './api/client';
 import { type DailyReportFormData } from '@/validation/dailyReportSchema';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export interface DailyReport {
   id: string;
@@ -66,20 +64,18 @@ class DailyReportService {
    * Get all daily reports with optional filters
    */
   async getAll(filters?: DailyReportFilters): Promise<DailyReport[]> {
-    const params = new URLSearchParams();
+    const params: Record<string, string> = {};
 
-    if (filters?.projectId) params.append('projectId', filters.projectId);
-    if (filters?.date) params.append('date', filters.date.toISOString());
-    if (filters?.dcId) params.append('dcId', filters.dcId);
-    if (filters?.startDate) params.append('startDate', filters.startDate.toISOString());
-    if (filters?.endDate) params.append('endDate', filters.endDate.toISOString());
-    if (filters?.workType) params.append('workType', filters.workType);
+    if (filters?.projectId) params.projectId = filters.projectId;
+    if (filters?.date) params.date = filters.date.toISOString();
+    if (filters?.dcId) params.dcId = filters.dcId;
+    if (filters?.startDate) params.startDate = filters.startDate.toISOString();
+    if (filters?.endDate) params.endDate = filters.endDate.toISOString();
+    if (filters?.workType) params.workType = filters.workType;
 
-    const response = await axios.get<DailyReport[]>(
-      `${API_URL}/api/daily-reports?${params.toString()}`
-    );
+    const { data } = await apiClient.get<DailyReport[]>('/daily-reports', { params });
 
-    return response.data.map((report) => ({
+    return data.map((report) => ({
       ...report,
       reportDate: new Date(report.reportDate),
       createdAt: new Date(report.createdAt),
@@ -91,13 +87,13 @@ class DailyReportService {
    * Get a single daily report by ID
    */
   async getById(id: string): Promise<DailyReport> {
-    const response = await axios.get<DailyReport>(`${API_URL}/api/daily-reports/${id}`);
+    const { data } = await apiClient.get<DailyReport>(`/daily-reports/${id}`);
 
     return {
-      ...response.data,
-      reportDate: new Date(response.data.reportDate),
-      createdAt: new Date(response.data.createdAt),
-      updatedAt: new Date(response.data.updatedAt),
+      ...data,
+      reportDate: new Date(data.reportDate),
+      createdAt: new Date(data.createdAt),
+      updatedAt: new Date(data.updatedAt),
     };
   }
 
@@ -109,13 +105,13 @@ class DailyReportService {
    * - All reports share same work description, time, etc.
    */
   async create(data: DailyReportFormData): Promise<DailyReport | DailyReport[]> {
-    const response = await axios.post<DailyReport | DailyReport[]>(
-      `${API_URL}/api/daily-reports`,
+    const { data: response } = await apiClient.post<DailyReport | DailyReport[]>(
+      '/daily-reports',
       data
     );
 
-    if (Array.isArray(response.data)) {
-      return response.data.map((report) => ({
+    if (Array.isArray(response)) {
+      return response.map((report) => ({
         ...report,
         reportDate: new Date(report.reportDate),
         createdAt: new Date(report.createdAt),
@@ -124,10 +120,10 @@ class DailyReportService {
     }
 
     return {
-      ...response.data,
-      reportDate: new Date(response.data.reportDate),
-      createdAt: new Date(response.data.createdAt),
-      updatedAt: new Date(response.data.updatedAt),
+      ...response,
+      reportDate: new Date(response.reportDate),
+      createdAt: new Date(response.createdAt),
+      updatedAt: new Date(response.updatedAt),
     };
   }
 
@@ -137,16 +133,16 @@ class DailyReportService {
    * Creates edit history entry automatically
    */
   async update(id: string, data: Partial<DailyReportFormData>): Promise<DailyReport> {
-    const response = await axios.put<DailyReport>(
-      `${API_URL}/api/daily-reports/${id}`,
+    const { data: response } = await apiClient.put<DailyReport>(
+      `/daily-reports/${id}`,
       data
     );
 
     return {
-      ...response.data,
-      reportDate: new Date(response.data.reportDate),
-      createdAt: new Date(response.data.createdAt),
-      updatedAt: new Date(response.data.updatedAt),
+      ...response,
+      reportDate: new Date(response.reportDate),
+      createdAt: new Date(response.createdAt),
+      updatedAt: new Date(response.updatedAt),
     };
   }
 
@@ -156,7 +152,7 @@ class DailyReportService {
    * Note: May implement soft delete in backend
    */
   async delete(id: string): Promise<void> {
-    await axios.delete(`${API_URL}/api/daily-reports/${id}`);
+    await apiClient.delete(`/daily-reports/${id}`);
   }
 
   /**
@@ -165,11 +161,11 @@ class DailyReportService {
    * Returns all changes made to this report
    */
   async getHistory(id: string): Promise<EditHistory[]> {
-    const response = await axios.get<EditHistory[]>(
-      `${API_URL}/api/daily-reports/${id}/history`
+    const { data } = await apiClient.get<EditHistory[]>(
+      `/daily-reports/${id}/history`
     );
 
-    return response.data.map((entry) => ({
+    return data.map((entry) => ({
       ...entry,
       editedAt: new Date(entry.editedAt),
     }));
@@ -215,10 +211,10 @@ class DailyReportService {
     endTime: string,
     excludeReportId?: string
   ): Promise<{ hasOverlap: boolean; overlappingReports: DailyReport[] }> {
-    const response = await axios.post<{
+    const { data } = await apiClient.post<{
       hasOverlap: boolean;
       overlappingReports: DailyReport[];
-    }>(`${API_URL}/api/daily-reports/check-overlap`, {
+    }>('/daily-reports/check-overlap', {
       dcId,
       date: date.toISOString(),
       startTime,
@@ -227,8 +223,8 @@ class DailyReportService {
     });
 
     return {
-      hasOverlap: response.data.hasOverlap,
-      overlappingReports: response.data.overlappingReports.map((report) => ({
+      hasOverlap: data.hasOverlap,
+      overlappingReports: data.overlappingReports.map((report) => ({
         ...report,
         reportDate: new Date(report.reportDate),
         createdAt: new Date(report.createdAt),

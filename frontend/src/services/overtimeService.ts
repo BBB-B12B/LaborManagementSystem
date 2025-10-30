@@ -11,10 +11,8 @@
  * - Check time overlap
  */
 
-import axios from 'axios';
+import apiClient from './api/client';
 import { type OvertimeFormData, type OTPeriod } from '@/validation/overtimeSchema';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export interface OvertimeRecord {
   id: string;
@@ -67,20 +65,18 @@ class OvertimeService {
    * Get all overtime records with optional filters
    */
   async getAll(filters?: OvertimeFilters): Promise<OvertimeRecord[]> {
-    const params = new URLSearchParams();
+    const params: Record<string, string> = {};
 
-    if (filters?.projectId) params.append('projectId', filters.projectId);
-    if (filters?.date) params.append('date', filters.date.toISOString());
-    if (filters?.dcId) params.append('dcId', filters.dcId);
-    if (filters?.startDate) params.append('startDate', filters.startDate.toISOString());
-    if (filters?.endDate) params.append('endDate', filters.endDate.toISOString());
-    if (filters?.otPeriod) params.append('otPeriod', filters.otPeriod);
+    if (filters?.projectId) params.projectId = filters.projectId;
+    if (filters?.date) params.date = filters.date.toISOString();
+    if (filters?.dcId) params.dcId = filters.dcId;
+    if (filters?.startDate) params.startDate = filters.startDate.toISOString();
+    if (filters?.endDate) params.endDate = filters.endDate.toISOString();
+    if (filters?.otPeriod) params.otPeriod = filters.otPeriod;
 
-    const response = await axios.get<OvertimeRecord[]>(
-      `${API_URL}/api/overtime?${params.toString()}`
-    );
+    const { data } = await apiClient.get<OvertimeRecord[]>('/overtime', { params });
 
-    return response.data.map((record) => ({
+    return data.map((record) => ({
       ...record,
       reportDate: new Date(record.reportDate),
       createdAt: new Date(record.createdAt),
@@ -92,13 +88,13 @@ class OvertimeService {
    * Get a single overtime record by ID
    */
   async getById(id: string): Promise<OvertimeRecord> {
-    const response = await axios.get<OvertimeRecord>(`${API_URL}/api/overtime/${id}`);
+    const { data } = await apiClient.get<OvertimeRecord>(`/overtime/${id}`);
 
     return {
-      ...response.data,
-      reportDate: new Date(response.data.reportDate),
-      createdAt: new Date(response.data.createdAt),
-      updatedAt: new Date(response.data.updatedAt),
+      ...data,
+      reportDate: new Date(data.reportDate),
+      createdAt: new Date(data.createdAt),
+      updatedAt: new Date(data.updatedAt),
     };
   }
 
@@ -110,13 +106,13 @@ class OvertimeService {
    * - All records share same work description, time, etc.
    */
   async create(data: OvertimeFormData): Promise<OvertimeRecord | OvertimeRecord[]> {
-    const response = await axios.post<OvertimeRecord | OvertimeRecord[]>(
-      `${API_URL}/api/overtime`,
+    const { data: response } = await apiClient.post<OvertimeRecord | OvertimeRecord[]>(
+      '/overtime',
       data
     );
 
-    if (Array.isArray(response.data)) {
-      return response.data.map((record) => ({
+    if (Array.isArray(response)) {
+      return response.map((record) => ({
         ...record,
         reportDate: new Date(record.reportDate),
         createdAt: new Date(record.createdAt),
@@ -125,10 +121,10 @@ class OvertimeService {
     }
 
     return {
-      ...response.data,
-      reportDate: new Date(response.data.reportDate),
-      createdAt: new Date(response.data.createdAt),
-      updatedAt: new Date(response.data.updatedAt),
+      ...response,
+      reportDate: new Date(response.reportDate),
+      createdAt: new Date(response.createdAt),
+      updatedAt: new Date(response.updatedAt),
     };
   }
 
@@ -138,16 +134,16 @@ class OvertimeService {
    * Creates edit history entry automatically
    */
   async update(id: string, data: Partial<OvertimeFormData>): Promise<OvertimeRecord> {
-    const response = await axios.put<OvertimeRecord>(
-      `${API_URL}/api/overtime/${id}`,
+    const { data: response } = await apiClient.put<OvertimeRecord>(
+      `/overtime/${id}`,
       data
     );
 
     return {
-      ...response.data,
-      reportDate: new Date(response.data.reportDate),
-      createdAt: new Date(response.data.createdAt),
-      updatedAt: new Date(response.data.updatedAt),
+      ...response,
+      reportDate: new Date(response.reportDate),
+      createdAt: new Date(response.createdAt),
+      updatedAt: new Date(response.updatedAt),
     };
   }
 
@@ -155,7 +151,7 @@ class OvertimeService {
    * Delete an overtime record
    */
   async delete(id: string): Promise<void> {
-    await axios.delete(`${API_URL}/api/overtime/${id}`);
+    await apiClient.delete(`/overtime/${id}`);
   }
 
   /**
@@ -164,11 +160,11 @@ class OvertimeService {
    * Returns all changes made to this record
    */
   async getHistory(id: string): Promise<EditHistory[]> {
-    const response = await axios.get<EditHistory[]>(
-      `${API_URL}/api/overtime/${id}/history`
+    const { data } = await apiClient.get<EditHistory[]>(
+      `/overtime/${id}/history`
     );
 
-    return response.data.map((entry) => ({
+    return data.map((entry) => ({
       ...entry,
       editedAt: new Date(entry.editedAt),
     }));
@@ -222,10 +218,10 @@ class OvertimeService {
     endTime: string,
     excludeRecordId?: string
   ): Promise<{ hasOverlap: boolean; overlappingRecords: OvertimeRecord[] }> {
-    const response = await axios.post<{
+    const { data } = await apiClient.post<{
       hasOverlap: boolean;
       overlappingRecords: OvertimeRecord[];
-    }>(`${API_URL}/api/overtime/check-overlap`, {
+    }>('/overtime/check-overlap', {
       dcId,
       date: date.toISOString(),
       startTime,
@@ -234,8 +230,8 @@ class OvertimeService {
     });
 
     return {
-      hasOverlap: response.data.hasOverlap,
-      overlappingRecords: response.data.overlappingRecords.map((record) => ({
+      hasOverlap: data.hasOverlap,
+      overlappingRecords: data.overlappingRecords.map((record) => ({
         ...record,
         reportDate: new Date(record.reportDate),
         createdAt: new Date(record.createdAt),
