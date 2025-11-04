@@ -56,6 +56,16 @@ const firebaseConfig = {
   measurementId: readEnv('NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID'),
 };
 
+const shouldUseEmulators = (() => {
+  const flag = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED;
+
+  if (typeof flag === 'string') {
+    return flag.trim().toLowerCase() === 'true';
+  }
+
+  return process.env.NODE_ENV === 'development';
+})();
+
 /**
  * Initialize Firebase
  */
@@ -71,21 +81,25 @@ try {
   db = getFirestore(app);
   storage = getStorage(app);
 
-  // Connect to Firebase Emulator in development
-  if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+  // Connect to Firebase Emulator when enabled
+  if (shouldUseEmulators && typeof window !== 'undefined') {
     const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
-    const firestoreEmulatorHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
+    const firestoreEmulatorHost =
+      process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
 
     // Connect Auth Emulator
-    if (!auth.config.emulator) {
+    const authWithMeta = auth as unknown as { emulatorConfig?: unknown };
+    if (!authWithMeta.emulatorConfig) {
       connectAuthEmulator(auth, `http://${authEmulatorHost}`, { disableWarnings: true });
-      console.log(`🔧 Connected to Auth Emulator: ${authEmulatorHost}`);
+      console.log(`[firebase-config] Connected to Auth Emulator: ${authEmulatorHost}`);
     }
 
     // Connect Firestore Emulator
     try {
-      connectFirestoreEmulator(db, 'localhost', 8080);
-      console.log(`🔧 Connected to Firestore Emulator: ${firestoreEmulatorHost}`);
+      const [host, portString] = firestoreEmulatorHost.split(':');
+      const port = Number(portString) || 8080;
+      connectFirestoreEmulator(db, host, port);
+      console.log(`[firebase-config] Connected to Firestore Emulator: ${firestoreEmulatorHost}`);
     } catch (error) {
       // Emulator already connected, ignore error
     }
@@ -97,12 +111,13 @@ try {
   }
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('✅ Firebase initialized successfully');
-    console.log(`📊 Project ID: ${firebaseConfig.projectId || 'unknown'}`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log('[firebase-config] Firebase initialized successfully');
+    console.log(`[firebase-config] Project ID: ${firebaseConfig.projectId || 'unknown'}`);
+    console.log(`[firebase-config] Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`[firebase-config] Using emulators: ${shouldUseEmulators ? 'yes' : 'no'}`);
   }
 } catch (error) {
-  console.error('❌ Firebase initialization error:', error);
+  console.error('[firebase-config] Firebase initialization error:', error);
   throw error;
 }
 

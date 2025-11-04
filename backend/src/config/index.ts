@@ -3,9 +3,29 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+
+const toBooleanFlag = (value: string | undefined, defaultValue: boolean): boolean => {
+  if (typeof value !== 'string') {
+    return defaultValue;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (['true', '1', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return defaultValue;
+};
+
 export const config = {
   // Node environment
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
 
   // Server
   port: parseInt(process.env.PORT || '4000', 10),
@@ -31,6 +51,10 @@ export const config = {
     authDomain: process.env.FIREBASE_AUTH_DOMAIN,
     firestoreEmulatorHost: process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080',
     authEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099',
+    useEmulator: toBooleanFlag(
+      process.env.FIREBASE_EMULATOR_ENABLED,
+      nodeEnv === 'development'
+    ),
   },
 
   // Cloudflare R2
@@ -42,6 +66,12 @@ export const config = {
     publicUrl: process.env.CLOUDFLARE_R2_PUBLIC_URL || '',
   },
 };
+
+if (!config.firebase.useEmulator) {
+  delete process.env.FIRESTORE_EMULATOR_HOST;
+  delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  delete process.env.FIREBASE_EMULATOR_HOST;
+}
 
 // Validate required environment variables
 const requiredEnvVars = ['FIREBASE_PROJECT_ID'];
