@@ -64,6 +64,31 @@ const otChipColors: Record<OTPeriod, 'warning' | 'info' | 'error'> = {
   evening: 'error',
 };
 
+const renderWorkTypeChip = (record: WorkRecordRow) => {
+  if (record.type === 'ot') {
+    const period = record.otPeriod || 'morning';
+    return (
+      <Chip
+        label={`OT (${getOTPeriodLabel(period)})`}
+        size="small"
+        color={otChipColors[period]}
+      />
+    );
+  }
+
+  const label = record.workType ? workTypeLabels[record.workType] : 'Regular Work';
+  const color: 'default' | 'success' =
+    record.workType && record.workType !== 'regular' ? 'success' : 'default';
+
+  return (
+    <Chip
+      label={label}
+      size="small"
+      color={color}
+    />
+  );
+};
+
 export default function WorkRecordsPage() {
   const router = useRouter();
   const toast = useToast();
@@ -241,33 +266,6 @@ export default function WorkRecordsPage() {
     setTypeFilter('all');
   };
 
-  const typeColumnRenderer = useMemo(() => {
-    return (record: WorkRecordRow) => {
-      if (record.type === 'ot') {
-        const period = record.otPeriod || 'morning';
-        return (
-          <Chip
-            label={`OT (${getOTPeriodLabel(period)})`}
-            size="small"
-            color={otChipColors[period]}
-          />
-        );
-      }
-
-      const label = record.workType ? workTypeLabels[record.workType] : 'เวลาปกติ';
-      const color: 'default' | 'success' =
-        record.workType && record.workType !== 'regular' ? 'success' : 'default';
-
-      return (
-        <Chip
-          label={label}
-          size="small"
-          color={color}
-        />
-      );
-    };
-  }, []);
-
   const columns: GridColDef<WorkRecordRow>[] = [
     {
       field: 'reportDate',
@@ -280,7 +278,7 @@ export default function WorkRecordsPage() {
       headerName: 'ประเภท',
       width: 150,
       sortable: false,
-      renderCell: (params) => typeColumnRenderer(params.row),
+      renderCell: (params) => renderWorkTypeChip(params.row),
     },
     {
       field: 'projectName',

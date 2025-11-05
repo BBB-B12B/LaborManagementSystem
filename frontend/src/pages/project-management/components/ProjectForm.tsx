@@ -1,23 +1,12 @@
-import React from 'react';
+﻿import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Box,
-  Button,
-  Grid,
-  TextField,
-  Typography,
-  Alert,
-  CircularProgress,
-  FormControlLabel,
-  Switch,
-} from '@mui/material';
+import { Box, Button, Grid, TextField, Typography, Alert, CircularProgress } from '@mui/material';
 import {
   projectSchema,
   type ProjectFormData,
   PROJECT_STATUS_LABELS,
 } from '@/validation/projectSchema';
-import { DatePicker } from '@/components/forms/DatePicker';
 import { useToast } from '@/components/common/Toast';
 import { DepartmentAutocomplete } from '@/components/forms/DepartmentAutocomplete';
 import projectService from '@/services/projectService';
@@ -49,8 +38,6 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     defaultValues: {
       status: defaultValues?.status || 'active',
       isActive: defaultValues?.isActive ?? true,
-      startDate: defaultValues?.startDate || null,
-      endDate: defaultValues?.endDate || null,
       ...defaultValues,
     },
   });
@@ -107,7 +94,11 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 
   const handleFormSubmit = async (data: ProjectFormData) => {
     try {
-      await onSubmit(data);
+      const payload: ProjectFormData = {
+        ...data,
+        isActive: data.isActive ?? true,
+      };
+      await onSubmit(payload);
       toast.success(mode === 'create' ? 'สร้างโครงการสำเร็จ' : 'อัปเดตโครงการสำเร็จ');
     } catch (error) {
       toast.error(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
@@ -131,9 +122,6 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         <Grid item xs={12}>
           <Typography variant="h5" gutterBottom>
             {mode === 'create' ? 'สร้างโครงการใหม่' : 'แก้ไขโครงการ'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            กรุณากรอกข้อมูลโครงการให้ครบถ้วนก่อนบันทึก
           </Typography>
         </Grid>
 
@@ -205,27 +193,6 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 
         <Grid item xs={12}>
           <Controller
-            name="location"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label="ที่อยู่โครงการ"
-                required
-                error={!!errors.location}
-                multiline
-                rows={2}
-                helperText={
-                  errors.location?.message || 'ระบุที่อยู่โครงการได้สูงสุด 2,000 ตัวอักษร'
-                }
-              />
-            )}
-          />
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Controller
             name="status"
             control={control}
             render={({ field }) => (
@@ -249,85 +216,6 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
           />
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Controller
-            name="projectManager"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label="ผู้จัดการโครงการ"
-                error={!!errors.projectManager}
-                helperText={errors.projectManager?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Controller
-            name="startDate"
-            control={control}
-            render={({ field: { ref, value, onChange, ...rest } }) => (
-              <DatePicker
-                {...rest}
-                label="วันที่เริ่มต้น"
-                value={value ? new Date(value) : null}
-                onChange={(date) => onChange(date)}
-                helperText={errors.startDate?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Controller
-            name="endDate"
-            control={control}
-            render={({ field: { ref, value, onChange, ...rest } }) => (
-              <DatePicker
-                {...rest}
-                label="วันที่สิ้นสุด"
-                value={value ? new Date(value) : null}
-                onChange={(date) => onChange(date)}
-                helperText={errors.endDate?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <Controller
-            name="description"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                fullWidth
-                label="รายละเอียดเพิ่มเติม"
-                multiline
-                rows={3}
-                error={!!errors.description}
-                helperText={errors.description?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <Controller
-            name="isActive"
-            control={control}
-            render={({ field }) => (
-              <FormControlLabel
-                control={<Switch {...field} checked={field.value} color="primary" />}
-                label="เปิดใช้งานโครงการ"
-              />
-            )}
-          />
-        </Grid>
-
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
             {onCancel && (
@@ -341,7 +229,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               disabled={isLoading || isSubmitting || codeLoading}
               startIcon={isLoading || isSubmitting ? <CircularProgress size={16} /> : null}
             >
-              {isLoading || isSubmitting ? 'กำลังบันทึก...' : 'บันทึกโครงการ'}
+              {isLoading || isSubmitting ? '\u0e01\u0e33\u0e25\u0e31\u0e07\u0e40\u0e1b\u0e34\u0e14\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19...' : '\u0e40\u0e1b\u0e34\u0e14\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23'}
             </Button>
           </Box>
         </Grid>
@@ -351,3 +239,10 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 };
 
 export default ProjectForm;
+
+
+
+
+
+
+

@@ -78,31 +78,6 @@ export const useResponsive = () => {
      */
     isXl: useMediaQuery(theme.breakpoints.only('xl')),
 
-    /**
-     * Up from breakpoint (inclusive)
-     */
-    up: (breakpoint: 'xs' | 'sm' | 'md' | 'lg' | 'xl') =>
-      useMediaQuery(theme.breakpoints.up(breakpoint)),
-
-    /**
-     * Down from breakpoint (exclusive)
-     */
-    down: (breakpoint: 'xs' | 'sm' | 'md' | 'lg' | 'xl') =>
-      useMediaQuery(theme.breakpoints.down(breakpoint)),
-
-    /**
-     * Between two breakpoints
-     */
-    between: (
-      start: 'xs' | 'sm' | 'md' | 'lg' | 'xl',
-      end: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-    ) => useMediaQuery(theme.breakpoints.between(start, end)),
-
-    /**
-     * Only this breakpoint
-     */
-    only: (breakpoint: 'xs' | 'sm' | 'md' | 'lg' | 'xl') =>
-      useMediaQuery(theme.breakpoints.only(breakpoint)),
   };
 };
 

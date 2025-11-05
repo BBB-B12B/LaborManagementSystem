@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true,
 
       // Actions
       setUser: (user) =>
@@ -73,6 +73,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           token: null,
           isAuthenticated: false,
+          isLoading: false,
         }),
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -92,6 +93,13 @@ export const useAuthStore = create<AuthState>()(
           };
         }
         return persistedState;
+      },
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          state?.setLoading(false);
+          return;
+        }
+        state?.setLoading(false);
       },
       partialize: (state) => ({
         user: state.user,

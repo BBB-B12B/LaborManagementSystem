@@ -12,7 +12,7 @@ export interface ProjectLocation {
   id: string;
   code: string;
   name: string;
-  location: string;
+  location?: string;
   department: string;
   projectManager?: string;
   startDate?: Date;
@@ -29,7 +29,7 @@ export interface ProjectLocation {
 export interface CreateProjectLocationInput {
   code: string;
   name: string;
-  location: string;
+  location?: string;
   department: string;
   projectManager?: string;
   startDate?: Date;

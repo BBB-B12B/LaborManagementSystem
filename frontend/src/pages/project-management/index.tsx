@@ -110,9 +110,11 @@ export default function ProjectListPage() {
       const detail = await projectService.getById(project.id);
       setEditingProjectId(project.id);
       setDrawerInitialValues({
-        ...detail,
-        startDate: detail.startDate ? detail.startDate : undefined,
-        endDate: detail.endDate ? detail.endDate : undefined,
+        code: detail.code,
+        name: detail.name,
+        department: detail.department,
+        status: detail.status,
+        isActive: detail.isActive,
       });
     } catch (error: any) {
       toast.error(error.message || 'ไม่สามารถโหลดข้อมูลโครงการได้');

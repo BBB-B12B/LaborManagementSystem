@@ -1,67 +1,32 @@
 /**
  * Project (ProjectLocation) Form Validation Schema
- * สคีมาการตรวจสอบฟอร์มโครงการ
  *
- * Validation for Project/ProjectLocation forms (FR-P)
- * Used for project management CRUD operations
+ * Validation rules for project management create/edit forms.
  */
 
 import { z } from 'zod';
-import {
-  requiredString,
-  optionalString,
-  optionalDate,
-  projectStatusEnum,
-  baseBoolean,
-  errorMessages,
-  validateDateRange,
-} from './baseSchemas';
+import { requiredString, projectStatusEnum, baseBoolean, errorMessages } from './baseSchemas';
 
 /**
  * Project create/edit schema
- * Used for project management
  */
-export const projectSchema = z
-  .object({
-    code: requiredString('รหัสโครงการ')
-      .min(2, errorMessages.minLength(2))
-      .max(20, errorMessages.maxLength(20))
-      .regex(/^[A-Z0-9-]+$/, 'รหัสโครงการต้องเป็นตัวพิมพ์ใหญ่ ตัวเลข หรือ - เท่านั้น')
-      .transform((val) => val.toUpperCase()),
+export const projectSchema = z.object({
+  code: requiredString('Project code is required')
+    .min(2, errorMessages.minLength(2))
+    .max(20, errorMessages.maxLength(20))
+    .regex(/^[A-Z0-9-]+$/, 'Project code must contain only A-Z, 0-9, or hyphen (-)')
+    .transform((val) => val.toUpperCase()),
 
-    name: requiredString('ชื่อโครงการ')
-      .min(3, errorMessages.minLength(3))
-      .max(200, errorMessages.maxLength(200)),
+  department: requiredString('Department is required'),
 
-    location: requiredString('ที่อยู่โครงการ')
-      .min(5, errorMessages.minLength(5))
-      .max(2000, errorMessages.maxLength(2000)),
+  name: requiredString('Project name is required')
+    .min(3, errorMessages.minLength(3))
+    .max(200, errorMessages.maxLength(200)),
 
-    department: requiredString('สังกัด'),
+  status: projectStatusEnum.default('active'),
 
-    projectManager: optionalString,
-
-    startDate: optionalDate,
-    endDate: optionalDate,
-
-    status: projectStatusEnum.default('active'),
-
-    description: optionalString,
-
-    isActive: baseBoolean.default(true),
-  })
-  .refine(
-    (data) => {
-      if (data.startDate && data.endDate) {
-        return validateDateRange(data.startDate, data.endDate);
-      }
-      return true;
-    },
-    {
-      message: errorMessages.endDateBeforeStart,
-      path: ['endDate'],
-    }
-  );
+  isActive: baseBoolean.default(true),
+});
 
 export const projectFilterSchema = z.object({
   department: z.string().optional(),
@@ -71,13 +36,13 @@ export const projectFilterSchema = z.object({
 });
 
 export const PROJECT_STATUS_LABELS = {
-  active: 'ดำเนินการอยู่',
-  completed: 'เสร็จสิ้น',
-  suspended: 'ระงับชั่วคราว',
+  active: 'Active',
+  completed: 'Completed',
+  suspended: 'Suspended',
 } as const;
 
 export const getProjectStatusLabel = (status?: string): string => {
-  if (!status) return 'ไม่ทราบสถานะ';
+  if (!status) return 'Unknown';
   return PROJECT_STATUS_LABELS[status as keyof typeof PROJECT_STATUS_LABELS] || status;
 };
 

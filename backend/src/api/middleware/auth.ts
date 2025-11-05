@@ -71,7 +71,8 @@ export function authenticate(
       const mockUserHeader = req.headers['x-mock-user'];
       if (typeof mockUserHeader === 'string') {
         try {
-          req.user = JSON.parse(mockUserHeader);
+          const decodedMockUser = Buffer.from(mockUserHeader, 'base64').toString('utf8');
+          req.user = JSON.parse(decodedMockUser);
         } catch (error) {
           logger.warn('Failed to parse X-Mock-User header', { error });
         }

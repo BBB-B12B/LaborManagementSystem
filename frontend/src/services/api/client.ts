@@ -8,6 +8,29 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResp
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 /**
+ * Convert mock user JSON into an ASCII-safe header value.
+ * Uses base64 encoding in the browser, with a Node-compatible fallback for tests.
+ */
+const encodeMockUserHeader = (value: string): string => {
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    return window
+      .btoa(
+        encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_match, hex) =>
+          String.fromCharCode(Number.parseInt(hex, 16))
+        )
+      );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nodeBuffer = (globalThis as any)?.Buffer;
+  if (nodeBuffer) {
+    return nodeBuffer.from(value, 'utf8').toString('base64');
+  }
+
+  return value;
+};
+
+/**
  * API Response type
  */
 export interface APIResponse<T = any> {
@@ -50,7 +73,8 @@ apiClient.interceptors.request.use(
     // ส่งข้อมูล user mock สำหรับ backend dev
     const storedUser = localStorage.getItem('user');
     if (storedUser && config.headers) {
-      config.headers['X-Mock-User'] = storedUser;
+      // Encode mock user JSON to keep header ASCII-safe during dev
+      config.headers['X-Mock-User'] = encodeMockUserHeader(storedUser);
     }
 
     // Log in development

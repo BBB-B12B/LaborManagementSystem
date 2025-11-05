@@ -71,9 +71,6 @@ export default function ManagementHubPage() {
             <Typography variant="h4" gutterBottom>
               การจัดการข้อมูล
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              เข้าถึงเครื่องมือจัดการโครงการ สมาชิก และแรงงานรายวันจากหน้านี้
-            </Typography>
           </Box>
 
           {sections.length === 0 ? (

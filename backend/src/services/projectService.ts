@@ -15,7 +15,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 export interface ProjectData {
   code?: string;
   name: string;
-  location: string;
+  location?: string;
   department: string;
   projectManager?: string;
   startDate?: Date;
@@ -61,7 +61,7 @@ export async function createProject(
   const projectData = {
     code: codeUpper,
     name: data.name,
-    location: data.location,
+    location: typeof data.location === 'string' ? data.location.trim() : '',
     department: data.department.trim(),
     projectManager: data.projectManager || null,
     startDate: data.startDate || null,
@@ -121,6 +121,11 @@ export async function updateProject(
 
   if (data.department) {
     updateData.department = data.department.trim();
+  }
+
+  if (data.location !== undefined) {
+    updateData.location =
+      typeof data.location === 'string' ? data.location.trim() : '';
   }
 
   // Remove undefined values
