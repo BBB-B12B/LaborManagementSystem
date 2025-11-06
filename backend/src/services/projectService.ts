@@ -14,6 +14,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 export interface ProjectData {
   code?: string;
+  projectCode?: string;
   name: string;
   location?: string;
   department: string;
@@ -41,6 +42,11 @@ export async function createProject(
   }
 
   const codeUpper = code.toUpperCase();
+  const projectCodeValue = data.projectCode ? data.projectCode.trim() : '';
+
+  if (!projectCodeValue) {
+    throw new Error('Project code is required');
+  }
 
   // Check code uniqueness
   const existingProject = await db
@@ -60,6 +66,7 @@ export async function createProject(
 
   const projectData = {
     code: codeUpper,
+    projectCode: projectCodeValue,
     name: data.name,
     location: typeof data.location === 'string' ? data.location.trim() : '',
     department: data.department.trim(),
@@ -108,6 +115,15 @@ export async function updateProject(
     }
   }
 
+  let projectCodeValue: string | undefined;
+  if (data.projectCode !== undefined) {
+    const trimmed = typeof data.projectCode === 'string' ? data.projectCode.trim() : '';
+    if (!trimmed) {
+      throw new Error('Project code is required');
+    }
+    projectCodeValue = trimmed;
+  }
+
   if (data.department !== undefined && !String(data.department).trim()) {
     throw new Error('กรุณาระบุสังกัดโครงการ');
   }
@@ -115,6 +131,7 @@ export async function updateProject(
   const updateData: any = {
     ...data,
     code: data.code ? data.code.toUpperCase() : undefined,
+    projectCode: projectCodeValue,
     updatedBy,
     updatedAt: FieldValue.serverTimestamp(),
   };

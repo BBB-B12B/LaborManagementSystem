@@ -97,6 +97,7 @@ export default function ProjectListPage() {
     setDrawerInitialValues({
       status: 'active',
       isActive: true,
+      projectCode: '',
     });
     setDrawerLoading(false);
     setDrawerOpen(true);
@@ -111,6 +112,7 @@ export default function ProjectListPage() {
       setEditingProjectId(project.id);
       setDrawerInitialValues({
         code: detail.code,
+        projectCode: detail.projectCode || '',
         name: detail.name,
         department: detail.department,
         status: detail.status,
@@ -248,7 +250,6 @@ export default function ProjectListPage() {
           <DeleteConfirmDialog />
 
           <ProjectDrawer
-            title={drawerMode === 'create' ? 'สร้างโครงการใหม่' : 'แก้ไขโครงการ'}
             key={drawerMode === 'edit' ? editingProjectId ?? 'edit' : 'create'}
             open={drawerOpen}
             onClose={handleCloseDrawer}

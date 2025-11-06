@@ -1,14 +1,22 @@
-﻿import React from 'react';
+import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Box, Button, Grid, TextField, Typography, Alert, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Button,
+  Grid,
+  TextField,
+  Typography,
+  Alert,
+  CircularProgress,
+  MenuItem,
+} from '@mui/material';
 import {
   projectSchema,
   type ProjectFormData,
   PROJECT_STATUS_LABELS,
 } from '@/validation/projectSchema';
 import { useToast } from '@/components/common/Toast';
-import { DepartmentAutocomplete } from '@/components/forms/DepartmentAutocomplete';
 import projectService from '@/services/projectService';
 
 export interface ProjectFormProps {
@@ -18,6 +26,14 @@ export interface ProjectFormProps {
   isLoading?: boolean;
   mode?: 'create' | 'edit';
 }
+
+const departmentOptions = [
+  { value: 'PD01', label: 'PD-01' },
+  { value: 'PD02', label: 'PD-02' },
+  { value: 'PD03', label: 'PD-03' },
+  { value: 'PD04', label: 'PD-04' },
+  { value: 'PD05', label: 'PD-05' },
+];
 
 export const ProjectForm: React.FC<ProjectFormProps> = ({
   defaultValues,
@@ -38,6 +54,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     defaultValues: {
       status: defaultValues?.status || 'active',
       isActive: defaultValues?.isActive ?? true,
+      projectCode: defaultValues?.projectCode || '',
       ...defaultValues,
     },
   });
@@ -73,7 +90,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         .catch((error) => {
           console.error('Failed to generate project code automatically', error);
           if (isMounted) {
-            toast.error('ไม่สามารถสร้างรหัสโครงการอัตโนมัติได้ กรุณากรอกเอง');
+            toast.error('ไม่สามารถสร้างลำดับโครงการอัตโนมัติได้');
             setCodeLocked(false);
             hasRequestedCodeRef.current = false;
           }
@@ -90,7 +107,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [mode, defaultValues?.code, setValue]);
+  }, [mode, defaultValues?.code, setValue, toast]);
 
   const handleFormSubmit = async (data: ProjectFormData) => {
     try {
@@ -99,14 +116,14 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         isActive: data.isActive ?? true,
       };
       await onSubmit(payload);
-      toast.success(mode === 'create' ? 'สร้างโครงการสำเร็จ' : 'อัปเดตโครงการสำเร็จ');
+      toast.success(mode === 'create' ? 'บันทึกข้อมูลสำเร็จ' : 'อัปเดตข้อมูลสำเร็จ');
     } catch (error) {
       toast.error(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
     }
   };
 
-  const handleFormError = (formErrors: any) => {
-    const firstError = Object.values(formErrors)[0] as any;
+  const handleFormError = (formErrors: Record<string, unknown>) => {
+    const firstError = Object.values(formErrors)[0] as { message?: string } | undefined;
     if (firstError?.message) {
       toast.error(firstError.message);
     }
@@ -127,7 +144,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 
         {Object.keys(errors).length > 0 && (
           <Grid item xs={12}>
-            <Alert severity="error">กรุณาตรวจสอบข้อมูลที่กรอก</Alert>
+            <Alert severity="error">กรุณาตรวจสอบข้อมูลให้ครบถ้วน</Alert>
           </Grid>
         )}
 
@@ -139,13 +156,15 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               <TextField
                 {...field}
                 fullWidth
-                label="รหัสโครงการ"
+                label="ลำดับโครงการ"
                 required
                 error={!!errors.code}
                 helperText={
                   errors.code?.message ||
-                  (codeLoading && mode === 'create'
-                    ? 'กำลังสร้างรหัสโครงการอัตโนมัติ...'
+                  (mode === 'create'
+                    ? codeLoading
+                      ? 'กำลังสร้างลำดับโครงการอัตโนมัติ...'
+                      : 'ระบบจะกำหนดค่าให้อัตโนมัติ'
                     : undefined)
                 }
                 disabled={isLoading || isSubmitting || (codeLoading && codeLocked)}
@@ -159,17 +178,71 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 
         <Grid item xs={12} md={6}>
           <Controller
+            name="projectCode"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label="รหัสโครงการ"
+                required
+                error={!!errors.projectCode}
+                helperText={errors.projectCode?.message}
+                disabled={isLoading || isSubmitting}
+                InputLabelProps={{ shrink: true }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Controller
             name="department"
             control={control}
             render={({ field }) => (
-              <DepartmentAutocomplete
-                value={field.value || ''}
-                onChange={field.onChange}
+              <TextField
+                {...field}
+                select
+                fullWidth
+                label="สังกัด"
                 required
                 error={!!errors.department}
                 helperText={errors.department?.message}
                 disabled={isLoading || isSubmitting}
-              />
+                InputLabelProps={{ shrink: true }}
+              >
+                {departmentOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          />
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Controller
+            name="status"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                select
+                fullWidth
+                label="สถานะ"
+                required
+                error={!!errors.status}
+                helperText={errors.status?.message}
+                disabled={isLoading || isSubmitting}
+                InputLabelProps={{ shrink: true }}
+              >
+                {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </TextField>
             )}
           />
         </Grid>
@@ -186,32 +259,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 required
                 error={!!errors.name}
                 helperText={errors.name?.message}
+                disabled={isLoading || isSubmitting}
+                InputLabelProps={{ shrink: true }}
               />
-            )}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <Controller
-            name="status"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                select
-                fullWidth
-                label="สถานะ"
-                required
-                SelectProps={{ native: true }}
-                error={!!errors.status}
-                helperText={errors.status?.message}
-              >
-                {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </TextField>
             )}
           />
         </Grid>
@@ -219,17 +269,23 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
             {onCancel && (
-              <Button variant="outlined" onClick={onCancel} disabled={isLoading || isSubmitting}>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={onCancel}
+                disabled={isLoading || isSubmitting}
+              >
                 ยกเลิก
               </Button>
             )}
             <Button
               type="submit"
               variant="contained"
+              color="success"
               disabled={isLoading || isSubmitting || codeLoading}
               startIcon={isLoading || isSubmitting ? <CircularProgress size={16} /> : null}
             >
-              {isLoading || isSubmitting ? '\u0e01\u0e33\u0e25\u0e31\u0e07\u0e40\u0e1b\u0e34\u0e14\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19...' : '\u0e40\u0e1b\u0e34\u0e14\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23'}
+              {isLoading || isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
             </Button>
           </Box>
         </Grid>
@@ -239,10 +295,3 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 };
 
 export default ProjectForm;
-
-
-
-
-
-
-

@@ -14,6 +14,7 @@ import { type ProjectFormData, type ProjectStatus } from '@/validation/projectSc
 export interface Project {
   id: string;
   code: string;
+  projectCode: string;
   name: string;
   location: string;
   department: string;
@@ -45,6 +46,7 @@ class ProjectService {
   private normalize(project: any): Project {
     return {
       ...project,
+      projectCode: project.projectCode ?? '',
       department: project.department ?? '',
       startDate: project.startDate ? new Date(project.startDate) : undefined,
       endDate: project.endDate ? new Date(project.endDate) : undefined,

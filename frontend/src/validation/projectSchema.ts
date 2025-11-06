@@ -17,6 +17,10 @@ export const projectSchema = z.object({
     .regex(/^[A-Z0-9-]+$/, 'Project code must contain only A-Z, 0-9, or hyphen (-)')
     .transform((val) => val.toUpperCase()),
 
+  projectCode: requiredString('รหัสโครงการจำเป็นต้องระบุ')
+    .min(1, errorMessages.minLength(1))
+    .max(50, errorMessages.maxLength(50)),
+
   department: requiredString('Department is required'),
 
   name: requiredString('Project name is required')
@@ -36,13 +40,13 @@ export const projectFilterSchema = z.object({
 });
 
 export const PROJECT_STATUS_LABELS = {
-  active: 'Active',
-  completed: 'Completed',
-  suspended: 'Suspended',
+  active: 'กำลังดำเนินการอยู่',
+  suspended: 'ระงับชั่วคราว',
+  completed: 'ปิดโครงการ',
 } as const;
 
 export const getProjectStatusLabel = (status?: string): string => {
-  if (!status) return 'Unknown';
+  if (!status) return 'ไม่ทราบสถานะ';
   return PROJECT_STATUS_LABELS[status as keyof typeof PROJECT_STATUS_LABELS] || status;
 };
 

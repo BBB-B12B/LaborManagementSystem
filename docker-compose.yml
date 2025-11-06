@@ -25,6 +25,9 @@ services:
       - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
       - NEXT_PUBLIC_FIREBASE_APP_ID=${FIREBASE_APP_ID}
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID:-}
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - WATCHPACK_POLLING_INTERVAL=1000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -35,7 +38,7 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
-    command: npm run dev
+    command: npm run dev -- --hostname 0.0.0.0
 
   # Backend Service (Express.js)
   backend:
@@ -70,6 +73,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
       - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-10}
       - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
     volumes:
       - ./backend:/app
       - /app/node_modules

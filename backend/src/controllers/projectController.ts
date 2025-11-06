@@ -148,6 +148,10 @@ export async function createProjectHandler(
     const data = {
       ...req.body,
       department: req.body.department ? String(req.body.department).trim() : '',
+      projectCode:
+        req.body.projectCode !== undefined
+          ? String(req.body.projectCode).trim()
+          : '',
       startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
       endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
     };
@@ -188,6 +192,10 @@ export async function updateProjectHandler(
     const data = {
       ...req.body,
       department: req.body.department ? String(req.body.department).trim() : undefined,
+      projectCode:
+        req.body.projectCode !== undefined
+          ? String(req.body.projectCode).trim()
+          : undefined,
       startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
       endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
     };

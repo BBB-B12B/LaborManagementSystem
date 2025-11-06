@@ -65,15 +65,16 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 async function run() {
-  const docRef = db.collection('User').doc('101527');
+  const docRef = db.collection('User').doc('101395');
   const payload = {
-    Employeeid: '10157',
-    Fullname: '\u0e10\u0e34\u0e15\u0e34\u0020\u0e21\u0e31\u0e07\u0e01\u0e23',
-    Fullnameen: 'Thiti Mungkorn',
-    Password: '101527',
-    Role: 'Admin',
-    Username: 'thiti.m',
-    UsernameLower: 'thiti.m',
+    Employeeid: '101395',
+    Fullname:
+      '\u0e1e\u0e07\u0e29\u0e4c\u0e2a\u0e14\u0e32\u0020\u0e1e\u0e27\u0e07\u0e17\u0e2d\u0e07',
+    Fullnameen: 'Pongsada Phuagthong',
+    Password: '101395',
+    Role: 'AM',
+    Username: 'pongsada.p',
+    UsernameLower: 'pongsada.p',
   };
 
   try {
