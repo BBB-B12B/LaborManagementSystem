@@ -44,6 +44,21 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 }) => {
   const toast = useToast();
 
+  const mergedDefaults: ProjectFormData = React.useMemo(
+    () => ({
+      code: defaultValues?.code ?? (mode === 'create' ? 'P001' : ''),
+      projectCode: defaultValues?.projectCode ?? '',
+      department: defaultValues?.department ?? '',
+      name: defaultValues?.name ?? '',
+      status: defaultValues?.status ?? 'active',
+      isActive: defaultValues?.isActive ?? true,
+      projectManager: defaultValues?.projectManager ?? '',
+      statusLabel: defaultValues?.statusLabel,
+      ...defaultValues,
+    }),
+    [defaultValues, mode]
+  );
+
   const {
     control,
     handleSubmit,
@@ -51,16 +66,13 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     formState: { errors, isSubmitting },
   } = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
-    defaultValues: {
-      status: defaultValues?.status || 'active',
-      isActive: defaultValues?.isActive ?? true,
-      projectCode: defaultValues?.projectCode || '',
-      ...defaultValues,
-    },
+    defaultValues: mergedDefaults,
   });
 
   const [codeLoading, setCodeLoading] = React.useState(false);
-  const [codeLocked, setCodeLocked] = React.useState(Boolean(defaultValues?.code));
+  const [codeLocked, setCodeLocked] = React.useState(
+    mode === 'create' ? true : Boolean(defaultValues?.code)
+  );
   const hasRequestedCodeRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -80,19 +92,16 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         .then((code) => {
           if (!isMounted) return;
 
-          if (code) {
-            setValue('code', code, { shouldValidate: true });
-            setCodeLocked(true);
-          } else {
-            setCodeLocked(false);
-          }
+          const resolvedCode = (code ?? '').trim() || 'P001';
+          setValue('code', resolvedCode, { shouldValidate: true });
+          setCodeLocked(true);
         })
         .catch((error) => {
           console.error('Failed to generate project code automatically', error);
           if (isMounted) {
             toast.error('ไม่สามารถสร้างลำดับโครงการอัตโนมัติได้');
-            setCodeLocked(false);
-            hasRequestedCodeRef.current = false;
+            setValue('code', 'P001', { shouldValidate: true });
+            setCodeLocked(true);
           }
         })
         .finally(() => {
@@ -114,6 +123,8 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       const payload: ProjectFormData = {
         ...data,
         isActive: data.isActive ?? true,
+        projectManager: data.projectManager?.trim() || undefined,
+        statusLabel: PROJECT_STATUS_LABELS[data.status] || data.status,
       };
       await onSubmit(payload);
       toast.success(mode === 'create' ? 'บันทึกข้อมูลสำเร็จ' : 'อัปเดตข้อมูลสำเร็จ');
@@ -128,6 +139,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       toast.error(firstError.message);
     }
   };
+
+  const submitDisabled = isLoading || isSubmitting;
+  const showSubmitSpinner = submitDisabled || codeLoading;
 
   return (
     <Box
@@ -159,17 +173,10 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 label="ลำดับโครงการ"
                 required
                 error={!!errors.code}
-                helperText={
-                  errors.code?.message ||
-                  (mode === 'create'
-                    ? codeLoading
-                      ? 'กำลังสร้างลำดับโครงการอัตโนมัติ...'
-                      : 'ระบบจะกำหนดค่าให้อัตโนมัติ'
-                    : undefined)
-                }
+                helperText={errors.code?.message}
                 disabled={isLoading || isSubmitting || (codeLoading && codeLocked)}
                 inputProps={{ style: { textTransform: 'uppercase' } }}
-                InputProps={{ readOnly: mode === 'create' && codeLocked && !codeLoading }}
+                InputProps={{ readOnly: mode === 'create' && codeLocked }}
                 InputLabelProps={{ shrink: true }}
               />
             )}
@@ -247,7 +254,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Controller
             name="name"
             control={control}
@@ -266,6 +273,24 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
           />
         </Grid>
 
+        <Grid item xs={12} md={6}>
+          <Controller
+            name="projectManager"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label="รักษาการผู้จัดการโครงการ (PM)"
+                error={!!errors.projectManager}
+                helperText={errors.projectManager?.message}
+                disabled={isLoading || isSubmitting}
+                InputLabelProps={{ shrink: true }}
+              />
+            )}
+          />
+        </Grid>
+
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
             {onCancel && (
@@ -273,7 +298,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 variant="outlined"
                 color="error"
                 onClick={onCancel}
-                disabled={isLoading || isSubmitting}
+                disabled={submitDisabled}
               >
                 ยกเลิก
               </Button>
@@ -282,10 +307,10 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               type="submit"
               variant="contained"
               color="success"
-              disabled={isLoading || isSubmitting || codeLoading}
-              startIcon={isLoading || isSubmitting ? <CircularProgress size={16} /> : null}
+              disabled={submitDisabled}
+              startIcon={showSubmitSpinner ? <CircularProgress size={16} /> : null}
             >
-              {isLoading || isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+              {submitDisabled ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
             </Button>
           </Box>
         </Grid>

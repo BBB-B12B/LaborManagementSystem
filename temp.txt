@@ -9,11 +9,7 @@
  */
 
 import { api, apiClient } from './api/client';
-import {
-  type ProjectFormData,
-  type ProjectStatus,
-  PROJECT_STATUS_LABELS,
-} from '@/validation/projectSchema';
+import { type ProjectFormData, type ProjectStatus } from '@/validation/projectSchema';
 
 export interface Project {
   id: string;
@@ -166,3 +162,4 @@ class ProjectService {
 
 export const projectService = new ProjectService();
 export default projectService;
+

@@ -33,7 +33,7 @@ export const COLLECTIONS = {
   USERS: 'users',
   ROLES: 'roles',
   SKILLS: 'skills',
-  PROJECT_LOCATIONS: 'projectLocations',
+  PROJECT_LOCATIONS: 'Project',
   DAILY_CONTRACTORS: 'dailyContractors',
   DAILY_REPORTS: 'dailyReports',
   EDIT_HISTORY: 'editHistory',

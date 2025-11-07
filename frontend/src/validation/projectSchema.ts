@@ -30,6 +30,12 @@ export const projectSchema = z.object({
   status: projectStatusEnum.default('active'),
 
   isActive: baseBoolean.default(true),
+  projectManager: z
+    .string()
+    .max(200, errorMessages.maxLength(200))
+    .optional()
+    .transform((val) => (val ? val.trim() : val)),
+  statusLabel: z.string().optional(),
 });
 
 export const projectFilterSchema = z.object({

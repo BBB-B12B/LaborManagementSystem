@@ -3,7 +3,7 @@
  * โครงการ
  *
  * Description: Construction sites or project locations where daily contractors work.
- * Firestore Collection: projectLocations
+ * Firestore Collection: Project
  */
 
 export type ProjectStatus = 'active' | 'completed' | 'suspended';

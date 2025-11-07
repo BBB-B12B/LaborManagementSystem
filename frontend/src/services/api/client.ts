@@ -30,6 +30,39 @@ const encodeMockUserHeader = (value: string): string => {
   return value;
 };
 
+const DEFAULT_DEV_USER: Record<string, unknown> = {
+  id: 'dev-admin',
+  employeeId: '101527',
+  username: 'thiti.m',
+  name: 'Dev Admin',
+  roleId: 'AM',
+  roleCode: 'AM',
+  department: 'PD01',
+  projectLocationIds: ['P001', 'P002', 'P003', 'P004'],
+  isActive: true,
+};
+
+const ensureMockUser = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const existing = localStorage.getItem('user');
+  if (existing) {
+    return existing;
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    const override = process.env.NEXT_PUBLIC_DEV_MOCK_USER;
+    const payload =
+      override && override.trim().length > 0 ? override : JSON.stringify(DEFAULT_DEV_USER);
+    localStorage.setItem('user', payload);
+    return payload;
+  }
+
+  return null;
+};
+
 /**
  * API Response type
  */
@@ -65,13 +98,13 @@ const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // เพิ่ม auth token ถ้ามี
-    const token = localStorage.getItem('authToken');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     // ส่งข้อมูล user mock สำหรับ backend dev
-    const storedUser = localStorage.getItem('user');
+    const storedUser = ensureMockUser();
     if (storedUser && config.headers) {
       // Encode mock user JSON to keep header ASCII-safe during dev
       config.headers['X-Mock-User'] = encodeMockUserHeader(storedUser);

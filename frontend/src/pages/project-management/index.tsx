@@ -98,6 +98,7 @@ export default function ProjectListPage() {
       status: 'active',
       isActive: true,
       projectCode: '',
+      projectManager: '',
     });
     setDrawerLoading(false);
     setDrawerOpen(true);
@@ -117,6 +118,8 @@ export default function ProjectListPage() {
         department: detail.department,
         status: detail.status,
         isActive: detail.isActive,
+        projectManager: detail.projectManager || '',
+        statusLabel: detail.statusLabel,
       });
     } catch (error: any) {
       toast.error(error.message || 'ไม่สามารถโหลดข้อมูลโครงการได้');
@@ -143,42 +146,43 @@ export default function ProjectListPage() {
   const columns: GridColDef[] = [
     {
       field: 'code',
-      headerName: 'รหัส',
-      width: 120,
+      headerName: 'ลำดับ',
+      width: 140,
     },
     {
-      field: 'name',
+      field: 'projectCode',
+      headerName: 'รหัสโครงการ',
+      width: 160,
+    },
+    {
+      field: 'projectName',
       headerName: 'ชื่อโครงการ',
-      width: 250,
       flex: 1,
+      minWidth: 220,
+      valueGetter: (params) => params.value || params.row.name || '-',
     },
     {
       field: 'department',
       headerName: 'สังกัด',
-      width: 100,
+      width: 120,
       renderCell: (params) => (
         <Chip label={params.value || '-'} size="small" color="default" />
       ),
     },
     {
-      field: 'location',
-      headerName: 'ที่อยู่',
-      width: 200,
-      flex: 1,
-    },
-    {
       field: 'status',
       headerName: 'สถานะ',
-      width: 130,
+      width: 160,
       renderCell: (params) => {
         const colors: Record<string, 'success' | 'warning' | 'error'> = {
           active: 'success',
           completed: 'warning',
           suspended: 'error',
         };
+        const label = params.row.statusLabel || getProjectStatusLabel(params.value);
         return (
           <Chip
-            label={getProjectStatusLabel(params.value)}
+            label={label}
             size="small"
             color={colors[params.value] || 'default'}
           />
@@ -189,19 +193,17 @@ export default function ProjectListPage() {
       field: 'actions',
       type: 'actions',
       headerName: 'จัดการ',
-      width: 120,
+      width: 140,
       getActions: (params) => [
         <GridActionsCellItem
           icon={<EditIcon />}
           label="แก้ไข"
           onClick={() => handleEdit(params.row as Project)}
-          showInMenu
         />,
         <GridActionsCellItem
           icon={<DeleteIcon />}
           label="ลบ"
           onClick={() => handleDelete(params.id as string, params.row.name)}
-          showInMenu
         />,
       ],
     },
