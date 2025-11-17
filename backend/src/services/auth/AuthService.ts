@@ -18,6 +18,7 @@ export interface AuthResponse {
     employeeId: string;
     username: string;
     name: string;
+    fullNameEn?: string;
     roleId: string;
     roleCode: string;
     department: string;
@@ -65,6 +66,7 @@ export class AuthService {
         employeeId: user.employeeId,
         username: user.username,
         name: user.name,
+        fullNameEn: user.name,
         roleId: user.roleId,
         roleCode: user.roleId,
         department: user.department,

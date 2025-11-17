@@ -28,12 +28,14 @@ import {
   ManageAccounts as ManageAccountsIcon,
   Calculate as CalculateIcon,
   Fingerprint as FingerprintIcon,
-  AccountCircle,
   Language as LanguageIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
 import { Permissions, type UserRole } from '@/utils/permissions';
+
+const NAVBAR_BG = '#A9C39C';
+const NAVBAR_TEXT = '#1B2A1B';
 
 /**
  * Menu item definition
@@ -154,8 +156,31 @@ export const Navbar: React.FC = () => {
     router.push(path);
   };
 
+  const englishInitial = React.useMemo(() => {
+    const candidates = [
+      user?.fullNameEn,
+      user?.name,
+      user?.username,
+    ];
+    for (const value of candidates) {
+      if (!value) continue;
+      const match = value.match(/[A-Za-z]/);
+      if (match) {
+        return match[0].toUpperCase();
+      }
+    }
+    return '';
+  }, [user?.fullNameEn, user?.name, user?.username]);
+
   return (
-    <AppBar position="sticky" elevation={1}>
+    <AppBar
+      position="sticky"
+      elevation={1}
+      sx={{
+        backgroundColor: NAVBAR_BG,
+        color: NAVBAR_TEXT,
+      }}
+    >
       <Toolbar>
         {/* Logo/Title */}
         <Typography
@@ -178,14 +203,14 @@ export const Navbar: React.FC = () => {
                 startIcon={item.icon}
                 onClick={() => handleNavigate(item.path)}
                 sx={{
-                  color: 'white',
+                  color: NAVBAR_TEXT,
                   mx: 0.5,
                   backgroundColor:
                     isActive
-                      ? 'rgba(255, 255, 255, 0.1)'
+                      ? 'rgba(255, 255, 255, 0.45)'
                       : 'transparent',
                   '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    backgroundColor: 'rgba(0, 0, 0, 0.08)',
                   },
                 }}
               >
@@ -201,16 +226,19 @@ export const Navbar: React.FC = () => {
           onChange={handleLanguageChange}
           size="small"
           sx={{
-            color: 'white',
+            color: NAVBAR_TEXT,
             mr: 2,
             '.MuiOutlinedInput-notchedOutline': {
-              borderColor: 'rgba(255, 255, 255, 0.3)',
+              borderColor: 'rgba(27, 42, 27, 0.3)',
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: 'rgba(255, 255, 255, 0.5)',
+              borderColor: 'rgba(27, 42, 27, 0.5)',
             },
             '.MuiSvgIcon-root': {
-              color: 'white',
+              color: NAVBAR_TEXT,
+            },
+            '.MuiSelect-select': {
+              color: NAVBAR_TEXT,
             },
           }}
         >
@@ -229,8 +257,17 @@ export const Navbar: React.FC = () => {
             aria-haspopup="true"
             color="inherit"
           >
-            <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
-              {user?.name?.charAt(0) || <AccountCircle />}
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                bgcolor: '#000',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: 16,
+              }}
+            >
+              {englishInitial || '?'}
             </Avatar>
           </IconButton>
 

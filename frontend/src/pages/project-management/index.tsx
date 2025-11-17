@@ -11,7 +11,6 @@ import {
   Typography,
   Button,
   Paper,
-  Grid,
   Chip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -21,9 +20,34 @@ import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { BackButton, DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { projectService, type Project } from '@/services/projectService';
-import { getProjectStatusLabel } from '@/validation/projectSchema';
 import { ProjectDrawer } from './components/ProjectDrawer';
-import type { ProjectFormData } from '@/validation/projectSchema';
+import { PROJECT_STATUS_OPTIONS, type ProjectFormData } from '@/validation/projectSchema';
+
+const CODE_PREFIX = 'P';
+const CODE_PAD = 3;
+const ACTIVE_STATUS = PROJECT_STATUS_OPTIONS[0];
+const STATUS_COLOR_MAP: Record<string, 'success' | 'warning' | 'error'> = {
+  [PROJECT_STATUS_OPTIONS[0]]: 'success',
+  [PROJECT_STATUS_OPTIONS[1]]: 'warning',
+  [PROJECT_STATUS_OPTIONS[2]]: 'error',
+};
+
+const extractCodeNumber = (code?: string | null): number | null => {
+  if (!code) return null;
+  const match = code.match(/(\d+)$/);
+  if (!match) return null;
+  const num = Number.parseInt(match[1], 10);
+  return Number.isNaN(num) ? null : num;
+};
+
+const getNextProjectCodeFromList = (items: Project[]): string => {
+  const max = items.reduce((acc, item) => {
+    const value = extractCodeNumber(item.code) ?? extractCodeNumber(item.id);
+    return value !== null && value > acc ? value : acc;
+  }, 0);
+  const next = Math.max(max + 1, 1);
+  return `${CODE_PREFIX}${next.toString().padStart(CODE_PAD, '0')}`;
+};
 
 export default function ProjectListPage() {
   const toast = useToast();
@@ -92,12 +116,14 @@ export default function ProjectListPage() {
   };
 
   const handleCreate = () => {
+    const nextCode = getNextProjectCodeFromList(projects || []);
     setDrawerMode('create');
     setEditingProjectId(null);
     setDrawerInitialValues({
-      status: 'active',
-      isActive: true,
+      code: nextCode,
+      status: ACTIVE_STATUS,
       projectCode: '',
+      projectName: '',
       projectManager: '',
     });
     setDrawerLoading(false);
@@ -114,12 +140,10 @@ export default function ProjectListPage() {
       setDrawerInitialValues({
         code: detail.code,
         projectCode: detail.projectCode || '',
-        name: detail.name,
+        projectName: detail.projectName,
         department: detail.department,
         status: detail.status,
-        isActive: detail.isActive,
         projectManager: detail.projectManager || '',
-        statusLabel: detail.statusLabel,
       });
     } catch (error: any) {
       toast.error(error.message || 'ไม่สามารถโหลดข้อมูลโครงการได้');
@@ -129,8 +153,9 @@ export default function ProjectListPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    await showDeleteConfirm(`โครงการ: ${name}`, async () => {
+  const handleDelete = async (id: string, projectName?: string) => {
+    const displayName = projectName || id;
+    await showDeleteConfirm(`โครงการ: ${displayName}`, async () => {
       await deleteMutation.mutateAsync(id);
     });
   };
@@ -159,7 +184,7 @@ export default function ProjectListPage() {
       headerName: 'ชื่อโครงการ',
       flex: 1,
       minWidth: 220,
-      valueGetter: (params) => params.value || params.row.name || '-',
+      valueGetter: (params) => params.value || '-',
     },
     {
       field: 'department',
@@ -174,17 +199,11 @@ export default function ProjectListPage() {
       headerName: 'สถานะ',
       width: 160,
       renderCell: (params) => {
-        const colors: Record<string, 'success' | 'warning' | 'error'> = {
-          active: 'success',
-          completed: 'warning',
-          suspended: 'error',
-        };
-        const label = params.row.statusLabel || getProjectStatusLabel(params.value);
         return (
           <Chip
-            label={label}
+            label={params.value || '-'}
             size="small"
-            color={colors[params.value] || 'default'}
+            color={STATUS_COLOR_MAP[params.value as string] || 'default'}
           />
         );
       },
@@ -203,7 +222,12 @@ export default function ProjectListPage() {
         <GridActionsCellItem
           icon={<DeleteIcon />}
           label="ลบ"
-          onClick={() => handleDelete(params.id as string, params.row.name)}
+          onClick={() =>
+            handleDelete(
+              params.id as string,
+              params.row.projectName || params.row.code
+            )
+          }
         />,
       ],
     },
@@ -247,6 +271,7 @@ export default function ProjectListPage() {
                 sorting: { sortModel: [{ field: 'code', sort: 'asc' }] },
               }}
               pageSizeOptions={[10, 25, 50, 100]}
+              hideFooter
             />
           </Paper>
           <DeleteConfirmDialog />

@@ -128,6 +128,7 @@ class PortalUserService {
         employeeId: (data.Employeeid || '').toString(),
         username: (data.Username || '').toString(),
         name: fullName || (data.Fullnameen || '').toString(),
+        fullNameEn: (data.Fullnameen || '').toString(),
         roleId: (data.Role || '').toString(),
         roleCode: (data.Role || '').toString(),
         department: '',

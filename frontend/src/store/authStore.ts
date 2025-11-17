@@ -10,6 +10,7 @@ export interface User {
   id: string;
   username: string;
   name: string;
+  fullNameEn?: string;
   roleId: string;
   roleCode?: 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD'; // User role code (AM, FM, SE, OE, PE, PM, PD, MD, GOD)
   department: string;

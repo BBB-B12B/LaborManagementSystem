@@ -35,6 +35,7 @@ const DEFAULT_DEV_USER: Record<string, unknown> = {
   employeeId: '101527',
   username: 'thiti.m',
   name: 'Dev Admin',
+  fullNameEn: 'Dev Admin',
   roleId: 'AM',
   roleCode: 'AM',
   department: 'PD01',

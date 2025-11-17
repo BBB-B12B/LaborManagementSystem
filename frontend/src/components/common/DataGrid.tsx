@@ -48,6 +48,7 @@ export interface DataGridProps {
   title?: string;
   noRowsMessage?: string;
   density?: 'compact' | 'standard' | 'comfortable';
+  hideFooter?: boolean;
 }
 
 /**
@@ -85,6 +86,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
   title,
   noRowsMessage,
   density = 'standard',
+  hideFooter = false,
 }) => {
   const { t } = useTranslation();
 
@@ -212,6 +214,16 @@ export const DataGrid: React.FC<DataGridProps> = ({
             '& .MuiDataGrid-columnHeader:focus-within': {
               outline: 'none',
             },
+            '& .MuiDataGrid-columnSeparator': {
+              display: 'none',
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              borderBottom: 'none',
+            },
+            '& .MuiDataGrid-cell': {
+              borderBottom: 'none',
+              borderRight: 'none',
+            },
           }}
           // Pagination
           pageSizeOptions={pageSizeOptions}
@@ -246,6 +258,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
           }}
           // Disable column menu by default (can be enabled per column)
           disableColumnMenu={false}
+          hideFooter={hideFooter}
         />
       </Paper>
     </Box>

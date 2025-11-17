@@ -262,9 +262,13 @@ export const departmentEnum = createEnum(['PD01', 'PD02', 'PD03', 'PD04', 'PD05'
 export const roleEnum = createEnum(['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'], 'บทบาท');
 
 /**
- * Project status enum
+ * Project status enum (Thai values)
  */
-export const projectStatusEnum = createEnum(['active', 'completed', 'suspended'], 'สถานะโครงการ');
+export const PROJECT_STATUS_VALUES = ['กำลังดำเนินการอยู่', 'ระงับชั่วคราว', 'ปิดโครงการ'] as const;
+export const projectStatusEnum = createEnum(
+  PROJECT_STATUS_VALUES as unknown as string[],
+  'สถานะโครงการ'
+);
 
 /**
  * Work type enum
@@ -363,6 +367,7 @@ export default {
   nonEmptyArray,
   departmentEnum,
   roleEnum,
+  PROJECT_STATUS_VALUES,
   projectStatusEnum,
   workTypeEnum,
   validateDateRange,

@@ -146,14 +146,18 @@ export async function createProjectHandler(
     const userId = authUser.uid || authUser.id || authUser.employeeId || 'system';
 
     const data = {
-      ...req.body,
-      department: req.body.department ? String(req.body.department).trim() : '',
+      code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
       projectCode:
         req.body.projectCode !== undefined
           ? String(req.body.projectCode).trim()
           : '',
-      startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
-      endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+      projectName: req.body.projectName ? String(req.body.projectName).trim() : '',
+      department: req.body.department ? String(req.body.department).trim() : '',
+      projectManager:
+        req.body.projectManager !== undefined && req.body.projectManager !== null
+          ? String(req.body.projectManager).trim()
+          : undefined,
+      status: req.body.status ? String(req.body.status).trim() : undefined,
     };
 
     const project = await createProject(data, userId);
@@ -190,14 +194,24 @@ export async function updateProjectHandler(
     const userId = authUser.uid || authUser.id || authUser.employeeId || 'system';
 
     const data = {
-      ...req.body,
-      department: req.body.department ? String(req.body.department).trim() : undefined,
+      code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
       projectCode:
         req.body.projectCode !== undefined
           ? String(req.body.projectCode).trim()
           : undefined,
-      startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
-      endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+      projectName:
+        req.body.projectName !== undefined
+          ? String(req.body.projectName).trim()
+          : undefined,
+      department:
+        req.body.department !== undefined
+          ? String(req.body.department).trim()
+          : undefined,
+      projectManager:
+        req.body.projectManager !== undefined
+          ? String(req.body.projectManager ?? '').trim()
+          : undefined,
+      status: req.body.status ? String(req.body.status).trim() : undefined,
     };
 
     Object.keys(data).forEach((key) => {

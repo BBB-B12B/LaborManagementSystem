@@ -15,22 +15,32 @@ import { FieldValue } from 'firebase-admin/firestore';
 export interface ProjectData {
   code?: string;
   projectCode?: string;
-  name: string;
-  projectName?: string;
-  location?: string;
+  projectName: string;
   department: string;
-  projectManager?: string;
-  startDate?: Date;
-  endDate?: Date;
-  status?: 'active' | 'completed' | 'suspended';
-  statusLabel?: string;
-  description?: string;
-  isActive?: boolean;
+  projectManager?: string | null;
+  status?: string;
 }
 
 const PROJECT_COLLECTION = 'Project';
 const PROJECT_CODE_PREFIX = 'P';
 const PROJECT_CODE_PAD_LENGTH = 3;
+const STATUS_THAI_MAP: Record<string, string> = {
+  active: 'กำลังดำเนินการอยู่',
+  suspended: 'ระงับชั่วคราว',
+  completed: 'ปิดโครงการ',
+};
+
+const normalizeStatusValue = (status?: string): string => {
+  if (!status) {
+    return STATUS_THAI_MAP.active;
+  }
+  const trimmed = status.trim();
+  const lower = trimmed.toLowerCase();
+  if (STATUS_THAI_MAP[lower]) {
+    return STATUS_THAI_MAP[lower];
+  }
+  return trimmed;
+};
 
 const getProjectCollection = () => db.collection(PROJECT_COLLECTION);
 const formatProjectCode = (num: number) =>
@@ -115,9 +125,14 @@ export async function createProject(
 ): Promise<any> {
   const codeUpper = await resolveProjectCode(data.code);
   const projectCodeValue = data.projectCode ? data.projectCode.trim() : '';
+  const projectNameValue = data.projectName ? data.projectName.trim() : '';
 
   if (!projectCodeValue) {
     throw new Error('Project code is required');
+  }
+
+  if (!projectNameValue) {
+    throw new Error('กรุณาระบุชื่อโครงการ');
   }
 
   if (!data.department || !data.department.trim()) {
@@ -129,17 +144,10 @@ export async function createProject(
   const projectData = {
     code: codeUpper,
     projectCode: projectCodeValue,
-    name: data.name,
-    projectName: data.projectName ?? data.name,
-    location: typeof data.location === 'string' ? data.location.trim() : '',
+    projectName: projectNameValue,
     department: data.department.trim(),
     projectManager: data.projectManager ? data.projectManager.trim() : null,
-    startDate: data.startDate || null,
-    endDate: data.endDate || null,
-    status: data.status || 'active',
-    statusLabel: data.statusLabel || null,
-    description: data.description || null,
-    isActive: data.isActive !== undefined ? data.isActive : true,
+    status: normalizeStatusValue(data.status),
     createdBy,
     updatedBy: createdBy,
     createdAt: FieldValue.serverTimestamp(),
@@ -186,32 +194,30 @@ export async function updateProject(
     throw new Error('กรุณาระบุสังกัดโครงการ');
   }
 
+  if (data.projectName !== undefined && !String(data.projectName).trim()) {
+    throw new Error('กรุณาระบุชื่อโครงการ');
+  }
+
   const updateData: any = {
-    ...data,
-    code: data.code ? data.code.toUpperCase() : undefined,
-    projectName: data.projectName ?? data.name,
     projectCode: projectCodeValue,
+    projectName:
+      data.projectName !== undefined
+        ? data.projectName
+          ? data.projectName.trim()
+          : undefined
+        : undefined,
+    department: data.department ? data.department.trim() : undefined,
     projectManager:
       data.projectManager !== undefined
         ? data.projectManager
           ? data.projectManager.trim()
           : null
         : undefined,
-    statusLabel: data.statusLabel ?? undefined,
+    status: data.status ? normalizeStatusValue(data.status) : undefined,
     updatedBy,
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  if (data.department) {
-    updateData.department = data.department.trim();
-  }
-
-  if (data.location !== undefined) {
-    updateData.location =
-      typeof data.location === 'string' ? data.location.trim() : '';
-  }
-
-  // Remove undefined values
   Object.keys(updateData).forEach((key) => {
     if (updateData[key] === undefined) {
       delete updateData[key];
@@ -238,11 +244,7 @@ export async function deleteProject(id: string): Promise<void> {
     throw new Error('ไม่พบโครงการ');
   }
 
-  // Soft delete: set isActive to false
-  await projectRef.update({
-    isActive: false,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await projectRef.delete();
 
   clearProjectCache();
   projectCache.delete(detailCacheKey(id));
@@ -291,11 +293,7 @@ export async function getAllProjects(filters?: {
   }
 
   if (filters?.status) {
-    query = query.where('status', '==', filters.status);
-  }
-
-  if (filters?.isActive !== undefined) {
-    query = query.where('isActive', '==', filters.isActive);
+    query = query.where('status', '==', normalizeStatusValue(filters.status));
   }
 
   // Order by code
@@ -304,13 +302,20 @@ export async function getAllProjects(filters?: {
   const snapshot = await query.get();
   let projects = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
+  if (filters?.isActive !== undefined) {
+    const activeStatus = normalizeStatusValue('active');
+    projects = projects.filter((p: any) =>
+      filters.isActive ? p.status === activeStatus : p.status !== activeStatus
+    );
+  }
+
   // Apply search filter (client-side for now)
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
     projects = projects.filter((p: any) => 
-      p.name.toLowerCase().includes(searchLower) ||
+      (p.projectName || '').toLowerCase().includes(searchLower) ||
       p.code.toLowerCase().includes(searchLower) ||
-      (p.location || '').toLowerCase().includes(searchLower)
+      (p.projectCode || '').toLowerCase().includes(searchLower)
     );
   }
 
@@ -323,7 +328,7 @@ export async function getNextProjectCode(): Promise<string> {
   let maxNumber = 0;
 
   snapshot.forEach((doc) => {
-    const data = doc.data() as { code?: string; projectCode?: string } | undefined;
+    const data = doc.data() as { code?: string } | undefined;
     const updateMax = (value?: string) => {
       const parsed = extractNumericSuffix(value);
       if (parsed !== null && parsed > maxNumber) {
@@ -332,7 +337,6 @@ export async function getNextProjectCode(): Promise<string> {
     };
 
     updateMax(data?.code);
-    updateMax(data?.projectCode);
     updateMax(doc.id);
   });
 
@@ -344,7 +348,7 @@ export async function getNextProjectCode(): Promise<string> {
  * Get active projects only
  */
 export async function getActiveProjects(): Promise<any[]> {
-  return getAllProjects({ isActive: true, status: 'active' });
+  return getAllProjects({ status: STATUS_THAI_MAP.active });
 }
 
 export async function getDepartments(): Promise<string[]> {

@@ -15,6 +15,7 @@ export interface User {
   employeeId: string;
   username: string;
   name: string;
+  fullNameEn?: string;
   roleId: string;
   roleCode: string;
   department: string;

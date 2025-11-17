@@ -23,11 +23,9 @@ import projectService, { type Project } from '@/services/projectService';
 export interface ProjectLocation {
   id: string;
   code: string;
-  name: string;
-  location: string;
+  projectName: string;
   department: string;
-  status: 'active' | 'completed' | 'suspended';
-  isActive: boolean;
+  status: string;
 }
 
 export interface ProjectSelectProps {
@@ -89,11 +87,9 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         .map((project) => ({
           id: project.id,
           code: project.code,
-          name: project.name,
-          location: project.location,
+          projectName: project.projectName,
           department: project.department,
           status: project.status,
-          isActive: project.isActive,
         }));
     },
     enabled: Boolean(user),
@@ -147,7 +143,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   const renderValue = (selected: string | string[]) => {
     if (!multiple) {
       const project = projects.find((p) => p.id === selected);
-      return project ? `${project.code} - ${project.name}` : '-- เลือกโครงการ --';
+      return project ? `${project.code} - ${project.projectName}` : '-- เลือกโครงการ --';
     }
 
     const selectedArray = Array.isArray(selected) ? selected : [selected];
@@ -186,7 +182,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
           <MenuItem key={project.id} value={project.id}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
               <span style={{ flex: 1 }}>
-                {project.code} - {project.name}
+                {project.code} - {project.projectName}
               </span>
               <Chip
                 label={project.department}

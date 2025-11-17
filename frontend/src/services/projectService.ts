@@ -12,28 +12,19 @@ import { api, apiClient } from './api/client';
 import {
   type ProjectFormData,
   type ProjectStatus,
-  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_OPTIONS,
 } from '@/validation/projectSchema';
 
 export interface Project {
   id: string;
   code: string;
   projectCode: string;
-  name: string;
-  projectName?: string;
-  location: string;
+  projectName: string;
   department: string;
   projectManager?: string | null;
-  startDate?: Date;
-  endDate?: Date;
   status: ProjectStatus;
-  statusLabel?: string;
-  description?: string;
-  isActive: boolean;
   createdBy: string;
-  createdByName?: string;
   updatedBy: string;
-  updatedByName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,12 +44,10 @@ class ProjectService {
     return {
       ...project,
       projectCode: project.projectCode ?? '',
-      projectName: project.projectName ?? project.name,
+      projectName: project.projectName ?? '',
       department: project.department ?? '',
       projectManager: project.projectManager ?? null,
-      statusLabel: project.statusLabel ?? PROJECT_STATUS_LABELS[project.status as ProjectStatus] ?? project.status,
-      startDate: project.startDate ? new Date(project.startDate) : undefined,
-      endDate: project.endDate ? new Date(project.endDate) : undefined,
+      status: (project.status || PROJECT_STATUS_OPTIONS[0]) as ProjectStatus,
       createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
       updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date(),
     };
@@ -87,7 +76,7 @@ class ProjectService {
    * Get active projects only
    */
   async getActive(): Promise<Project[]> {
-    return this.getAll({ isActive: true, status: 'active' });
+    return this.getAll({ status: PROJECT_STATUS_OPTIONS[0] });
   }
 
   /**
@@ -128,7 +117,7 @@ class ProjectService {
   }
 
   /**
-   * Delete a project (soft delete)
+   * Delete a project
    */
   async delete(id: string): Promise<void> {
     await apiClient.delete(`/projects/${id}`);

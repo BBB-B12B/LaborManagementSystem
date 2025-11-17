@@ -11,6 +11,15 @@ import { projectLocationService } from '../../services/project/ProjectLocationSe
 import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
+const STATUS_MAP: Record<string, 'active' | 'completed' | 'suspended'> = {
+  active: 'active',
+  completed: 'completed',
+  suspended: 'suspended',
+  'กำลังดำเนินการอยู่': 'active',
+  'ปิดโครงการ': 'completed',
+  'ระงับชั่วคราว': 'suspended',
+};
+const STATUS_OPTIONS = Object.keys(STATUS_MAP);
 
 /**
  * GET /api/projects
@@ -20,7 +29,7 @@ router.get(
   '/',
   [
     query('department').optional().isString().trim(),
-    query('status').optional().isIn(['active', 'completed', 'suspended']),
+    query('status').optional().isIn(STATUS_OPTIONS),
     query('search').optional().isString().trim(),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
@@ -39,7 +48,8 @@ router.get(
       if (department) {
         projects = await projectLocationService.getByDepartment(department as string);
       } else if (status) {
-        projects = await projectLocationService.getByStatus(status as any);
+        const normalizedStatus = STATUS_MAP[status as string];
+        projects = await projectLocationService.getByStatus(normalizedStatus);
       } else if (search) {
         const result = await projectLocationService.getAll();
         const keyword = (search as string).toLowerCase();
@@ -115,7 +125,7 @@ router.get('/departments', async (_req: Request, res: Response) => {
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const project = await projectLocationService.getById(req.params.id);
+      const project = await projectLocationService.getById(req.params.id);
 
     if (!project) {
       throw new AppError('Project not found', 404);

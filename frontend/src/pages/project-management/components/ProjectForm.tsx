@@ -1,20 +1,11 @@
 import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Box,
-  Button,
-  Grid,
-  TextField,
-  Typography,
-  Alert,
-  CircularProgress,
-  MenuItem,
-} from '@mui/material';
+import { Box, Button, Grid, TextField, Alert, CircularProgress, MenuItem } from '@mui/material';
 import {
   projectSchema,
   type ProjectFormData,
-  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_OPTIONS,
 } from '@/validation/projectSchema';
 import { useToast } from '@/components/common/Toast';
 import projectService from '@/services/projectService';
@@ -33,6 +24,8 @@ const departmentOptions = [
   { value: 'PD03', label: 'PD-03' },
   { value: 'PD04', label: 'PD-04' },
   { value: 'PD05', label: 'PD-05' },
+  { value: 'HO', label: 'HO' },
+  { value: 'WH', label: 'WH' },
 ];
 
 export const ProjectForm: React.FC<ProjectFormProps> = ({
@@ -49,11 +42,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       code: defaultValues?.code ?? (mode === 'create' ? 'P001' : ''),
       projectCode: defaultValues?.projectCode ?? '',
       department: defaultValues?.department ?? '',
-      name: defaultValues?.name ?? '',
-      status: defaultValues?.status ?? 'active',
-      isActive: defaultValues?.isActive ?? true,
+      projectName: defaultValues?.projectName ?? '',
+      status: defaultValues?.status ?? PROJECT_STATUS_OPTIONS[0],
       projectManager: defaultValues?.projectManager ?? '',
-      statusLabel: defaultValues?.statusLabel,
       ...defaultValues,
     }),
     [defaultValues, mode]
@@ -84,15 +75,15 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
   React.useEffect(() => {
     let isMounted = true;
 
-    if (mode === 'create' && !defaultValues?.code && !hasRequestedCodeRef.current) {
+    if (mode === 'create' && !hasRequestedCodeRef.current) {
       hasRequestedCodeRef.current = true;
       setCodeLoading(true);
       projectService
         .getNextCode()
         .then((code) => {
           if (!isMounted) return;
-
-          const resolvedCode = (code ?? '').trim() || 'P001';
+          const resolvedCode =
+            (code ?? '').trim() || defaultValues?.code || 'P001';
           setValue('code', resolvedCode, { shouldValidate: true });
           setCodeLocked(true);
         })
@@ -100,7 +91,8 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
           console.error('Failed to generate project code automatically', error);
           if (isMounted) {
             toast.error('ไม่สามารถสร้างลำดับโครงการอัตโนมัติได้');
-            setValue('code', 'P001', { shouldValidate: true });
+            const fallback = defaultValues?.code || 'P001';
+            setValue('code', fallback, { shouldValidate: true });
             setCodeLocked(true);
           }
         })
@@ -109,7 +101,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
             setCodeLoading(false);
           }
         });
-    } else if (mode === 'create' && defaultValues?.code) {
+    } else if (mode === 'create') {
       setCodeLocked(true);
     }
 
@@ -122,9 +114,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     try {
       const payload: ProjectFormData = {
         ...data,
-        isActive: data.isActive ?? true,
         projectManager: data.projectManager?.trim() || undefined,
-        statusLabel: PROJECT_STATUS_LABELS[data.status] || data.status,
       };
       await onSubmit(payload);
       toast.success(mode === 'create' ? 'บันทึกข้อมูลสำเร็จ' : 'อัปเดตข้อมูลสำเร็จ');
@@ -150,11 +140,6 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       sx={{ maxWidth: 900, mx: 'auto' }}
     >
       <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Typography variant="h5" gutterBottom>
-            {mode === 'create' ? 'สร้างโครงการใหม่' : 'แก้ไขโครงการ'}
-          </Typography>
-        </Grid>
 
         {Object.keys(errors).length > 0 && (
           <Grid item xs={12}>
@@ -244,9 +229,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
               >
-                {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
+                {PROJECT_STATUS_OPTIONS.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
                   </MenuItem>
                 ))}
               </TextField>
@@ -256,7 +241,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 
         <Grid item xs={12} md={6}>
           <Controller
-            name="name"
+            name="projectName"
             control={control}
             render={({ field }) => (
               <TextField
@@ -264,8 +249,8 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 fullWidth
                 label="ชื่อโครงการ"
                 required
-                error={!!errors.name}
-                helperText={errors.name?.message}
+                error={!!errors.projectName}
+                helperText={errors.projectName?.message}
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
               />

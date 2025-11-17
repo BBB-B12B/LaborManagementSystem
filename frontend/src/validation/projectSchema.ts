@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { requiredString, projectStatusEnum, baseBoolean, errorMessages } from './baseSchemas';
+import { requiredString, projectStatusEnum, PROJECT_STATUS_VALUES, errorMessages } from './baseSchemas';
 
 /**
  * Project create/edit schema
@@ -23,19 +23,16 @@ export const projectSchema = z.object({
 
   department: requiredString('Department is required'),
 
-  name: requiredString('Project name is required')
+  projectName: requiredString('Project name is required')
     .min(3, errorMessages.minLength(3))
     .max(200, errorMessages.maxLength(200)),
 
-  status: projectStatusEnum.default('active'),
-
-  isActive: baseBoolean.default(true),
+  status: projectStatusEnum.default('กำลังดำเนินการอยู่'),
   projectManager: z
     .string()
     .max(200, errorMessages.maxLength(200))
     .optional()
     .transform((val) => (val ? val.trim() : val)),
-  statusLabel: z.string().optional(),
 });
 
 export const projectFilterSchema = z.object({
@@ -45,23 +42,14 @@ export const projectFilterSchema = z.object({
   search: z.string().optional(),
 });
 
-export const PROJECT_STATUS_LABELS = {
-  active: 'กำลังดำเนินการอยู่',
-  suspended: 'ระงับชั่วคราว',
-  completed: 'ปิดโครงการ',
-} as const;
-
-export const getProjectStatusLabel = (status?: string): string => {
-  if (!status) return 'ไม่ทราบสถานะ';
-  return PROJECT_STATUS_LABELS[status as keyof typeof PROJECT_STATUS_LABELS] || status;
-};
+export const PROJECT_STATUS_OPTIONS = PROJECT_STATUS_VALUES;
 
 export type ProjectFormData = z.infer<typeof projectSchema>;
 export type ProjectFilterData = z.infer<typeof projectFilterSchema>;
-export type ProjectStatus = 'active' | 'completed' | 'suspended';
+export type ProjectStatus = (typeof PROJECT_STATUS_VALUES)[number];
 
 export default {
   projectSchema,
   projectFilterSchema,
-  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_OPTIONS,
 };
