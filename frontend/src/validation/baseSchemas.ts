@@ -109,8 +109,8 @@ export const password = requiredString('รหัสผ่าน').min(6, errorM
  * Strong password validation (min 8 characters, contains letter and number)
  */
 export const strongPassword = requiredString('รหัสผ่าน')
-  .min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
-  .regex(/^[A-Za-z]+$/, 'รหัสผ่านต้องเป็นตัวอักษรภาษาอังกฤษเท่านั้น');
+  .min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษรหรือตัวเลข')
+  .regex(/^[A-Za-z0-9]+$/, 'รหัสผ่านต้องเป็นตัวอักษรหรือตัวเลขภาษาอังกฤษเท่านั้น');
 
 /**
  * Username validation (alphanumeric, 3-20 characters, no spaces)
@@ -254,7 +254,7 @@ export const nonEmptyArray = <T extends z.ZodTypeAny>(schema: T, fieldName?: str
 /**
  * Department enum (PD01-PD05)
  */
-export const departmentEnum = createEnum(['PD01', 'PD02', 'PD03', 'PD04', 'PD05'], 'สังกัด');
+export const departmentEnum = createEnum(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'], 'สังกัด');
 
 /**
  * Role enum (8 roles)

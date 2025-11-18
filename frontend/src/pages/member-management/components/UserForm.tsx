@@ -387,6 +387,7 @@ export function UserForm({
               render={({ field }) => (
                 <ProjectSelect
                   multiple
+                  displayProjectNameOnly
                   value={
                     Array.isArray(field.value)
                       ? field.value

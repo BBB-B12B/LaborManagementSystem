@@ -296,9 +296,6 @@ export async function getAllProjects(filters?: {
     query = query.where('status', '==', normalizeStatusValue(filters.status));
   }
 
-  // Order by code
-  query = query.orderBy('code', 'asc');
-
   const snapshot = await query.get();
   let projects = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
@@ -318,6 +315,12 @@ export async function getAllProjects(filters?: {
       (p.projectCode || '').toLowerCase().includes(searchLower)
     );
   }
+
+  projects.sort((a: any, b: any) => {
+    const codeA = (a.code || '').toString();
+    const codeB = (b.code || '').toString();
+    return codeA.localeCompare(codeB);
+  });
 
   setCachedValue(cacheKey, projects);
   return projects;

@@ -15,7 +15,7 @@ export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD';
 /**
  * Department types
  */
-export type Department = 'PD01' | 'PD02' | 'PD03' | 'PD04' | 'PD05';
+export type Department = 'PD01' | 'PD02' | 'PD03' | 'PD04' | 'PD05' | 'HO' | 'WH';
 
 /**
  * Extended Request with user info

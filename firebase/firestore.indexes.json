@@ -144,6 +144,22 @@
         { "fieldPath": "wagePeriodId", "order": "ASCENDING" },
         { "fieldPath": "dcId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "Project",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "Project",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "department", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

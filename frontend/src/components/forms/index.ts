@@ -29,7 +29,7 @@ export type { Skill } from '@/services/skillService';
 export { RoleSelect, ROLES, getRoleByCode, getRoleName } from './RoleSelect';
 export type { RoleSelectProps, Role } from './RoleSelect';
 
-export { DepartmentSelect, DEPARTMENTS, getDepartmentByCode, getDepartmentName, getDepartmentColor } from './DepartmentSelect';
+export { DepartmentSelect, DEPARTMENTS, getDepartmentByCode, getDepartmentName } from './DepartmentSelect';
 export type { DepartmentSelectProps, Department } from './DepartmentSelect';
 
 export { DepartmentAutocomplete } from './DepartmentAutocomplete';

@@ -23,7 +23,7 @@ export const DepartmentAutocomplete: React.FC<DepartmentAutocompleteProps> = ({
   disabled = false,
 }) => {
   const DEFAULT_DEPARTMENTS = React.useMemo(
-    () => ['PD01', 'PD02', 'PD03', 'PD04', 'PD05'],
+    () => ['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'],
     []
   );
 
