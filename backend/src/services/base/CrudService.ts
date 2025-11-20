@@ -43,6 +43,16 @@ export class CrudService<T extends { id: string }> {
   }
 
   /**
+   * Create a new document with a specific ID
+   */
+  async createWithId(id: string, data: Omit<T, 'id'>): Promise<T> {
+    const docRef = this.collection.doc(id);
+    await docRef.set(data as any);
+    const doc = await docRef.get();
+    return doc.data() as T;
+  }
+
+  /**
    * ดึงรายการตาม ID
    * Get document by ID
    */

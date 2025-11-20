@@ -49,8 +49,9 @@ export class UserService extends CrudService<User> {
     const passwordHash = await bcrypt.hash(input.password, config.bcryptRounds);
 
     const now = new Date();
+    const docId = input.employeeId.toString();
     const userData: Omit<User, 'id'> = {
-      employeeId: input.employeeId,
+      employeeId: docId,
       username: input.username,
       passwordHash,
       name: input.name,
@@ -66,7 +67,7 @@ export class UserService extends CrudService<User> {
       updatedBy: createdBy,
     };
 
-    const user = await this.create(userData);
+    const user = await this.createWithId(docId, userData);
     return this.toDTO(user);
   }
 

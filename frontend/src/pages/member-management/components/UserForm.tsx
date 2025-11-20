@@ -1,17 +1,9 @@
 /**
  * User Form Component
- * ฟอร์มจัดการผู้ใช้
- *
- * Features:
- * - Create/Edit user
- * - Username validation (unique, no spaces)
- * - Password management (create: required, edit: optional)
- * - Role and department selection
- * - Multi-select accessible projects
- * - Admin only (FR-M-001)
+ * Create / Edit user with validation
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -41,38 +33,13 @@ import { DepartmentSelect } from '../../../components/forms/DepartmentSelect';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 
 export interface UserFormProps {
-  /**
-   * Initial form data (for edit mode)
-   */
   defaultValues?: Partial<UserEditInput>;
-
-  /**
-   * Callback when form is submitted successfully
-   */
   onSubmit: (data: UserCreateInput | UserEditInput) => Promise<void>;
-
-  /**
-   * Callback when cancel button is clicked
-   */
   onCancel: () => void;
-
-  /**
-   * Form mode
-   */
   mode: 'create' | 'edit';
-
-  /**
-   * Loading state
-   */
   isLoading?: boolean;
 }
 
-/**
- * UserForm Component
- *
- * FR-M-002: สร้าง/แก้ไขผู้ใช้
- * FR-M-006: Password >= 8 characters with bcrypt
- */
 export function UserForm({
   defaultValues,
   onSubmit,
@@ -84,10 +51,9 @@ export function UserForm({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Use different schema based on mode
   const schema = mode === 'create' ? userCreateSchema : userEditSchema;
 
-  const initialValues = React.useMemo(
+  const initialValues = useMemo(
     () => ({
       isActive: true,
       projectLocationIds: [],
@@ -106,7 +72,7 @@ export function UserForm({
     defaultValues: initialValues,
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     reset(initialValues);
   }, [initialValues, reset]);
 
@@ -115,49 +81,52 @@ export function UserForm({
       setSubmitError(null);
       await onSubmit(data);
     } catch (error: any) {
-      setSubmitError(error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      setSubmitError(error.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง');
     }
   };
 
-  const handleTogglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
-
-  const handleToggleConfirmPasswordVisibility = () => {
-    setShowConfirmPassword((prev) => !prev);
-  };
+  const passwordHelper =
+    mode === 'edit'
+      ? 'ถ้าไม่เปลี่ยนรหัส ให้เว้นว่าง'
+      : 'รหัสผ่านอย่างน้อย 6 ตัวอักษร (A-Z, a-z, 0-9)';
 
   return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        {mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขข้อมูลผู้ใช้'}
+    <Paper
+      elevation={0}
+      sx={{
+        p: { xs: 2.5, md: 3.5 },
+        borderRadius: 3,
+        border: '1px solid #e9ecef',
+        backgroundColor: '#fafafa',
+      }}
+    >
+      <Typography variant='h5' gutterBottom sx={{ fontWeight: 700 }}>
+        {mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้'}
       </Typography>
 
       {submitError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity='error' sx={{ mb: 2 }}>
           {submitError}
         </Alert>
       )}
 
-      <Box component="form" onSubmit={handleSubmit(handleFormSubmit)} noValidate>
-        <Grid container spacing={3}>
-          {/* Basic Information Section */}
+      <Box component='form' onSubmit={handleSubmit(handleFormSubmit)} noValidate>
+        <Grid container spacing={{ xs: 2, md: 3 }}>
           <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant='subtitle1' sx={{ mb: 1, fontWeight: 600 }}>
               ข้อมูลพื้นฐาน
             </Typography>
           </Grid>
 
-          {/* Employee ID */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="employeeId"
+              name='employeeId'
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label="รหัสพนักงาน"
+                  label='รหัสพนักงาน *'
                   required
                   fullWidth
                   error={!!errors.employeeId}
@@ -168,16 +137,15 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Full Name */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="name"
+              name='name'
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label="ชื่อ-นามสกุล"
+                  label='ชื่อ-นามสกุล *'
                   required
                   fullWidth
                   error={!!errors.name}
@@ -188,56 +156,48 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Username */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="username"
+              name='username'
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label="Username"
+                  label='Username *'
                   required
                   fullWidth
                   error={!!errors.username}
-                  helperText={
-                    errors.username?.message || 'Username ไม่สามารถมีช่องว่างได้'
-                  }
+                  helperText={errors.username?.message || 'ไม่สามารถมีช่องว่างและต้องไม่ซ้ำ'}
                   disabled={isLoading || isSubmitting}
                 />
               )}
             />
           </Grid>
 
-          {/* Password */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="password"
+              name='password'
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label="รหัสผ่าน"
+                  label='รหัสผ่าน *'
                   type={showPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
                   error={!!errors.password}
-                  helperText={
-                    errors.password?.message ||
-                    (mode === 'edit'
-                      ? 'เว้นว่างหากไม่ต้องการเปลี่ยนรหัสผ่าน'
-                      : 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร (A-Z)')
-                  }
+                  helperText={errors.password?.message || passwordHelper}
                   disabled={isLoading || isSubmitting}
                   InputProps={{
                     endAdornment: (
-                      <InputAdornment position="end">
+                      <InputAdornment position='end'>
                         <IconButton
-                          onClick={handleTogglePasswordVisibility}
-                          edge="end"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          edge='end'
                           disabled={isLoading || isSubmitting}
+                          aria-label='toggle password visibility'
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
@@ -249,29 +209,29 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Confirm Password */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="confirmPassword"
+              name='confirmPassword'
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label="ยืนยันรหัสผ่าน"
+                  label='ยืนยันรหัสผ่าน *'
                   type={showConfirmPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
                   error={!!errors.confirmPassword}
-                  helperText={errors.confirmPassword?.message}
+                  helperText={errors.confirmPassword?.message || 'ต้องตรงกับรหัสผ่าน'}
                   disabled={isLoading || isSubmitting}
                   InputProps={{
                     endAdornment: (
-                      <InputAdornment position="end">
+                      <InputAdornment position='end'>
                         <IconButton
-                          onClick={handleToggleConfirmPasswordVisibility}
-                          edge="end"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          edge='end'
                           disabled={isLoading || isSubmitting}
+                          aria-label='toggle confirm password visibility'
                         >
                           {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
@@ -283,17 +243,15 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Role & Department Section */}
           <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mt: 2, mb: 2 }}>
+            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               บทบาทและแผนก
             </Typography>
           </Grid>
 
-          {/* Role */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="roleId"
+              name='roleId'
               control={control}
               render={({ field }) => (
                 <RoleSelect
@@ -308,10 +266,9 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Department */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="department"
+              name='department'
               control={control}
               render={({ field }) => (
                 <DepartmentSelect
@@ -326,21 +283,19 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Date Section */}
           <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mt: 2, mb: 2 }}>
+            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               วันที่
             </Typography>
           </Grid>
 
-          {/* Date of Birth */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="dateOfBirth"
+              name='dateOfBirth'
               control={control}
               render={({ field }) => (
                 <DatePicker
-                  label="วันเกิด"
+                  label='วันเกิด'
                   value={field.value}
                   onChange={field.onChange}
                   error={!!errors.dateOfBirth}
@@ -352,14 +307,13 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Start Date */}
           <Grid item xs={12} md={6}>
             <Controller
-              name="startDate"
+              name='startDate'
               control={control}
               render={({ field }) => (
                 <DatePicker
-                  label="วันที่เริ่มงาน"
+                  label='วันที่เริ่มงาน *'
                   value={field.value}
                   onChange={field.onChange}
                   error={!!errors.startDate}
@@ -372,17 +326,15 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Project Access Section */}
           <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mt: 2, mb: 2 }}>
+            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               โครงการที่เข้าถึงได้
             </Typography>
           </Grid>
 
-          {/* Accessible Projects */}
           <Grid item xs={12}>
             <Controller
-              name="projectLocationIds"
+              name='projectLocationIds'
               control={control}
               render={({ field }) => (
                 <ProjectSelect
@@ -405,10 +357,7 @@ export function UserForm({
                     )
                   }
                   error={!!errors.projectLocationIds}
-                  helperText={
-                    errors.projectLocationIds?.message ||
-                    'เลือกโครงการที่ผู้ใช้สามารถเข้าถึงได้'
-                  }
+                  helperText={errors.projectLocationIds?.message || 'เลือกหลายโครงการได้'}
                   disabled={isLoading || isSubmitting}
                   required
                 />
@@ -416,17 +365,15 @@ export function UserForm({
             />
           </Grid>
 
-          {/* Status Section */}
           <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mt: 2, mb: 2 }}>
+            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               สถานะ
             </Typography>
           </Grid>
 
-          {/* Active Status */}
           <Grid item xs={12}>
             <Controller
-              name="isActive"
+              name='isActive'
               control={control}
               render={({ field }) => (
                 <FormControlLabel
@@ -437,29 +384,24 @@ export function UserForm({
                       disabled={isLoading || isSubmitting}
                     />
                   }
-                  label="ใช้งาน (Active)"
+                  label='เปิดใช้งาน (Active)'
                 />
               )}
             />
           </Grid>
 
-          {/* Form Actions */}
           <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+            <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
               <Button
-                type="submit"
-                variant="contained"
-                color="primary"
+                type='submit'
+                variant='contained'
+                color='primary'
                 disabled={isLoading || isSubmitting}
                 startIcon={isSubmitting && <CircularProgress size={20} />}
               >
-                {mode === 'create' ? 'สร้างผู้ใช้' : 'บันทึกการแก้ไข'}
+                {mode === 'create' ? 'บันทึกผู้ใช้ใหม่' : 'บันทึกการแก้ไข'}
               </Button>
-              <Button
-                variant="outlined"
-                onClick={onCancel}
-                disabled={isLoading || isSubmitting}
-              >
+              <Button variant='outlined' onClick={onCancel} disabled={isLoading || isSubmitting}>
                 ยกเลิก
               </Button>
             </Box>

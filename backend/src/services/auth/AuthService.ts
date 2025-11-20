@@ -1,10 +1,8 @@
 /**
  * Authentication Service
- * จัดการการล็อกอิน/ออก และโทเคน
  */
 
 import { userService } from './UserService';
-import { portalUserService } from './PortalUserService';
 import { User } from '../../models/User';
 
 export interface LoginCredentials {
@@ -30,22 +28,11 @@ export interface AuthResponse {
 
 export class AuthService {
   /**
-   * Login with username and password
+   * Login with username and password (single source: `users` collection)
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const { username, password } = credentials;
 
-    // Primary: portal users stored in Firestore collection `User`
-    const portalRecord = await portalUserService.findByUsernameInsensitive(username);
-    if (portalRecord) {
-      const passwordMatches = portalUserService.verifyPassword(portalRecord.data, password);
-      if (!passwordMatches) {
-        throw new Error('Invalid username or password');
-      }
-      return portalUserService.toAuthResponse(portalRecord);
-    }
-
-    // Fallback: application users stored in `users` collection
     const user = await userService.findByUsername(username);
     if (!user) {
       throw new Error('Invalid username or password');
