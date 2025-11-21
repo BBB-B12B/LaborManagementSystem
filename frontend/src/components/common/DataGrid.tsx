@@ -192,7 +192,15 @@ export const DataGrid: React.FC<DataGridProps> = ({
       )}
 
       {/* DataGrid */}
-      <Paper elevation={2}>
+      <Paper
+        elevation={2}
+        sx={{
+          p: 1,
+          borderRadius: 12,
+          boxShadow: '0 10px 20px rgba(23,24,36,0.08)',
+          border: '1px solid #e5e7ed',
+        }}
+      >
         <MuiDataGrid
           rows={rows}
           columns={columns}
@@ -202,27 +210,41 @@ export const DataGrid: React.FC<DataGridProps> = ({
           sx={{
             height: autoHeight ? 'auto' : height,
             border: 'none',
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none',
-            },
-            '& .MuiDataGrid-cell:focus-within': {
-              outline: 'none',
-            },
-            '& .MuiDataGrid-columnHeader:focus': {
-              outline: 'none',
-            },
-            '& .MuiDataGrid-columnHeader:focus-within': {
-              outline: 'none',
+            borderRadius: 10,
+            backgroundColor: '#ffffff',
+            '& .MuiDataGrid-columnHeaders': {
+              backgroundColor: '#f8f8fb',
+              borderBottom: '1px solid #e5e7ed',
+              color: '#3a4055',
+              fontWeight: 700,
+              fontSize: '0.94rem',
             },
             '& .MuiDataGrid-columnSeparator': {
               display: 'none',
             },
-            '& .MuiDataGrid-columnHeaders': {
-              borderBottom: 'none',
-            },
             '& .MuiDataGrid-cell': {
-              borderBottom: 'none',
+              borderBottom: '1px solid #f0f1f5',
               borderRight: 'none',
+              color: '#2d3040',
+            },
+            '& .MuiDataGrid-row:nth-of-type(even)': {
+              backgroundColor: '#fafbfe',
+            },
+            '& .MuiDataGrid-row:hover': {
+              backgroundColor: '#f4f6fb',
+            },
+            '& .MuiDataGrid-row.Mui-selected': {
+              backgroundColor: 'rgba(214, 40, 40, 0.06) !important',
+            },
+            '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+              outline: 'none',
+            },
+            '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+              outline: 'none',
+            },
+            '& .MuiDataGrid-footerContainer': {
+              borderTop: '1px solid #e5e7ed',
+              backgroundColor: '#f8f8fb',
             },
           }}
           // Pagination
