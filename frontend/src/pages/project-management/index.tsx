@@ -12,13 +12,13 @@ import {
   Button,
   Paper,
   Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton, DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
+import { BackButton, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { projectService, type Project } from '@/services/projectService';
 import { ProjectDrawer } from './components/ProjectDrawer';
 import { PROJECT_STATUS_OPTIONS, type ProjectFormData } from '@/validation/projectSchema';
@@ -210,43 +210,44 @@ export default function ProjectListPage() {
     },
     {
       field: 'actions',
-      type: 'actions',
       headerName: 'จัดการ',
-      width: 140,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={<EditIcon />}
-          label="แก้ไข"
-          onClick={() => handleEdit(params.row as Project)}
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon />}
-          label="ลบ"
-          onClick={() =>
-            handleDelete(
-              params.id as string,
-              params.row.projectName || params.row.code
-            )
-          }
-        />,
-      ],
+      width: 120,
+      sortable: false,
+      filterable: false,
+      renderCell: (params: GridRenderCellParams) => (
+        <Box>
+          <Tooltip title="แก้ไข">
+            <IconButton
+              size="small"
+              onClick={() => handleEdit(params.row as Project)}
+              color="primary"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="ลบ">
+            <IconButton
+              size="small"
+              onClick={() =>
+                handleDelete(
+                  params.id as string,
+                  params.row.projectName || params.row.code
+                )
+              }
+              color="error"
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
     },
   ];
-
-  if (isLoading) {
-    return (
-      <ProtectedRoute>
-        <Layout>
-          <LoadingSpinner message="กำลังโหลดข้อมูลโครงการ..." />
-        </Layout>
-      </ProtectedRoute>
-    );
-  }
 
   return (
     <ProtectedRoute requiredRoles={['GOD', 'FM', 'PM', 'AM']}>
       <Layout>
-        <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
           <BackButton href="/management" />
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h4">จัดการโครงการ</Typography>
@@ -259,20 +260,33 @@ export default function ProjectListPage() {
             </Button>
           </Box>
 
-          <Paper elevation={2}>
-            <DataGrid
-              rows={projects || []}
-              columns={columns}
-              loading={isLoading}
-              autoHeight
-              disableRowSelectionOnClick
-              initialState={{
-                pagination: { paginationModel: { pageSize: 25 } },
-                sorting: { sortModel: [{ field: 'code', sort: 'asc' }] },
-              }}
-              pageSizeOptions={[10, 25, 50, 100]}
-              hideFooter
-            />
+          <Paper sx={{ width: '100%' }}>
+            {isLoading ? (
+              <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+                <LoadingSpinner size="large" />
+              </Box>
+            ) : (
+              <DataGrid
+                rows={projects || []}
+                columns={columns}
+                autoHeight
+                disableSelectionOnClick
+                initialState={{
+                  pagination: { paginationModel: { pageSize: 25 } },
+                  sorting: { sortModel: [{ field: 'code', sort: 'asc' }] },
+                }}
+                pageSizeOptions={[10, 25, 50, 100]}
+                sx={{
+                  '& .MuiDataGrid-cell': {
+                    borderBottom: '1px solid #f0f0f0',
+                  },
+                  '& .MuiDataGrid-columnHeaders': {
+                    backgroundColor: '#fafafa',
+                    borderBottom: '2px solid #e0e0e0',
+                  },
+                }}
+              />
+            )}
           </Paper>
           <DeleteConfirmDialog />
 
@@ -291,3 +305,4 @@ export default function ProjectListPage() {
     </ProtectedRoute>
   );
 }
+
