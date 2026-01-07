@@ -6,7 +6,7 @@
  */
 
 import { collections } from '../../config/collections';
-import { CrudService } from '../base/CrudService';
+import { BaseCrudService } from '../base/BaseCrudService';
 import {
   DailyReport,
   CreateDailyReportInput,
@@ -16,7 +16,7 @@ import {
 } from '../../models/DailyReport';
 import { EditHistory, CreateEditHistoryInput } from '../../models/EditHistory';
 
-export class DailyReportService extends CrudService<DailyReport> {
+export class DailyReportService extends BaseCrudService<DailyReport> {
   constructor() {
     super(collections.dailyReports as any, 'dailyReports');
   }

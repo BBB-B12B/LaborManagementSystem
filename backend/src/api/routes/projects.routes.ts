@@ -9,8 +9,11 @@ import { Router, Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { projectLocationService } from '../../services/project/ProjectLocationService';
 import { AppError } from '../middleware/errorHandler';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 
 const router = Router();
+router.use(authenticate);
 const STATUS_MAP: Record<string, 'active' | 'completed' | 'suspended'> = {
   active: 'active',
   completed: 'completed',
@@ -150,6 +153,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post(
   '/',
+  authorize(['AM', 'OE', 'PE', 'PM', 'PD']),
   [
     body('code').notEmpty().trim(),
     body('name').notEmpty().trim(),
@@ -169,8 +173,10 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get createdBy from authenticated user
-      const createdBy = req.body.createdBy || 'system';
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input = {
@@ -201,6 +207,7 @@ router.post(
  */
 router.put(
   '/:id',
+  authorize(['AM', 'OE', 'PE', 'PM', 'PD']),
   [
     body('code').optional().trim(),
     body('name').optional().trim(),
@@ -220,8 +227,10 @@ router.put(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get updatedBy from authenticated user
-      const updatedBy = req.body.updatedBy || 'system';
+      const updatedBy = (req as AuthRequest).user?.id;
+      if (!updatedBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input: any = { ...req.body };

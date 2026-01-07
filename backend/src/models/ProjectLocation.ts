@@ -1,10 +1,3 @@
-/**
- * ProjectLocation Model
- * โครงการ
- *
- * Description: Construction sites or project locations where daily contractors work.
- * Firestore Collection: Project
- */
 
 export type ProjectStatus = 'active' | 'completed' | 'suspended';
 
@@ -52,30 +45,36 @@ export interface UpdateProjectLocationInput {
   isActive?: boolean;
 }
 
-/**
- * Firestore document converter for ProjectLocation
- */
 export const projectLocationConverter = {
-  toFirestore: (project: Omit<ProjectLocation, 'id'>): any => {
+  toFirestore: (project: any): any => {
     return {
-      code: project.code.toUpperCase(),
+      code: project.code,
       name: project.name,
       location: project.location,
       department: project.department,
-      projectManager: project.projectManager || null,
-      startDate: project.startDate || null,
-      endDate: project.endDate || null,
+      projectManager: project.projectManager,
+      startDate: project.startDate,
+      endDate: project.endDate,
       status: project.status,
-      description: project.description || null,
+      description: project.description,
       isActive: project.isActive,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
       createdBy: project.createdBy,
-      updatedBy: project.updatedBy,
+      updatedBy: project.updatedBy
     };
   },
   fromFirestore: (snapshot: any): ProjectLocation => {
     const data = snapshot.data();
+
+    // Safely handle dates
+    const safeDate = (val: any): Date | undefined => {
+      if (!val) return undefined;
+      if (typeof val.toDate === 'function') return val.toDate();
+      if (typeof val === 'string') return new Date(val);
+      return val;
+    };
+
     return {
       id: snapshot.id,
       code: data.code,
@@ -83,15 +82,15 @@ export const projectLocationConverter = {
       location: data.location,
       department: data.department,
       projectManager: data.projectManager,
-      startDate: data.startDate?.toDate(),
-      endDate: data.endDate?.toDate(),
+      startDate: safeDate(data.startDate),
+      endDate: safeDate(data.endDate),
       status: data.status,
       description: data.description,
       isActive: data.isActive !== undefined ? data.isActive : true,
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate(),
+      createdAt: safeDate(data.createdAt) || new Date(),
+      updatedAt: safeDate(data.updatedAt) || new Date(),
       createdBy: data.createdBy,
-      updatedBy: data.updatedBy,
+      updatedBy: data.updatedBy
     };
-  },
+  }
 };

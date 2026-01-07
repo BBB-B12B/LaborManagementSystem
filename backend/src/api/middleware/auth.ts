@@ -6,6 +6,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from './errorHandler';
 import { logger } from '../../utils/logger';
+import { auth as firebaseAuth } from '../../config/firebase';
+import { userService } from '../../services/auth/UserService';
 
 /**
  * Role types ตาม data-model.md
@@ -22,6 +24,7 @@ export type Department = 'PD01' | 'PD02' | 'PD03' | 'PD04' | 'PD05' | 'HO' | 'WH
  */
 export interface AuthRequest extends Request {
   user?: {
+    uid: string; // Required for compatibility
     id: string;
     employeeId: string;
     username: string;
@@ -35,6 +38,53 @@ export interface AuthRequest extends Request {
 }
 
 /**
+ * Resolve application user profile from a decoded Firebase ID token.
+ */
+export async function resolveUserProfile(decoded: any) {
+  /*
+  const profile =
+    (decoded.uid && (await userService.getById(decoded.uid))) ||
+    (decoded.uid && (await userService.findByEmployeeId(decoded.uid))) ||
+    (decoded.email && (await userService.findByUsername(decoded.email))) ||
+    (decoded.email &&
+      (await userService.findByUsername(decoded.email.split('@')[0]))) ||
+    (decoded as any).employeeId
+      ? await userService.findByEmployeeId((decoded as any).employeeId)
+      : null;
+  */
+
+  // Debug Log
+  logger.debug(`[Auth] Resolving profile for decoded: ${JSON.stringify(decoded)}`);
+
+  let profile = null;
+  if (decoded.uid) {
+    profile = await userService.getById(decoded.uid);
+    if (profile) logger.debug(`[Auth] Found by ID: ${decoded.uid}`);
+
+    if (!profile) {
+      profile = await userService.findByEmployeeId(decoded.uid);
+      if (profile) logger.debug(`[Auth] Found by EmployeeID (via uid): ${decoded.uid}`);
+    }
+  }
+
+  if (!profile && decoded.email) {
+    profile = await userService.findByUsername(decoded.email);
+    if (profile) logger.debug(`[Auth] Found by Username (via email): ${decoded.email}`);
+  }
+
+  if (!profile && decoded.user_id) {
+    profile = await userService.getById(decoded.user_id);
+    if (profile) logger.debug(`[Auth] Found by user_id: ${decoded.user_id}`);
+  }
+
+  if (!profile) {
+    logger.warn(`[Auth] User profile resolution failed for token:`, decoded);
+  }
+
+  return profile;
+}
+
+/**
  * Authenticate user middleware
  * ตรวจสอบว่า user login แล้วหรือยัง
  *
@@ -43,45 +93,68 @@ export interface AuthRequest extends Request {
  * - Option 2: JWT token (req.headers.authorization)
  * - Option 3: Firebase Auth (req.headers.authorization with Firebase token)
  */
-export function authenticate(
+export async function authenticate(
   req: AuthRequest,
   _res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   try {
-    // TODO: Implement authentication logic based on chosen strategy
-    // For now, assume user is attached to request by previous middleware
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : null;
 
-    // Example for session-based:
-    // if (!req.session?.user) {
-    //   throw new AppError('Unauthorized - Please login', 401);
-    // }
-    // req.user = req.session.user;
+    if (!token) {
+      throw new AppError('Unauthorized - Missing Bearer token', 401);
+    }
 
-    // Example for JWT:
-    // const token = req.headers.authorization?.replace('Bearer ', '');
-    // if (!token) {
-    //   throw new AppError('Unauthorized - No token provided', 401);
-    // }
-    // const decoded = verifyJWT(token);
-    // req.user = decoded;
+    logger.debug(`[Auth] Verifying token: ${token.substring(0, 10)}...`);
+    let decoded;
 
-    // Temporary: Check if user exists in request
-    if (!req.user) {
-      const mockUserHeader = req.headers['x-mock-user'];
-      if (typeof mockUserHeader === 'string') {
-        try {
-          const decodedMockUser = Buffer.from(mockUserHeader, 'base64').toString('utf8');
-          req.user = JSON.parse(decodedMockUser);
-        } catch (error) {
-          logger.warn('Failed to parse X-Mock-User header', { error });
+    // DEVELOPMENT ONLY: Bypass signature verification if using Emulator
+    // The emulator often causes signature issues due to clock skew or key mismatch
+    if (process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.NODE_ENV === 'development') {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = Buffer.from(base64, 'base64').toString('utf-8');
+          decoded = JSON.parse(jsonPayload);
+          logger.debug(`[Auth] Emulator Mode: Signature verification bypassed for UID: ${decoded.uid}`);
         }
+      } catch (decodeError) {
+        logger.warn(`[Auth] Failed to manual decode token in emulator mode, falling back to verifyIdToken`);
       }
     }
 
-    if (!req.user) {
-      throw new AppError('Unauthorized - Please login', 401);
+    if (!decoded) {
+      try {
+        decoded = await firebaseAuth.verifyIdToken(token);
+        logger.debug(`[Auth] Token verified for UID: ${decoded.uid}`);
+      } catch (verifyError: any) {
+        logger.error(`[Auth] Token verification failed: ${verifyError.message}`, { error: verifyError });
+        throw new AppError(`Authentication failed: ${verifyError.message}`, 401);
+      }
     }
+
+    const profile = await resolveUserProfile(decoded);
+
+    if (!profile) {
+      throw new AppError('Unauthorized - User profile not found', 401);
+    }
+
+    req.user = {
+      uid: decoded.uid,
+      id: profile.id,
+      employeeId: profile.employeeId,
+      username: profile.username,
+      name: profile.name,
+      roleId: profile.roleId,
+      roleCode: profile.roleId as UserRole,
+      department: profile.department,
+      projectLocationIds: profile.projectLocationIds || [],
+      isActive: profile.isActive,
+    };
 
     // Check if user is active
     if (!req.user.isActive) {
@@ -116,7 +189,7 @@ export function checkRole(allowedRoles: UserRole[]) {
 
       const userRole = req.user.roleCode;
 
-      if (userRole === 'GOD') {
+      if ((userRole as string) === 'GOD') {
         next();
         return;
       }

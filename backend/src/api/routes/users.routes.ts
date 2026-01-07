@@ -12,6 +12,8 @@ import { userService } from '../../services/auth/UserService';
 import { CreateUserInput } from '../../models/User';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -19,6 +21,10 @@ const upload = multer({
 });
 
 const normalizeKey = (value: string): string => value.trim().toLowerCase();
+
+const router = Router();
+router.use(authenticate);
+router.use(authorize(['AM']));
 
 function parseCsv(content: string): string[][] {
   const rows: string[][] = [];
@@ -106,9 +112,6 @@ const toProjectIds = (value: string): string[] => {
     .map((item) => item.trim())
     .filter(Boolean);
 };
-
-const router = Router();
-
 /**
  * GET /api/users
  * ดึงรายการผู้ใช้ทั้งหมด (พร้อม pagination)
@@ -210,8 +213,10 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get createdBy from authenticated user
-      const createdBy = req.body.createdBy || 'system';
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       const startDate = new Date(req.body.startDate);
       if (Number.isNaN(startDate.getTime())) {
@@ -376,8 +381,10 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
  */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    // TODO: Get updatedBy from authenticated user
-    const updatedBy = req.body.updatedBy || 'system';
+    const updatedBy = (req as AuthRequest).user?.id;
+    if (!updatedBy) {
+      throw new AppError('Unauthorized - Missing user context', 401);
+    }
 
     const user = await userService.updateUser(req.params.id, req.body, updatedBy);
 

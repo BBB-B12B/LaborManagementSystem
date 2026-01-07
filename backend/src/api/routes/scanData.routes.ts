@@ -8,7 +8,8 @@
 import { Router, Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import multer from 'multer';
-import type { AuthRequest } from '../middleware/auth';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 import { scanDataService } from '../../services/scanData/ScanDataService';
 import { AppError } from '../middleware/errorHandler';
 import {
@@ -18,6 +19,7 @@ import {
 } from '../../services/scanData/ScanDataImportUtils';
 
 const router = Router();
+router.use(authenticate);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -221,6 +223,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post(
   '/import',
+  authorize(['AM']),
   upload.single('file'),
   [body('projectLocationId').notEmpty().withMessage('กรุณาเลือกโครงการ')],
   async (req: AuthRequest, res: Response) => {
@@ -314,8 +317,10 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get importedBy from authenticated user
-      const importedBy = req.body.importedBy || 'system';
+    const importedBy = req.user?.id;
+    if (!importedBy) {
+      throw new AppError('Unauthorized - Missing user context', 401);
+    }
 
       // Convert date strings to Date objects
       const input = {

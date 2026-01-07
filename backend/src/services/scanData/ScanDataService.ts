@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import type { FirebaseFirestore } from 'firebase-admin/firestore';
-import { CrudService } from '../base/CrudService';
+import { BaseCrudService } from '../base/BaseCrudService';
 import {
   ScanData,
   CreateScanDataInput,
@@ -64,7 +64,7 @@ interface PreparedImportRecord {
  * ScanDataService
  * Extends CrudService with scan data operations
  */
-class ScanDataService extends CrudService<ScanData> {
+class ScanDataService extends BaseCrudService<ScanData> {
   constructor() {
     super(collections.scanData);
   }
@@ -419,8 +419,8 @@ class ScanDataService extends CrudService<ScanData> {
             record.rawData ||
             (record.rawLine
               ? {
-                  line: record.rawLine,
-                }
+                line: record.rawLine,
+              }
               : undefined),
         };
 

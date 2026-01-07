@@ -9,6 +9,8 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authService } from '../../services/auth/AuthService';
 import { AppError } from '../middleware/errorHandler';
+import { auth as firebaseAuth } from '../../config/firebase';
+import { resolveUserProfile } from '../middleware/auth';
 
 const router = Router();
 
@@ -37,7 +39,16 @@ router.post(
         data: result,
       });
     } catch (error: any) {
-      res.status(401).json({
+      if (error.message === 'Invalid username or password') {
+        res.status(401).json({
+          success: false,
+          error: 'Invalid username or password',
+        });
+        return;
+      }
+
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
         success: false,
         error: error.message || 'Login failed',
       });

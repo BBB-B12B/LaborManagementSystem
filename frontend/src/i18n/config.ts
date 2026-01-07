@@ -36,21 +36,15 @@ i18n
   .init({
     resources,
     fallbackLng: 'th', // Default to Thai
-    lng: typeof window !== 'undefined'
-      ? (localStorage.getItem('i18nextLng') || 'th')
-      : 'th', // Use localStorage only on client-side
+    lng: 'th', // Force initial language to Thai to match Server (prevent Hydration Error)
     debug: process.env.NODE_ENV === 'development',
 
     interpolation: {
       escapeValue: false, // React already escapes values
     },
 
-    detection: typeof window !== 'undefined' ? {
-      // Order of language detection (client-side only)
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
-      lookupLocalStorage: 'i18nextLng',
-    } : undefined,
+    // Disable auto-detection to ensure Server/Client sync on first render
+    detection: undefined,
 
     react: {
       useSuspense: false,

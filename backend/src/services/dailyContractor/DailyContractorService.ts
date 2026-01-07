@@ -6,7 +6,7 @@
  */
 
 import bcrypt from 'bcrypt';
-import { CrudService, PaginationOptions } from '../base/CrudService';
+import { BaseCrudService, PaginationOptions } from '../base/BaseCrudService';
 import {
   DailyContractor,
   DailyContractorDTO,
@@ -33,7 +33,7 @@ import { config } from '../../config';
  * DailyContractorService
  * Extends CrudService with DC-specific operations
  */
-class DailyContractorService extends CrudService<DailyContractor> {
+class DailyContractorService extends BaseCrudService<DailyContractor> {
   constructor() {
     super(collections.dailyContractors);
   }

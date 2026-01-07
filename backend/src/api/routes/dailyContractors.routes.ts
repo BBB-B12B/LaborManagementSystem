@@ -12,8 +12,11 @@ import { dailyContractorService } from '../../services/dailyContractor/DailyCont
 import type { DailyContractorDTO } from '../../models/DailyContractor';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 
 const router = Router();
+router.use(authenticate);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -236,7 +239,11 @@ router.get('/active', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/import', upload.single('file'), async (req: Request, res: Response) => {
+router.post(
+  '/import',
+  authorize(['AM', 'FM']),
+  upload.single('file'),
+  async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       throw new AppError('กรุณาอัปโหลดไฟล์ CSV', 400);
@@ -576,6 +583,7 @@ router.post(
       .isISO8601()
       .withMessage('Invalid endDate'),
   ],
+  authorize(['AM', 'FM']),
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -583,8 +591,10 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get createdBy from authenticated user
-      const createdBy = req.body.createdBy || 'system';
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input = {
@@ -639,6 +649,7 @@ router.put(
       .isISO8601()
       .withMessage('Invalid endDate'),
   ],
+  authorize(['AM', 'FM']),
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -646,8 +657,10 @@ router.put(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get updatedBy from authenticated user
-      const updatedBy = req.body.updatedBy || 'system';
+      const updatedBy = (req as AuthRequest).user?.id;
+      if (!updatedBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input: any = { ...req.body };
@@ -682,7 +695,7 @@ router.put(
  * DELETE /api/daily-contractors/:id
  * ลบ Daily Contractor (soft delete)
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authorize(['AM', 'FM']), async (req: Request, res: Response) => {
   try {
     const success = await dailyContractorService.softDelete(req.params.id);
 

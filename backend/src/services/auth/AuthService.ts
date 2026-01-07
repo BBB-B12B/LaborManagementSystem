@@ -4,6 +4,7 @@
 
 import { userService } from './UserService';
 import { User } from '../../models/User';
+import { auth as firebaseAuth } from '../../config/firebase';
 
 export interface LoginCredentials {
   username: string;
@@ -32,20 +33,36 @@ export class AuthService {
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const { username, password } = credentials;
+    // Debug Log
+    console.log(`[AuthService] Attempting login for username: '${username}'`);
 
     const user = await userService.findByUsername(username);
     if (!user) {
+      console.warn(`[AuthService] User not found: '${username}'`);
       throw new Error('Invalid username or password');
     }
 
     if (!user.isActive) {
+      console.warn(`[AuthService] User inactive: '${username}'`);
       throw new Error('User account is inactive');
     }
 
     const isValidPassword = await userService.verifyPassword(user, password);
     if (!isValidPassword) {
+      console.warn(`[AuthService] Password mismatch for user: '${username}'`);
       throw new Error('Invalid username or password');
     }
+
+    console.log(`[AuthService] Login successful for: '${username}'`);
+
+    const customClaims = {
+      role: user.roleCode,
+      department: user.department,
+    };
+
+    // Create Firebase Custom Token
+    // Frontend must use signInWithCustomToken() to exchange this for an ID Token
+    const token = await firebaseAuth.createCustomToken(user.id, customClaims);
 
     return {
       user: {
@@ -60,7 +77,7 @@ export class AuthService {
         projectLocationIds: user.projectLocationIds || [],
         isActive: user.isActive,
       },
-      token: 'mock-token',
+      token,
     };
   }
 

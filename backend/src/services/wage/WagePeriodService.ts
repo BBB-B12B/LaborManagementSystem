@@ -5,7 +5,7 @@
  * Manages wage periods with CRUD operations and wage calculations.
  */
 
-import { CrudService } from '../base/CrudService';
+import { BaseCrudService } from '../base/BaseCrudService';
 import {
   WagePeriod,
   CreateWagePeriodInput,
@@ -21,7 +21,7 @@ import { logger } from '../../utils/logger';
  * WagePeriodService
  * Extends CrudService with wage calculation operations
  */
-class WagePeriodService extends CrudService<WagePeriod> {
+class WagePeriodService extends BaseCrudService<WagePeriod> {
   constructor() {
     super(collections.wagePeriods);
   }

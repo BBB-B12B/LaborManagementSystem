@@ -5,6 +5,8 @@
  * Handles login, logout, token management
  */
 
+import { signInWithCustomToken } from 'firebase/auth';
+import { auth } from '../../config/firebase';
 import { api } from './client';
 
 /**
@@ -54,12 +56,12 @@ export const authService = {
     if (response.token) {
       localStorage.setItem('authToken', response.token);
     }
-    
+
     // Store user info
     if (response.user) {
       localStorage.setItem('user', JSON.stringify(response.user));
     }
-    
+
     return response;
   },
 
@@ -81,11 +83,11 @@ export const authService = {
    */
   async refreshToken(): Promise<{ token: string }> {
     const response = await api.post<{ token: string }>('/auth/refresh');
-    
+
     if (response.token) {
       localStorage.setItem('authToken', response.token);
     }
-    
+
     return response;
   },
 
@@ -95,7 +97,7 @@ export const authService = {
   getCurrentUser(): User | null {
     const userStr = localStorage.getItem('user');
     if (!userStr) return null;
-    
+
     try {
       return JSON.parse(userStr);
     } catch {
