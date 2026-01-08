@@ -25,6 +25,7 @@ services:
       - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
       - NEXT_PUBLIC_FIREBASE_APP_ID=${FIREBASE_APP_ID}
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID:-}
+      - NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED=${FIREBASE_EMULATOR_ENABLED:-false}
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - WATCHPACK_POLLING_INTERVAL=1000
@@ -57,7 +58,9 @@ services:
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
       - FIREBASE_API_KEY=${FIREBASE_API_KEY}
       - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
-      - FIREBASE_EMULATOR_ENABLED=true
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_EMULATOR_ENABLED=${FIREBASE_EMULATOR_ENABLED:-false}
+      - FIREBASE_SERVICE_ACCOUNT_KEY=${FIREBASE_SERVICE_ACCOUNT_KEY}
 
       # Firebase Emulator Configuration
       - FIREBASE_EMULATOR_HOST=firebase-emulator
@@ -82,39 +85,39 @@ services:
       - ./uploads:/app/uploads
     networks:
       - app-network
-    depends_on:
-      - firebase-emulator
+    # depends_on:
+    #   - firebase-emulator
     restart: unless-stopped
     command: npm run dev
 
-  # Firebase Emulator Suite
-  firebase-emulator:
-    build:
-      context: ./firebase
-      dockerfile: Dockerfile
-    container_name: labor-firebase-emulator
-    ports:
-      - "4001:4000"  # Emulator UI (mapped to 4001 to avoid conflict with backend)
-      - "8080:8080"  # Firestore Emulator
-      - "9099:9099"  # Authentication Emulator
-      - "9000:9000"  # Realtime Database Emulator
-    environment:
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
-    volumes:
-      - ./firebase:/firebase
-      - firebase_data:/opt/data
-    working_dir: /firebase
-    networks:
-      - app-network
-    restart: unless-stopped
-    command: >
-      sh -c "
-        if [ -d /opt/data ]; then
-          firebase emulators:start --only auth,firestore,database --project=${FIREBASE_PROJECT_ID} --import=/opt/data --export-on-exit=/opt/data
-        else
-          firebase emulators:start --only auth,firestore,database --project=${FIREBASE_PROJECT_ID} --export-on-exit=/opt/data
-        fi
-      "
+  # Firebase Emulator Suite (Disabled for Real Cloud)
+  # firebase-emulator:
+  #   build:
+  #     context: ./firebase
+  #     dockerfile: Dockerfile
+  #   container_name: labor-firebase-emulator
+  #   ports:
+  #     - "4001:4000"
+  #     - "8080:8080"
+  #     - "9099:9099"
+  #     - "9000:9000"
+  #   environment:
+  #     - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+  #   volumes:
+  #     - ./firebase:/firebase
+  #     - firebase_data:/opt/data
+  #   working_dir: /firebase
+  #   networks:
+  #     - app-network
+  #   restart: unless-stopped
+  #   command: >
+  #     sh -c "
+  #       if [ -d /opt/data ]; then
+  #         firebase emulators:start --only auth,firestore,database --project=${FIREBASE_PROJECT_ID} --import=/opt/data --export-on-exit=/opt/data
+  #       else
+  #         firebase emulators:start --only auth,firestore,database --project=${FIREBASE_PROJECT_ID} --export-on-exit=/opt/data
+  #       fi
+  #     "
 
 # Named Volumes (Docker-managed persistence)
 volumes:

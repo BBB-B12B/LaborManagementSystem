@@ -81,6 +81,11 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
 
       return baseProjects
         .filter((project) => {
+          // Admin and GOD roles can see all projects
+          if (user?.roleId === 'AM' || user?.roleCode === 'AM' || user?.roleCode === 'GOD') {
+            return true;
+          }
+
           if (user?.projectLocationIds?.length) {
             return user.projectLocationIds.includes(project.id);
           }

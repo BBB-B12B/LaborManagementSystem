@@ -4,7 +4,7 @@ export type ProjectStatus = 'active' | 'completed' | 'suspended';
 export interface ProjectLocation {
   id: string;
   code: string;
-  name: string;
+  projectName: string; // Changed from name to match DB
   location?: string;
   department: string;
   projectManager?: string;
@@ -21,7 +21,7 @@ export interface ProjectLocation {
 
 export interface CreateProjectLocationInput {
   code: string;
-  name: string;
+  projectName: string;
   location?: string;
   department: string;
   projectManager?: string;
@@ -34,7 +34,7 @@ export interface CreateProjectLocationInput {
 
 export interface UpdateProjectLocationInput {
   code?: string;
-  name?: string;
+  projectName?: string;
   location?: string;
   department?: string;
   projectManager?: string;
@@ -49,7 +49,7 @@ export const projectLocationConverter = {
   toFirestore: (project: any): any => {
     return {
       code: project.code,
-      name: project.name,
+      projectName: project.projectName, // Updated field
       location: project.location,
       department: project.department,
       projectManager: project.projectManager,
@@ -78,7 +78,7 @@ export const projectLocationConverter = {
     return {
       id: snapshot.id,
       code: data.code,
-      name: data.name,
+      projectName: data.projectName || data.name || '', // Support both for backward compatibility
       location: data.location,
       department: data.department,
       projectManager: data.projectManager,

@@ -52,9 +52,23 @@ export const authService = {
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
 
-    // Store token in localStorage
+    // Exchange Custom Token for ID Token (Required for Real Firebase)
     if (response.token) {
-      localStorage.setItem('authToken', response.token);
+      try {
+        const userCredential = await signInWithCustomToken(auth, response.token);
+        const idToken = await userCredential.user.getIdToken();
+
+        // Store ID Token (not Custom Token)
+        localStorage.setItem('authToken', idToken);
+
+        // Update response token to be ID Token (for immediate use if any)
+        response.token = idToken;
+      } catch (error) {
+        console.error('Token exchange failed:', error);
+        // Fallback or re-throw? 
+        // If exchange fails, we can't authenticate.
+        throw error;
+      }
     }
 
     // Store user info

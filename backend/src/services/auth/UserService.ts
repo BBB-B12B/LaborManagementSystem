@@ -87,6 +87,23 @@ export class UserService extends BaseCrudService<User> {
 
     return this.update(id, updates);
   }
+  /**
+   * Get all users with pagination
+   */
+  async getAllUsers(options?: PaginationOptions): Promise<PaginatedResult<User>> {
+    const result = await this.getAll(options);
+
+    // Remove passwordHash from results
+    const items = result.items.map(user => {
+      const { passwordHash, ...userWithoutPassword } = user;
+      return userWithoutPassword as User;
+    });
+
+    return {
+      ...result,
+      items
+    };
+  }
 }
 
 export const userService = new UserService();

@@ -59,7 +59,7 @@ router.get(
         projects = result.items.filter(
           (project) =>
             project.code.toLowerCase().includes(keyword) ||
-            project.name.toLowerCase().includes(keyword)
+            project.projectName.toLowerCase().includes(keyword)
         );
       } else {
         const result = await projectLocationService.getAll({
@@ -128,7 +128,7 @@ router.get('/departments', async (_req: Request, res: Response) => {
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-      const project = await projectLocationService.getById(req.params.id);
+    const project = await projectLocationService.getById(req.params.id);
 
     if (!project) {
       throw new AppError('Project not found', 404);
@@ -156,7 +156,7 @@ router.post(
   authorize(['AM', 'OE', 'PE', 'PM', 'PD']),
   [
     body('code').notEmpty().trim(),
-    body('name').notEmpty().trim(),
+    body('projectName').notEmpty().trim(), // Updated from name
     body('location').notEmpty().trim(),
     body('department').notEmpty().trim(),
     body('projectManager').optional().trim(),
@@ -210,7 +210,7 @@ router.put(
   authorize(['AM', 'OE', 'PE', 'PM', 'PD']),
   [
     body('code').optional().trim(),
-    body('name').optional().trim(),
+    body('projectName').optional().trim(), // Updated from name
     body('location').optional().trim(),
     body('department').optional().trim(),
     body('projectManager').optional().trim(),

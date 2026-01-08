@@ -47,7 +47,12 @@ export class AuthService {
       throw new Error('User account is inactive');
     }
 
-    const isValidPassword = await userService.verifyPassword(user, password);
+    // Debug Log
+    console.log(`[AuthService] Login attempt: username=${username}, active=${user?.isActive}, userId=${user?.id}`);
+
+    const isValidPassword = await userService.verifyPassword(user.id, password);
+    console.log(`[AuthService] Password valid: ${isValidPassword}`);
+
     if (!isValidPassword) {
       console.warn(`[AuthService] Password mismatch for user: '${username}'`);
       throw new Error('Invalid username or password');
@@ -56,7 +61,7 @@ export class AuthService {
     console.log(`[AuthService] Login successful for: '${username}'`);
 
     const customClaims = {
-      role: user.roleCode,
+      role: user.roleId,
       department: user.department,
     };
 

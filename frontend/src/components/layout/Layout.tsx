@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography } from '@mui/material';
-import { Logout as LogoutIcon } from '@mui/icons-material';
+import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button } from '@mui/material';
+import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
 import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';
@@ -61,27 +61,21 @@ const Topbar: React.FC = () => {
         }}
       >
         <Stack direction="row" alignItems="center" spacing={1.25}>
-          <Avatar
+          <Button
+            onClick={() => router.back()}
+            startIcon={<ArrowBackIcon />}
             sx={{
-              width: 34,
-              height: 34,
-              bgcolor: '#2b2337',
-              color: '#f5f5f8',
-              fontWeight: 800,
-              fontSize: 16,
-              borderRadius: 8,
+              color: '#1c1e2b',
+              fontWeight: 700,
+              textTransform: 'none',
+              fontSize: '1rem',
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.04)'
+              }
             }}
           >
-            LM
-          </Avatar>
-          <Stack spacing={0}>
-            <Typography variant="subtitle2" sx={{ color: '#1c1e2b', fontWeight: 800, letterSpacing: 0.1 }}>
-              Labor Manager
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#6b7080' }}>
-              Daily & OT reports
-            </Typography>
-          </Stack>
+            ย้อนกลับ
+          </Button>
         </Stack>
 
         <Stack direction="row" alignItems="center" spacing={1.5}>
