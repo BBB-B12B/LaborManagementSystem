@@ -66,6 +66,18 @@
 
 ---
 
+### Task ID: T-AUTH-002
+**Feature Ref**: F-001 Authentication
+**Status**: ✅ Complete
+#### 1. Requirement
+*   Implement Case Insensitive Username Login (e.g. `Admin` == `admin`).
+
+#### 2. Implementation Plan
+*   **UserService**: Normalize username to lowercase on `create`, `update`, `findByUsername`.
+*   **DailyContractorService**: Normalize username to lowercase on `create`, `update`, `findByUsername`.
+
+---
+
 ### Error Logging Protocol (บันทึก Error ตาม `Implement.md`)
 หากพบ Error ให้บันทึกแทรกใน Task ID นั้นๆ ตาม Format: `T-xxx-Ex-x`
 *   **Cause**: สาเหตุ
@@ -146,22 +158,15 @@
 **Feature Ref**: F-001 Authentication
 **Status**: ✅ Fixed
 #### 1. Symptom
-*   User receives `401 Unauthorized` during login.
+*   User logs in with correct credentials but gets 401.
 
 #### 2. Analysis
-*   **Cause**: `AuthService.login` passed entire `User` object to `userService.verifyPassword` instead of just `user.id`. `verifyPassword` expects `string`.
-*   **Solution**: Changed to pass `user.id`.
+*   **Cause**: `AuthService` passing object instead of string ID to `verifyPassword`.
+*   **Solution**: Pass `user.id` correctly.
 
 #### 3. Fix Steps
-*   [x] Fix `AuthService.ts` to pass `user.id`.
-*   [x] T-BUG-005-E1-1:
-    *   **Cause**: Type mismatch in `AuthService.ts` (User object vs String ID).
-    *   **Solution**: Updated call to `userService.verifyPassword(user.id, password)`.
-    *   **Result**: Pass - 2026-01-08 (Static Analysis & Fix Applied).
-*   [x] T-BUG-005-E2-1:
-    *   **Cause**: Docker Emulator data was empty (logs showed "User not found"). Host env vars differ from Docker env vars.
-    *   **Solution**: Manually ran seed script from host pointing to localhost ports.
-    *   **Result**: Database populated. Ready for retry.
+*   [x] Fix `AuthService.ts`.
+*   [x] Seed DB properly.
 
 ---
 
@@ -178,17 +183,6 @@
 
 #### 3. Fix Steps
 *   [x] Modify `ProjectLocation.ts` to use safe `toDate` helper.
-#### 1. Symptom
-*   User receives `401 Unauthorized`.
-*   **New Blocker**: `CrudService.ts` compilation error `TS1005` preventing backend startup.
-
-
-#### 2. Analysis
-*   **Possibilities**:
-    1.  Wrong Username/Password (User error or Seed data mismatch) -> Rule out, verified seed data.
-    2.  `AuthService` cannot find user in Firestore -> **CONFIRMED**.
-    3.  Emulator configuration mismatch -> **FIXED** (forced env vars), but problem persists.
-    *   **Result**: Database populated. Ready for retry.
 
 ### Task ID: T-VERIFY-001 (F-001 & F-002)
 **Feature Ref**: F-001, F-002
@@ -196,9 +190,6 @@
 #### 1. F-001 Authentication
 *   **Ready**: Login flow fixed and verified manually.
 #### 2. F-002 User Management
-*   **Backend**: `UserService` has `createUser` and `getAllUsers` (fixed 500 error).
-*   **Database**: Stores in `users` collection.
-*   **Frontend**: `UserForm.tsx` correctly implements fields (`employeeId`, `username`, `password`, `roleId`, `department`, `projectLocationIds`).
 *   **Result**: Ready for User Acceptance Testing (UAT).
 *   **Next Step**: Instrument `CrudService` to log exact queries.
 
@@ -253,7 +244,6 @@
 
 #### 4. Result
 *   Configuration is now flexible. User can switch via `.env`.
-*   Requires Docker Restart to take effect.
 
 ---
 
@@ -313,21 +303,6 @@
 *   **Root Cause**: `docker-compose` looks for these variables in the **ROOT** `.env` file, but the user only had `backend/.env`. Thus, variables were passed as empty strings.
 
 #### 3. Fix Steps
-*   [x] Identified `FIREBASE_API_KEY` exists in `backend/.env`.
-*   [x] Copied `backend/.env` to Root `.env` to enable proper variable substitution.
-
-#### 4. Result
-*   Next Docker Restart will pick up the valid API Key.
-*   **Update**: Error persisted. Found `frontend/.env.local` overriding Docker Env.
-*   [x] Renamed `frontend/.env.local` to `.env.local.bak` to force usage of Docker variables.
-*   **Update**: Variables confirmed present in Container (`docker exec`) but missing in App.
-*   [x] Deleted `frontend/.next` folder to force full rebuild and clear stale caches.
-*   **Update**: Emulator Container crashed due to Java incompatibility. Disabled Emulator Service since Real Cloud is used.
-*   [x] Commented out `firebase-emulator` in `docker-compose.yml`.
-*   **Update**: User requested efficiency. `run_command` used to inject `frontend/.env.local` directly.
-*   [x] Created `frontend/.env.local` manually with valid Real Cloud keys using PowerShell.
-*   [x] Fixed duplicate `networks` YAML syntax error in `docker-compose.yml`.
-*   **Update**: Root Cause Found in Code. `firebase.ts` used dynamic `process.env[key]` access which fails in Next.js Client Side.
 *   [x] Refactored `firebase.ts` to use explicit `process.env.NEXT_PUBLIC_...` access. This ensures Webpack can inline the values.
 
 ---
@@ -471,5 +446,3 @@
 
 #### 3. Result
 *   Login page now looks premium and matches the reference image structure.
-
-

@@ -35,7 +35,7 @@ import { config } from '../../config';
  */
 class DailyContractorService extends BaseCrudService<DailyContractor> {
   constructor() {
-    super(collections.dailyContractors);
+    super(collections.dailyContractors as any);
   }
 
   /**
@@ -49,7 +49,8 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       const employeeId = (input.employeeId ?? '').trim();
       const name = (input.name ?? '').trim();
       const skillId = (input.skillId ?? '').trim();
-      const username = input.username ? input.username.trim() : undefined;
+      // Normalize username to lowercase
+      const username = input.username ? input.username.trim().toLowerCase() : undefined;
 
       // Check for duplicate employeeId when provided
       if (employeeId) {
@@ -95,8 +96,14 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         updatedBy: createdBy,
       };
 
-      const dc = await this.create(dcData);
-      logger.info(`Daily contractor created: ${dc.employeeId}`, { dcId: dc.id });
+      // Enforce DocumentID = EmployeeID (F-006)
+      // This ensures we can easily find documents by employeeId without querying
+      if (!employeeId) {
+        throw new AppError('Employee ID is required', 400);
+      }
+
+      const dc = await this.createWithId(employeeId, dcData);
+      logger.info(`Daily contractor created: ${dc.employeeId} (ID: ${dc.id})`, { dcId: dc.id });
 
       return this.toDTO(dc);
     } catch (error: any) {
@@ -138,7 +145,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       }
 
       // Check for duplicate username if being changed
-      const username = input.username ? input.username.trim() : undefined;
+      const username = input.username ? input.username.trim().toLowerCase() : undefined;
       if (username && username !== existing.username) {
         const duplicate = await this.findByUsername(username);
         if (duplicate) {
@@ -259,11 +266,12 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
    */
   async findByUsername(username: string): Promise<DailyContractor | null> {
     try {
+      const normalizedUsername = username.trim().toLowerCase();
       const results = await this.query([
         {
           field: 'username',
           operator: '==',
-          value: username,
+          value: normalizedUsername,
         },
       ]);
 

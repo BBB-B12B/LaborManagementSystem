@@ -19,7 +19,7 @@ export interface User {
   name: string;
   fullNameEn?: string;
   roleId: string;
-  roleCode: string;
+  roleCode: 'GOD' | 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD';
   department: string;
   projectLocationIds: string[];
   isActive: boolean;

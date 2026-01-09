@@ -19,11 +19,12 @@ export class UserService extends BaseCrudService<User> {
   }
 
   /**
-   * Find user by username
+   * Find user by username (Case Insensitive)
    */
   async findByUsername(username: string): Promise<User | null> {
+    const normalizedUsername = username.trim().toLowerCase();
     const users = await this.query([
-      { field: 'username', operator: '==', value: username }
+      { field: 'username', operator: '==', value: normalizedUsername }
     ]);
     return users.length > 0 ? users[0] : null;
   }
@@ -43,7 +44,9 @@ export class UserService extends BaseCrudService<User> {
    * Create a new user with password hashing
    */
   async createUser(input: CreateUserInput, createdBy: string): Promise<User> {
-    const existingUser = await this.findByUsername(input.username);
+    const normalizedUsername = input.username.trim().toLowerCase();
+
+    const existingUser = await this.findByUsername(normalizedUsername);
     if (existingUser) {
       throw new AppError('Username already exists', 400);
     }
@@ -53,6 +56,7 @@ export class UserService extends BaseCrudService<User> {
 
     const userData = {
       ...input,
+      username: normalizedUsername, // Save as lowercase
       passwordHash,
       createdAt: now,
       updatedAt: now,
@@ -80,6 +84,20 @@ export class UserService extends BaseCrudService<User> {
       updatedAt: new Date(),
       updatedBy,
     };
+
+    // Normalize username if being updated
+    if (input.username) {
+      const normalizedUsername = input.username.trim().toLowerCase();
+
+      // Check for duplicate only if username is changing
+      if (normalizedUsername !== user.username) {
+        const existing = await this.findByUsername(normalizedUsername);
+        if (existing) {
+          throw new AppError('Username already exists', 400);
+        }
+      }
+      updates.username = normalizedUsername;
+    }
 
     if (input.password) {
       updates.passwordHash = await bcrypt.hash(input.password, 10);
