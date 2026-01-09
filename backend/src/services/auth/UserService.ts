@@ -64,7 +64,8 @@ export class UserService extends BaseCrudService<User> {
     // Remove plain password from storage object if it exists (though CreateUserInput shouldn't have it generally if separated, but strictly cleaning)
     delete (userData as any).password;
 
-    return this.create(userData as any);
+    // Use employeeId as the Firestore Document ID
+    return this.createWithId(input.employeeId, userData as any);
   }
 
   /**

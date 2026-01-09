@@ -404,3 +404,20 @@
 *   This change is global (affects all pages).
 *   If specific pages have their own back buttons, they might now be redundant.
 
+---
+
+### Task ID: T-DATA-001 (Enforce DocumentID = EmployeeID)
+**Feature Ref**: Data Integrity
+**Status**: ✅ Complete
+
+#### 1. Requirement
+*   When creating a new user, the Firestore Document ID must match the `employeeId` field (instead of being auto-generated random string).
+
+#### 2. Implementation
+*   [x] Modified `backend/src/services/auth/UserService.ts`.
+*   [x] Changed `createUser` to use `baseCrudService.createWithId(input.employeeId, ...)` instead of `create()`.
+
+#### 3. Impact
+*   New users created via API/Signup will have predictable IDs.
+*   Easier to reference users in other collections.
+
