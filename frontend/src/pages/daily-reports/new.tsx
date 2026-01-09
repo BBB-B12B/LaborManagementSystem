@@ -23,7 +23,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton } from '@/components/common/BackButton';
+
 import { DailyReportForm } from './components/DailyReportForm';
 import { OvertimeForm } from '@/pages/overtime/components/OvertimeForm';
 import { dailyReportService } from '@/services/dailyReportService';
@@ -200,7 +200,7 @@ export default function WorkRecordComposerPage() {
     <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
-          <BackButton href="/daily-reports" />
+
           <Box
             sx={{
               display: 'flex',

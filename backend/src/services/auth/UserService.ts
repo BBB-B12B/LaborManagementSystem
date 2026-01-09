@@ -8,9 +8,9 @@
 import bcrypt from 'bcrypt';
 import { collections } from '../../config/collections';
 import { BaseCrudService } from '../base/BaseCrudService';
-import { User, UserDTO, CreateUserInput, UpdateUserInput } from '../../models/User';
+import { User, CreateUserInput, UpdateUserInput } from '../../models/User';
 import type { PaginatedResult, PaginationOptions } from '../base/BaseCrudService';
-import { config } from '../../config';
+
 import { AppError } from '../../api/middleware/errorHandler';
 
 export class UserService extends BaseCrudService<User> {

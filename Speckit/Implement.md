@@ -78,4 +78,11 @@
 *   **T-170-E1-1**:
     *   **สาเหตุ**: `DailyReport` บางอันไม่มี `totalWage` ทำให้ sum แล้วเป็น NaN
     *   **แนวทางแก้ไข**: เพิ่ม condition เช็ค `report.totalWage || 0`
-    *   **ผลลัพธ์**: Pass - 2024-01-06 14:30
+
+---
+
+## 4. UI/UX Design Rules
+*   **Navigation**:
+    *   Do NOT place "Back" buttons inside the page content (e.g., above title).
+    *   ALWAYS rely on the **Global Header Back Button** (Top-Left) for navigation.
+    *   Exception: Modals/Drawers should have their own Close/Cancel buttons.

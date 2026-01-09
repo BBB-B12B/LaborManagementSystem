@@ -73,7 +73,7 @@ export default function ProjectListPage() {
     mutationFn: (id: string) => projectService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-       queryClient.invalidateQueries({ queryKey: ['projectDepartments'] });
+      queryClient.invalidateQueries({ queryKey: ['projectDepartments'] });
       toast.success('ลบโครงการสำเร็จ');
     },
     onError: (error) => {
@@ -248,7 +248,7 @@ export default function ProjectListPage() {
     <ProtectedRoute requiredRoles={['GOD', 'FM', 'PM', 'AM']}>
       <Layout>
         <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-          <BackButton href="/management" />
+          {/* <BackButton href="/management" /> removed as per global header change */}
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h4">จัดการโครงการ</Typography>
             <Button

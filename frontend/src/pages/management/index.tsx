@@ -19,7 +19,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import GroupsIcon from '@mui/icons-material/Groups';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton } from '@/components/common/BackButton';
+
 import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/utils/permissions';
 
@@ -66,7 +66,7 @@ export default function ManagementHubPage() {
     <ProtectedRoute requiredRoles={['AM', 'FM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
-          <BackButton href="/dashboard" />
+
           <Box sx={{ mb: 4 }}>
             <Typography variant="h4" gutterBottom>
               การจัดการข้อมูล

@@ -27,6 +27,12 @@
 *   **Status**: Complete
 *   **Deliverables**: DC CRUD, Skill Assignment, Social Security Logic
 
+### 🧪 Phase 10.5: User Acceptance Testing (F-006)
+*   [ ] **Test Case 1**: Create Standard DC (ID: `DC001`). Verify success.
+*   [ ] **Test Case 2**: Create Social Security Exempt DC (ID: `9001`). Verify "Exempt" badge appears.
+*   [ ] **Test Case 3**: Duplicate ID Check. Try creating `DC001` again.
+*   [ ] **Test Case 4**: Verify Data in List.
+
 ---
 
 ## ⚠️ Current Phase: Phase 11 & 12 (Pending Tasks)
@@ -406,6 +412,30 @@
 
 ---
 
+### Task ID: T-UI-002 (Remove Redundant Page Back Button)
+**Feature Ref**: UI/UX
+**Status**: ✅ Complete (Global)
+
+#### 1. Requirement
+*   Remove the "Back Button" (`< ย้อนกลับ`) that sits *inside* the page content on ALL pages.
+*   The Global Header Back Button is the single source of truth for navigation.
+
+#### 2. Implementation
+*   [x] Removed `<BackButton />` from:
+    *   `project-management/index.tsx`
+    *   `wage-calculation/index.tsx`
+    *   `member-management/index.tsx`
+    *   `management/index.tsx`
+    *   `dc-management/index.tsx`
+    *   `daily-reports/new.tsx`
+    *   `daily-reports/index.tsx`
+*   [x] Updated `Speckit/Implement.md` with new UI Rule.
+
+#### 3. Result
+*   Page UI is cleaner. No duplicate navigation buttons anywhere.
+
+---
+
 ### Task ID: T-DATA-001 (Enforce DocumentID = EmployeeID)
 **Feature Ref**: Data Integrity
 **Status**: ✅ Complete
@@ -420,4 +450,26 @@
 #### 3. Impact
 *   New users created via API/Signup will have predictable IDs.
 *   Easier to reference users in other collections.
+
+---
+
+### Task ID: T-UI-003 (Login Page Redesign)
+**Feature Ref**: UI/UX
+**Status**: ✅ Complete
+
+#### 1. Requirement
+*   Redesign Login Page to match "Modern UI Kit" reference.
+*   Split Screen Layout (Text Left, Visuals Right).
+*   Use System Theme (#2b2337 / #d62828).
+*   Specific Red Circle Text: "Labor Management System".
+
+#### 2. Implementation
+*   [x] Rewrote `pages/login/index.tsx`.
+*   [x] Implemented `Grid` layout (5:7 ratio).
+*   [x] Added "Glassmorphism" abstract cards with CSS Backdrop Filter.
+*   [x] Applied Linear Gradients matching theme.
+
+#### 3. Result
+*   Login page now looks premium and matches the reference image structure.
+
 

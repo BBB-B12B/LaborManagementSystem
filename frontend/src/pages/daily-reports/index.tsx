@@ -25,7 +25,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import HistoryIcon from '@mui/icons-material/History';
 import { GridActionsCellItem, GridColDef } from '@mui/x-data-grid';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton, DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
+import { DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { ProjectSelect, DatePicker, DCAutoComplete } from '@/components/forms';
 import { dailyReportService } from '@/services/dailyReportService';
 import { overtimeService } from '@/services/overtimeService';
@@ -136,18 +136,18 @@ export default function WorkRecordsPage() {
       const [regularReports, overtimeRecords] = await Promise.all([
         shouldFetchRegular
           ? dailyReportService.getAll({
-              projectId: projectFilter || undefined,
-              date: dateFilter || undefined,
-              dcId: dcFilter || undefined,
-            })
+            projectId: projectFilter || undefined,
+            date: dateFilter || undefined,
+            dcId: dcFilter || undefined,
+          })
           : Promise.resolve([]),
         shouldFetchOT
           ? overtimeService.getAll({
-              projectId: projectFilter || undefined,
-              date: dateFilter || undefined,
-              dcId: dcFilter || undefined,
-              otPeriod: periodFilter || undefined,
-            })
+            projectId: projectFilter || undefined,
+            date: dateFilter || undefined,
+            dcId: dcFilter || undefined,
+            otPeriod: periodFilter || undefined,
+          })
           : Promise.resolve([]),
       ]);
 
@@ -379,7 +379,7 @@ export default function WorkRecordsPage() {
     <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
       <Layout>
         <Container maxWidth="xl" sx={{ py: 4 }}>
-          <BackButton href="/dashboard" />
+
 
           <Box
             sx={{
@@ -440,8 +440,8 @@ export default function WorkRecordsPage() {
                           value === 'ot'
                             ? { view: 'ot' }
                             : value === 'regular'
-                            ? { view: 'regular' }
-                            : {},
+                              ? { view: 'regular' }
+                              : {},
                       },
                       undefined,
                       { shallow: true }

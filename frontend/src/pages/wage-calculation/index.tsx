@@ -55,7 +55,7 @@ import {
   type WagePeriodCreateInput,
   validate15DayPeriod,
 } from '../../validation/wageSchema';
-import { BackButton } from '../../components/common/BackButton';
+
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
@@ -369,7 +369,7 @@ export default function WageCalculationPage() {
 
     return (
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        <BackButton href="/management" />
+
 
         {/* Header */}
         <Box

@@ -42,7 +42,7 @@ import {
   type DCFilterOptions,
   type DCImportSummary,
 } from '../../services/dcService';
-import { BackButton } from '../../components/common/BackButton';
+
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
@@ -415,13 +415,13 @@ export default function DCManagementPage() {
 
   const importErrorMessage = importMutation.isError
     ? (importMutation.error as any)?.response?.data?.error ||
-      (importMutation.error as Error)?.message ||
-      'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน'
+    (importMutation.error as Error)?.message ||
+    'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน'
     : null;
 
   const pageContent = (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <BackButton href="/management" />
+
       {/* Header */}
       <Box
         sx={{

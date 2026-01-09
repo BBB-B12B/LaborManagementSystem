@@ -32,7 +32,7 @@ import {
   type User,
   type UserFilterOptions,
 } from '../../services/memberService';
-import { BackButton } from '../../components/common/BackButton';
+
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
@@ -300,13 +300,13 @@ export default function MemberManagementPage() {
 
   const importErrorMessage = userImportMutation.isError
     ? (userImportMutation.error as any)?.response?.data?.error ||
-      (userImportMutation.error as Error)?.message ||
-      'เกิดข้อผิดพลาดในการนำเข้าผู้ใช้'
+    (userImportMutation.error as Error)?.message ||
+    'เกิดข้อผิดพลาดในการนำเข้าผู้ใช้'
     : null;
 
   const pageContent = (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <BackButton href="/management" />
+
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
