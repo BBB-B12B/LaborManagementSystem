@@ -56,8 +56,9 @@ export const DCImportDialog: React.FC<DCImportDialogProps> = ({
       <DialogContent dividers>
         <Box sx={{ mb: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            ดาวน์โหลดเทมเพลต CSV จากปุ่ม &quot;ดาวน์โหลดเทมเพลต&quot; บนหน้าแรงงานรายวัน
-            แล้วกรอกข้อมูลตามคอลัมน์ที่กำหนด จากนั้นอัปโหลดไฟล์กลับเข้ามาเพื่อสร้างแรงงานใหม่แบบเป็นชุด
+            ดาวน์โหลดเทมเพลต CSV แล้วกรอกข้อมูล
+            (แนะนำให้ Save As เป็นไฟล์ Excel .xlsx หากพบปัญหาภาษาต่างดาว)
+            จากนั้นอัปโหลดไฟล์กลับเข้ามาเพื่อสร้างแรงงานใหม่แบบเป็นชุด
           </Typography>
         </Box>
 
@@ -70,9 +71,9 @@ export const DCImportDialog: React.FC<DCImportDialogProps> = ({
         <FileUpload
           onFileSelect={setSelectedFile}
           onFileRemove={() => setSelectedFile(null)}
-          accept=".csv"
-          label="เลือกไฟล์ CSV"
-          helperText="รองรับเฉพาะไฟล์ .csv ที่ได้จากเทมเพลต"
+          accept=".csv, .xlsx"
+          label="เลือกไฟล์ CSV หรือ Excel"
+          helperText="รองรับไฟล์ .csv และ .xlsx"
           disabled={isLoading}
         />
 
@@ -96,9 +97,8 @@ export const DCImportDialog: React.FC<DCImportDialogProps> = ({
                   {result.errors.map((err) => (
                     <ListItem key={`${err.row}-${err.employeeId || 'row'}`}>
                       <ListItemText
-                        primary={`แถวที่ ${err.row}${
-                          err.employeeId ? ` (รหัส ${err.employeeId})` : ''
-                        }`}
+                        primary={`แถวที่ ${err.row}${err.employeeId ? ` (รหัส ${err.employeeId})` : ''
+                          }`}
                         secondary={err.message}
                       />
                     </ListItem>

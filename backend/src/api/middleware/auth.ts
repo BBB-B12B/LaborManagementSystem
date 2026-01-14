@@ -94,12 +94,13 @@ export async function resolveUserProfile(decoded: any) {
  * - Option 3: Firebase Auth (req.headers.authorization with Firebase token)
  */
 export async function authenticate(
-  req: AuthRequest,
+  req: Request,
   _res: Response,
   next: NextFunction
 ): Promise<void> {
+  const authReq = req as AuthRequest;
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader = authReq.headers.authorization;
     const token = authHeader?.startsWith('Bearer ')
       ? authHeader.slice('Bearer '.length).trim()
       : null;
@@ -143,7 +144,7 @@ export async function authenticate(
       throw new AppError('Unauthorized - User profile not found', 401);
     }
 
-    req.user = {
+    authReq.user = {
       uid: decoded.uid,
       id: profile.id,
       employeeId: profile.employeeId,
@@ -157,7 +158,7 @@ export async function authenticate(
     };
 
     // Check if user is active
-    if (!req.user.isActive) {
+    if (!authReq.user.isActive) {
       throw new AppError('Account is inactive', 403);
     }
 
@@ -181,13 +182,14 @@ export async function authenticate(
  * router.get('/wage-calculation', checkRole(['AM', 'PM', 'PD', 'MD']), getWages);
  */
 export function checkRole(allowedRoles: UserRole[]) {
-  return (req: AuthRequest, _res: Response, next: NextFunction): void => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const authReq = req as AuthRequest;
     try {
-      if (!req.user) {
+      if (!authReq.user) {
         throw new AppError('Unauthorized - Please login', 401);
       }
 
-      const userRole = req.user.roleCode;
+      const userRole = authReq.user.roleCode;
 
       if ((userRole as string) === 'GOD') {
         next();
@@ -196,7 +198,7 @@ export function checkRole(allowedRoles: UserRole[]) {
 
       if (!allowedRoles.includes(userRole)) {
         logger.warn(
-          `Access denied: User ${req.user.username} (${userRole}) attempted to access resource requiring roles: ${allowedRoles.join(', ')}`
+          `Access denied: User ${authReq.user.username} (${userRole}) attempted to access resource requiring roles: ${allowedRoles.join(', ')}`
         );
         throw new AppError(
           `Access denied - Required roles: ${allowedRoles.join(', ')}`,
@@ -205,7 +207,7 @@ export function checkRole(allowedRoles: UserRole[]) {
       }
 
       logger.debug(
-        `Access granted: User ${req.user.username} (${userRole}) accessing ${req.method} ${req.path}`
+        `Access granted: User ${authReq.user.username} (${userRole}) accessing ${req.method} ${req.path}`
       );
 
       next();

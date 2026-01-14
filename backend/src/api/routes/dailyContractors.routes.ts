@@ -14,6 +14,7 @@ import { AppError } from '../middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { authenticate, type AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
+import * as XLSX from 'xlsx';
 
 const router = Router();
 router.use(authenticate);
@@ -114,7 +115,19 @@ const toBoolean = (value: string): boolean => {
 const toDate = (value: string): Date | undefined => {
   if (!value) return undefined;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  const time = parsed.getTime();
+  if (Number.isNaN(time)) return undefined;
+
+  // Sanity check for far future dates (e.g. timestamps in microseconds)
+  // If year > 3000, try dividing by 1000 if it brings it to reasonable range
+  if (parsed.getFullYear() > 3000) {
+    const reduced = new Date(time / 1000);
+    if (reduced.getFullYear() >= 1970 && reduced.getFullYear() < 3000) {
+      return reduced;
+    }
+  }
+
+  return parsed;
 };
 
 const toProjectIds = (value: string): string[] => {
@@ -196,7 +209,7 @@ router.get(
         contractors = result.items.map((dc) => dailyContractorService.toDTO(dc));
         total = result.total;
         page = result.page;
-          pageSize = result.pageSize;
+        pageSize = result.pageSize;
       }
 
       const contractorsWithFlags = await attachCompensationFlags(contractors);
@@ -223,7 +236,7 @@ router.get(
  * GET /api/daily-contractors/active
  * ดึงรายการ DCs ที่ active เท่านั้น
  */
-router.get('/active', async (req: Request, res: Response) => {
+router.get('/active', async (_req: Request, res: Response) => {
   try {
     const contractors = await dailyContractorService.getActiveDCs();
 
@@ -244,142 +257,209 @@ router.post(
   authorize(['AM', 'FM']),
   upload.single('file'),
   async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      throw new AppError('กรุณาอัปโหลดไฟล์ CSV', 400);
-    }
-
-    const csvContent = req.file.buffer.toString('utf-8');
-    const rows = parseCsv(csvContent);
-
-    if (rows.length === 0) {
-      throw new AppError('ไฟล์ไม่มีข้อมูล', 400);
-    }
-
-    const headers = rows[0];
-    const dataRows = rows.slice(1);
-
-    if (dataRows.length === 0) {
-      throw new AppError('ไม่พบข้อมูลแรงงานในไฟล์', 400);
-    }
-
-    const getValue = createAccessor(headers);
-
-    const summary = {
-      total: dataRows.length,
-      imported: 0,
-      skipped: 0,
-      errors: [] as Array<{ row: number; employeeId?: string; message: string }>,
-    };
-
-    for (let index = 0; index < dataRows.length; index += 1) {
-      const row = dataRows[index];
-      const rowNumber = index + 2; // header row is line 1
-
-      const employeeId = getValue(row, 'Employee ID');
-      const name = getValue(row, 'Full Name');
-      const skillId = getValue(row, 'Skill ID');
-
-      if (!employeeId || !name || !skillId) {
-        summary.skipped += 1;
-        summary.errors.push({
-          row: rowNumber,
-          employeeId: employeeId || undefined,
-          message: 'ข้อมูลไม่ครบถ้วน (ต้องระบุ Employee ID, Full Name, Skill ID)',
-        });
-        continue;
+    try {
+      if (!req.file) {
+        throw new AppError('กรุณาอัปโหลดไฟล์ CSV', 400);
       }
 
-      const projectIdsRaw = getValue(row, 'Project Location IDs (comma-separated)');
-      const startDate = toDate(getValue(row, 'Start Date (YYYY-MM-DD)'));
-      const endDate = toDate(getValue(row, 'End Date (YYYY-MM-DD)'));
-      const isActive = toBoolean(getValue(row, 'Is Active (TRUE/FALSE)'));
+      const decodeTis620 = (buffer: Buffer): string => {
+        let result = '';
+        for (let i = 0; i < buffer.length; i++) {
+          const b = buffer[i];
+          if (b < 0x80) {
+            result += String.fromCharCode(b);
+          } else if (b >= 0xA1 && b <= 0xDA) {
+            result += String.fromCharCode(0x0E01 + (b - 0xA1));
+          } else if (b >= 0xDF && b <= 0xFB) {
+            result += String.fromCharCode(0x0E3F + (b - 0xDF));
+          } else if (b === 0xDB) result += '\u0E2F';
+          else if (b === 0xDC) result += '\u0E46';
+          else if (b === 0xDD) result += '\u0E4C';
+          else if (b === 0xDE) result += '\u0E4D';
+          else result += String.fromCharCode(b); // fallback
+        }
+        return result;
+      };
 
-      const hourlyRate = toNumber(getValue(row, 'Hourly Rate (THB)'));
-      const professionalRate = toNumber(getValue(row, 'Professional Rate (THB)'));
-      const phoneAllowance = toNumber(getValue(row, 'Phone Allowance Per Period (THB)'));
-      const accommodationCost = toNumber(getValue(row, 'Accommodation Cost Per Period (THB)'));
-      const followerCount = toInteger(getValue(row, 'Follower Count'));
-      const refrigeratorCost = toNumber(getValue(row, 'Refrigerator Cost Per Period (THB)'));
-      const soundSystemCost = toNumber(getValue(row, 'Sound System Cost Per Period (THB)'));
-      const tvCost = toNumber(getValue(row, 'TV Cost Per Period (THB)'));
-      const washingMachineCost = toNumber(getValue(row, 'Washing Machine Cost Per Period (THB)'));
-      const portableAcCost = toNumber(getValue(row, 'Portable AC Cost Per Period (THB)'));
+      const rawBuffer = req.file.buffer;
+      let rows: string[][] = [];
+      let headers: string[] = [];
 
-      const phoneNumber = getValue(row, 'Phone Number') || undefined;
-      const idCardNumber = getValue(row, 'ID Card Number') || undefined;
-      const address = getValue(row, 'Address') || undefined;
-      const emergencyContact = getValue(row, 'Emergency Contact') || undefined;
-      const emergencyPhone = getValue(row, 'Emergency Phone') || undefined;
+      // Check for Excel file signature or mimetype
+      const isExcel = req.file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        req.file.originalname.endsWith('.xlsx');
 
-      try {
-        const contractor = await dailyContractorService.createDC(
-          {
+      if (isExcel) {
+        const workbook = XLSX.read(rawBuffer, { type: 'buffer', cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        // Convert to array of arrays (header is row 0)
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as string[][];
+        // Filter empty rows
+        rows = rows.filter(row => row.some(cell => cell && cell.toString().trim().length > 0));
+
+        // Convert all cells to strings to match CSV behavior
+        rows = rows.map(row => row.map(cell => (cell === null || cell === undefined) ? '' : String(cell).trim()));
+
+        console.log('[Import] Parsed XLSX file. Rows:', rows.length);
+      } else {
+        // Fallback to CSV handling (existing logic)
+        let csvContent = rawBuffer.toString('utf-8');
+
+        // 1. Try UTF-8 (Strip BOM if present)
+        if (csvContent.charCodeAt(0) === 0xFEFF) {
+          csvContent = csvContent.slice(1);
+        }
+
+        rows = parseCsv(csvContent);
+
+        // 2. Validate Headers (Check for key Thai field)
+        headers = rows.length > 0 ? rows[0] : [];
+        const isHeaderValid = (h: string[]) => h.some(col => col.includes('รหัสพนักงาน') || col.includes('ชื่อ'));
+
+        if (!isHeaderValid(headers)) {
+          console.warn('[CSV Import] UTF-8 headers invalid, trying TIS-620/Windows-874...');
+          const decodedLegacy = decodeTis620(rawBuffer);
+          const rowsLegacy = parseCsv(decodedLegacy);
+          if (rowsLegacy.length > 0 && isHeaderValid(rowsLegacy[0])) {
+            console.log('[CSV Import] Succeeded with TIS-620');
+            rows = rowsLegacy;
+            headers = rows[0];
+          } else {
+            console.warn('[CSV Import] Failed to decode with TIS-620, reverting to UTF-8 (may be garbage)');
+          }
+        }
+      }
+
+      if (rows.length > 0) {
+        headers = rows[0];
+      }
+
+      if (rows.length === 0) {
+        throw new AppError('ไฟล์ไม่มีข้อมูล', 400);
+      }
+
+
+      // Debug logging
+      console.log('[CSV Import] Raw Headers:', headers);
+      console.log('[CSV Import] Normalized Headers:', headers.map(h => normalizeKey(h)));
+
+      const dataRows = rows.slice(1);
+
+      if (dataRows.length === 0) {
+        throw new AppError('ไม่พบข้อมูลแรงงานในไฟล์', 400);
+      }
+
+      const getValue = createAccessor(headers);
+
+      const summary = {
+        total: dataRows.length,
+        imported: 0,
+        skipped: 0,
+        errors: [] as Array<{ row: number; employeeId?: string; message: string }>,
+      };
+
+      for (let index = 0; index < dataRows.length; index += 1) {
+        const row = dataRows[index];
+        const rowNumber = index + 2; // header row is line 1
+        console.log(`[CSV Import] Processing row ${rowNumber}/${dataRows.length + 1}`);
+
+        const employeeId = getValue(row, 'รหัสพนักงาน');
+        const name = getValue(row, 'ชื่อ-นามสกุล');
+        const skillId = getValue(row, 'รหัสทักษะ');
+
+        if (!employeeId || !name || !skillId) {
+          console.warn(`[CSV Import] Row ${rowNumber} missing required fields`);
+          summary.skipped += 1;
+          summary.errors.push({
+            row: rowNumber,
+            employeeId: employeeId || undefined,
+            message: 'ข้อมูลไม่ครบถ้วน (ต้องระบุ รหัสพนักงาน, ชื่อ-นามสกุล, รหัสทักษะ)',
+          });
+          continue;
+        }
+
+        const projectIdsRaw = getValue(row, 'รหัสโครงการ (คั่นด้วยคอมมา)');
+        const startDate = toDate(getValue(row, 'วันเริ่มงาน (ปปปป-ดด-วว)'));
+        const isActive = toBoolean(getValue(row, 'สถานะใช้งาน (TRUE/FALSE)'));
+
+        const hourlyRate = toNumber(getValue(row, 'ค่าแรงต่อชั่วโมง (บาท)'));
+        const professionalRate = toNumber(getValue(row, 'ค่าวิชาชีพ (บาท/วัน)'));
+        const phoneAllowance = toNumber(getValue(row, 'ค่าโทรศัพท์ต่องวด (บาท)'));
+        const accommodationCost = toNumber(getValue(row, 'ค่าที่พักต่องวด (บาท)'));
+        const followerCount = toInteger(getValue(row, 'จำนวนผู้ติดตาม'));
+        const refrigeratorCost = toNumber(getValue(row, 'ค่าตู้เย็นต่องวด (บาท)'));
+        const soundSystemCost = toNumber(getValue(row, 'ค่าเครื่องเสียงต่องวด (บาท)'));
+        const tvCost = toNumber(getValue(row, 'ค่าทีวีต่องวด (บาท)'));
+        const washingMachineCost = toNumber(getValue(row, 'ค่าเครื่องซักผ้าต่องวด (บาท)'));
+        const portableAcCost = toNumber(getValue(row, 'ค่าแอร์เคลื่อนที่ต่องวด (บาท)'));
+
+
+        try {
+          console.time(`[CSV Import] Row ${rowNumber} DB Ops`);
+          const contractor = await dailyContractorService.createDC(
+            {
+              employeeId,
+              name,
+              skillId,
+              projectLocationIds: toProjectIds(projectIdsRaw),
+              isActive,
+              startDate,
+            },
+            'import-csv'
+          );
+
+          await dailyContractorService.upsertCompensationDetails(
+            contractor.id,
+            {
+              income: {
+                hourlyRate,
+                professionalRate,
+                phoneAllowancePerPeriod: phoneAllowance,
+              },
+              expense: {
+                accommodationCostPerPeriod: accommodationCost,
+                followerCount,
+                refrigeratorCostPerPeriod: refrigeratorCost,
+                soundSystemCostPerPeriod: soundSystemCost,
+                tvCostPerPeriod: tvCost,
+                washingMachineCostPerPeriod: washingMachineCost,
+                portableAcCostPerPeriod: portableAcCost,
+              },
+            },
+            'import-csv'
+          );
+          console.timeEnd(`[CSV Import] Row ${rowNumber} DB Ops`);
+
+          summary.imported += 1;
+        } catch (error: any) {
+          console.error(`[CSV Import] Row ${rowNumber} Error:`, error);
+          summary.skipped += 1;
+          summary.errors.push({
+            row: rowNumber,
             employeeId,
-            name,
-            skillId,
-            projectLocationIds: toProjectIds(projectIdsRaw),
-            phoneNumber,
-            idCardNumber,
-            address,
-            emergencyContact,
-            emergencyPhone,
-            isActive,
-            startDate,
-            endDate,
-          },
-          'import-csv'
-        );
-
-        await dailyContractorService.upsertCompensationDetails(
-          contractor.id,
-          {
-            income: {
-              hourlyRate,
-              professionalRate,
-              phoneAllowancePerPeriod: phoneAllowance,
-            },
-            expense: {
-              accommodationCostPerPeriod: accommodationCost,
-              followerCount,
-              refrigeratorCostPerPeriod: refrigeratorCost,
-              soundSystemCostPerPeriod: soundSystemCost,
-              tvCostPerPeriod: tvCost,
-              washingMachineCostPerPeriod: washingMachineCost,
-              portableAcCostPerPeriod: portableAcCost,
-            },
-          },
-          'import-csv'
-        );
-
-        summary.imported += 1;
-      } catch (error: any) {
-        summary.skipped += 1;
-        summary.errors.push({
-          row: rowNumber,
-          employeeId,
-          message: error?.message || 'ไม่สามารถสร้างแรงงานได้',
-        });
-        logger.error('Failed to import daily contractor row', {
-          rowNumber,
-          employeeId,
-          error: error?.message,
-        });
+            message: error.message || 'บันทึกข้อมูลไม่สำเร็จ',
+          });
+          logger.error('Failed to import daily contractor row', {
+            rowNumber,
+            employeeId,
+            error: error?.message,
+          });
+        }
       }
-    }
 
-    res.json({
-      success: true,
-      data: summary,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: error.message || 'ไม่สามารถนำเข้าข้อมูลแรงงานได้',
-    });
-  }
-});
+      res.json({
+        success: true,
+        data: summary,
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message || 'ไม่สามารถนำเข้าข้อมูลแรงงานได้',
+      });
+    }
+  });
 
 /**
  * GET /api/daily-contractors/:id
@@ -421,25 +501,25 @@ router.get('/:id/compensation', async (req: Request, res: Response) => {
       data: {
         income: income
           ? {
-              hourlyRate: income.hourlyRate,
-              otHourlyRate: parseFloat((income.hourlyRate * 1.5).toFixed(2)),
-              professionalRate: income.professionalRate,
-              phoneAllowancePerPeriod: income.phoneAllowance,
-              effectiveDate: income.effectiveDate,
-            }
+            hourlyRate: income.hourlyRate,
+            otHourlyRate: parseFloat((income.hourlyRate * 1.5).toFixed(2)),
+            professionalRate: income.professionalRate,
+            phoneAllowancePerPeriod: income.phoneAllowance,
+            effectiveDate: income.effectiveDate,
+          }
           : null,
         expense: expense
           ? {
-              accommodationCostPerPeriod: expense.accommodationCost,
-              followerCount: expense.followerCount,
-              followerAccommodationPerPeriod: expense.followerAccommodation,
-              refrigeratorCostPerPeriod: expense.refrigeratorCost,
-              soundSystemCostPerPeriod: expense.soundSystemCost,
-              tvCostPerPeriod: expense.tvCost,
-              washingMachineCostPerPeriod: expense.washingMachineCost,
-              portableAcCostPerPeriod: expense.portableAcCost,
-              effectiveDate: expense.effectiveDate,
-            }
+            accommodationCostPerPeriod: expense.accommodationCost,
+            followerCount: expense.followerCount,
+            followerAccommodationPerPeriod: expense.followerAccommodation,
+            refrigeratorCostPerPeriod: expense.refrigeratorCost,
+            soundSystemCostPerPeriod: expense.soundSystemCost,
+            tvCostPerPeriod: expense.tvCost,
+            washingMachineCostPerPeriod: expense.washingMachineCost,
+            portableAcCostPerPeriod: expense.portableAcCost,
+            effectiveDate: expense.effectiveDate,
+          }
           : null,
       },
     });
@@ -479,32 +559,32 @@ router.put(
       const updatedBy = req.body.updatedBy || 'system';
       const incomePayload = req.body.income
         ? {
-            hourlyRate: Number(req.body.income.hourlyRate ?? 0),
-            professionalRate: Number(req.body.income.professionalRate ?? 0),
-            phoneAllowancePerPeriod: Number(req.body.income.phoneAllowancePerPeriod ?? 0),
-          }
+          hourlyRate: Number(req.body.income.hourlyRate ?? 0),
+          professionalRate: Number(req.body.income.professionalRate ?? 0),
+          phoneAllowancePerPeriod: Number(req.body.income.phoneAllowancePerPeriod ?? 0),
+        }
         : undefined;
 
       const expensePayload = req.body.expense
         ? {
-            accommodationCostPerPeriod: Number(
-              req.body.expense.accommodationCostPerPeriod ?? 0
-            ),
-            followerCount: Number(req.body.expense.followerCount ?? 0),
-            refrigeratorCostPerPeriod: Number(
-              req.body.expense.refrigeratorCostPerPeriod ?? 0
-            ),
-            soundSystemCostPerPeriod: Number(
-              req.body.expense.soundSystemCostPerPeriod ?? 0
-            ),
-            tvCostPerPeriod: Number(req.body.expense.tvCostPerPeriod ?? 0),
-            washingMachineCostPerPeriod: Number(
-              req.body.expense.washingMachineCostPerPeriod ?? 0
-            ),
-            portableAcCostPerPeriod: Number(
-              req.body.expense.portableAcCostPerPeriod ?? 0
-            ),
-          }
+          accommodationCostPerPeriod: Number(
+            req.body.expense.accommodationCostPerPeriod ?? 0
+          ),
+          followerCount: Number(req.body.expense.followerCount ?? 0),
+          refrigeratorCostPerPeriod: Number(
+            req.body.expense.refrigeratorCostPerPeriod ?? 0
+          ),
+          soundSystemCostPerPeriod: Number(
+            req.body.expense.soundSystemCostPerPeriod ?? 0
+          ),
+          tvCostPerPeriod: Number(req.body.expense.tvCostPerPeriod ?? 0),
+          washingMachineCostPerPeriod: Number(
+            req.body.expense.washingMachineCostPerPeriod ?? 0
+          ),
+          portableAcCostPerPeriod: Number(
+            req.body.expense.portableAcCostPerPeriod ?? 0
+          ),
+        }
         : undefined;
 
       const { income, expense } = await dailyContractorService.upsertCompensationDetails(
@@ -521,25 +601,25 @@ router.put(
         data: {
           income: income
             ? {
-                hourlyRate: income.hourlyRate,
-                otHourlyRate: parseFloat((income.hourlyRate * 1.5).toFixed(2)),
-                professionalRate: income.professionalRate,
-                phoneAllowancePerPeriod: income.phoneAllowance,
-                effectiveDate: income.effectiveDate,
-              }
+              hourlyRate: income.hourlyRate,
+              otHourlyRate: parseFloat((income.hourlyRate * 1.5).toFixed(2)),
+              professionalRate: income.professionalRate,
+              phoneAllowancePerPeriod: income.phoneAllowance,
+              effectiveDate: income.effectiveDate,
+            }
             : null,
           expense: expense
             ? {
-                accommodationCostPerPeriod: expense.accommodationCost,
-                followerCount: expense.followerCount,
-                followerAccommodationPerPeriod: expense.followerAccommodation,
-                refrigeratorCostPerPeriod: expense.refrigeratorCost,
-                soundSystemCostPerPeriod: expense.soundSystemCost,
-                tvCostPerPeriod: expense.tvCost,
-                washingMachineCostPerPeriod: expense.washingMachineCost,
-                portableAcCostPerPeriod: expense.portableAcCost,
-                effectiveDate: expense.effectiveDate,
-              }
+              accommodationCostPerPeriod: expense.accommodationCost,
+              followerCount: expense.followerCount,
+              followerAccommodationPerPeriod: expense.followerAccommodation,
+              refrigeratorCostPerPeriod: expense.refrigeratorCost,
+              soundSystemCostPerPeriod: expense.soundSystemCost,
+              tvCostPerPeriod: expense.tvCost,
+              washingMachineCostPerPeriod: expense.washingMachineCost,
+              portableAcCostPerPeriod: expense.portableAcCost,
+              effectiveDate: expense.effectiveDate,
+            }
             : null,
         },
       });
@@ -697,7 +777,8 @@ router.put(
  */
 router.delete('/:id', authorize(['AM', 'FM']), async (req: Request, res: Response) => {
   try {
-    const success = await dailyContractorService.softDelete(req.params.id);
+    const updatedBy = (req as AuthRequest).user?.id;
+    const success = await dailyContractorService.softDelete(req.params.id, updatedBy);
 
     if (!success) {
       throw new AppError('Daily contractor not found', 404);

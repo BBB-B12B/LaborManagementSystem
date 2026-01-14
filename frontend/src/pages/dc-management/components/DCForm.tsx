@@ -221,113 +221,7 @@ export function DCForm({
             <Divider sx={{ my: 2 }} />
           </Grid>
 
-          {/* Contact Information Section */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              ข้อมูลติดต่อ
-            </Typography>
-          </Grid>
 
-          {/* Phone Number */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="phoneNumber"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="เบอร์โทรศัพท์"
-                  fullWidth
-                  error={!!errors.phoneNumber}
-                  helperText={errors.phoneNumber?.message || 'รูปแบบ: 08X-XXX-XXXX'}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
-
-          {/* ID Card Number */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="idCardNumber"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="เลขบัตรประชาชน"
-                  fullWidth
-                  error={!!errors.idCardNumber}
-                  helperText={errors.idCardNumber?.message || '13 หลัก'}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
-
-          {/* Address */}
-          <Grid item xs={12}>
-            <Controller
-              name="address"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="ที่อยู่"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  error={!!errors.address}
-                  helperText={errors.address?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
-
-          {/* Emergency Contact */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="emergencyContact"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="ชื่อผู้ติดต่อฉุกเฉิน"
-                  fullWidth
-                  error={!!errors.emergencyContact}
-                  helperText={errors.emergencyContact?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
-
-          {/* Emergency Phone */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="emergencyPhone"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="เบอร์ติดต่อฉุกเฉิน"
-                  fullWidth
-                  error={!!errors.emergencyPhone}
-                  helperText={errors.emergencyPhone?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Divider sx={{ my: 2 }} />
-          </Grid>
 
           {/* Employment Section */}
           <Grid item xs={12}>
@@ -344,7 +238,7 @@ export function DCForm({
               render={({ field }) => (
                 <DatePicker
                   label="วันที่เริ่มงาน"
-                  value={field.value}
+                  value={field.value ?? null}
                   onChange={field.onChange}
                   error={!!errors.startDate}
                   helperText={errors.startDate?.message}
@@ -354,23 +248,7 @@ export function DCForm({
             />
           </Grid>
 
-          {/* End Date */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="endDate"
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label="วันที่สิ้นสุดการจ้าง"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={!!errors.endDate}
-                  helperText={errors.endDate?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+
 
           <Grid item xs={12}>
             <Divider sx={{ my: 2 }} />
@@ -398,16 +276,16 @@ export function DCForm({
                     Array.isArray(field.value)
                       ? field.value
                       : field.value
-                      ? [field.value]
-                      : []
+                        ? [field.value]
+                        : []
                   }
                   onChange={(value) =>
                     field.onChange(
                       Array.isArray(value)
                         ? value
                         : value
-                        ? [value]
-                        : []
+                          ? [value]
+                          : []
                     )
                   }
                   error={!!errors.projectLocationIds}

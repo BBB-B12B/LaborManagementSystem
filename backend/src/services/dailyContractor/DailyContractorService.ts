@@ -12,18 +12,16 @@ import {
   DailyContractorDTO,
   CreateDailyContractorInput,
   UpdateDailyContractorInput,
-} from '../../models/DailyContractor';
-import {
   DCIncomeDetails,
   CreateDCIncomeDetailsInput,
   UpdateDCIncomeDetailsInput,
-} from '../../models/DCIncomeDetails';
-import {
   DCExpenseDetails,
   CreateDCExpenseDetailsInput,
   UpdateDCExpenseDetailsInput,
+  dcIncomeDetailsConverter,
+  dcExpenseDetailsConverter,
   calculateFollowerAccommodation,
-} from '../../models/DCExpenseDetails';
+} from '../../models';
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
@@ -360,8 +358,11 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
   private async getIncomeDetailsRecord(
     dailyContractorId: string
   ): Promise<DCIncomeDetails | null> {
-    const snapshot = await collections.dcIncomeDetails
-      .where('dailyContractorId', '==', dailyContractorId)
+    // T-DB-001: Sub-collection Logic
+    const snapshot = await collections.dailyContractors
+      .doc(dailyContractorId)
+      .collection('dcIncomeDetails')
+      .withConverter(dcIncomeDetailsConverter)
       .get();
 
     if (snapshot.empty) {
@@ -375,8 +376,11 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
   private async getExpenseDetailsRecord(
     dailyContractorId: string
   ): Promise<DCExpenseDetails | null> {
-    const snapshot = await collections.dcExpenseDetails
-      .where('dailyContractorId', '==', dailyContractorId)
+    // T-DB-001: Sub-collection Logic
+    const snapshot = await collections.dailyContractors
+      .doc(dailyContractorId)
+      .collection('dcExpenseDetails')
+      .withConverter(dcExpenseDetailsConverter)
       .get();
 
     if (snapshot.empty) {
@@ -426,6 +430,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     expense: DCExpenseDetails | null;
   }> {
     const now = new Date();
+    const dcRef = collections.dailyContractors.doc(dailyContractorId);
 
     if (data.income) {
       const existingIncome = await this.getIncomeDetailsRecord(dailyContractorId);
@@ -437,11 +442,14 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       };
 
       if (existingIncome) {
-        await collections.dcIncomeDetails.doc(existingIncome.id).update({
-          ...payload,
-          updatedAt: now,
-          updatedBy,
-        });
+        await dcRef
+          .collection('dcIncomeDetails')
+          .doc(existingIncome.id)
+          .update({
+            ...payload,
+            updatedAt: now,
+            updatedBy,
+          });
       } else {
         const docData: Omit<DCIncomeDetails, 'id'> = {
           dailyContractorId,
@@ -455,7 +463,10 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
           createdBy: updatedBy,
           updatedBy,
         };
-        await collections.dcIncomeDetails.add(docData as any);
+        await dcRef
+          .collection('dcIncomeDetails')
+          .withConverter(dcIncomeDetailsConverter)
+          .add(docData as any);
       }
     }
 
@@ -474,12 +485,15 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       };
 
       if (existingExpense) {
-        await collections.dcExpenseDetails.doc(existingExpense.id).update({
-          ...payload,
-          followerAccommodation,
-          updatedAt: now,
-          updatedBy,
-        });
+        await dcRef
+          .collection('dcExpenseDetails')
+          .doc(existingExpense.id)
+          .update({
+            ...payload,
+            followerAccommodation,
+            updatedAt: now,
+            updatedBy,
+          });
       } else {
         const docData: Omit<DCExpenseDetails, 'id'> = {
           dailyContractorId,
@@ -498,7 +512,10 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
           createdBy: updatedBy,
           updatedBy,
         };
-        await collections.dcExpenseDetails.add(docData as any);
+        await dcRef
+          .collection('dcExpenseDetails')
+          .withConverter(dcExpenseDetailsConverter)
+          .add(docData as any);
       }
     }
 
@@ -559,6 +576,34 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
   async getByIdDTO(id: string): Promise<DailyContractorDTO | null> {
     const dc = await this.getById(id);
     return dc ? this.toDTO(dc) : null;
+  }
+  /**
+   * Soft delete DC (set isActive = false)
+   * Override BaseCrudService to use isActive instead of isDeleted
+   */
+  async softDelete(id: string, updatedBy?: string): Promise<boolean> {
+    try {
+      logger.info(`Attempting to soft delete DC with ID: ${id}`);
+      const docRef = this.collection.doc(id);
+      const doc = await docRef.get();
+
+      if (!doc.exists) {
+        logger.warn(`Soft delete failed: DC not found (ID: ${id})`);
+        return false;
+      }
+
+      await docRef.update({
+        isActive: false,
+        updatedAt: new Date(),
+        updatedBy: updatedBy || 'system',
+      } as any);
+
+      logger.info(`Soft deleted DC successfully: ${id}`);
+      return true;
+    } catch (error: any) {
+      logger.error(`Error soft deleting DC (ID: ${id}):`, error);
+      throw error;
+    }
   }
 }
 

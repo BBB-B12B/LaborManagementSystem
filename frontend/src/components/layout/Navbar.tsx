@@ -72,13 +72,15 @@ export const Navbar: React.FC = () => {
   const visibleMenuItems = !isClient
     ? menuItems
     : menuItems.filter((item) => {
-        if (!user) return false;
-        if (!user.roleCode) return true;
-        if (user.roleCode === 'GOD') return true;
-        return item.roles.includes(user.roleCode as UserRole);
-      });
+      if (!user) return false;
+      if (!user.roleCode) return true;
+      if (user.roleCode === 'GOD') return true;
+      return item.roles.includes(user.roleCode as UserRole);
+    });
 
   const handleNavigate = (path: string) => {
+    // Prevent navigation to current path or double clicking
+    if (router.pathname === path) return;
     router.push(path);
   };
 
@@ -120,9 +122,9 @@ export const Navbar: React.FC = () => {
           LM
         </Box>
         <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: 0.2 }}>
-              Labor Manager
-            </Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: 0.2 }}>
+            Labor Manager
+          </Typography>
           <Typography variant="caption" sx={{ color: 'rgba(245, 245, 248, 0.65)' }}>
             Daily & OT reports
           </Typography>

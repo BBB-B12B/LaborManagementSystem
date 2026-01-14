@@ -77,33 +77,8 @@ export const dcCreateSchema = z
     // Skill
     skillId: optionalText(1, 100),
 
-    // Contact Info
-    phoneNumber: optionalThaiPhone,
-
-    idCardNumber: optionalThaiIdCard,
-
-    address: optionalString
-      .refine(
-        (val) => !val || val.length <= 500,
-        {
-          message: errorMessages.maxLength(500),
-        }
-      ),
-
-    emergencyContact: optionalString
-      .refine(
-        (val) => !val || val.length >= 2,
-        {
-          message: errorMessages.minLength(2),
-        }
-      ),
-
-    emergencyPhone: optionalThaiPhone,
-
     // Employment
     startDate: optionalDate,
-
-    endDate: optionalDate,
 
     // Project Access
     projectLocationIds: z.preprocess(
@@ -120,19 +95,6 @@ export const dcCreateSchema = z
     // Status
     isActive: baseBoolean.default(true),
   })
-  .refine(
-    (data) => {
-      // If both dates are provided, end date must be after start date
-      if (data.startDate && data.endDate) {
-        return validateDateRange(data.startDate, data.endDate);
-      }
-      return true;
-    },
-    {
-      message: errorMessages.endDateBeforeStart,
-      path: ['endDate'],
-    }
-  )
   .refine(
     (data) => {
       // If username is provided, password must also be provided
@@ -166,27 +128,8 @@ export const dcEditSchema = z
     // Skill
     skillId: optionalText(1, 100),
 
-    // Contact Info
-    phoneNumber: optionalThaiPhone,
-
-    idCardNumber: optionalThaiIdCard,
-
-    address: optionalString
-      .refine(
-        (val) => !val || val.length <= 500,
-        {
-          message: errorMessages.maxLength(500),
-        }
-      ),
-
-    emergencyContact: optionalString,
-
-    emergencyPhone: optionalThaiPhone,
-
     // Employment
     startDate: optionalDate,
-
-    endDate: optionalDate,
 
     // Project Access
     projectLocationIds: z.preprocess(
@@ -202,20 +145,7 @@ export const dcEditSchema = z
 
     // Status
     isActive: baseBoolean.optional(),
-  })
-  .refine(
-    (data) => {
-      // If both dates are provided, end date must be after start date
-      if (data.startDate && data.endDate) {
-        return validateDateRange(data.startDate, data.endDate);
-      }
-      return true;
-    },
-    {
-      message: errorMessages.endDateBeforeStart,
-      path: ['endDate'],
-    }
-  );
+  });
 
 /**
  * DC Income Details schema

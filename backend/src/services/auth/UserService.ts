@@ -30,6 +30,18 @@ export class UserService extends BaseCrudService<User> {
   }
 
   /**
+   * Find user by employeeId
+   */
+  async findByEmployeeId(employeeId: string): Promise<User | null> {
+    // If we enforce ID=EmployeeID, we could just use getById.
+    // But to be safe and support query by field:
+    const users = await this.query([
+      { field: 'employeeId', operator: '==', value: employeeId }
+    ]);
+    return users.length > 0 ? users[0] : null;
+  }
+
+  /**
    * Verify password for a user
    */
   async verifyPassword(userId: string, plainPassword: string): Promise<boolean> {

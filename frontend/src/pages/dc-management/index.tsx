@@ -77,16 +77,11 @@ const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: 
     username: toStringOrEmpty(payload.username as string | null | undefined),
     password: toStringOrEmpty(payload.password as string | null | undefined),
     skillId: toStringOrEmpty(payload.skillId),
-    phoneNumber: toStringOrEmpty(payload.phoneNumber as string | null | undefined),
-    idCardNumber: toStringOrEmpty(payload.idCardNumber as string | null | undefined),
-    address: toStringOrEmpty(payload.address as string | null | undefined),
-    emergencyContact: toStringOrEmpty(payload.emergencyContact as string | null | undefined),
-    emergencyPhone: toStringOrEmpty(payload.emergencyPhone as string | null | undefined),
+
     projectLocationIds: Array.isArray(payload.projectLocationIds)
       ? payload.projectLocationIds.filter(Boolean)
       : [],
     startDate: toIsoOrEmpty(payload.startDate as Date | string | null | undefined) as any,
-    endDate: toIsoOrEmpty(payload.endDate as Date | string | null | undefined) as any,
     isActive: payload.isActive ?? true,
   };
 };
@@ -259,7 +254,6 @@ export default function DCManagementPage() {
       setDrawerInitialValues({
         ...detail,
         startDate: detail.startDate ? new Date(detail.startDate) : undefined,
-        endDate: detail.endDate ? new Date(detail.endDate) : undefined,
         projectLocationIds: detail.projectLocationIds || [],
       });
     } catch (error: any) {
@@ -331,12 +325,7 @@ export default function DCManagementPage() {
         return <Chip label={label} size="small" />;
       },
     },
-    {
-      field: 'phoneNumber',
-      headerName: 'เบอร์โทร',
-      width: 130,
-      renderCell: (params: GridRenderCellParams) => params.value || '-',
-    },
+
     {
       field: 'projectLocationIds',
       headerName: 'จำนวนโครงการ',

@@ -15,8 +15,7 @@ import {
   dailyReportConverter,
   editHistoryConverter,
   wagePeriodConverter,
-  dcIncomeDetailsConverter,
-  dcExpenseDetailsConverter,
+
   additionalIncomeConverter,
   additionalExpenseConverter,
   socialSecurityCalculationConverter,
@@ -66,12 +65,13 @@ export const collections = {
   dailyReports: db.collection(COLLECTIONS.DAILY_REPORTS).withConverter(dailyReportConverter),
   editHistory: db.collection(COLLECTIONS.EDIT_HISTORY).withConverter(editHistoryConverter),
   wagePeriods: db.collection(COLLECTIONS.WAGE_PERIODS).withConverter(wagePeriodConverter),
-  dcIncomeDetails: db
-    .collection(COLLECTIONS.DC_INCOME_DETAILS)
-    .withConverter(dcIncomeDetailsConverter),
-  dcExpenseDetails: db
-    .collection(COLLECTIONS.DC_EXPENSE_DETAILS)
-    .withConverter(dcExpenseDetailsConverter),
+  // [DEPRECATED] Moved to Sub-collection of 'dailyContractors'
+  // dcIncomeDetails: db
+  //   .collection(COLLECTIONS.DC_INCOME_DETAILS)
+  //   .withConverter(dcIncomeDetailsConverter),
+  // dcExpenseDetails: db
+  //   .collection(COLLECTIONS.DC_EXPENSE_DETAILS)
+  //   .withConverter(dcExpenseDetailsConverter),
   additionalIncome: db
     .collection(COLLECTIONS.ADDITIONAL_INCOME)
     .withConverter(additionalIncomeConverter),
