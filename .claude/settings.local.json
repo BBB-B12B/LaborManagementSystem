@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix User type compatibility in auth.service\n\n- Changed roleCode from string to union type\n- Added departmentCode field for consistency with authStore\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git remote set-url:*)",
+      "Bash(curl:*)",
+      "Bash(\"C:\\\\Users\\\\100654\\\\New folder \\(2\\)\\\\stock-shopee-app\\\\temp_login.tsx\")"
+    ]
+  }
+}
