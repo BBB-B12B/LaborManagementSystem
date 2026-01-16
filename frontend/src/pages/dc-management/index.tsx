@@ -155,8 +155,8 @@ export default function DCManagementPage() {
     setFilters((prev) => ({ ...prev, search: value, page: 1 }));
   };
 
-  const handleSkillChange = (skillId: string) => {
-    setFilters((prev) => ({ ...prev, skillId, page: 1 }));
+  const handleSkillChange = (skillId: string | null) => {
+    setFilters((prev) => ({ ...prev, skillId: skillId || '', page: 1 }));
   };
 
   const handleProjectChange = (projectLocationId: string) => {
@@ -480,7 +480,6 @@ export default function DCManagementPage() {
               value={filters.skillId || ''}
               onChange={handleSkillChange}
               label="กรองทักษะ"
-              showAll
             />
           </Grid>
 
@@ -493,7 +492,6 @@ export default function DCManagementPage() {
                 handleProjectChange(selected || '');
               }}
               label="กรองโครงการ"
-              showAll
             />
           </Grid>
 

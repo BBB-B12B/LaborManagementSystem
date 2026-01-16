@@ -87,4 +87,55 @@
 #### 2. Solution
 *   **Frontend**: Removed Contact Info section from `DCForm.tsx` and Phone column from `index.tsx`.
 *   **Refinement**: Removed "End Date" field as per user request (T-UI-001-2).
+*   **Refinement**: Updated Project Select to save "Project Code" (e.g., HO) instead of UUID (T-UI-001-3).
 *   **Validation**: Removed Zod validation rules in `dcSchema.ts` for unused fields.
+
+### Task ID: T-UI-003 (Refine Project Select UI)
+**Feature Ref**: F-006 / User Interface
+**Status**: ✅ Complete
+#### 1. Requirement
+*   Remove Project Sequence (default order) and use Project Code (A-Z).
+*   Refine UI to match Login Page (Premium/Elegant).
+*   Do not change position or layout structure.
+
+#### 2. Solution
+*   **Sorting**: Updated `ProjectSelect.tsx` to sort projects by `code` alphabetically.
+*   **UI Design**: Implemented custom `renderOption` with:
+    *   **Project Code**: Bold, Primary Color (`#2b2337`).
+    *   **Separator**: Vertical divider.
+    *   **Project Name**: Grey text.
+    *   **Department**: Small outlined chip.
+*   **Display**: Input field shows `Code : Name` for clarity.
+
+### Task ID: T-UI-004 (Table Styling)
+**Feature Ref**: F-006 / User Interface
+**Status**: ↩️ Reverted (User Request)
+#### 1. Requirement
+*   Update Data Grid to match "Clean/Modern" reference.
+*   Increase spacing (Padding).
+*   Add Amber highlight for selected rows.
+*   Rounding corners and Premium Shadow.
+*   **Do not** change headers or buttons.
+
+#### 2. Solution
+*   **Container**: Added `borderRadius: 4` and soft shadow (`0 12px 24px...`).
+*   **Layout**: Increased `rowHeight` to `72px` and `headerHeight` to `64px`.
+*   **Visuals**: Removed vertical borders and grid lines (Dashed horizontal only).
+*   **Highlight**: Added `#FFF7CD` (Amber) background for selected rows.
+*   **Headers**: Made background transparent with bold gray text.
+
+### Task ID: T-UI-002 (Fix Build Errors)
+**Feature Ref**: F-006 / User Interface
+**Status**: ✅ Complete
+*   **T-UI-002-E1-1**:
+    *   **Cause**: `SkillSelect` `onChange` expects `string | null` but handler accepted `string`.
+    *   **Solution**: Updated `handleSkillChange` in `index.tsx` to accept `string | null`.
+    *   **Result**: Fixed (2026-01-16).
+*   **T-UI-002-E2-1**:
+    *   **Cause**: `SkillSelect` does not have `showAll` prop but it was passed.
+    *   **Solution**: Removed `showAll` prop from `index.tsx`.
+    *   **Result**: Fixed (2026-01-16).
+*   **T-UI-002-E3**:
+    *   **Cause**: `ProjectSelect` was passed invalid `showAll` prop.
+    *   **Solution**: Removed `showAll` prop from component usage.
+    *   **Result**: Fixed (2026-01-16).

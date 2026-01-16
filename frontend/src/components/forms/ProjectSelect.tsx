@@ -97,7 +97,8 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
           projectName: project.projectName,
           department: project.department,
           status: project.status,
-        }));
+        }))
+        .sort((a, b) => a.code.localeCompare(b.code)); // Sort by Code for cleaner order
     },
     enabled: Boolean(user),
     staleTime: 5 * 60 * 1000,
@@ -114,9 +115,9 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   });
 
   const selectedProjects = React.useMemo(() => {
-    const ids = Array.isArray(value) ? value : value ? [value] : [];
-    return ids.map(
-      (id) => projects.find((project) => project.id === id) ?? createFallbackProject(id)
+    const codes = Array.isArray(value) ? value : value ? [value] : [];
+    return codes.map(
+      (code) => projects.find((project) => project.code === code) ?? createFallbackProject(code)
     );
   }, [value, projects]);
 
@@ -124,20 +125,20 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
 
   const options = React.useMemo(() => {
     if (!selectedValue) {
-      return projects;
+      return projects; // Already sorted
     }
     const map = new Map<string, ProjectLocation>();
-    projects.forEach((project) => map.set(project.id, project));
+    projects.forEach((project) => map.set(project.code, project));
 
     if (multiple) {
       (selectedValue as ProjectLocation[]).forEach((project) => {
-        map.set(project.id, project);
+        map.set(project.code, project);
       });
     } else if (selectedValue) {
-      map.set((selectedValue as ProjectLocation).id, selectedValue as ProjectLocation);
+      map.set((selectedValue as ProjectLocation).code, selectedValue as ProjectLocation);
     }
 
-    return Array.from(map.values());
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
   }, [projects, selectedValue, multiple]);
 
   const autocompleteValue = React.useMemo(() => {
@@ -152,12 +153,12 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     newValue: ProjectLocation | ProjectLocation[] | null
   ) => {
     if (multiple) {
-      const selectedIds = Array.isArray(newValue)
-        ? newValue.map((project) => project.id)
+      const selectedCodes = Array.isArray(newValue)
+        ? newValue.map((project) => project.code)
         : [];
-      onChange(selectedIds);
+      onChange(selectedCodes);
     } else {
-      const selected = (newValue as ProjectLocation | null)?.id ?? null;
+      const selected = (newValue as ProjectLocation | null)?.code ?? null;
       onChange(selected);
 
       if (selected && user?.id) {
@@ -177,6 +178,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
             : option.code
         }
         size="small"
+        sx={{ borderRadius: '6px', fontWeight: 500 }}
       />
     ));
 
@@ -188,28 +190,62 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         loading={isLoading}
         value={autocompleteValue}
         onChange={handleAutocompleteChange}
-        getOptionLabel={(option) =>
-          displayProjectNameOnly ? option.projectName : `${option.code} - ${option.projectName}`
-        }
+        getOptionLabel={(option) => {
+          // Display logic: Preference to Code
+          if (displayProjectNameOnly) return option.projectName;
+          return `${option.code} : ${option.projectName}`;
+        }}
         renderTags={multiple ? (renderTags as any) : undefined}
         size={size}
         disabled={disabled || isLoading}
         fullWidth={fullWidth}
         noOptionsText="ไม่พบโครงการ"
         loadingText="กำลังโหลด..."
-        isOptionEqualToValue={(option, val) => option.id === val.id}
+        isOptionEqualToValue={(option, val) => option.code === val.code}
         renderOption={(props, option) => (
-          <li {...props} key={option.id}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="body2">
-                  {displayProjectNameOnly
-                    ? option.projectName
-                    : `${option.code} - ${option.projectName}`}
-                </Typography>
-              </Box>
+          <li {...props} key={option.id} style={{ padding: '8px 16px' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  color: 'primary.main',
+                  minWidth: '40px'
+                }}
+              >
+                {option.code}
+              </Typography>
+              <Box sx={{
+                height: '16px',
+                width: '1px',
+                bgcolor: 'divider',
+                mx: 0.5
+              }} />
+              <Typography
+                variant="body2"
+                sx={{
+                  flex: 1,
+                  color: 'text.primary',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {option.projectName}
+              </Typography>
+
               {option.department && (
-                <Chip label={option.department} size="small" />
+                <Chip
+                  label={option.department}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    height: 20,
+                    fontSize: '0.7rem',
+                    color: 'text.secondary',
+                    borderColor: 'divider'
+                  }}
+                />
               )}
             </Box>
           </li>
