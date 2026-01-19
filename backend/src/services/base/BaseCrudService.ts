@@ -9,6 +9,7 @@ import type {
     CollectionReference,
     Query,
     WhereFilterOp,
+    FieldPath,
 } from 'firebase-admin/firestore';
 
 export interface PaginationOptions {
@@ -126,7 +127,7 @@ export class BaseCrudService<T extends { id: string }> {
     }
 
     async query(
-        filters: Array<{ field: string; operator: WhereFilterOp; value: any }>,
+        filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
         options?: PaginationOptions
     ): Promise<T[]> {
         console.log(`[BaseCrudService] Querying ${this.collectionName || 'unknown'} with filters: ${JSON.stringify(filters)}`);
@@ -151,7 +152,7 @@ export class BaseCrudService<T extends { id: string }> {
     }
 
     async count(
-        filters?: Array<{ field: string; operator: WhereFilterOp; value: any }>
+        filters?: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>
     ): Promise<number> {
         let query: Query<T> = this.collection as any;
 

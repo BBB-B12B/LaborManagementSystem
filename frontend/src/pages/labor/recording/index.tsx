@@ -18,13 +18,9 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import SaveIcon from '@mui/icons-material/Save';
 import { Layout, ProtectedRoute } from '@/components/layout';
-
-// Mock Data for Projects (Replace with API call later)
-const MOCK_PROJECTS = [
-    { id: '1', name: 'คลังสินค้าและบริการ' },
-    { id: '2', name: 'โครงการ A' },
-];
+import { importedWageSystemService, ImportedWageSystem } from '@/services/api/importedWageSystem.service';
 
 interface LaborRow {
     id: string;
@@ -40,8 +36,9 @@ interface LaborRow {
 }
 
 export default function LaborRecordingPage() {
-    const [selectedProject, setSelectedProject] = useState('1');
-    const [currentLaborCount, setCurrentLaborCount] = useState(80); // Mock initial value
+    const [selectedProject, setSelectedProject] = useState('');
+    const [projects, setProjects] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState<LaborRow[]>([
         {
             id: '1',
@@ -68,6 +65,88 @@ export default function LaborRecordingPage() {
             remarks: '',
         },
     ]);
+
+    // Derived value for total labor count
+    const currentLaborCount = rows.reduce((acc, row) => acc + (row.total || 0), 0);
+
+    React.useEffect(() => {
+        const fetchProjects = async () => {
+            try {
+                const data = await importedWageSystemService.getUniqueProjects();
+                setProjects(data);
+                if (data.length > 0) setSelectedProject(data[0]);
+            } catch (err) {
+                console.error('Failed to fetch projects:', err);
+                setProjects(['คลังสินค้าและบริการ', 'โครงการ A']);
+                setSelectedProject('คลังสินค้าและบริการ');
+            }
+        };
+        fetchProjects();
+    }, []);
+
+    // Fetch rows when selectedProject changes
+    React.useEffect(() => {
+        if (!selectedProject) return;
+
+        const fetchRows = async () => {
+            setLoading(true);
+            try {
+                const projectData = await importedWageSystemService.getByProject(selectedProject);
+
+                const tableRows: LaborRow[] = projectData.map((item: ImportedWageSystem) => {
+                    const latestLog = item.logs && item.logs.length > 0
+                        ? item.logs[item.logs.length - 1]
+                        : null;
+
+                    return {
+                        id: item.id,
+                        contractorName: item["ชื่อผู้รับเหมา"],
+                        position: item["ตำแหน่งงาน"],
+                        total: latestLog ? Number(latestLog["จำนวนรวม"] || 0) : 0,
+                        thai: latestLog ? Number(latestLog["สัญชาติไทย"] || 0) : 0,
+                        cambodia: latestLog ? Number(latestLog["สัญชาติกัมพูชา"] || 0) : 0,
+                        lao: latestLog ? Number(latestLog["สัญชาติลาว"] || 0) : 0,
+                        myanmar: latestLog ? Number(latestLog["สัญชาติเมียนมาร์"] || 0) : 0,
+                        illegal: latestLog ? Number(latestLog["จำนวนแรงงานผิดกฎหมาย"] || 0) : 0,
+                        remarks: latestLog ? latestLog["หมายเหตุ"] || '' : '',
+                    };
+                });
+
+                setRows(tableRows.length > 0 ? tableRows : [
+                    {
+                        id: 'empty-1',
+                        contractorName: '',
+                        position: '',
+                        total: 0,
+                        thai: 0,
+                        cambodia: 0,
+                        lao: 0,
+                        myanmar: 0,
+                        illegal: 0,
+                        remarks: '',
+                    }
+                ]);
+            } catch (err) {
+                console.error('Failed to fetch rows:', err);
+                setRows([{
+                    id: 'empty-1',
+                    contractorName: '',
+                    position: '',
+                    total: 0,
+                    thai: 0,
+                    cambodia: 0,
+                    lao: 0,
+                    myanmar: 0,
+                    illegal: 0,
+                    remarks: '',
+                }]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRows();
+    }, [selectedProject]);
 
     const handleAddRow = () => {
         const newRow: LaborRow = {
@@ -132,9 +211,9 @@ export default function LaborRecordingPage() {
                                     onChange={(e) => setSelectedProject(e.target.value)}
                                     size="small"
                                 >
-                                    {MOCK_PROJECTS.map((project) => (
-                                        <MenuItem key={project.id} value={project.id}>
-                                            {project.name}
+                                    {projects.map((projectName) => (
+                                        <MenuItem key={projectName} value={projectName}>
+                                            {projectName}
                                         </MenuItem>
                                     ))}
                                 </TextField>
@@ -157,14 +236,14 @@ export default function LaborRecordingPage() {
                     </Paper>
 
                     {/* Table Section */}
-                    <Paper sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                            <Typography variant="h6">รายการแรงงาน</Typography>
+                    <Paper sx={{ p: 0, mt: 3, overflow: 'hidden', borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>รายการแรงงาน</Typography>
                             <Button
                                 variant="contained"
                                 startIcon={<AddIcon />}
                                 onClick={handleAddRow}
-                                color="primary"
+                                sx={{ bgcolor: '#4A69BD', '&:hover': { bgcolor: '#3c55a5' } }}
                             >
                                 เพิ่มแถว
                             </Button>
@@ -172,19 +251,19 @@ export default function LaborRecordingPage() {
 
                         <TableContainer>
                             <Table sx={{ minWidth: 650 }} aria-label="labor table">
-                                <TableHead sx={{ bgcolor: '#d2b48c' }}> {/* Approx color from image */}
+                                <TableHead sx={{ bgcolor: '#C5A059' }}>
                                     <TableRow>
-                                        <TableCell align="center" width="5%">No.</TableCell>
-                                        <TableCell width="20%">ชื่อผู้รับเหมา *</TableCell>
-                                        <TableCell width="15%">ตำแหน่งงาน *</TableCell>
-                                        <TableCell align="center" width="8%">จำนวนรวม</TableCell>
-                                        <TableCell align="center" width="8%">สัญชาติ<br />ไทย</TableCell>
-                                        <TableCell align="center" width="8%">สัญชาติ<br />กัมพูชา</TableCell>
-                                        <TableCell align="center" width="8%">สัญชาติ<br />ลาว</TableCell>
-                                        <TableCell align="center" width="8%">สัญชาติ<br />เมียนมาร์</TableCell>
-                                        <TableCell align="center" width="10%">แรงงานผิดกฎหมาย</TableCell>
-                                        <TableCell align="center" width="10%">หมายเหตุ</TableCell>
-                                        <TableCell align="center" width="5%">ลบแถว</TableCell>
+                                        <TableCell align="center" width="5%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>No.</TableCell>
+                                        <TableCell width="20%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>ชื่อผู้รับเหมา *</TableCell>
+                                        <TableCell width="15%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>ตำแหน่งงาน *</TableCell>
+                                        <TableCell align="center" width="8%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>จำนวนรวม</TableCell>
+                                        <TableCell align="center" width="8%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>สัญชาติไทย</TableCell>
+                                        <TableCell align="center" width="8%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>สัญชาติกัมพูชา</TableCell>
+                                        <TableCell align="center" width="8%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>สัญชาติลาว</TableCell>
+                                        <TableCell align="center" width="8%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>สัญชาติเมียนมาร์</TableCell>
+                                        <TableCell align="center" width="10%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>แรงงานผิดกฎหมาย</TableCell>
+                                        <TableCell align="center" width="10%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>หมายเหตุ</TableCell>
+                                        <TableCell align="center" width="5%" sx={{ color: 'white', fontWeight: 'bold', bgcolor: '#C5A059' }}>ลบแถว</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -276,8 +355,26 @@ export default function LaborRecordingPage() {
                             </Table>
                         </TableContainer>
                     </Paper>
+
+                    {/* Centered Submit Button */}
+                    <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                        <Button
+                            variant="contained"
+                            size="large"
+                            sx={{
+                                bgcolor: '#50C878',
+                                px: 6,
+                                '&:hover': { bgcolor: '#45b36b' },
+                                borderRadius: 1,
+                                textTransform: 'none',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Submit
+                        </Button>
+                    </Box>
                 </Container>
             </Layout>
-        </ProtectedRoute>
+        </ProtectedRoute >
     );
 }
