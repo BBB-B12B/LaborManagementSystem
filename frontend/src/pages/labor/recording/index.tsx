@@ -32,7 +32,96 @@ interface LaborRow {
     lao: number;
     myanmar: number;
     illegal: number;
+    illegalCambodia: number;
+    illegalLao: number;
+    illegalMyanmar: number;
     remarks: string;
+}
+
+interface IllegalLaborDialogProps {
+    open: boolean;
+    onClose: () => void;
+    onSave: (cambodia: number, lao: number, myanmar: number) => void;
+    initialData: {
+        cambodia: number;
+        lao: number;
+        myanmar: number;
+    };
+}
+
+import {
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+} from '@mui/material';
+
+function IllegalLaborDialog({ open, onClose, onSave, initialData }: IllegalLaborDialogProps) {
+    const [cambodia, setCambodia] = useState(initialData.cambodia);
+    const [lao, setLao] = useState(initialData.lao);
+    const [myanmar, setMyanmar] = useState(initialData.myanmar);
+
+    React.useEffect(() => {
+        setCambodia(initialData.cambodia);
+        setLao(initialData.lao);
+        setMyanmar(initialData.myanmar);
+    }, [initialData]);
+
+    const handleSave = () => {
+        onSave(cambodia, lao, myanmar);
+        onClose();
+    };
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ bgcolor: '#C5A059', color: 'white', fontWeight: 'bold' }}>
+                ระบุจำนวนแรงงานผิดกฎหมาย
+            </DialogTitle>
+            <DialogContent sx={{ mt: 2 }}>
+                <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom>สัญชาติเมียนมาร์ (Myanmar)</Typography>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            size="small"
+                            value={myanmar}
+                            onChange={(e) => setMyanmar(Number(e.target.value))}
+                            inputProps={{ min: 0 }}
+                        />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom>สัญชาติกัมพูชา (Cambodia)</Typography>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            size="small"
+                            value={cambodia}
+                            onChange={(e) => setCambodia(Number(e.target.value))}
+                            inputProps={{ min: 0 }}
+                        />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom>สัญชาติลาว (Lao)</Typography>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            size="small"
+                            value={lao}
+                            onChange={(e) => setLao(Number(e.target.value))}
+                            inputProps={{ min: 0 }}
+                        />
+                    </Grid>
+                </Grid>
+            </DialogContent>
+            <DialogActions sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                <Button onClick={onClose} color="inherit">ยกเลิก</Button>
+                <Button onClick={handleSave} variant="contained" sx={{ bgcolor: '#C5A059', '&:hover': { bgcolor: '#b08e4d' } }}>
+                    ตกลง
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
 }
 
 export default function LaborRecordingPage() {
@@ -50,6 +139,9 @@ export default function LaborRecordingPage() {
             lao: 0,
             myanmar: 0,
             illegal: 0,
+            illegalCambodia: 0,
+            illegalLao: 0,
+            illegalMyanmar: 0,
             remarks: '',
         },
         {
@@ -62,9 +154,18 @@ export default function LaborRecordingPage() {
             lao: 0,
             myanmar: 0,
             illegal: 0,
+            illegalCambodia: 0,
+            illegalLao: 0,
+            illegalMyanmar: 0,
             remarks: '',
         },
     ]);
+
+    // Dialog state
+    const [illegalDialog, setIllegalDialog] = useState<{ open: boolean; rowId: string | null }>({
+        open: false,
+        rowId: null,
+    });
 
     // Derived value for total labor count
     const currentLaborCount = rows.reduce((acc, row) => acc + (row.total || 0), 0);
@@ -108,6 +209,9 @@ export default function LaborRecordingPage() {
                         lao: latestLog ? Number(latestLog["สัญชาติลาว"] || 0) : 0,
                         myanmar: latestLog ? Number(latestLog["สัญชาติเมียนมาร์"] || 0) : 0,
                         illegal: latestLog ? Number(latestLog["จำนวนแรงงานผิดกฎหมาย"] || 0) : 0,
+                        illegalCambodia: latestLog ? Number(latestLog["แรงงานผิดกฎหมาย_กัมพูชา"] || 0) : 0,
+                        illegalLao: latestLog ? Number(latestLog["แรงงานผิดกฎหมาย_ลาว"] || 0) : 0,
+                        illegalMyanmar: latestLog ? Number(latestLog["แรงงานผิดกฎหมาย_เมียนมาร์"] || 0) : 0,
                         remarks: latestLog ? latestLog["หมายเหตุ"] || '' : '',
                     };
                 });
@@ -123,6 +227,9 @@ export default function LaborRecordingPage() {
                         lao: 0,
                         myanmar: 0,
                         illegal: 0,
+                        illegalCambodia: 0,
+                        illegalLao: 0,
+                        illegalMyanmar: 0,
                         remarks: '',
                     }
                 ]);
@@ -138,6 +245,9 @@ export default function LaborRecordingPage() {
                     lao: 0,
                     myanmar: 0,
                     illegal: 0,
+                    illegalCambodia: 0,
+                    illegalLao: 0,
+                    illegalMyanmar: 0,
                     remarks: '',
                 }]);
             } finally {
@@ -159,6 +269,9 @@ export default function LaborRecordingPage() {
             lao: 0,
             myanmar: 0,
             illegal: 0,
+            illegalCambodia: 0,
+            illegalLao: 0,
+            illegalMyanmar: 0,
             remarks: '',
         };
         setRows([...rows, newRow]);
@@ -188,6 +301,36 @@ export default function LaborRecordingPage() {
             })
         );
     };
+
+    const handleIllegalSave = (cambodia: number, lao: number, myanmar: number) => {
+        if (!illegalDialog.rowId) return;
+
+        setRows(
+            rows.map((row) => {
+                if (row.id === illegalDialog.rowId) {
+                    const totalIllegal = cambodia + lao + myanmar;
+                    const updatedRow = {
+                        ...row,
+                        illegal: totalIllegal,
+                        illegalCambodia: cambodia,
+                        illegalLao: lao,
+                        illegalMyanmar: myanmar,
+                    };
+                    // Recalculate row total
+                    updatedRow.total =
+                        Number(updatedRow.thai) +
+                        Number(updatedRow.cambodia) +
+                        Number(updatedRow.lao) +
+                        Number(updatedRow.myanmar) +
+                        Number(updatedRow.illegal);
+                    return updatedRow;
+                }
+                return row;
+            })
+        );
+    };
+
+    const currentRowForDialog = rows.find(r => r.id === illegalDialog.rowId);
 
     return (
         <ProtectedRoute requiredRoles={['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD']}>
@@ -327,14 +470,27 @@ export default function LaborRecordingPage() {
                                                     inputProps={{ min: 0, style: { textAlign: 'center' } }}
                                                 />
                                             </TableCell>
-                                            <TableCell>
-                                                <TextField
-                                                    type="number"
+                                            <TableCell align="center">
+                                                <Button
+                                                    fullWidth
+                                                    variant="outlined"
                                                     size="small"
-                                                    value={row.illegal}
-                                                    onChange={(e) => handleRowChange(row.id, 'illegal', Number(e.target.value))}
-                                                    inputProps={{ min: 0, style: { textAlign: 'center' } }}
-                                                />
+                                                    onClick={() => setIllegalDialog({ open: true, rowId: row.id })}
+                                                    sx={{
+                                                        height: 40,
+                                                        borderColor: row.illegal > 0 ? '#C5A059' : '#ddd',
+                                                        color: row.illegal > 0 ? '#d32f2f' : '#666',
+                                                        bgcolor: row.illegal > 0 ? '#fff5f5' : '#f9f9f9',
+                                                        fontWeight: row.illegal > 0 ? 'bold' : 'normal',
+                                                        textTransform: 'none',
+                                                        '&:hover': {
+                                                            borderColor: '#C5A059',
+                                                            bgcolor: '#fdfaf5'
+                                                        }
+                                                    }}
+                                                >
+                                                    {row.illegal === 0 ? "เลือก" : row.illegal}
+                                                </Button>
                                             </TableCell>
                                             <TableCell>
                                                 <TextField
@@ -373,6 +529,18 @@ export default function LaborRecordingPage() {
                             Submit
                         </Button>
                     </Box>
+
+                    {/* Illegal Labor Dialog */}
+                    <IllegalLaborDialog
+                        open={illegalDialog.open}
+                        onClose={() => setIllegalDialog({ ...illegalDialog, open: false })}
+                        onSave={handleIllegalSave}
+                        initialData={{
+                            cambodia: currentRowForDialog?.illegalCambodia || 0,
+                            lao: currentRowForDialog?.illegalLao || 0,
+                            myanmar: currentRowForDialog?.illegalMyanmar || 0,
+                        }}
+                    />
                 </Container>
             </Layout>
         </ProtectedRoute >
