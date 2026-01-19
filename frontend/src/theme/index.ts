@@ -196,6 +196,17 @@ const baseThemeOptions: ThemeOptions = {
         },
       },
     },
+    // @ts-ignore
+    MuiDataGrid: {
+      styleOverrides: {
+        root: {
+          '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within, & .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within':
+          {
+            outline: 'none !important',
+          },
+        },
+      },
+    },
   },
 };
 

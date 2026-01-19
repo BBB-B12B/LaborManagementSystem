@@ -23,6 +23,7 @@ import projectService, { type Project } from '@/services/projectService';
 export interface ProjectLocation {
   id: string;
   code: string;
+  projectCode?: string; // Added field
   projectName: string;
   department: string;
   status: string;
@@ -94,11 +95,12 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         .map((project) => ({
           id: project.id,
           code: project.code,
+          projectCode: project.projectCode, // Map new field
           projectName: project.projectName,
           department: project.department,
           status: project.status,
         }))
-        .sort((a, b) => a.code.localeCompare(b.code)); // Sort by Code for cleaner order
+        .sort((a, b) => (a.projectCode || a.code).localeCompare(b.projectCode || b.code)); // Sort by ProjectCode
     },
     enabled: Boolean(user),
     staleTime: 5 * 60 * 1000,
@@ -138,7 +140,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
       map.set((selectedValue as ProjectLocation).code, selectedValue as ProjectLocation);
     }
 
-    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+    return Array.from(map.values()).sort((a, b) => (a.projectCode || a.code).localeCompare(b.projectCode || b.code));
   }, [projects, selectedValue, multiple]);
 
   const autocompleteValue = React.useMemo(() => {
@@ -175,7 +177,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         label={
           displayProjectNameOnly && option.projectName
             ? option.projectName
-            : option.code
+            : (option.projectCode || option.code) // Use ProjectCode
         }
         size="small"
         sx={{ borderRadius: '6px', fontWeight: 500 }}
@@ -191,9 +193,10 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         value={autocompleteValue}
         onChange={handleAutocompleteChange}
         getOptionLabel={(option) => {
-          // Display logic: Preference to Code
-          if (displayProjectNameOnly) return option.projectName;
-          return `${option.code} : ${option.projectName}`;
+          // Display logic: Preference to ProjectCode
+          return displayProjectNameOnly
+            ? option.projectName
+            : `${option.projectCode || option.code} : ${option.projectName}`;
         }}
         renderTags={multiple ? (renderTags as any) : undefined}
         size={size}
@@ -213,7 +216,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
                   minWidth: '40px'
                 }}
               >
-                {option.code}
+                {option.projectCode || option.code}
               </Typography>
               <Box sx={{
                 height: '16px',
@@ -233,20 +236,6 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
               >
                 {option.projectName}
               </Typography>
-
-              {option.department && (
-                <Chip
-                  label={option.department}
-                  size="small"
-                  variant="outlined"
-                  sx={{
-                    height: 20,
-                    fontSize: '0.7rem',
-                    color: 'text.secondary',
-                    borderColor: 'divider'
-                  }}
-                />
-              )}
             </Box>
           </li>
         )}

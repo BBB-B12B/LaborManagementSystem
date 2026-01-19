@@ -139,3 +139,26 @@
     *   **Cause**: `ProjectSelect` was passed invalid `showAll` prop.
     *   **Solution**: Removed `showAll` prop from component usage.
     *   **Result**: Fixed (2026-01-16).
+
+### Task ID: T-UI-004 (Refactor Project Display)
+**Feature Ref**: F-006 / User Interface
+**Status**: ✅ Complete
+#### 1. Requirement
+*   Display `projectCode` (e.g., WH3, HO) instead of `code` (e.g., P001) in Project Select.
+*   `code` is just an internal sequence. `projectCode` is the meaningful identifier.
+
+#### 2. Solution
+*   **Backend**: Added `projectCode` to `ProjectLocation` model and Firestore converter.
+*   **Frontend**: Updated `ProjectSelect` to display `projectCode` : `projectName`.
+*   **Fallback**: If `projectCode` is missing, falls back to `code`.
+
+### Task ID: T-UI-005 (Refine DataGrid Focus)
+**Feature Ref**: F-006 / User Interface
+**Status**: ✅ Complete
+#### 1. Requirement
+*   Remove black focus outline (border) when clicking on DataGrid row/cell.
+*   Apply globally to all pages.
+
+#### 2. Solution
+*   **Theme**: Added `MuiDataGrid` style override in `src/theme/index.ts`.
+*   **CSS**: Set `outline: none !important` for focus/focus-within states of cells and headers.
