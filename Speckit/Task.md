@@ -275,6 +275,13 @@
 *   Admin user created successfully.
 *   **Ready for Production Use**.
 
+#### 4. Error Logs
+*   **T-SETUP-001-EX-1**:
+    *   **Symptom**: 500 Internal Server Error (RESOURCE_EXHAUSTED) during login.
+    *   **Cause**: Firebase Free Tier Quota Exceeded for Real Cloud Database.
+    *   **Solution**: Reverted to Firebase Emulator for Development (`FIREBASE_EMULATOR_ENABLED=true` in `.env`, Port `4001`).
+    *   **Result**: Fixed.
+
 ---
 
 ### Task ID: T-BUG-009 (Login Loop on Real Cloud)

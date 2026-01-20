@@ -95,8 +95,8 @@ function parseCSV(content: string): any[] {
     return data;
 }
 
-function generateKey(project: string, contractor: string, position: string): string {
-    return `${project}|${contractor}|${position}`.trim();
+function generateKey(project: string, contractor: string): string {
+    return `${project}|${contractor}`.trim();
 }
 
 
@@ -150,7 +150,7 @@ async function importWageSystem() {
 
         if (!project || !contractor) continue; // Basic validation
 
-        const key = generateKey(project, contractor, position);
+        const key = generateKey(project, contractor);
 
         if (!docMap.has(key)) {
             docMap.set(key, {
@@ -175,7 +175,7 @@ async function importWageSystem() {
         const project = row['หน่วยงาน/โครงการ'];
         const contractor = row['ชื่อผู้รับเหมา'];
         const position = row['ตำแหน่งงาน'];
-        const key = generateKey(project, contractor, position);
+        const key = generateKey(project, contractor);
 
         if (docMap.has(key)) {
             docMap.get(key)!.logs.push(row);
@@ -208,7 +208,7 @@ async function importWageSystem() {
         const project = row['หน่วยงาน/โครงการ'];
         const contractor = row['ชื่อผู้รับเหมา'];
         const position = row['ตำแหน่งงาน'];
-        const key = generateKey(project, contractor, position);
+        const key = generateKey(project, contractor);
 
         if (docMap.has(key)) {
             docMap.get(key)!.summaries.push(row);
@@ -237,7 +237,7 @@ async function importWageSystem() {
         const project = row['หน่วยงาน/โครงการ'];
         const contractor = row['ชื่อผู้รับเหมา'];
         const position = row['ตำแหน่งงาน'];
-        const key = generateKey(project, contractor, position);
+        const key = generateKey(project, contractor);
 
         if (docMap.has(key)) {
             docMap.get(key)!.plans.push(row);
@@ -262,14 +262,18 @@ async function importWageSystem() {
     // 6. Write to Firestore
     console.log(`Starting Batch Write for ${docMap.size} documents...`);
 
-    // We will clear the collection? No, "ไม่ต้องการยุ่งกับฐานข้อมูลที่มีอยู่". 
-    // Just add new. Since it's a NEW collection name "Wage Calculation system", it should be empty.
-
     const batchHandler = new BatchHandler(db);
     let processed = 0;
 
-    for (const docData of docMap.values()) {
-        const docRef = db.collection(collectionName).doc(); // Auto-ID
+    for (const [key, docData] of docMap.entries()) {
+        // Generate a readable ID: "Project_Contractor_Position"
+        // Key format is: "project|contractor|position"
+        const customId = key.replace(/\|/g, '_').replace(/\//g, '-').replace(/\s+/g, ' ');
+
+        // Ensure ID is not empty or invalid
+        const validId = customId || db.collection(collectionName).doc().id;
+
+        const docRef = db.collection(collectionName).doc(validId);
         await batchHandler.set(docRef, docData);
         processed++;
         if (processed % 100 === 0) process.stdout.write('.');

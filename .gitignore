@@ -44,6 +44,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+backend_logs*.txt
+debug_output.txt
 
 # ============================================
 # Testing
@@ -100,6 +102,7 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 backend/keys/
+serviceAccountKey.json
 
 # ============================================
 # Temporary Files

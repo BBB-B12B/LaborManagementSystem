@@ -9,11 +9,11 @@
 import React, { useMemo } from 'react';
 import { DatePicker as MuiDatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { th } from 'date-fns/locale';
 import { TextField, TextFieldProps } from '@mui/material';
 import { isAfter, isBefore, isValid } from 'date-fns';
-import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 const BANGKOK_TZ = 'Asia/Bangkok';
 
@@ -60,7 +60,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
    * Convert value to Bangkok timezone for display
    * Must run on every render to keep hook order stable between SSR and CSR
    */
-  const displayValue = useMemo(() => (value ? utcToZonedTime(value, BANGKOK_TZ) : null), [value]);
+  const displayValue = useMemo(() => (value ? toZonedTime(value, BANGKOK_TZ) : null), [value]);
 
   /**
    * Handle date change - convert to UTC
@@ -72,7 +72,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     }
 
     // Convert Bangkok time to UTC
-    const utcDate = zonedTimeToUtc(newValue, BANGKOK_TZ);
+    const utcDate = fromZonedTime(newValue, BANGKOK_TZ);
     onChange(utcDate);
   };
 
@@ -194,8 +194,7 @@ export const validateDateRange = (
  */
 export const formatThaiDate = (date: Date | null): string => {
   if (!date || !isValid(date)) return '-';
-
-  const bangkokDate = utcToZonedTime(date, BANGKOK_TZ);
+  const bangkokDate = toZonedTime(date, BANGKOK_TZ);
   return format(bangkokDate, 'dd MMMM yyyy', { locale: th });
 };
 
@@ -205,7 +204,7 @@ export const formatThaiDate = (date: Date | null): string => {
 export const formatThaiDateShort = (date: Date | null): string => {
   if (!date || !isValid(date)) return '-';
 
-  const bangkokDate = utcToZonedTime(date, BANGKOK_TZ);
+  const bangkokDate = toZonedTime(date, BANGKOK_TZ);
   return format(bangkokDate, 'dd/MM/yyyy');
 };
 
