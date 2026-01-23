@@ -13,6 +13,8 @@ Mapping ระหว่าง Feature หลักและไฟล์ Code ท
 | **F-006** (DC) | `dailyContractors.routes.ts` | `DailyContractor.ts`, `SocialSecurityCalculation.ts` | Contractor Data |
 | **F-007** (Wage) | `wagePeriods.routes.ts` | `WagePeriod.ts`, `AdditionalIncome.ts` | Wage Calculation |
 | **F-008** (Scan) | `scanData.routes.ts` | `ScanData.ts`, `LateRecord.ts` | Finger Scan Processing |
+| **F-007, F-008** | `seedWageTestData.ts` | - | Mock Data for Wage Testing |
+| **F-010** (Integrated Wage) | `wagePeriods.routes.ts` | `WagePeriod.ts`, `ScanData.ts`, `LateRecord.ts` | Integrated Wage Calculation |
 
 ## 2. Data & Component Traceability
 Mapping ระหว่าง Entity และความหมายในระบบ

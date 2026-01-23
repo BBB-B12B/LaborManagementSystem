@@ -15,6 +15,7 @@ export interface ScanDataDiscrepancy {
   dailyContractorId: string;
   projectLocationId: string;
   workDate: Date;
+  discrepancyType: 'Type1' | 'Type2' | 'Type3';
   reportedHours: number; // จาก Daily Report
   scannedHours: number; // จาก Scan Data
   hoursDifference: number; // reportedHours - scannedHours
@@ -35,6 +36,7 @@ export interface CreateScanDataDiscrepancyInput {
   workDate: Date;
   reportedHours: number;
   scannedHours: number;
+  discrepancyType: 'Type1' | 'Type2' | 'Type3';
   detectionReason: string;
 }
 
@@ -58,6 +60,7 @@ export const scanDataDiscrepancyConverter = {
       dailyContractorId: discrepancy.dailyContractorId,
       projectLocationId: discrepancy.projectLocationId,
       workDate: discrepancy.workDate,
+      discrepancyType: discrepancy.discrepancyType,
       reportedHours: discrepancy.reportedHours,
       scannedHours: discrepancy.scannedHours,
       hoursDifference: discrepancy.hoursDifference,
@@ -79,6 +82,7 @@ export const scanDataDiscrepancyConverter = {
       dailyContractorId: data.dailyContractorId,
       projectLocationId: data.projectLocationId,
       workDate: data.workDate.toDate(),
+      discrepancyType: data.discrepancyType || 'Type1',
       reportedHours: data.reportedHours,
       scannedHours: data.scannedHours,
       hoursDifference: data.hoursDifference,

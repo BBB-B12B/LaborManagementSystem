@@ -108,7 +108,8 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [mode, defaultValues?.code, setValue, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, defaultValues?.code, setValue]);
 
   const handleFormSubmit = async (data: ProjectFormData) => {
     try {

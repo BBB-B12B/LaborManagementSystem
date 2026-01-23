@@ -33,6 +33,7 @@ import {
   MonetizationOn,
   FileDownload,
   CloudUpload,
+  AttachMoney,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -49,8 +50,7 @@ import { useToast } from '../../components/common/Toast';
 import { SkillSelect } from '../../components/forms/SkillSelect';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { DCDrawer } from './components/DCDrawer';
-import { DCCompensationDrawer } from './components/DCCompensationDrawer';
+import { DCModal } from './components/DCModal';
 import { DCImportDialog } from './components/DCImportDialog';
 import type { DCCreateInput, DCEditInput } from '@/validation/dcSchema';
 import { getSkills } from '@/services/skillService';
@@ -108,7 +108,7 @@ export default function DCManagementPage() {
     projectLocationId: '',
     isActive: undefined,
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
@@ -161,16 +161,6 @@ export default function DCManagementPage() {
 
   const handleProjectChange = (projectLocationId: string) => {
     setFilters((prev) => ({ ...prev, projectLocationId, page: 1 }));
-  };
-
-  const handleOpenCompensation = (contractor: DailyContractor) => {
-    setSelectedContractor(contractor);
-    setCompensationDrawerOpen(true);
-  };
-
-  const handleCloseCompensation = () => {
-    setCompensationDrawerOpen(false);
-    setSelectedContractor(null);
   };
 
   const handleOpenImport = () => {
@@ -360,25 +350,6 @@ export default function DCManagementPage() {
       filterable: false,
       renderCell: (params: GridRenderCellParams) => (
         <Box>
-          <Tooltip
-            title={
-              (params.row as DailyContractor).hasCompensation
-                ? 'ตั้งค่าแล้ว - คลิกเพื่อแก้ไข'
-                : 'ยังไม่ได้ตั้งค่าค่าแรง'
-            }
-          >
-            <IconButton
-              size="small"
-              onClick={() => handleOpenCompensation(params.row as DailyContractor)}
-              sx={{
-                color: (params.row as DailyContractor).hasCompensation
-                  ? 'error.main'
-                  : 'text.disabled',
-              }}
-            >
-              <MonetizationOn fontSize="small" />
-            </IconButton>
-          </Tooltip>
           <Tooltip title="แก้ไข">
             <IconButton
               size="small"
@@ -529,7 +500,7 @@ export default function DCManagementPage() {
             columns={columns}
             pagination
             page={(filters.page || 1) - 1}
-            pageSize={filters.pageSize || 25}
+            pageSize={filters.pageSize || 10}
             rowsPerPageOptions={[10, 25, 50, 100]}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
@@ -552,21 +523,14 @@ export default function DCManagementPage() {
 
       <DeleteConfirmDialog />
 
-      <DCDrawer
+      <DCModal
         title={drawerMode === 'create' ? 'สร้างแรงงานรายวันใหม่' : 'แก้ไขแรงงานรายวัน'}
-        key={drawerMode === 'edit' ? editingId ?? 'edit' : 'create'}
         open={drawerOpen}
         onClose={handleCloseDrawer}
         mode={drawerMode}
         defaultValues={drawerInitialValues}
-        loading={drawerLoading}
-        isLoading={drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending}
+        isLoading={(drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending) || drawerLoading}
         onSubmit={handleDrawerSubmit}
-      />
-      <DCCompensationDrawer
-        open={compensationDrawerOpen}
-        contractor={selectedContractor}
-        onClose={handleCloseCompensation}
       />
       <DCImportDialog
         open={importDialogOpen}

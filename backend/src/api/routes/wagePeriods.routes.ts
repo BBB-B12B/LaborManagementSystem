@@ -239,4 +239,144 @@ router.post(
   }
 );
 
+/**
+ * POST /api/wage-periods/:id/additional-income
+ * เพิ่มรายได้เพิ่มเติม
+ */
+router.post(
+  '/:id/additional-income',
+  [
+    body('dailyContractorId').notEmpty(),
+    body('incomeType').notEmpty(),
+    body('description').notEmpty(),
+    body('amount').isNumeric(),
+  ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Validation failed', 400);
+      }
+
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized', 401);
+      }
+
+      const { additionalIncomeService } = await import('../../services/wage/AdditionalIncomeService');
+      const item = await additionalIncomeService.create({
+        wagePeriodId: req.params.id,
+        dailyContractorId: req.body.dailyContractorId,
+        incomeType: req.body.incomeType,
+        description: req.body.description,
+        amount: Number(req.body.amount),
+        notes: req.body.notes,
+        createdAt: new Date(),
+        createdBy
+      });
+
+      res.status(201).json({
+        success: true,
+        data: item,
+        message: 'Additional income added. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /api/wage-periods/additional-income/:itemId
+ * ลบรายได้เพิ่มเติม
+ */
+router.delete(
+  '/additional-income/:itemId',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const { additionalIncomeService } = await import('../../services/wage/AdditionalIncomeService');
+      await additionalIncomeService.delete(req.params.itemId);
+
+      res.json({
+        success: true,
+        message: 'Additional income deleted. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wage-periods/:id/additional-expense
+ * เพิ่มรายจ่ายเพิ่มเติม
+ */
+router.post(
+  '/:id/additional-expense',
+  [
+    body('dailyContractorId').notEmpty(),
+    body('expenseType').notEmpty(),
+    body('description').notEmpty(),
+    body('amount').isNumeric(),
+  ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Validation failed', 400);
+      }
+
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized', 401);
+      }
+
+      const { additionalExpenseService } = await import('../../services/wage/AdditionalExpenseService');
+      const item = await additionalExpenseService.create({
+        wagePeriodId: req.params.id,
+        dailyContractorId: req.body.dailyContractorId,
+        expenseType: req.body.expenseType,
+        description: req.body.description,
+        amount: Number(req.body.amount),
+        notes: req.body.notes,
+        createdAt: new Date(),
+        createdBy
+      });
+
+      res.status(201).json({
+        success: true,
+        data: item,
+        message: 'Additional expense added. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /api/wage-periods/additional-expense/:itemId
+ * ลบรายจ่ายเพิ่มเติม
+ */
+router.delete(
+  '/additional-expense/:itemId',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const { additionalExpenseService } = await import('../../services/wage/AdditionalExpenseService');
+      await additionalExpenseService.delete(req.params.itemId);
+
+      res.json({
+        success: true,
+        message: 'Additional expense deleted. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 export default router;

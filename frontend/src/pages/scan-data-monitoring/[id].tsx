@@ -52,6 +52,7 @@ import {
   Warning,
   Info,
   AccessTime,
+  Delete,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
@@ -60,6 +61,7 @@ import { z } from 'zod';
 import {
   getDiscrepancyById,
   resolveDiscrepancy,
+  softDeleteScanData,
   type ScanDataDiscrepancy,
 } from '../../services/scanDataService';
 import {
@@ -140,6 +142,22 @@ export default function DiscrepancyDetailPage() {
 
   const handleBack = () => {
     router.push('/scan-data-monitoring');
+  };
+
+  const deleteScanMutation = useMutation({
+    mutationFn: (scanId: string) => softDeleteScanData(scanId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['discrepancy', id] });
+    },
+    onError: (err: any) => {
+      alert(`ไม่สามารถลบข้อมูลสแกนได้: ${err.message}`);
+    },
+  });
+
+  const handleDeleteScan = (scanId: string) => {
+    if (window.confirm('คุณต้องการลบข้อมูลสแกนนี้ใช่หรือไม่?')) {
+      deleteScanMutation.mutate(scanId);
+    }
   };
 
   if (isLoading) {
@@ -444,6 +462,7 @@ export default function DiscrepancyDetailPage() {
                     <TableCell>เวลา</TableCell>
                     <TableCell>ประเภท</TableCell>
                     <TableCell align="right">ชั่วโมง (ปัดเศษ)</TableCell>
+                    <TableCell align="center" width={50}></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -463,10 +482,22 @@ export default function DiscrepancyDetailPage() {
                         <TableCell align="right">
                           {record.roundedTime
                             ? new Date(record.roundedTime).toLocaleTimeString('th-TH', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
                             : '-'}
+                        </TableCell>
+                        <TableCell align="center">
+                          {record.id && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteScan(record.id!)}
+                              color="error"
+                              title="ลบข้อมูลสแกน"
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -561,8 +592,8 @@ export default function DiscrepancyDetailPage() {
                 {discrepancy.severity === 'high'
                   ? 'สูง (ส่วนต่าง > 2 ชม.)'
                   : discrepancy.severity === 'medium'
-                  ? 'กลาง (ส่วนต่าง 1-2 ชม.)'
-                  : 'ต่ำ (ส่วนต่าง < 1 ชม.)'}
+                    ? 'กลาง (ส่วนต่าง 1-2 ชม.)'
+                    : 'ต่ำ (ส่วนต่าง < 1 ชม.)'}
               </Typography>
             </Box>
           </Paper>

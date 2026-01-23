@@ -32,7 +32,7 @@ import {
   type DailyContractor,
   FileUpload,
 } from '@/components/forms';
-import { calculateHours } from '@/components/forms/TimePicker';
+import { calculateHours, calculateNetHours } from '@/components/forms/TimePicker';
 import { useToast } from '@/components/common';
 
 export interface DailyReportFormProps {
@@ -95,7 +95,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
   } = useForm<DailyReportFormData>({
     resolver: zodResolver(dailyReportSchema),
     defaultValues: {
-      reportDate: defaultValues?.reportDate || new Date(),
+      workDate: defaultValues?.workDate || new Date(),
       workType: defaultValues?.workType || 'regular',
       isOvernight: defaultValues?.isOvernight || false,
       ...defaultValues,
@@ -105,21 +105,25 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
   // Watch time fields for auto-calculation
   const startTime = watch('startTime');
   const endTime = watch('endTime');
+  const workType = watch('workType');
   const isOvernight = watch('isOvernight');
-  const workHours = watch('workHours');
+  const netHours = watch('netHours');
 
   // Auto-calculate work hours when time changes
   useEffect(() => {
     if (startTime && endTime) {
-      const hours = calculateHours(startTime, endTime, isOvernight);
-      setCalculatedHours(hours);
+      const grossHours = calculateHours(startTime, endTime, isOvernight);
+      const calculatedNet = calculateNetHours(grossHours, workType, startTime, endTime);
 
-      // Auto-fill work hours if not manually edited
-      if (!workHours || workHours === calculatedHours) {
-        setValue('workHours', hours);
+      setCalculatedHours(calculatedNet);
+
+      // Auto-fill work hours if not manually edited or if equal to previous calculation
+      // This allows users to still manual override if needed
+      if (!netHours || netHours === grossHours) {
+        setValue('netHours', calculatedNet);
       }
     }
-  }, [startTime, endTime, isOvernight, setValue]);
+  }, [startTime, endTime, isOvernight, workType, setValue]);
 
   // Calculate total wage when DCs are selected
   useEffect(() => {
@@ -183,7 +187,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 value={field.value || ''}
                 onChange={(value) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
                 error={!!errors.projectLocationId}
-                helperText={errors.projectLocationId?.message}
+                helperText={errors.projectLocationId?.message as string}
               />
             )}
           />
@@ -192,14 +196,14 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
         {/* Date */}
         <Grid item xs={12} md={6}>
           <Controller
-            name="reportDate"
+            name="workDate"
             control={control}
             render={({ field }) => (
               <DatePicker
                 {...field}
                 label="วันที่ *"
-                error={!!errors.reportDate}
-                helperText={errors.reportDate?.message}
+                error={!!errors.workDate}
+                helperText={errors.workDate?.message as string}
               />
             )}
           />
@@ -222,7 +226,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 }}
                 error={!!errors.dailyContractorIds}
                 helperText={
-                  errors.dailyContractorIds?.message ||
+                  (errors.dailyContractorIds?.message as string) ||
                   'เลือกแรงงานรายวันหลายคนได้ (สำหรับงานเดียวกัน)'
                 }
               />
@@ -233,7 +237,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
         {/* Work Description */}
         <Grid item xs={12}>
           <Controller
-            name="workDescription"
+            name="taskName"
             control={control}
             render={({ field }) => (
               <TextField
@@ -242,8 +246,8 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 label="งาน/รายละเอียดงาน *"
                 multiline
                 rows={2}
-                error={!!errors.workDescription}
-                helperText={errors.workDescription?.message}
+                error={!!errors.taskName}
+                helperText={errors.taskName?.message as React.ReactNode}
                 placeholder="ระบุรายละเอียดงานที่ทำ เช่น เทคอนกรีตพื้น ชั้น 2"
               />
             )}
@@ -260,7 +264,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 {...field}
                 label="เวลาเริ่ม *"
                 error={!!errors.startTime}
-                helperText={errors.startTime?.message}
+                helperText={errors.startTime?.message as string}
               />
             )}
           />
@@ -276,7 +280,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 {...field}
                 label="เวลาจบ *"
                 error={!!errors.endTime}
-                helperText={errors.endTime?.message}
+                helperText={errors.endTime?.message as string}
               />
             )}
           />
@@ -285,7 +289,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
         {/* Work Hours - Auto-calculated, editable */}
         <Grid item xs={12} md={4}>
           <Controller
-            name="workHours"
+            name="netHours"
             control={control}
             render={({ field }) => (
               <TextField
@@ -294,9 +298,9 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 label="ชั่วโมงที่ทำได้"
                 type="number"
                 inputProps={{ step: 0.5, min: 0 }}
-                error={!!errors.workHours}
+                error={!!errors.netHours}
                 helperText={
-                  errors.workHours?.message ||
+                  (errors.netHours?.message as string) ||
                   `คำนวณอัตโนมัติ: ${calculatedHours.toFixed(1)} ชม.`
                 }
                 InputProps={{
@@ -383,6 +387,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 {...field}
                 label="อัปโหลดรูปภาพ (ถ้ามี)"
                 accept="image/*"
+                // @ts-ignore - Prop multiple might be strictly defined in some versions
                 multiple
                 maxFiles={5}
                 helperText="อัปโหลดรูปภาพได้สูงสุด 5 รูป (ขนาดไม่เกิน 5 MB ต่อรูป)"
@@ -423,8 +428,8 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                   ? 'กำลังบันทึก...'
                   : 'กำลังอัปเดท...'
                 : mode === 'create'
-                ? 'บันทึก'
-                : 'อัปเดท'}
+                  ? 'บันทึก'
+                  : 'อัปเดท'}
             </Button>
           </Box>
         </Grid>

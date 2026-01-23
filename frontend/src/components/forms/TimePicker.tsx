@@ -82,14 +82,12 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   };
 
   /**
-   * Validate time against min/max constraints
+   * Validate time against constraints
    */
-  const shouldDisableTime = (value: number, clockType: 'hours' | 'minutes'): boolean => {
-    if (clockType === 'minutes' && minutesStep > 1) {
-      // Disable minutes that don't match the step
-      return value % minutesStep !== 0;
+  const shouldDisableTime = (value: Date, view: 'hours' | 'minutes' | 'seconds'): boolean => {
+    if (view === 'minutes' && minutesStep > 1) {
+      return value.getMinutes() % minutesStep !== 0;
     }
-
     return false;
   };
 
@@ -230,6 +228,48 @@ export const calculateHours = (
   // Round down to nearest 5 minutes (0.083 hours) as per FR-SD-006
   const minutes = Math.floor((hours * 60) / 5) * 5;
   return minutes / 60;
+};
+
+/**
+ * Calculate net hours (minus break hours)
+ * Handles lunch break (12:00-13:00) for regular work
+ */
+export const calculateNetHours = (
+  totalHours: number,
+  workType: string,
+  startTime: string | Date | null,
+  endTime: string | Date | null
+): number => {
+  if (totalHours <= 0) return 0;
+  if (!startTime || !endTime) return totalHours;
+
+  let breakHours = 0;
+
+  // Standard lunch break deduction (12:00-13:00) for regular work
+  if (workType === 'regular') {
+    const parseTime = (time: Date | string): Date | null => {
+      if (time instanceof Date) return time;
+      if (typeof time === 'string') {
+        return parse(time, 'HH:mm', new Date());
+      }
+      return null;
+    };
+
+    const start = parseTime(startTime);
+    const end = parseTime(endTime);
+
+    if (start && end && isValid(start) && isValid(end)) {
+      const startHour = start.getHours();
+      const endHour = end.getHours();
+
+      // If range crosses 12:00-13:00 (e.g. 08:00-17:00 or 11:30-13:30)
+      if (startHour < 13 && endHour > 12) {
+        breakHours = 1.0;
+      }
+    }
+  }
+
+  return Math.max(0, totalHours - breakHours);
 };
 
 /**

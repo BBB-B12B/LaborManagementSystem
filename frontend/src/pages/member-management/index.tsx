@@ -64,7 +64,7 @@ export default function MemberManagementPage() {
     department: '',
     isActive: undefined,
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
@@ -159,12 +159,12 @@ export default function MemberManagementPage() {
     setFilters((prev) => ({ ...prev, search: value, page: 1 }));
   };
 
-  const handleRoleChange = (roleId: string) => {
-    setFilters((prev) => ({ ...prev, roleId, page: 1 }));
+  const handleRoleChange = (roleId: string | null) => {
+    setFilters((prev) => ({ ...prev, roleId: roleId || '', page: 1 }));
   };
 
-  const handleDepartmentChange = (department: string) => {
-    setFilters((prev) => ({ ...prev, department, page: 1 }));
+  const handleDepartmentChange = (department: string | null) => {
+    setFilters((prev) => ({ ...prev, department: department || '', page: 1 }));
   };
 
   const handleCreateUser = () => {
@@ -367,7 +367,6 @@ export default function MemberManagementPage() {
               value={filters.roleId || ''}
               onChange={handleRoleChange}
               label="กรอง Role"
-              showAll
             />
           </Grid>
 
@@ -377,7 +376,6 @@ export default function MemberManagementPage() {
               value={filters.department || ''}
               onChange={handleDepartmentChange}
               label="กรองสังกัด"
-              showAll
             />
           </Grid>
 
@@ -415,7 +413,7 @@ export default function MemberManagementPage() {
             columns={columns}
             pagination
             page={(filters.page || 1) - 1}
-            pageSize={filters.pageSize || 25}
+            pageSize={filters.pageSize || 10}
             rowsPerPageOptions={[10, 25, 50, 100]}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}

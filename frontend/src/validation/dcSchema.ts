@@ -94,6 +94,24 @@ export const dcCreateSchema = z
 
     // Status
     isActive: baseBoolean.default(true),
+
+    // T-230: New Wage Fields
+    dailyWageRate: nonNegativeNumber('ค่าแรงรายวัน').default(0),
+    professionalRate: nonNegativeNumber('ค่าวิชาชีพ').default(0),
+    phoneAllowance: nonNegativeNumber('ค่าโทรศัพท์').default(0),
+    mouDeductionRate: nonNegativeNumber('ค่าหัก MOU').default(0),
+    nationality: z.string().default('ไทย'),
+
+    // T-240: Detailed Financial Fields
+    otherIncome: nonNegativeNumber('รายได้อื่นๆ').default(0),
+    housingFee: nonNegativeNumber('ค่าห้องพัก').default(0),
+    followerCount: nonNegativeNumber('จำนวนผู้ติดตาม').int().default(0),
+    refrigeratorFee: nonNegativeNumber('ค่าตู้เย็น').default(0),
+    soundSystemFee: nonNegativeNumber('ค่าเครื่องเสียง').default(0),
+    tvFee: nonNegativeNumber('ค่าทีวี').default(0),
+    laundryFee: nonNegativeNumber('ค่าเครื่องซักผ้า').default(0),
+    airConFee: nonNegativeNumber('ค่าแอร์เคลื่อนที่').default(0),
+    otherDeduction: nonNegativeNumber('ค่าอื่นๆ').default(0),
   })
   .refine(
     (data) => {
@@ -145,6 +163,24 @@ export const dcEditSchema = z
 
     // Status
     isActive: baseBoolean.optional(),
+
+    // T-230: New Wage Fields
+    dailyWageRate: nonNegativeNumber('ค่าแรงรายวัน').optional(),
+    professionalRate: nonNegativeNumber('ค่าวิชาชีพ').optional(),
+    phoneAllowance: nonNegativeNumber('ค่าโทรศัพท์').optional(),
+    mouDeductionRate: nonNegativeNumber('ค่าหัก MOU').optional(),
+    nationality: z.string().optional(),
+
+    // T-240: Detailed Financial Fields
+    otherIncome: nonNegativeNumber('รายได้อื่นๆ').optional(),
+    housingFee: nonNegativeNumber('ค่าห้องพัก').optional(),
+    followerCount: nonNegativeNumber('จำนวนผู้ติดตาม').int().optional(),
+    refrigeratorFee: nonNegativeNumber('ค่าตู้เย็น').optional(),
+    soundSystemFee: nonNegativeNumber('ค่าเครื่องเสียง').optional(),
+    tvFee: nonNegativeNumber('ค่าทีวี').optional(),
+    laundryFee: nonNegativeNumber('ค่าเครื่องซักผ้า').optional(),
+    airConFee: nonNegativeNumber('ค่าแอร์เคลื่อนที่').optional(),
+    otherDeduction: nonNegativeNumber('ค่าอื่นๆ').optional(),
   });
 
 /**

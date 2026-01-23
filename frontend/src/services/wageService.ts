@@ -184,6 +184,18 @@ export async function approveWagePeriod(id: string): Promise<WagePeriod> {
 }
 
 /**
+ * Mark wage period as paid
+ * POST /api/wage-periods/:id/mark-paid
+ */
+export async function markAsPaid(id: string): Promise<WagePeriod> {
+  const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
+    `/wage-periods/${id}/mark-paid`
+  );
+
+  return response.data.data;
+}
+
+/**
  * Delete wage period
  * DELETE /api/wage-periods/:id
  */
@@ -194,8 +206,6 @@ export async function deleteWagePeriod(id: string): Promise<void> {
 /**
  * Export wage period to Excel
  * GET /api/wage-periods/:id/export
- *
- * SC-014: Export <10s
  */
 export async function exportWagePeriodToExcel(id: string): Promise<Blob> {
   const response = await apiClient.get(`/wage-periods/${id}/export`, {
@@ -229,22 +239,22 @@ export async function addAdditionalExpense(
 
 /**
  * Delete additional income
- * DELETE /api/additional-income/:id
+ * DELETE /api/wage-periods/additional-income/:id
  */
 export async function deleteAdditionalIncome(id: string): Promise<void> {
-  await apiClient.delete(`/additional-income/${id}`);
+  await apiClient.delete(`/wage-periods/additional-income/${id}`);
 }
 
 /**
  * Delete additional expense
- * DELETE /api/additional-expense/:id
+ * DELETE /api/wage-periods/additional-expense/:id
  */
 export async function deleteAdditionalExpense(id: string): Promise<void> {
-  await apiClient.delete(`/additional-expense/${id}`);
+  await apiClient.delete(`/wage-periods/additional-expense/${id}`);
 }
 
 /**
- * Set DC income details (wage rates)
+ * Set DC income details
  * POST /api/dc-income-details
  */
 export async function setDCIncomeDetails(
@@ -304,6 +314,7 @@ export const wageService = {
   createWagePeriod,
   calculateWages,
   approveWagePeriod,
+  markAsPaid,
   deleteWagePeriod,
   exportWagePeriodToExcel,
   addAdditionalIncome,

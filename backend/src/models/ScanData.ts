@@ -37,6 +37,10 @@ export interface ScanData {
   importSource?: string;
   importNote?: string;
   rawData?: Record<string, unknown>;
+  // Soft Delete
+  isDeleted?: boolean;
+  deletedAt?: Date;
+  deletedBy?: string;
 }
 
 export interface CreateScanDataInput {

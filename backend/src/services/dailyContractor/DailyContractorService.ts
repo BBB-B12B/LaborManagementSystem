@@ -92,15 +92,37 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         updatedAt: now,
         createdBy,
         updatedBy: createdBy,
+        // T-230: Defaults
+        dailyWageRate: input.dailyWageRate || 0,
+        professionalRate: input.professionalRate || 0,
+        phoneAllowance: input.phoneAllowance || 0,
+        mouDeductionRate: input.mouDeductionRate || 0,
+        nationality: input.nationality || 'ไทย',
+        // T-240: Defaults
+        otherIncome: input.otherIncome || 0,
+        housingFee: input.housingFee || 0,
+        followerCount: input.followerCount || 0,
+        refrigeratorFee: input.refrigeratorFee || 0,
+        soundSystemFee: input.soundSystemFee || 0,
+        tvFee: input.tvFee || 0,
+        laundryFee: input.laundryFee || 0,
+        airConFee: input.airConFee || 0,
+        otherDeduction: input.otherDeduction || 0,
       };
 
-      // Enforce DocumentID = EmployeeID (F-006)
-      // This ensures we can easily find documents by employeeId without querying
+      // Enforce DocumentID = DC-EmployeeID (F-006 & T-230)
       if (!employeeId) {
         throw new AppError('Employee ID is required', 400);
       }
 
-      const dc = await this.createWithId(employeeId, dcData);
+      // T-230: Changed ID format to DC-[employeeId]
+      const docId = `DC-${employeeId}`;
+      const existingDoc = await this.getById(docId);
+      if (existingDoc) {
+        throw new AppError('Daily Contractor ID already exists (Duplicate Employee ID)', 409);
+      }
+
+      const dc = await this.createWithId(docId, dcData);
       logger.info(`Daily contractor created: ${dc.employeeId} (ID: ${dc.id})`, { dcId: dc.id });
 
       return this.toDTO(dc);
@@ -223,6 +245,24 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         updateData.endDate = input.endDate || null;
       }
 
+      // T-230: Update new fields
+      if (input.dailyWageRate !== undefined) updateData.dailyWageRate = input.dailyWageRate;
+      if (input.professionalRate !== undefined) updateData.professionalRate = input.professionalRate;
+      if (input.phoneAllowance !== undefined) updateData.phoneAllowance = input.phoneAllowance;
+      if (input.mouDeductionRate !== undefined) updateData.mouDeductionRate = input.mouDeductionRate;
+      if (input.nationality !== undefined) updateData.nationality = input.nationality;
+
+      // T-240: Update new financial fields
+      if (input.otherIncome !== undefined) updateData.otherIncome = input.otherIncome;
+      if (input.housingFee !== undefined) updateData.housingFee = input.housingFee;
+      if (input.followerCount !== undefined) updateData.followerCount = input.followerCount;
+      if (input.refrigeratorFee !== undefined) updateData.refrigeratorFee = input.refrigeratorFee;
+      if (input.soundSystemFee !== undefined) updateData.soundSystemFee = input.soundSystemFee;
+      if (input.tvFee !== undefined) updateData.tvFee = input.tvFee;
+      if (input.laundryFee !== undefined) updateData.laundryFee = input.laundryFee;
+      if (input.airConFee !== undefined) updateData.airConFee = input.airConFee;
+      if (input.otherDeduction !== undefined) updateData.otherDeduction = input.otherDeduction;
+
       // Remove password from update data (we use passwordHash)
       delete (updateData as any).password;
 
@@ -255,6 +295,31 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       return results.length > 0 ? results[0] : null;
     } catch (error: any) {
       logger.error('Error finding DC by employeeId:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find DC by employeeId or idHistory
+   */
+  async findByEmployeeIdOrHistory(employeeId: string): Promise<DailyContractor | null> {
+    try {
+      // 1. Check current ID
+      const byCurrentId = await this.findByEmployeeId(employeeId);
+      if (byCurrentId) return byCurrentId;
+
+      // 2. Check history
+      const results = await this.query([
+        {
+          field: 'idHistory',
+          operator: 'array-contains',
+          value: employeeId,
+        },
+      ]);
+
+      return results.length > 0 ? results[0] : null;
+    } catch (error: any) {
+      logger.error('Error finding DC by employeeId or history:', error);
       throw error;
     }
   }

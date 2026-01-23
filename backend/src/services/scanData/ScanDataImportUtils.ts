@@ -116,13 +116,13 @@ function parseDatLine(line: string): DatLineParseResult | null {
   const delimiter = line.includes(',')
     ? ','
     : line.includes('\t')
-    ? '\t'
-    : undefined;
+      ? '\t'
+      : undefined;
 
   let tokens = delimiter
     ? line
-        .split(delimiter)
-        .flatMap((segment) => segment.split(/\s+/g))
+      .split(delimiter)
+      .flatMap((segment) => segment.split(/\s+/g))
     : line.split(/\s+/g);
 
   tokens = tokens
@@ -168,8 +168,7 @@ function parseDatLine(line: string): DatLineParseResult | null {
   };
 }
 
-export function parseDatFile(buffer: Buffer): ParsedFileResult {
-  const content = buffer.toString('utf8');
+export function parseNotepadText(content: string): ParsedFileResult {
   const lines = content.split(/\r?\n/);
   const records: BulkImportRecord[] = [];
   const errors: ImportErrorEntry[] = [];
@@ -186,13 +185,13 @@ export function parseDatFile(buffer: Buffer): ParsedFileResult {
     const parsed = parseDatLine(trimmed);
     if (!parsed) {
       if (rowNumber === 1) {
-        warnings.push('ข้าม header ของไฟล์ .dat');
+        warnings.push('ข้าม header ของข้อมูล');
         return;
       }
 
       errors.push({
         row: rowNumber,
-        error: 'รูปแบบไฟล์ไม่ถูกต้อง (ต้องมีรหัสพนักงานและวันที่)',
+        error: 'รูปแบบข้อมูลไม่ถูกต้อง (ต้องมีรหัสพนักงานและวันที่)',
       });
       return;
     }
@@ -224,8 +223,8 @@ export function parseDatFile(buffer: Buffer): ParsedFileResult {
       rawLine,
       rawData: extras.length
         ? {
-            extras,
-          }
+          extras,
+        }
         : undefined,
     });
   });
@@ -235,6 +234,10 @@ export function parseDatFile(buffer: Buffer): ParsedFileResult {
     errors,
     warnings,
   };
+}
+
+export function parseDatFile(buffer: Buffer): ParsedFileResult {
+  return parseNotepadText(buffer.toString('utf8'));
 }
 
 export function parseExcelFile(buffer: Buffer): ParsedFileResult {

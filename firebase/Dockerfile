@@ -1,9 +1,7 @@
-FROM node:20-bullseye
+FROM node:20-alpine
 
 # Install Java runtime required by Firebase emulators
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-17-jre-headless && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache openjdk21-jre
 
 # Install Firebase CLI globally
 RUN npm install -g firebase-tools

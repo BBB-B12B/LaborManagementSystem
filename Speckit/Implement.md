@@ -1,88 +1,218 @@
-# Master Implementation Protocol (Implement.md)
+# Master Developer Instruction for AI Agent
 
-**ไฟล์สั่งการหลักสำหรับการพัฒนาโปรเจกต์** (Master Control File for the Entire Project)
-ไฟล์นี้คือกฎเหล็กและคู่มือการปฏิบัติงานสำหรับ Project "Labor Management System" โดยเฉพาะ
-
----
-
-## 1. กฎเหล็กของการทำงาน (Rules of Engagement)
-1.  **ภาษาที่ใช้ (Strictly Thai)**:
-    *   **ต้องใช้ภาษาไทยเป็นหลัก 100%** ในการอธิบายความคิด, ตอบคำถาม, และเขียนสรุปงาน
-    *   *ข้อยกเว้นเดียว*: อนุญาตให้ใช้ภาษาอังกฤษสำหรับศัพท์เทคนิค (Technical Terms) เฉพาะคำ noun หรือ proper noun เพื่อความชัดเจน เช่น `Endpoint`, `Component`, `Function`, `Variable Name`
-    *   **ตัวอย่าง**: "ผมตรวจสอบ `Logic` ในการคำนวณ `Wage` แล้วครับ พบว่าถูกต้อง" (ห้ามพูดว่า "I checked the logic...")
-
-2.  **การแก้ไขเอกสาร (Documentation Integrity)**:
-    *   **ห้ามลบข้อมูลเก่า**: ให้ใช้วิธี Mark as Done หรือ เปลี่ยน Status
-    *   **ต้องอัพเดต Speckit ทั้ง 4 ไฟล์**: ทุกครั้งที่มีการเปลี่ยนแปลง Code ที่สำคัญ
-    *   **Speckit คือตัวแทนของ Code**: เอกสารต้องตรงกับ Code เสมอ (Single Source of Truth)
+เอกสารนี้คือ **"Single Source of Truth"** และคู่มือปฏิบัติงานหลักสำหรับ AI Agent และทีมพัฒนา ภายใต้แนวคิด **"Spec-First Development"**
+เมื่อได้รับคำสั่ง "เริ่มพัฒนา", "ทำงานต่อ", หรือการอ้างถึงไฟล์นี้ (@Speckit/implement.md)ให้ปฏิบัติงานตามขั้นตอนด้านล่างอย่างเคร่งครัด
 
 ---
 
-## 2. ขั้นตอนการปฏิบัติงานมาตรฐาน (Standard Operating Procedure)
+## 1. Rules of Engagement (กฎไตรภาคี)
 
-ไม่ว่าจะงานเล็กหรือใหญ่ ให้ทำตาม Loop นี้เสมอ:
+### 1.1 The Spec-First Philosophy (เอกสารนำทางโค้ด)
+> **"Code is a liability, Documentation is an asset."**
+> ห้ามเขียน Code จนกว่าจะมั่นใจว่า `spec.md`, `task.md`, และ traceability.md ถูกอัปเดตให้สอดคล้องกับงานใหม่แล้วเท่านั้น
 
-### Step 2.1: โหลดข้อมูล (Context Loading)
-อ่านไฟล์เหล่านี้เสมอ เพื่อให้เห็นภาพรวมทั้งโปรเจกต์ (Full Project Visibility):
-1.  **`@[Speckit/Infrastructure.md]`**: 
-    *   เช็ค Tech Stack: เราใช้ Next.js 14, Express, Firebase, AWS S3
-    *   เช็ค Structure: Model อยู่ที่ `backend/src/models` (มี 19 models), Route อยู่ที่ `api/routes` (มี 14 files)
-2.  **`@[Speckit/Spec.md]`**: 
-    *   ดู Feature ID (F-001 ถึง F-008) 
-    *   เช็คให้แน่ใจว่างานที่ทำ อยู่ใน Feature ไหน
-3.  **`@[Speckit/Task.md]`**: 
-    *   ดูประวัติงาน (Phase 1-10 เสร็จแล้ว)
-    *   ดูงานปัจจุบัน (Phase 11-12) ว่าต้องทำอะไรต่อ
-4.  **`@[Speckit/Traceability.md]`**: 
-    *   เช็คความเชื่อมโยง เช่น `DailyReport` เชื่อมกับ `FileAttachment` และ `EditHistory`
+### 1.2 Primary Language (ภาษาหลัก)
+- **THAI (ภาษาไทย):** ใช้ภาษาไทยในการสนทนา อธิบายเหตุผล และสรุปงาน **ทุกกรณี** (ยกเว้นข้อความ System Log)
+- **Technical Terms:** ใช้ภาษาอังกฤษทับศัพท์ได้ แต่หากซับซ้อนให้มีคำอธิบายไทยกำกับไว้เสมอ
+- **Response Protocol:** โปรดตรวจสอบเสมอว่าคำตอบสุดท้ายเป็นภาษาไทยก่อนส่งเสมอ
 
-### Step 2.2: วิเคราะห์และแผนงาน (Analysis & Planning)
-*   **วิเคราะห์**: ตีโจทย์ให้แตกว่ากระทบ module ไหนบ้าง (Backend/Frontend)
-*   **วางแผน**: เขียนแผนเป็นข้อๆ (Step 1, 2, 3)
+### 1.3 Code Documentation
+- **Comment Policy:** ทุกการแก้ไข Logic สำคัญ ต้องมี Comment ภาษาไทยอธิบายเสมอ
+  
+typescript
+  // Validate input (ตรวจสอบข้อมูลก่อนบันทึก)
+  if (!isValid) return;
+  
 
-### Step 2.3: ลงมือทำ (Execution)
-*   เขียนโค้ดตามมาตรฐานที่วางไว้
-*   **Run Project**: ใช้ `docker-compose up` เป็นมาตรฐาน
-*   **Frontend**: ใช้ MUI v5, React Hook Form, Zustand
-*   **Backend**: ใช้ Service Pattern, Repository Pattern (Firestore), Express Validator
 
-### Step 2.4: ตรวจสอบและบันทึกผล (Verification & Logging)
-*   รัน Test หรือลองเล่นหน้าเว็บ
-*   **เช็ค Console**: ต้องไม่มี Error ตัวแดง (เช่น Hydration Mismatch, 400 Bad Request)
-*   **ถ้าเจอ Error**:
-    *   **หยุด!** อย่าเพิ่งแก้แบบมั่วๆ
-    *   วิเคราะห์หาสาเหตุ
-    *   **บันทึก Error ลงใน `Speckit/Task.md` ทันที** (Format: `T-xxx-Ex-x`)
-    *   แก้เสร็จแล้วค่อยไปต่อ
-
-### Step 2.5: อัพเดตเอกสาร (Documentation Update)
-ก่อนส่งงาน ต้องเช็ค 4 จุด:
-3.  **งานเสร็จ?** -> อัพเดต `Task.md` (เปลี่ยน Status)
-4.  **เพิ่มความสัมพันธ์?** -> อัพเดต `Traceability.md`
-
-### Step 2.6: ข้อควรระวังสำหรับ Emulator (Emulator Quirks)
-*   **Token Signature**: ใน Development Mode ที่ใช้ Firebase Emulator Backend จะข้ามการตรวจสอบ Signature (Manual Decode) เพื่อป้องกันปัญหา Issuer Mismatch 
-*   **ห้ามใช้ Logic นี้บน Production**: ต้องเช็ค `process.env.NODE_ENV === 'development'` เสมอ
+### 1.4 Rigid Workflow Adherence (กฎเหล็กแห่งขั้นตอน)
+- **Mandatory Sequence:** ขั้นตอนการทำงานในหมวด **"2. Development Workflow" (Step 2.1 - 2.7)** ถือเป็นข้อบังคับที่ **ห้ามข้าม ห้ามลัด และห้ามทำสลับขั้นตอน** โดยเด็ดขาด
+- **Completeness Check:** การส่งมอบงานต้องมีองค์ประกอบครบทั้ง Code, Test, และ Documentation (ตาม Step 2.7) หากขาดอย่างใดอย่างหนึ่ง ให้ถือว่างานนั้น **"ยังไม่เสร็จ" (Incomplete)**
+- **System Discipline:** แม้จะเป็นงานแก้ Bug เล็กน้อย ก็ต้องเริ่มจาก 2.1 (Context) -> 2.3 (Log Problem) -> 2.4 (Fix) -> 2.7 (Doc Summary) เสมอ เพื่อรักษามาตรฐาน Traceability ของระบบ
 
 ---
 
-## 3. รูปแบบการบันทึก Error (Error Logging Protocol)
+## 2. Development Workflow (ขั้นตอนการทำงานแบบพรีเมียม)
 
-ต้องบันทึกทุกครั้งที่มีปัญหา เพื่อให้คนอื่นมาทำต่อแแล้วรู้ประวัติ
+ให้ปฏิบัติงานตาม **8 ขั้นตอนนี้ (Step 2.1 - 2.8)** เรียงตามลำดับ (Sequential) **ห้ามข้ามขั้นตอนและห้ามทำพร้อมกัน (Parallel) โดยเด็ดขาด** ความถูกต้องของ Process สำคัญเท่ากับความถูกต้องของ Code
 
-**Format**: `T-xxx-Ex-x`
-(`Ex` = Error ครั้งที่, `x` = ความพยายามครั้งที่)
+### Step 2.1: Context Loading & Rehydration (โหลดบริบท)
+ทุกครั้งที่เริ่ม Session หรือรับงานให้ทำความเข้าใจ Context จาก 4 ไฟล์หลัก:
+1.  **`Speckit/instruction.md`**: Tech Stack & Standards
+2.  **`Speckit/spec.md`**: User Flow & Features [F-XXX]
+3.  **`Speckit/traceability.md`**: Relationship & Impact
+4.  **`Speckit/task.md`**: Progress & Roadmap [T-XXX]
 
-### ตัวอย่าง:
-**Task T-170 (Wage Calc)**
-*   **T-170-E1-1**:
-    *   **สาเหตุ**: `DailyReport` บางอันไม่มี `totalWage` ทำให้ sum แล้วเป็น NaN
-    *   **แนวทางแก้ไข**: เพิ่ม condition เช็ค `report.totalWage || 0`
+
+**Handoff Prompt (สำหรับเริ่มงานต่อ):**
+> "สรุปสถานะปัจจุบันจาก task.md ว่าล่าสุดทำอะไรเสร็จไปแล้ว และ Next Step คืออะไร ก่อนเริ่มงาน"
+
+### Step 2.2: Analysis & Planning (วิเคราะห์และวางแผน)
+- เปรียบเทียบ User Request กับ System Spec
+- **The CRUD Heuristic (กฎการตรวจสอบความครบถ้วน):**
+    > หากมีการเพิ่ม Field ใน Data Model ต้องวางแผนแก้ไขให้ครบ 3 จุด:
+    > 1. **Create Form** (e.g., Add Dialog) -> Update Input
+    > 2. **Read/View** (e.g., Detail Page) -> Update Display
+    > 3. **Update Form** (e.g., Edit Dialog) -> Update Input
+- **Dependency Check Rule:**
+    - ตรวจสอบ traceability.md ว่า Component ใดบ้างที่ได้รับผลกระทบ
+    - ห้ามแก้ Data Model โดยไม่เช็ค CRUD
+
+### Step 2.3: Ephemeral Planning (วางแผนเบื้องต้น) **[PLANNING MODE]**
+> **"Think before you Write."**
+1.  **Create `implementation_plan.md`**:
+    - สร้างไฟล์แผนงานชั่วคราวเพื่อระบุ Goal, Proposed Changes, และ Verification Plan
+    - ใช้ notify_user เพื่อขอ Approval จาก User เสมอ
+    - **Note**: ห้ามข้ามขั้นตอนนี้ แม้จะเป็นงานเล็กน้อย เพื่อให้ User เห็นภาพรวมก่อนลงมือจริง
+    - *Plan Template*: ดู implementation_plan_artifact ใน System Prompt
+
+### Step 2.4: Permanent Documentation (บันทึกข้อมูลถาวร) **[CRITICAL GATEKEEPER]**
+**Pre-condition**: implementation_plan.md ต้องได้รับการอนุมัติ (Approved) แล้วเท่านั้น
+ก่อนเขียนโค้ดบรรทัดแรก ต้องอัปเดตเอกสารหลักให้ครบถ้วนตามแผนที่วางไว้:
+
+1.  **Update `task.md`**:
+    - ค้นหา Page Section ที่เกี่ยวข้อง (Page-Based Grouping)
+    - **Placement Rule**: ต้องเลือก Section ที่ตรงกับ "ต้นเหตุ" หรือ "Component หลัก" ของงานนั้นๆ ไม่ใช่แค่ดูว่าเจอปัญหาที่ไหน (ดู List of Sections ใน task.md เป็นหลัก)
+      - *Example*: เจอปัญหา Auth ที่หน้า Calendar -> ต้องไปใส่ใน Section "Authentication/System" ไม่ใช่ "Calendar"
+    - **Defect Decision Matrix (เช็คก่อนสร้าง Task ใหม่):**
+      - 🔴 เป็น Bug/Error จากงานที่เพิ่งทำ / เคยทำเสร็จแล้ว? -> **ห้ามสร้าง Task ใหม่** ให้ใช้ **Error Log (T-XXX-EX-Y)**
+      - 🔴 เป็น Production Incident ของ Feature เดิม? -> **ห้ามสร้าง Task ใหม่** ให้ใช้ **Error Log**
+      - 🟢 เป็น Feature ใหม่ หรือ Requirement ใหม่ที่ไม่เคยระบุมาก่อน? -> **สร้าง Task ใหม่ได้**
+
+    - **Rich Task Schema (Copy & Use):**
+      
+markdown
+      - [ ] [T-XXX] **Task Name**: Short Description
+          - **Type**: Feature / Bug Fix / Refactor
+          - **Priority**: High / Medium / Low
+          - **Description**:
+              1. ...
+          - **Traceability**: [F-XXX]
+      
+
+
+    > **[CRITICAL WARNING] Artifact ≠ Documentation**
+    > การสร้าง implementation_plan.md หรือ Artifact ใดๆ **ไม่ถือว่า** เป็นการอัปเดตเอกสารหลัก
+    > คุณ **ต้อง** เขียนลงในไฟล์ spec.md และ traceability.md จริงๆ เท่านั้นถึงจะผ่านขั้นตอนนี้ได้
+    > ห้ามข้ามขั้นตอนนี้โดยอ้างว่า "มีรายละเอียดใน Plan แล้ว" เด็ดขาด
+
+2.  **Update `traceability.md`**:
+      
+markdown
+      - [ ] **[T-XXX] Task Name**
+          - **Concept/Goal**: เป้าหมายหลัก
+          - **Principles**: หลักการออกแบบ (e.g., Performance, Consistency)
+          - **Implementation Details**:
+              - **UI/UX**: Component ที่ต้องแก้
+              - **Logic/State**: State management
+              - **Data**: Query/Cache strategy
+          - **Confirmed Behavior**: สิ่งที่ต้องทดสอบ (Acceptance Criteria)
+          - **Sub-tasks**:
+              - [ ] Sub-task 1
+      
+
+
+2.  **Update `traceability.md`**:
+    - ใช้โครงสร้างตารางมาตรฐาน:
+      - **RTM**: | Feature ID | Name | Tasks | Files | Status |
+      - **Data Traceability**: | Entity | Type | Key State Vars | Related Files | Notes |
+    - เพิ่ม Row ใหม่หากมี Feature หรือ Key Variable ใหม่
+
+3.  **Update `spec.md`**:
+    - **Refactor using Rich Feature Schema**:
+      - **[F-XXX] Feature Name**
+      - **Description**: คำอธิบายหลัก
+      - **User Flow**: Step-by-step actions (1. User logs in -> 2. System redirects)
+      - **Key Components**: src/path/to/file.tsx
+      - **Data Usage**: Entity.field
+
+### Step 2.5: Implementation (ลงมือทำ) **[EXECUTION MODE]**
+- **GATEKEEPER CHECK**:
+  - [ ] implementation_plan.md Approved?
+  - [ ] task.md Updated?
+  - [ ] traceability.md Updated?
+  - [ ] spec.md Updated?
+  - หากยังไม่ครบ 4 ข้อนี้ ห้ามเริ่มเขียน Code เด็ดขาด!
+- เขียน Code ตามแผนที่วางไว้ใน Step 2.3
+- ทำทีละ Sub-task เพื่อลดความซับซ้อน
+
+### Step 2.6: Verification (ตรวจสอบ) **[VERIFICATION MODE]**
+- รัน Validate Command: npm run lint หรือ Build Check
+- **Verification Plan**: ตรวจสอบตาม "Confirmed Behavior" ที่ระบุใน Task
+
+### Step 2.7: Closure & Handoff (จบงาน)
+- [x] Mark Task as Completed ใน task.md
+- ลบ Temporary Logs หรือ Comments ที่ไม่จำเป็นตอน Production
+
+### Step 2.8: Documentation Summary (สรุปการอัปเดตเอกสาร) **[MANDATORY FINAL CHECK]**
+> **[CRITICAL GATEKEEPER]** : หากคุณไม่สรุปหัวข้อนี้ใน Final Response ถือว่างาน **"FAILED"** และผู้ใช้จะตีกลับงานทันที
+
+ในขั้นตอนสุดท้ายของการตอบโต้ (Final Response) หรือเมื่อจะแจ้ง notify_user เพื่อจบงาน **คุณต้อง** สรุปการเปลี่ยนแปลงของเอกสาร 4 ฉบับหลักเสมอ:
+
+1. Speckit/instruction.md
+2. Speckit/spec.md
+3. Speckit/task.md
+4. Speckit/traceability.md
+
+**Format การสรุป (Copy template นี้ไปใช้):**
+markdown
+### Documentation Summary
+1. **instruction.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
+2. **spec.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
+3. **task.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
+4. **traceability.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
+*เหตุผลที่ต้องระบุ "No Change"*: เพื่อยืนยันว่าคุณได้ "คิด" และ "ตรวจสอบ" แล้วจริงๆ ไม่ใช่แค่ลืม
 
 ---
 
-## 4. UI/UX Design Rules
-*   **Navigation**:
-    *   Do NOT place "Back" buttons inside the page content (e.g., above title).
-    *   ALWAYS rely on the **Global Header Back Button** (Top-Left) for navigation.
-    *   Exception: Modals/Drawers should have their own Close/Cancel buttons.
+## 3. Error Handling & Logging (การบันทึกปัญหา)
+
+หากพบ Error ระหว่างทำงาน ให้บันทึกแบบ **Nested Log** ภายใต้ Task นั้นๆ ใน task.md เสมอ:
+
+### Format: T-XXX-EX-Y
+- **`T-XXX` (Task ID)**: รหัสงานหลักที่ปัญหานั้นเกิดขึ้น
+- **`EX` (Error Index)**: ลำดับของ "ปัญหา" (Problem) ที่พบ (รันเลข E1, E2, ... ตามลำดับการเจอ)
+  - *Note*: หากเป็นปัญหาเรื่องเดิม อาการเดิม หรือ Root Cause เดิม ให้ใช้เลข **E เดิม** เสมอ
+- **`Y` (Attempt Count)**: จำนวนครั้งที่พยายามแก้ไข (เริ่มที่ 1)
+  - หากแก้ครั้งแรกไม่หาย แล้วต้องแก้ซ้ำ ให้เพิ่มเลขนี้เป็น 2, 3, ... (เช่น E1-2, E1-3)
+  - ห้ามเปลี่ยนเลข E ถ้ายังเป็นปัญหาเดิม
+
+**Critical Rule: Bug vs. New Task (The "No New Task" Policy)**
+- **ห้ามสร้าง Task ใหม่** ([T-New]) สำหรับการแก้ไขปัญหา (Bug/Fix) ในทุกกรณี ยกเว้นมันคือ Feature ใหม่ 100%
+- หากปัญหานั้นเกิดจาก:
+  1.  **Immediate Regression**: บั๊กที่เกิดทันทีหลัง Deploy หรือหลังแก้โค้ดจาก Task ล่าสุด
+  2.  **Implementation Defect**: การตกหล่นของฟีเจอร์ที่กำลังทำอยู่ (ทำไม่ครบ, ทำแล้วพัง)
+  3.  **Config/Env Issue**: ปัญหา Environment ที่ต้องแก้เพื่อให้ Task เดิมผ่าน (เช่น CORS, API Key)
+  4.  **Logic Error**: สูตรคำนวณผิด, แสดงผลผิด
+- **Action**: ให้บันทึกเป็น **Error Log (Nested List)** ใต้ Task เดิมที่เป็นเจ้าของ Feature นั้นๆ ทันที
+  - *เหตุผล*: เพื่อให้เห็น History การแก้ปัญหาอยู่ในจุดเดียว (Traceability) และไม่ทำให้ Task List รกด้วยเศษงานแก้บั๊ก
+- **สร้าง Task ใหม่ได้เมื่อ (Exceptions)**:
+  - เป็น **Feature Request** ใหม่จาก User ที่ไม่เคยมีใน Spec มาก่อน
+  - ต้องการ **Refactor** ใหญ่ที่แยก Module ออกมาอย่างชัดเจน
+  - เป็นงาน **Optimization** ที่ไม่ได้เกิดจาก Error แต่ต้องการ Performance ที่ดีขึ้นมาก
+
+### Example Log:
+markdown
+- [ ] [T-XXX] Implement Feature A
+    - **Error Logs**:
+      - **[T-XXX-E1-1]**: Import Error
+        1. **Root Cause**: วงวนการ Import (Circular Dependency)
+        2. **Action**: แยก Type ออกไฟล์กลาง
+        3. **Status**: Fixed
+
+---
+
+## 4. Incident Resolution Template (Production Issues)
+*(สำหรับปัญหาเร่งด่วน หรือ Critical Bug)*
+
+### A. Symptom (อาการ)
+*   **What**: เกิดอะไรขึ้น Error คืออะไร
+*   **Where**: Environment ไหน (Dev/Prod)
+
+### B. Analysis (วิเคราะห์)
+*   **Root Cause**: สาเหตุทางเทคนิค
+*   **Impact**: ผลกระทบ
+
+### C. Solution (การแก้ไข)
+*   **Fix Steps**: วิธีแก้ตามลำดับ
+*   **Verification**: วิธีตรวจสอบว่าหายจริง

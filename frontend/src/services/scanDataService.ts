@@ -24,15 +24,15 @@ export interface ScanData {
   scanDateTime: Date;
   scanDate: Date;
   scanType:
-    | 'ot_morning_in'
-    | 'ot_morning_out'
-    | 'regular_in'
-    | 'late'
-    | 'lunch_break'
-    | 'regular_out'
-    | 'ot_noon'
-    | 'ot_evening_in'
-    | 'ot_evening_out';
+  | 'ot_morning_in'
+  | 'ot_morning_out'
+  | 'regular_in'
+  | 'late'
+  | 'lunch_break'
+  | 'regular_out'
+  | 'ot_noon'
+  | 'ot_evening_in'
+  | 'ot_evening_out';
   scanTimeSlot: string;
   isFirstScanOfDay: boolean;
   isLastScanOfDay: boolean;
@@ -82,6 +82,7 @@ export interface ScanDataDiscrepancy {
     workHours?: number;
   };
   scanDataRecords?: Array<{
+    id?: string;
     scanTime: string;
     scanType: string;
     roundedTime?: string;
@@ -171,6 +172,25 @@ export async function uploadScanDataFile(
 export const uploadScanDataExcel = uploadScanDataFile;
 
 /**
+ * Import ScanData via Raw Text (Smart Notepad)
+ */
+export async function importScanDataText(
+  textData: string,
+  projectLocationId: string,
+  importNote?: string
+): Promise<ImportResult> {
+  const response = await apiClient.post<{ success: boolean; data: ImportResult }>(
+    '/scan-data/import-text',
+    {
+      textData,
+      projectLocationId,
+      importNote,
+    }
+  );
+  return response.data.data;
+}
+
+/**
  * Get all scan data with filtering
  */
 export async function getAllScanData(
@@ -224,6 +244,13 @@ export async function getScanDataById(id: string): Promise<ScanData> {
     `/scan-data/${id}`
   );
   return response.data.data;
+}
+
+/**
+ * Soft delete scan data
+ */
+export async function softDeleteScanData(id: string): Promise<void> {
+  await apiClient.delete(`/scan-data/${id}`);
 }
 
 /**

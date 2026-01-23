@@ -14,6 +14,7 @@ import {
   AutoCompleteOption,
   createAutoCompleteOption,
 } from './AutoCompleteSearch';
+import apiClient from '@/services/api/client';
 
 export interface DailyContractor {
   id: string;
@@ -71,52 +72,20 @@ export const DCAutoComplete: React.FC<DCAutoCompleteProps> = ({
   const { data: dcs = [], isLoading } = useQuery({
     queryKey: ['dailyContractors', projectId, searchTerm],
     queryFn: async () => {
-      // TODO: Replace with actual API call
-      // const response = await api.get('/daily-contractors', {
-      //   params: {
-      //     projectId,
-      //     search: searchTerm,
-      //     isActive: true,
-      //   },
-      // });
-      // return response.data;
+      if (!projectId) return [];
 
-      // Mock data for development
-      return [
-        {
-          id: 'dc1',
-          employeeId: 'DC001',
-          name: 'สมชาย ใจดี',
-          skillId: 'skill1',
-          skillName: 'ช่างไฟฟ้า',
+      const { data: response } = await apiClient.get<any>('/daily-contractors', {
+        params: {
+          projectLocationId: projectId,
+          search: searchTerm,
           isActive: true,
         },
-        {
-          id: 'dc2',
-          employeeId: 'DC002',
-          name: 'สมหญิง รักงาน',
-          skillId: 'skill2',
-          skillName: 'ช่างก่อสร้าง',
-          isActive: true,
-        },
-        {
-          id: 'dc3',
-          employeeId: 'DC003',
-          name: 'สมศักดิ์ ขยัน',
-          skillId: 'skill1',
-          skillName: 'ช่างไฟฟ้า',
-          isActive: true,
-        },
-      ].filter((dc) => {
-        if (!searchTerm) return true;
-        const search = searchTerm.toLowerCase();
-        return (
-          dc.name.toLowerCase().includes(search) ||
-          dc.employeeId.toLowerCase().includes(search)
-        );
       });
+
+      // Extract the array from the standard API response format { success, data: { dailyContractors: [] } }
+      return response.data?.dailyContractors || [];
     },
-    enabled: Boolean(projectId), // Only fetch once project selected
+    enabled: Boolean(projectId),
   });
 
   const createPlaceholderDC = React.useCallback(
@@ -138,7 +107,7 @@ export const DCAutoComplete: React.FC<DCAutoCompleteProps> = ({
     setSelectedCache((prev) => {
       const next = { ...prev };
       let mutated = false;
-      dcs.forEach((dc) => {
+      (dcs as DailyContractor[]).forEach((dc) => {
         if (!next[dc.id]) {
           mutated = true;
         } else if (next[dc.id] !== dc) {
@@ -186,7 +155,7 @@ export const DCAutoComplete: React.FC<DCAutoCompleteProps> = ({
    */
   const options: AutoCompleteOption[] = React.useMemo(() => {
     const map = new Map<string, AutoCompleteOption>();
-    dcs.forEach((dc) => {
+    (dcs as DailyContractor[]).forEach((dc) => {
       const option = createOptionFromDC(dc);
       map.set(option.id, option);
     });

@@ -21,6 +21,7 @@ import { Layout, ProtectedRoute } from '@/components/layout';
 import { BackButton, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { projectService, type Project } from '@/services/projectService';
 import { ProjectDrawer } from './components/ProjectDrawer';
+import { ProjectCreateModal } from './components/ProjectCreateModal';
 import { PROJECT_STATUS_OPTIONS, type ProjectFormData } from '@/validation/projectSchema';
 
 const CODE_PREFIX = 'P';
@@ -59,6 +60,7 @@ export default function ProjectListPage() {
 
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
   const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<ProjectFormData> | undefined>(undefined);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -116,18 +118,12 @@ export default function ProjectListPage() {
   };
 
   const handleCreate = () => {
-    const nextCode = getNextProjectCodeFromList(projects || []);
-    setDrawerMode('create');
-    setEditingProjectId(null);
-    setDrawerInitialValues({
-      code: nextCode,
-      status: ACTIVE_STATUS,
-      projectCode: '',
-      projectName: '',
-      projectManager: '',
-    });
-    setDrawerLoading(false);
-    setDrawerOpen(true);
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateSubmit = async (data: ProjectFormData) => {
+    await createMutation.mutateAsync(data);
+    setCreateModalOpen(false);
   };
 
   const handleEdit = async (project: Project) => {
@@ -271,11 +267,11 @@ export default function ProjectListPage() {
                 columns={columns}
                 autoHeight
                 disableSelectionOnClick
+                hideFooter
+                pageSize={100}
                 initialState={{
-                  pagination: { paginationModel: { pageSize: 25 } },
                   sorting: { sortModel: [{ field: 'code', sort: 'asc' }] },
                 }}
-                pageSizeOptions={[10, 25, 50, 100]}
                 sx={{
                   '& .MuiDataGrid-cell': {
                     borderBottom: '1px solid #f0f0f0',
@@ -297,12 +293,18 @@ export default function ProjectListPage() {
             mode={drawerMode}
             defaultValues={drawerInitialValues}
             loading={drawerLoading}
-            isLoading={drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending}
+            isLoading={updateMutation.isPending}
             onSubmit={handleDrawerSubmit}
+          />
+
+          <ProjectCreateModal
+            open={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            onSubmit={handleCreateSubmit}
+            isLoading={createMutation.isPending}
           />
         </Container>
       </Layout>
     </ProtectedRoute>
   );
 }
-

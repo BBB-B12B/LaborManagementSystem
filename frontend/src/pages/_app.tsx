@@ -10,15 +10,7 @@ import i18n from '@/i18n/config';
 import '@/styles/globals.css';
 
 // Create React Query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-});
+import { queryClient } from '@/config/queryClient';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (

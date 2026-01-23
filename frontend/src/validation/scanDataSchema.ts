@@ -66,13 +66,16 @@ const hasAllowedExtension = (fileName: string): boolean => {
 };
 
 export const ScanDataUploadSchema = z.object({
+  mode: z.enum(['file', 'text']).default('file'),
   file: z
     .instanceof(File)
-    .refine((file) => file.size <= MAX_UPLOAD_SIZE_BYTES, {
+    .optional()
+    .refine((file) => !file || file.size <= MAX_UPLOAD_SIZE_BYTES, {
       message: 'ขนาดไฟล์ต้องไม่เกิน 100MB',
     })
     .refine(
       (file) => {
+        if (!file) return true;
         const mime = file.type?.toLowerCase() ?? '';
         return (
           ALLOWED_MIME_TYPES.includes(mime) ||
@@ -83,8 +86,24 @@ export const ScanDataUploadSchema = z.object({
         message: 'รองรับเฉพาะไฟล์ .dat, .xlsx หรือ .xls',
       }
     ),
+  textData: z.string().optional(),
   projectLocationId: z.string().min(1, 'กรุณาเลือกโครงการ'),
   importNote: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.mode === 'file' && !data.file) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'กรุณาเลือกไฟล์',
+      path: ['file'],
+    });
+  }
+  if (data.mode === 'text' && (!data.textData || data.textData.trim().length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'กรุณาระบุข้อมูล',
+      path: ['textData'],
+    });
+  }
 });
 
 export type ScanDataUploadInput = z.infer<typeof ScanDataUploadSchema>;

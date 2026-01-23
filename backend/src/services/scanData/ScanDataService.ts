@@ -6,7 +6,6 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { FirebaseFirestore } from 'firebase-admin/firestore';
 import { BaseCrudService } from '../base/BaseCrudService';
 import {
   ScanData,
@@ -20,6 +19,9 @@ import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { db } from '../../config/firebase';
 import { dailyContractorService } from '../dailyContractor/DailyContractorService';
+import { dailyReportService } from '../dailyReport/DailyReportService';
+import { COLLECTIONS } from '../../config/collections';
+import { DailyReport } from '../../models/DailyReport';
 
 export interface BulkImportRecord {
   rowNumber: number;
@@ -33,7 +35,7 @@ export interface BulkImportOptions {
   projectLocationId: string;
   importedBy: string;
   importNote?: string;
-  source: 'excel' | 'dat';
+  source: 'excel' | 'dat' | 'text';
   batchId?: string;
 }
 
@@ -66,7 +68,7 @@ interface PreparedImportRecord {
  */
 class ScanDataService extends BaseCrudService<ScanData> {
   constructor() {
-    super(collections.scanData);
+    super(collections.scanData as any, 'scanData');
   }
 
   /**
@@ -377,7 +379,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
         if (dailyContractorId === undefined) {
           const contractor =
-            await dailyContractorService.findByEmployeeId(record.employeeNumber);
+            await dailyContractorService.findByEmployeeIdOrHistory(record.employeeNumber);
           dailyContractorId = contractor?.id ?? null;
           employeeCache.set(record.employeeNumber, dailyContractorId);
         }
@@ -424,7 +426,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
               : undefined),
         };
 
-        const docRef = collections.scanData.doc(uniqueKey);
+        const docRef = collections.scanData.doc(uniqueKey) as any;
         preparedRecords.push({
           uniqueKey,
           rowNumber: record.rowNumber,
@@ -493,6 +495,135 @@ class ScanDataService extends BaseCrudService<ScanData> {
     };
   }
 
+  /**
+   * Detect discrepancies between Scan Data and Daily Reports
+   */
+  async detectDiscrepancies(
+    projectLocationId: string,
+    startDate: Date,
+    endDate: Date,
+    detectedBy: string
+  ): Promise<{ detected: number; discrepanciesCreated: number }> {
+    try {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      // 1. Fetch all Daily Reports for the range
+      const reports = await dailyReportService.getByProjectAndDate(projectLocationId, start, end);
+
+      // 2. Fetch all Scan Data for the range
+      const scans = await this.getByProjectAndDate(projectLocationId, start, end);
+
+      // 3. Group by DC and Date
+      const reportMap = new Map<string, DailyReport[]>();
+      reports.forEach((r: DailyReport) => {
+        const key = `${r.dailyContractorId}_${r.workDate.toISOString().split('T')[0]}`;
+        if (!reportMap.has(key)) reportMap.set(key, []);
+        reportMap.get(key)!.push(r);
+      });
+
+      const scanMap = new Map<string, ScanData[]>();
+      scans.forEach((s: ScanData) => {
+        const key = `${s.dailyContractorId}_${s.workDate.toISOString().split('T')[0]}`;
+        if (!scanMap.has(key)) scanMap.set(key, []);
+        scanMap.get(key)!.push(s);
+      });
+
+      const allKeys = new Set([...reportMap.keys(), ...scanMap.keys()]);
+      let discrepanciesCreated = 0;
+      const now = new Date();
+
+      const batch = db.batch();
+
+      for (const key of allKeys) {
+        const [dcId, dateStr] = key.split('_');
+        const workDate = new Date(dateStr);
+        const dayReports = reportMap.get(key) || [];
+        const dayScans = scanMap.get(key) || [];
+
+        const reportedHours = dayReports.reduce((sum, r) => sum + (r.netHours || 0), 0);
+        let scannedHours = 0;
+
+        if (dayScans.length >= 2) {
+          // Calculate from first and last scan
+          const times = dayScans.map(s => s.scanDateTime.getTime()).sort();
+          const first = times[0];
+          const last = times[times.length - 1];
+          let diffMs = last - first;
+
+          // Deduct lunch if span covers 12:00-13:00
+          const firstDate = new Date(first);
+          const lastDate = new Date(last);
+          if (firstDate.getHours() < 12 && lastDate.getHours() >= 13) {
+            diffMs -= 60 * 60 * 1000;
+          }
+
+          scannedHours = Math.max(0, diffMs / (1000 * 60 * 60));
+        }
+
+        const hoursDifference = reportedHours - scannedHours;
+        const absDiff = Math.abs(hoursDifference);
+
+        // Logic check: if diff > 1 hour, or one exists while other doesn't
+        let shouldCreate = false;
+        let reason = '';
+        let discrepancyType: 'Type1' | 'Type2' | 'Type3' = 'Type1';
+
+        if (dayReports.length > 0 && dayScans.length < 2) {
+          shouldCreate = true;
+          discrepancyType = 'Type2';
+          reason = 'มี Daily Report แต่ข้อมูลสแกนไม่ครบถ้วน (ต้องการอย่างน้อย 2 ครั้ง)';
+        } else if (dayReports.length === 0 && dayScans.length >= 2) {
+          shouldCreate = true;
+          discrepancyType = 'Type3';
+          reason = 'มีข้อมูลสแกนแต่ไม่มี Daily Report';
+        } else if (absDiff > 1.0) {
+          shouldCreate = true;
+          discrepancyType = 'Type1';
+          reason = `ชั่วโมงทำงานไม่ตรงกัน (ส่วนต่าง ${hoursDifference.toFixed(2)} ชม.)`;
+        }
+
+        if (shouldCreate) {
+          const discId = `${dcId}_${dateStr}_disc`;
+          const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discId);
+
+          const absDiffVal = Math.abs(hoursDifference);
+          const severity = absDiffVal > 2 ? 'error' : 'warning';
+
+          const discrepancyData: any = {
+            dailyReportId: dayReports[0]?.id || 'missing',
+            dailyContractorId: dcId,
+            projectLocationId,
+            workDate,
+            discrepancyType,
+            reportedHours,
+            scannedHours,
+            hoursDifference,
+            severity,
+            status: 'pending',
+            detectionReason: reason,
+            createdAt: now,
+            detectedBy,
+          };
+
+          batch.set(discRef, discrepancyData);
+          discrepanciesCreated++;
+        }
+      }
+
+      if (discrepanciesCreated > 0) {
+        await batch.commit();
+      }
+
+      return { detected: allKeys.size, discrepanciesCreated };
+    } catch (error: any) {
+      logger.error('Error detecting discrepancies:', error);
+      throw error;
+    }
+  }
+
   private buildUniqueKey(
     projectLocationId: string,
     employeeId: string,
@@ -500,6 +631,22 @@ class ScanDataService extends BaseCrudService<ScanData> {
   ): string {
     const normalizedTimestamp = scanDateTime.toISOString().replace(/[:.]/g, '-');
     return `${projectLocationId}_${employeeId}_${normalizedTimestamp}`;
+  }
+
+  /**
+   * Soft delete scan data
+   */
+  async softDelete(id: string, deletedBy?: string): Promise<boolean> {
+    try {
+      const result = await super.softDelete(id, deletedBy);
+      if (result) {
+        logger.info(`Scan data soft deleted`, { id, deletedBy });
+      }
+      return result;
+    } catch (error: any) {
+      logger.error('Error soft deleting scan data:', error);
+      throw error;
+    }
   }
 }
 

@@ -109,7 +109,7 @@ export class BaseCrudService<T extends { id: string }> {
         return true;
     }
 
-    async softDelete(id: string): Promise<boolean> {
+    async softDelete(id: string, deletedBy?: string): Promise<boolean> {
         const docRef = this.collection.doc(id);
         const doc = await docRef.get();
 
@@ -117,10 +117,16 @@ export class BaseCrudService<T extends { id: string }> {
             return false;
         }
 
-        await docRef.update({
+        const updateData: any = {
             isDeleted: true,
             deletedAt: new Date(),
-        } as any);
+        };
+
+        if (deletedBy) {
+            updateData.deletedBy = deletedBy;
+        }
+
+        await docRef.update(updateData);
 
         return true;
     }

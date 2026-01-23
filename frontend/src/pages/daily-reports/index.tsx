@@ -32,6 +32,9 @@ import { overtimeService } from '@/services/overtimeService';
 import { formatDate, formatTime } from '@/utils/dateUtils';
 import { getOTPeriodLabel, type OTPeriod } from '@/validation/overtimeSchema';
 
+// Fix for MUI X DataGrid v5 type mismatch
+const GridActionsCellItemAny = GridActionsCellItem as any;
+
 type WorkType = 'regular' | 'ot_morning' | 'ot_noon' | 'ot_evening';
 
 interface WorkRecordRow {
@@ -337,22 +340,22 @@ export default function WorkRecordsPage() {
       type: 'actions',
       headerName: 'การดำเนินการ',
       width: 140,
-      getActions: (params) => [
-        <GridActionsCellItem
+      getActions: (params: any) => [
+        <GridActionsCellItemAny
           key="edit"
           icon={<EditIcon />}
           label="แก้ไข"
           onClick={() => handleEdit(params.row)}
           showInMenu={false}
         />,
-        <GridActionsCellItem
+        <GridActionsCellItemAny
           key="history"
           icon={<HistoryIcon />}
           label="ประวัติการแก้ไข"
           onClick={() => handleViewHistory(params.row)}
           showInMenu
         />,
-        <GridActionsCellItem
+        <GridActionsCellItemAny
           key="delete"
           icon={<DeleteIcon />}
           label="ลบ"
@@ -360,7 +363,7 @@ export default function WorkRecordsPage() {
           showInMenu
         />,
       ],
-    },
+    } as any,
   ];
 
   const loadingMessage = 'กำลังโหลดรายการบันทึกการทำงาน...';
@@ -492,9 +495,9 @@ export default function WorkRecordsPage() {
               columns={columns}
               loading={isLoading}
               autoHeight
-              pageSizeOptions={[10, 25, 50, 100]}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              pageSize={10}
               initialState={{
-                pagination: { paginationModel: { pageSize: 25 } },
                 sorting: {
                   sortModel: [{ field: 'reportDate', sort: 'desc' }],
                 },

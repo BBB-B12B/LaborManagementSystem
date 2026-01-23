@@ -16,12 +16,12 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 export interface DailyReportData {
   projectLocationId: string;
-  reportDate: Date;
+  workDate: Date;
   dailyContractorIds: string[];
-  workDescription: string;
+  taskName: string;
   startTime: string;
   endTime: string;
-  workHours: number;
+  netHours: number;
   totalWage: number;
   workType: 'regular' | 'ot_morning' | 'ot_noon' | 'ot_evening';
   isOvernight: boolean;
@@ -68,8 +68,11 @@ export async function createDailyReport(
 
       const reportData = {
         ...commonData,
-        dailyContractorIds: [dcId], // Single DC per report
+        dailyContractorId: dcId, // Use singular field
         imageUrls: uploadedImageUrls,
+        status: 'submitted',
+        isDeleted: false,
+        version: 1,
         createdBy,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -97,8 +100,11 @@ export async function createDailyReport(
 
   const reportData = {
     ...commonData,
-    dailyContractorIds,
+    dailyContractorId: dailyContractorIds[0], // Use singular field
     imageUrls: uploadedImageUrls,
+    status: 'submitted',
+    isDeleted: false,
+    version: 1,
     createdBy,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -248,18 +254,18 @@ export async function getAllDailyReports(filters?: {
     endOfDay.setHours(23, 59, 59, 999);
 
     query = query
-      .where('reportDate', '>=', startOfDay)
-      .where('reportDate', '<=', endOfDay);
+      .where('workDate', '>=', startOfDay)
+      .where('workDate', '<=', endOfDay);
   }
 
   if (filters?.dcId) {
-    query = query.where('dailyContractorIds', 'array-contains', filters.dcId);
+    query = query.where('dailyContractorId', '==', filters.dcId);
   }
 
   if (filters?.startDate && filters?.endDate) {
     query = query
-      .where('reportDate', '>=', filters.startDate)
-      .where('reportDate', '<=', filters.endDate);
+      .where('workDate', '>=', filters.startDate)
+      .where('workDate', '<=', filters.endDate);
   }
 
   if (filters?.workType) {
@@ -306,9 +312,9 @@ export async function checkTimeOverlap(
 
   const reportsSnapshot = await db
     .collection('daily_reports')
-    .where('dailyContractorIds', 'array-contains', dcId)
-    .where('reportDate', '>=', startOfDay)
-    .where('reportDate', '<=', endOfDay)
+    .where('dailyContractorId', '==', dcId)
+    .where('workDate', '>=', startOfDay)
+    .where('workDate', '<=', endOfDay)
     .get();
 
   const overlappingReports = reportsSnapshot.docs

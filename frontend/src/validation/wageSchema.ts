@@ -72,17 +72,13 @@ export const wagePeriodCreateSchema = z
  */
 export const additionalIncomeSchema = z.object({
   dailyContractorId: requiredString('แรงงานรายวัน'),
-
   wagePeriodId: requiredString('งวดค่าแรง'),
-
+  incomeType: requiredString('ประเภทรายได้'),
   description: requiredString('รายละเอียด')
     .min(2, errorMessages.minLength(2))
     .max(200, errorMessages.maxLength(200)),
-
   amount: positiveNumber('จำนวนเงิน')
     .max(50000, 'รายได้พิเศษสูงสุด 50,000 บาท'),
-
-  date: baseDate('วันที่'),
 });
 
 /**
@@ -91,17 +87,13 @@ export const additionalIncomeSchema = z.object({
  */
 export const additionalExpenseSchema = z.object({
   dailyContractorId: requiredString('แรงงานรายวัน'),
-
   wagePeriodId: requiredString('งวดค่าแรง'),
-
+  expenseType: requiredString('ประเภทรายจ่าย'),
   description: requiredString('รายละเอียด')
     .min(2, errorMessages.minLength(2))
     .max(200, errorMessages.maxLength(200)),
-
   amount: positiveNumber('จำนวนเงิน')
     .max(50000, 'รายจ่ายพิเศษสูงสุด 50,000 บาท'),
-
-  date: baseDate('วันที่'),
 });
 
 /**

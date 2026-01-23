@@ -14,8 +14,7 @@ import {
   GridRowsProp,
   GridSortModel,
   GridFilterModel,
-  GridPaginationModel,
-  GridRowSelectionModel,
+  GridSelectionModel,
   GridCallbackDetails,
   GridRowParams,
 } from '@mui/x-data-grid';
@@ -28,7 +27,7 @@ export interface DataGridProps {
   loading?: boolean;
   error?: string | null;
   pageSize?: number;
-  pageSizeOptions?: number[];
+  rowsPerPageOptions?: number[];
   totalRows?: number;
   page?: number;
   onPageChange?: (page: number) => void;
@@ -37,8 +36,8 @@ export interface DataGridProps {
   onSortModelChange?: (model: GridSortModel) => void;
   filterModel?: GridFilterModel;
   onFilterModelChange?: (model: GridFilterModel) => void;
-  selectionModel?: GridRowSelectionModel;
-  onSelectionModelChange?: (model: GridRowSelectionModel) => void;
+  selectionModel?: GridSelectionModel;
+  onSelectionModelChange?: (model: GridSelectionModel) => void;
   onRowClick?: (params: GridRowParams) => void;
   onRowDoubleClick?: (params: GridRowParams) => void;
   checkboxSelection?: boolean;
@@ -49,6 +48,8 @@ export interface DataGridProps {
   noRowsMessage?: string;
   density?: 'compact' | 'standard' | 'comfortable';
   hideFooter?: boolean;
+  initialState?: any;
+  sx?: any;
 }
 
 /**
@@ -66,7 +67,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
   loading = false,
   error = null,
   pageSize = 10,
-  pageSizeOptions = [5, 10, 25, 50, 100],
+  rowsPerPageOptions = [5, 10, 25, 50, 100],
   totalRows,
   page = 0,
   onPageChange,
@@ -87,20 +88,10 @@ export const DataGrid: React.FC<DataGridProps> = ({
   noRowsMessage,
   density = 'standard',
   hideFooter = false,
+  initialState,
+  sx,
 }) => {
   const { t } = useTranslation();
-
-  /**
-   * Handle pagination model change
-   */
-  const handlePaginationModelChange = (model: GridPaginationModel, details: GridCallbackDetails) => {
-    if (onPageChange && model.page !== page) {
-      onPageChange(model.page);
-    }
-    if (onPageSizeChange && model.pageSize !== pageSize) {
-      onPageSizeChange(model.pageSize);
-    }
-  };
 
   /**
    * Thai locale text for DataGrid
@@ -246,14 +237,14 @@ export const DataGrid: React.FC<DataGridProps> = ({
               borderTop: '1px solid #e5e7ed',
               backgroundColor: '#f8f8fb',
             },
+            ...sx,
           }}
           // Pagination
-          pageSizeOptions={pageSizeOptions}
-          paginationModel={{
-            page,
-            pageSize,
-          }}
-          onPaginationModelChange={handlePaginationModelChange}
+          rowsPerPageOptions={rowsPerPageOptions}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
           paginationMode={totalRows !== undefined ? 'server' : 'client'}
           rowCount={totalRows !== undefined ? totalRows : rows.length}
           // Sorting
@@ -266,21 +257,22 @@ export const DataGrid: React.FC<DataGridProps> = ({
           filterMode={onFilterModelChange ? 'server' : 'client'}
           // Selection
           checkboxSelection={checkboxSelection}
-          disableRowSelectionOnClick={disableRowSelectionOnClick}
-          rowSelectionModel={selectionModel}
-          onRowSelectionModelChange={onSelectionModelChange}
+          disableSelectionOnClick={disableRowSelectionOnClick}
+          selectionModel={selectionModel}
+          onSelectionModelChange={onSelectionModelChange}
           // Row events
           onRowClick={onRowClick}
           onRowDoubleClick={onRowDoubleClick}
           // Locale
           localeText={localeText}
           // Loading overlay
-          slots={{
-            loadingOverlay: LinearProgress,
+          components={{
+            LoadingOverlay: LinearProgress,
           }}
           // Disable column menu by default (can be enabled per column)
           disableColumnMenu={false}
           hideFooter={hideFooter}
+          initialState={initialState}
         />
       </Paper>
     </Box>

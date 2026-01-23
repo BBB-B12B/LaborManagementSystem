@@ -29,6 +29,12 @@ export interface DailyContractor {
   createdAt: Date;
   updatedAt: Date;
   hasCompensation?: boolean;
+  // T-230: New Wage Fields
+  dailyWageRate?: number;
+  professionalRate?: number;
+  phoneAllowance?: number;
+  mouDeductionRate?: number;
+  nationality?: string;
 }
 
 export interface DCCompensationIncome {
@@ -333,6 +339,10 @@ export const dcService = {
   getDCsBySkill,
   getDCsByProject,
   checkEmployeeIdUnique,
+  getDCCompensation,
+  upsertDCCompensation,
 };
 
 export default dcService;
+
+
