@@ -1,20 +1,32 @@
 /**
- * Daily Report Service
- * บริการจัดการรายงานประจำวัน
+ * Daily Report Service (Aggregated)
+ * บริการจัดการรายงานประจำวัน (แบบรวมตามวัน)
  *
- * Service for managing daily reports with Edit History tracking
+ * Service for managing daily reports with Aggregated Project-Day Schema.
  */
 
 import { collections } from '../../config/collections';
+import { db } from '../../config/firebase';
 import { BaseCrudService } from '../base/BaseCrudService';
 import {
   DailyReport,
-  CreateDailyReportInput,
-  UpdateDailyReportInput,
+  DailyReportEntry,
   calculateTotalHours,
   calculateNetHours,
+  dailyReportConverter
 } from '../../models/DailyReport';
-import { EditHistory, CreateEditHistoryInput } from '../../models/EditHistory';
+import { AppError } from '../../api/middleware/errorHandler';
+
+// Helper for UUID generation (simple fallback)
+function generateUuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Helper Type for return
+type DailyReportSource = DailyReport;
 
 export class DailyReportService extends BaseCrudService<DailyReport> {
   constructor() {
@@ -22,222 +34,131 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
   }
 
   /**
-   * สร้าง Daily Report ใหม่
-   * Create new daily report with automatic calculations and edit history
+   * Generate Custom ID
    */
-  async createDailyReport(
-    input: CreateDailyReportInput,
-    createdBy: string
-  ): Promise<DailyReport> {
+  private generateId(projectId: string, date: Date): string {
+    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    return `REP_${projectId}_${dateStr}`;
+  }
+
+  /**
+   * Add Work Entry (Upsert Report)
+   */
+  async addWorkEntry(
+    projectId: string,
+    date: Date,
+    entryInput: Omit<DailyReportEntry, 'id' | 'createdAt' | 'totalHours' | 'netHours'>,
+    user: string
+  ): Promise<DailyReportSource> {
+    const reportId = this.generateId(projectId, date);
     const now = new Date();
 
-    // คำนวณชั่วโมงอัตโนมัติ
-    const totalHours = calculateTotalHours(
-      input.startTime,
-      input.endTime,
-      input.isOvernight || false
-    );
-    const breakHours = input.workType === 'regular' ? 1.0 : 0;
-    const netHours = calculateNetHours(totalHours, input.workType, input.startTime, input.endTime);
+    // Calculate Hours
+    const totalHours = calculateTotalHours(entryInput.startTime, entryInput.endTime);
+    const netHours = calculateNetHours(totalHours, entryInput.workType, entryInput.startTime, entryInput.endTime);
 
-    const reportData: Omit<DailyReport, 'id'> = {
-      projectLocationId: input.projectLocationId,
-      dailyContractorId: input.dailyContractorId,
-      taskName: input.taskName,
-      workDate: input.workDate,
-      startTime: input.startTime,
-      endTime: input.endTime,
-      workType: input.workType,
+    const newEntry: DailyReportEntry = {
+      id: generateUuid(),
+      ...entryInput,
       totalHours,
-      breakHours,
       netHours,
-      isOvernight: input.isOvernight || false,
-      notes: input.notes,
-      fileAttachmentIds: input.fileAttachmentIds || [],
-      status: input.status || 'draft',
-      isDeleted: false,
-      createdAt: now,
-      updatedAt: now,
-      createdBy,
-      updatedBy: createdBy,
-      version: 1,
+      createdAt: now
     };
 
-    const report = await this.create(reportData);
+    const periodRef = collections.dailyReports.doc(reportId);
 
-    // บันทึก EditHistory สำหรับการสร้าง
-    await this.createEditHistory({
-      dailyReportId: report.id,
-      previousVersion: 0,
-      changeType: 'create',
-      changedFields: Object.keys(reportData),
-      oldValues: {},
-      newValues: reportData as any,
-      createdBy,
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(periodRef);
+
+      if (!doc.exists) {
+        // Create new Aggregated Report
+        const newReport: DailyReport = {
+          id: reportId,
+          projectLocationId: projectId,
+          date: date,
+          entries: [newEntry],
+          status: 'draft',
+          createdAt: now,
+          updatedAt: now,
+          createdBy: user,
+          updatedBy: user,
+          version: 1
+        };
+        t.set(periodRef, dailyReportConverter.toFirestore(newReport));
+      } else {
+        // Append to existing
+        const data = doc.data();
+        const entries = data?.entries || [];
+        entries.push(dailyReportConverter.toFirestore({ ...newEntry } as any));
+
+        t.update(periodRef, {
+          entries, // Firestore handles array replacement
+          updatedAt: now,
+          updatedBy: user,
+          version: (data?.version || 0) + 1
+        });
+      }
     });
 
-    return report;
+    // Return updated document
+    const updatedUserDoc = await periodRef.get();
+    return dailyReportConverter.fromFirestore(updatedUserDoc);
   }
 
   /**
-   * อัปเดท Daily Report พร้อมบันทึก EditHistory
-   * Update daily report with edit history tracking
+   * Remove Work Entry
    */
-  async updateDailyReport(
-    id: string,
-    input: UpdateDailyReportInput,
-    updatedBy: string
-  ): Promise<DailyReport | null> {
-    const existing = await this.getById(id);
-    if (!existing) {
-      return null;
-    }
+  async removeWorkEntry(
+    projectId: string,
+    date: Date,
+    entryId: string,
+    user: string
+  ): Promise<void> {
+    const reportId = this.generateId(projectId, date);
+    const periodRef = collections.dailyReports.doc(reportId);
 
-    const now = new Date();
-    const updateData: any = {
-      ...input,
-      updatedAt: now,
-      updatedBy,
-      version: existing.version + 1,
-    };
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(periodRef);
+      if (!doc.exists) throw new AppError('Report not found', 404);
 
-    // ถ้ามีการเปลี่ยนเวลา ให้คำนวณใหม่
-    if (input.startTime || input.endTime) {
-      const startTime = input.startTime || existing.startTime;
-      const endTime = input.endTime || existing.endTime;
-      const isOvernight = input.isOvernight !== undefined ? input.isOvernight : existing.isOvernight;
+      const data = doc.data();
+      const entries = (data?.entries || []).filter((e: any) => e.id !== entryId);
 
-      updateData.totalHours = calculateTotalHours(startTime, endTime, isOvernight);
-      updateData.netHours = calculateNetHours(
-        updateData.totalHours,
-        input.workType || existing.workType,
-        startTime,
-        endTime
-      );
-    }
-
-    const updated = await this.update(id, updateData);
-    if (!updated) {
-      return null;
-    }
-
-    // บันทึก EditHistory
-    const changedFields = Object.keys(input);
-    const oldValues: Record<string, any> = {};
-    const newValues: Record<string, any> = {};
-
-    changedFields.forEach((field) => {
-      oldValues[field] = (existing as any)[field];
-      newValues[field] = (updated as any)[field];
+      const now = new Date();
+      t.update(periodRef, {
+        entries,
+        updatedAt: now,
+        updatedBy: user
+      });
     });
-
-    await this.createEditHistory({
-      dailyReportId: id,
-      previousVersion: existing.version,
-      changeType: 'update',
-      changedFields,
-      oldValues,
-      newValues,
-      createdBy: updatedBy,
-    });
-
-    return updated;
   }
 
   /**
-   * ลบ Daily Report (soft delete)
-   * Soft delete daily report
+   * Get Report by Project & Date
    */
-  async deleteDailyReport(id: string, deletedBy: string): Promise<boolean> {
-    const existing = await this.getById(id);
-    if (!existing) {
-      return false;
-    }
+  async getByProjectAndDate(projectId: string, date: Date): Promise<DailyReport | null> {
+    const reportId = this.generateId(projectId, date);
+    const doc = await collections.dailyReports.doc(reportId).get();
 
-    await this.update(id, {
-      isDeleted: true,
-      updatedAt: new Date(),
-      updatedBy: deletedBy,
-    } as any);
-
-    // บันทึก EditHistory
-    await this.createEditHistory({
-      dailyReportId: id,
-      previousVersion: existing.version,
-      changeType: 'delete',
-      changedFields: ['isDeleted'],
-      oldValues: { isDeleted: false },
-      newValues: { isDeleted: true },
-      createdBy: deletedBy,
-    });
-
-    return true;
+    if (!doc.exists) return null;
+    return dailyReportConverter.fromFirestore(doc);
   }
 
   /**
-   * ดึงประวัติการแก้ไขทั้งหมดของ Daily Report
-   * Get edit history for a daily report
+   * Get Reports by Month (For Calendar/List)
    */
-  async getEditHistory(dailyReportId: string): Promise<EditHistory[]> {
-    const historyDocs = await collections.editHistory
-      .where('dailyReportId', '==', dailyReportId)
-      .orderBy('createdAt', 'desc')
+  async getByProjectAndMonth(projectId: string, year: number, month: number): Promise<DailyReport[]> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0); // Last day of month
+
+    const snapshot = await collections.dailyReports
+      .where('projectLocationId', '==', projectId)
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
       .get();
 
-    return historyDocs.docs.map((doc) => doc.data());
-  }
-
-  /**
-   * ดึง Daily Reports ตาม project และวันที่
-   * Get daily reports by project and date range
-   */
-  async getByProjectAndDate(
-    projectId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<DailyReport[]> {
-    const reports = await this.query([
-      { field: 'projectLocationId', operator: '==', value: projectId },
-      { field: 'workDate', operator: '>=', value: startDate },
-      { field: 'workDate', operator: '<=', value: endDate },
-      { field: 'isDeleted', operator: '==', value: false },
-    ]);
-
-    return reports;
-  }
-
-  /**
-   * ดึง Daily Reports ตาม DC และวันที่
-   * Get daily reports by contractor and date range
-   */
-  async getByContractorAndDate(
-    contractorId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<DailyReport[]> {
-    const reports = await this.query([
-      { field: 'dailyContractorId', operator: '==', value: contractorId },
-      { field: 'workDate', operator: '>=', value: startDate },
-      { field: 'workDate', operator: '<=', value: endDate },
-      { field: 'isDeleted', operator: '==', value: false },
-    ]);
-
-    return reports;
-  }
-
-  /**
-   * บันทึก EditHistory
-   * Create edit history record
-   */
-  private async createEditHistory(input: CreateEditHistoryInput): Promise<void> {
-    const historyData = {
-      ...input,
-      createdAt: new Date(),
-    };
-
-    await collections.editHistory.add(historyData as any);
+    return snapshot.docs.map(doc => dailyReportConverter.fromFirestore(doc));
   }
 }
 
-// Export singleton instance
 export const dailyReportService = new DailyReportService();

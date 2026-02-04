@@ -39,7 +39,6 @@ import {
   Download,
   Visibility,
   CheckCircle,
-  CloudUpload,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,7 +52,6 @@ import {
 import {
   wagePeriodCreateSchema,
   type WagePeriodCreateInput,
-  validate15DayPeriod,
 } from '../../validation/wageSchema';
 
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -61,8 +59,6 @@ import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
-import ScanDataUploadDialog from '../scan-data-monitoring/components/ScanDataUploadDialog';
-import type { ImportResult } from '../../services/scanDataService';
 import { Layout, ProtectedRoute } from '@/components/layout';
 
 /**
@@ -83,7 +79,6 @@ export default function WageCalculationPage() {
   } = useDeleteConfirmDialog();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [calculatingId, setCalculatingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
 
@@ -145,12 +140,6 @@ export default function WageCalculationPage() {
   });
 
   const startDate = watch('startDate');
-  const endDate = watch('endDate');
-
-  // Check if period is valid 15 days
-  const isValid15Days =
-    startDate && endDate ? validate15DayPeriod(startDate, endDate) : false;
-
   // Handlers
   const handleCreatePeriod = async (data: WagePeriodCreateInput) => {
     await createMutation.mutateAsync(data);
@@ -184,12 +173,7 @@ export default function WageCalculationPage() {
     });
   };
 
-  const handleUploadSuccess = (result: ImportResult) => {
-    showSuccess(
-      `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
-    );
-    // สามารถ refresh discrepancy data ได้ถ้ามี
-  };
+
 
   // Status color mapping
   const getStatusColor = (status: PeriodStatus) => {
@@ -384,14 +368,7 @@ export default function WageCalculationPage() {
             คำนวณค่าแรง
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<CloudUpload />}
-              onClick={() => setUploadDialogOpen(true)}
-            >
-              Upload ScanData
-            </Button>
+
             <Button
               variant="contained"
               color="primary"
@@ -496,27 +473,7 @@ export default function WageCalculationPage() {
                   />
                 </Grid>
 
-                {/* 15-Day Period Validation */}
-                {startDate && endDate && (
-                  <Grid item xs={12}>
-                    <Box
-                      sx={{
-                        p: 2,
-                        bgcolor: isValid15Days ? 'success.light' : 'error.light',
-                        borderRadius: 1,
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        color={isValid15Days ? 'success.dark' : 'error.dark'}
-                      >
-                        {isValid15Days
-                          ? '✓ งวดนี้เป็น 15 วันพอดี (ถูกต้อง)'
-                          : '✗ งวดค่าแรงต้องเป็น 15 วันพอดี (FR-WC-001)'}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
+
 
                 {/* Notes */}
                 <Grid item xs={12}>
@@ -558,11 +515,6 @@ export default function WageCalculationPage() {
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
         <DeleteConfirmDialog />
-        <ScanDataUploadDialog
-          open={uploadDialogOpen}
-          onClose={() => setUploadDialogOpen(false)}
-          onSuccess={handleUploadSuccess}
-        />
       </Layout>
     </ProtectedRoute>
   );

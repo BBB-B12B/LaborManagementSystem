@@ -11,7 +11,6 @@ import {
   DCWageSummary,
   CreateWagePeriodInput,
   generatePeriodCode,
-  validatePeriodDays,
   PeriodStatus,
 } from '../../models/WagePeriod';
 import { AdditionalIncome } from '../../models/AdditionalIncome';
@@ -39,10 +38,8 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
     createdBy: string
   ): Promise<WagePeriod> {
     try {
-      // Validate period is 15 days
-      if (!validatePeriodDays(input.startDate, input.endDate)) {
-        throw new AppError('Wage period must be exactly 15 days', 400);
-      }
+      const diffTime = Math.abs(input.endDate.getTime() - input.startDate.getTime());
+      const periodDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Inclusive
 
       // Generate period code
       const periodCode = generatePeriodCode(input.startDate);
@@ -59,7 +56,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         projectLocationId: input.projectLocationId,
         startDate: input.startDate,
         endDate: input.endDate,
-        periodDays: 15,
+        periodDays,
         status: 'draft',
         dcSummaries: [],
         totalRegularHours: 0,
@@ -101,11 +98,14 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       // 1. Fetch all daily reports for the period and project
       const reports = await collections.dailyReports
         .where('projectLocationId', '==', period.projectLocationId)
-        .where('workDate', '>=', period.startDate)
-        .where('workDate', '<=', period.endDate)
-        .where('isDeleted', '==', false)
+        .where('date', '>=', period.startDate)
+        .where('date', '<=', period.endDate)
+        // .where('isDeleted', '==', false) // status check handles deletion logic if needed, or if we use status field
         .get()
         .then(s => s.docs.map(doc => doc.data()));
+
+      // Flatten all entries from all reports
+      const allEntries = reports.flatMap(report => (report.entries || []));
 
       // 2. Fetch all daily contractors active in this project
       const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
@@ -143,12 +143,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         calculatedBy
       );
 
-      // Fetch all scans for this period to process late records
-      const allScansInPeriod = await scanDataService.getByProjectAndDate(
-        period.projectLocationId,
-        period.startDate,
-        period.endDate
-      );
+
 
       const dcSummaries: DCWageSummary[] = [];
       let totalRegularHours = 0;
@@ -159,13 +154,14 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       // 6. Calculate for each DC
       for (const dc of dcs) {
-        const dcReports = reports.filter(r => (r as any).dailyContractorId === dc.id);
+        // Filter entries for this DC
+        const dcEntries = allEntries.filter((e: any) => e.dailyContractorId === dc.id);
 
         // Aggregate hours
-        const regHours = dcReports.filter(r => r.workType === 'regular').reduce((sum, r) => sum + r.netHours, 0);
-        const otMorning = dcReports.filter(r => r.workType === 'ot_morning').reduce((sum, r) => sum + r.totalHours, 0);
-        const otNoon = dcReports.filter(r => r.workType === 'ot_noon').reduce((sum, r) => sum + r.totalHours, 0);
-        const otEvening = dcReports.filter(r => r.workType === 'ot_evening').reduce((sum, r) => sum + r.totalHours, 0);
+        const regHours = dcEntries.filter((e: any) => e.workType === 'regular').reduce((sum: number, e: any) => sum + e.netHours, 0);
+        const otMorning = dcEntries.filter((e: any) => e.workType === 'ot_morning').reduce((sum: number, e: any) => sum + e.totalHours, 0);
+        const otNoon = dcEntries.filter((e: any) => e.workType === 'ot_noon').reduce((sum: number, e: any) => sum + e.totalHours, 0);
+        const otEvening = dcEntries.filter((e: any) => e.workType === 'ot_evening').reduce((sum: number, e: any) => sum + e.totalHours, 0);
         const dcTotalOtHours = otMorning + otNoon + otEvening;
 
         // Fetch income/expense details
@@ -193,29 +189,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         const dcAddExpenseList = additionalExpenses.filter(e => e.dailyContractorId === dc.id);
         const totalAddExpense = dcAddExpenseList.reduce((sum, e) => sum + e.amount, 0);
 
-        // Process Late Records from Scan Data
-        const dcLateScans = allScansInPeriod.filter(s => s.dailyContractorId === dc.id && s.isLate);
-
-        // Clean up old late records for this period/DC before regenerating
-        await lateRecordService.deleteByPeriodAndDC(periodId, dc.id);
-
-        for (const scan of dcLateScans) {
-          const expectedTime = new Date(scan.scanDateTime);
-          expectedTime.setHours(8, 0, 0, 0);
-
-          await lateRecordService.createLateRecord({
-            wagePeriodId: periodId,
-            dailyContractorId: dc.id,
-            projectLocationId: period.projectLocationId,
-            lateDate: scan.workDate,
-            scanTime: scan.scanDateTime,
-            expectedTime: expectedTime,
-            lateMinutes: scan.lateMinutes,
-            notes: `Auto-generated from scan at ${scan.scanDateTime.toLocaleTimeString()}`
-          }, calculatedBy);
-        }
-
-        // Fetch late deductions
+        // Fetch late deductions (already generated by detectDiscrepancies)
         const dcLateRecords = await lateRecordService.getByPeriod(periodId);
         const dcSpecificLateRecords = dcLateRecords.filter(r => r.dailyContractorId === dc.id);
         const lateDeductions = dcSpecificLateRecords.reduce((sum, r) => sum + r.lateDeduction, 0);

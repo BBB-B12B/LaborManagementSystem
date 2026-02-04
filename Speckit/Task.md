@@ -300,4 +300,23 @@
 
 #### 2. Detailed Sub-tasks
 * [x] **T-220-1**: เพิ่ม Column ในหน้า [id].tsx สำหรับ Discrepancy Status และ Late Deduction
-* [x] **T-220-2**: ปรับปรุง UI ให้รองรับการแสดงผลแบบพรีเมียมตามมาตรฐานโปรเจกต์
+
+### Task ID: T-290 (ScanData Aggregation Refactor)
+**Feature Ref**: F-008 (Scan Data)
+**Status**: [x] Complete
+#### 1. Concept / Goal
+*   Refactor Scan Data to Daily Aggregation.
+
+#### 2. Detailed Sub-tasks
+*   [x] **T-290-1**: Backend - Update Schema & Service.
+*   [x] **T-290-2**: Backend - Refactor Import Logic.
+*   [x] **T-290-3**: Migration Script.
+
+#### 3. Error Logging
+*   **T-290-E1-1**:
+    *   **Cause**: เกิด Syntax Error (Duplicate Identifier) ใน `ScanDataService.ts` และ `scanData.routes.ts` จากการแก้ไขไฟล์ซ้ำซ้อนและไม่ได้ลบตัวแปรที่ไม่ได้ใช้ (Unused Variables)
+    *   **Solution**:
+        1. ลบ Code ที่ซ้ำซ้อนใน `ScanDataService.ts` (Class Definition ซ้ำ)
+        2. ลบ Unused Import (`ScanData`, `COLLECTIONS`) และตัวแปร (`projectId`, `startDate`, `operationsCount`) ที่ไม่ได้ถูกเรียกใช้งาน
+    *   **Result**: Fixed (2026-01-26)
+

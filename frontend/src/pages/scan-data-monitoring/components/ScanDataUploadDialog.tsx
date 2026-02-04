@@ -37,7 +37,7 @@ import {
   importScanDataText,
   type ImportResult,
 } from '../../../services/scanDataService';
-import ProjectSelect from '../../../components/forms/ProjectSelect';
+import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 
 interface ScanDataUploadDialogProps {
   open: boolean;

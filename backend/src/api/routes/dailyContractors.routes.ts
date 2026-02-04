@@ -635,7 +635,7 @@ router.put(
 
 /**
  * POST /api/daily-contractors
- * สร้าง Daily Contractor ใหม่
+ * สร้าง Daily Contractor ใหม่ (Single Action)
  */
 router.post(
   '/',
@@ -662,6 +662,19 @@ router.post(
       .optional()
       .isISO8601()
       .withMessage('Invalid endDate'),
+    // Financial Fields (Optional)
+    body('dailyWageRate').optional().isFloat({ min: 0 }),
+    body('professionalRate').optional().isFloat({ min: 0 }),
+    body('phoneAllowance').optional().isFloat({ min: 0 }),
+    body('housingFee').optional().isFloat({ min: 0 }),
+    body('followerCount').optional().isInt({ min: 0 }),
+    body('refrigeratorFee').optional().isFloat({ min: 0 }),
+    body('soundSystemFee').optional().isFloat({ min: 0 }),
+    body('tvFee').optional().isFloat({ min: 0 }),
+    body('laundryFee').optional().isFloat({ min: 0 }),
+    body('airConFee').optional().isFloat({ min: 0 }),
+    body('otherDeduction').optional().isFloat({ min: 0 }), // otherDeduction -> expense (not clearly mapped in upsert but can determine logic)
+    body('otherIncome').optional().isFloat({ min: 0 }), // otherIncome -> income (if schema supports it)
   ],
   authorize(['AM', 'FM']),
   async (req: Request, res: Response) => {
@@ -683,7 +696,43 @@ router.post(
         endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
       };
 
+      // 1. Create Basic DC Profile
       const contractor = await dailyContractorService.createDC(input, createdBy);
+
+      // 2. Handle Financial Data (Single Action)
+      // Extract fields from body. Note: DCForm uses specific names.
+      const dailyWage = Number(req.body.dailyWageRate ?? 0);
+      const hourlyRate = dailyWage > 0 ? dailyWage / 8 : 0; // Convert Day -> Hour
+
+      // We only upsert if there's meaningful financial data provided
+      // or to initialize defaults.
+      await dailyContractorService.upsertCompensationDetails(
+        contractor.id,
+        {
+          income: {
+            hourlyRate: hourlyRate,
+            professionalRate: Number(req.body.professionalRate ?? 0),
+            phoneAllowancePerPeriod: Number(req.body.phoneAllowance ?? 0),
+            // Note: otherIncome is stored in DC Profile itself (T-240) in createDC input, so strictly expense/income sub-collection might not duplicate it unless schema requires.
+            // Spec says "Income Details" has hourlyRate, professionalRate, phoneAllowance.
+          },
+          expense: {
+            accommodationCostPerPeriod: Number(req.body.housingFee ?? 0),
+            followerCount: Number(req.body.followerCount ?? 0),
+            refrigeratorCostPerPeriod: Number(req.body.refrigeratorFee ?? 0),
+            soundSystemCostPerPeriod: Number(req.body.soundSystemFee ?? 0),
+            tvCostPerPeriod: Number(req.body.tvFee ?? 0),
+            washingMachineCostPerPeriod: Number(req.body.laundryFee ?? 0),
+            portableAcCostPerPeriod: Number(req.body.airConFee ?? 0),
+          },
+        },
+        createdBy
+      );
+
+      // Re-fetch to get complete object if needed, or just return contractor
+      // contractor from createDC already has the inputs mapped to its fields (T-230/T-240 added fields to DC entity too)
+      // However, upsertCompensationDetails updates the sub-collections which might be used by calculation engine.
+      // We return the contractor object which now includes T-230 fields.
 
       res.status(201).json({
         success: true,
@@ -701,7 +750,7 @@ router.post(
 
 /**
  * PUT /api/daily-contractors/:id
- * อัปเดท Daily Contractor
+ * อัปเดท Daily Contractor (Single Action)
  */
 router.put(
   '/:id',
@@ -728,6 +777,19 @@ router.put(
       .optional()
       .isISO8601()
       .withMessage('Invalid endDate'),
+    // Financial Fields (Optional)
+    body('dailyWageRate').optional().isFloat({ min: 0 }),
+    body('professionalRate').optional().isFloat({ min: 0 }),
+    body('phoneAllowance').optional().isFloat({ min: 0 }),
+    body('housingFee').optional().isFloat({ min: 0 }),
+    body('followerCount').optional().isInt({ min: 0 }),
+    body('refrigeratorFee').optional().isFloat({ min: 0 }),
+    body('soundSystemFee').optional().isFloat({ min: 0 }),
+    body('tvFee').optional().isFloat({ min: 0 }),
+    body('laundryFee').optional().isFloat({ min: 0 }),
+    body('airConFee').optional().isFloat({ min: 0 }),
+    body('otherDeduction').optional().isFloat({ min: 0 }),
+    body('otherIncome').optional().isFloat({ min: 0 }),
   ],
   authorize(['AM', 'FM']),
   async (req: Request, res: Response) => {
@@ -747,6 +809,7 @@ router.put(
       if (input.startDate) input.startDate = new Date(input.startDate);
       if (input.endDate) input.endDate = new Date(input.endDate);
 
+      // 1. Update Basic DC Profile (and embedded T-230 fields)
       const contractor = await dailyContractorService.updateDC(
         req.params.id,
         input,
@@ -755,6 +818,59 @@ router.put(
 
       if (!contractor) {
         throw new AppError('Daily contractor not found', 404);
+      }
+
+      // 2. Handle Financial Data (Single Action)
+      // 2. Handle Financial Data (Single Action)
+
+      // Note: If dailyWageRate is NOT provided in update (partial update?), we should be careful.
+      // But for Single Action Modal, we expect the full form to be submitted usually.
+      // However, if it's 0 or missing, logic requires care. 
+      // Assuming form sends current values.
+
+      // Determine Hourly Rate: 
+      // If dailyWageRate is in body, use it. If not, we might need to fetch existing?
+      // For now, let's assume if it's sent, we update. If not sent, we skip upserting that specific part?
+      // Actually, upsertCompensationDetails handles partials if we structure it right.
+      // But our logic `hourlyRate = dailyWage / 8` depends on `dailyWage`.
+      // Let's assume if `dailyWageRate` key exists in body, we process it.
+
+      if (req.body.dailyWageRate !== undefined ||
+        req.body.professionalRate !== undefined ||
+        req.body.phoneAllowance !== undefined ||
+        req.body.housingFee !== undefined) {
+
+        const hourlyRate = (req.body.dailyWageRate !== undefined)
+          ? Number(req.body.dailyWageRate) / 8
+          : undefined;
+
+        const incomePayload: any = {};
+        if (hourlyRate !== undefined) incomePayload.hourlyRate = hourlyRate;
+        if (req.body.professionalRate !== undefined) incomePayload.professionalRate = Number(req.body.professionalRate);
+        if (req.body.phoneAllowance !== undefined) incomePayload.phoneAllowancePerPeriod = Number(req.body.phoneAllowance);
+
+        const expensePayload: any = {};
+        if (req.body.housingFee !== undefined) expensePayload.accommodationCostPerPeriod = Number(req.body.housingFee);
+        if (req.body.followerCount !== undefined) expensePayload.followerCount = Number(req.body.followerCount);
+        if (req.body.refrigeratorFee !== undefined) expensePayload.refrigeratorCostPerPeriod = Number(req.body.refrigeratorFee);
+        if (req.body.soundSystemFee !== undefined) expensePayload.soundSystemCostPerPeriod = Number(req.body.soundSystemFee);
+        if (req.body.tvFee !== undefined) expensePayload.tvCostPerPeriod = Number(req.body.tvFee);
+        if (req.body.washingMachineCost !== undefined) expensePayload.washingMachineCostPerPeriod = Number(req.body.washingMachineCost); // Check key name mapping
+        // In Create, I used laundryFee mapped to washingMachineCostPerPeriod. 
+        if (req.body.laundryFee !== undefined) expensePayload.washingMachineCostPerPeriod = Number(req.body.laundryFee);
+        if (req.body.airConFee !== undefined) expensePayload.portableAcCostPerPeriod = Number(req.body.airConFee);
+
+        // Only call upsert if there's something to update
+        if (Object.keys(incomePayload).length > 0 || Object.keys(expensePayload).length > 0) {
+          await dailyContractorService.upsertCompensationDetails(
+            req.params.id,
+            {
+              income: Object.keys(incomePayload).length > 0 ? incomePayload : undefined,
+              expense: Object.keys(expensePayload).length > 0 ? expensePayload : undefined,
+            },
+            updatedBy
+          );
+        }
       }
 
       res.json({

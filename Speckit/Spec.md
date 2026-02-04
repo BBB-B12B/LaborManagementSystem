@@ -79,6 +79,7 @@
 *   ทะเบียนประวัติ (Address, ID Card)
 *   ตั้งรหัสผ่าน (Hashed)
 *   ระบุข้อยกเว้นประกันสังคม (Social Security Calculation)
+*   **Single Action**: จัดการค่าแรงและรายการหัก (Wage Configuration) รวมในหน้าเดียวกัน (Unified Modal)
 
 #### 2. Architecture
 *   **Endpoints**: `/api/daily-contractors/*`
@@ -145,7 +146,7 @@
 **Name**: การคำนวณค่าแรงแบบบูรณาการ (Integrated Wage Calculation)
 **Status**: ✅ Complete
 #### 1. User Flow
-1. Admin เลือกงวดค่าแรง (15 วัน) และโครงการที่ต้องการ
+1. Admin เลือกงวดค่าแรง (Flexible Period) และโครงการที่ต้องการ
 2. เมื่อกดปุ่ม "คำนวณ":
    - ระบบดึงข้อมูล Daily Report (วันทำงาน, OT) ในช่วงงวดนั้น
    - ระบบดึงข้อมูลสแกนนิ้ว (Scan Data) มาเปรียบเทียบ (Requirement 2)
@@ -155,9 +156,23 @@
 4. แสดงผลในตาราง 1 แถวต่อ 1 คน (Requirement 3)
 
 #### 2. Architecture
-*   **Endpoints**: `/api/wage-periods/:id/calculate`
 *   **Related Entities**: `WagePeriod`, `DailyReport`, `ScanData`, `LateRecord`, `ScanDataDiscrepancy`
 *   **Logic**: `WagePeriodService.calculateWages` + `ScanDataService.detectDiscrepancies`
+
+---
+
+### Feature ID: F-011
+**Name**: Daily Report UI (Unified)
+**Status**: [ ] Planned
+#### 1. User Flow
+*   Foreman selects Date & Project.
+*   Adds work entries (Task, Time, Workers).
+*   **Unified Experience**: Same UI for Mobile and Desktop.
+*   **Logic**: 1 Doc per Project-Day (Aggregated).
+*   **Constraint**: Noon OT locked to 1 hour.
+#### 2. Architecture
+*   **UI**: `pages/daily-reports/new.tsx` (Wraps `MobileDailyReportView`)
+*   **Data**: `DailyReport` (Aggregated Schema)
 
 ---
 

@@ -17,6 +17,7 @@ import {
 } from '../../services/scanData/ScanDataImportUtils';
 import { collections } from '../../config/collections';
 
+
 const router = Router();
 router.use(authenticate);
 
@@ -165,13 +166,18 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
         new Date(discrepancy.workDate) // Same day
       );
 
-      discrepancy.scanDataRecords = scans.map(scan => ({
-        id: scan.id,
-        scanTime: scan.scanDateTime,
-        scanType: scan.scanBehavior,
-        roundedTime: scan.roundedTime.toISOString(),
-      }));
-
+      // Map Aggregated Scans to Punches list for UI
+      // Use Scan[0] because there should be only 1 doc per person per day
+      if (scans.length > 0) {
+        discrepancy.scanDataRecords = scans[0].punches.map(time => ({
+          id: `${scans[0].id}_${time}`,
+          scanTime: new Date(`${scans[0].workDate}T${time}:00`),
+          scanType: 'manual',
+          roundedTime: null
+        }));
+      } else {
+        discrepancy.scanDataRecords = [];
+      }
       discrepancy.scanDataIds = scans.map(s => s.id);
     }
 
@@ -184,14 +190,10 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/scan-data/late
  */
-router.get('/late', async (req: Request, res: Response) => {
+router.get('/late', async (_req: Request, res: Response) => {
   try {
-    const { projectId, startDate, endDate } = req.query;
-    const lateRecords = await scanDataService.getLateRecords(
-      projectId as string | undefined,
-      startDate ? new Date(startDate as string) : undefined,
-      endDate ? new Date(endDate as string) : undefined
-    );
+    // Note: getLateRecords still needs implementation in Service or use generic Query
+    const lateRecords = await scanDataService.getLateRecords();
     res.json({ success: true, data: lateRecords });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -352,21 +354,22 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/scan-data/:id/match
- */
-router.post('/:id/match', [body('dailyReportId').notEmpty()], async (req: Request, res: Response) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
+// /**
+//  * POST /api/scan-data/:id/match
+//  */
+// router.post('/:id/match', [body('dailyReportId').notEmpty()], async (req: Request, res: Response) => {
+//   try {
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
 
-    const scan = await scanDataService.matchToDailyReport(req.params.id, req.body.dailyReportId);
-    if (!scan) throw new AppError('Scan data not found', 404);
-    res.json({ success: true, data: scan });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({ success: false, error: error.message });
-  }
-});
+//     // const scan = await scanDataService.matchToDailyReport(req.params.id, req.body.dailyReportId);
+//     // if (!scan) throw new AppError('Scan data not found', 404);
+//     // res.json({ success: true, data: scan });
+//     res.status(501).json({ success: false, error: 'Not implemented in daily aggregation model' });
+//   } catch (error: any) {
+//     res.status(error.statusCode || 500).json({ success: false, error: error.message });
+//   }
+// });
 
 /**
  * DELETE /api/scan-data/:id

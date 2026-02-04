@@ -16,15 +16,7 @@ import {
   errorMessages,
 } from './baseSchemas';
 
-/**
- * Validate 15-day period
- * FR-WC-001: Wage period must be exactly 15 days
- */
-export function validate15DayPeriod(startDate: Date, endDate: Date): boolean {
-  const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays === 15;
-}
+
 
 /**
  * Wage period creation schema
@@ -51,20 +43,7 @@ export const wagePeriodCreateSchema = z
     // Notes
     notes: optionalString,
   })
-  .refine(
-    (data) => data.endDate > data.startDate,
-    {
-      message: 'วันที่สิ้นสุดต้องมาหลังวันที่เริ่มต้น',
-      path: ['endDate'],
-    }
-  )
-  .refine(
-    (data) => validate15DayPeriod(data.startDate, data.endDate),
-    {
-      message: 'งวดค่าแรงต้องเป็น 15 วันพอดี (FR-WC-001)',
-      path: ['endDate'],
-    }
-  );
+
 
 /**
  * Additional Income schema
@@ -176,5 +155,5 @@ export default {
   dcIncomeDetailsSchema,
   dcExpenseDetailsSchema,
   wagePeriodFilterSchema,
-  validate15DayPeriod,
+
 };

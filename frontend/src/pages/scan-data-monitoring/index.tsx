@@ -35,6 +35,7 @@ import {
   FilterList,
   Refresh,
   Analytics,
+  CloudUpload,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -55,6 +56,9 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
+import ScanDataUploadDialog from './components/ScanDataUploadDialog';
+import { useToast } from '../../components/common/Toast';
+import type { ImportResult } from '../../services/scanDataService';
 
 /**
  * ScanData Monitoring Page
@@ -66,6 +70,7 @@ import { Layout, ProtectedRoute } from '@/components/layout';
  */
 export default function ScanDataMonitoringPage() {
   const router = useRouter();
+  const { success: showSuccess } = useToast();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
 
@@ -78,6 +83,7 @@ export default function ScanDataMonitoringPage() {
 
   const filter = watch();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
   // Fetch summary
   const { data: summary, refetch: refetchSummary } = useQuery({
@@ -281,6 +287,13 @@ export default function ScanDataMonitoringPage() {
     },
   ];
 
+  const handleUploadSuccess = (result: ImportResult) => {
+    showSuccess(
+      `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
+    );
+    handleRefresh();
+  };
+
   const renderContent = () => (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
@@ -315,6 +328,16 @@ export default function ScanDataMonitoringPage() {
               <Refresh />
             </IconButton>
           </Tooltip>
+
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<CloudUpload />}
+            onClick={() => setUploadDialogOpen(true)}
+            sx={{ ml: 1 }}
+          >
+            Upload ScanData
+          </Button>
         </Box>
       </Box>
 
@@ -564,7 +587,7 @@ export default function ScanDataMonitoringPage() {
           </Box>
         </Box>
       </Paper>
-    </Container>
+    </Container >
   );
 
   if (error) {
@@ -585,6 +608,11 @@ export default function ScanDataMonitoringPage() {
     <ProtectedRoute>
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
+        <ScanDataUploadDialog
+          open={uploadDialogOpen}
+          onClose={() => setUploadDialogOpen(false)}
+          onSuccess={handleUploadSuccess}
+        />
       </Layout>
     </ProtectedRoute>
   );

@@ -30,10 +30,8 @@ import {
   Edit,
   Delete,
   Search,
-  MonetizationOn,
   FileDownload,
   CloudUpload,
-  AttachMoney,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -115,8 +113,7 @@ export default function DCManagementPage() {
   const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<DCEditInput> | undefined>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
-  const [compensationDrawerOpen, setCompensationDrawerOpen] = useState(false);
-  const [selectedContractor, setSelectedContractor] = useState<DailyContractor | null>(null);
+
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<DCImportSummary | null>(null);
 
