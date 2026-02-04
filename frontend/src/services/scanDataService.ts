@@ -82,7 +82,6 @@ export interface ScanDataDiscrepancy {
     workHours?: number;
   };
   scanDataRecords?: Array<{
-    id?: string;
     scanTime: string;
     scanType: string;
     roundedTime?: string;
@@ -121,12 +120,20 @@ export interface ImportResult {
   totalRecords: number;
   successfulRecords: number;
   failedRecords: number;
+  duplicateRecords?: number;
   errors: Array<{
     row: number;
     employeeNumber?: string;
     error: string;
   }>;
   warnings: string[];
+  records: Array<{
+    row: number;
+    status: 'success' | 'failed' | 'duplicate';
+    employeeNumber?: string;
+    data: any;
+    error?: string;
+  }>;
 }
 
 /**
@@ -148,7 +155,8 @@ export interface DiscrepancySummary {
 export async function uploadScanDataFile(
   file: File,
   projectLocationId: string,
-  importNote?: string
+  importNote?: string,
+  dryRun?: boolean
 ): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
@@ -161,6 +169,9 @@ export async function uploadScanDataFile(
     '/scan-data/import',
     formData,
     {
+      params: {
+        dryRun: dryRun ? 'true' : 'false'
+      },
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -170,25 +181,6 @@ export async function uploadScanDataFile(
 }
 
 export const uploadScanDataExcel = uploadScanDataFile;
-
-/**
- * Import ScanData via Raw Text (Smart Notepad)
- */
-export async function importScanDataText(
-  textData: string,
-  projectLocationId: string,
-  importNote?: string
-): Promise<ImportResult> {
-  const response = await apiClient.post<{ success: boolean; data: ImportResult }>(
-    '/scan-data/import-text',
-    {
-      textData,
-      projectLocationId,
-      importNote,
-    }
-  );
-  return response.data.data;
-}
 
 /**
  * Get all scan data with filtering
@@ -244,13 +236,6 @@ export async function getScanDataById(id: string): Promise<ScanData> {
     `/scan-data/${id}`
   );
   return response.data.data;
-}
-
-/**
- * Soft delete scan data
- */
-export async function softDeleteScanData(id: string): Promise<void> {
-  await apiClient.delete(`/scan-data/${id}`);
 }
 
 /**

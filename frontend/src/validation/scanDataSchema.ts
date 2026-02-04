@@ -51,7 +51,7 @@ export type ResolutionAction = z.infer<typeof ResolutionActionEnum>;
  * สำหรับ validate ไฟล์ ScanData (.dat หรือ Excel) ที่ upload
  */
 const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
-const ALLOWED_EXTENSIONS = ['.dat', '.xlsx', '.xls'];
+const ALLOWED_EXTENSIONS = ['.dat', '.xlsx', '.xls', '.txt'];
 const ALLOWED_MIME_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -66,16 +66,15 @@ const hasAllowedExtension = (fileName: string): boolean => {
 };
 
 export const ScanDataUploadSchema = z.object({
-  mode: z.enum(['file', 'text']).default('file'),
   file: z
-    .instanceof(File)
-    .optional()
-    .refine((file) => !file || file.size <= MAX_UPLOAD_SIZE_BYTES, {
+    .custom<File>((v) => v instanceof File || (v && typeof v === 'object' && 'name' in v && 'size' in v), {
+      message: 'กรุณาเลือกไฟล์',
+    })
+    .refine((file) => file.size <= MAX_UPLOAD_SIZE_BYTES, {
       message: 'ขนาดไฟล์ต้องไม่เกิน 100MB',
     })
     .refine(
       (file) => {
-        if (!file) return true;
         const mime = file.type?.toLowerCase() ?? '';
         return (
           ALLOWED_MIME_TYPES.includes(mime) ||
@@ -83,27 +82,11 @@ export const ScanDataUploadSchema = z.object({
         );
       },
       {
-        message: 'รองรับเฉพาะไฟล์ .dat, .xlsx หรือ .xls',
+        message: 'รองรับเฉพาะไฟล์ .dat, .txt, .xlsx หรือ .xls',
       }
     ),
-  textData: z.string().optional(),
   projectLocationId: z.string().min(1, 'กรุณาเลือกโครงการ'),
   importNote: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.mode === 'file' && !data.file) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'กรุณาเลือกไฟล์',
-      path: ['file'],
-    });
-  }
-  if (data.mode === 'text' && (!data.textData || data.textData.trim().length === 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'กรุณาระบุข้อมูล',
-      path: ['textData'],
-    });
-  }
 });
 
 export type ScanDataUploadInput = z.infer<typeof ScanDataUploadSchema>;

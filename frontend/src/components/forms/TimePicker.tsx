@@ -9,7 +9,7 @@
 import React, { useMemo } from 'react';
 import { TimePicker as MuiTimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { th } from 'date-fns/locale';
 import { TextField, TextFieldProps } from '@mui/material';
 import { format, isValid, parse, setHours, setMinutes } from 'date-fns';
@@ -84,8 +84,14 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   /**
    * Validate time against constraints
    */
+<<<<<<< HEAD
   const shouldDisableTime = (value: Date, view: 'hours' | 'minutes' | 'seconds'): boolean => {
     if (view === 'minutes' && minutesStep > 1) {
+=======
+  const shouldDisableTime = (value: Date, view: string): boolean => {
+    if (view === 'minutes' && minutesStep > 1) {
+      // Disable minutes that don't match the step
+>>>>>>> Labor-Rotation
       return value.getMinutes() % minutesStep !== 0;
     }
     return false;

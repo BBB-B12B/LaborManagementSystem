@@ -111,7 +111,7 @@ export function generatePeriodCode(startDate: Date): string {
  * Firestore document converter for WagePeriod
  */
 export const wagePeriodConverter = {
-  toFirestore: (period: Omit<WagePeriod, 'id'>): any => {
+  toFirestore: (period: WagePeriod): any => {
     return {
       periodCode: period.periodCode,
       projectLocationId: period.projectLocationId,

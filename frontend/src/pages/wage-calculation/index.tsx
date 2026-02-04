@@ -39,7 +39,6 @@ import {
   Download,
   Visibility,
   CheckCircle,
-  CloudUpload,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -61,8 +60,6 @@ import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
-import ScanDataUploadDialog from '../scan-data-monitoring/components/ScanDataUploadDialog';
-import type { ImportResult } from '../../services/scanDataService';
 import { Layout, ProtectedRoute } from '@/components/layout';
 
 /**
@@ -83,7 +80,6 @@ export default function WageCalculationPage() {
   } = useDeleteConfirmDialog();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [calculatingId, setCalculatingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
 
@@ -184,12 +180,7 @@ export default function WageCalculationPage() {
     });
   };
 
-  const handleUploadSuccess = (result: ImportResult) => {
-    showSuccess(
-      `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
-    );
-    // สามารถ refresh discrepancy data ได้ถ้ามี
-  };
+
 
   // Status color mapping
   const getStatusColor = (status: PeriodStatus) => {
@@ -384,14 +375,7 @@ export default function WageCalculationPage() {
             คำนวณค่าแรง
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<CloudUpload />}
-              onClick={() => setUploadDialogOpen(true)}
-            >
-              Upload ScanData
-            </Button>
+
             <Button
               variant="contained"
               color="primary"
@@ -558,11 +542,6 @@ export default function WageCalculationPage() {
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
         <DeleteConfirmDialog />
-        <ScanDataUploadDialog
-          open={uploadDialogOpen}
-          onClose={() => setUploadDialogOpen(false)}
-          onSuccess={handleUploadSuccess}
-        />
       </Layout>
     </ProtectedRoute>
   );

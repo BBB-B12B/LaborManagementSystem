@@ -210,27 +210,27 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
 
       const phoneNumber = normalizeOptionalString(input.phoneNumber);
       if (phoneNumber !== undefined) {
-        updateData.phoneNumber = phoneNumber || null;
+        updateData.phoneNumber = phoneNumber || undefined;
       }
 
       const idCardNumber = normalizeOptionalString(input.idCardNumber);
       if (idCardNumber !== undefined) {
-        updateData.idCardNumber = idCardNumber || null;
+        updateData.idCardNumber = idCardNumber || undefined;
       }
 
       const address = normalizeOptionalString(input.address);
       if (address !== undefined) {
-        updateData.address = address;
+        updateData.address = address || undefined;
       }
 
       const emergencyContact = normalizeOptionalString(input.emergencyContact);
       if (emergencyContact !== undefined) {
-        updateData.emergencyContact = emergencyContact;
+        updateData.emergencyContact = emergencyContact || undefined;
       }
 
       const emergencyPhone = normalizeOptionalString(input.emergencyPhone);
       if (emergencyPhone !== undefined) {
-        updateData.emergencyPhone = emergencyPhone || null;
+        updateData.emergencyPhone = emergencyPhone || undefined;
       }
 
       if (input.isActive !== undefined) {
@@ -238,11 +238,11 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       }
 
       if (input.startDate !== undefined) {
-        updateData.startDate = input.startDate || null;
+        updateData.startDate = input.startDate || undefined;
       }
 
       if (input.endDate !== undefined) {
-        updateData.endDate = input.endDate || null;
+        updateData.endDate = input.endDate || undefined;
       }
 
       // T-230: Update new fields

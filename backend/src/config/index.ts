@@ -53,7 +53,7 @@ export const config = {
     authEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099',
     useEmulator: toBooleanFlag(
       process.env.FIREBASE_EMULATOR_ENABLED,
-      nodeEnv === 'development'
+      false // Default to Real Firestore even in dev
     ),
   },
 

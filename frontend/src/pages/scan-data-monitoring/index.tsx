@@ -34,15 +34,13 @@ import {
   Search,
   FilterList,
   Refresh,
-  Analytics,
+  CloudUpload,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Controller, useForm } from 'react-hook-form';
 import {
   getAllDiscrepancies,
-  getDiscrepancySummary,
-  triggerDiscrepancyDetection,
   type ScanDataDiscrepancy,
 } from '../../services/scanDataService';
 import {
@@ -55,6 +53,9 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
+import ScanDataUploadDialog from './components/ScanDataUploadDialog';
+import type { ImportResult } from '../../services/scanDataService';
+import { useToast } from '../../components/common/Toast';
 
 /**
  * ScanData Monitoring Page
@@ -66,6 +67,8 @@ import { Layout, ProtectedRoute } from '@/components/layout';
  */
 export default function ScanDataMonitoringPage() {
   const router = useRouter();
+  const { success: showSuccess } = useToast();
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
 
@@ -77,13 +80,6 @@ export default function ScanDataMonitoringPage() {
   });
 
   const filter = watch();
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  // Fetch summary
-  const { data: summary, refetch: refetchSummary } = useQuery({
-    queryKey: ['discrepancies-summary', filter.projectLocationId],
-    queryFn: () => getDiscrepancySummary(filter.projectLocationId),
-  });
 
   // Fetch discrepancies
   const { data, isLoading, error, refetch } = useQuery({
@@ -103,41 +99,13 @@ export default function ScanDataMonitoringPage() {
 
   const handleRefresh = () => {
     refetch();
-    refetchSummary();
   };
 
-  // Detection Mutation
-  const detectionMutation = useMutation({
-    mutationFn: (params: { projectId: string; start: Date; end: Date }) =>
-      triggerDiscrepancyDetection(params.projectId, params.start, params.end),
-    onSuccess: (result) => {
-      alert(`ดำเนินการเสร็จสิ้น: พบข้อมูล ${result.detectCounted} รายการ, สร้าง Discrepancy ${result.discrepanciesCreated} รายการ`);
-      handleRefresh();
-    },
-    onError: (err: any) => {
-      alert(`เกิดข้อผิดพลาด: ${err.message}`);
-    },
-    onSettled: () => {
-      setIsAnalyzing(false);
-    },
-  });
-
-  const handleRunAnalysis = () => {
-    if (!filter.projectLocationId) {
-      alert('กรุณาเลือกโครงการก่อนเริ่มการตรวจสอบ');
-      return;
-    }
-    if (!filter.startDate || !filter.endDate) {
-      alert('กรุณาเลือกช่วงเวลาที่ต้องการตรวจสอบ');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    detectionMutation.mutate({
-      projectId: filter.projectLocationId,
-      start: filter.startDate,
-      end: filter.endDate,
-    });
+  const handleUploadSuccess = (result: ImportResult) => {
+    showSuccess(
+      `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
+    );
+    refetch();
   };
 
   // Status color mapping
@@ -303,12 +271,11 @@ export default function ScanDataMonitoringPage() {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="contained"
-            color="secondary"
-            startIcon={<Analytics />}
-            onClick={handleRunAnalysis}
-            disabled={isAnalyzing}
+            color="primary"
+            startIcon={<CloudUpload />}
+            onClick={() => setUploadDialogOpen(true)}
           >
-            {isAnalyzing ? 'กำลังประมวลผล...' : 'เริ่มการตรวจสอบ (Run Analysis)'}
+            Upload ScanData
           </Button>
           <Tooltip title="รีเฟรช">
             <IconButton onClick={handleRefresh} color="primary">
@@ -317,34 +284,6 @@ export default function ScanDataMonitoringPage() {
           </Tooltip>
         </Box>
       </Box>
-
-      {/* Summary Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
-            <Typography variant="overline">รอดำเนินการ (Pending)</Typography>
-            <Typography variant="h4">{summary?.pendingCount || 0}</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'error.light' }}>
-            <Typography variant="overline">ความรุนแรงสูง (High)</Typography>
-            <Typography variant="h4">{summary?.highSeverityCount || 0}</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="overline">Type 1 (Mismatch)</Typography>
-            <Typography variant="h4">{summary?.type1Count || 0}</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="overline">Type 2/3 (Missing)</Typography>
-            <Typography variant="h4">{(summary?.type2Count || 0) + (summary?.type3Count || 0)}</Typography>
-          </Paper>
-        </Grid>
-      </Grid>
 
       {/* Filters */}
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -585,6 +524,11 @@ export default function ScanDataMonitoringPage() {
     <ProtectedRoute>
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
+        <ScanDataUploadDialog
+          open={uploadDialogOpen}
+          onClose={() => setUploadDialogOpen(false)}
+          onSuccess={handleUploadSuccess}
+        />
       </Layout>
     </ProtectedRoute>
   );

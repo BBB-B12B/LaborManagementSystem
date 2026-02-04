@@ -265,6 +265,13 @@
 #### 2. Result
 *   Verified: ระบบเชื่อมต่อกับ Firebase Cloud (`labor-management-system-33b06`) เรียบร้อยแล้ว (Emulator Disabled ใน `.env` และ `docker-compose.yml`)
 
+#### 4. Error Logs
+*   **T-SETUP-001-EX-1**:
+    *   **Symptom**: 500 Internal Server Error (RESOURCE_EXHAUSTED) during login.
+    *   **Cause**: Firebase Free Tier Quota Exceeded for Real Cloud Database.
+    *   **Solution**: Reverted to Firebase Emulator for Development (`FIREBASE_EMULATOR_ENABLED=true` in `.env`, Port `4001`).
+    *   **Result**: Fixed.
+
 ---
 
 ### Error Logging Protocol (บันทึก Error ตาม `Implement.md`)

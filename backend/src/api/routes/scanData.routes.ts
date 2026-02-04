@@ -9,6 +9,9 @@ import multer from 'multer';
 import { authenticate, type AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
 import { scanDataService } from '../../services/scanData/ScanDataService';
+import { dailyReportService } from '../../services/dailyReport/DailyReportService';
+import { DailyReport } from '../../models/DailyReport';
+import { ScanData } from '../../models/ScanData';
 import { AppError } from '../middleware/errorHandler';
 import {
   parseDatFile,
@@ -16,15 +19,81 @@ import {
   detectFileType,
 } from '../../services/scanData/ScanDataImportUtils';
 import { collections } from '../../config/collections';
+import { randomUUID } from 'crypto';
+import * as XLSX from 'xlsx';
 
 const router = Router();
-router.use(authenticate);
+router.use(authenticate as any);
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 120 * 1024 * 1024, // 120MB
   },
+});
+
+/**
+ * GET /api/scan-data/template
+ * Download Excel Template for Scan Data Import
+ */
+router.get('/template', (_req: Request, res: Response) => {
+  try {
+    const headers = [
+      'EmployeeNumber',
+      'Date',
+      'Time1',
+      'Time2',
+      'Time3',
+      'Time4',
+      'Time5',
+      'Time6',
+      'NormalStatus',
+      'LunchStatus',
+      'MorningOT'
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+
+    ws['!cols'] = [
+      { wch: 15 }, // EmployeeNumber
+      { wch: 15 }, // Date
+      { wch: 10 }, // Time1
+      { wch: 10 }, // Time2
+      { wch: 10 }, // Time3
+      { wch: 10 }, // Time4
+      { wch: 10 }, // Time5
+      { wch: 10 }, // Time6
+      { wch: 15 }, // NormalStatus
+      { wch: 15 }, // LunchStatus
+      { wch: 12 }, // MorningOT
+    ];
+
+    XLSX.utils.sheet_add_aoa(ws, [
+      [
+        '101527',
+        new Date().toISOString().split('T')[0],
+        '08:00',
+        '12:00',
+        '13:00',
+        '17:00',
+        '',
+        '',
+        'Normal',
+        'Yes',
+        '0'
+      ]
+    ], { origin: -1 });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'ScanDataTemplate');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=ScanData_Template.xlsx');
+    res.send(buffer);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Error generating template' });
+  }
 });
 
 /**
@@ -44,12 +113,9 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        throw new AppError('Validation failed', 400);
-      }
+      if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
 
       const { projectId, contractorId, startDate, endDate } = req.query;
-
       let scans;
       if (projectId && startDate && endDate) {
         scans = await scanDataService.getByProjectAndDate(
@@ -80,35 +146,125 @@ router.get(
 
 /**
  * GET /api/scan-data/discrepancies
- * ดึงรายการความผิดปกติ (Discrepancies)
+ * Detect and return discrepancies between Daily Reports and Scan Data
  */
 router.get('/discrepancies', async (req: Request, res: Response) => {
   try {
     const page = parseInt((req.query.page as string) || '1', 10);
     const pageSize = parseInt((req.query.pageSize as string) || '50', 10);
-    const { projectLocationId, dailyContractorId, status, severity, startDate, endDate } = req.query;
+    const projectId = req.query.projectId as string | undefined;
+    const startDateStr = req.query.startDate as string | undefined;
+    const endDateStr = req.query.endDate as string | undefined;
 
-    const queryRef = collections.scanDataDiscrepancies;
-    let firestoreQuery: any = queryRef;
+    let startDate = startDateStr ? new Date(startDateStr) : new Date();
+    let endDate = endDateStr ? new Date(endDateStr) : new Date();
 
-    if (projectLocationId) firestoreQuery = firestoreQuery.where('projectLocationId', '==', projectLocationId);
-    if (dailyContractorId) firestoreQuery = firestoreQuery.where('dailyContractorId', '==', dailyContractorId);
-    if (status) firestoreQuery = firestoreQuery.where('status', '==', status);
-    if (severity) firestoreQuery = firestoreQuery.where('severity', '==', severity);
-    if (startDate) firestoreQuery = firestoreQuery.where('workDate', '>=', new Date(startDate as string));
-    if (endDate) firestoreQuery = firestoreQuery.where('workDate', '<=', new Date(endDate as string));
+    if (isNaN(startDate.getTime())) startDate = new Date();
+    if (isNaN(endDate.getTime())) endDate = new Date();
 
-    const snapshot = await firestoreQuery.orderBy('workDate', 'desc').get();
-    const items = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+    if (!startDateStr) startDate.setHours(0, 0, 0, 0);
+    if (!endDateStr) endDate.setHours(23, 59, 59, 999);
+
+    // 1. Fetch Data in Parallel
+    const [reports, scans] = await Promise.all([
+      projectId
+        ? dailyReportService.getByProjectAndDate(projectId, startDate, endDate)
+        : dailyReportService.getByDateRange(startDate, endDate),
+      projectId
+        ? scanDataService.getByProjectAndDate(projectId, startDate, endDate)
+        : scanDataService.getByDateRange(startDate, endDate)
+    ]);
+
+    // Helper to safely convert Firestore Timestamp or string to Date
+    const toDate = (val: any): Date => {
+      if (!val) return new Date();
+      if (val instanceof Date) return val;
+      if (val && typeof val.toDate === 'function') return val.toDate();
+      if (val && val._seconds) return new Date(val._seconds * 1000);
+      return new Date(val);
+    };
+
+    // 2. Group Data
+    const reportMap = new Map<string, DailyReport>();
+    const scanMap = new Map<string, ScanData[]>();
+
+    reports.forEach(r => {
+      try {
+        const d = toDate(r.workDate);
+        if (isNaN(d.getTime())) return;
+        const dateStr = d.toISOString().split('T')[0];
+        const key = `${r.dailyContractorId}_${dateStr}`;
+        reportMap.set(key, r);
+      } catch (err) {
+        console.error('Error processing report:', r.id, err);
+      }
+    });
+
+    scans.forEach(s => {
+      try {
+        const d = toDate(s.scanDateTime);
+        if (isNaN(d.getTime())) return;
+        const dateStr = d.toISOString().split('T')[0];
+        const key = `${s.dailyContractorId}_${dateStr}`;
+        if (!scanMap.has(key)) scanMap.set(key, []);
+        scanMap.get(key)?.push(s);
+      } catch (err) {
+        console.error('Error processing scan:', s.id, err);
+      }
+    });
+
+    // 3. Detect Discrepancies
+    const discrepancies: any[] = [];
+    const allKeys = new Set([...reportMap.keys(), ...scanMap.keys()]);
+
+    for (const key of allKeys) {
+      const report = reportMap.get(key);
+      const scanList = scanMap.get(key);
+      const [dcId, dateStr] = key.split('_');
+
+      if (report && (!scanList || scanList.length === 0)) {
+        discrepancies.push({
+          id: `type2-${randomUUID()}`,
+          type: 'Type2',
+          date: dateStr,
+          dailyContractorId: dcId,
+          employeeNumber: 'Load...',
+          employeeName: (report as any).employeeName || 'Unknown',
+          projectLocationId: report.projectLocationId,
+          status: 'Pending',
+          severity: 'High'
+        });
+      }
+
+      if (!report && scanList && scanList.length > 0) {
+        const firstScan = scanList[0];
+        discrepancies.push({
+          id: `type3-${randomUUID()}`,
+          type: 'Type3',
+          date: dateStr,
+          dailyContractorId: dcId,
+          employeeNumber: firstScan.employeeNumber || firstScan.employeeId,
+          employeeName: 'Unknown',
+          projectLocationId: firstScan.projectLocationId,
+          status: 'Pending',
+          severity: 'Medium'
+        });
+      }
+    }
+
+    const total = discrepancies.length;
+    const start = (page - 1) * pageSize;
+    const pagedData = discrepancies.slice(start, start + pageSize);
 
     res.json({
       success: true,
-      data: items,
+      data: pagedData,
       pagination: {
-        total: items.length,
         page,
         pageSize,
-      },
+        total,
+        totalPages: Math.ceil(total / pageSize)
+      }
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -132,9 +288,9 @@ router.get('/discrepancies/summary', async (req: Request, res: Response) => {
       data: {
         totalDiscrepancies: discrepancies.length,
         pendingCount: discrepancies.length,
-        type1Count: discrepancies.filter((d: any) => d.detectionReason.includes('ไม่ตรงกัน')).length,
-        type2Count: discrepancies.filter((d: any) => d.detectionReason.includes('ไม่มีข้อมูลสแกน')).length,
-        type3Count: discrepancies.filter((d: any) => d.detectionReason.includes('ไม่มี Daily Report')).length,
+        type1Count: discrepancies.filter((d: any) => d.detectionReason?.includes('ไม่ตรงกัน')).length,
+        type2Count: discrepancies.filter((d: any) => d.detectionReason?.includes('ไม่มีข้อมูลสแกน')).length,
+        type3Count: discrepancies.filter((d: any) => d.detectionReason?.includes('ไม่มี Daily Report')).length,
         highSeverityCount: discrepancies.filter((d: any) => d.severity === 'error').length,
         recentDiscrepancies: discrepancies.slice(0, 5),
       },
@@ -146,7 +302,6 @@ router.get('/discrepancies/summary', async (req: Request, res: Response) => {
 
 /**
  * GET /api/scan-data/discrepancies/:id
- * Get discrepancy details with related scan data
  */
 router.get('/discrepancies/:id', async (req: Request, res: Response) => {
   try {
@@ -157,12 +312,11 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
 
     const discrepancy = { id: doc.id, ...doc.data() } as any;
 
-    // Fetch related Scan Data
     if (discrepancy.dailyContractorId && discrepancy.workDate) {
       const scans = await scanDataService.getByContractorAndDate(
         discrepancy.dailyContractorId,
         new Date(discrepancy.workDate),
-        new Date(discrepancy.workDate) // Same day
+        new Date(discrepancy.workDate)
       );
 
       discrepancy.scanDataRecords = scans.map(scan => ({
@@ -171,7 +325,6 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
         scanType: scan.scanBehavior,
         roundedTime: scan.roundedTime.toISOString(),
       }));
-
       discrepancy.scanDataIds = scans.map(s => s.id);
     }
 
@@ -195,6 +348,36 @@ router.get('/late', async (req: Request, res: Response) => {
     res.json({ success: true, data: lateRecords });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/scan-data/unmatched
+ */
+router.get(
+  '/unmatched',
+  [query('projectId').optional().isString()],
+  async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.query;
+      const unmatched = await scanDataService.getUnmatchedScans(projectId as string | undefined);
+      res.json({ success: true, data: unmatched });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/scan-data/:id
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const scan = await scanDataService.getById(req.params.id);
+    if (!scan) throw new AppError('Scan data not found', 404);
+    res.json({ success: true, data: scan });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -228,15 +411,17 @@ router.post(
       }
 
       const importedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+      const dryRun = req.query.dryRun === 'true';
       const importSummary = await scanDataService.bulkImport(parseResult.records, {
         projectLocationId: req.body.projectLocationId,
         importedBy,
         importNote: req.body.importNote,
         source: fileType,
+        dryRun
       });
 
       return res.json({
-        success: importSummary.errors.length === 0,
+        success: importSummary.success && parseErrors.length === 0,
         data: {
           ...importSummary,
           totalRecords: importSummary.totalRecords + parseErrors.length,
@@ -306,6 +491,23 @@ router.post(
 );
 
 /**
+ * POST /api/scan-data/:id/match
+ */
+router.post(
+  '/:id/match',
+  authorize(['AM', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const scan = await scanDataService.matchToDailyReport(req.params.id, req.body.dailyReportId);
+      if (!scan) throw new AppError('Scan data not found', 404);
+      return res.json({ success: true, data: scan });
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
  * POST /api/scan-data/detect-discrepancies
  */
 router.post(
@@ -340,37 +542,40 @@ router.post(
 );
 
 /**
- * GET /api/scan-data/:id
+ * POST /api/scan-data
  */
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const scan = await scanDataService.getById(req.params.id);
-    if (!scan) throw new AppError('Scan data not found', 404);
-    res.json({ success: true, data: scan });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({ success: false, error: error.message });
-  }
-});
+router.post(
+  '/',
+  [
+    body('dailyContractorId').notEmpty(),
+    body('employeeId').notEmpty().trim(),
+    body('projectLocationId').notEmpty(),
+    body('scanDateTime').isISO8601(),
+  ],
+  async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
 
-/**
- * POST /api/scan-data/:id/match
- */
-router.post('/:id/match', [body('dailyReportId').notEmpty()], async (req: Request, res: Response) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
+      const importedBy = (req as any).user?.id || 'system';
+      const input = {
+        dailyContractorId: req.body.dailyContractorId,
+        employeeId: req.body.employeeId,
+        projectLocationId: req.body.projectLocationId,
+        scanDateTime: new Date(req.body.scanDateTime),
+        importNote: req.body.importNote,
+      };
 
-    const scan = await scanDataService.matchToDailyReport(req.params.id, req.body.dailyReportId);
-    if (!scan) throw new AppError('Scan data not found', 404);
-    res.json({ success: true, data: scan });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({ success: false, error: error.message });
+      const scan = await scanDataService.importScanData(input, importedBy);
+      return res.status(201).json({ success: true, data: scan });
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
   }
-});
+);
 
 /**
  * DELETE /api/scan-data/:id
- * Soft delete scan data
  */
 router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
@@ -380,6 +585,71 @@ router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Respons
     res.json({ success: true, message: 'Scan data deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/scan-data/batch/:batchId/export
+ */
+router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+    const scans = await scanDataService.getByBatchId(batchId);
+    if (!scans || scans.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับ Batch นี้', 404);
+
+    const grouped = new Map<string, any>();
+    scans.sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
+
+    scans.forEach(scan => {
+      const dateStr = scan.scanDateTime.toISOString().split('T')[0];
+      const empNum = scan.employeeNumber || scan.employeeId || 'Unknown';
+      const key = `${empNum}_${dateStr}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          EmployeeNumber: empNum,
+          Date: dateStr,
+          Times: [],
+          NormalStatus: '',
+          LunchStatus: '',
+          MorningOT: ''
+        });
+      }
+      const entry = grouped.get(key);
+      const timeStr = scan.scanDateTime.toTimeString().split(' ')[0];
+      entry.Times.push(timeStr);
+    });
+
+    const rows: any[] = [];
+    const keys = Array.from(grouped.keys());
+
+    keys.sort((a, b) => {
+      const [empA, dateA] = a.split('_');
+      const [empB, dateB] = b.split('_');
+      if (empA !== empB) return empA.localeCompare(empB, undefined, { numeric: true });
+      return dateA.localeCompare(dateB);
+    });
+
+    keys.forEach(key => {
+      const data = grouped.get(key);
+      const row: any = { EmployeeNumber: data.EmployeeNumber, Date: data.Date };
+      data.Times.slice(0, 6).forEach((t: string, i: number) => {
+        row[`Time${i + 1}`] = t;
+      });
+      rows.push(row);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6', 'NormalStatus', 'LunchStatus', 'MorningOT'] });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Batch_${batchId}.xlsx`);
+    res.send(buffer);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Export failed' });
   }
 });
 

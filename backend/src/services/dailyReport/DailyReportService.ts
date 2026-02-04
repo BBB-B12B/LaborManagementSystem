@@ -184,7 +184,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       .orderBy('createdAt', 'desc')
       .get();
 
-    return historyDocs.docs.map((doc) => doc.data());
+    return historyDocs.docs.map((doc) => doc.data()) as EditHistory[];
   }
 
   /**
@@ -200,7 +200,20 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       { field: 'projectLocationId', operator: '==', value: projectId },
       { field: 'workDate', operator: '>=', value: startDate },
       { field: 'workDate', operator: '<=', value: endDate },
-      { field: 'isDeleted', operator: '==', value: false },
+    ]);
+
+    return reports;
+  }
+
+
+  /**
+   * ดึง Daily Reports ตามวันที่ (ทุกโครงการ)
+   * Get daily reports by date range (all projects)
+   */
+  async getByDateRange(startDate: Date, endDate: Date): Promise<DailyReport[]> {
+    const reports = await this.query([
+      { field: 'workDate', operator: '>=', value: startDate },
+      { field: 'workDate', operator: '<=', value: endDate },
     ]);
 
     return reports;
@@ -219,7 +232,6 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       { field: 'dailyContractorId', operator: '==', value: contractorId },
       { field: 'workDate', operator: '>=', value: startDate },
       { field: 'workDate', operator: '<=', value: endDate },
-      { field: 'isDeleted', operator: '==', value: false },
     ]);
 
     return reports;

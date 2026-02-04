@@ -29,6 +29,7 @@ export interface BulkImportRecord {
   scanDateTime: Date;
   rawLine?: string;
   rawData?: Record<string, unknown>;
+  rowData?: any;
 }
 
 export interface BulkImportOptions {
@@ -37,12 +38,22 @@ export interface BulkImportOptions {
   importNote?: string;
   source: 'excel' | 'dat' | 'text';
   batchId?: string;
+  dryRun?: boolean;
 }
 
 export interface ImportErrorEntry {
   row: number;
   employeeNumber?: string;
   error: string;
+  rowData?: any;
+}
+
+export interface RowSummary {
+  row: number;
+  status: 'success' | 'failed' | 'duplicate';
+  employeeNumber?: string;
+  data: any;
+  error?: string;
 }
 
 export interface ImportSummary {
@@ -51,8 +62,10 @@ export interface ImportSummary {
   totalRecords: number;
   successfulRecords: number;
   failedRecords: number;
+  duplicateRecords?: number;
   errors: ImportErrorEntry[];
   warnings: string[];
+  records: RowSummary[];
 }
 interface PreparedImportRecord {
   uniqueKey: string;
@@ -212,6 +225,50 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   /**
+   * Get scan data by date range (all projects)
+   */
+  async getByDateRange(startDate: Date, endDate: Date): Promise<ScanData[]> {
+    try {
+      const results = await this.query([
+        {
+          field: 'workDate',
+          operator: '>=',
+          value: startDate,
+        },
+        {
+          field: 'workDate',
+          operator: '<=',
+          value: endDate,
+        },
+      ]);
+
+      return results;
+    } catch (error: any) {
+      logger.error('Error getting scan data by date range:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get scan data by batch ID
+   */
+  async getByBatchId(batchId: string): Promise<ScanData[]> {
+    try {
+      const results = await this.query([
+        {
+          field: 'importBatchId',
+          operator: '==',
+          value: batchId,
+        },
+      ]);
+      return results;
+    } catch (error: any) {
+      logger.error('Error getting scan data by batch ID:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get late records
    */
   async getLateRecords(
@@ -328,17 +385,20 @@ class ScanDataService extends BaseCrudService<ScanData> {
     const errors: ImportErrorEntry[] = [];
     const warnings: string[] = [];
     const employeeCache = new Map<string, string | null>();
+    const projectCheckCache = new Map<string, boolean>();
     const processedKeys = new Set<string>();
+    const rowSummaries: RowSummary[] = [];
 
     let successfulRecords = 0;
     let duplicateRecords = 0;
+    let failedRecords = 0;
     let batch = db.batch();
     let operationsInBatch = 0;
     const BATCH_WRITE_LIMIT = 400;
     const CHECK_CHUNK_SIZE = 400;
 
     const commitBatch = async () => {
-      if (operationsInBatch === 0) {
+      if (options.dryRun || operationsInBatch === 0) {
         return;
       }
 
@@ -357,19 +417,34 @@ class ScanDataService extends BaseCrudService<ScanData> {
           record.scanDateTime
         );
         if (processedKeys.has(uniqueKey)) {
-          warnings.push(
-            `ข้ามข้อมูลซ้ำ: ${record.employeeNumber} เวลา ${record.scanDateTime.toISOString()} (แถว ${record.rowNumber})`
-          );
+          const warning = `ข้ามข้อมูลซ้ำ: ${record.employeeNumber} เวลา ${record.scanDateTime.toISOString()} (แถว ${record.rowNumber})`;
+          warnings.push(warning);
+          rowSummaries.push({
+            row: record.rowNumber,
+            status: 'duplicate',
+            employeeNumber: record.employeeNumber,
+            data: record.rowData || record.rawData,
+            error: 'ข้อมูลซ้ำในไฟล์เดียวกัน'
+          });
           continue;
         }
         processedKeys.add(uniqueKey);
 
         if (record.scanDateTime.getTime() > importedAt.getTime() + 60_000) {
+          const errMsg = 'เวลาสแกนอยู่ในอนาคต';
           errors.push({
             row: record.rowNumber,
             employeeNumber: record.employeeNumber,
-            error: 'เวลาสแกนอยู่ในอนาคต',
+            error: errMsg,
           });
+          rowSummaries.push({
+            row: record.rowNumber,
+            status: 'failed',
+            employeeNumber: record.employeeNumber,
+            data: record.rowData || record.rawData,
+            error: errMsg
+          });
+          failedRecords++;
           continue;
         }
 
@@ -378,18 +453,53 @@ class ScanDataService extends BaseCrudService<ScanData> {
         );
 
         if (dailyContractorId === undefined) {
-          const contractor =
-            await dailyContractorService.findByEmployeeIdOrHistory(record.employeeNumber);
-          dailyContractorId = contractor?.id ?? null;
+          const contractor = await dailyContractorService.findByEmployeeIdOrHistory(record.employeeNumber);
+
+          if (!contractor) {
+            dailyContractorId = null;
+          } else {
+            dailyContractorId = contractor.id;
+            // Also cache project match
+            const isAssigned = contractor.projectLocationIds?.includes(options.projectLocationId) ?? false;
+            projectCheckCache.set(record.employeeNumber, isAssigned);
+          }
           employeeCache.set(record.employeeNumber, dailyContractorId);
         }
 
         if (!dailyContractorId) {
+          const errMsg = 'ไม่พบข้อมูลแรงงานที่มีรหัสนี้ (หาจากทุกโครงการแล้ว)';
           errors.push({
             row: record.rowNumber,
             employeeNumber: record.employeeNumber,
-            error: 'ไม่พบข้อมูลแรงงานที่มีรหัสนี้',
+            error: errMsg,
           });
+          rowSummaries.push({
+            row: record.rowNumber,
+            status: 'failed',
+            employeeNumber: record.employeeNumber,
+            data: record.rowData || record.rawData,
+            error: errMsg
+          });
+          failedRecords++;
+          continue;
+        }
+
+        const isAssignedToProject = projectCheckCache.get(record.employeeNumber);
+        if (!isAssignedToProject) {
+          const errMsg = 'พบคนงานในระบบแต่ไม่ได้ถูกมอบหมายให้โครงการนี้';
+          errors.push({
+            row: record.rowNumber,
+            employeeNumber: record.employeeNumber,
+            error: errMsg,
+          });
+          rowSummaries.push({
+            row: record.rowNumber,
+            status: 'failed',
+            employeeNumber: record.employeeNumber,
+            data: record.rowData || record.rawData,
+            error: errMsg
+          });
+          failedRecords++;
           continue;
         }
 
@@ -431,7 +541,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
           uniqueKey,
           rowNumber: record.rowNumber,
           employeeNumber: record.employeeNumber,
-          docRef,
+          docRef: docRef as any,
           scanData,
         });
       } catch (error: any) {
@@ -439,32 +549,56 @@ class ScanDataService extends BaseCrudService<ScanData> {
           error: error?.message,
           row: record.rowNumber,
         });
+        const errMsg = error?.message || 'ไม่สามารถบันทึกข้อมูลแถวนี้ได้';
         errors.push({
           row: record.rowNumber,
           employeeNumber: record.employeeNumber,
-          error: error?.message || 'ไม่สามารถบันทึกข้อมูลแถวนี้ได้',
+          error: errMsg,
         });
+        rowSummaries.push({
+          row: record.rowNumber,
+          status: 'failed',
+          employeeNumber: record.employeeNumber,
+          data: record.rowData || record.rawData,
+          error: errMsg
+        });
+        failedRecords++;
       }
     }
 
     for (let i = 0; i < preparedRecords.length; i += CHECK_CHUNK_SIZE) {
       const chunk = preparedRecords.slice(i, i + CHECK_CHUNK_SIZE);
       const refs = chunk.map((item) => item.docRef);
-      const snapshots = await db.getAll(...refs);
+      const snapshots = await db.getAll(...(refs as any));
 
       for (let index = 0; index < snapshots.length; index += 1) {
         const item = chunk[index];
         const snapshot = snapshots[index];
+        const originalRecord = records.find(r => r.rowNumber === item.rowNumber);
 
         if (snapshot?.exists) {
           duplicateRecords += 1;
-          warnings.push(
-            `ข้อมูลซ้ำ: ${item.employeeNumber} เวลา ${item.scanData.scanDateTime.toISOString()} (แถว ${item.rowNumber})`
-          );
+          const warning = `ข้อมูลซ้ำ: ${item.employeeNumber} เวลา ${item.scanData.scanDateTime.toISOString()} (แถว ${item.rowNumber})`;
+          warnings.push(warning);
+          rowSummaries.push({
+            row: item.rowNumber,
+            status: 'duplicate',
+            employeeNumber: item.employeeNumber,
+            data: originalRecord?.rowData || originalRecord?.rawData,
+            error: 'ข้อมูลซ้ำในระบบ'
+          });
         } else {
-          batch.set(item.docRef, item.scanData, { merge: false });
-          operationsInBatch += 1;
+          if (!options.dryRun) {
+            batch.set(item.docRef as any, item.scanData, { merge: false });
+            operationsInBatch += 1;
+          }
           successfulRecords += 1;
+          rowSummaries.push({
+            row: item.rowNumber,
+            status: 'success',
+            employeeNumber: item.employeeNumber,
+            data: originalRecord?.rowData || originalRecord?.rawData
+          });
         }
 
         if (operationsInBatch >= BATCH_WRITE_LIMIT) {
@@ -475,23 +609,35 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     await commitBatch();
 
-    logger.info('Bulk scan data import completed', {
+    // Sort summaries by EmployeeNumber then row number for consistent display as requested
+    rowSummaries.sort((a, b) => {
+      if (a.employeeNumber && b.employeeNumber) {
+        if (a.employeeNumber !== b.employeeNumber) {
+          return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
+        }
+      }
+      return a.row - b.row;
+    });
+
+    logger.info(`Bulk scan data import completed ${options.dryRun ? '(Dry Run)' : ''}`, {
       importBatchId,
       totalRecords: records.length,
       successfulRecords,
-      failedRecords: errors.length,
+      failedRecords,
       warnings: warnings.length,
       duplicateRecords,
     });
 
     return {
-      success: errors.length === 0,
+      success: failedRecords === 0,
       importBatchId,
       totalRecords: records.length,
       successfulRecords,
-      failedRecords: errors.length,
+      failedRecords,
+      duplicateRecords,
       errors,
       warnings,
+      records: rowSummaries
     };
   }
 

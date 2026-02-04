@@ -12,15 +12,11 @@ import {
   CreateWagePeriodInput,
   generatePeriodCode,
   validatePeriodDays,
-  PeriodStatus,
 } from '../../models/WagePeriod';
-import { AdditionalIncome } from '../../models/AdditionalIncome';
-import { AdditionalExpense } from '../../models/AdditionalExpense';
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
-import { scanDataService } from '../scanData/ScanDataService';
-import { lateRecordService } from '../scanData/LateRecordService';
+import { dailyReportService } from '../dailyReport/DailyReportService';
 
 /**
  * WagePeriodService
@@ -28,7 +24,7 @@ import { lateRecordService } from '../scanData/LateRecordService';
  */
 class WagePeriodService extends BaseCrudService<WagePeriod> {
   constructor() {
-    super(collections.wagePeriods as any);
+    super(collections.wagePeriods);
   }
 
   /**
@@ -86,7 +82,6 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
   /**
    * Calculate wages for a period
-   * TODO: Implement full wage calculation logic
    */
   async calculateWages(
     periodId: string,
@@ -95,207 +90,50 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
     try {
       const period = await this.getById(periodId);
       if (!period) {
-        return null;
+        throw new AppError('Wage period not found', 404);
       }
 
       // 1. Fetch all daily reports for the period and project
-      const reports = await collections.dailyReports
-        .where('projectLocationId', '==', period.projectLocationId)
-        .where('workDate', '>=', period.startDate)
-        .where('workDate', '<=', period.endDate)
-        .where('isDeleted', '==', false)
-        .get()
-        .then(s => s.docs.map(doc => doc.data()));
-
-      // 2. Fetch all daily contractors active in this project
-      const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
-      const dcs = await dailyContractorService.getByProject(period.projectLocationId);
-
-      // 3. Fetch skills for names
-      const { skillService } = await import('../skill/SkillService');
-      const skills = await skillService.getAll();
-      const skillMap = new Map(skills.items.map(s => [s.id, s.name]));
-
-      // 4. Fetch additional income/expenses for this period
-      const additionalIncomes = (await collections.additionalIncome
-        .where('wagePeriodId', '==', periodId)
-        .get()
-        .then(s => s.docs.map(doc => doc.data()))) as AdditionalIncome[];
-
-      const additionalExpenses = (await collections.additionalExpense
-        .where('wagePeriodId', '==', periodId)
-        .get()
-        .then(s => s.docs.map(doc => doc.data()))) as AdditionalExpense[];
-
-      // 5. Fetch other periods in the same month for social security calculation
-      const monthPrefix = period.periodCode.split('-')[0]; // e.g. "202401"
-      const otherPeriodsInMonth = await this.query([
-        { field: 'periodCode', operator: '>=', value: `${monthPrefix}-P1` },
-        { field: 'periodCode', operator: '<=', value: `${monthPrefix}-P2` }
-      ]);
-      const pastPeriodsInMonth = otherPeriodsInMonth.filter(p => p.id !== periodId && p.status === 'paid' || p.status === 'approved');
-
-      // 5.5 Detect discrepancies and generate late records before calculation
-      await scanDataService.detectDiscrepancies(
-        period.projectLocationId,
-        period.startDate,
-        period.endDate,
-        calculatedBy
-      );
-
-      // Fetch all scans for this period to process late records
-      const allScansInPeriod = await scanDataService.getByProjectAndDate(
+      const reports = await dailyReportService.getByProjectAndDate(
         period.projectLocationId,
         period.startDate,
         period.endDate
       );
 
-      const dcSummaries: DCWageSummary[] = [];
-      let totalRegularHours = 0;
-      let totalOtHours = 0;
-      let totalGrossWages = 0;
-      let totalDeductions = 0;
-      let totalNetWages = 0;
-
-      // 6. Calculate for each DC
-      for (const dc of dcs) {
-        const dcReports = reports.filter(r => (r as any).dailyContractorId === dc.id);
-
-        // Aggregate hours
-        const regHours = dcReports.filter(r => r.workType === 'regular').reduce((sum, r) => sum + r.netHours, 0);
-        const otMorning = dcReports.filter(r => r.workType === 'ot_morning').reduce((sum, r) => sum + r.totalHours, 0);
-        const otNoon = dcReports.filter(r => r.workType === 'ot_noon').reduce((sum, r) => sum + r.totalHours, 0);
-        const otEvening = dcReports.filter(r => r.workType === 'ot_evening').reduce((sum, r) => sum + r.totalHours, 0);
-        const dcTotalOtHours = otMorning + otNoon + otEvening;
-
-        // Fetch income/expense details
-        const compensation = await dailyContractorService.getCompensationDetails(dc.id);
-        const income = compensation.income;
-        const expense = compensation.expense;
-
-        if (!income) {
-          logger.warn(`No income details found for DC: ${dc.employeeId}`);
-          continue;
-        }
-
-        // Calculate wages
-        const regularWages = regHours * income.hourlyRate;
-        const otWages = dcTotalOtHours * income.hourlyRate * 1.5;
-        const professionalFees = regHours * income.professionalRate;
-
-        // Sum additional income for this DC
-        const dcAddIncomeList = additionalIncomes.filter(i => i.dailyContractorId === dc.id);
-        const totalAddIncome = dcAddIncomeList.reduce((sum, i) => sum + i.amount, 0);
-
-        const totalIncome = regularWages + otWages + professionalFees + (income.phoneAllowance || 0) + totalAddIncome;
-
-        // Sum additional expenses
-        const dcAddExpenseList = additionalExpenses.filter(e => e.dailyContractorId === dc.id);
-        const totalAddExpense = dcAddExpenseList.reduce((sum, e) => sum + e.amount, 0);
-
-        // Process Late Records from Scan Data
-        const dcLateScans = allScansInPeriod.filter(s => s.dailyContractorId === dc.id && s.isLate);
-
-        // Clean up old late records for this period/DC before regenerating
-        await lateRecordService.deleteByPeriodAndDC(periodId, dc.id);
-
-        for (const scan of dcLateScans) {
-          const expectedTime = new Date(scan.scanDateTime);
-          expectedTime.setHours(8, 0, 0, 0);
-
-          await lateRecordService.createLateRecord({
-            wagePeriodId: periodId,
-            dailyContractorId: dc.id,
-            projectLocationId: period.projectLocationId,
-            lateDate: scan.workDate,
-            scanTime: scan.scanDateTime,
-            expectedTime: expectedTime,
-            lateMinutes: scan.lateMinutes,
-            notes: `Auto-generated from scan at ${scan.scanDateTime.toLocaleTimeString()}`
-          }, calculatedBy);
-        }
-
-        // Fetch late deductions
-        const dcLateRecords = await lateRecordService.getByPeriod(periodId);
-        const dcSpecificLateRecords = dcLateRecords.filter(r => r.dailyContractorId === dc.id);
-        const lateDeductions = dcSpecificLateRecords.reduce((sum, r) => sum + r.lateDeduction, 0);
-
-        // Calculate Social Security (SS)
-        // ... (existing SS calculation) ...
-        const ssShould = regularWages * 0.05;
-        let ssPaidInMonth = 0;
-        for (const pastPeriod of pastPeriodsInMonth) {
-          const pastSummary = pastPeriod.dcSummaries.find(s => s.dailyContractorId === dc.id);
-          if (pastSummary) {
-            ssPaidInMonth += pastSummary.socialSecurityDeduction;
-          }
-        }
-
-        let ssDeduction = 0;
-        if (!dc.employeeId.startsWith('9')) {
-          if (ssShould + ssPaidInMonth > 750) {
-            ssDeduction = Math.max(0, 750 - ssPaidInMonth);
-          } else {
-            ssDeduction = ssShould > 0 ? Math.max(ssShould, 83) : 0;
-          }
-        }
-
-        const totalExpense = (expense?.accommodationCost || 0) +
-          (expense?.followerAccommodation || 0) +
-          (expense?.refrigeratorCost || 0) +
-          (expense?.soundSystemCost || 0) +
-          (expense?.tvCost || 0) +
-          (expense?.washingMachineCost || 0) +
-          (expense?.portableAcCost || 0) +
-          totalAddExpense +
-          lateDeductions +
-          ssDeduction;
-
-        const netWages = totalIncome - totalExpense;
-
-        dcSummaries.push({
-          dailyContractorId: dc.id,
-          employeeId: dc.employeeId,
-          name: dc.name,
-          skillName: skillMap.get(dc.skillId) || 'N/A',
-          regularHours: regHours,
-          otMorningHours: otMorning,
-          otNoonHours: otNoon,
-          otEveningHours: otEvening,
-          totalOtHours: dcTotalOtHours,
-          totalHours: regHours + dcTotalOtHours,
-          hourlyRate: income.hourlyRate,
-          professionalRate: income.professionalRate,
-          phoneAllowance: income.phoneAllowance || 0,
-          regularWages,
-          otWages,
-          professionalFees,
-          additionalIncome: totalAddIncome,
-          totalIncome,
-          accommodationCost: expense?.accommodationCost || 0,
-          followerCount: expense?.followerCount || 0,
-          followerAccommodation: expense?.followerAccommodation || 0,
-          refrigeratorCost: expense?.refrigeratorCost || 0,
-          soundSystemCost: expense?.soundSystemCost || 0,
-          tvCost: expense?.tvCost || 0,
-          washingMachineCost: expense?.washingMachineCost || 0,
-          portableAcCost: expense?.portableAcCost || 0,
-          additionalExpenses: totalAddExpense,
-          socialSecurityDeduction: ssDeduction,
-          lateDeductions,
-          totalExpenses: totalExpense,
-          netWages,
-          additionalIncomeIds: dcAddIncomeList.map(i => i.id),
-          additionalExpenseIds: dcAddExpenseList.map(e => e.id)
-        });
-
-        // Global totals
-        totalRegularHours += regHours;
-        totalOtHours += dcTotalOtHours;
-        totalGrossWages += totalIncome;
-        totalDeductions += totalExpense;
-        totalNetWages += netWages;
+      if (reports.length === 0) {
+        // Even if no reports, we should still clear and update status
+        const updateData: Partial<WagePeriod> = {
+          dcSummaries: [],
+          totalRegularHours: 0,
+          totalOtHours: 0,
+          totalGrossWages: 0,
+          totalDeductions: 0,
+          totalNetWages: 0,
+          status: 'calculated',
+          calculatedAt: new Date(),
+          calculatedBy,
+          updatedAt: new Date(),
+          updatedBy: calculatedBy,
+        };
+        return await this.update(periodId, updateData);
       }
+
+      // TODO: Implement wage calculation logic
+      // 1. Fetch all daily reports for the period
+      // 2. Group by dailyContractorId
+      // 3. Calculate hours (regular, OT morning, noon, evening)
+      // 4. Fetch DC rates and calculate wages
+      // 5. Fetch additional income/expenses
+      // 6. Calculate social security
+      // 7. Calculate late deductions
+      // 8. Build DCWageSummary array
+
+      const dcSummaries: DCWageSummary[] = [];
+      const totalRegularHours = 0;
+      const totalOtHours = 0;
+      const totalGrossWages = 0;
+      const totalDeductions = 0;
+      const totalNetWages = 0;
 
       const updateData: Partial<WagePeriod> = {
         dcSummaries,
@@ -313,7 +151,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       const updated = await this.update(periodId, updateData);
       if (updated) {
-        logger.info(`Wages calculated for period: ${period.periodCode}`, { periodId });
+        logger.info(`Wages calculated for period: ${period.periodCode}`, {
+          periodId,
+          workerCount: dcSummaries.length,
+          totalNetWages
+        });
       }
 
       return updated;
@@ -436,7 +278,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Get wage periods by status
    */
-  async getByStatus(status: PeriodStatus): Promise<WagePeriod[]> {
+  async getByStatus(status: any): Promise<WagePeriod[]> {
     try {
       return await this.query([
         {

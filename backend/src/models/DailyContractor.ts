@@ -146,7 +146,7 @@ export interface UpdateDailyContractorInput {
  * Firestore document converter for DailyContractor
  */
 export const dailyContractorConverter = {
-  toFirestore: (dc: Omit<DailyContractor, 'id'>): any => {
+  toFirestore: (dc: DailyContractor): any => {
     return {
       employeeId: dc.employeeId,
       username: dc.username || null,

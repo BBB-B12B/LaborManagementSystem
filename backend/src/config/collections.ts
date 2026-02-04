@@ -23,6 +23,7 @@ import {
   scanDataDiscrepancyConverter,
   lateRecordConverter,
   fileAttachmentConverter,
+  importedWageSystemConverter,
 } from '../models';
 
 /**
@@ -46,6 +47,7 @@ export const COLLECTIONS = {
   SCAN_DATA_DISCREPANCIES: 'scanDataDiscrepancies',
   LATE_RECORDS: 'lateRecords',
   FILE_ATTACHMENTS: 'fileAttachments',
+  IMPORTED_WAGE_SYSTEM: 'Wage Calculation system',
 } as const;
 
 /**
@@ -89,6 +91,9 @@ export const collections = {
   fileAttachments: db
     .collection(COLLECTIONS.FILE_ATTACHMENTS)
     .withConverter(fileAttachmentConverter),
+  importedWageSystem: db
+    .collection(COLLECTIONS.IMPORTED_WAGE_SYSTEM)
+    .withConverter(importedWageSystemConverter),
 };
 
 /**
