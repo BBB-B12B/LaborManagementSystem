@@ -39,6 +39,9 @@ const upload = multer({
 router.get('/template', (_req: Request, res: Response) => {
   try {
     const headers = [
+
+
+
       'EmployeeNumber',
       'Date',
       'Time1',
@@ -333,6 +336,41 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
     res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
+
+/**
+ * POST /api/scan-data/discrepancies/:id/resolve
+ */
+router.post(
+  '/discrepancies/:id/resolve',
+  authorize(['AM', 'MD']),
+  [
+    body('resolutionMethod').isIn(['update_dr', 'create_dr', 'verify', 'ignore']),
+    body('resolutionNote').notEmpty().withMessage('กรุณาระบุหมายเหตุ'),
+    body('updatedHours').optional().isFloat({ min: 0 })
+  ],
+  async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    try {
+      const errors = validationResult(req as Request);
+      if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
+
+      const resolvedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+      const result = await scanDataService.resolveDiscrepancy(
+        req.params.id,
+        {
+          resolutionMethod: req.body.resolutionMethod,
+          resolutionNote: req.body.resolutionNote,
+          updatedHours: req.body.updatedHours ? parseFloat(req.body.updatedHours) : undefined
+        },
+        resolvedBy
+      );
+
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+  }
+);
 
 /**
  * GET /api/scan-data/late

@@ -794,6 +794,126 @@ class ScanDataService extends BaseCrudService<ScanData> {
       throw error;
     }
   }
+
+  /**
+   * Resolve discrepancy
+   * FR-SD-013: Resolution methods
+   */
+  async resolveDiscrepancy(
+    discrepancyId: string,
+    resolutionData: {
+      resolutionMethod: 'update_dr' | 'create_dr' | 'verify' | 'ignore';
+      resolutionNote: string;
+      updatedHours?: number;
+    },
+    resolvedBy: string
+  ): Promise<any> {
+    try {
+      const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discrepancyId);
+      const doc = await discRef.get();
+      if (!doc.exists) {
+        throw new AppError('Discrepancy not found', 404);
+      }
+
+      const discrepancy = doc.data() as any;
+      if (discrepancy.status !== 'pending') {
+        throw new AppError('Discrepancy is already resolved', 400);
+      }
+
+      const now = new Date();
+      let newStatus = 'verified';
+      let dailyReportId = discrepancy.dailyReportId;
+
+      const { resolutionMethod, resolutionNote, updatedHours } = resolutionData;
+
+      if (resolutionMethod === 'update_dr') {
+        if (!dailyReportId || dailyReportId === 'missing') {
+          throw new AppError('No Daily Report found to update', 400);
+        }
+
+        const report = await dailyReportService.getById(dailyReportId);
+        if (!report) {
+          throw new AppError('Daily Report not found for update', 404);
+        }
+
+        // Use updatedHours to adjust end time if provided
+        let newEndTime = report.endTime;
+        if (updatedHours !== undefined && updatedHours >= 0) {
+          const msToAdd = (updatedHours + report.breakHours) * 60 * 60 * 1000;
+          // newEndTime = startTime + msToAdd (converting hours to ms)
+          newEndTime = new Date(report.startTime.getTime() + msToAdd);
+        }
+
+        await dailyReportService.updateDailyReport(
+          dailyReportId,
+          {
+            endTime: newEndTime,
+            notes: `Updated from ScanData Discrepancy resolution: ${resolutionNote}`
+          },
+          resolvedBy
+        );
+        newStatus = 'fixed';
+
+      } else if (resolutionMethod === 'create_dr') {
+        if (discrepancy.discrepancyType !== 'Type3') {
+          throw new AppError('Cannot create Daily Report for this discrepancy type', 400);
+        }
+
+        const scans = await this.getByContractorAndDate(
+          discrepancy.dailyContractorId,
+          new Date(discrepancy.workDate),
+          new Date(discrepancy.workDate)
+        );
+
+        const workDate = new Date(discrepancy.workDate);
+        let startTime = new Date(workDate.setHours(8, 0, 0, 0));
+        let endTime = new Date(workDate.setHours(17, 0, 0, 0));
+
+        if (scans && scans.length >= 2) {
+          const times = scans.map(s => s.scanDateTime.getTime()).sort();
+          startTime = new Date(times[0]);
+          endTime = new Date(times[times.length - 1]);
+        }
+
+        const newReport = await dailyReportService.createDailyReport(
+          {
+            projectLocationId: discrepancy.projectLocationId,
+            dailyContractorId: discrepancy.dailyContractorId,
+            taskName: 'Auto-created from ScanData',
+            workDate: new Date(discrepancy.workDate),
+            startTime,
+            endTime,
+            workType: 'regular',
+            notes: `Auto-created from ScanData Discrepancy resolution: ${resolutionNote}`,
+            status: 'draft',
+          },
+          resolvedBy
+        );
+        dailyReportId = newReport.id;
+        newStatus = 'fixed';
+      } else if (resolutionMethod === 'ignore') {
+        newStatus = 'ignored';
+      }
+
+      // Update discrepancy document
+      const updateData = {
+        status: newStatus,
+        resolutionMethod,
+        resolutionNote,
+        resolvedAt: now,
+        resolvedBy,
+        ...(dailyReportId && dailyReportId !== 'missing' ? { dailyReportId } : {})
+      };
+
+      await discRef.update(updateData);
+
+      const updatedDoc = await discRef.get();
+      return { id: updatedDoc.id, ...updatedDoc.data() };
+    } catch (error: any) {
+      logger.error('Error resolving discrepancy:', error);
+      throw error;
+    }
+  }
 }
 
 // Singleton instance
