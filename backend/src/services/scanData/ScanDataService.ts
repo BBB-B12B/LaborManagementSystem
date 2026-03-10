@@ -430,7 +430,11 @@ class ScanDataService extends BaseCrudService<ScanData> {
         }
         processedKeys.add(uniqueKey);
 
-        if (record.scanDateTime.getTime() > importedAt.getTime() + 60_000) {
+        // Support deployments where Server Timezone might be UTC instead of UTC+7 (Thailand)
+        // Add 7 hours tolerance just in case importedAt (new Date()) falls behind the actual local time 
+        // provided by the scan machines (+ an extra minute overlap)
+        const timezoneToleranceMs = 7 * 60 * 60 * 1000;
+        if (record.scanDateTime.getTime() > importedAt.getTime() + timezoneToleranceMs + 60_000) {
           const errMsg = 'เวลาสแกนอยู่ในอนาคต';
           errors.push({
             row: record.rowNumber,

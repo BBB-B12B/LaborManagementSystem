@@ -618,8 +618,21 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       <TableCell sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)' }}>
                         {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้า', 'morning_ot'], '0.00')}
                       </TableCell>
-                      <TableCell sx={{ color: 'error.main', maxWidth: 200 }}>
+                      <TableCell sx={{ color: 'error.main', maxWidth: 250 }}>
                         {record.error}
+                        {record.error?.includes('ไม่พบข้อมูลแรงงาน') && (
+                          <Box sx={{ mt: 0.5 }}>
+                            <Button
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem', py: 0, px: 1 }}
+                              onClick={() => window.open('/labor/dc-management', '_blank')}
+                            >
+                              เพิ่มพนักงาน
+                            </Button>
+                          </Box>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -752,6 +765,18 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
           <>
             <Button onClick={handleUploadAnother} variant="outlined" sx={{ borderRadius: 2 }}>
               Upload ไฟล์อื่น
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button
+              onClick={() => {
+                handleClose();
+                window.location.href = '/scan-data-monitoring';
+              }}
+              variant="contained"
+              color="info"
+              sx={{ borderRadius: 2, px: 3, mr: 1 }}
+            >
+              ตรวจสอบ Discrepancies
             </Button>
             <Button onClick={handleClose} variant="contained" sx={{ borderRadius: 2, px: 4, bgcolor: '#2e3b4e' }}>
               ปิดหน้าต่าง

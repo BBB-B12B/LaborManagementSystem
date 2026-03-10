@@ -113,21 +113,20 @@ interface DatLineParseResult {
 }
 
 function parseDatLine(line: string): DatLineParseResult | null {
-  const delimiter = line.includes(',')
-    ? ','
-    : line.includes('\t')
-      ? '\t'
-      : undefined;
+  const hasComma = line.includes(',');
+  const hasTab = line.includes('\t');
 
-  let tokens = delimiter
-    ? line
-      .split(delimiter)
-      .flatMap((segment) => segment.split(/\s+/g))
-    : line.split(/\s+/g);
+  let tokens: string[] = [];
 
-  tokens = tokens
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
+  if (hasComma) {
+    tokens = line.split(',').map(t => t.trim());
+  } else if (hasTab) {
+    tokens = line.split('\t').map(t => t.trim());
+  } else {
+    tokens = line.split(/\s+/g).map(t => t.trim());
+  }
+
+  tokens = tokens.filter((token) => token.length > 0);
 
   if (tokens.length < 2) {
     return null;
@@ -146,7 +145,10 @@ function parseDatLine(line: string): DatLineParseResult | null {
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     const timePattern = /^\d{2}:\d{2}(:\d{2})?$/;
 
-    if (datePattern.test(maybeDate) && timePattern.test(maybeTime)) {
+    // Support DD/MM/YYYY formatting check as well
+    const alterDatePattern = /^\d{2}\/\d{2}\/\d{4}$/;
+
+    if ((datePattern.test(maybeDate) || alterDatePattern.test(maybeDate)) && timePattern.test(maybeTime)) {
       dateValue = `${maybeDate} ${maybeTime}`;
       extras = remainingTokens.slice(2);
     }
