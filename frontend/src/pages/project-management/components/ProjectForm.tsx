@@ -1,7 +1,11 @@
 import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Box, Button, Grid, TextField, Alert, CircularProgress, MenuItem } from '@mui/material';
+import { Box, Button, Grid, TextField, Alert, CircularProgress, MenuItem, InputAdornment } from '@mui/material';
+import LabelIcon from '@mui/icons-material/Label';
+import CodeIcon from '@mui/icons-material/Code';
+import BusinessIcon from '@mui/icons-material/Business';
+import PersonIcon from '@mui/icons-material/Person';
 import {
   projectSchema,
   type ProjectFormData,
@@ -138,7 +142,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     <Box
       component="form"
       onSubmit={handleSubmit(handleFormSubmit, handleFormError)}
-      sx={{ maxWidth: 900, mx: 'auto' }}
+      sx={{ maxWidth: 900, mx: 'auto', pt: 1 }}
     >
       <Grid container spacing={3}>
 
@@ -162,7 +166,15 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 helperText={errors.code?.message}
                 disabled={isLoading || isSubmitting || (codeLoading && codeLocked)}
                 inputProps={{ style: { textTransform: 'uppercase' } }}
-                InputProps={{ readOnly: mode === 'create' && codeLocked }}
+                InputProps={{
+                  readOnly: mode === 'create' && codeLocked,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LabelIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: '12px', bgcolor: '#f5f5f5' },
+                }}
                 InputLabelProps={{ shrink: true }}
               />
             )}
@@ -183,6 +195,14 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 helperText={errors.projectCode?.message}
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <CodeIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: '12px' },
+                }}
               />
             )}
           />
@@ -203,6 +223,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 helperText={errors.department?.message}
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  sx: { borderRadius: '12px' },
+                }}
               >
                 {departmentOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
@@ -229,6 +252,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 helperText={errors.status?.message}
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  sx: { borderRadius: '12px' },
+                }}
               >
                 {PROJECT_STATUS_OPTIONS.map((option) => (
                   <MenuItem key={option} value={option}>
@@ -254,6 +280,14 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 helperText={errors.projectName?.message}
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <BusinessIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: '12px' },
+                }}
               />
             )}
           />
@@ -272,19 +306,28 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 helperText={errors.projectManager?.message}
                 disabled={isLoading || isSubmitting}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: '12px' },
+                }}
               />
             )}
           />
         </Grid>
 
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 1 }}>
             {onCancel && (
               <Button
                 variant="outlined"
                 color="error"
                 onClick={onCancel}
                 disabled={submitDisabled}
+                sx={{ borderRadius: '10px', px: 3 }}
               >
                 ยกเลิก
               </Button>
@@ -294,7 +337,15 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               variant="contained"
               color="success"
               disabled={submitDisabled}
-              startIcon={showSubmitSpinner ? <CircularProgress size={16} /> : null}
+              startIcon={showSubmitSpinner ? <CircularProgress size={16} color="inherit" /> : null}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                py: 1,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
               {submitDisabled ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
             </Button>

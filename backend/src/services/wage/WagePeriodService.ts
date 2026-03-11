@@ -194,9 +194,13 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         const dcSpecificLateRecords = dcLateRecords.filter(r => r.dailyContractorId === dc.id);
         const lateDeductions = dcSpecificLateRecords.reduce((sum, r) => sum + r.lateDeduction, 0);
 
-        // Calculate Social Security (SS)
-        // ... (existing SS calculation) ...
-        const ssShould = regularWages * 0.05;
+        // Calculate Social Security (SS) dynamically using the new Rules engine
+        let ssDeduction = 0;
+        
+        // 1) First check: is the employee exempt? We still respect the "9" rule inside the service or we can check it upfront.
+        // But the Rules engine handles the employeeId exemption natively
+        
+        // 2) Deduct what was already paid this month
         let ssPaidInMonth = 0;
         for (const pastPeriod of pastPeriodsInMonth) {
           const pastSummary = pastPeriod.dcSummaries.find(s => s.dailyContractorId === dc.id);
@@ -205,13 +209,17 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           }
         }
 
-        let ssDeduction = 0;
-        if (!dc.employeeId.startsWith('9')) {
-          if (ssShould + ssPaidInMonth > 750) {
-            ssDeduction = Math.max(0, 750 - ssPaidInMonth);
-          } else {
-            ssDeduction = ssShould > 0 ? Math.max(ssShould, 83) : 0;
-          }
+        // 3) Evaluate current period's raw deduction based on Admin rules (Using Total Income per User Request)
+        const { socialSecurityRuleService } = await import('./SocialSecurityRuleService');
+        const rawSSDeduction = await socialSecurityRuleService.calculateDeduction(totalIncome, dc.employeeId);
+        
+        // 4) Apply logic: max SS per month is typically 750 combined
+        if (rawSSDeduction > 0) {
+            if (rawSSDeduction + ssPaidInMonth > 750) {
+                ssDeduction = Math.max(0, 750 - ssPaidInMonth);
+            } else {
+                ssDeduction = rawSSDeduction;
+            }
         }
 
         const totalExpense = (expense?.accommodationCost || 0) +

@@ -296,7 +296,7 @@ export function UserForm({
               render={({ field }) => (
                 <DatePicker
                   label='วันเกิด'
-                  value={field.value}
+                  value={field.value ?? null}
                   onChange={field.onChange}
                   error={!!errors.dateOfBirth}
                   helperText={errors.dateOfBirth?.message}
@@ -393,16 +393,29 @@ export function UserForm({
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
               <Button
+                variant='outlined'
+                color='error'
+                onClick={onCancel}
+                disabled={isLoading || isSubmitting}
+                sx={{ borderRadius: '10px', px: 3 }}
+              >
+                ยกเลิก
+              </Button>
+              <Button
                 type='submit'
                 variant='contained'
-                color='primary'
+                color='success'
                 disabled={isLoading || isSubmitting}
                 startIcon={isSubmitting && <CircularProgress size={20} />}
+                sx={{
+                  borderRadius: '10px',
+                  px: 4,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                }}
               >
                 {mode === 'create' ? 'บันทึกผู้ใช้ใหม่' : 'บันทึกการแก้ไข'}
-              </Button>
-              <Button variant='outlined' onClick={onCancel} disabled={isLoading || isSubmitting}>
-                ยกเลิก
               </Button>
             </Box>
           </Grid>

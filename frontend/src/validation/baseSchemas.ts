@@ -266,7 +266,7 @@ export const roleEnum = createEnum(['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'M
  */
 export const PROJECT_STATUS_VALUES = ['กำลังดำเนินการอยู่', 'ระงับชั่วคราว', 'ปิดโครงการ'] as const;
 export const projectStatusEnum = createEnum(
-  PROJECT_STATUS_VALUES as unknown as string[],
+  PROJECT_STATUS_VALUES as unknown as [string, ...string[]],
   'สถานะโครงการ'
 );
 

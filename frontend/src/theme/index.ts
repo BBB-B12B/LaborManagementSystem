@@ -45,6 +45,7 @@ const infoColors = {
   main: '#2563eb',
   light: '#d6e4ff',
   dark: '#1d4ed8',
+  contrastText: '#ffffff',
 };
 
 const successColors = {

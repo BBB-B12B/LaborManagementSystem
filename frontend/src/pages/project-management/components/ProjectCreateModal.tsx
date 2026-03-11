@@ -317,29 +317,25 @@ export const ProjectCreateModal: React.FC<ProjectCreateModalProps> = ({
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'space-between' }}>
+            <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
                 <Button
                     onClick={onClose}
-                    variant="text"
-                    color="inherit"
+                    variant="outlined"
+                    color="error"
                     disabled={isSubmitting || isLoading}
-                    sx={{ borderRadius: '10px', px: 3, color: 'text.secondary' }}
+                    sx={{ borderRadius: '10px', px: 3 }}
                 >
                     ยกเลิก
                 </Button>
                 <Button
                     onClick={handleSubmit(handleFormSubmit)}
                     variant="contained"
+                    color="success"
                     disabled={isSubmitting || isLoading || codeLoading}
                     sx={{
                         borderRadius: '10px',
                         px: 4,
                         py: 1,
-                        bgcolor: '#1a1a1a',
-                        color: '#ffffff',
-                        '&:hover': {
-                            bgcolor: '#000000',
-                        },
                         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                         textTransform: 'none',
                         fontWeight: 600,

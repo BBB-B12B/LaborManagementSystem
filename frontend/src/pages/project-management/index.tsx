@@ -249,6 +249,7 @@ export default function ProjectListPage() {
             <Typography variant="h4">จัดการโครงการ</Typography>
             <Button
               variant="contained"
+              color="info"
               startIcon={<AddIcon />}
               onClick={handleCreate}
             >

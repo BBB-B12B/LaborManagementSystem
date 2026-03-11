@@ -190,11 +190,37 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/scan-data/late
  */
-router.get('/late', async (_req: Request, res: Response) => {
+router.get('/late', async (req: Request, res: Response) => {
   try {
-    // Note: getLateRecords still needs implementation in Service or use generic Query
-    const lateRecords = await scanDataService.getLateRecords();
-    res.json({ success: true, data: lateRecords });
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = parseInt(req.query.pageSize as string) || 50;
+    const { wagePeriodId, projectLocationId, dailyContractorId, employeeNumber } = req.query;
+
+    const { lateRecordService } = await import('../../services/scanData/LateRecordService');
+
+    let filters: any[] = [];
+    if (wagePeriodId) filters.push({ field: 'wagePeriodId', operator: '==', value: wagePeriodId });
+    if (projectLocationId) filters.push({ field: 'projectLocationId', operator: '==', value: projectLocationId });
+    if (dailyContractorId) filters.push({ field: 'dailyContractorId', operator: '==', value: dailyContractorId });
+    if (employeeNumber) filters.push({ field: 'employeeNumber', operator: '==', value: employeeNumber });
+    
+    let items = await lateRecordService.query(filters);
+    
+    // In-memory pagination since BaseCrudService.query doesn't support pagination directly
+    const total = items.length;
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedItems = items.slice(startIndex, endIndex);
+
+    res.json({ 
+      success: true, 
+      data: paginatedItems,
+      pagination: {
+        total,
+        page,
+        pageSize,
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

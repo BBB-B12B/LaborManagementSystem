@@ -320,3 +320,14 @@
         2. ลบ Unused Import (`ScanData`, `COLLECTIONS`) และตัวแปร (`projectId`, `startDate`, `operationsCount`) ที่ไม่ได้ถูกเรียกใช้งาน
     *   **Result**: Fixed (2026-01-26)
 
+### Task ID: T-340 (Social Security Rules Management)
+**Feature Ref**: F-012 (SS Rules)
+**Status**: [/] Executing
+#### 1. Concept / Goal
+*   สร้างระบบ "การจัดการเกณฑ์ประกันสังคม" ที่ให้ Admin เพิ่ม/ลบ/แก้ไขกฎได้แบบไดนามิก แทนของเดิมที่เกิดสภาวะ Hardcoded 5% เพื่อให้รองรับเงื่อนไขใหม่ๆ
+
+#### 2. Detailed Sub-tasks
+*   [ ] **T-340-1**: (Backend) สร้าง Model, Service, และ API routes สำหรับ `SocialSecurityRule`
+*   [ ] **T-340-2**: (Backend) ปรับปรุง `WagePeriodService` ให้คำนวณเงินประกันสังคมจาก Rule ใน Database แทน Constants แบบฝังในโค้ด
+*   [ ] **T-340-3**: (Frontend) สร้างหน้า UI รายการกฎ (DataGrid) และหน้า Form สำหรับ Admin ลงใน Management Hub
+*   [ ] **T-340-4**: (Frontend) เชื่อม API เรียกใช้กฎจากหน้า UI และปรับปรุง Permissions ให้มีแต่ Admin ที่เข้าเกณฑ์ได้

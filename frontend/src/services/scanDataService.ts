@@ -396,7 +396,7 @@ export async function getLateRecords(
     success: boolean;
     data: LateRecord[];
     pagination: { total: number; page: number; pageSize: number };
-  }>(`/late-records?${params.toString()}`);
+  }>(`/scan-data/late?${params.toString()}`);
 
   return {
     data: response.data.data,

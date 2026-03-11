@@ -436,14 +436,27 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                 </Stack>
             </DialogContent>
 
-            <DialogActions sx={{ p: 2, bgcolor: 'white', borderTop: '1px solid #eee' }}>
+            <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2, bgcolor: 'white', borderTop: '1px solid #eee' }}>
+                <Button
+                    onClick={onClose}
+                    variant="outlined"
+                    color="error"
+                    sx={{ borderRadius: '10px', px: 3 }}
+                >
+                    ยกเลิก
+                </Button>
                 <Button
                     variant="contained"
-                    fullWidth
-                    size="large"
+                    color="success"
                     onClick={handleSave}
-                    sx={{ bgcolor: '#00a152' }}
                     disabled={!regular.taskName || regular.workerIds.length === 0}
+                    sx={{
+                        borderRadius: '10px',
+                        px: 4,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        textTransform: 'none',
+                        fontWeight: 600,
+                    }}
                 >
                     บันทึกรายงาน
                 </Button>

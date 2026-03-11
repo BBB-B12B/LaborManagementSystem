@@ -438,7 +438,7 @@ export default function DiscrepancyDetailPage() {
                         : '-'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {discrepancy.hoursDifference > 0
+                      {(discrepancy.hoursDifference || 0) > 0
                         ? 'ScanData มากกว่า Daily Report'
                         : 'Daily Report มากกว่า ScanData'}
                     </Typography>
@@ -696,12 +696,27 @@ export default function DiscrepancyDetailPage() {
               />
             </Stack>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setResolveDialogOpen(false)}>ยกเลิก</Button>
+          <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+            <Button
+              onClick={() => setResolveDialogOpen(false)}
+              variant="outlined"
+              color="error"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
+              ยกเลิก
+            </Button>
             <Button
               type="submit"
               variant="contained"
+              color="success"
               disabled={resolveMutation.isPending}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
               {resolveMutation.isPending ? 'กำลังบันทึก...' : 'ยืนยัน'}
             </Button>

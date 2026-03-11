@@ -780,8 +780,15 @@ function AdditionalItemsDialog({ open, onClose, dc, periodId, onUpdate }: any) {
           </Box>
         )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>ปิด</Button>
+      <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          color="error"
+          sx={{ borderRadius: '10px', px: 3 }}
+        >
+          ปิด
+        </Button>
       </DialogActions>
     </Dialog>
   );

@@ -333,7 +333,7 @@ export default function MemberManagementPage() {
           </Button>
           <Button
             variant="contained"
-            color="primary"
+            color="info"
             startIcon={<Add />}
             onClick={handleCreateUser}
           >

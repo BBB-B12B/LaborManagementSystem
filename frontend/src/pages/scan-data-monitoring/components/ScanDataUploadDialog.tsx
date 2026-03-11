@@ -469,25 +469,56 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
         )}
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
         {!uploadResult ? (
           <>
-            <Button onClick={handleClose}>ยกเลิก</Button>
+            <Button
+              onClick={handleClose}
+              variant="outlined"
+              color="error"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
+              ยกเลิก
+            </Button>
             <Button
               onClick={handleSubmit(onSubmit)}
               variant="contained"
+              color="success"
               disabled={uploadMutation.isPending || (mode === 'file' && !selectedFile)}
               startIcon={uploadMutation.isPending ? <CircularProgress size={20} /> : (mode === 'text' ? <ContentPaste /> : <CloudUpload />)}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
               {uploadMutation.isPending ? 'กำลัง Process...' : (mode === 'text' ? 'นำเข้าข้อมูล' : 'Upload')}
             </Button>
           </>
         ) : (
           <>
-            <Button onClick={handleUploadAnother} variant="outlined">
+            <Button
+              onClick={handleUploadAnother}
+              variant="outlined"
+              color="primary"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
               Upload อีกครั้ง
             </Button>
-            <Button onClick={handleClose} variant="contained">
+            <Button
+              onClick={handleClose}
+              variant="contained"
+              color="error"
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
               ปิด
             </Button>
           </>

@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import { useFeedbackStore } from '@/store/feedbackStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -116,17 +117,32 @@ apiClient.interceptors.request.use(
       console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
     }
 
+    // Show global loading spinner for mutations (POST, PUT, PATCH, DELETE)
+    // We skip GET to not block the screen during normal data fetching
+    const method = config.method?.toUpperCase();
+    if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      useFeedbackStore.getState().showLoading();
+    }
+
     return config;
   },
   (error) => {
+    useFeedbackStore.getState().hideLoading();
     return Promise.reject(error);
   }
 );
 
 // Response interceptor
 apiClient.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: AxiosResponse) => {
+    // Hide global loading spinner
+    useFeedbackStore.getState().hideLoading();
+    return response;
+  },
   (error: AxiosError) => {
+    // Hide global loading spinner
+    useFeedbackStore.getState().hideLoading();
+
     // Handle common errors
     if (error.response) {
       switch (error.response.status) {

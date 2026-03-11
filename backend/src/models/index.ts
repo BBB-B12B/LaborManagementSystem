@@ -35,3 +35,6 @@ export * from './LateRecord';
 
 // File Models
 export * from './FileAttachment';
+
+// Dynamic Rules
+export * from './SocialSecurityRule';

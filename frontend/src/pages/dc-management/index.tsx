@@ -412,7 +412,7 @@ export default function DCManagementPage() {
           </Button>
           <Button
             variant="contained"
-            color="primary"
+            color="info"
             startIcon={<Add />}
             onClick={handleCreateDC}
           >

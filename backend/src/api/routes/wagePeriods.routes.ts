@@ -37,24 +37,40 @@ router.get(
       }
 
       const { projectId, status } = req.query;
-
-      let periods;
+      let periodsData;
 
       if (projectId) {
-        periods = await wagePeriodService.getByProject(projectId as string);
+        const items = await wagePeriodService.getByProject(projectId as string);
+        periodsData = {
+          wagePeriods: items,
+          total: items.length,
+          page: 1,
+          pageSize: items.length || 50,
+        };
       } else if (status) {
-        periods = await wagePeriodService.getByStatus(status as any);
+        const items = await wagePeriodService.getByStatus(status as any);
+        periodsData = {
+          wagePeriods: items,
+          total: items.length,
+          page: 1,
+          pageSize: items.length || 50,
+        };
       } else {
         const result = await wagePeriodService.getAll({
           page: parseInt(req.query.page as string) || 1,
           pageSize: parseInt(req.query.pageSize as string) || 50,
         });
-        periods = result.items;
+        periodsData = {
+          wagePeriods: result.items,
+          total: result.total,
+          page: result.page,
+          pageSize: result.pageSize,
+        };
       }
 
       res.json({
         success: true,
-        data: periods,
+        data: periodsData,
       });
     } catch (error: any) {
       res.status(500).json({

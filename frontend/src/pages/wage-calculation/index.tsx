@@ -495,12 +495,27 @@ export default function WageCalculationPage() {
               </Grid>
             </Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCreateDialogOpen(false)}>ยกเลิก</Button>
+          <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+            <Button
+              onClick={() => setCreateDialogOpen(false)}
+              variant="outlined"
+              color="error"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
+              ยกเลิก
+            </Button>
             <Button
               variant="contained"
+              color="success"
               onClick={handleSubmit(handleCreatePeriod)}
               disabled={createMutation.isPending}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
               {createMutation.isPending ? <CircularProgress size={20} /> : 'สร้างงวด'}
             </Button>

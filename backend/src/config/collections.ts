@@ -23,6 +23,7 @@ import {
   scanDataDiscrepancyConverter,
   lateRecordConverter,
   fileAttachmentConverter,
+  socialSecurityRuleConverter,
 } from '../models';
 
 /**
@@ -46,6 +47,7 @@ export const COLLECTIONS = {
   SCAN_DATA_DISCREPANCIES: 'scanDataDiscrepancies',
   LATE_RECORDS: 'lateRecords',
   FILE_ATTACHMENTS: 'fileAttachments',
+  SOCIAL_SECURITY_RULES: 'socialSecurityRules',
 } as const;
 
 /**
@@ -89,6 +91,9 @@ export const collections = {
   fileAttachments: db
     .collection(COLLECTIONS.FILE_ATTACHMENTS)
     .withConverter(fileAttachmentConverter),
+  socialSecurityRules: db
+    .collection(COLLECTIONS.SOCIAL_SECURITY_RULES)
+    .withConverter(socialSecurityRuleConverter),
 };
 
 /**

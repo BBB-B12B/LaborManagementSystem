@@ -89,19 +89,19 @@ export function DCForm({
     () => ({
       isActive: true,
       projectLocationIds: [],
-      dailyWageRate: 0,
-      professionalRate: 0,
-      phoneAllowance: 0,
-      otherIncome: 0,
-      housingFee: 0,
-      followerCount: 0,
-      refrigeratorFee: 0,
-      soundSystemFee: 0,
-      tvFee: 0,
-      laundryFee: 0,
-      airConFee: 0,
-      otherDeduction: 0,
-      mouDeductionRate: 0,
+      dailyWageRate: ('' as any),
+      professionalRate: ('' as any),
+      phoneAllowance: ('' as any),
+      otherIncome: ('' as any),
+      housingFee: ('' as any),
+      followerCount: ('' as any),
+      refrigeratorFee: ('' as any),
+      soundSystemFee: ('' as any),
+      tvFee: ('' as any),
+      laundryFee: ('' as any),
+      airConFee: ('' as any),
+      otherDeduction: ('' as any),
+      mouDeductionRate: ('' as any),
       nationality: 'ไทย',
       ...defaultValues,
     }),
@@ -119,12 +119,12 @@ export function DCForm({
   });
 
   // Watch fields for Auto-Calculation
-  const dailyWageRate = useWatch({ control, name: 'dailyWageRate' }) || 0;
-  const followerCount = useWatch({ control, name: 'followerCount' }) || 0;
+  const dailyWageRate = useWatch({ control, name: 'dailyWageRate' });
+  const followerCount = useWatch({ control, name: 'followerCount' });
 
   // Auto-calculated values
-  const otHourlyRate = (Number(dailyWageRate) / 8) * 1.5;
-  const followerFee = Number(followerCount) * 300;
+  const otHourlyRate = dailyWageRate ? (Number(dailyWageRate) / 8) * 1.5 : 0;
+  const followerFee = followerCount ? Number(followerCount) * 300 : 0;
 
   React.useEffect(() => {
     reset(initialValues);
@@ -297,7 +297,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -331,7 +332,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -350,7 +352,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -369,7 +372,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -399,7 +403,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -418,7 +423,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">คน</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -452,7 +458,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -471,7 +478,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -490,7 +498,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -509,7 +518,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -528,7 +538,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -547,7 +558,8 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}

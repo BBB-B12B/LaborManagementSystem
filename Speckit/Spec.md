@@ -176,6 +176,20 @@
 
 ---
 
+### Feature ID: F-012
+**Name**: การจัดการเกณฑ์ประกันสังคม (Social Security Rules Management)
+**Status**: ✅ Complete
+#### 1. User Flow
+*   Admin เข้าเมนู "การจัดการ" (Management Hub) > "การจัดการเกณฑ์ประกันสังคม"
+*   เพิ่ม/ลบ/แก้ไข กฎเกณฑ์การหักเงินประกันสังคม (ระบุเงื่อนไขรายได้, % หรือยอดเงินคงที่, ขั้นต่ำ/สูงสุด)
+*   ระบบนำกฎเหล่านี้ไปใช้ในการคำนวณงวดค่าแรง (Wage Calculation) แทนแบบ Hardcode เดิม
+
+#### 2. Architecture
+*   **Endpoints**: `/api/social-security-rules/*`
+*   **Entities**: `SocialSecurityRule`
+
+---
+
 ## 4. Task Traceability
 | Task ID | Name | Goal | key Components |
 | :--- | :--- | :--- | :--- |

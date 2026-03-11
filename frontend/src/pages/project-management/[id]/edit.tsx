@@ -73,7 +73,7 @@ export default function ProjectEditPage() {
           <Paper elevation={2} sx={{ p: 4 }}>
             <ProjectForm
               mode="edit"
-              defaultValues={project}
+              defaultValues={project as Partial<ProjectFormData>}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
               isLoading={updateMutation.isPending}

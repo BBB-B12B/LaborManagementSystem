@@ -55,34 +55,33 @@ export const DCModal: React.FC<DCModalProps> = ({
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider', justifyContent: 'space-between', bgcolor: '#f8fafc', position: 'sticky', bottom: 0 }}>
+            <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider', justifyContent: 'flex-end', gap: 2, bgcolor: '#f8fafc', position: 'sticky', bottom: 0 }}>
                 <Button
+                    variant="outlined"
+                    color="error"
+                    sx={{ borderRadius: '10px', px: 3 }}
                     onClick={onClose}
-                    color="inherit"
                     disabled={isLoading}
                 >
-                    ปิดหน้าต่าง
+                    ยกเลิก
                 </Button>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                        variant="contained"
-                        sx={{ bgcolor: '#ef5350', '&:hover': { bgcolor: '#c62828' }, paddingX: 3 }}
-                        onClick={onClose}
-                        disabled={isLoading}
-                    >
-                        ยกเลิก
-                    </Button>
-                    <Button
-                        type="submit"
-                        form={formId} // Link to DCForm's ID
-                        variant="contained"
-                        sx={{ bgcolor: '#2e7d32', '&:hover': { bgcolor: '#1b5e20' }, paddingX: 4 }}
-                        disabled={isLoading}
-                        startIcon={isLoading && <CircularProgress size={20} color="inherit" />}
-                    >
-                        {formProps.mode === 'create' ? 'ยืนยันการสร้าง' : 'บันทึกการแก้ไข'}
-                    </Button>
-                </Box>
+                <Button
+                    type="submit"
+                    form={formId} // Link to DCForm's ID
+                    variant="contained"
+                    color="success"
+                    sx={{
+                        borderRadius: '10px',
+                        px: 4,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        textTransform: 'none',
+                        fontWeight: 600,
+                    }}
+                    disabled={isLoading}
+                    startIcon={isLoading && <CircularProgress size={20} color="inherit" />}
+                >
+                    {formProps.mode === 'create' ? 'ยืนยันการสร้าง' : 'บันทึกการแก้ไข'}
+                </Button>
             </DialogActions>
         </Dialog>
     );
