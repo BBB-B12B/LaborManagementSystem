@@ -7,13 +7,14 @@
  */
 
 export type ScanBehavior =
-  | 'ot_morning' // 05:00-08:00
-  | 'regular_in' // 08:00-17:00 (เข้างาน)
-  | 'lunch_out' // 12:00-13:00 (ออกพักเที่ยง)
-  | 'lunch_in' // 12:00-13:00 (กลับจากพักเที่ยง)
-  | 'regular_out' // 08:00-17:00 (เลิกงาน)
-  | 'ot_noon' // 12:00-13:00 (OT เที่ยง)
-  | 'ot_evening'; // 17:00-22:00
+  | 'ot_morning_in' // 03:00-07:30
+  | 'ot_morning_out'
+  | 'regular_in' // 07:30-12:00 (เข้างาน / สายเกิน 08:00)
+  | 'lunch_break' // 12:00-13:00 (พักเที่ยง)
+  | 'regular_out' // 13:00-18:00 (เลิกงาน)
+  | 'ot_noon' // OT เที่ยง (Requires OT record logic later)
+  | 'ot_evening_in' // 18:00-24:00
+  | 'ot_evening_out'; // 18:00-24:00
 
 export interface ScanData {
   id: string;
@@ -66,35 +67,42 @@ export function roundDownToFiveMinutes(date: Date): Date {
 }
 
 /**
- * จำแนกพฤติกรรมการสแกน
- * Classify scan behavior based on time
+ * การจำแนกพฤติกรรมการสแกนพื้นฐาน (Stateless Time-based Classification)
+ * Contextual classification (e.g., differentiating 'in' vs 'out' for OT) 
+ * will be handled by analyzeDailyScans later.
  */
 export function classifyScanBehavior(scanTime: Date): ScanBehavior {
   const hour = scanTime.getHours();
   const minute = scanTime.getMinutes();
   const timeInMinutes = hour * 60 + minute;
 
-  // OT เช้า: 05:00-08:00
-  if (timeInMinutes >= 5 * 60 && timeInMinutes < 8 * 60) {
-    return 'ot_morning';
+  // OT เช้า: 03:00-07:30
+  if (timeInMinutes >= 3 * 60 && timeInMinutes < 7 * 60 + 30) {
+    return 'ot_morning_in'; // Default to 'in' base class for this period
+  }
+
+  // เข้างาน (เวลาปกติ): 07:30-12:00
+  if (timeInMinutes >= 7 * 60 + 30 && timeInMinutes < 12 * 60) {
+    return 'regular_in';
   }
 
   // พักเที่ยง: 12:00-13:00
   if (timeInMinutes >= 12 * 60 && timeInMinutes < 13 * 60) {
-    return 'ot_noon'; // Or could be lunch_out/lunch_in based on context
+    return 'lunch_break';
   }
 
-  // OT เย็น: 17:00-22:00
-  if (timeInMinutes >= 17 * 60 && timeInMinutes < 22 * 60) {
-    return 'ot_evening';
+  // เลิกงานปกติ / ออก OT เช้า / เริ่ม OT เย็น: 13:00-18:00
+  // (Assuming >=17:00 is regular out, Contextual engine can override to OT evening in)
+  if (timeInMinutes >= 13 * 60 && timeInMinutes < 18 * 60) {
+    return 'regular_out';
   }
 
-  // เวลาปกติ: 08:00-17:00
-  if (timeInMinutes >= 8 * 60 && timeInMinutes < 17 * 60) {
-    return timeInMinutes < 12 * 60 ? 'regular_in' : 'regular_out';
+  // OT เย็น: 18:00-24:00
+  if (timeInMinutes >= 18 * 60 && timeInMinutes < 24 * 60) {
+    return 'ot_evening_out'; // Default to 'out' base class
   }
 
-  // Default
+  // Default fallback
   return 'regular_in';
 }
 

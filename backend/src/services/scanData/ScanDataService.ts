@@ -646,6 +646,191 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   /**
+   * Helper to fetch Overtime Records for a specific project and date range
+   */
+  async getOvertimeRecords(
+    projectLocationId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<any[]> {
+    try {
+      const recordsSnapshot = await db
+        .collection('overtime_records')
+        .where('projectLocationId', '==', projectLocationId)
+        .where('reportDate', '>=', startDate)
+        .where('reportDate', '<=', endDate)
+        .get();
+
+      return recordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      logger.error('Error fetching overtime records for discrepancy check:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Analyze daily scans for a single DC to calculate contextual behaviors and scanned hours
+   * 
+   * Returns calculated regular and OT hours, based on the 7 scan behaviors.
+   */
+  analyzeDailyScans(dayScans: ScanData[]): {
+    scannedRegularHours: number;
+    scannedMorningOT: number;
+    scannedEveningOT: number;
+    scannedNoonOT: number;
+    isLate: boolean;
+    lateMinutes: number;
+  } {
+    let scannedRegularHours = 0;
+    let scannedMorningOT = 0;
+    let scannedEveningOT = 0;
+    const scannedNoonOT = 0; // Noon OT is usually detected by Overtime record + missing lunch break
+    let isLate = false;
+    let lateMinutes = 0;
+
+    if (!dayScans || dayScans.length < 2) {
+      return { scannedRegularHours, scannedMorningOT, scannedEveningOT, scannedNoonOT, isLate, lateMinutes };
+    }
+
+    // Sort scans chronologically
+    const sortedScans = [...dayScans].sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
+
+    // Contextual groupings
+    let morningIn: Date | null = null;
+    let regularIn: Date | null = null;
+    let lunchOut: Date | null = null;
+    let lunchIn: Date | null = null;
+    let regularOut: Date | null = null;
+    let eveningOut: Date | null = null;
+
+    for (const scan of sortedScans) {
+      const behavior = scan.scanBehavior;
+      const time = scan.scanDateTime;
+
+      if (behavior === 'ot_morning_in' && !morningIn) morningIn = time;
+      // If we see another scan during morning OT, it might be the OUT scan for OT Morning, or just IN for regular.
+      // E.g., Scan at 05:00, Scan at 07:30
+      if ((behavior === 'ot_morning_in' || behavior === 'ot_morning_out' || behavior === 'regular_in') && morningIn && time > morningIn && !regularIn) {
+        // Technically, 08:00 is standard IN. If they scan at 07:30, it can act as both OT Morning OUT and Regular IN.
+        regularIn = time;
+      }
+
+      if (behavior === 'regular_in' && !regularIn && !morningIn) {
+        regularIn = time;
+        isLate = scan.isLate;
+        lateMinutes = scan.lateMinutes;
+      }
+
+      // Lunch breaks
+      if (behavior === 'lunch_break') {
+        if (!lunchOut) lunchOut = time;
+        else if (!lunchIn) lunchIn = time;
+      }
+
+      // Regular Out
+      if (behavior === 'regular_out' && !regularOut) regularOut = time;
+
+      // Evening OT
+      if ((behavior === 'ot_evening_in' || behavior === 'ot_evening_out') && time > (regularOut || regularIn || new Date(0))) {
+        eveningOut = time;
+      }
+    }
+
+    // Mathematical Calculation based on Context
+    if (morningIn && regularIn) {
+      const diffMs = regularIn.getTime() - morningIn.getTime();
+      scannedMorningOT = Math.max(0, diffMs / (1000 * 60 * 60));
+    }
+
+    if (regularIn && regularOut) {
+      let diffMs = regularOut.getTime() - regularIn.getTime();
+      // Deduct lunch break
+      if (lunchOut && lunchIn) {
+        diffMs -= (lunchIn.getTime() - lunchOut.getTime());
+      } else {
+        // Standard 1 hour deduction if worked over noon
+        if (regularIn.getHours() < 12 && regularOut.getHours() >= 13) {
+          diffMs -= 60 * 60 * 1000;
+        }
+      }
+      scannedRegularHours = Math.max(0, diffMs / (1000 * 60 * 60));
+    }
+
+    if (regularOut && eveningOut) {
+      const diffMs = eveningOut.getTime() - regularOut.getTime();
+      scannedEveningOT = Math.max(0, diffMs / (1000 * 60 * 60));
+    } else if (eveningOut && !regularOut && regularIn) {
+      // Missed regular checkout, stayed for OT
+      // Assume 17:00 was regular out
+      const standardOut = new Date(regularIn);
+      standardOut.setHours(17, 0, 0, 0);
+
+      const standardIn = new Date(regularIn);
+      standardIn.setHours(8, 0, 0, 0);
+
+      const actualIn = regularIn > standardIn ? regularIn : standardIn;
+
+      if (eveningOut > standardOut) {
+        scannedEveningOT = Math.max(0, (eveningOut.getTime() - standardOut.getTime()) / (1000 * 60 * 60));
+
+        // Calculate regular hours up to 17:00
+        let regDiffMs = standardOut.getTime() - actualIn.getTime();
+        // Deduct lunch if working over noon
+        if (actualIn.getHours() < 12 && standardOut.getHours() >= 13) {
+            regDiffMs -= 60 * 60 * 1000;
+        }
+        scannedRegularHours = Math.max(0, regDiffMs / (1000 * 60 * 60));
+      } else {
+        // They checked out before 17:00 but it was classified as evening OT? Check time.
+        let regDiffMs = eveningOut.getTime() - actualIn.getTime();
+        if (actualIn.getHours() < 12 && eveningOut.getHours() >= 13) {
+            regDiffMs -= 60 * 60 * 1000;
+        }
+        scannedRegularHours = Math.max(0, regDiffMs / (1000 * 60 * 60));
+        scannedEveningOT = 0;
+      }
+    }
+
+    // Default fallback if scans don't neatly fit the IN/OUT pairs
+    if (sortedScans.length >= 2 && scannedRegularHours === 0 && scannedMorningOT === 0 && scannedEveningOT === 0) {
+      const first = sortedScans[0].scanDateTime.getTime();
+      const last = sortedScans[sortedScans.length - 1].scanDateTime.getTime();
+      let diffMs = last - first;
+      const firstHour = new Date(first).getHours();
+      const lastHour = new Date(last).getHours();
+
+      if (firstHour < 12 && lastHour >= 13) diffMs -= 60 * 60 * 1000;
+      scannedRegularHours = Math.max(0, diffMs / (1000 * 60 * 60));
+      
+      // Cap at 8 regular hours if it exceeds 9 hours (8 working + 1 lunch)
+      if (scannedRegularHours > 8) {
+          scannedRegularHours = 8;
+      }
+    }
+
+    // Default fallback if scans don't neatly fit the IN/OUT pairs
+    if (sortedScans.length >= 2 && scannedRegularHours === 0 && scannedMorningOT === 0 && scannedEveningOT === 0) {
+      const first = sortedScans[0].scanDateTime.getTime();
+      const last = sortedScans[sortedScans.length - 1].scanDateTime.getTime();
+      let diffMs = last - first;
+      const firstHour = new Date(first).getHours();
+      const lastHour = new Date(last).getHours();
+
+      if (firstHour < 12 && lastHour >= 13) diffMs -= 60 * 60 * 1000;
+      scannedRegularHours = Math.max(0, diffMs / (1000 * 60 * 60));
+    }
+
+    return {
+      scannedRegularHours,
+      scannedMorningOT,
+      scannedEveningOT,
+      scannedNoonOT,
+      isLate,
+      lateMinutes
+    };
+  }
+
+  /**
    * Detect discrepancies between Scan Data and Daily Reports
    */
   async detectDiscrepancies(
@@ -663,15 +848,35 @@ class ScanDataService extends BaseCrudService<ScanData> {
       // 1. Fetch all Daily Reports for the range
       const reports = await dailyReportService.getByProjectAndDate(projectLocationId, start, end);
 
-      // 2. Fetch all Scan Data for the range
+      // 2. Fetch all Overtime Records for the range
+      const overtimeRecs = await this.getOvertimeRecords(projectLocationId, start, end);
+
+      // 3. Fetch all Scan Data for the range
       const scans = await this.getByProjectAndDate(projectLocationId, start, end);
 
-      // 3. Group by DC and Date
+      // 4. Group by DC and Date
       const reportMap = new Map<string, DailyReport[]>();
       reports.forEach((r: DailyReport) => {
         const key = `${r.dailyContractorId}_${r.workDate.toISOString().split('T')[0]}`;
         if (!reportMap.has(key)) reportMap.set(key, []);
         reportMap.get(key)!.push(r);
+      });
+
+      const otMap = new Map<string, any[]>();
+      overtimeRecs.forEach((ot: any) => {
+        // Need to flatten because OT can have array of dailyContractorIds
+        ot.dailyContractorIds?.forEach((dcId: string) => {
+          let otDateStr = '';
+          if (ot.reportDate?.toDate) otDateStr = ot.reportDate.toDate().toISOString().split('T')[0];
+          else if (ot.reportDate instanceof Date) otDateStr = ot.reportDate.toISOString().split('T')[0];
+          else if (typeof ot.reportDate === 'string') otDateStr = new Date(ot.reportDate).toISOString().split('T')[0];
+
+          if (otDateStr) {
+            const key = `${dcId}_${otDateStr}`;
+            if (!otMap.has(key)) otMap.set(key, []);
+            otMap.get(key)!.push(ot);
+          }
+        });
       });
 
       const scanMap = new Map<string, ScanData[]>();
@@ -681,7 +886,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         scanMap.get(key)!.push(s);
       });
 
-      const allKeys = new Set([...reportMap.keys(), ...scanMap.keys()]);
+      const allKeys = new Set([...reportMap.keys(), ...otMap.keys(), ...scanMap.keys()]);
       let discrepanciesCreated = 0;
       const now = new Date();
 
@@ -691,56 +896,66 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const [dcId, dateStr] = key.split('_');
         const workDate = new Date(dateStr);
         const dayReports = reportMap.get(key) || [];
+        const dayOTs = otMap.get(key) || [];
         const dayScans = scanMap.get(key) || [];
 
-        const reportedHours = dayReports.reduce((sum, r) => sum + (r.netHours || 0), 0);
-        let scannedHours = 0;
+        // Reported Hours calculation
+        const reportedRegularHours = dayReports.reduce((sum, r) => sum + (r.netHours || 0), 0);
+        const reportedOTHours = dayOTs.reduce((sum, ot) => sum + (ot.workHours || 0), 0);
+        const reportedTotalHours = reportedRegularHours + reportedOTHours;
 
-        if (dayScans.length >= 2) {
-          // Calculate from first and last scan
-          const times = dayScans.map(s => s.scanDateTime.getTime()).sort();
-          const first = times[0];
-          const last = times[times.length - 1];
-          let diffMs = last - first;
+        // Scanned Hours calculation via Contextual Engine
+        const analyzedScans = this.analyzeDailyScans(dayScans);
+        const scannedRegularHours = analyzedScans.scannedRegularHours;
+        const scannedOTHours = analyzedScans.scannedMorningOT + analyzedScans.scannedEveningOT + analyzedScans.scannedNoonOT;
+        const scannedTotalHours = scannedRegularHours + scannedOTHours;
 
-          // Deduct lunch if span covers 12:00-13:00
-          const firstDate = new Date(first);
-          const lastDate = new Date(last);
-          if (firstDate.getHours() < 12 && lastDate.getHours() >= 13) {
-            diffMs -= 60 * 60 * 1000;
-          }
+        // Compare sums
+        const diffTotalHours = reportedTotalHours - scannedTotalHours;
+        const diffRegularHours = reportedRegularHours - scannedRegularHours;
+        const diffOTHours = reportedOTHours - scannedOTHours;
 
-          scannedHours = Math.max(0, diffMs / (1000 * 60 * 60));
-        }
-
-        const hoursDifference = reportedHours - scannedHours;
-        const absDiff = Math.abs(hoursDifference);
-
-        // Logic check: if diff > 1 hour, or one exists while other doesn't
         let shouldCreate = false;
         let reason = '';
         let discrepancyType: 'Type1' | 'Type2' | 'Type3' = 'Type1';
 
-        if (dayReports.length > 0 && dayScans.length < 2) {
+        // Discrepancy Classification
+        if ((dayReports.length > 0 || dayOTs.length > 0) && dayScans.length < 2) {
+          // Type 2: Daily Report exists but no Scan Data
           shouldCreate = true;
           discrepancyType = 'Type2';
-          reason = 'มี Daily Report แต่ข้อมูลสแกนไม่ครบถ้วน (ต้องการอย่างน้อย 2 ครั้ง)';
-        } else if (dayReports.length === 0 && dayScans.length >= 2) {
+          reason = 'มี Daily Report หรือ OT Record แต่ข้อมูลสแกนนิ้วน้อยกว่า 2 ครั้ง';
+        } else if (dayReports.length === 0 && dayOTs.length === 0 && dayScans.length >= 2) {
+          // Type 3: Scan Data exists but no Daily Report
           shouldCreate = true;
           discrepancyType = 'Type3';
-          reason = 'มีข้อมูลสแกนแต่ไม่มี Daily Report';
-        } else if (absDiff > 1.0) {
+          reason = 'มีการสแกนนิ้วเข้า-ออก แต่ไม่มีการกรอก Daily Report / OT';
+        } else if (diffTotalHours > 0.5) { // Type 1: Reported > Scanned. Tolerance of 0.5hr (30m)
+          // Actually, Type 1 in User request is: Daily Report hours < Scan Data hours.
+          // Is it? Let's flag any mismatch over 0.5 hours.
           shouldCreate = true;
           discrepancyType = 'Type1';
-          reason = `ชั่วโมงทำงานไม่ตรงกัน (ส่วนต่าง ${hoursDifference.toFixed(2)} ชม.)`;
+          if (diffRegularHours > 0.5 && diffOTHours > 0.5) {
+            reason = `ลงชั่วโมงปกติเกิน ${diffRegularHours.toFixed(2)} ชม. และชั่วโมง OT เกิน ${diffOTHours.toFixed(2)} ชม.`;
+          } else if (diffRegularHours > 0.5) {
+            reason = `ลงชั่วโมงทำงานปกติมากกว่าสแกนจริง ${diffRegularHours.toFixed(2)} ชม.`;
+          } else if (diffOTHours > 0.5) {
+            reason = `ลงชั่วโมง OT มากกว่าสแกนจริง ${diffOTHours.toFixed(2)} ชม.`;
+          } else if (diffTotalHours > 0.5) {
+            reason = `ชั่วโมงทำงานรวมไม่ตรงกัน (ส่วนต่าง ${diffTotalHours.toFixed(2)} ชม.)`;
+          }
+        } else if (diffTotalHours < -0.5) { // Under-reported
+          shouldCreate = true;
+          discrepancyType = 'Type1';
+          reason = `สแกนนิ้วมากกว่าชั่วโมงที่กรอก ${Math.abs(diffTotalHours).toFixed(2)} ชม. (อาจลืมกรอก OT)`;
         }
 
         if (shouldCreate) {
           const discId = `${dcId}_${dateStr}_disc`;
           const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discId);
 
-          const absDiffVal = Math.abs(hoursDifference);
-          const severity = absDiffVal > 2 ? 'error' : 'warning';
+          const absDiffVal = Math.abs(diffTotalHours);
+          const severity = absDiffVal >= 2 ? 'error' : 'warning'; // If mismatch is >= 2 hours => Red Error
 
           const discrepancyData: any = {
             dailyReportId: dayReports[0]?.id || 'missing',
@@ -748,9 +963,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
             projectLocationId,
             workDate,
             discrepancyType,
-            reportedHours,
-            scannedHours,
-            hoursDifference,
+            reportedHours: reportedTotalHours,
+            scannedHours: scannedTotalHours,
+            hoursDifference: diffTotalHours, // POSITIVE = Reported > Scanned
             severity,
             status: 'pending',
             detectionReason: reason,
@@ -915,6 +1130,101 @@ class ScanDataService extends BaseCrudService<ScanData> {
       return { id: updatedDoc.id, ...updatedDoc.data() };
     } catch (error: any) {
       logger.error('Error resolving discrepancy:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get paginated discrepancies
+   */
+  async getDiscrepancies(options: {
+    page: number;
+    pageSize: number;
+    projectId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<{ items: any[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    try {
+      let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES);
+
+      if (options.projectId) {
+        query = query.where('projectLocationId', '==', options.projectId);
+      }
+      if (options.startDate) {
+        query = query.where('workDate', '>=', options.startDate);
+      }
+      if (options.endDate) {
+        query = query.where('workDate', '<=', options.endDate);
+      }
+
+      // Order by descending workDate
+      query = query.orderBy('workDate', 'desc');
+
+      const snapshot = await query.get();
+      const allItems = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      const total = allItems.length;
+
+      const { page, pageSize } = options;
+      const start = (page - 1) * pageSize;
+      const pagedData = allItems.slice(start, start + pageSize);
+
+      // Enhance with basic contractor string if missing
+      for (const item of pagedData) {
+         if (!item.employeeNumber && item.dailyContractorId) {
+            const dc = await dailyContractorService.getById(item.dailyContractorId);
+            if (dc) {
+               item.employeeNumber = dc.employeeId || dc.id;
+               item.dailyContractorName = dc.name || `${(dc as any).firstName || ''} ${(dc as any).lastName || ''}`.trim() || 'Unknown';
+            }
+         }
+      }
+
+      return {
+        items: pagedData,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      };
+    } catch (error: any) {
+      logger.error('Error fetching discrepancies:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get summary of discrepancies for Dashboard
+   */
+  async getDiscrepancySummary(projectId?: string): Promise<any> {
+    try {
+      let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
+        .where('status', '==', 'pending');
+
+      if (projectId) {
+        queryRef = queryRef.where('projectLocationId', '==', projectId);
+      }
+
+      const snapshot = await queryRef.get();
+      const discrepancies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      return {
+        totalDiscrepancies: discrepancies.length,
+        pendingCount: discrepancies.length,
+        type1Count: discrepancies.filter((d: any) => d.discrepancyType === 'Type1').length,
+        type2Count: discrepancies.filter((d: any) => d.discrepancyType === 'Type2').length,
+        type3Count: discrepancies.filter((d: any) => d.discrepancyType === 'Type3').length,
+        highSeverityCount: discrepancies.filter((d: any) => d.severity === 'error').length,
+        // Sort by created descending
+        recentDiscrepancies: discrepancies
+            .sort((a: any, b: any) => {
+              const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt || 0).getTime();
+              const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt || 0).getTime();
+              return dateB - dateA;
+            })
+            .slice(0, 5),
+      };
+    } catch (error: any) {
+      logger.error('Error fetching discrepancy summary:', error);
       throw error;
     }
   }

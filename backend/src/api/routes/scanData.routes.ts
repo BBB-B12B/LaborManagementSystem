@@ -9,9 +9,6 @@ import multer from 'multer';
 import { authenticate, type AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
 import { scanDataService } from '../../services/scanData/ScanDataService';
-import { dailyReportService } from '../../services/dailyReport/DailyReportService';
-import { DailyReport } from '../../models/DailyReport';
-import { ScanData } from '../../models/ScanData';
 import { AppError } from '../middleware/errorHandler';
 import {
   parseDatFile,
@@ -19,7 +16,6 @@ import {
   detectFileType,
 } from '../../services/scanData/ScanDataImportUtils';
 import { collections } from '../../config/collections';
-import { randomUUID } from 'crypto';
 import * as XLSX from 'xlsx';
 
 const router = Router();
@@ -159,114 +155,33 @@ router.get('/discrepancies', async (req: Request, res: Response) => {
     const startDateStr = req.query.startDate as string | undefined;
     const endDateStr = req.query.endDate as string | undefined;
 
-    let startDate = startDateStr ? new Date(startDateStr) : new Date();
-    let endDate = endDateStr ? new Date(endDateStr) : new Date();
-
-    if (isNaN(startDate.getTime())) startDate = new Date();
-    if (isNaN(endDate.getTime())) endDate = new Date();
-
-    if (!startDateStr) startDate.setHours(0, 0, 0, 0);
-    if (!endDateStr) endDate.setHours(23, 59, 59, 999);
-
-    // 1. Fetch Data in Parallel
-    const [reports, scans] = await Promise.all([
-      projectId
-        ? dailyReportService.getByProjectAndDate(projectId, startDate, endDate)
-        : dailyReportService.getByDateRange(startDate, endDate),
-      projectId
-        ? scanDataService.getByProjectAndDate(projectId, startDate, endDate)
-        : scanDataService.getByDateRange(startDate, endDate)
-    ]);
-
-    // Helper to safely convert Firestore Timestamp or string to Date
-    const toDate = (val: any): Date => {
-      if (!val) return new Date();
-      if (val instanceof Date) return val;
-      if (val && typeof val.toDate === 'function') return val.toDate();
-      if (val && val._seconds) return new Date(val._seconds * 1000);
-      return new Date(val);
-    };
-
-    // 2. Group Data
-    const reportMap = new Map<string, DailyReport>();
-    const scanMap = new Map<string, ScanData[]>();
-
-    reports.forEach(r => {
-      try {
-        const d = toDate(r.workDate);
-        if (isNaN(d.getTime())) return;
-        const dateStr = d.toISOString().split('T')[0];
-        const key = `${r.dailyContractorId}_${dateStr}`;
-        reportMap.set(key, r);
-      } catch (err) {
-        console.error('Error processing report:', r.id, err);
-      }
-    });
-
-    scans.forEach(s => {
-      try {
-        const d = toDate(s.scanDateTime);
-        if (isNaN(d.getTime())) return;
-        const dateStr = d.toISOString().split('T')[0];
-        const key = `${s.dailyContractorId}_${dateStr}`;
-        if (!scanMap.has(key)) scanMap.set(key, []);
-        scanMap.get(key)?.push(s);
-      } catch (err) {
-        console.error('Error processing scan:', s.id, err);
-      }
-    });
-
-    // 3. Detect Discrepancies
-    const discrepancies: any[] = [];
-    const allKeys = new Set([...reportMap.keys(), ...scanMap.keys()]);
-
-    for (const key of allKeys) {
-      const report = reportMap.get(key);
-      const scanList = scanMap.get(key);
-      const [dcId, dateStr] = key.split('_');
-
-      if (report && (!scanList || scanList.length === 0)) {
-        discrepancies.push({
-          id: `type2-${randomUUID()}`,
-          type: 'Type2',
-          date: dateStr,
-          dailyContractorId: dcId,
-          employeeNumber: 'Load...',
-          employeeName: (report as any).employeeName || 'Unknown',
-          projectLocationId: report.projectLocationId,
-          status: 'Pending',
-          severity: 'High'
-        });
-      }
-
-      if (!report && scanList && scanList.length > 0) {
-        const firstScan = scanList[0];
-        discrepancies.push({
-          id: `type3-${randomUUID()}`,
-          type: 'Type3',
-          date: dateStr,
-          dailyContractorId: dcId,
-          employeeNumber: firstScan.employeeNumber || firstScan.employeeId,
-          employeeName: 'Unknown',
-          projectLocationId: firstScan.projectLocationId,
-          status: 'Pending',
-          severity: 'Medium'
-        });
-      }
+    let startDate: Date | undefined;
+    if (startDateStr) {
+      startDate = new Date(startDateStr);
+      startDate.setHours(0, 0, 0, 0);
+    }
+    let endDate: Date | undefined;
+    if (endDateStr) {
+      endDate = new Date(endDateStr);
+      endDate.setHours(23, 59, 59, 999);
     }
 
-    const total = discrepancies.length;
-    const start = (page - 1) * pageSize;
-    const pagedData = discrepancies.slice(start, start + pageSize);
+    const discrepancies = await scanDataService.getDiscrepancies({
+      page,
+      pageSize,
+      projectId,
+      startDate,
+      endDate
+    });
 
     res.json({
       success: true,
-      data: pagedData,
+      data: discrepancies.items,
       pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize)
+        page: discrepancies.page,
+        pageSize: discrepancies.pageSize,
+        total: discrepancies.total,
+        totalPages: discrepancies.totalPages
       }
     });
   } catch (error: any) {
@@ -280,23 +195,11 @@ router.get('/discrepancies', async (req: Request, res: Response) => {
 router.get('/discrepancies/summary', async (req: Request, res: Response) => {
   try {
     const { projectLocationId } = req.query;
-    let queryRef: any = collections.scanDataDiscrepancies.where('status', '==', 'pending');
-    if (projectLocationId) queryRef = queryRef.where('projectLocationId', '==', projectLocationId);
-
-    const snapshot = await queryRef.get();
-    const discrepancies = snapshot.docs.map((doc: any) => doc.data());
+    const summary = await scanDataService.getDiscrepancySummary(projectLocationId as string | undefined);
 
     res.json({
       success: true,
-      data: {
-        totalDiscrepancies: discrepancies.length,
-        pendingCount: discrepancies.length,
-        type1Count: discrepancies.filter((d: any) => d.detectionReason?.includes('ไม่ตรงกัน')).length,
-        type2Count: discrepancies.filter((d: any) => d.detectionReason?.includes('ไม่มีข้อมูลสแกน')).length,
-        type3Count: discrepancies.filter((d: any) => d.detectionReason?.includes('ไม่มี Daily Report')).length,
-        highSeverityCount: discrepancies.filter((d: any) => d.severity === 'error').length,
-        recentDiscrepancies: discrepancies.slice(0, 5),
-      },
+      data: summary,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

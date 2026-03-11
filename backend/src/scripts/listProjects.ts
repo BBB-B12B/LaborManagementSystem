@@ -1,6 +1,6 @@
 
 import { collections } from '../config/collections';
-import { db } from '../config/firebase';
+
 
 async function listProjects() {
     try {
