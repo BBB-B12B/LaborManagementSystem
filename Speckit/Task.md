@@ -331,3 +331,54 @@
 *   [ ] **T-340-2**: (Backend) ปรับปรุง `WagePeriodService` ให้คำนวณเงินประกันสังคมจาก Rule ใน Database แทน Constants แบบฝังในโค้ด
 *   [ ] **T-340-3**: (Frontend) สร้างหน้า UI รายการกฎ (DataGrid) และหน้า Form สำหรับ Admin ลงใน Management Hub
 *   [ ] **T-340-4**: (Frontend) เชื่อม API เรียกใช้กฎจากหน้า UI และปรับปรุง Permissions ให้มีแต่ Admin ที่เข้าเกณฑ์ได้
+
+### Task ID: T-350 (Wage Period Soft Delete)
+**Feature Ref**: F-007 Wage Calculation
+**Status**: [x] Complete
+#### 1. Concept / Goal
+*   เพิ่มฟังก์ชันการลบงวดค่าแรง (Soft Delete) เพื่อแก้ไขปัญหา 404 Error และรักษาความถูกต้องของข้อมูล (Audit Trail)
+#### 2. Detailed Sub-tasks
+*   [x] **T-350-1**: (Models) เพิ่มฟิลด์ `isDeleted`, `deletedAt`, `deletedBy` ใน `WagePeriod.ts` และปรับปรุง Converter
+*   [x] **T-350-2**: (Backend) เพิ่ม `softDelete` endpoint ใน `wagePeriods.routes.ts`
+*   [x] **T-350-3**: (Backend) ปรับปรุง `WagePeriodService.ts` ให้กรองเฉพาะงวดที่ยังไม่ถูกลบ
+*   [x] **T-350-4**: (Verification) ตรวจสอบการลบผ่าน UI และสถานะในฐานข้อมูล
+
+#### 3. Error Logging
+*   **T-350-E1-1**:
+    *   **Cause**: 
+        1. ข้อมูลหายหลังจากรีเฟรช: เนื่องจาก Firestore query `where('isDeleted', '==', false)` จะไม่คืนค่าเอกสารเก่าที่ไม่มีฟิลด์ `isDeleted` (Legacy Data)
+        2. "Wage period already exists": เนื่องจาก `findByPeriodCode` ยังค้นหาเจอข้อมูลที่ถูก Soft Delete ไปแล้ว ทำให้อนุญาตให้สร้างซ้ำไม่ได้
+    *   **Solution**:
+        1. ปรับปรุง `getAll`, `getById`, `findByPeriodCode`, `getByProject`, และ `getByStatus` ใน `WagePeriodService.ts` ให้ใช้ In-memory filtering เพื่อรองรับทั้งข้อมูลเก่า (Legacy) และข้อมูลที่ถูก Soft Delete
+    *   **Status**: Resolved (2026-03-12)
+
+### Task ID: T-360 (Refactor Wage Period Project Identity)
+**Feature Ref**: F-007 Wage Calculation
+**Status**: [/] Executing
+#### 1. Concept / Goal
+*   เปลี่ยนการเก็บข้อมูลโปรเจกต์ใน `WagePeriod` จาก `projectLocationId` เป็น `projectCode` และเพิ่ม `projectName` (Denormalization) เพื่อให้เข้าใจง่ายและแสดงผล UI ได้รวดเร็ว
+#### 2. Detailed Sub-tasks
+*   **[x] T-360-1**: (Models) ปรับปรุง `WagePeriod.ts` (Backend) ให้ใช้ `projectCode` และเพิ่ม `projectName`
+*   **[x] T-360-2**: (Migration) สร้างสคริปต์ย้ายข้อมูลฟิลด์เก่าไปฟิลด์ใหม่ และดึงชื่อโครงการมาใส่
+*   **[x] T-360-3**: (Backend) ปรับปรุง `WagePeriodService.ts` และ Routes ให้รองรับฟิลด์ใหม่
+*   **[x] T-360-4**: (Frontend) ปรับปรุง `types.ts` และหน้า UI `wage-calculation/index.tsx` ให้แสดงชื่อโครงการ
+*   [ ] **T-360-5**: (Cleanup) ลบฟิลด์ `projectLocationId` ออกจากระบบ (หลังจาก Verify ข้อมูลแล้ว)
+
+### Task ID: T-361 (Wage Calculation UI Refinement)
+**Feature Ref**: F-007 / F-010
+**Status**: ✅ Complete
+#### 1. Concept / Goal
+*   ปรับปรุง UI หน้าลิสต์คำนวณค่าแรงให้สวยงามและอ่านง่ายขึ้น
+#### 2. Solution
+*   ปรับสีปุ่ม "สร้างงวดใหม่" เป็นสีน้ำเงิน
+*   ปรับตารางโครงการให้แสดงเฉพาะชื่อ (เอา Project Code ออก)
+
+### Task ID: T-362 (Wage Detail UI Refinement)
+**Feature Ref**: F-007 / F-010
+**Status**: ✅ Complete
+#### 1. Concept / Goal
+*   ปรับปรุง UI หน้ารายละเอียดการคำนวณค่าแรงให้ขยายเต็มหน้าจอและนำ Scrollbar ออก
+#### 2. Solution
+*   ปรับ Container เป็น Full Width (`maxWidth={false}`)
+*   ปรับสีปุ่ม "คำนวณค่าแรง" เป็นสีน้ำเงิน
+*   ปรับสัดส่วนคอลัมน์ใน DataGrid ให้พอดีกับหน้าจอเพื่อนำ horizontal scrollbar ออก

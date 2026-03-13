@@ -175,14 +175,16 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'skillName',
       headerName: 'ทักษะ',
-      width: 140,
+      minWidth: 140,
+      flex: 1,
     },
 
     // === กลุ่ม: ชั่วโมงการทำงาน (สีฟ้าอ่อน) ===
     {
       field: 'regularHours',
       headerName: 'ชม.ปกติ',
-      width: 90,
+      minWidth: 90,
+      flex: 0.5,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'hours-column',
@@ -192,7 +194,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'totalOtHours',
       headerName: 'ชม.รวม OT',
-      width: 100,
+      minWidth: 100,
+      flex: 0.5,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'hours-column',
@@ -204,7 +207,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'regularWages',
       headerName: 'ค่าแรงปกติ',
-      width: 120,
+      minWidth: 110,
+      flex: 0.8,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'income-column',
@@ -214,7 +218,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'otWages',
       headerName: 'ค่าแรง OT',
-      width: 120,
+      minWidth: 110,
+      flex: 0.8,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'income-column',
@@ -224,7 +229,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'professionalFees',
       headerName: 'ค่าวิชาชีพ',
-      width: 120,
+      minWidth: 110,
+      flex: 0.8,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'income-column',
@@ -234,7 +240,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'totalIncome',
       headerName: 'รายได้รวม',
-      width: 130,
+      minWidth: 120,
+      flex: 1,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'income-column-total',
@@ -246,7 +253,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'accommodationCost',
       headerName: 'ค่าที่พัก',
-      width: 100,
+      minWidth: 90,
+      flex: 0.7,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'expense-column',
@@ -256,7 +264,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'phoneAllowance',
       headerName: 'ค่าโทรศัพท์',
-      width: 110,
+      minWidth: 100,
+      flex: 0.7,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'expense-column',
@@ -266,7 +275,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'lateDeductions',
       headerName: 'หักมาสาย',
-      width: 100,
+      minWidth: 90,
+      flex: 0.7,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'expense-column',
@@ -284,7 +294,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'socialSecurityDeduction',
       headerName: 'ประกันสังคม',
-      width: 120,
+      minWidth: 100,
+      flex: 0.8,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'expense-column',
@@ -294,7 +305,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'totalExpenses',
       headerName: 'รายจ่ายรวม',
-      width: 130,
+      minWidth: 110,
+      flex: 1,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'expense-column-total',
@@ -306,7 +318,8 @@ export default function WageCalculationDetailsPage() {
     {
       field: 'netWages',
       headerName: 'ค่าแรงสุทธิ',
-      width: 150,
+      minWidth: 130,
+      flex: 1.2,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'net-column',
@@ -361,7 +374,7 @@ export default function WageCalculationDetailsPage() {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: { xs: 2, md: 4 } }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mb: 2 }}>
@@ -376,10 +389,10 @@ export default function WageCalculationDetailsPage() {
         >
           <Box>
             <Typography variant="h4" component="h1">
-              คำนวณค่าแรง - {period.periodCode}
+              คำนวณค่าแรง - {period.projectName || period.periodCode}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {new Date(period.startDate).toLocaleDateString('th-TH')} -{' '}
+              รหัสงวด: {period.periodCode} | {new Date(period.startDate).toLocaleDateString('th-TH')} -{' '}
               {new Date(period.endDate).toLocaleDateString('th-TH')}
             </Typography>
           </Box>
@@ -387,7 +400,10 @@ export default function WageCalculationDetailsPage() {
             {(period.status === 'draft' || period.status === 'calculated') && (
               <Button
                 variant="contained"
-                color="primary"
+                sx={{ 
+                  backgroundColor: '#1976d2', 
+                  '&:hover': { backgroundColor: '#115293' } 
+                }}
                 startIcon={<Calculate />}
                 onClick={handleCalculate}
                 disabled={calculateMutation.isPending}

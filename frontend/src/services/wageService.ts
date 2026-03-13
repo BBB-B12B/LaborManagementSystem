@@ -70,7 +70,8 @@ export interface DCWageSummary {
 export interface WagePeriod {
   id: string;
   periodCode: string;
-  projectLocationId: string;
+  projectCode: string; // [T-360]
+  projectName: string; // [T-360] Denormalized
   startDate: Date;
   endDate: Date;
   periodDays: number;
@@ -106,15 +107,15 @@ export interface WagePeriodListResponse {
  * GET /api/wage-periods
  */
 export async function getAllWagePeriods(filters?: {
-  projectLocationId?: string;
+  projectCode?: string;
   status?: PeriodStatus;
   page?: number;
   pageSize?: number;
 }): Promise<WagePeriodListResponse> {
   const params = new URLSearchParams();
 
-  if (filters?.projectLocationId)
-    params.append('projectLocationId', filters.projectLocationId);
+  if (filters?.projectCode)
+    params.append('projectCode', filters.projectCode);
   if (filters?.status) params.append('status', filters.status);
   if (filters?.page) params.append('page', String(filters.page));
   if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));

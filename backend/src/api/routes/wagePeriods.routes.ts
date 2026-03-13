@@ -24,7 +24,7 @@ router.use(authenticate);
 router.get(
   '/',
   [
-    query('projectId').optional().isString(),
+    query('projectCode').optional().isString(),
     query('status').optional().isIn(['draft', 'calculated', 'approved', 'paid', 'locked']),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
@@ -36,11 +36,11 @@ router.get(
         throw new AppError('Validation failed', 400);
       }
 
-      const { projectId, status } = req.query;
+      const { projectCode, status } = req.query;
       let periodsData;
 
-      if (projectId) {
-        const items = await wagePeriodService.getByProject(projectId as string);
+      if (projectCode) {
+        const items = await wagePeriodService.getByProject(projectCode as string);
         periodsData = {
           wagePeriods: items,
           total: items.length,
@@ -113,7 +113,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post(
   '/',
   [
-    body('projectLocationId').notEmpty(),
+    body('projectCode').notEmpty(),
+    body('projectName').notEmpty(),
     body('startDate').isISO8601(),
     body('endDate').isISO8601(),
   ],
@@ -132,7 +133,8 @@ router.post(
 
       // Convert date strings to Date objects
       const input = {
-        projectLocationId: req.body.projectLocationId,
+        projectCode: req.body.projectCode,
+        projectName: req.body.projectName,
         startDate: new Date(req.body.startDate),
         endDate: new Date(req.body.endDate),
       };
@@ -394,5 +396,36 @@ router.delete(
     }
   }
 );
+
+/**
+ * DELETE /api/wage-periods/:id
+ * ลบงวดค่าแรง (Soft Delete)
+ * [T-350] แก้ไขปัญหา 404 error เมื่อกดถังขยะ
+ */
+router.delete('/:id', async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError('Unauthorized - Missing user context', 401);
+    }
+
+    const success = await wagePeriodService.softDelete(req.params.id, userId);
+
+    if (!success) {
+      throw new AppError('Wage period not found', 404);
+    }
+
+    res.json({
+      success: true,
+      message: 'ลบงวดค่าแรงสำเร็จ',
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
 
 export default router;

@@ -31,6 +31,52 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   }
 
   /**
+   * Get all wage periods (filtered by isDeleted)
+   */
+  async getAll(options?: any): Promise<any> {
+    try {
+      // To support legacy data (missing isDeleted field), we fetch all records
+      // and filter in memory. Since WagePeriods are relatively few, this is safe.
+      const items = await this.query([], {
+        orderBy: options?.orderBy || 'createdAt',
+        orderDirection: options?.orderDirection || 'desc',
+      });
+
+      // Filter active records
+      const activeItems = items.filter((item) => item.isDeleted !== true);
+
+      // Manual pagination
+      const total = activeItems.length;
+      const pageSize = options?.pageSize || 50;
+      const page = options?.page || 1;
+      const start = (page - 1) * pageSize;
+      const paginatedItems = activeItems.slice(start, start + pageSize);
+
+      return {
+        items: paginatedItems,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
+    } catch (error: any) {
+      logger.error('Error getting all wage periods:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get wage period by ID (filtered by isDeleted)
+   */
+  async getById(id: string): Promise<WagePeriod | null> {
+    const period = await super.getById(id);
+    if (!period || period.isDeleted) {
+      return null;
+    }
+    return period;
+  }
+
+  /**
    * Create new wage period
    */
   async createWagePeriod(
@@ -53,7 +99,8 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const now = new Date();
       const periodData: Omit<WagePeriod, 'id'> = {
         periodCode,
-        projectLocationId: input.projectLocationId,
+        projectCode: input.projectCode,
+        projectName: input.projectName,
         startDate: input.startDate,
         endDate: input.endDate,
         periodDays,
@@ -95,12 +142,18 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         return null;
       }
 
+      // [T-360] Get project UUID for querying related collections
+      const projects = await collections.projectLocations.where('projectCode', '==', period.projectCode).get();
+      if (projects.empty) {
+        throw new AppError(`Project not found for code: ${period.projectCode}`, 404);
+      }
+      const projectLocationId = projects.docs[0].id;
+
       // 1. Fetch all daily reports for the period and project
       const reports = await collections.dailyReports
-        .where('projectLocationId', '==', period.projectLocationId)
+        .where('projectLocationId', '==', projectLocationId)
         .where('date', '>=', period.startDate)
         .where('date', '<=', period.endDate)
-        // .where('isDeleted', '==', false) // status check handles deletion logic if needed, or if we use status field
         .get()
         .then(s => s.docs.map(doc => doc.data()));
 
@@ -109,7 +162,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       // 2. Fetch all daily contractors active in this project
       const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
-      const dcs = await dailyContractorService.getByProject(period.projectLocationId);
+      const dcs = await dailyContractorService.getByProject(projectLocationId);
 
       // 3. Fetch skills for names
       const { skillService } = await import('../skill/SkillService');
@@ -137,7 +190,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       // 5.5 Detect discrepancies and generate late records before calculation
       await scanDataService.detectDiscrepancies(
-        period.projectLocationId,
+        projectLocationId,
         period.startDate,
         period.endDate,
         calculatedBy
@@ -382,6 +435,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
    */
   async findByPeriodCode(periodCode: string): Promise<WagePeriod | null> {
     try {
+      // Query by periodCode only
       const results = await this.query([
         {
           field: 'periodCode',
@@ -390,7 +444,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         },
       ]);
 
-      return results.length > 0 ? results[0] : null;
+      // Filter in memory to handle legacy data (where isDeleted is missing)
+      // and soft-deleted data (where isDeleted is true)
+      const active = results.find((p) => p.isDeleted !== true);
+
+      return active || null;
     } catch (error: any) {
       logger.error('Error finding wage period by code:', error);
       throw error;
@@ -400,15 +458,18 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Get wage periods by project
    */
-  async getByProject(projectLocationId: string): Promise<WagePeriod[]> {
+  async getByProject(projectCode: string): Promise<WagePeriod[]> {
     try {
-      return await this.query([
+      const results = await this.query([
         {
-          field: 'projectLocationId',
+          field: 'projectCode',
           operator: '==',
-          value: projectLocationId,
+          value: projectCode,
         },
       ]);
+
+      // Filter in memory to handle legacy data
+      return results.filter((p) => p.isDeleted !== true);
     } catch (error: any) {
       logger.error('Error getting wage periods by project:', error);
       throw error;
@@ -420,13 +481,16 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
    */
   async getByStatus(status: PeriodStatus): Promise<WagePeriod[]> {
     try {
-      return await this.query([
+      const results = await this.query([
         {
           field: 'status',
           operator: '==',
           value: status,
         },
       ]);
+
+      // Filter in memory to handle legacy data
+      return results.filter((p) => p.isDeleted !== true);
     } catch (error: any) {
       logger.error('Error getting wage periods by status:', error);
       throw error;

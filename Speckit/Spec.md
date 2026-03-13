@@ -110,10 +110,12 @@
 *   จัดการงวดค่าแรง (WagePeriod)
 *   บันทึกรายได้พิเศษ (AdditionalIncome)
 *   บันทึกรายจ่าย/หัก (AdditionalExpense)
+*   การลบงวดค่าแรง (Soft Delete)
+*   อ้างอิงโครงการด้วย Code และ Name (Refactor T-360)
 
 #### 2. Architecture
 *   **Endpoints**: `/api/wage-periods/*`
-*   **Entities**: `WagePeriod`, `AdditionalIncome`, `AdditionalExpense`, `DCIncomeDetails`, `DCExpenseDetails`
+*   **Entities**: `WagePeriod` (ใช้ `projectCode` & `projectName`), `AdditionalIncome`, `AdditionalExpense`
 
 ---
 
@@ -194,3 +196,5 @@
 | Task ID | Name | Goal | key Components |
 | :--- | :--- | :--- | :--- |
 | **T-230** | DC Migration & Update | Migrate IDs & Add Wage Schema | `DailyContractor.ts`, `DailyContractorService.ts`, `migrateDCIds.ts`, `index.tsx` |
+| **T-350** | Wage Period Soft Delete | Soft Delete Logic | `WagePeriod.ts`, `WagePeriodService.ts` |
+| **T-360** | Refactor Project Identity | projectCode & projectName | `WagePeriod.ts`, `WagePeriodService.ts` |

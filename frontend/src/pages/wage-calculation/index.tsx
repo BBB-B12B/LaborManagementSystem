@@ -134,6 +134,7 @@ export default function WageCalculationPage() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<WagePeriodCreateInput>({
     resolver: zodResolver(wagePeriodCreateSchema),
@@ -219,12 +220,15 @@ export default function WageCalculationPage() {
       width: 130,
     },
     {
-      field: 'projectLocationId',
+      field: 'projectName',
       headerName: 'โครงการ',
-      width: 150,
+      width: 250,
       renderCell: (params: GridRenderCellParams) => {
-        // TODO: Map projectLocationId to project name
-        return params.value;
+        return (
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {params.value}
+          </Typography>
+        );
       },
     },
     {
@@ -371,7 +375,12 @@ export default function WageCalculationPage() {
 
             <Button
               variant="contained"
-              color="primary"
+              sx={{ 
+                backgroundColor: '#1976d2', // Blue color
+                '&:hover': {
+                  backgroundColor: '#115293',
+                }
+              }}
               startIcon={<Add />}
               onClick={() => setCreateDialogOpen(true)}
             >
@@ -419,16 +428,21 @@ export default function WageCalculationPage() {
                 {/* Project Selection */}
                 <Grid item xs={12}>
                   <Controller
-                    name="projectLocationId"
+                    name="projectCode"
                     control={control}
                     render={({ field }) => (
                       <ProjectSelect
                         value={field.value || ''}
-                        onChange={(value) =>
-                          field.onChange(Array.isArray(value) ? value[0] ?? '' : value)
-                        }
-                        error={!!errors.projectLocationId}
-                        helperText={errors.projectLocationId?.message}
+                        onChange={(value) => {
+                          field.onChange(value);
+                        }}
+                        onSelectProject={(project) => {
+                          if (project) {
+                            setValue('projectName', project.projectName);
+                          }
+                        }}
+                        error={!!errors.projectCode}
+                        helperText={errors.projectCode?.message || ''}
                         required
                       />
                     )}

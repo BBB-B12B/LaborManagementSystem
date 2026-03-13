@@ -42,6 +42,7 @@ export interface ProjectSelectProps {
   showOnlyActive?: boolean;
   multiple?: boolean;
   displayProjectNameOnly?: boolean;
+  onSelectProject?: (project: ProjectLocation | null) => void;
 }
 
 /**
@@ -63,6 +64,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   showOnlyActive = true,
   multiple = false,
   displayProjectNameOnly = false,
+  onSelectProject,
 }) => {
   const { user } = useAuthStore();
 
@@ -162,6 +164,10 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     } else {
       const selected = (newValue as ProjectLocation | null)?.code ?? null;
       onChange(selected);
+
+      if (onSelectProject) {
+        onSelectProject(newValue as ProjectLocation | null);
+      }
 
       if (selected && user?.id) {
         localStorage.setItem(`lastProject_${user.id}`, selected);

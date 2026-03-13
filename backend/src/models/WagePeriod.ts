@@ -58,7 +58,8 @@ export interface DCWageSummary {
 export interface WagePeriod {
   id: string;
   periodCode: string; // Format: YYYYMM-P1 or YYYYMM-P2
-  projectLocationId: string;
+  projectCode: string; // [T-360] Use projectCode instead of UUID
+  projectName: string; // [T-360] Denormalized project name for UI/Audit
   startDate: Date;
   endDate: Date;
   periodDays: number; // Always 15
@@ -79,10 +80,14 @@ export interface WagePeriod {
   updatedAt: Date;
   createdBy: string;
   updatedBy: string;
+  isDeleted?: boolean; // [T-350] Soft delete flag
+  deletedAt?: Date; // [T-350] Timestamp of deletion
+  deletedBy?: string; // [T-350] User who deleted
 }
 
 export interface CreateWagePeriodInput {
-  projectLocationId: string;
+  projectCode: string; // [T-360] Use projectCode
+  projectName: string; // [T-360] Store name at creation
   startDate: Date;
   endDate: Date;
 }
@@ -114,7 +119,8 @@ export const wagePeriodConverter = {
   toFirestore: (period: Omit<WagePeriod, 'id'>): any => {
     return {
       periodCode: period.periodCode,
-      projectLocationId: period.projectLocationId,
+      projectCode: period.projectCode,
+      projectName: period.projectName,
       startDate: period.startDate,
       endDate: period.endDate,
       periodDays: period.periodDays,
@@ -135,6 +141,9 @@ export const wagePeriodConverter = {
       updatedAt: period.updatedAt,
       createdBy: period.createdBy,
       updatedBy: period.updatedBy,
+      isDeleted: period.isDeleted ?? false, // [T-350] Default to false
+      deletedAt: period.deletedAt || null,
+      deletedBy: period.deletedBy || null,
     };
   },
   fromFirestore: (snapshot: any): WagePeriod => {
@@ -142,7 +151,8 @@ export const wagePeriodConverter = {
     return {
       id: snapshot.id,
       periodCode: data.periodCode,
-      projectLocationId: data.projectLocationId,
+      projectCode: data.projectCode || data.projectLocationId || '', // Fallback for migration
+      projectName: data.projectName || '',
       startDate: data.startDate.toDate(),
       endDate: data.endDate.toDate(),
       periodDays: data.periodDays,
@@ -163,6 +173,9 @@ export const wagePeriodConverter = {
       updatedAt: data.updatedAt.toDate(),
       createdBy: data.createdBy,
       updatedBy: data.updatedBy,
+      isDeleted: data.isDeleted || false, // [T-350] Handle existing docs
+      deletedAt: data.deletedAt?.toDate(),
+      deletedBy: data.deletedBy,
     };
   },
 };

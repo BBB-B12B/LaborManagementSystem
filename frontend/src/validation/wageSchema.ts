@@ -25,7 +25,8 @@ import {
 export const wagePeriodCreateSchema = z
   .object({
     // Project selection
-    projectLocationId: requiredString('โครงการ'),
+    projectCode: requiredString('รหัสโครงการ'),
+    projectName: requiredString('ชื่อโครงการ'),
 
     // Period dates
     startDate: baseDate('วันที่เริ่มต้นงวด')
@@ -132,7 +133,7 @@ export const dcExpenseDetailsSchema = z.object({
  * Used for filtering wage periods
  */
 export const wagePeriodFilterSchema = z.object({
-  projectLocationId: z.string().optional(),
+  projectCode: z.string().optional(),
   status: z.enum(['draft', 'calculated', 'approved', 'paid', 'locked']).optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
