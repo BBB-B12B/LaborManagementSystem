@@ -78,13 +78,19 @@ const tableHeaders = [
   'Time4',
   'Time5',
   'Time6',
-  'Time7',
-  'Time8',
-  'Time9',
-  'Time10',
-  'สถานะเวลาปกติ',
-  'สถานะพักเที่ยง',
-  'จำนวน OT เช้าสแกนนิ้ว'
+  'สถานะเวลางานปกติ',
+  'สถานะผ่าเที่ยง',
+  'จำนวน OT เช้าสแกนนิ้ว',
+  'จำนวน OT เช้าจากตารางงาน',
+  'จำนวน OT เย็นสแกนนิ้ว',
+  'สถานะเวลางานปกติจากตารางงาน',
+  'จำนวน OTผ่าเที่ยงจากตารางงาน',
+  'จำนวน OT เย็นจากตารางงาน',
+  'จำนวนนาทีมาสาย',
+  'ความขัดแย้ง OT เที่ยง',
+  'ความขัดแย้ง OT เช้า',
+  'ความขัดแย้ง OT เย็น',
+  'ส่วนงาน'
 ];
 
 const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
@@ -599,25 +605,55 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       <TableCell>
                         {getValueByKeys(record.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'date_time', 'time'])}
                       </TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time1', 'เวลา1'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time2', 'เวลา2'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time3', 'เวลา3'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time4', 'เวลา4'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time5', 'เวลา5'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time7', 'เวลา7'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time8', 'เวลา8'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time9', 'เวลา9'])}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time10', 'เวลา10'])}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time1', 'เวลา1'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time2', 'เวลา2'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time3', 'เวลา3'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time4', 'เวลา4'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time5', 'เวลา5'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'], '')}</TableCell>
+                      
+                      {/* Computed actual metrics */}
                       <TableCell sx={{ bgcolor: 'rgba(233, 30, 99, 0.05)' }}>
-                        {getValueByKeys(record.data, ['NormalStatus', 'สถานะเวลาปกติ', 'status'], '0')}
+                        {getValueByKeys(record.data, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], '0')}
                       </TableCell>
                       <TableCell sx={{ bgcolor: 'rgba(33, 150, 243, 0.05)' }}>
-                        {getValueByKeys(record.data, ['LunchStatus', 'สถานะพักเที่ยง', 'lunch_status'], '0')}
+                        {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], '0')}
                       </TableCell>
                       <TableCell sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)' }}>
-                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้า', 'morning_ot'], '0.00')}
+                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], '0.00')}
                       </TableCell>
+
+                      {/* Extracted from Daily Report */}
+                      <TableCell sx={{ bgcolor: 'rgba(255, 193, 7, 0.05)' }}>
+                        {getValueByKeys(record.data, ['ReportMorningOT', 'จำนวน OT เช้าจากตารางงาน'], '0.00')}
+                      </TableCell>
+
+                      {/* Computed actual metrics */}
+                      <TableCell sx={{ bgcolor: 'rgba(255, 152, 0, 0.05)' }}>
+                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], '0.00')}
+                      </TableCell>
+
+                      {/* Extracted from Daily Report */}
+                      <TableCell sx={{ bgcolor: 'rgba(233, 30, 99, 0.05)' }}>
+                        {getValueByKeys(record.data, ['ReportNormalStatus', 'สถานะเวลางานปกติจากตารางงาน'], '0')}
+                      </TableCell>
+                      <TableCell sx={{ bgcolor: 'rgba(33, 150, 243, 0.05)' }}>
+                        {getValueByKeys(record.data, ['ReportLunchOT', 'จำนวน OTผ่าเที่ยงจากตารางงาน'], '0.00')}
+                      </TableCell>
+                      <TableCell sx={{ bgcolor: 'rgba(255, 152, 0, 0.05)' }}>
+                        {getValueByKeys(record.data, ['ReportEveningOT', 'จำนวน OT เย็นจากตารางงาน'], '0.00')}
+                      </TableCell>
+
+                      <TableCell sx={{ bgcolor: 'rgba(244, 67, 54, 0.1)', color: 'error.main', fontWeight: 'bold' }}>
+                        {getValueByKeys(record.data, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], '')}
+                      </TableCell>
+                      
+                      {/* Discrepancies */}
+                      <TableCell sx={{ fontWeight: 'bold' }}>{getValueByKeys(record.data, ['DiffLunch', 'ความขัดแย้ง OT เที่ยง'], '0')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{getValueByKeys(record.data, ['DiffMorning', 'ความขัดแย้ง OT เช้า'], '0')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{getValueByKeys(record.data, ['DiffEvening', 'ความขัดแย้ง OT เย็น'], '0')}</TableCell>
+                      
+                      <TableCell>{getValueByKeys(record.data, ['Department', 'ส่วนงาน'], '#N/A')}</TableCell>
                       <TableCell sx={{ color: 'error.main', maxWidth: 250 }}>
                         {record.error}
                         {record.error?.includes('ไม่พบข้อมูลแรงงาน') && (

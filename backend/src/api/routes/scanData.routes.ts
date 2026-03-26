@@ -344,10 +344,18 @@ router.post(
       const parseErrors = parseResult.errors ?? [];
       const warnings = parseResult.warnings ?? [];
 
+      const failedParseRowSummaries = parseErrors.map(err => ({
+        row: err.row,
+        status: 'failed' as const,
+        employeeNumber: err.employeeNumber || '',
+        data: err.rowData || {},
+        error: err.error
+      }));
+
       if (parseResult.records.length === 0) {
         return res.status(200).json({
           success: false,
-          data: { totalRecords: parseErrors.length, successfulRecords: 0, failedRecords: parseErrors.length, errors: parseErrors, warnings },
+          data: { totalRecords: parseErrors.length, successfulRecords: 0, failedRecords: parseErrors.length, errors: parseErrors, warnings, records: failedParseRowSummaries },
         });
       }
 
@@ -361,6 +369,15 @@ router.post(
         dryRun
       });
 
+      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort((a, b) => {
+        if (a.employeeNumber && b.employeeNumber) {
+          if (a.employeeNumber !== b.employeeNumber) {
+            return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
+          }
+        }
+        return a.row - b.row;
+      });
+
       return res.json({
         success: importSummary.success && parseErrors.length === 0,
         data: {
@@ -369,6 +386,7 @@ router.post(
           failedRecords: importSummary.failedRecords + parseErrors.length,
           errors: [...parseErrors, ...importSummary.errors],
           warnings: [...warnings, ...importSummary.warnings],
+          records: combinedRecords,
         },
       });
     } catch (error: any) {
@@ -400,10 +418,18 @@ router.post(
       const parseErrors = parseResult.errors ?? [];
       const warnings = parseResult.warnings ?? [];
 
+      const failedParseRowSummaries = parseErrors.map(err => ({
+        row: err.row,
+        status: 'failed' as const,
+        employeeNumber: err.employeeNumber || '',
+        data: err.rowData || {},
+        error: err.error
+      }));
+
       if (parseResult.records.length === 0) {
         return res.status(200).json({
           success: false,
-          data: { totalRecords: parseErrors.length, successfulRecords: 0, failedRecords: parseErrors.length, errors: parseErrors, warnings },
+          data: { totalRecords: parseErrors.length, successfulRecords: 0, failedRecords: parseErrors.length, errors: parseErrors, warnings, records: failedParseRowSummaries },
         });
       }
 
@@ -415,6 +441,15 @@ router.post(
         source: 'text',
       });
 
+      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort((a, b) => {
+        if (a.employeeNumber && b.employeeNumber) {
+          if (a.employeeNumber !== b.employeeNumber) {
+            return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
+          }
+        }
+        return a.row - b.row;
+      });
+
       return res.json({
         success: importSummary.errors.length === 0,
         data: {
@@ -423,6 +458,7 @@ router.post(
           failedRecords: importSummary.failedRecords + parseErrors.length,
           errors: [...parseErrors, ...importSummary.errors],
           warnings: [...warnings, ...importSummary.warnings],
+          records: combinedRecords,
         },
       });
     } catch (error: any) {

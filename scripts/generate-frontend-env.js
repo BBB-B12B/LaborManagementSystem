@@ -101,7 +101,7 @@ NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED=${emulatorEnabled}
   frontendContent += `# ============================================
 # Backend API Configuration
 # ============================================
-NEXT_PUBLIC_API_URL=http://localhost:${backendPort}/api
+NEXT_PUBLIC_API_URL=http://localhost:${backendPort}
 
 `;
 

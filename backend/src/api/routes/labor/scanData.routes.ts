@@ -248,6 +248,14 @@ router.post(
       const parseErrors = parseResult.errors ?? [];
       const warnings = parseResult.warnings ?? [];
 
+      const failedParseRowSummaries = parseErrors.map(err => ({
+        row: err.row,
+        status: 'failed' as const,
+        employeeNumber: err.employeeNumber || '',
+        data: err.rowData || {},
+        error: err.error
+      }));
+
       if (parseResult.records.length === 0) {
         return res.status(200).json({
           success: false,
@@ -258,7 +266,7 @@ router.post(
             failedRecords: parseErrors.length,
             errors: parseErrors,
             warnings,
-            records: [],
+            records: failedParseRowSummaries,
           },
         });
       }
@@ -281,6 +289,15 @@ router.post(
       const success =
         importSummary.success && parseErrors.length === 0;
 
+      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort((a, b) => {
+        if (a.employeeNumber && b.employeeNumber) {
+          if (a.employeeNumber !== b.employeeNumber) {
+            return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
+          }
+        }
+        return a.row - b.row;
+      });
+
       return res.json({
         success,
         data: {
@@ -289,6 +306,7 @@ router.post(
           failedRecords,
           errors: combinedErrors,
           warnings: combinedWarnings,
+          records: combinedRecords,
         },
       });
     } catch (error: any) {

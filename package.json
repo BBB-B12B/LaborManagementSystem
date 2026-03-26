@@ -7,7 +7,8 @@
     "setup:env": "node scripts/setup-env.js",
     "setup:env:backend": "node scripts/generate-backend-env.js",
     "setup:env:frontend": "node scripts/generate-frontend-env.js",
-    "dev": "docker-compose up",
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:docker": "docker-compose up",
     "dev:build": "docker-compose up --build",
     "down": "docker-compose down",
     "logs": "docker-compose logs -f",
@@ -33,5 +34,8 @@
   ],
   "dependencies": {
     "iconv-lite": "^0.7.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

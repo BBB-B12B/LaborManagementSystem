@@ -22,6 +22,7 @@ import { dailyContractorService } from '../dailyContractor/DailyContractorServic
 import { dailyReportService } from '../dailyReport/DailyReportService';
 import { COLLECTIONS } from '../../config/collections';
 import { DailyReport } from '../../models/DailyReport';
+import { ScanDataAggregator } from './ScanDataAggregator';
 
 export interface BulkImportRecord {
   rowNumber: number;
@@ -613,20 +614,98 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     await commitBatch();
 
-    // Sort summaries by EmployeeNumber then row number for consistent display as requested
-    rowSummaries.sort((a, b) => {
+    // Aggregate the successful records for the preview
+    const successfulOriginalRecords = records.filter(r => rowSummaries.some(rs => rs.status === 'success' && rs.row === r.rowNumber));
+    const aggregatedDailyRows = ScanDataAggregator.aggregate(successfulOriginalRecords);
+    
+    // Keep failed/duplicate ones as they are
+    const finalRowSummaries: RowSummary[] = rowSummaries.filter(rs => rs.status !== 'success');
+
+    for (const group of aggregatedDailyRows) {
+      const dailyContractorId = employeeCache.get(group.employeeNumber);
+      
+      let reportMorningOT = 0;
+      let reportEveningOT = 0;
+      let reportLunchOT = 0;
+      let reportNormalStatus = 0;
+      let department = '#N/A';
+      let hasReport = false;
+
+      if (dailyContractorId) {
+        // Find daily reports for this date
+        const d = new Date(group.workDate);
+        const reports = await dailyReportService.getByContractorAndDate(dailyContractorId, d, d);
+        
+        if (reports && reports.length > 0) {
+          hasReport = true;
+          for (const rep of reports) {
+            if (rep.workType === 'regular') reportNormalStatus = 1;
+            else if (rep.workType === 'ot_morning') reportMorningOT += rep.netHours;
+            else if (rep.workType === 'ot_noon') reportLunchOT += rep.netHours;
+            else if (rep.workType === 'ot_evening') reportEveningOT += rep.netHours;
+          }
+        }
+      }
+
+      const otLunchScan = group.lunchStatus === 1 ? 1 : 0; // Assuming 1 hr OT for skipped lunch
+      
+      const diffLunch = !hasReport ? 'ไม่พบข้อมูลใน Report' : Math.abs(otLunchScan - reportLunchOT);
+      const diffMorning = !hasReport ? 'ไม่พบข้อมูลใน Report' : Math.abs(group.otMorningHours - reportMorningOT);
+      const diffEvening = !hasReport ? 'ไม่พบข้อมูลใน Report' : Math.abs(group.otEveningHours - reportEveningOT);
+
+      // Use the first source row number as the display row
+      const displayRow = group.sourceRowNumbers.length > 0 ? Math.min(...group.sourceRowNumbers) : 0;
+
+      finalRowSummaries.push({
+        row: displayRow,
+        status: 'success',
+        employeeNumber: group.employeeNumber,
+        data: {
+          EmployeeNumber: group.employeeNumber,
+          Date: group.workDate,
+          Time1: group.time1 || '',
+          Time2: group.time2 || '',
+          Time3: group.time3 || '',
+          Time4: group.time4 || '',
+          Time5: group.time5 || '',
+          Time6: group.time6 || '',
+          NormalStatus: group.normalStatus,
+          LunchStatus: group.lunchStatus,
+          MorningOT: group.otMorningHours,
+          EveningOT: group.otEveningHours,
+          LateMinutes: group.lateMinutes,
+          ReportNormalStatus: reportNormalStatus,
+          ReportMorningOT: reportMorningOT,
+          ReportLunchOT: reportLunchOT,
+          ReportEveningOT: reportEveningOT,
+          DiffLunch: diffLunch,
+          DiffMorning: diffMorning,
+          DiffEvening: diffEvening,
+          Department: department
+        }
+      });
+    }
+
+    // Sort final summaries by EmployeeNumber then Date (for aggregated) OR Row (for errors)
+    finalRowSummaries.sort((a, b) => {
       if (a.employeeNumber && b.employeeNumber) {
         if (a.employeeNumber !== b.employeeNumber) {
           return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
         }
       }
+      
+      // If both are success (aggregated), sort by Date
+      if (a.status === 'success' && b.status === 'success' && a.data?.Date && b.data?.Date) {
+         return a.data.Date.localeCompare(b.data.Date);
+      }
+      
       return a.row - b.row;
     });
 
     logger.info(`Bulk scan data import completed ${options.dryRun ? '(Dry Run)' : ''}`, {
       importBatchId,
       totalRecords: records.length,
-      successfulRecords,
+      successfulRecords: successfulOriginalRecords.length,
       failedRecords,
       warnings: warnings.length,
       duplicateRecords,
@@ -636,12 +715,12 @@ class ScanDataService extends BaseCrudService<ScanData> {
       success: failedRecords === 0,
       importBatchId,
       totalRecords: records.length,
-      successfulRecords,
+      successfulRecords: successfulOriginalRecords.length,
       failedRecords,
       duplicateRecords,
       errors,
       warnings,
-      records: rowSummaries
+      records: finalRowSummaries
     };
   }
 
