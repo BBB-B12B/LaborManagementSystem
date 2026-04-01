@@ -34,6 +34,13 @@ import {
   DialogContent,
   DialogActions,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
 } from '@mui/material';
 import {
   Visibility,
@@ -45,10 +52,12 @@ import {
   Add,
   History,
   List,
+  Edit,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Controller, useForm } from 'react-hook-form';
+import { ScanDataEditDialog } from './components/ScanDataEditDialog';
 import {
   getAllDiscrepancies,
   type ScanDataDiscrepancy,
@@ -78,6 +87,8 @@ export default function ScanDataMonitoringPage() {
   const [pageSize, setPageSize] = useState(25);
   const [currentTab, setCurrentTab] = useState(0); // 0: Discrepancies, 1: All Scans
   const [manualScanOpen, setManualScanOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
 
   // Filter form
   const { control, watch, reset, handleSubmit: handleFilterSubmit } = useForm<DiscrepancyFilter>({
@@ -131,6 +142,24 @@ export default function ScanDataMonitoringPage() {
     else refetchAllScans();
   };
 
+  const handleOpenEdit = (row: any) => {
+    // Get existing punches from scanSummary or manually if needed
+    const summary = row.scanSummary || {};
+    const punches = [
+      summary.time1, summary.time2, summary.time3, 
+      summary.time4, summary.time5, summary.time6
+    ].filter(Boolean);
+    
+    setSelectedRecord({
+      contractorId: row.dailyContractorId,
+      contractorName: row.dailyContractorName || '-',
+      employeeNumber: row.employeeNumber,
+      workDate: new Date(row.workDate),
+      punches
+    });
+    setEditDialogOpen(true);
+  };
+
   const handleClearProjectData = async () => {
     if (!filter.projectLocationId || !filter.startDate || !filter.endDate) return;
 
@@ -182,130 +211,36 @@ export default function ScanDataMonitoringPage() {
     }
   };
 
-  // DataGrid columns
-  const columns: GridColDef[] = [
-    {
-      field: 'workDate',
-      headerName: 'วันที่',
-      width: 110,
-      valueFormatter: (params) =>
-        new Date(params.value).toLocaleDateString('th-TH'),
-    },
-    {
-      field: 'employeeNumber',
-      headerName: 'รหัสพนักงาน',
-      width: 120,
-    },
-    {
-      field: 'dailyContractorName',
-      headerName: 'ชื่อ DC',
-      width: 150,
-      valueGetter: (params) => params.row.dailyContractorName || '-',
-    },
-    {
-      field: 'projectLocationName',
-      headerName: 'โครงการ',
-      width: 150,
-      valueGetter: (params) => params.row.projectLocationName || '-',
-    },
-    {
-      field: 'discrepancyType',
-      headerName: 'ประเภท',
-      width: 100,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          color={getDiscrepancyTypeColor(params.value)}
-        />
-      ),
-    },
-    {
-      field: 'severity',
-      headerName: 'ความรุนแรง',
-      width: 100,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          color={getSeverityColor(params.value)}
-        />
-      ),
-    },
-    {
-      field: 'dailyReportHours',
-      headerName: 'DR (ชม.)',
-      width: 90,
-      align: 'right',
-      valueFormatter: (params) =>
-        params.value != null ? params.value.toFixed(2) : '-',
-    },
-    {
-      field: 'scannedHours',
-      headerName: 'Scan (ชม.)',
-      width: 90,
-      align: 'right',
-      valueFormatter: (params) =>
-        params.value != null ? Number(params.value).toFixed(2) : '-',
-    },
-    {
-      field: 'scanStatusLabel',
-      headerName: 'สถานะการสแกน',
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => {
-        const value = params.value || '-';
-        const isNormal = value === 'ปกติ';
-        return (
-          <Chip
-            label={value}
-            size="small"
-            color={isNormal ? 'success' : 'error'}
-            variant="outlined"
-          />
-        );
-      },
-    },
-    {
-      field: 'hoursDifference',
-      headerName: 'ส่วนต่าง',
-      width: 90,
-      align: 'right',
-      valueFormatter: (params) =>
-        params.value != null ? `${Number(params.value).toFixed(2)}` : '-',
-    },
-    {
-      field: 'status',
-      headerName: 'สถานะ',
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={getStatusLabel(params.value)}
-          size="small"
-          color={getStatusColor(params.value)}
-        />
-      ),
-    },
-    {
-      field: 'actions',
-      headerName: 'จัดการ',
-      width: 100,
-      sortable: false,
-      filterable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box>
-          <Tooltip title="ดูรายละเอียด">
-            <IconButton
-              size="small"
-              onClick={() => handleViewDetails(params.row.id)}
-              color="primary"
-            >
-              <Visibility fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      ),
-    },
+  // Manual Table Column Headers
+  const tableHeaders = [
+    { label: 'แถว', width: 60, sticky: 'left', left: 0 },
+    { label: 'สถานะ', width: 100 },
+    { label: 'EmployeeNumber', width: 130, sticky: 'left', left: 60 },
+    { label: 'Date', width: 110 },
+    { label: 'Time1', width: 80 },
+    { label: 'Time2', width: 80 },
+    { label: 'Time3', width: 80 },
+    { label: 'Time4', width: 80 },
+    { label: 'Time5', width: 80 },
+    { label: 'Time6', width: 80 },
+    { label: 'สถานะเวลางานปกติ', width: 150 },
+    { label: 'สถานะผ่าเที่ยง', width: 120 },
+    { label: 'จำนวน OT เช้าสแกนนิ้ว', width: 160 },
+    { label: 'จำนวน OT เช้าจากตารางงาน', width: 180 },
+    { label: 'จำนวน OT เย็นสแกนนิ้ว', width: 160 },
+    { label: 'สถานะเวลางานปกติจากตารางงาน', width: 220 },
+    { label: 'จำนวน OT เย็นจากตารางงาน', width: 180 },
+    { label: 'จำนวน OT ผ่าเที่ยงจากตารางงาน', width: 220 },
+    { label: 'จำนวนนาทีที่มาสาย', width: 150 },
+    { label: 'ความขัดแย้ง OT เที่ยง', width: 180 },
+    { label: 'ความขัดแย้ง OT เช้า', width: 180 },
+    { label: 'ความขัดแย้ง OT เย็น', width: 180 },
+    { label: 'ส่วนงาน', width: 150 },
+    { label: 'ข้อผิดพลาด', width: 250 },
+    { label: 'จัดการ', width: 80, sticky: 'right', right: 0 }
   ];
+
+
 
   // All Scan Data columns
   const scanColumns: GridColDef[] = [
@@ -637,23 +572,137 @@ export default function ScanDataMonitoringPage() {
                 <LoadingSpinner size="large" />
               </Box>
             ) : (
-              <DataGrid
-                rows={discrepancyData?.data || []}
-                columns={columns}
-                rowCount={discrepancyData?.total || 0}
-                page={page}
-                pageSize={pageSize}
-                paginationMode="server"
-                onPageChange={(newPage) => setPage(newPage)}
-                onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
+            <Box sx={{ width: '100%', overflow: 'hidden' }}>
+              <TableContainer sx={{ maxHeight: 600, border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+                <Table stickyHeader size="small" sx={{ minWidth: 3500 }}>
+                  <TableHead>
+                    <TableRow>
+                      {tableHeaders.map((header, index) => (
+                        <TableCell
+                          key={index}
+                          align="center"
+                          sx={{
+                            backgroundColor: '#1a333c !important',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            width: header.width,
+                            minWidth: header.width,
+                            position: header.sticky ? 'sticky' : 'static',
+                            left: header.left ?? 'auto',
+                            right: header.right ?? 'auto',
+                            zIndex: header.sticky ? 11 : 10,
+                            borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+                          }}
+                        >
+                          {header.label}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {discrepancyData?.data.map((row: any) => (
+                      <TableRow key={row.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                        {/* 1. แถว */}
+                        <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'white', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
+                          {row.detailedView?.row || '-'}
+                        </TableCell>
+                        
+                        {/* 2. สถานะ */}
+                        <TableCell align="center">
+                          <Chip
+                            label={getStatusLabel(row.status)}
+                            size="small"
+                            color={getStatusColor(row.status)}
+                            sx={{ fontWeight: 'bold' }}
+                          />
+                        </TableCell>
+
+                        {/* 3. EmployeeNumber */}
+                        <TableCell sx={{ position: 'sticky', left: 60, bgcolor: 'white', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
+                          {row.employeeNumber}
+                        </TableCell>
+
+                        {/* 4. Date */}
+                        <TableCell align="center">
+                          {new Date(row.workDate).toLocaleDateString('th-TH')}
+                        </TableCell>
+
+                        {/* 5-10. Time1-Time6 */}
+                        <TableCell align="center">{row.detailedView?.time1 || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.time2 || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.time3 || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.time4 || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.time5 || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.time6 || '-'}</TableCell>
+
+                        {/* 11. สถานะเวลางานปกติ */}
+                        <TableCell align="center">{row.detailedView?.scanNormalStatus || '-'}</TableCell>
+
+                        {/* 12. สถานะผ่าเที่ยง */}
+                        <TableCell align="center">{row.detailedView?.scanLunchStatus || '0'}</TableCell>
+
+                        {/* 13. จำนวน OT เช้าสแกนนิ้ว */}
+                        <TableCell align="center">{row.detailedView?.scanOTMorning || 0}</TableCell>
+
+                        {/* 14. จำนวน OT เช้าจากตารางงาน */}
+                        <TableCell align="center">{row.detailedView?.reportOTMorning || 0}</TableCell>
+
+                        {/* 15. จำนวน OT เย็นสแกนนิ้ว */}
+                        <TableCell align="center">{row.detailedView?.scanOTEvening || 0}</TableCell>
+
+                        {/* 16. สถานะเวลางานปกติจากตารางงาน */}
+                        <TableCell align="center">{row.detailedView?.reportRegularStatus || '-'}</TableCell>
+
+                        {/* 17. จำนวน OT เย็นจากตารางงาน */}
+                        <TableCell align="center">{row.detailedView?.reportOTEvening || 0}</TableCell>
+
+                        {/* 18. จำนวน OT ผ่าเที่ยงจากตารางงาน */}
+                        <TableCell align="center">{row.detailedView?.reportOTNoon || 0}</TableCell>
+
+                        {/* 19. จำนวนนาทีที่มาสาย */}
+                        <TableCell align="center" sx={{ color: (row.detailedView?.lateMinutes || 0) > 0 ? 'error.main' : 'inherit', fontWeight: (row.detailedView?.lateMinutes || 0) > 0 ? 'bold' : 'normal' }}>
+                          {row.detailedView?.lateMinutes || 0}
+                        </TableCell>
+
+                        {/* 20-22. ความขัดแย้ง */}
+                        <TableCell align="center">{row.detailedView?.lunchOTDiff || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.morningOTDiff || '-'}</TableCell>
+                        <TableCell align="center">{row.detailedView?.eveningOTDiff || '-'}</TableCell>
+
+                        {/* 23. ส่วนงาน */}
+                        <TableCell align="center">{row.detailedView?.projectName || '-'}</TableCell>
+
+                        {/* 24. ข้อผิดพลาด */}
+                        <TableCell align="left" sx={{ maxWidth: 250, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {row.detailedView?.errorNote || '-'}
+                        </TableCell>
+
+                        {/* 25. จัดการ */}
+                        <TableCell sx={{ position: 'sticky', right: 0, bgcolor: 'white', zIndex: 5, borderLeft: '1px solid #eee' }} align="center">
+                          <Tooltip title="แก้ไขเวลาสแกน">
+                            <IconButton size="small" onClick={() => handleOpenEdit(row)} color="info">
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
                 rowsPerPageOptions={[10, 25, 50, 100]}
-                autoHeight
-                disableSelectionOnClick
-                sx={{
-                  '& .MuiDataGrid-cell': { borderBottom: '1px solid #f0f0f0' },
-                  '& .MuiDataGrid-columnHeaders': { backgroundColor: '#fafafa', borderBottom: '2px solid #e0e0e0' },
+                component="div"
+                count={discrepancyData?.total || 0}
+                rowsPerPage={pageSize}
+                page={page}
+                onPageChange={(_: any, newPage: number) => setPage(newPage)}
+                onRowsPerPageChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                  setPageSize(parseInt(event.target.value, 10));
+                  setPage(0);
                 }}
               />
+            </Box>
             )}
           </>
         ) : (
@@ -684,6 +733,22 @@ export default function ScanDataMonitoringPage() {
           </>
         )}
       </Paper>
+
+      {/* Edit Scan Data Dialog */}
+      {selectedRecord && (
+        <ScanDataEditDialog
+          open={editDialogOpen}
+          onClose={() => {
+            setEditDialogOpen(false);
+            setSelectedRecord(null);
+          }}
+          contractorId={selectedRecord.contractorId}
+          contractorName={selectedRecord.contractorName}
+          employeeNumber={selectedRecord.employeeNumber}
+          workDate={selectedRecord.workDate}
+          existingPunches={selectedRecord.punches}
+        />
+      )}
 
       {/* Manual Scan Dialog */}
       <Dialog open={manualScanOpen} onClose={() => setManualScanOpen(false)} maxWidth="sm" fullWidth>

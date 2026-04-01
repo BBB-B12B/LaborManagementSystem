@@ -13,13 +13,12 @@ import {
   classifyScanBehavior,
   checkLate,
 } from '../../models/ScanData';
-import { collections } from '../../config/collections';
+import { COLLECTIONS, collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
-import { db } from '../../config/firebase';
+import admin, { db } from '../../config/firebase';
 import { dailyContractorService } from '../dailyContractor/DailyContractorService';
 import { dailyReportService } from '../dailyReport/DailyReportService';
-import { COLLECTIONS } from '../../config/collections';
 import { DailyReport } from '../../models/DailyReport';
 import { ScanDataAggregator } from './ScanDataAggregator';
 import { projectLocationService } from '../project/ProjectLocationService';
@@ -570,7 +569,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
           options.projectLocationId,
           minDate,
           maxDate,
-          options.importedBy
+          options.importedBy,
+          projectName,
+          projectCode
         );
       } catch (detectErr) {
         logger.error('Error in automatic discrepancy detection after import:', detectErr);
@@ -967,7 +968,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
     projectLocationId: string,
     startDate: Date,
     endDate: Date,
-    detectedBy: string
+    detectedBy: string,
+    projectName?: string,
+    projectCode?: string
   ): Promise<{ detected: number; discrepanciesCreated: number }> {
     try {
       const start = new Date(startDate);
@@ -1034,7 +1037,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const reportedOTHours = dayOTs.reduce((sum, ot) => sum + (ot.workHours || 0), 0);
         const reportedTotalHours = reportedRegularHours + reportedOTHours;
 
-        // Scanned Hours calculation via same logic as Import Preview (ScanDataAggregator)
+        // 4. Group Scans for Aggregator
         const forAggregator = dayScans.map(s => ({
           employeeNumber: dcId,
           scanDateTime: s.scanDateTime,
@@ -1047,12 +1050,12 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const scanNormalStatus = daySummary?.normalStatus || 0;
         const scanStatusLabel = scanNormalStatus === 1 ? 'ปกติ' : 'ไม่ครบ';
 
-        // Scanned Hours breakdowns (used for diff calculation)
+        // 5. Scanned Hours breakdowns
         const scannedRegularHours = daySummary?.normalStatus ? 8.0 : 0.0;
         const scannedOTHours = (daySummary?.otMorningHours || 0) + (daySummary?.otEveningHours || 0) + (daySummary?.lunchStatus ? 1.0 : 0.0);
         const scannedTotalHours = scannedRegularHours + scannedOTHours;
 
-        // Compare sums
+        // 6. Compare with Daily Reports
         const diffTotalHours = reportedTotalHours - scannedTotalHours;
         const diffRegularHours = reportedRegularHours - scannedRegularHours;
         const diffOTHours = reportedOTHours - scannedOTHours;
@@ -1061,20 +1064,17 @@ class ScanDataService extends BaseCrudService<ScanData> {
         let reason = '';
         let discrepancyType: 'Type1' | 'Type2' | 'Type3' = 'Type1';
 
-        // Discrepancy Classification
         if ((dayReports.length > 0 || dayOTs.length > 0) && dayScans.length < 2) {
-          // Type 2: Daily Report exists but no Scan Data
           shouldCreate = true;
           discrepancyType = 'Type2';
           reason = 'มี Daily Report หรือ OT Record แต่ข้อมูลสแกนนิ้วน้อยกว่า 2 ครั้ง';
         } else if (dayReports.length === 0 && dayOTs.length === 0 && dayScans.length >= 1) {
-          // Type 3: Scan Data exists but no Daily Report
           shouldCreate = true;
           discrepancyType = 'Type3';
           reason = dayScans.length === 1 
             ? 'มีการสแกนนิ้วเพียง 1 ครั้ง และไม่มีการกรอก Daily Report / OT' 
             : 'มีการสแกนนิ้วเข้า-ออก แต่ไม่มีการกรอก Daily Report / OT';
-        } else if (Math.abs(diffTotalHours) > 0.5) { // Any mismatch over 0.5 hours
+        } else if (Math.abs(diffTotalHours) > 0.5) {
           shouldCreate = true;
           discrepancyType = 'Type1';
           if (diffRegularHours > 0.5) {
@@ -1091,7 +1091,13 @@ class ScanDataService extends BaseCrudService<ScanData> {
           const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discId);
 
           const absDiffVal = Math.abs(diffTotalHours);
-          const severity = absDiffVal >= 2 ? 'error' : 'warning'; // If mismatch is >= 2 hours => Red Error
+          const severity = absDiffVal >= 2 ? 'error' : 'warning';
+
+          // Aggregate Report Data Labels (เหมือนใน Preview)
+          const reportOTNoon = dayOTs.some(ot => ot.workType === 'ot_noon') ? 1 : 0;
+          const reportOTMorning = dayOTs.reduce((sum, ot) => sum + (ot.workType === 'ot_morning' ? ot.workHours : 0), 0);
+          const reportOTEvening = dayOTs.reduce((sum, ot) => sum + (ot.workType === 'ot_evening' ? ot.workHours : 0), 0);
+          const reportStatusLabel = dayReports.length > 0 ? 'พบใน Report' : 'ไม่พบข้อมูลใน Report';
 
           const discrepancyData: any = {
             dailyReportId: dayReports[0]?.id || 'missing',
@@ -1103,12 +1109,35 @@ class ScanDataService extends BaseCrudService<ScanData> {
             scannedHours: scannedTotalHours,
             scanNormalStatus,
             scanStatusLabel,
-            hoursDifference: diffTotalHours, // POSITIVE = Reported > Scanned
+            hoursDifference: diffTotalHours,
             severity,
             status: 'pending',
             detectionReason: reason,
             createdAt: now,
             detectedBy,
+            projectName,
+            projectCode,
+            
+            // --- PERSISTENT DETAILED METRICS ---
+            employeeNumber: daySummary?.employeeNumber || dcId,
+            rowNumber: 0, // Will be handled by frontend sorting/paging
+            time1: daySummary?.time1,
+            time2: daySummary?.time2,
+            time3: daySummary?.time3,
+            time4: daySummary?.time4,
+            time5: daySummary?.time5,
+            time6: daySummary?.time6,
+            scanLunchStatus: daySummary?.lunchStatus || 0,
+            scanOTMorning: daySummary?.otMorningHours || 0,
+            scanOTEvening: daySummary?.otEveningHours || 0,
+            lateMinutes: daySummary?.lateMinutes || 0,
+            reportNormalStatus: dayReports.length > 0 ? 1 : 0,
+            reportOTMorning,
+            reportOTEvening,
+            reportOTNoon,
+            morningOTDiff: (daySummary?.otMorningHours || 0) !== reportOTMorning ? reportStatusLabel : '-',
+            eveningOTDiff: (daySummary?.otEveningHours || 0) !== reportOTEvening ? reportStatusLabel : '-',
+            lunchOTDiff: (daySummary?.lunchStatus || 0) !== reportOTNoon ? reportStatusLabel : '-',
           };
 
           batch.set(discRef, discrepancyData);
@@ -1318,39 +1347,54 @@ class ScanDataService extends BaseCrudService<ScanData> {
         }
       }
 
-      let allItems = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
-      
-      // Mandatory in-memory filtering (to cover the fields skipped in fallback query)
-      if (options.projectId) {
-         allItems = allItems.filter(item => item.projectLocationId === options.projectId);
-      }
-      if (options.startDate) {
-         const start = options.startDate.getTime();
-         allItems = allItems.filter(item => {
-            const d = item.workDate?.toDate ? item.workDate.toDate() : new Date(item.workDate);
-            return d.getTime() >= start;
-         });
-      }
-      if (options.endDate) {
-         const end = options.endDate.getTime();
-         allItems = allItems.filter(item => {
-            const d = item.workDate?.toDate ? item.workDate.toDate() : new Date(item.workDate);
-            return d.getTime() <= end;
-         });
-      }
-
-      // Manual Sort
-      allItems.sort((a, b) => {
-        const dateA = a.workDate?.toDate ? a.workDate.toDate().getTime() : new Date(a.workDate).getTime();
-        const dateB = b.workDate?.toDate ? b.workDate.toDate().getTime() : new Date(b.workDate).getTime();
-        return dateB - dateA; // Descending
+      let allItems = snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        // Clean up Timestamps for JSON serialization (fixes 'Invalid Date')
+        if (data.workDate && data.workDate.toDate) data.workDate = data.workDate.toDate();
+        if (data.createdAt && data.createdAt.toDate) data.createdAt = data.createdAt.toDate();
+        if (data.resolvedAt && data.resolvedAt.toDate) data.resolvedAt = data.resolvedAt.toDate();
+        
+        return { id: doc.id, ...data };
       });
 
-      const total = allItems.length;
+      // 4. Return Data (Stop on-the-fly enrichment)
+      const finalItems = allItems.map(item => ({
+        ...item,
+        // Wrap stored fields into detailedView for UI compatibility if needed, 
+        // OR just ensure the UI reads directly from 'item'. 
+        // We'll wrap it to avoid breaking the existing UI component.
+        detailedView: {
+          row: item.rowNumber || 0,
+          status: item.status,
+          employeeNumber: item.employeeNumber,
+          date: item.workDate,
+          time1: item.time1 || '-',
+          time2: item.time2 || '-',
+          time3: item.time3 || '-',
+          time4: item.time4 || '-',
+          time5: item.time5 || '-',
+          time6: item.time6 || '-',
+          scanNormalStatus: item.scanNormalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
+          scanLunchStatus: String(item.scanLunchStatus || 0),
+          scanOTMorning: item.scanOTMorning || 0,
+          scanOTEvening: item.scanOTEvening || 0,
+          lateMinutes: item.lateMinutes || 0,
+          reportRegularStatus: item.reportNormalStatus === 1 ? 'ปกติ' : 'ไม่มีข้อมูล',
+          reportOTMorning: item.reportOTMorning || 0,
+          reportOTEvening: item.reportOTEvening || 0,
+          reportOTNoon: item.reportOTNoon || 0,
+          morningOTDiff: item.morningOTDiff || '-',
+          eveningOTDiff: item.eveningOTDiff || '-',
+          lunchOTDiff: item.lunchOTDiff || '-',
+          projectName: item.projectName || '-',
+          errorNote: item.detectionReason || '-'
+        }
+      }));
 
+      const total = finalItems.length;
       const { page, pageSize } = options;
       const start = (page - 1) * pageSize;
-      const pagedData = allItems.slice(start, start + pageSize);
+      const pagedData = finalItems.slice(start, start + pageSize);
 
       // Enhance with basic contractor string if missing
       for (const item of pagedData) {
@@ -1447,6 +1491,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
   /**
    * Delete scan data by project and date range
+   * Also deletes associated discrepancy records
    * @param projectLocationId The project ID
    * @param startDate Start date (inclusive)
    * @param endDate End date (inclusive)
@@ -1457,30 +1502,57 @@ class ScanDataService extends BaseCrudService<ScanData> {
     endDate: Date
   ): Promise<number> {
     try {
-      const records = await this.getByProjectAndDate(projectLocationId, startDate, endDate);
-      if (records.length === 0) return 0;
-
+      // 1. Delete ScanData records
+      const scans = await this.getByProjectAndDate(projectLocationId, startDate, endDate);
       let deletedCount = 0;
-      const chunks = [];
-      for (let i = 0; i < records.length; i += 500) {
-        chunks.push(records.slice(i, i + 500));
+      
+      if (scans.length > 0) {
+        const chunks = [];
+        for (let i = 0; i < scans.length; i += 500) {
+          chunks.push(scans.slice(i, i + 500));
+        }
+
+        for (const chunk of chunks) {
+          const batch = db.batch();
+          chunk.forEach((doc) => {
+            batch.delete(collections.scanData.doc(doc.id));
+          });
+          await batch.commit();
+          deletedCount += chunk.length;
+        }
       }
 
-      for (const chunk of chunks) {
-        const batch = db.batch();
-        chunk.forEach((doc) => {
-          batch.delete(collections.scanData.doc(doc.id));
-        });
-        await batch.commit();
-        deletedCount += chunk.length;
+      // 2. Delete ScanDataDiscrepancy records
+      const discQuery = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
+        .where('projectLocationId', '==', projectLocationId)
+        .where('workDate', '>=', startDate)
+        .where('workDate', '<=', endDate);
+      
+      const discSnapshot = await discQuery.get();
+      const discRecords = discSnapshot.docs;
+
+      if (discRecords.length > 0) {
+        const discChunks = [];
+        for (let i = 0; i < discRecords.length; i += 500) {
+          discChunks.push(discRecords.slice(i, i + 500));
+        }
+
+        for (const chunk of discChunks) {
+          const batch = db.batch();
+          chunk.forEach((doc) => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+        }
+        logger.info(`Deleted ${discRecords.length} discrepancy records for project ${projectLocationId}`);
       }
 
       logger.info(
-        `Deleted ${deletedCount} scan records for project ${projectLocationId} from ${startDate.toISOString()} to ${endDate.toISOString()}`
+        `Bulk cleanup complete: Deleted ${deletedCount} scans and ${discRecords.length} discrepancies for project ${projectLocationId} from ${startDate.toISOString()} to ${endDate.toISOString()}`
       );
       return deletedCount;
     } catch (error: any) {
-      logger.error('Error deleting scan data by project/date:', error);
+      logger.error('Error in comprehensive data cleanup:', error);
       throw error;
     }
   }
@@ -1579,6 +1651,151 @@ class ScanDataService extends BaseCrudService<ScanData> {
     } catch (error: any) {
       logger.error('Error re-opening discrepancy:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Update all punches for a specific contractor and date.
+   * This is used for manual correction from the UI.
+   */
+  async updateDailyPunches(
+    contractorId: string,
+    date: Date,
+    punches: string[], // Array of HH:mm
+    updatedBy: string
+  ): Promise<{ success: boolean; count: number }> {
+    try {
+      // 1. Delete all existing scans for this contractor and date
+      const existingScans = await this.getByContractorAndDate(contractorId, date, date);
+      const batch = db.batch();
+      
+      for (const scan of existingScans) {
+        batch.delete(db.collection(COLLECTIONS.SCAN_DATA).doc(scan.id));
+      }
+      
+      // 2. Create new scans for each punch
+      const projectLocationId = existingScans.reduce<string>((acc, s) => acc || s.projectLocationId || '', ''); 
+      const employeeNumber = existingScans.reduce<string>((acc, s) => acc || s.employeeNumber || '', '');
+      const employeeId = existingScans.reduce<string>((acc, s) => acc || s.employeeId || '', '');
+
+      for (const punch of punches) {
+        if (!punch || punch.trim() === '') continue;
+        const [hours, mins] = punch.split(':').map(Number);
+        if (isNaN(hours) || isNaN(mins)) continue;
+
+        const scanDateTime = new Date(date);
+        scanDateTime.setHours(hours, mins, 0, 0);
+
+        const newScanRef = db.collection(COLLECTIONS.SCAN_DATA).doc();
+        batch.set(newScanRef, {
+          dailyContractorId: contractorId,
+          employeeId: employeeId,
+          employeeNumber: employeeNumber,
+          projectLocationId: projectLocationId,
+          scanDateTime: admin.firestore.Timestamp.fromDate(scanDateTime),
+          importNote: `Manual Edit by ${updatedBy}`,
+          createdAt: admin.firestore.Timestamp.now()
+        });
+      }
+
+      await batch.commit();
+
+      // 3. Re-trigger discrepancy detection for this day
+      if (projectLocationId) {
+        setTimeout(() => {
+          this.detectDiscrepancies(projectLocationId, date, date, updatedBy).catch(console.error);
+        }, 1000);
+      }
+
+      return { success: true, count: punches.length };
+    } catch (error) {
+      console.error('Error updating daily punches:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/scan-data/detailed
+   * Custom report with full column enrichment
+   */
+  async getDetailedScanReport(options: any): Promise<{ data: any[]; total: number }> {
+    try {
+      let scans: ScanData[] = [];
+      let total = 0;
+
+      if (options.projectId && options.startDate && options.endDate) {
+        scans = await this.getByProjectAndDate(
+          options.projectId,
+          options.startDate,
+          options.endDate
+        );
+        total = scans.length;
+      } else {
+        const result = await super.getAll(options);
+        scans = result.items;
+        total = result.total;
+      }
+
+      const enriched = [];
+      for (const scan of scans) {
+        const workDate = scan.workDate instanceof Date ? scan.workDate : (scan.workDate as any).toDate ? (scan.workDate as any).toDate() : new Date(scan.workDate);
+        
+        // Fetch All Daily Reports (including OT) for this contractor and date
+        const dayReports = await dailyReportService.getByContractorAndDate(
+          scan.dailyContractorId,
+          workDate,
+          workDate
+        );
+
+        const reportData = {
+          regular: dayReports.some(r => r.workType === 'regular') ? 1 : 0,
+          otMorning: dayReports.reduce((sum: number, r: DailyReport) => sum + (r.workType === 'ot_morning' ? r.netHours : 0), 0),
+          otNoon: dayReports.some(r => r.workType === 'ot_noon') ? 1 : 0,
+          otEvening: dayReports.reduce((sum: number, r: DailyReport) => sum + (r.workType === 'ot_evening' ? r.netHours : 0), 0),
+          statusLabel: dayReports.length > 0 ? 'พบใน Report' : 'ไม่พบข้อมูลใน Report'
+        };
+
+        enriched.push({
+          ...scan,
+          detailedView: {
+            row: 0,
+            status: scan.hasDiscrepancy ? 'pending' : 'verified',
+            employeeNumber: scan.employeeNumber,
+            date: workDate,
+            time1: scan.Time1 || '-',
+            time2: scan.Time2 || '-',
+            time3: scan.Time3 || '-',
+            time4: scan.Time4 || '-',
+            time5: scan.Time5 || '-',
+            time6: scan.Time6 || '-',
+            scanNormalStatus: (scan as any).scanNormalStatus === 1 ? 'ปกติ' : (scan.Time1 && scan.lastOut ? 'ปกติ' : 'ไม่ครบ'),
+            scanLunchStatus: String((scan as any).scanLunchStatus || 0),
+            scanOTMorning: (scan as any).scanOTMorning || 0,
+            scanOTEvening: (scan as any).scanOTEvening || 0,
+            lateMinutes: scan.lateMinutes || 0,
+            reportRegularStatus: reportData.regular === 1 ? 'ปกติ' : 'ไม่มีข้อมูล',
+            reportOTMorning: reportData.otMorning,
+            reportOTEvening: reportData.otEvening,
+            reportOTNoon: reportData.otNoon,
+            morningOTDiff: '-',
+            eveningOTDiff: '-',
+            lunchOTDiff: '-',
+            projectName: scan.projectName || '-',
+            errorNote: scan.notes || '-'
+          }
+        });
+      }
+
+      if (options.page && options.pageSize && options.projectId) {
+         const start = (options.page - 1) * options.pageSize;
+         const paged = enriched.slice(start, start + options.pageSize);
+         return { data: paged, total };
+      }
+
+      return { data: enriched, total };
+    } catch (err) {
+      console.error('Error getting detailed scan report:', err);
+      throw err;
     }
   }
 }

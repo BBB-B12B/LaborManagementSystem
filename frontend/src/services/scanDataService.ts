@@ -187,7 +187,7 @@ export const uploadScanDataExcel = uploadScanDataFile;
  * Get all scan data with filtering
  */
 export async function getAllScanData(
-  filter?: ScanDataFilter,
+  filter?: ScanDataFilter & { enriched?: boolean },
   page: number = 1,
   pageSize: number = 50
 ): Promise<{
@@ -213,19 +213,20 @@ export async function getAllScanData(
     if (filter.hasDiscrepancy !== undefined)
       params.append('hasDiscrepancy', String(filter.hasDiscrepancy));
     if (filter.importBatchId) params.append('importBatchId', filter.importBatchId);
+    if (filter.enriched) params.append('enriched', 'true');
   }
 
   const response = await apiClient.get<{
     success: boolean;
     data: ScanData[];
-    pagination: { total: number; page: number; pageSize: number };
+    total: number;
   }>(`/scan-data?${params.toString()}`);
 
   return {
     data: response.data.data,
-    total: response.data.pagination.total,
-    page: response.data.pagination.page,
-    pageSize: response.data.pagination.pageSize,
+    total: response.data.total || 0,
+    page,
+    pageSize,
   };
 }
 
@@ -477,6 +478,26 @@ export async function updateScanDataRecord(
     updates
   );
   return response.data.data;
+}
+
+
+/**
+ * Update all punches for a specific contractor and date (Manual correction)
+ */
+export async function updateDailyPunches(
+  contractorId: string,
+  date: Date,
+  punches: string[]
+): Promise<{ success: boolean; count: number }> {
+  const response = await apiClient.put<{ success: boolean; count: number }>(
+    '/scan-data/punches',
+    {
+      contractorId,
+      date: date.toISOString(),
+      punches
+    }
+  );
+  return response.data;
 }
 
 /**

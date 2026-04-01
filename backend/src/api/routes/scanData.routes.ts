@@ -91,29 +91,40 @@ router.get(
       const errors = validationResult(req);
       if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
 
-      const { projectId, contractorId, startDate, endDate } = req.query;
-      let scans;
-      if (projectId && startDate && endDate) {
-        scans = await scanDataService.getByProjectAndDate(
-          projectId as string,
-          new Date(startDate as string),
-          new Date(endDate as string)
+      const { projectId, contractorId, startDate, endDate, enriched } = req.query;
+      let result;
+
+      const options = {
+        projectId: projectId as string,
+        contractorId: contractorId as string,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        page: parseInt(req.query.page as string) || 1,
+        pageSize: parseInt(req.query.pageSize as string) || 50,
+      };
+
+      if (enriched === 'true') {
+        result = await scanDataService.getDetailedScanReport(options);
+      } else if (projectId && startDate && endDate) {
+        const scans = await scanDataService.getByProjectAndDate(
+          options.projectId,
+          options.startDate!,
+          options.endDate!
         );
+        result = { data: scans, total: scans.length };
       } else if (contractorId && startDate && endDate) {
-        scans = await scanDataService.getByContractorAndDate(
-          contractorId as string,
-          new Date(startDate as string),
-          new Date(endDate as string)
+        const scans = await scanDataService.getByContractorAndDate(
+          options.contractorId,
+          options.startDate!,
+          options.endDate!
         );
+        result = { data: scans, total: scans.length };
       } else {
-        const result = await scanDataService.getAll({
-          page: parseInt(req.query.page as string) || 1,
-          pageSize: parseInt(req.query.pageSize as string) || 50,
-        });
-        scans = result.items;
+        const crudResult = await scanDataService.getAll(options);
+        result = { data: crudResult.items, total: crudResult.total };
       }
 
-      res.json({ success: true, data: scans });
+      res.json({ success: true, data: result.data, total: result.total });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }
@@ -193,22 +204,35 @@ router.get('/discrepancies/:id', async (req: Request, res: Response) => {
       throw new AppError('Discrepancy not found', 404);
     }
 
-    const discrepancy = { id: doc.id, ...doc.data() } as any;
+    // Use raw data first but properly extract workDate for query
+    const data = doc.data() as any;
+    const workDate = data.workDate?.toDate ? data.workDate.toDate() : new Date(data.workDate);
+    
+    const discrepancy = { 
+        id: doc.id, 
+        ...data,
+        workDate: workDate // Ensure it's a JS Date for the response
+    };
 
-    if (discrepancy.dailyContractorId && discrepancy.workDate) {
-      const scans = await scanDataService.getByContractorAndDate(
-        discrepancy.dailyContractorId,
-        new Date(discrepancy.workDate),
-        new Date(discrepancy.workDate)
-      );
+    if (discrepancy.dailyContractorId && workDate && !isNaN(workDate.getTime())) {
+      try {
+        const scans = await scanDataService.getByContractorAndDate(
+          discrepancy.dailyContractorId,
+          workDate,
+          workDate
+        );
 
-      discrepancy.scanDataRecords = scans.map(scan => ({
-        id: scan.id,
-        scanTime: scan.scanDateTime,
-        scanType: scan.scanBehavior,
-        roundedTime: scan.roundedTime.toISOString(),
-      }));
-      discrepancy.scanDataIds = scans.map(s => s.id);
+        discrepancy.scanDataRecords = scans.map(scan => ({
+          id: scan.id,
+          scanTime: scan.scanDateTime,
+          scanType: scan.scanBehavior,
+          roundedTime: scan.roundedTime instanceof Date ? scan.roundedTime.toISOString() : scan.roundedTime,
+        }));
+        discrepancy.scanDataIds = scans.map(s => s.id);
+      } catch (err) {
+        console.warn('Could not fetch scan records for discrepancy detail:', err);
+        discrepancy.scanDataRecords = [];
+      }
     }
 
     res.json({ success: true, data: discrepancy });
@@ -548,18 +572,37 @@ router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Respons
 });
 
 /**
- * GET /api/scan-data/batch/:batchId/export
+ * GET /api/scan-data/export
+ * Export filtered scan data to Excel
  */
-router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
+router.get('/export', async (req: Request, res: Response) => {
   try {
-    const { batchId } = req.params;
-    const scans = await scanDataService.getByBatchId(batchId);
-    if (!scans || scans.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับ Batch นี้', 404);
+    const { projectLocationId, startDate, endDate, employeeNumber } = req.query;
+    
+    if (!projectLocationId || !startDate || !endDate) {
+       throw new AppError('กรุณาระบุโครงการและช่วงวันที่', 400);
+    }
+
+    const scans = await scanDataService.getByProjectAndDate(
+      projectLocationId as string,
+      new Date(startDate as string),
+      new Date(endDate as string)
+    );
+
+    let filteredScans = scans;
+    if (employeeNumber) {
+      filteredScans = scans.filter(s => 
+        (s.employeeNumber && s.employeeNumber.includes(employeeNumber as string)) || 
+        (s.employeeId && s.employeeId.includes(employeeNumber as string))
+      );
+    }
+
+    if (!filteredScans || filteredScans.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับเงื่อนไขนี้', 404);
 
     const grouped = new Map<string, any>();
-    scans.sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
+    filteredScans.sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
 
-    scans.forEach(scan => {
+    filteredScans.forEach(scan => {
       const dateStr = scan.scanDateTime.toISOString().split('T')[0];
       const empNum = scan.employeeNumber || scan.employeeId || 'Unknown';
       const key = `${empNum}_${dateStr}`;
@@ -569,13 +612,10 @@ router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
           EmployeeNumber: empNum,
           Date: dateStr,
           Times: [],
-          NormalStatus: '',
-          LunchStatus: '',
-          MorningOT: ''
         });
       }
       const entry = grouped.get(key);
-      const timeStr = scan.scanDateTime.toTimeString().split(' ')[0];
+      const timeStr = scan.scanDateTime.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
       entry.Times.push(timeStr);
     });
 
@@ -599,7 +639,69 @@ router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
     });
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows, { header: ['EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6', 'NormalStatus', 'LunchStatus', 'MorningOT'] });
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6'] });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Export_${new Date().getTime()}.xlsx`);
+    res.send(buffer);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Export failed' });
+  }
+});
+
+/**
+ * GET /api/scan-data/batch/:batchId/export
+ */
+router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+    const scans = await scanDataService.getByBatchId(batchId);
+    if (!scans || scans.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับ Batch นี้', 404);
+
+    const grouped = new Map<string, any>();
+    scans.sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
+
+    scans.forEach(scan => {
+      const dateStr = scan.scanDateTime.toISOString().split('T')[0];
+      const empNum = scan.employeeNumber || scan.employeeId || 'Unknown';
+      const key = `${empNum}_${dateStr}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          EmployeeNumber: empNum,
+          Date: dateStr,
+          Times: [],
+        });
+      }
+      const entry = grouped.get(key);
+      const timeStr = scan.scanDateTime.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
+      entry.Times.push(timeStr);
+    });
+
+    const rows: any[] = [];
+    const keys = Array.from(grouped.keys());
+
+    keys.sort((a, b) => {
+      const [empA, dateA] = a.split('_');
+      const [empB, dateB] = b.split('_');
+      if (empA !== empB) return empA.localeCompare(empB, undefined, { numeric: true });
+      return dateA.localeCompare(dateB);
+    });
+
+    keys.forEach(key => {
+      const data = grouped.get(key);
+      const row: any = { EmployeeNumber: data.EmployeeNumber, Date: data.Date };
+      data.Times.slice(0, 6).forEach((t: string, i: number) => {
+        row[`Time${i + 1}`] = t;
+      });
+      rows.push(row);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6'] });
 
     XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -611,7 +713,6 @@ router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: error.message || 'Export failed' });
   }
 });
-
 /**
  * Add a manual scan record
  */
@@ -670,5 +771,37 @@ router.post('/discrepancies/:id/reopen', async (req: Request, res: Response) => 
     res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
+
+
+/**
+ * PUT /api/scan-data/punches
+ * แก้ไขรายการสแกนนิ้วรายวัน (Manual Correction)
+ */
+router.put(
+  '/punches',
+  [
+    body('contractorId').isString(),
+    body('date').isISO8601(),
+    body('punches').isArray(),
+  ],
+  async (req: Request, res: Response) => {
+    try {
+      const authReq = req as AuthRequest;
+      const { contractorId, date, punches } = req.body;
+      const updatedBy = authReq.user?.name || authReq.user?.username || 'admin';
+      
+      const result = await scanDataService.updateDailyPunches(
+        contractorId,
+        new Date(date),
+        punches,
+        updatedBy
+      );
+      
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
 
 export default router;
