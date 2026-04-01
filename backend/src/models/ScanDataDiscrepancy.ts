@@ -18,6 +18,8 @@ export interface ScanDataDiscrepancy {
   discrepancyType: 'Type1' | 'Type2' | 'Type3';
   reportedHours: number; // จาก Daily Report
   scannedHours: number; // จาก Scan Data
+  scanNormalStatus: number; // 0: ไม่ครบ, 1: ปกติ
+  scanStatusLabel: string; // 'ปกติ' | 'ไม่ครบ'
   hoursDifference: number; // reportedHours - scannedHours
   severity: DiscrepancySeverity; // warning ถ้า difference > 2 hours
   status: DiscrepancyStatus;
@@ -36,6 +38,8 @@ export interface CreateScanDataDiscrepancyInput {
   workDate: Date;
   reportedHours: number;
   scannedHours: number;
+  scanNormalStatus: number;
+  scanStatusLabel: string;
   discrepancyType: 'Type1' | 'Type2' | 'Type3';
   detectionReason: string;
 }
@@ -63,6 +67,8 @@ export const scanDataDiscrepancyConverter = {
       discrepancyType: discrepancy.discrepancyType,
       reportedHours: discrepancy.reportedHours,
       scannedHours: discrepancy.scannedHours,
+      scanNormalStatus: discrepancy.scanNormalStatus,
+      scanStatusLabel: discrepancy.scanStatusLabel,
       hoursDifference: discrepancy.hoursDifference,
       severity: discrepancy.severity,
       status: discrepancy.status,
@@ -85,6 +91,8 @@ export const scanDataDiscrepancyConverter = {
       discrepancyType: data.discrepancyType || 'Type1',
       reportedHours: data.reportedHours,
       scannedHours: data.scannedHours,
+      scanNormalStatus: data.scanNormalStatus || 0,
+      scanStatusLabel: data.scanStatusLabel || 'ไม่ครบ',
       hoursDifference: data.hoursDifference,
       severity: data.severity,
       status: data.status,

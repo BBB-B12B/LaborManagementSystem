@@ -190,7 +190,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                     '&:hover': { bgcolor: '#1a2433' }
                   }}
                 >
-                  โหลด Template
+                  ดาวน์โหลด Template
                 </Button>
               </Box>
               <input

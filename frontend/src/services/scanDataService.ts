@@ -82,6 +82,7 @@ export interface ScanDataDiscrepancy {
     workHours?: number;
   };
   scanDataRecords?: Array<{
+    id?: string;
     scanTime: string;
     scanType: string;
     roundedTime?: string;
@@ -241,8 +242,32 @@ export async function getScanDataById(id: string): Promise<ScanData> {
 /**
  * Delete scan data (ลบทั้ง batch)
  */
-export async function deleteScanDataBatch(importBatchId: string): Promise<void> {
-  await apiClient.delete(`/scan-data/batch/${importBatchId}`);
+export async function deleteScanDataBatch(importBatchId: string): Promise<{ deletedCount: number }> {
+  const response = await apiClient.delete<{
+    success: boolean;
+    data: { deletedCount: number };
+  }>(`/scan-data/batch/${importBatchId}`);
+  return response.data.data;
+}
+
+/**
+ * Delete scan data (ลบตามโครงการและวันที่)
+ */
+export async function deleteScanDataBulk(
+  projectLocationId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{ deletedCount: number }> {
+  const params = new URLSearchParams();
+  params.append('projectLocationId', projectLocationId);
+  params.append('startDate', startDate.toISOString());
+  params.append('endDate', endDate.toISOString());
+
+  const response = await apiClient.delete<{
+    success: boolean;
+    data: { deletedCount: number };
+  }>(`/scan-data/bulk?${params.toString()}`);
+  return response.data.data;
 }
 
 /**
@@ -392,6 +417,13 @@ export async function getLateRecords(
 }
 
 /**
+ * Delete a single scan data record
+ */
+export async function softDeleteScanData(id: string): Promise<void> {
+  await apiClient.delete(`/scan-data/${id}`);
+}
+
+/**
  * Trigger discrepancy detection for a date range
  */
 export async function triggerDiscrepancyDetection(
@@ -415,4 +447,44 @@ export async function triggerDiscrepancyDetection(
     detectCounted: response.data.data.detected,
     discrepanciesCreated: response.data.data.discrepanciesCreated,
   };
+}
+
+/**
+ * Add a manual scan record
+ */
+export async function addManualScan(payload: {
+  employeeNumber: string;
+  projectLocationId: string;
+  scanDateTime: Date;
+  notes?: string;
+}): Promise<ScanData> {
+  const response = await apiClient.post<{ success: boolean; data: ScanData }>(
+    '/scan-data/manual',
+    payload
+  );
+  return response.data.data;
+}
+
+/**
+ * Update a scan record
+ */
+export async function updateScanDataRecord(
+  id: string,
+  updates: Partial<ScanData>
+): Promise<ScanData> {
+  const response = await apiClient.patch<{ success: boolean; data: ScanData }>(
+    `/scan-data/${id}`,
+    updates
+  );
+  return response.data.data;
+}
+
+/**
+ * Re-open a resolved discrepancy
+ */
+export async function reopenDiscrepancy(id: string): Promise<ScanDataDiscrepancy> {
+  const response = await apiClient.post<{ success: boolean; data: ScanDataDiscrepancy }>(
+    `/scan-data/discrepancies/${id}/reopen`
+  );
+  return response.data.data;
 }

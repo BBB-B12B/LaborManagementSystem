@@ -1,4 +1,5 @@
 import { parse, isValid as isValidDate } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
 import XLSX from 'xlsx';
 import type {
   BulkImportRecord,
@@ -8,19 +9,51 @@ import { AppError } from '../../api/middleware/errorHandler';
 
 const DATE_FORMATS = [
   'yyyy-MM-dd HH:mm:ss',
+  'yyyy-MM-dd H:mm:ss',
   'yyyy-MM-dd HH:mm',
+  'yyyy-MM-dd H:mm',
   'dd/MM/yyyy HH:mm:ss',
+  'dd/MM/yyyy H:mm:ss',
   'dd/MM/yyyy HH:mm',
+  'dd/MM/yyyy H:mm',
   'dd-MM-yyyy HH:mm:ss',
+  'dd-MM-yyyy H:mm:ss',
   'dd-MM-yyyy HH:mm',
+  'dd-MM-yyyy H:mm',
   'yyyy/MM/dd HH:mm:ss',
+  'yyyy/MM/dd H:mm:ss',
   'yyyy/MM/dd HH:mm',
+  'yyyy/MM/dd H:mm',
   'MM/dd/yyyy HH:mm:ss',
+  'MM/dd/yyyy H:mm:ss',
   'MM/dd/yyyy HH:mm',
-  'yyyyMMddHHmmss',
+  'MM/dd/yyyy H:mm',
   'ddMMyyyyHHmmss',
   'ddMMyyyyHHmm',
+  'yyyyMMddHHmmss',
   'yyyyMMddHHmm',
+
+  // Date only formats (Standard)
+  'yyyy-MM-dd',
+  'dd/MM/yyyy',
+  'dd-MM-yyyy',
+  'yyyy/MM/dd',
+  'MM/dd/yyyy',
+  'yyyy-MM-dd',
+  'yyyy.MM.dd',
+  'dd.MM.yyyy',
+
+  // Short years
+  'dd/MM/yy',
+  'dd-MM-yy',
+  'yy-MM-dd',
+  'yy/MM/dd',
+  'dd.MM.yy',
+  'yy.MM.dd',
+
+  // Condensed
+  'yyyyMMdd',
+  'ddMMyyyy',
 ];
 
 export interface ParsedFileResult {
@@ -55,6 +88,52 @@ function looksLikeHeader(value: string): boolean {
   );
 }
 
+const THAI_MONTHS: Record<string, string> = {
+  'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04',
+  'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08',
+  'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12',
+  'มกราคม': '01', 'กุมภาพันธ์': '02', 'มีนาคม': '03', 'เมษายน': '04',
+  'พฤษภาคม': '05', 'มิถุนายน': '06', 'กรกฎาคม': '07', 'สิงหาคม': '08',
+  'กันยายน': '09', 'ตุลาคม': '10', 'พฤศจิกายน': '11', 'ธันวาคม': '12'
+};
+
+function normalizeThaiDate(dateStr: string): string {
+  let normalized = dateStr;
+  for (const [thai, num] of Object.entries(THAI_MONTHS)) {
+    if (normalized.includes(thai)) {
+      normalized = normalized.replace(thai, num);
+      break;
+    }
+  }
+
+  // Handle BE years in DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  const yearMatch = normalized.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[3], 10);
+    if (year > 2500) {
+      normalized = normalized.replace(year.toString(), (year - 543).toString());
+    }
+  }
+
+  // Handle BE years in short format (e.g., 68 for 2568)
+  // This is risky but common in Thailand (dd/MM/yy where yy is BE)
+  // We'll only convert if yy > 60 and < 99 assuming it's around 256x
+  const shortYearMatch = normalized.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
+  if (shortYearMatch) {
+    const yr = parseInt(shortYearMatch[3], 10);
+    // If yr is between 60 and 99, it's likely Buddhist Era (BE) 256x-259x
+    if (yr >= 60 && yr <= 99) {
+      const fullYear = 2500 + yr - 543; // Convert to AD
+      normalized = normalized.substring(0, shortYearMatch.index! + shortYearMatch[0].length - 2) + fullYear.toString().substring(2);
+      // Wait, let's just use the full 4 digit year for clarity before parsing
+      normalized = normalized.substring(0, shortYearMatch.index! + shortYearMatch[0].length - 2 - (shortYearMatch[1].length + 1 + shortYearMatch[2].length + 1)) 
+                 + shortYearMatch[1] + '/' + shortYearMatch[2] + '/' + fullYear;
+    }
+  }
+
+  return normalized;
+}
+
 function parseDateValue(raw: unknown): Date | null {
   if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
     return raw;
@@ -65,7 +144,7 @@ function parseDateValue(raw: unknown): Date | null {
     const parseDateCode = (XLSX.SSF as unknown as { parse_date_code?: (value: number) => any }).parse_date_code;
     const excelDate = parseDateCode ? parseDateCode(raw) : null;
     if (excelDate) {
-      return new Date(
+      const d = new Date(
         excelDate.y,
         excelDate.m - 1,
         excelDate.d,
@@ -73,6 +152,7 @@ function parseDateValue(raw: unknown): Date | null {
         excelDate.M,
         excelDate.S
       );
+      return fromZonedTime(d, 'Asia/Bangkok');
     }
 
     if (raw > 10_000_000_000) {
@@ -91,14 +171,16 @@ function parseDateValue(raw: unknown): Date | null {
     return null;
   }
 
+  const normalizedValue = normalizeThaiDate(value);
+
   for (const format of DATE_FORMATS) {
-    const parsed = parse(value, format, new Date());
+    const parsed = parse(normalizedValue, format, new Date());
     if (isValidDate(parsed)) {
-      return parsed;
+      return fromZonedTime(parsed, 'Asia/Bangkok');
     }
   }
 
-  const parsed = new Date(value);
+  const parsed = new Date(normalizedValue);
   if (!Number.isNaN(parsed.getTime())) {
     return parsed;
   }
@@ -108,8 +190,10 @@ function parseDateValue(raw: unknown): Date | null {
 
 interface DatLineParseResult {
   employeeNumber: string;
-  dateValue: string;
+  dateToken: string;
+  timeTokens: string[];
   extras: string[];
+  originalRemaining: string[];
 }
 
 function parseDatLine(line: string): DatLineParseResult | null {
@@ -132,41 +216,34 @@ function parseDatLine(line: string): DatLineParseResult | null {
     return null;
   }
 
-  const employeeToken = tokens[0].replace(/^\uFEFF/, '');
+  const employeeToken = tokens[0].replace(/[\uFEFF\u200B\s]+/g, '');
   const remainingTokens = tokens.slice(1);
 
-  let dateValue = '';
-  let extras: string[] = [];
-
-  if (remainingTokens.length >= 2) {
-    const maybeDate = remainingTokens[0];
-    const maybeTime = remainingTokens[1];
-
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    const timePattern = /^\d{2}:\d{2}(:\d{2})?$/;
-
-    // Support DD/MM/YYYY formatting check as well
-    const alterDatePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-
-    if ((datePattern.test(maybeDate) || alterDatePattern.test(maybeDate)) && timePattern.test(maybeTime)) {
-      dateValue = `${maybeDate} ${maybeTime}`;
-      extras = remainingTokens.slice(2);
-    }
-  }
-
-  if (!dateValue) {
-    dateValue = remainingTokens.join(' ').trim();
-    extras = [];
-  }
-
-  if (looksLikeHeader(employeeToken) || looksLikeHeader(dateValue)) {
+  if (looksLikeHeader(employeeToken)) {
     return null;
+  }
+
+  const maybeDate = remainingTokens[0];
+  const timeTokens: string[] = [];
+  const extras: string[] = [];
+  
+  const timePattern = /^\d{1,2}:\d{2}(:\d{2})?$/;
+
+  for (let i = 1; i < remainingTokens.length; i++) {
+    const token = remainingTokens[i];
+    if (timePattern.test(token)) {
+      timeTokens.push(token);
+    } else {
+      extras.push(token);
+    }
   }
 
   return {
     employeeNumber: employeeToken,
-    dateValue,
+    dateToken: maybeDate,
+    timeTokens,
     extras,
+    originalRemaining: remainingTokens
   };
 }
 
@@ -198,53 +275,92 @@ export function parseNotepadText(content: string): ParsedFileResult {
       return;
     }
 
-    const { employeeNumber, dateValue, extras } = parsed;
-
-    const dateParts = dateValue.split(' ');
-    const rowDate = dateParts[0] || '';
-    const rowTime = dateParts[1] || '';
-
-    // Create rowData for template display - Only include essential fields as requested
-    const rowData: any = {
-      EmployeeNumber: employeeNumber,
-      Date: rowDate,
-      Time1: rowTime,
-    };
+    const { employeeNumber, dateToken, timeTokens, extras, originalRemaining } = parsed;
 
     if (!employeeNumber) {
       errors.push({
         row: rowNumber,
         error: 'รหัสพนักงานว่าง',
-        rowData
       });
       return;
     }
 
-    const scanDateTime = parseDateValue(dateValue);
-    if (!scanDateTime) {
-      errors.push({
-        row: rowNumber,
-        employeeNumber,
-        error: `ไม่สามารถอ่านเวลาสแกน "${dateValue}"`,
-        rowData
+    if (timeTokens.length > 0) {
+      let insertedCount = 0;
+      
+      const rowData: any = {
+        EmployeeNumber: employeeNumber,
+        Date: dateToken,
+      };
+      
+      timeTokens.forEach((t, i) => {
+        rowData[`Time${i+1}`] = t;
       });
-      return;
-    }
 
+      timeTokens.forEach((timeStr, i) => {
+        const dateValue = `${dateToken} ${timeStr}`;
+        const scanDateTime = parseDateValue(dateValue);
 
-
-    records.push({
-      rowNumber,
-      employeeNumber,
-      scanDateTime,
-      rawLine,
-      rawData: extras.length
-        ? {
-          extras,
+        if (scanDateTime) {
+          records.push({
+            rowNumber,
+            employeeNumber,
+            scanDateTime,
+            rawLine,
+            rawData: { extras, timeColumn: `Time${i+1}` },
+            rowData: {
+              ...rowData,
+              Date: scanDateTime.toISOString().split('T')[0] // Format for UI mapping
+            }
+          });
+          insertedCount++;
+        } else {
+          warnings.push(`แถว ${rowNumber}: ไม่สามารถอ่านเวลาสแกน "${dateValue}"`);
         }
-        : undefined,
-      rowData
-    });
+      });
+
+      if (insertedCount === 0) {
+        errors.push({
+          row: rowNumber,
+          employeeNumber,
+          error: `รูปแบบวันที่/เวลาไม่ถูกต้องในแถวนี้ ("${dateToken}")`,
+          rowData
+        });
+      }
+    } else {
+      // Single date/time combo or missing time
+      let dateValue = "";
+      if (extras.length === 0) {
+        dateValue = dateToken;
+      } else {
+        dateValue = originalRemaining.join(' ');
+      }
+
+      const scanDateTime = parseDateValue(dateValue);
+      const rowData: any = {
+        EmployeeNumber: employeeNumber,
+        Date: dateToken,
+      };
+
+      if (!scanDateTime) {
+        errors.push({
+          row: rowNumber,
+          employeeNumber,
+          error: `ไม่สามารถอ่านเวลาสแกน "${dateValue}"`,
+          rowData
+        });
+        return;
+      }
+
+      records.push({
+        rowNumber,
+        employeeNumber,
+        scanDateTime,
+        rawLine,
+        rawData: extras.length ? { extras } : undefined,
+        rowData
+      });
+    }
   });
 
   return {
@@ -308,7 +424,8 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
     const employeeRaw = row[employeeIndex];
     const dateRaw = row[dateIndex];
 
-    const employeeNumber = typeof employeeRaw === 'string' ? employeeRaw.trim() : `${employeeRaw ?? ''}`.trim();
+    const employeeRawStr = typeof employeeRaw === 'string' ? employeeRaw : `${employeeRaw ?? ''}`;
+    const employeeNumber = employeeRawStr.replace(/[\uFEFF\u200B\s]+/g, '');
     if (!employeeNumber) return; // Skip empty rows
 
     // Parse base date
@@ -367,7 +484,10 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
                   timeColumn: `Time${i + 1}`,
                   originalTime: timeStr
                 },
-                rowData
+                rowData: {
+                  ...rowData,
+                  Date: scanDateTime.toISOString().split('T')[0]
+                }
               });
             } else {
               warnings.push(`แถว ${rowNumber}: ไม่สามารถอ่านเวลา Time${i + 1} "${timeStr}"`);
@@ -384,7 +504,10 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
             employeeNumber,
             scanDateTime: baseDate,
             rawData: extras,
-            rowData
+            rowData: {
+              ...rowData,
+              Date: baseDate.toISOString().split('T')[0]
+            }
           });
         } else {
           // If no time found, we still push a record but with warning or handle as failure in service
@@ -393,7 +516,10 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
             employeeNumber,
             scanDateTime: baseDate,
             rawData: extras,
-            rowData
+            rowData: {
+              ...rowData,
+              Date: baseDate.toISOString().split('T')[0]
+            }
           });
           warnings.push(`แถว ${rowNumber}: ไม่พบเวลาสแกนในคอลัมน์ Time1-10`);
         }
@@ -406,7 +532,10 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
         employeeNumber,
         scanDateTime: baseDate,
         rawData: extras,
-        rowData
+        rowData: {
+          ...rowData,
+          Date: baseDate.toISOString().split('T')[0] // Standardize for UI
+        }
       });
     }
   });

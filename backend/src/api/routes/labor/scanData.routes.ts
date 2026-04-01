@@ -399,4 +399,67 @@ router.post(
   }
 );
 
+/**
+ * DELETE /api/scan-data/batch/:batchId
+ * ลบข้อมูลสแกนตาม Batch ID
+ */
+router.delete('/batch/:batchId', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+    const deletedCount = await scanDataService.deleteByBatchId(batchId);
+
+    res.json({
+      success: true,
+      message: `ลบข้อมูลสำเร็จ ${deletedCount} รายการ`,
+      data: { deletedCount },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * DELETE /api/scan-data/bulk
+ * ลบข้อมูลสแกนตามโครงการและวันที่
+ */
+router.delete(
+  '/bulk',
+  [
+    query('projectLocationId').notEmpty().withMessage('กรุณาระบุโครงการ'),
+    query('startDate').isISO8601().withMessage('รูปแบบวันที่ไม่ถูกต้อง'),
+    query('endDate').isISO8601().withMessage('รูปแบบวันที่ไม่ถูกต้อง'),
+  ],
+  async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('กรุณาระบุข้อมูลให้ครบถ้วน', 400);
+      }
+
+      const { projectLocationId, startDate, endDate } = req.query;
+
+      const deletedCount = await scanDataService.deleteByProjectAndDateRange(
+        projectLocationId as string,
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+
+      res.json({
+        success: true,
+        message: `ลบข้อมูลสำเร็จ ${deletedCount} รายการ`,
+        data: { deletedCount },
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
 export default router;

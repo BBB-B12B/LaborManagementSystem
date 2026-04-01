@@ -35,52 +35,29 @@ const upload = multer({
 router.get('/template', (_req: Request, res: Response) => {
   try {
     const headers = [
-
-
-
       'EmployeeNumber',
-      'Date',
-      'Time1',
-      'Time2',
-      'Time3',
-      'Time4',
-      'Time5',
-      'Time6',
-      'NormalStatus',
-      'LunchStatus',
-      'MorningOT'
+      'Date'
     ];
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers]);
 
     ws['!cols'] = [
-      { wch: 15 }, // EmployeeNumber
-      { wch: 15 }, // Date
-      { wch: 10 }, // Time1
-      { wch: 10 }, // Time2
-      { wch: 10 }, // Time3
-      { wch: 10 }, // Time4
-      { wch: 10 }, // Time5
-      { wch: 10 }, // Time6
-      { wch: 15 }, // NormalStatus
-      { wch: 15 }, // LunchStatus
-      { wch: 12 }, // MorningOT
+      { wch: 20 }, // EmployeeNumber
+      { wch: 25 }, // Date
+      { wch: 80 }, // Note
     ];
 
     XLSX.utils.sheet_add_aoa(ws, [
       [
-        '101527',
-        new Date().toISOString().split('T')[0],
-        '08:00',
-        '12:00',
-        '13:00',
-        '17:00',
+        '200022',
+        '2025-08-25 07:35:22'
+      ],
+      [],
+      [
         '',
         '',
-        'Normal',
-        'Yes',
-        '0'
+        'หมายเหตุ: กรุณาวางข้อมูลในรูปแบบรหัสพนักงาน (EmployeeNumber) และ วันเวลา (YYYY-MM-DD HH:mm:ss)'
       ]
     ], { origin: -1 });
 
@@ -370,12 +347,16 @@ router.post(
       });
 
       const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort((a, b) => {
-        if (a.employeeNumber && b.employeeNumber) {
-          if (a.employeeNumber !== b.employeeNumber) {
-            return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
-          }
+        const empA = String(a.employeeNumber || '');
+        const empB = String(b.employeeNumber || '');
+        
+        if (empA && empB && empA !== empB) {
+          return empA.localeCompare(empB, undefined, { numeric: true });
         }
-        return a.row - b.row;
+        
+        const rowA = Number(a.row) || 0;
+        const rowB = Number(b.row) || 0;
+        return rowA - rowB;
       });
 
       return res.json({
@@ -390,7 +371,8 @@ router.post(
         },
       });
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Import failed' });
+      console.error('CRASH IN /import ROUTE:', error);
+      return res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Import failed', stack: error.stack });
     }
   }
 );
@@ -627,6 +609,65 @@ router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
     res.send(buffer);
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message || 'Export failed' });
+  }
+});
+
+/**
+ * Add a manual scan record
+ */
+router.post('/manual', async (req: Request, res: Response) => {
+  try {
+    const { employeeNumber, projectLocationId, scanDateTime, notes } = req.body;
+    if (!employeeNumber || !projectLocationId || !scanDateTime) {
+      throw new AppError('กรุณาระบุข้อมูลให้ครบถ้วน (รหัสพนักงาน, โครงการ, วันเวลา)', 400);
+    }
+
+    const result = await scanDataService.addManualScan(
+      {
+        employeeNumber,
+        projectLocationId,
+        scanDateTime: new Date(scanDateTime),
+        notes,
+      },
+      (req as any).user?.id || 'admin'
+    );
+
+    res.status(201).json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Update a scan record
+ */
+router.patch('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await scanDataService.updateScanData(
+      id,
+      req.body,
+      (req as any).user?.id || 'admin'
+    );
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Re-open a resolved discrepancy
+ */
+router.post('/discrepancies/:id/reopen', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await scanDataService.reopenDiscrepancy(
+      id,
+      (req as any).user?.id || 'admin'
+    );
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 

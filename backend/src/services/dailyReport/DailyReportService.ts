@@ -196,7 +196,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
     startDate: Date,
     endDate: Date
   ): Promise<DailyReport[]> {
-    const reports = await this.query([
+    const reports = await this.queryWithFallback([
       { field: 'projectLocationId', operator: '==', value: projectId },
       { field: 'workDate', operator: '>=', value: startDate },
       { field: 'workDate', operator: '<=', value: endDate },
@@ -211,7 +211,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
    * Get daily reports by date range (all projects)
    */
   async getByDateRange(startDate: Date, endDate: Date): Promise<DailyReport[]> {
-    const reports = await this.query([
+    const reports = await this.queryWithFallback([
       { field: 'workDate', operator: '>=', value: startDate },
       { field: 'workDate', operator: '<=', value: endDate },
     ]);
@@ -228,7 +228,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
     startDate: Date,
     endDate: Date
   ): Promise<DailyReport[]> {
-    const reports = await this.query([
+    const reports = await this.queryWithFallback([
       { field: 'dailyContractorId', operator: '==', value: contractorId },
       { field: 'workDate', operator: '>=', value: startDate },
       { field: 'workDate', operator: '<=', value: endDate },

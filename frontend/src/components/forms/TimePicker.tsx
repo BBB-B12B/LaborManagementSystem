@@ -84,14 +84,9 @@ export const TimePicker: React.FC<TimePickerProps> = ({
   /**
    * Validate time against constraints
    */
-<<<<<<< HEAD
   const shouldDisableTime = (value: Date, view: 'hours' | 'minutes' | 'seconds'): boolean => {
     if (view === 'minutes' && minutesStep > 1) {
-=======
-  const shouldDisableTime = (value: Date, view: string): boolean => {
-    if (view === 'minutes' && minutesStep > 1) {
       // Disable minutes that don't match the step
->>>>>>> Labor-Rotation
       return value.getMinutes() % minutesStep !== 0;
     }
     return false;

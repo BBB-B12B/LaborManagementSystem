@@ -52,6 +52,8 @@ import {
   Warning,
   Info,
   AccessTime,
+  Refresh,
+  Delete,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
@@ -61,13 +63,16 @@ import {
   getDiscrepancyById,
   resolveDiscrepancy,
   type ScanDataDiscrepancy,
-} from '../../services/scanDataService';
+  reopenDiscrepancy,
+  updateScanDataRecord,
+} from '../../../services/scanDataService';
 import {
   getDiscrepancyTypeLabel,
   getDiscrepancyTypeColor,
   getSeverityColor,
-} from '../../validation/scanDataSchema';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+} from '../../../validation/scanDataSchema';
+import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
+import { Layout, ProtectedRoute } from '@/components/layout';
 
 /**
  * Resolution form schema
@@ -100,6 +105,30 @@ export default function DiscrepancyDetailPage() {
     enabled: !!id,
   });
 
+  const [editScanOpen, setEditScanOpen] = useState(false);
+  const [editingScan, setEditingScan] = useState<any>(null);
+
+  // Re-open mutation
+  const reopenMutation = useMutation({
+    mutationFn: () => reopenDiscrepancy(id as string),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['discrepancy', id] });
+      queryClient.invalidateQueries({ queryKey: ['discrepancies'] });
+      alert('เปิดรายการใหม่สำเร็จแล้ว');
+    },
+  });
+
+  // Update scan record mutation
+  const updateScanMutation = useMutation({
+    mutationFn: ({ scanId, updates }: { scanId: string; updates: any }) =>
+      updateScanDataRecord(scanId, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['discrepancy', id] });
+      setEditScanOpen(false);
+      alert('อัปเดตเวลาสแกนสำเร็จแล้ว');
+    },
+  });
+
   // Resolution form
   const {
     control,
@@ -109,6 +138,13 @@ export default function DiscrepancyDetailPage() {
   } = useForm<ResolutionInput>({
     resolver: zodResolver(ResolutionSchema),
   });
+
+  // Edit Scan form
+  const {
+    control: editScanControl,
+    handleSubmit: handleEditScanSubmit,
+    reset: resetEditScan,
+  } = useForm();
 
   // Resolve mutation
   const resolveMutation = useMutation({
@@ -139,38 +175,46 @@ export default function DiscrepancyDetailPage() {
   };
 
   const handleBack = () => {
-    router.push('/scan-data-monitoring');
+    router.push('/labor/scan-data-monitoring');
   };
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-        <LoadingSpinner size="large" />
-      </Container>
+      <ProtectedRoute>
+        <Layout maxWidth={false} disablePadding>
+          <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+            <LoadingSpinner size="large" />
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   if (error || !discrepancy) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="error">
-          <AlertTitle>เกิดข้อผิดพลาด</AlertTitle>
-          {error ? (error as Error).message : 'ไม่พบข้อมูลความผิดปกติ'}
-        </Alert>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleBack}
-          sx={{ mt: 2 }}
-        >
-          กลับ
-        </Button>
-      </Container>
+      <ProtectedRoute>
+        <Layout maxWidth={false} disablePadding>
+          <Container maxWidth="lg" sx={{ mt: 4 }}>
+            <Alert severity="error">
+              <AlertTitle>เกิดข้อผิดพลาด</AlertTitle>
+              {error ? (error as Error).message : 'ไม่พบข้อมูลความผิดปกติ'}
+            </Alert>
+            <Button
+              startIcon={<ArrowBack />}
+              onClick={handleBack}
+              sx={{ mt: 2 }}
+            >
+              กลับ
+            </Button>
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   const isResolved = discrepancy.status !== 'pending';
 
-  return (
+  const renderContent = () => (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
@@ -205,7 +249,7 @@ export default function DiscrepancyDetailPage() {
           </Box>
 
           {/* Resolution Actions */}
-          {!isResolved && (
+          {!isResolved ? (
             <Stack direction="row" spacing={1}>
               <Tooltip title="อัพเดท Daily Report ด้วยข้อมูลจาก ScanData">
                 <Button
@@ -250,6 +294,21 @@ export default function DiscrepancyDetailPage() {
                 </Button>
               </Tooltip>
             </Stack>
+          ) : (
+            /* Re-open Action */
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<Refresh />}
+              onClick={() => {
+                if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการเปิดรายการนี้เพื่อแก้ไขใหม่?')) {
+                  reopenMutation.mutate();
+                }
+              }}
+              disabled={reopenMutation.isPending}
+            >
+              แก้ไขการจัดการ (Re-open)
+            </Button>
           )}
         </Box>
       </Box>
@@ -290,7 +349,7 @@ export default function DiscrepancyDetailPage() {
                   รหัสพนักงาน
                 </Typography>
                 <Typography variant="body1" fontWeight="bold">
-                  {discrepancy.employeeNumber}
+                   {discrepancy.employeeNumber}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -420,7 +479,7 @@ export default function DiscrepancyDetailPage() {
                         : '-'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {discrepancy.hoursDifference > 0
+                      {(discrepancy.hoursDifference || 0) > 0
                         ? 'ScanData มากกว่า Daily Report'
                         : 'Daily Report มากกว่า ScanData'}
                     </Typography>
@@ -441,13 +500,14 @@ export default function DiscrepancyDetailPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>เวลา</TableCell>
-                    <TableCell>ประเภท</TableCell>
-                    <TableCell align="right">ชั่วโมง (ปัดเศษ)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>เวลา</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>ประเภท</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>ชั่วโมง (ปัดเศษ)</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 'bold' }}>จัดการ</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {discrepancy.scanDataRecords
+                  {(discrepancy.scanDataRecords || [])
                     .sort((a, b) => new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime())
                     .map((record, index) => (
                       <TableRow key={index}>
@@ -455,6 +515,7 @@ export default function DiscrepancyDetailPage() {
                           {new Date(record.scanTime).toLocaleTimeString('th-TH', {
                             hour: '2-digit',
                             minute: '2-digit',
+                            second: '2-digit',
                           })}
                         </TableCell>
                         <TableCell>
@@ -467,6 +528,39 @@ export default function DiscrepancyDetailPage() {
                                 minute: '2-digit',
                               })
                             : '-'}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="แก้ไขเวลา">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setEditingScan(record);
+                                setEditScanOpen(true);
+                                resetEditScan({
+                                  scanTime: new Date(record.scanTime).toISOString().split('T')[0],
+                                  time: new Date(record.scanTime).toTimeString().split(' ')[0],
+                                });
+                              }}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="ลบรายการ">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => {
+                                if (record.id && window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการสแกนนี้?')) {
+                                  updateScanMutation.mutate({
+                                    scanId: record.id,
+                                    updates: { isDeleted: true },
+                                  });
+                                }
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -572,7 +666,7 @@ export default function DiscrepancyDetailPage() {
             <Typography variant="subtitle2" gutterBottom color="info.main">
               💡 คำแนะนำ
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
               {discrepancy.discrepancyType === 'Type1' && (
                 <>
                   <strong>Type1:</strong> Daily Report มีชั่วโมงน้อยกว่า ScanData
@@ -678,6 +772,14 @@ export default function DiscrepancyDetailPage() {
         </form>
       </Dialog>
     </Container>
+  );
+
+  return (
+    <ProtectedRoute>
+      <Layout maxWidth={false} disablePadding>
+        {renderContent()}
+      </Layout>
+    </ProtectedRoute>
   );
 }
 

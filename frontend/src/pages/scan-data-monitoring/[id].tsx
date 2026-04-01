@@ -438,7 +438,7 @@ export default function DiscrepancyDetailPage() {
                         : '-'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {discrepancy.hoursDifference > 0
+                      {(discrepancy.hoursDifference || 0) > 0
                         ? 'ScanData มากกว่า Daily Report'
                         : 'Daily Report มากกว่า ScanData'}
                     </Typography>
@@ -459,14 +459,14 @@ export default function DiscrepancyDetailPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>เวลา</TableCell>
-                    <TableCell>ประเภท</TableCell>
-                    <TableCell align="right">ชั่วโมง (ปัดเศษ)</TableCell>
-                    <TableCell align="center" width={50}></TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>เวลา</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>ประเภท</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>ชั่วโมง (ปัดเศษ)</TableCell>
+                    <TableCell align="center" width={50} sx={{ fontWeight: 'bold' }}></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {discrepancy.scanDataRecords
+                  {(discrepancy.scanDataRecords || [])
                     .sort((a, b) => new Date(a.scanTime).getTime() - new Date(b.scanTime).getTime())
                     .map((record, index) => (
                       <TableRow key={index}>
@@ -482,9 +482,9 @@ export default function DiscrepancyDetailPage() {
                         <TableCell align="right">
                           {record.roundedTime
                             ? new Date(record.roundedTime).toLocaleTimeString('th-TH', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
                             : '-'}
                         </TableCell>
                         <TableCell align="center">

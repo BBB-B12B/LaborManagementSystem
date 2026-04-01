@@ -21,15 +21,19 @@ export interface ScanData {
   dailyContractorId: string;
   employeeId: string;
   employeeNumber?: string;
-  projectLocationId: string;
-  scanDateTime: Date;
-  scanBehavior: ScanBehavior;
-  workDate: Date; // วันที่ทำงานจริง (อาจต่างจาก scanDateTime ถ้าข้ามวัน)
-  roundedTime: Date; // ปัดเศษลง 5 นาที
-  isLate: boolean; // มาสายหรือไม่ (>08:00)
-  lateMinutes: number; // จำนวนนาทีที่มาสาย
-  matchedDailyReportId?: string; // Link to matched DailyReport
-  hasDiscrepancy: boolean; // มีความผิดปกติหรือไม่
+  name?: string;
+  position?: string;
+  projectLocationId: string; // Legacy field
+  projectLocationIds?: string[]; // New Array field (WH1, P002, etc.)
+  scanDateTime: Date; // Keep for legacy/internal purposes
+  scanDate?: string; // YYYY-MM-DD
+  scanBehavior: ScanBehavior; // Keep legacy behavior classification
+  workDate: Date;
+  roundedTime: Date;
+  isLate: boolean;
+  lateMinutes: number;
+  matchedDailyReportId?: string;
+  hasDiscrepancy: boolean;
   notes?: string;
   createdAt: Date;
   importedAt: Date;
@@ -38,6 +42,20 @@ export interface ScanData {
   importSource?: string;
   importNote?: string;
   rawData?: Record<string, unknown>;
+  // New Time Slots
+  // New Time Slots
+  Time1?: string | null;
+  Time2?: string | null;
+  Time3?: string | null;
+  Time4?: string | null;
+  Time5?: string | null;
+  Time6?: string | null;
+  allScans?: string[]; // Array of HH:mm:ss strings
+  punches?: string[]; // Array of HH:mm strings
+  firstIn?: string | null;
+  lastOut?: string | null;
+  projectCode?: string;
+  projectName?: string;
   // Soft Delete
   isDeleted?: boolean;
   deletedAt?: Date;
@@ -57,13 +75,8 @@ export interface CreateScanDataInput {
  * Round time down to nearest 5 minutes
  */
 export function roundDownToFiveMinutes(date: Date): Date {
-  const minutes = date.getMinutes();
-  const roundedMinutes = Math.floor(minutes / 5) * 5;
-  const rounded = new Date(date);
-  rounded.setMinutes(roundedMinutes);
-  rounded.setSeconds(0);
-  rounded.setMilliseconds(0);
-  return rounded;
+  // User requested exact time without rounding.
+  return new Date(date);
 }
 
 /**
@@ -72,6 +85,9 @@ export function roundDownToFiveMinutes(date: Date): Date {
  * will be handled by analyzeDailyScans later.
  */
 export function classifyScanBehavior(scanTime: Date): ScanBehavior {
+  if (!scanTime || !(scanTime instanceof Date)) {
+    return 'regular_in';
+  }
   const hour = scanTime.getHours();
   const minute = scanTime.getMinutes();
   const timeInMinutes = hour * 60 + minute;
@@ -129,8 +145,13 @@ export const scanDataConverter = {
     return {
       dailyContractorId: scan.dailyContractorId,
       employeeId: scan.employeeId,
+      employeeNumber: scan.employeeNumber || scan.employeeId,
+      name: scan.name || null,
+      position: scan.position || null,
       projectLocationId: scan.projectLocationId,
+      projectLocationIds: scan.projectLocationIds || [],
       scanDateTime: scan.scanDateTime,
+      scanDate: scan.scanDate || null,
       scanBehavior: scan.scanBehavior,
       workDate: scan.workDate,
       roundedTime: scan.roundedTime,
@@ -145,8 +166,22 @@ export const scanDataConverter = {
       importBatchId: scan.importBatchId,
       importSource: scan.importSource || null,
       importNote: scan.importNote || null,
-      employeeNumber: scan.employeeNumber || scan.employeeId,
       rawData: scan.rawData || null,
+      Time1: scan.Time1 || null,
+      Time2: scan.Time2 || null,
+      Time3: scan.Time3 || null,
+      Time4: scan.Time4 || null,
+      Time5: scan.Time5 || null,
+      Time6: scan.Time6 || null,
+      allScans: scan.allScans || null,
+      punches: scan.punches || [],
+      firstIn: scan.firstIn || null,
+      lastOut: scan.lastOut || null,
+      projectCode: scan.projectCode || null,
+      projectName: scan.projectName || null,
+      isDeleted: scan.isDeleted || false,
+      deletedAt: scan.deletedAt || null,
+      deletedBy: scan.deletedBy || null,
     };
   },
   fromFirestore: (snapshot: any): ScanData => {
@@ -156,8 +191,12 @@ export const scanDataConverter = {
       dailyContractorId: data.dailyContractorId,
       employeeId: data.employeeId,
       employeeNumber: data.employeeNumber || data.employeeId,
+      name: data.name,
+      position: data.position,
       projectLocationId: data.projectLocationId,
+      projectLocationIds: data.projectLocationIds || [],
       scanDateTime: data.scanDateTime.toDate(),
+      scanDate: data.scanDate,
       scanBehavior: data.scanBehavior,
       workDate: data.workDate.toDate(),
       roundedTime: data.roundedTime.toDate(),
@@ -173,6 +212,21 @@ export const scanDataConverter = {
       importSource: data.importSource || undefined,
       importNote: data.importNote || undefined,
       rawData: data.rawData || undefined,
+      Time1: data.Time1,
+      Time2: data.Time2,
+      Time3: data.Time3,
+      Time4: data.Time4,
+      Time5: data.Time5,
+      Time6: data.Time6,
+      allScans: data.allScans,
+      punches: data.punches || [],
+      firstIn: data.firstIn,
+      lastOut: data.lastOut,
+      projectCode: data.projectCode,
+      projectName: data.projectName,
+      isDeleted: data.isDeleted || false,
+      deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : data.deletedAt,
+      deletedBy: data.deletedBy,
     };
   },
 };

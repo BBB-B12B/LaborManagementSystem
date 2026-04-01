@@ -10,7 +10,6 @@ import { BaseCrudService } from '../base/BaseCrudService';
 import {
   ScanData,
   CreateScanDataInput,
-  roundDownToFiveMinutes,
   classifyScanBehavior,
   checkLate,
 } from '../../models/ScanData';
@@ -23,6 +22,7 @@ import { dailyReportService } from '../dailyReport/DailyReportService';
 import { COLLECTIONS } from '../../config/collections';
 import { DailyReport } from '../../models/DailyReport';
 import { ScanDataAggregator } from './ScanDataAggregator';
+import { projectLocationService } from '../project/ProjectLocationService';
 
 export interface BulkImportRecord {
   rowNumber: number;
@@ -68,14 +68,6 @@ export interface ImportSummary {
   warnings: string[];
   records: RowSummary[];
 }
-interface PreparedImportRecord {
-  uniqueKey: string;
-  rowNumber: number;
-  employeeNumber: string;
-  docRef: FirebaseFirestore.DocumentReference<ScanData>;
-  scanData: Omit<ScanData, 'id'>;
-}
-
 /**
  * ScanDataService
  * Extends CrudService with scan data operations
@@ -86,76 +78,99 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   /**
-   * Import scan data
+   * Import scan data (Single Record - merges into daily summary)
    */
   async importScanData(
     input: CreateScanDataInput,
     importedBy: string
   ): Promise<ScanData> {
     try {
-      const now = new Date();
-      const importBatchId = `manual-${randomUUID()}`;
+      
+      // 1. Get contractor info for enrichment
+      const contractor = await dailyContractorService.getById(input.dailyContractorId);
+      if (!contractor) {
+        throw new AppError('ไม่พบข้อมูลพนักงาน', 404);
+      }
+
+      const scanDate = this.formatDate(input.scanDateTime);
       const uniqueKey = this.buildUniqueKey(
-        input.projectLocationId,
         input.employeeId,
         input.scanDateTime
       );
 
-      // Round time down to 5 minutes
-      const roundedTime = roundDownToFiveMinutes(input.scanDateTime);
-
-      // Classify scan behavior
-      const scanBehavior = classifyScanBehavior(input.scanDateTime);
-
-      // Check if late
-      const { isLate, lateMinutes } = checkLate(input.scanDateTime);
-
-      // Work date is same as scan date (unless logic changes for overnight)
-      const workDate = new Date(input.scanDateTime);
-      workDate.setHours(0, 0, 0, 0);
-
-      const scanData: Omit<ScanData, 'id'> = {
-        dailyContractorId: input.dailyContractorId,
-        employeeId: input.employeeId,
-        projectLocationId: input.projectLocationId,
-        scanDateTime: input.scanDateTime,
-        scanBehavior,
-        workDate,
-        roundedTime,
-        isLate,
-        lateMinutes,
-        hasDiscrepancy: false,
-        createdAt: now,
-        importedAt: now,
-        importedBy,
-        importBatchId,
-        importSource: 'manual',
-        importNote: input.importNote,
-        employeeNumber: input.employeeId,
-        rawData: {
-          source: 'manual-form',
-        },
-      };
       const docRef = collections.scanData.doc(uniqueKey);
-      const existing = await docRef.get();
-      if (existing.exists) {
-        await docRef.set(scanData);
-        logger.info(`Scan data updated for DC: ${input.employeeId}`, { scanId: existing.id });
-        const updatedDoc = await docRef.get();
-        return updatedDoc.data() as ScanData;
+      const existingDoc = await docRef.get();
+      
+      let allScans: string[] = [];
+      let existingData: Partial<ScanData> = {};
+      
+      if (existingDoc.exists) {
+        existingData = existingDoc.data() as ScanData;
+        allScans = (existingData as any).allScans || [];
       }
 
-      await docRef.set(scanData);
-      const created = await docRef.get();
-      const scan = created.data() as ScanData;
-      logger.info(`Scan data imported for DC: ${scan.employeeId}`, { scanId: docRef.id });
+      const scanTimeStr = this.formatTime(input.scanDateTime);
+      if (!allScans.includes(scanTimeStr)) {
+        allScans.push(scanTimeStr);
+      }
+      allScans.sort();
 
-      return scan;
+      // Determine which Time slot to fill (Time1 to Time6)
+      const timeSlots: any = {};
+      allScans.slice(0, 6).forEach((time, index) => {
+        timeSlots[`Time${index + 1}`] = time;
+      });
+
+      const scanData: Omit<ScanData, 'id'> = {
+        ...(existingData as any),
+        dailyContractorId: input.dailyContractorId,
+        employeeId: input.employeeId,
+        employeeNumber: contractor.employeeId || input.employeeId,
+        name: contractor.name,
+        position: contractor.skillId,
+        projectLocationId: input.projectLocationId,
+        projectLocationIds: contractor.projectLocationIds || [input.projectLocationId],
+        scanDateTime: input.scanDateTime,
+        scanDate,
+        scanBehavior: classifyScanBehavior(input.scanDateTime),
+        workDate: input.scanDateTime,
+        roundedTime: input.scanDateTime,
+        isLate: checkLate(input.scanDateTime).isLate,
+        lateMinutes: checkLate(input.scanDateTime).lateMinutes,
+        hasDiscrepancy: false,
+        createdAt: existingDoc.exists ? (existingData as any).createdAt : new Date(),
+        importedAt: new Date(),
+        importedBy,
+        importBatchId: existingDoc.exists ? (existingData as any).importBatchId : `manual-${Date.now()}`,
+        importNote: input.importNote,
+        ...timeSlots,
+        allScans
+      };
+
+      await docRef.set(scanData, { merge: true });
+      const updated = await docRef.get();
+      return { id: updated.id, ...updated.data() } as ScanData;
     } catch (error: any) {
       logger.error('Error importing scan data:', error);
       throw error;
     }
   }
+
+  private formatDate(d: Date): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private formatTime(d: Date): string {
+    const hour = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const sec = String(d.getSeconds()).padStart(2, '0');
+    return `${hour}:${min}:${sec}`;
+  }
+
+
 
   /**
    * Get scan data by contractor and date range
@@ -200,7 +215,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     endDate: Date
   ): Promise<ScanData[]> {
     try {
-      const results = await this.query([
+      return await this.queryWithFallback([
         {
           field: 'projectLocationId',
           operator: '==',
@@ -217,9 +232,23 @@ class ScanDataService extends BaseCrudService<ScanData> {
           value: endDate,
         },
       ]);
-
-      return results;
     } catch (error: any) {
+      if (error.code === 9 || error.message?.includes('index')) {
+        logger.warn('Index missing for getByProjectAndDate, falling back to in-memory filtering', { projectLocationId });
+        // Fallback: Query by project only and filter by date in memory
+        const allProjectScans = await this.query([
+          {
+            field: 'projectLocationId',
+            operator: '==',
+            value: projectLocationId,
+          }
+        ]);
+        
+        return allProjectScans.filter(s => {
+          const d = s.workDate instanceof Date ? s.workDate : (s.workDate as any).toDate();
+          return d >= startDate && d <= endDate;
+        });
+      }
       logger.error('Error getting scan data by project:', error);
       throw error;
     }
@@ -323,7 +352,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
   async getUnmatchedScans(projectLocationId?: string): Promise<ScanData[]> {
     try {
       const filters: any[] = [];
-
       if (projectLocationId) {
         filters.push({
           field: 'projectLocationId',
@@ -385,18 +413,32 @@ class ScanDataService extends BaseCrudService<ScanData> {
     const importedAt = new Date();
     const errors: ImportErrorEntry[] = [];
     const warnings: string[] = [];
+    let minDate: Date | null = null;
+    let maxDate: Date | null = null;
+    
+    console.log(`[ScanDataService] bulkImport started. Version: 2026-03-30_1540. Aggregating ${records.length} records.`);
+    
+    let projectDepartmentName = '#N/A';
+    let projectCode = '';
+    let projectName = '';
+    try {
+      const projectLocation = await projectLocationService.getById(options.projectLocationId);
+      if (projectLocation) {
+        if (projectLocation.department) projectDepartmentName = projectLocation.department;
+        projectCode = projectLocation.projectCode || projectLocation.code || '';
+        projectName = projectLocation.projectName || '';
+      }
+    } catch (e) {
+      logger.warn(`Could not fetch details for project location ${options.projectLocationId}`);
+    }
     const employeeCache = new Map<string, string | null>();
-    const projectCheckCache = new Map<string, boolean>();
-    const processedKeys = new Set<string>();
     const rowSummaries: RowSummary[] = [];
 
     let successfulRecords = 0;
-    let duplicateRecords = 0;
     let failedRecords = 0;
     let batch = db.batch();
     let operationsInBatch = 0;
     const BATCH_WRITE_LIMIT = 400;
-    const CHECK_CHUNK_SIZE = 400;
 
     const commitBatch = async () => {
       if (options.dryRun || operationsInBatch === 0) {
@@ -408,123 +450,71 @@ class ScanDataService extends BaseCrudService<ScanData> {
       operationsInBatch = 0;
     };
 
-    const preparedRecords: PreparedImportRecord[] = [];
-
+    // Pre-populate contractor cache for performance and validation
     for (const record of records) {
-      try {
-        const uniqueKey = this.buildUniqueKey(
-          options.projectLocationId,
-          record.employeeNumber,
-          record.scanDateTime
-        );
-        if (processedKeys.has(uniqueKey)) {
-          const warning = `ข้ามข้อมูลซ้ำ: ${record.employeeNumber} เวลา ${record.scanDateTime.toISOString()} (แถว ${record.rowNumber})`;
-          warnings.push(warning);
-          rowSummaries.push({
-            row: record.rowNumber,
-            status: 'duplicate',
-            employeeNumber: record.employeeNumber,
-            data: record.rowData || record.rawData,
-            error: 'ข้อมูลซ้ำในไฟล์เดียวกัน'
-          });
-          continue;
-        }
-        processedKeys.add(uniqueKey);
-
-        // Support deployments where Server Timezone might be UTC instead of UTC+7 (Thailand)
-        // Add 7 hours tolerance just in case importedAt (new Date()) falls behind the actual local time 
-        // provided by the scan machines (+ an extra minute overlap)
-        const timezoneToleranceMs = 7 * 60 * 60 * 1000;
-        if (record.scanDateTime.getTime() > importedAt.getTime() + timezoneToleranceMs + 60_000) {
-          const errMsg = 'เวลาสแกนอยู่ในอนาคต';
-          errors.push({
-            row: record.rowNumber,
-            employeeNumber: record.employeeNumber,
-            error: errMsg,
-          });
-          rowSummaries.push({
-            row: record.rowNumber,
-            status: 'failed',
-            employeeNumber: record.employeeNumber,
-            data: record.rowData || record.rawData,
-            error: errMsg
-          });
-          failedRecords++;
-          continue;
-        }
-
-        let dailyContractorId: string | null | undefined = employeeCache.get(
-          record.employeeNumber
-        );
-
-        if (dailyContractorId === undefined) {
+      if (!employeeCache.has(record.employeeNumber)) {
+        try {
           const contractor = await dailyContractorService.findByEmployeeIdOrHistory(record.employeeNumber);
-
+          employeeCache.set(record.employeeNumber, contractor ? contractor.id : null);
+          
           if (!contractor) {
-            dailyContractorId = null;
-          } else {
-            dailyContractorId = contractor.id;
-            // Also cache project match
-            const isAssigned = contractor.projectLocationIds?.includes(options.projectLocationId) ?? false;
-            projectCheckCache.set(record.employeeNumber, isAssigned);
+            rowSummaries.push({
+              row: record.rowNumber,
+              status: 'failed',
+              employeeNumber: record.employeeNumber,
+              data: record.rowData || {},
+              error: 'ไม่พบข้อมูลพนักงานในระบบ (หรือไม่อยู่ในโครงการที่เลือก)'
+            });
           }
-          employeeCache.set(record.employeeNumber, dailyContractorId);
-        }
-
-        if (!dailyContractorId) {
-          const errMsg = 'ไม่พบข้อมูลแรงงานที่มีรหัสนี้ (หาจากทุกโครงการแล้ว)';
-          errors.push({
-            row: record.rowNumber,
-            employeeNumber: record.employeeNumber,
-            error: errMsg,
-          });
+        } catch (e: any) {
+          employeeCache.set(record.employeeNumber, null);
           rowSummaries.push({
-            row: record.rowNumber,
-            status: 'failed',
-            employeeNumber: record.employeeNumber,
-            data: record.rowData || record.rawData,
-            error: errMsg
+             row: record.rowNumber,
+             status: 'failed',
+             employeeNumber: record.employeeNumber,
+             data: record.rowData || {},
+             error: `Error checking contractor: ${e.message}`
           });
+        }
+      }
+    }
+
+    const aggregatedDailyRows = ScanDataAggregator.aggregate(records);
+    
+    // Process each aggregated day
+    for (const group of aggregatedDailyRows) {
+      try {
+        const contractor = await dailyContractorService.findByEmployeeIdOrHistory(group.employeeNumber);
+        
+        if (!contractor) {
           failedRecords++;
           continue;
         }
 
-        const isAssignedToProject = projectCheckCache.get(record.employeeNumber);
-        if (!isAssignedToProject) {
-          const errMsg = 'พบคนงานในระบบแต่ไม่ได้ถูกมอบหมายให้โครงการนี้';
-          errors.push({
-            row: record.rowNumber,
-            employeeNumber: record.employeeNumber,
-            error: errMsg,
-          });
-          rowSummaries.push({
-            row: record.rowNumber,
-            status: 'failed',
-            employeeNumber: record.employeeNumber,
-            data: record.rowData || record.rawData,
-            error: errMsg
-          });
-          failedRecords++;
-          continue;
-        }
+        const scanDate = group.workDate; // Aggregator returns YYYY-MM-DD
+        const uniqueKey = `SCAN_${group.employeeNumber}_${projectCode}_${scanDate}`;
+        const docRef = collections.scanData.doc(uniqueKey);
 
-        const scanBehavior = classifyScanBehavior(record.scanDateTime);
-        const { isLate, lateMinutes } = checkLate(record.scanDateTime);
-        const workDate = new Date(record.scanDateTime);
+        const workDate = new Date(group.workDate);
         workDate.setHours(0, 0, 0, 0);
-        const roundedTime = roundDownToFiveMinutes(record.scanDateTime);
+
+        const primaryScan = group.timeScans.length > 0 ? group.timeScans[0] : null;
 
         const scanData: Omit<ScanData, 'id'> = {
-          dailyContractorId,
-          employeeId: record.employeeNumber,
-          employeeNumber: record.employeeNumber,
-          projectLocationId: options.projectLocationId,
-          scanDateTime: record.scanDateTime,
-          scanBehavior,
+          dailyContractorId: contractor.id,
+          employeeId: group.employeeNumber,
+          employeeNumber: group.employeeNumber,
+          name: contractor.name,
+          position: contractor.skillId,
+          projectLocationId: options.projectLocationId, // Primary project for this import
+          projectLocationIds: contractor.projectLocationIds || [options.projectLocationId],
+          scanDateTime: primaryScan || workDate, // Fallback to workDate start if no time records
+          scanDate,
+          scanBehavior: primaryScan ? classifyScanBehavior(primaryScan) : 'regular_in',
           workDate,
-          roundedTime,
-          isLate,
-          lateMinutes,
+          roundedTime: group.timeScans[0],
+          isLate: group.lateMinutes > 0,
+          lateMinutes: group.lateMinutes,
           hasDiscrepancy: false,
           createdAt: importedAt,
           importedAt,
@@ -532,94 +522,72 @@ class ScanDataService extends BaseCrudService<ScanData> {
           importBatchId,
           importSource: options.source,
           importNote: options.importNote,
-          rawData:
-            record.rawData ||
-            (record.rawLine
-              ? {
-                line: record.rawLine,
-              }
-              : undefined),
+          Time1: group.time1,
+          Time2: group.time2,
+          Time3: group.time3,
+          Time4: group.time4,
+          Time5: group.time5,
+          Time6: group.time6,
+          allScans: group.timeScans.map(t => this.formatTime(t)),
+          punches: group.punches,
+          firstIn: group.firstIn,
+          lastOut: group.lastOut,
+          projectCode: projectCode,
+          projectName: projectName,
+          isDeleted: false,
+          rawData: {
+            importSource: options.source,
+            aggregated: true
+          }
         };
 
-        const docRef = collections.scanData.doc(uniqueKey) as any;
-        preparedRecords.push({
-          uniqueKey,
-          rowNumber: record.rowNumber,
-          employeeNumber: record.employeeNumber,
-          docRef: docRef as any,
-          scanData,
-        });
-      } catch (error: any) {
-        logger.error('Error processing scan data record', {
-          error: error?.message,
-          row: record.rowNumber,
-        });
-        const errMsg = error?.message || 'ไม่สามารถบันทึกข้อมูลแถวนี้ได้';
-        errors.push({
-          row: record.rowNumber,
-          employeeNumber: record.employeeNumber,
-          error: errMsg,
-        });
-        rowSummaries.push({
-          row: record.rowNumber,
-          status: 'failed',
-          employeeNumber: record.employeeNumber,
-          data: record.rowData || record.rawData,
-          error: errMsg
-        });
-        failedRecords++;
-      }
-    }
+        // Track date range for discrepancy detection
+        if (!minDate || workDate < minDate) minDate = new Date(workDate);
+        if (!maxDate || workDate > maxDate) maxDate = new Date(workDate);
 
-    for (let i = 0; i < preparedRecords.length; i += CHECK_CHUNK_SIZE) {
-      const chunk = preparedRecords.slice(i, i + CHECK_CHUNK_SIZE);
-      const refs = chunk.map((item) => item.docRef);
-      const snapshots = await db.getAll(...(refs as any));
-
-      for (let index = 0; index < snapshots.length; index += 1) {
-        const item = chunk[index];
-        const snapshot = snapshots[index];
-        const originalRecord = records.find(r => r.rowNumber === item.rowNumber);
-
-        if (snapshot?.exists) {
-          duplicateRecords += 1;
-          const warning = `ข้อมูลซ้ำ: ${item.employeeNumber} เวลา ${item.scanData.scanDateTime.toISOString()} (แถว ${item.rowNumber})`;
-          warnings.push(warning);
-          rowSummaries.push({
-            row: item.rowNumber,
-            status: 'duplicate',
-            employeeNumber: item.employeeNumber,
-            data: originalRecord?.rowData || originalRecord?.rawData,
-            error: 'ข้อมูลซ้ำในระบบ'
-          });
-        } else {
-          if (!options.dryRun) {
-            batch.set(item.docRef as any, item.scanData, { merge: false });
-            operationsInBatch += 1;
-          }
-          successfulRecords += 1;
-          rowSummaries.push({
-            row: item.rowNumber,
-            status: 'success',
-            employeeNumber: item.employeeNumber,
-            data: originalRecord?.rowData || originalRecord?.rawData
-          });
+        if (!options.dryRun) {
+          batch.set(docRef, scanData, { merge: true });
+          operationsInBatch++;
         }
+        successfulRecords++;
 
         if (operationsInBatch >= BATCH_WRITE_LIMIT) {
           await commitBatch();
         }
+      } catch (err: any) {
+        logger.error('Error saving aggregated scan data:', err);
+        failedRecords++;
       }
     }
 
     await commitBatch();
 
-    // Aggregate the successful records for the preview
-    const successfulOriginalRecords = records.filter(r => rowSummaries.some(rs => rs.status === 'success' && rs.row === r.rowNumber));
-    const aggregatedDailyRows = ScanDataAggregator.aggregate(successfulOriginalRecords);
+    // Trigger automatic discrepancy detection for the imported date range
+    if (!options.dryRun && minDate && maxDate) {
+      try {
+        console.log(`[ScanDataService] Triggering auto discrepancy detection: ${options.projectLocationId} from ${minDate.toISOString().split('T')[0]} to ${maxDate.toISOString().split('T')[0]}`);
+        await this.detectDiscrepancies(
+          options.projectLocationId,
+          minDate,
+          maxDate,
+          options.importedBy
+        );
+      } catch (detectErr) {
+        logger.error('Error in automatic discrepancy detection after import:', detectErr);
+        warnings.push('Auto-discrepancy detection failed. Please run manually if needed.');
+      }
+    }
+
+    // Map failed components
+    const failedOrDuplicate = rowSummaries.filter(rs => rs.status !== 'success');
+    const rowStatusMap = new Map<number, { status: string, error?: string }>();
+    for (const rs of failedOrDuplicate) {
+      if (!rowStatusMap.has(rs.row)) {
+         rowStatusMap.set(rs.row, { status: rs.status, error: rs.error });
+      }
+    }
     
-    // Keep failed/duplicate ones as they are
-    const finalRowSummaries: RowSummary[] = rowSummaries.filter(rs => rs.status !== 'success');
+    const finalRowSummaries: RowSummary[] = [];
 
     for (const group of aggregatedDailyRows) {
       const dailyContractorId = employeeCache.get(group.employeeNumber);
@@ -628,22 +596,26 @@ class ScanDataService extends BaseCrudService<ScanData> {
       let reportEveningOT = 0;
       let reportLunchOT = 0;
       let reportNormalStatus = 0;
-      let department = '#N/A';
+      let department = projectDepartmentName;
       let hasReport = false;
 
       if (dailyContractorId) {
         // Find daily reports for this date
         const d = new Date(group.workDate);
-        const reports = await dailyReportService.getByContractorAndDate(dailyContractorId, d, d);
-        
-        if (reports && reports.length > 0) {
-          hasReport = true;
-          for (const rep of reports) {
-            if (rep.workType === 'regular') reportNormalStatus = 1;
-            else if (rep.workType === 'ot_morning') reportMorningOT += rep.netHours;
-            else if (rep.workType === 'ot_noon') reportLunchOT += rep.netHours;
-            else if (rep.workType === 'ot_evening') reportEveningOT += rep.netHours;
+        try {
+          const reports = await dailyReportService.getByContractorAndDate(dailyContractorId, d, d);
+          if (reports && reports.length > 0) {
+            hasReport = true;
+            for (const rep of reports) {
+              if (rep.workType === 'regular') reportNormalStatus = 1;
+              else if (rep.workType === 'ot_morning') reportMorningOT += rep.netHours;
+              else if (rep.workType === 'ot_noon') reportLunchOT += rep.netHours;
+              else if (rep.workType === 'ot_evening') reportEveningOT += rep.netHours;
+            }
           }
+        } catch (reportErr: any) {
+          logger.warn(`Could not fetch daily reports for contractor ${dailyContractorId} on ${group.workDate}: ${reportErr?.message}`);
+          // Continue with hasReport = false (treat as no report)
         }
       }
 
@@ -653,13 +625,27 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const diffMorning = !hasReport ? 'ไม่พบข้อมูลใน Report' : Math.abs(group.otMorningHours - reportMorningOT);
       const diffEvening = !hasReport ? 'ไม่พบข้อมูลใน Report' : Math.abs(group.otEveningHours - reportEveningOT);
 
+      // Determine if this grouped row has any errors
+      let groupStatus: 'success' | 'failed' | 'duplicate' = 'success';
+      let groupError: string | undefined;
+      
+      for (const r of group.sourceRowNumbers) {
+         if (rowStatusMap.has(r)) {
+            const err = rowStatusMap.get(r)!;
+            groupStatus = err.status as any;
+            groupError = err.error;
+            break; // Grab the most prominent error
+         }
+      }
+
       // Use the first source row number as the display row
       const displayRow = group.sourceRowNumbers.length > 0 ? Math.min(...group.sourceRowNumbers) : 0;
 
       finalRowSummaries.push({
         row: displayRow,
-        status: 'success',
+        status: groupStatus,
         employeeNumber: group.employeeNumber,
+        error: groupError,
         data: {
           EmployeeNumber: group.employeeNumber,
           Date: group.workDate,
@@ -686,40 +672,84 @@ class ScanDataService extends BaseCrudService<ScanData> {
       });
     }
 
+    // Capture standalone parse errors or skipped rows that failed before records abstraction
+    for (const rs of failedOrDuplicate) {
+      // If none of its sourceRowNumbers made it to aggregatedDailyRows, 
+      // (like if `timeScan` array is empty or Employee number is missing), append manually.
+      // But aggregatedDailyRows groups by Employee, so if employee exists, it's covered above!
+      const covered = aggregatedDailyRows.some(g => g.sourceRowNumbers.includes(rs.row));
+      if (!covered) {
+        finalRowSummaries.push(rs);
+      }
+    }
+
     // Sort final summaries by EmployeeNumber then Date (for aggregated) OR Row (for errors)
     finalRowSummaries.sort((a, b) => {
-      if (a.employeeNumber && b.employeeNumber) {
-        if (a.employeeNumber !== b.employeeNumber) {
-          return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
-        }
+      // Safe access
+      const empA = String(a.employeeNumber || '');
+      const empB = String(b.employeeNumber || '');
+      
+      if (empA && empB && empA !== empB) {
+        return empA.localeCompare(empB, undefined, { numeric: true });
       }
       
       // If both are success (aggregated), sort by Date
-      if (a.status === 'success' && b.status === 'success' && a.data?.Date && b.data?.Date) {
-         return a.data.Date.localeCompare(b.data.Date);
+      const dateA = a.data?.Date || '';
+      const dateB = b.data?.Date || '';
+      if (a.status === 'success' && b.status === 'success' && dateA && dateB) {
+         return String(dateA).localeCompare(String(dateB));
       }
       
-      return a.row - b.row;
+      const rowA = Number(a.row) || 0;
+      const rowB = Number(b.row) || 0;
+      return rowA - rowB;
     });
+
+    // Deduplicate errors and warnings by row
+    const uniqueErrors: ImportErrorEntry[] = [];
+    const seenErrorRows = new Set<number>();
+    for (const err of errors) {
+      if (!seenErrorRows.has(err.row)) {
+        seenErrorRows.add(err.row);
+        uniqueErrors.push(err);
+      }
+    }
+    
+    // For warnings, just simple array deduplication
+    const uniqueWarnings = Array.from(new Set(warnings));
+    
+    // Calculate accurate metrics based on distinct rows
+    const uniqueInputRows = new Set(records.map(r => r.rowNumber));
+    const totalUniqueRows = uniqueInputRows.size;
+    
+    let uniqueFailedRows = 0;
+    let uniqueDuplicateRows = 0;
+    
+    for (const rs of finalRowSummaries) {
+      if (rs.status === 'failed') uniqueFailedRows++;
+      if (rs.status === 'duplicate') uniqueDuplicateRows++;
+    }
+    
+    const successfulUniqueRows = aggregatedDailyRows.length; // Each aggregated group is exactly one successful row representation
 
     logger.info(`Bulk scan data import completed ${options.dryRun ? '(Dry Run)' : ''}`, {
       importBatchId,
-      totalRecords: records.length,
-      successfulRecords: successfulOriginalRecords.length,
-      failedRecords,
-      warnings: warnings.length,
-      duplicateRecords,
+      totalRecords: totalUniqueRows,
+      successfulRecords: successfulUniqueRows,
+      failedRecords: uniqueFailedRows,
+      warnings: uniqueWarnings.length,
+      duplicateRecords: uniqueDuplicateRows,
     });
 
     return {
-      success: failedRecords === 0,
+      success: uniqueFailedRows === 0,
       importBatchId,
-      totalRecords: records.length,
-      successfulRecords: successfulOriginalRecords.length,
-      failedRecords,
-      duplicateRecords,
-      errors,
-      warnings,
+      totalRecords: totalUniqueRows,
+      successfulRecords: successfulUniqueRows,
+      failedRecords: uniqueFailedRows,
+      duplicateRecords: uniqueDuplicateRows,
+      errors: uniqueErrors,
+      warnings: uniqueWarnings,
       records: finalRowSummaries
     };
   }
@@ -733,6 +763,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     endDate: Date
   ): Promise<any[]> {
     try {
+      // Try with index first
       const recordsSnapshot = await db
         .collection('overtime_records')
         .where('projectLocationId', '==', projectLocationId)
@@ -741,7 +772,27 @@ class ScanDataService extends BaseCrudService<ScanData> {
         .get();
 
       return recordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
+    } catch (error: any) {
+      // Fallback for missing index: Fetch by projectLocationId only and filter in memory
+      if (error?.code === 9 || error?.message?.includes('FAILED_PRECONDITION') || error?.message?.includes('index')) {
+        console.warn(`[ScanDataService] Missing index for overtime_records. Falling back to in-memory filtering.`);
+        const snapshot = await db.collection('overtime_records')
+          .where('projectLocationId', '==', projectLocationId)
+          .limit(5000)
+          .get();
+        
+        const start = startDate.getTime();
+        const end = endDate.getTime();
+
+        return snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as any))
+          .filter(ot => {
+            const rd = ot.reportDate;
+            const itemTime = (rd instanceof Date) ? rd.getTime() : 
+                            (rd && typeof rd === 'object' && rd.toDate) ? rd.toDate().getTime() : 0;
+            return itemTime >= start && itemTime <= end;
+          });
+      }
       logger.error('Error fetching overtime records for discrepancy check:', error);
       return [];
     }
@@ -983,10 +1034,22 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const reportedOTHours = dayOTs.reduce((sum, ot) => sum + (ot.workHours || 0), 0);
         const reportedTotalHours = reportedRegularHours + reportedOTHours;
 
-        // Scanned Hours calculation via Contextual Engine
-        const analyzedScans = this.analyzeDailyScans(dayScans);
-        const scannedRegularHours = analyzedScans.scannedRegularHours;
-        const scannedOTHours = analyzedScans.scannedMorningOT + analyzedScans.scannedEveningOT + analyzedScans.scannedNoonOT;
+        // Scanned Hours calculation via same logic as Import Preview (ScanDataAggregator)
+        const forAggregator = dayScans.map(s => ({
+          employeeNumber: dcId,
+          scanDateTime: s.scanDateTime,
+          rowNumber: 0
+        }));
+
+        const aggregated = ScanDataAggregator.aggregate(forAggregator);
+        const daySummary = aggregated.length > 0 ? aggregated[0] : null;
+
+        const scanNormalStatus = daySummary?.normalStatus || 0;
+        const scanStatusLabel = scanNormalStatus === 1 ? 'ปกติ' : 'ไม่ครบ';
+
+        // Scanned Hours breakdowns (used for diff calculation)
+        const scannedRegularHours = daySummary?.normalStatus ? 8.0 : 0.0;
+        const scannedOTHours = (daySummary?.otMorningHours || 0) + (daySummary?.otEveningHours || 0) + (daySummary?.lunchStatus ? 1.0 : 0.0);
         const scannedTotalHours = scannedRegularHours + scannedOTHours;
 
         // Compare sums
@@ -1004,29 +1067,23 @@ class ScanDataService extends BaseCrudService<ScanData> {
           shouldCreate = true;
           discrepancyType = 'Type2';
           reason = 'มี Daily Report หรือ OT Record แต่ข้อมูลสแกนนิ้วน้อยกว่า 2 ครั้ง';
-        } else if (dayReports.length === 0 && dayOTs.length === 0 && dayScans.length >= 2) {
+        } else if (dayReports.length === 0 && dayOTs.length === 0 && dayScans.length >= 1) {
           // Type 3: Scan Data exists but no Daily Report
           shouldCreate = true;
           discrepancyType = 'Type3';
-          reason = 'มีการสแกนนิ้วเข้า-ออก แต่ไม่มีการกรอก Daily Report / OT';
-        } else if (diffTotalHours > 0.5) { // Type 1: Reported > Scanned. Tolerance of 0.5hr (30m)
-          // Actually, Type 1 in User request is: Daily Report hours < Scan Data hours.
-          // Is it? Let's flag any mismatch over 0.5 hours.
+          reason = dayScans.length === 1 
+            ? 'มีการสแกนนิ้วเพียง 1 ครั้ง และไม่มีการกรอก Daily Report / OT' 
+            : 'มีการสแกนนิ้วเข้า-ออก แต่ไม่มีการกรอก Daily Report / OT';
+        } else if (Math.abs(diffTotalHours) > 0.5) { // Any mismatch over 0.5 hours
           shouldCreate = true;
           discrepancyType = 'Type1';
-          if (diffRegularHours > 0.5 && diffOTHours > 0.5) {
-            reason = `ลงชั่วโมงปกติเกิน ${diffRegularHours.toFixed(2)} ชม. และชั่วโมง OT เกิน ${diffOTHours.toFixed(2)} ชม.`;
-          } else if (diffRegularHours > 0.5) {
-            reason = `ลงชั่วโมงทำงานปกติมากกว่าสแกนจริง ${diffRegularHours.toFixed(2)} ชม.`;
+          if (diffRegularHours > 0.5) {
+            reason = `ชั่วโมงปกติใน DR (${reportedRegularHours}) ไม่ตรงกับที่สแกนได้ (${scannedRegularHours})`;
           } else if (diffOTHours > 0.5) {
-            reason = `ลงชั่วโมง OT มากกว่าสแกนจริง ${diffOTHours.toFixed(2)} ชม.`;
-          } else if (diffTotalHours > 0.5) {
-            reason = `ชั่วโมงทำงานรวมไม่ตรงกัน (ส่วนต่าง ${diffTotalHours.toFixed(2)} ชม.)`;
+            reason = `ชั่วโมง OT ใน DR/OT Record (${reportedOTHours}) ไม่ตรงกับที่สแกนได้ (${scannedOTHours})`;
+          } else {
+            reason = `ชั่วโมงการทำงานรวมไม่ตรงกัน (ส่วนต่าง ${diffTotalHours.toFixed(2)} ชม.)`;
           }
-        } else if (diffTotalHours < -0.5) { // Under-reported
-          shouldCreate = true;
-          discrepancyType = 'Type1';
-          reason = `สแกนนิ้วมากกว่าชั่วโมงที่กรอก ${Math.abs(diffTotalHours).toFixed(2)} ชม. (อาจลืมกรอก OT)`;
         }
 
         if (shouldCreate) {
@@ -1044,6 +1101,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
             discrepancyType,
             reportedHours: reportedTotalHours,
             scannedHours: scannedTotalHours,
+            scanNormalStatus,
+            scanStatusLabel,
             hoursDifference: diffTotalHours, // POSITIVE = Reported > Scanned
             severity,
             status: 'pending',
@@ -1069,12 +1128,12 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   private buildUniqueKey(
-    projectLocationId: string,
     employeeId: string,
-    scanDateTime: Date
+    scanDate: string | Date
   ): string {
-    const normalizedTimestamp = scanDateTime.toISOString().replace(/[:.]/g, '-');
-    return `${projectLocationId}_${employeeId}_${normalizedTimestamp}`;
+    const d = scanDate instanceof Date ? scanDate : new Date(scanDate);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `${dateStr}_${employeeId}`;
   }
 
   /**
@@ -1236,11 +1295,57 @@ class ScanDataService extends BaseCrudService<ScanData> {
         query = query.where('workDate', '<=', options.endDate);
       }
 
-      // Order by descending workDate
-      query = query.orderBy('workDate', 'desc');
+      // Manual index fallback for multiple where clauses
+      let snapshot;
+      try {
+        // Try the full composite query (requires index)
+        snapshot = await query.orderBy('workDate', 'desc').get();
+      } catch (error: any) {
+        if (error?.code === 9 || error?.message?.includes('FAILED_PRECONDITION') || error?.message?.includes('index')) {
+          console.warn('[ScanDataService] Missing index for discrepancies. Falling back to in-memory filtering.');
+          
+          // Use only projectLocationId if available (most efficient single-field index)
+          let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES);
+          if (options.projectId) {
+            fallbackQuery = fallbackQuery.where('projectLocationId', '==', options.projectId);
+          } else if (options.startDate) {
+            fallbackQuery = fallbackQuery.where('workDate', '>=', options.startDate);
+          }
+          
+          snapshot = await fallbackQuery.limit(5000).get(); // Pull a reasonable chunk
+        } else {
+          throw error;
+        }
+      }
 
-      const snapshot = await query.get();
-      const allItems = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      let allItems = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      
+      // Mandatory in-memory filtering (to cover the fields skipped in fallback query)
+      if (options.projectId) {
+         allItems = allItems.filter(item => item.projectLocationId === options.projectId);
+      }
+      if (options.startDate) {
+         const start = options.startDate.getTime();
+         allItems = allItems.filter(item => {
+            const d = item.workDate?.toDate ? item.workDate.toDate() : new Date(item.workDate);
+            return d.getTime() >= start;
+         });
+      }
+      if (options.endDate) {
+         const end = options.endDate.getTime();
+         allItems = allItems.filter(item => {
+            const d = item.workDate?.toDate ? item.workDate.toDate() : new Date(item.workDate);
+            return d.getTime() <= end;
+         });
+      }
+
+      // Manual Sort
+      allItems.sort((a, b) => {
+        const dateA = a.workDate?.toDate ? a.workDate.toDate().getTime() : new Date(a.workDate).getTime();
+        const dateB = b.workDate?.toDate ? b.workDate.toDate().getTime() : new Date(b.workDate).getTime();
+        return dateB - dateA; // Descending
+      });
+
       const total = allItems.length;
 
       const { page, pageSize } = options;
@@ -1304,6 +1409,175 @@ class ScanDataService extends BaseCrudService<ScanData> {
       };
     } catch (error: any) {
       logger.error('Error fetching discrepancy summary:', error);
+      throw error;
+    }
+  }
+  /**
+   * Delete scan data by batch ID
+   * @param batchId The import batch ID to delete
+   */
+  async deleteByBatchId(batchId: string): Promise<number> {
+    try {
+      const records = await this.getByBatchId(batchId);
+      if (records.length === 0) return 0;
+
+      // Firestore batch limit is 500
+      let deletedCount = 0;
+      const chunks = [];
+      for (let i = 0; i < records.length; i += 500) {
+        chunks.push(records.slice(i, i + 500));
+      }
+
+      for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach((doc) => {
+          batch.delete(collections.scanData.doc(doc.id));
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+      }
+
+      logger.info(`Deleted ${deletedCount} scan records for batch ${batchId}`);
+      return deletedCount;
+    } catch (error: any) {
+      logger.error(`Error deleting scan data by batch ID ${batchId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete scan data by project and date range
+   * @param projectLocationId The project ID
+   * @param startDate Start date (inclusive)
+   * @param endDate End date (inclusive)
+   */
+  async deleteByProjectAndDateRange(
+    projectLocationId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<number> {
+    try {
+      const records = await this.getByProjectAndDate(projectLocationId, startDate, endDate);
+      if (records.length === 0) return 0;
+
+      let deletedCount = 0;
+      const chunks = [];
+      for (let i = 0; i < records.length; i += 500) {
+        chunks.push(records.slice(i, i + 500));
+      }
+
+      for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach((doc) => {
+          batch.delete(collections.scanData.doc(doc.id));
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+      }
+
+      logger.info(
+        `Deleted ${deletedCount} scan records for project ${projectLocationId} from ${startDate.toISOString()} to ${endDate.toISOString()}`
+      );
+      return deletedCount;
+    } catch (error: any) {
+      logger.error('Error deleting scan data by project/date:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a manual scan record
+   */
+  async addManualScan(
+    payload: {
+      employeeNumber: string;
+      projectLocationId: string;
+      scanDateTime: Date;
+      notes?: string;
+    },
+    addedBy: string
+  ): Promise<ScanData> {
+    try {
+      // Find contractor by employee number
+      const contractor = await dailyContractorService.findByEmployeeIdOrHistory(payload.employeeNumber);
+      if (!contractor) {
+        throw new AppError(`ไม่พบข้อมูลพนักงานที่มีรหัส ${payload.employeeNumber}`, 404);
+      }
+
+      const input: CreateScanDataInput = {
+        dailyContractorId: contractor.id,
+        employeeId: contractor.employeeId || payload.employeeNumber,
+        projectLocationId: payload.projectLocationId,
+        scanDateTime: payload.scanDateTime,
+        importNote: payload.notes || 'Manual Entry',
+      };
+
+      const result = await this.importScanData(input, addedBy);
+
+      // Trigger discrepancy detection for this day
+      const workDate = new Date(payload.scanDateTime);
+      await this.detectDiscrepancies(payload.projectLocationId, workDate, workDate, addedBy);
+
+      return result;
+    } catch (error: any) {
+      logger.error('Error adding manual scan:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a single scan record
+   */
+  async updateScanData(
+    id: string,
+    updates: Partial<ScanData>,
+    updatedBy: string
+  ): Promise<ScanData> {
+    try {
+      const existing = await this.getById(id);
+      if (!existing) throw new AppError('Scan data not found', 404);
+
+      const result = await this.update(id, updates);
+
+      // Re-trigger discrepancy detection for the affected date
+      if (existing.workDate || updates.workDate) {
+        const date = updates.workDate || existing.workDate;
+        await this.detectDiscrepancies(
+          updates.projectLocationId || existing.projectLocationId,
+          new Date(date),
+          new Date(date),
+          updatedBy
+        );
+      }
+
+      return result!;
+    } catch (error: any) {
+      logger.error('Error updating scan data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Re-open a resolved discrepancy
+   */
+  async reopenDiscrepancy(discrepancyId: string, reopenedBy: string): Promise<any> {
+    try {
+      const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discrepancyId);
+      const doc = await discRef.get();
+      if (!doc.exists) throw new AppError('Discrepancy not found', 404);
+
+      await discRef.update({
+        status: 'pending',
+        reopenedAt: new Date(),
+        reopenedBy,
+        resolutionMethod: null,
+        resolutionNote: `Re-opened for editing by ${reopenedBy}`
+      });
+
+      const updated = await discRef.get();
+      return { id: updated.id, ...updated.data() };
+    } catch (error: any) {
+      logger.error('Error re-opening discrepancy:', error);
       throw error;
     }
   }

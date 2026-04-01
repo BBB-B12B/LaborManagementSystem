@@ -24,6 +24,7 @@ import {
   TableRow,
   Paper,
   IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   CloudUpload,
@@ -46,6 +47,8 @@ import {
 import {
   uploadScanDataFile,
   type ImportResult,
+  deleteScanDataBatch,
+  deleteScanDataBulk,
 } from '../../../services/scanDataService';
 import { apiClient } from '../../../services/api/client';
 import ProjectSelect from '../../../components/forms/ProjectSelect';
@@ -90,7 +93,7 @@ const tableHeaders = [
   'ความขัดแย้ง OT เที่ยง',
   'ความขัดแย้ง OT เช้า',
   'ความขัดแย้ง OT เย็น',
-  'ส่วนงาน'
+  'ส่วนงาน',
 ];
 
 const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
@@ -253,6 +256,50 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
     uploadMutation.reset();
   };
 
+  const dateRange = useMemo(() => {
+    if (!validationResult || !validationResult.records.length) return null;
+    const dates = validationResult.records
+      .map((r) => {
+        const dStr = getValueByKeys(r.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'Scan Date']);
+        if (!dStr) return null;
+        const d = new Date(dStr);
+        return isNaN(d.getTime()) ? null : d;
+      })
+      .filter((d): d is Date => d !== null);
+
+    if (dates.length === 0) return null;
+    
+    // Set to start/end of day to be safe for bulk delete
+    const minDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())));
+    
+    minDate.setHours(0, 0, 0, 0);
+    maxDate.setHours(23, 59, 59, 999);
+    
+    return { start: minDate, end: maxDate };
+  }, [validationResult]);
+
+  const deleteBatchMutation = useMutation({
+    mutationFn: (batchId: string) => deleteScanDataBatch(batchId),
+    onSuccess: (res) => {
+      alert(`ลบข้อมูลสำเร็จ ${res.deletedCount} รายการ`);
+      handleUploadAnother();
+    },
+  });
+
+  const deleteBulkMutation = useMutation({
+    mutationFn: () => {
+      if (!dateRange || !validationResult) throw new Error('Missing data range');
+      const projectId = getValues('projectLocationId');
+      return deleteScanDataBulk(projectId, dateRange.start, dateRange.end);
+    },
+    onSuccess: (res) => {
+      alert(`ล้างข้อมูลโครงการสำเร็จ ${res.deletedCount} รายการ คุณสามารถตรวจสอบ (Refresh) และอัปโหลดใหม่ได้ครับ`);
+      // Re-validate to show updated status
+      onStartValidation(getValues());
+    },
+  });
+
   const canUpload = useMemo(() => {
     return validationResult && validationResult.failedRecords === 0;
   }, [validationResult]);
@@ -326,7 +373,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                     '&:hover': { bgcolor: '#1a2433' }
                   }}
                 >
-                  โหลด Template
+                  ดาวน์โหลด Template
                 </Button>
                 <Button
                   size="medium"
@@ -470,7 +517,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               {selectedFile && (
                 <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(76, 175, 80, 0.08)', borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CheckCircle color="success" fontSize="small" />
-                  <Box>
+                  <Box sx={{ flex: 1 }}>
                     <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.dark' }}>
                       ไฟล์ที่เลือก: {selectedFile.name}
                     </Typography>
@@ -478,6 +525,18 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       ขนาด: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
                     </Typography>
                   </Box>
+                  <Button
+                    size="small"
+                    variant="text"
+                    color="error"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setValue('file', undefined as any, { shouldValidate: true });
+                    }}
+                    sx={{ fontSize: '0.75rem', py: 0 }}
+                  >
+                    ล้างข้อมูล
+                  </Button>
                 </Box>
               )}
 
@@ -565,41 +624,96 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               </Box>
             )}
 
+            {validationResult.duplicateRecords && validationResult.duplicateRecords > 0 && (
+              <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">
+                    พบข้อมูลที่มีอยู่แล้วในระบบ <strong>{validationResult.duplicateRecords}</strong> รายการ หากต้องการบันทึกทับ (Overwrite) กรุณาล้างข้อมูลเก่าออกก่อน
+                  </Typography>
+                  <Button 
+                    color="warning" 
+                    variant="contained" 
+                    size="small" 
+                    onClick={() => {
+                      if (window.confirm('คุณต้องการล้างข้อมูลเก่าของโครงการนี้ในช่วงวันที่ดังกล่าวเพื่อนำเข้าใหม่ใช่หรือไม่?')) {
+                        deleteBulkMutation.mutate();
+                      }
+                    }}
+                    disabled={deleteBulkMutation.isPending}
+                  >
+                    {deleteBulkMutation.isPending ? 'กำลังสั่งลบ...' : 'ล้างข้อมูลเก่าออก'}
+                  </Button>
+                </Box>
+              </Alert>
+            )}
+
             {renderStatusChips(validationResult)}
 
             <Typography variant="subtitle2" sx={{ mb: 1, color: validationResult.failedRecords > 0 ? 'error.main' : 'text.primary', fontWeight: 'bold' }}>
               รายการข้อมูล:
             </Typography>
 
-            <TableContainer component={Paper} sx={{ maxHeight: 400, borderRadius: 2, border: '1px solid #eee' }}>
+            <TableContainer component={Paper} sx={{ maxHeight: 500, borderRadius: 2, border: '1px solid #e0e0e0', bgcolor: 'white' }}>
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ bgcolor: '#8bc34a', color: 'white', fontWeight: 'bold', width: 60 }}>แถว</TableCell>
-                    <TableCell sx={{ bgcolor: '#8bc34a', color: 'white', fontWeight: 'bold' }}>Status</TableCell>
+                    <TableCell sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', width: 60, borderBottom: '1px solid #586e75' }}>แถว</TableCell>
+                    <TableCell sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', borderBottom: '1px solid #586e75' }}>สถานะ</TableCell>
                     {tableHeaders.map((h) => (
-                      <TableCell key={h} sx={{ bgcolor: '#8bc34a', color: 'white', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                      <TableCell key={h} sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', whiteSpace: 'nowrap', borderBottom: '1px solid #586e75' }}>
                         {h}
                       </TableCell>
                     ))}
-                    <TableCell sx={{ bgcolor: '#8bc34a', color: 'white', fontWeight: 'bold' }}>ข้อผิดพลาด</TableCell>
+                    <TableCell sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', borderBottom: '1px solid #586e75' }}>ข้อผิดพลาด</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(validationResult?.records || []).map((record) => (
-                    <TableRow key={record.row} hover sx={{ bgcolor: record.status === 'failed' ? 'rgba(211, 47, 47, 0.04)' : 'inherit' }}>
-                      <TableCell>{record.row}</TableCell>
-                      <TableCell>
-                        {record.status === 'failed' ? (
-                          <Chip label="Error" size="small" color="error" />
-                        ) : record.status === 'duplicate' ? (
-                          <Chip label="Duplicate" size="small" color="warning" />
-                        ) : (
-                          <Chip label="Success" size="small" color="success" />
-                        )}
-                      </TableCell>
+                  {(validationResult?.records || []).map((record) => {
+                    const timeValues = [
+                      getValueByKeys(record.data, ['Time1', 'เวลา1']),
+                      getValueByKeys(record.data, ['Time2', 'เวลา2']),
+                      getValueByKeys(record.data, ['Time3', 'เวลา3']),
+                      getValueByKeys(record.data, ['Time4', 'เวลา4']),
+                      getValueByKeys(record.data, ['Time5', 'เวลา5']),
+                      getValueByKeys(record.data, ['Time6', 'เวลา6']),
+                    ].filter(v => v && v !== '' && v !== '-');
+                    
+                    const isIncomplete = timeValues.length > 0 && timeValues.length < 2;
+                    const normalVal = getValueByKeys(record.data, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], '0').toString();
+                    const isNormalStatusZero = normalVal === '0';
+                    const hasWarning = record.status === 'success' && (isIncomplete || isNormalStatusZero);
+                    
+                    return (
+                      <TableRow 
+                        key={record.row} 
+                        hover 
+                        sx={{ 
+                          bgcolor: record.status === 'failed' 
+                            ? 'rgba(211, 47, 47, 0.05)' 
+                            : hasWarning 
+                              ? 'rgba(255, 152, 0, 0.08)' 
+                              : 'transparent',
+                        }}
+                      >
+                        <TableCell sx={{ color: 'text.secondary' }}>{record.row}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {record.status === 'failed' ? (
+                              <Chip label="ผิดพลาด" size="small" color="error" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            ) : record.status === 'duplicate' ? (
+                              <Chip label="ซ้ำ" size="small" color="warning" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            ) : (
+                              <Chip label="สำเร็จ" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            )}
+                            {hasWarning && (
+                              <Tooltip title={isIncomplete ? "สแกนเพียง 1 ครั้ง (ข้อมูลอาจไม่ครบ)" : "สถานะงานปกติเป็น 0 (อาจมีปัญหาการคำนวณ)"}>
+                                <WarningIcon color="warning" sx={{ fontSize: 16 }} />
+                              </Tooltip>
+                            )}
+                          </Box>
+                        </TableCell>
                       {/* Mapping raw data columns */}
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>
                         {getValueByKeys(record.data, ['EmployeeNumber', 'EmployeeId', 'EmpNo', 'รหัสพนักงาน', 'employeeid', 'employee_no']) || record.employeeNumber}
                       </TableCell>
                       <TableCell>
@@ -613,38 +727,38 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'], '')}</TableCell>
                       
                       {/* Computed actual metrics */}
-                      <TableCell sx={{ bgcolor: 'rgba(233, 30, 99, 0.05)' }}>
-                        {getValueByKeys(record.data, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], '0')}
+                      <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'inherit' }}>
+                        {normalVal === '1' ? 'ปกติ' : 'ไม่ครบ'}
                       </TableCell>
-                      <TableCell sx={{ bgcolor: 'rgba(33, 150, 243, 0.05)' }}>
+                      <TableCell>
                         {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], '0')}
                       </TableCell>
-                      <TableCell sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)' }}>
+                      <TableCell>
                         {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], '0.00')}
                       </TableCell>
 
                       {/* Extracted from Daily Report */}
-                      <TableCell sx={{ bgcolor: 'rgba(255, 193, 7, 0.05)' }}>
+                      <TableCell sx={{ color: 'primary.main' }}>
                         {getValueByKeys(record.data, ['ReportMorningOT', 'จำนวน OT เช้าจากตารางงาน'], '0.00')}
                       </TableCell>
 
                       {/* Computed actual metrics */}
-                      <TableCell sx={{ bgcolor: 'rgba(255, 152, 0, 0.05)' }}>
+                      <TableCell>
                         {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], '0.00')}
                       </TableCell>
 
                       {/* Extracted from Daily Report */}
-                      <TableCell sx={{ bgcolor: 'rgba(233, 30, 99, 0.05)' }}>
+                      <TableCell sx={{ color: 'primary.main' }}>
                         {getValueByKeys(record.data, ['ReportNormalStatus', 'สถานะเวลางานปกติจากตารางงาน'], '0')}
                       </TableCell>
-                      <TableCell sx={{ bgcolor: 'rgba(33, 150, 243, 0.05)' }}>
+                      <TableCell sx={{ color: 'primary.main' }}>
                         {getValueByKeys(record.data, ['ReportLunchOT', 'จำนวน OTผ่าเที่ยงจากตารางงาน'], '0.00')}
                       </TableCell>
-                      <TableCell sx={{ bgcolor: 'rgba(255, 152, 0, 0.05)' }}>
+                      <TableCell sx={{ color: 'primary.main' }}>
                         {getValueByKeys(record.data, ['ReportEveningOT', 'จำนวน OT เย็นจากตารางงาน'], '0.00')}
                       </TableCell>
 
-                      <TableCell sx={{ bgcolor: 'rgba(244, 67, 54, 0.1)', color: 'error.main', fontWeight: 'bold' }}>
+                      <TableCell sx={{ color: 'error.main', fontWeight: 'bold' }}>
                         {getValueByKeys(record.data, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], '')}
                       </TableCell>
                       
@@ -671,8 +785,9 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
+                  );
+                })}
+              </TableBody>
               </Table>
             </TableContainer>
 
@@ -700,8 +815,25 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                   {renderStatusChips(finalResult)}
                 </Box>
                 <Alert severity="info" sx={{ mt: 3, maxWidth: 500, mx: 'auto', borderRadius: 2, textAlign: 'left' }}>
-                  <Typography variant="body2"><strong>Batch ID:</strong> {finalResult.importBatchId}</Typography>
-                  <Typography variant="caption">ระบบจะเริ่มตรวจสอบความสอดคล้อง (Discrepancy) โดยอัตโนมัติในภายหลัง</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography variant="body2"><strong>Batch ID:</strong> {finalResult.importBatchId}</Typography>
+                      <Typography variant="caption">ระบบย้ายข้อมูลดิบเข้าสู่ฐานข้อมูลแล้ว</Typography>
+                    </Box>
+                    <Button 
+                      size="small" 
+                      color="error" 
+                      variant="outlined"
+                      onClick={() => {
+                        if (window.confirm('คุณต้องการลบ Batch ที่เพิ่งอัปโหลดนี้ออกหรือไม่?')) {
+                          deleteBatchMutation.mutate(finalResult.importBatchId);
+                        }
+                      }}
+                      disabled={deleteBatchMutation.isPending}
+                    >
+                      ยกเลิก Batch นี้
+                    </Button>
+                  </Box>
                 </Alert>
               </>
             ) : (
