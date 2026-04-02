@@ -56,8 +56,9 @@ export class BaseCrudService<T extends { id: string }> {
         const orderBy = options?.orderBy || 'createdAt';
         const orderDirection = options?.orderDirection || 'desc';
 
-        const totalSnapshot = await this.collection.get();
-        const total = totalSnapshot.size;
+        // [P1] Scalability Optimization: Use count aggregation O(1)
+        const totalResult = await this.collection.count().get();
+        const total = totalResult.data().count;
 
         let query = this.collection.orderBy(orderBy, orderDirection);
 
@@ -68,16 +69,25 @@ export class BaseCrudService<T extends { id: string }> {
 
         query = query.limit(pageSize) as any;
 
-        const snapshot = await query.get();
-        const items = snapshot.docs.map((doc) => doc.data());
+        try {
+            const snapshot = await query.get();
+            const items = snapshot.docs.map((doc) => doc.data());
 
-        return {
-            items,
-            total,
-            page,
-            pageSize,
-            totalPages: Math.ceil(total / pageSize),
-        };
+            return {
+                items,
+                total,
+                page,
+                pageSize,
+                totalPages: Math.ceil(total / pageSize),
+            };
+        } catch (error: any) {
+            // [P0] Error Resilience: Catch Firestore Index errors
+            if (error.code === 9 || error.message.includes('FAILED_PRECONDITION')) {
+                console.error(`[BaseCrudService] Missing Index for ${this.collectionName || 'collection'}:`, error.message);
+                throw new Error(`ระบบต้องการการสร้าง Index: ${error.message}`);
+            }
+            throw error;
+        }
     }
 
     async update(id: string, data: Partial<Omit<T, 'id'>>): Promise<T | null> {
@@ -151,9 +161,18 @@ export class BaseCrudService<T extends { id: string }> {
             query = query.limit(options.pageSize);
         }
 
-        const snapshot = await query.get();
-        console.log(`[BaseCrudService] Found ${snapshot.size} documents in ${this.collectionName || 'unknown'} (for filters: ${JSON.stringify(filters)})`);
-        return snapshot.docs.map((doc) => doc.data());
+        try {
+            const snapshot = await query.get();
+            console.log(`[BaseCrudService] Found ${snapshot.size} documents in ${this.collectionName || 'unknown'} (for filters: ${JSON.stringify(filters)})`);
+            return snapshot.docs.map((doc) => doc.data());
+        } catch (error: any) {
+            // [P0] Error Resilience: Catch Firestore Index errors
+            if (error.code === 9 || error.message.includes('FAILED_PRECONDITION')) {
+                console.error(`[BaseCrudService] Missing Index for ${this.collectionName || 'collection'}:`, error.message);
+                throw new Error(`ระบบต้องการการสร้าง Index: ${error.message}`);
+            }
+            throw error;
+        }
     }
 
     async count(
@@ -167,7 +186,7 @@ export class BaseCrudService<T extends { id: string }> {
             });
         }
 
-        const snapshot = await query.get();
-        return snapshot.size;
+        const totalResult = await query.count().get();
+        return totalResult.data().count;
     }
 }

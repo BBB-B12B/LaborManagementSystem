@@ -8,10 +8,16 @@ import {
   addWorkEntry,
   removeWorkEntry,
   getByProjectAndDate,
-  getByProjectAndMonth
+  getByProjectAndMonth,
+  importExcel,
+  bulkCreate,
+  downloadTemplate
 } from '../../controllers/dailyReportController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
@@ -41,6 +47,27 @@ router.get(
 router.get(
   '/project/:projectId/month/:year/:month',
   getByProjectAndMonth
+);
+
+/** Download Excel Template */
+router.get(
+  '/template',
+  downloadTemplate
+);
+
+/** Import Excel (Preview Mode) */
+router.post(
+  '/import-excel',
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  upload.single('file'),
+  importExcel
+);
+
+/** Bulk Create (Commit Mode) */
+router.post(
+  '/bulk-create',
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  bulkCreate
 );
 
 export default router;

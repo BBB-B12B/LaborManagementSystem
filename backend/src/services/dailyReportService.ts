@@ -13,6 +13,11 @@
 import { db } from '../config/firebase';
 import { storage } from '../config/storage';
 import { FieldValue } from 'firebase-admin/firestore';
+import { dailyContractorService } from './dailyContractor/DailyContractorService';
+import { wagePeriodService } from './wage/WagePeriodService';
+import { AppError } from '../api/middleware/errorHandler';
+import * as XLSX from 'xlsx';
+import { parseExcelRow } from '../utils/dailyReportExcel';
 
 export interface DailyReportData {
   projectLocationId: string;
@@ -59,6 +64,20 @@ export async function createDailyReport(
     uploadedImageUrls = await uploadImages(imageUrls);
   }
 
+  // [P2] Data Locking: Prevent creation on locked dates
+  let finalProjectCode = '';
+  if (data.projectLocationId) {
+     const project = await db.collection('Project').doc(data.projectLocationId).get();
+     finalProjectCode = project.data()?.code || '';
+  }
+  
+  if (data.workDate) {
+    const isLocked = await wagePeriodService.isDateLocked(data.workDate, finalProjectCode);
+    if (isLocked) {
+      throw new AppError('ไม่สามารถสร้างข้อมูลได้ เนื่องจากงวดค่าแรงนี้ได้รับการอนุมัติหรือจ่ายเงินแล้ว', 403);
+    }
+  }
+
   // Multi-DC: Create separate report for each DC
   if (dailyContractorIds.length > 1) {
     const reports = [];
@@ -66,9 +85,14 @@ export async function createDailyReport(
     for (const dcId of dailyContractorIds) {
       const reportRef = db.collection('daily_reports').doc();
 
+      // [T-400] Fetch employeeId for denormalization
+      const dc = await dailyContractorService.getById(dcId);
+
       const reportData = {
         ...commonData,
         dailyContractorId: dcId, // Use singular field
+        employeeId: dc?.employeeId || null, // [T-400] Link to ScanData
+        verificationStatus: 'unverified' as const, // [T-401] Initial status
         imageUrls: uploadedImageUrls,
         status: 'submitted',
         isDeleted: false,
@@ -98,9 +122,14 @@ export async function createDailyReport(
   // Single DC: Create one report
   const reportRef = db.collection('daily_reports').doc();
 
+  // [T-400] Fetch employeeId for denormalization
+  const dc = await dailyContractorService.getById(dailyContractorIds[0]);
+
   const reportData = {
     ...commonData,
     dailyContractorId: dailyContractorIds[0], // Use singular field
+    employeeId: dc?.employeeId || null, // [T-400] Link to ScanData
+    verificationStatus: 'unverified' as const, // [T-401] Initial status
     imageUrls: uploadedImageUrls,
     status: 'submitted',
     isDeleted: false,
@@ -144,6 +173,26 @@ export async function updateDailyReport(
 
   const beforeData = reportDoc.data();
 
+  if (beforeData) {
+    // [P2] Data Locking: Check if the original or new date is locked
+    const originalDate = (beforeData.workDate as any)?.toDate ? (beforeData.workDate as any).toDate() : beforeData.workDate;
+    const projectCode = beforeData.projectCode || ''; 
+    
+    if (originalDate) {
+      // For now, let's look up projectCode from projectLocationId if not present
+      let finalProjectCode = projectCode;
+      if (!finalProjectCode && beforeData.projectLocationId) {
+         const project = await db.collection('Project').doc(beforeData.projectLocationId).get();
+         finalProjectCode = project.data()?.code || '';
+      }
+
+      const isLocked = await wagePeriodService.isDateLocked(originalDate, finalProjectCode);
+      if (isLocked) {
+        throw new AppError('ไม่สามารถแก้ไขข้อมูลได้ เนื่องจากงวดค่าแรงนี้ได้รับการอนุมัติหรือจ่ายเงินแล้ว', 403);
+      }
+    }
+  }
+
   // Handle image uploads if new images provided
   let uploadedImageUrls = data.imageUrls || [];
   if (data.imageUrls && data.imageUrls.some((url) => url.startsWith('data:'))) {
@@ -162,6 +211,14 @@ export async function updateDailyReport(
       delete updateData[key as keyof typeof updateData];
     }
   });
+
+  // [T-400] If dailyContractorId is changed, update employeeId accordingly
+  if (data.dailyContractorIds && data.dailyContractorIds.length > 0) {
+    const dc = await dailyContractorService.getById(data.dailyContractorIds[0]);
+    (updateData as any).dailyContractorId = data.dailyContractorIds[0];
+    (updateData as any).employeeId = dc?.employeeId || null;
+    (updateData as any).verificationStatus = 'unverified'; // Reset status on DC change
+  }
 
   await reportRef.update(updateData);
 
@@ -204,6 +261,26 @@ export async function deleteDailyReport(id: string): Promise<void> {
 
   if (!reportDoc.exists) {
     throw new Error('ไม่พบรายงานการทำงาน');
+  }
+
+  const beforeData = reportDoc.data();
+
+  if (beforeData) {
+    // [P2] Data Locking: Prevent deletion on locked dates
+    const originalDate = (beforeData.workDate as any)?.toDate ? (beforeData.workDate as any).toDate() : beforeData.workDate;
+    
+    if (originalDate) {
+      let finalProjectCode = beforeData.projectCode || '';
+      if (!finalProjectCode && beforeData.projectLocationId) {
+         const project = await db.collection('Project').doc(beforeData.projectLocationId).get();
+         finalProjectCode = project.data()?.code || '';
+      }
+
+      const isLocked = await wagePeriodService.isDateLocked(originalDate, finalProjectCode);
+      if (isLocked) {
+        throw new AppError('ไม่สามารถลบข้อมูลได้ เนื่องจากงวดค่าแรงนี้ได้รับการอนุมัติหรือจ่ายเงินแล้ว', 403);
+      }
+    }
   }
 
   // Hard delete
@@ -393,4 +470,107 @@ function timeRangesOverlap(
     (minutes1Start < minutes2End && minutes1End > minutes2Start) ||
     (minutes2Start < minutes1End && minutes2End > minutes1Start)
   );
+}
+/**
+ * Parse Excel for Daily Report Import
+ *
+ * - Reads Excel Buffer
+ * - Maps columns to internal fields
+ * - Validates Project Code and Employee ID
+ */
+export async function parseDailyReportExcel(
+  buffer: Buffer
+): Promise<any[]> {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet);
+
+  const results: any[] = [];
+
+  for (const row of rows) {
+    const parsed = parseExcelRow(row);
+    if (!parsed) continue;
+
+    // 1. Lookup Project by Code
+    const projectSnapshot = await db
+      .collection('Project')
+      .where('code', '==', parsed.projectCode)
+      .limit(1)
+      .get();
+    
+    // In case 'code' is not what we want, try 'projectCode' (T-360)
+    let project = projectSnapshot.empty ? null : projectSnapshot.docs[0];
+    if (!project) {
+        const p2Snapshot = await db.collection('Project').where('projectCode', '==', parsed.projectCode).limit(1).get();
+        project = p2Snapshot.empty ? null : p2Snapshot.docs[0];
+    }
+
+    // 2. Lookup DC by Employee ID
+    const dcSnapshot = await db
+      .collection('daily_contractors')
+      .where('employeeId', '==', parsed.employeeId)
+      .limit(1)
+      .get();
+    const dc = dcSnapshot.empty ? null : dcSnapshot.docs[0];
+
+    // 3. Calculate Hours (T-370-3 User Request)
+    let netHours = parsed.hours;
+    if (netHours === undefined || isNaN(netHours)) {
+      // Calculate from time
+      const [h1, m1] = parsed.startTime.split(':').map(Number);
+      const [h2, m2] = parsed.endTime.split(':').map(Number);
+      const total = (h2 * 60 + m2 - (h1 * 60 + m1)) / 60;
+      
+      // If regular, subtract 1h lunch
+      const breakHours = parsed.workType === 'regular' ? 1.0 : 0;
+      netHours = Math.max(0, total - breakHours);
+    }
+
+    results.push({
+      ...parsed,
+      projectLocationId: project?.id || null,
+      projectName: (project?.data() as any)?.name || 'ไมพบโครงการ',
+      dailyContractorId: dc?.id || null,
+      matchedWorkerName: (dc?.data() as any)?.name || 'ไม่พบพนักงาน',
+      netHours,
+      isValid: !!project && !!dc,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Bulk save daily reports from Excel
+ */
+export async function bulkCreateDailyReports(
+    data: any[],
+    createdBy: string
+): Promise<number> {
+    let count = 0;
+    for (const item of data) {
+        // Find existing report or create new one for the day-project
+        // For simplicity in this bulk import, we'll create individual reports
+        // similar to createDailyReport's logic
+        try {
+            await createDailyReport({
+                projectLocationId: item.projectLocationId,
+                workDate: new Date(item.date),
+                dailyContractorIds: [item.dailyContractorId],
+                taskName: item.taskName,
+                startTime: item.startTime,
+                endTime: item.endTime,
+                netHours: item.netHours,
+                totalWage: 0, // Will be calculated by WagePeriodService
+                workType: item.workType,
+                isOvernight: false,
+                notes: `Imported from Excel: ${item.notes || ''}`,
+            }, createdBy);
+            count++;
+        } catch (error) {
+            console.error(`Failed to import row for employee ${item.employeeId}:`, error);
+        }
+    }
+    return count;
 }

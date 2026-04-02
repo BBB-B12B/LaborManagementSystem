@@ -6,7 +6,7 @@
  */
 
 import { collections } from '../../config/collections';
-import { db } from '../../config/firebase';
+import admin, { db } from '../../config/firebase';
 import { BaseCrudService } from '../base/BaseCrudService';
 import {
   DailyReport,
@@ -16,6 +16,8 @@ import {
   dailyReportConverter
 } from '../../models/DailyReport';
 import { AppError } from '../../api/middleware/errorHandler';
+import * as XLSX from 'xlsx';
+import { parseExcelRowV2 } from '../../utils/dailyReportExcel';
 
 // Helper for UUID generation (simple fallback)
 function generateUuid(): string {
@@ -158,6 +160,139 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       .get();
 
     return snapshot.docs.map(doc => dailyReportConverter.fromFirestore(doc));
+  }
+
+  /**
+   * Parse Excel for Daily Report Import (v2 Split Logic)
+   */
+  async parseDailyReportExcel(buffer: Buffer): Promise<any[]> {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet);
+
+    const results: any[] = [];
+
+    for (const row of rows) {
+      const parsed = parseExcelRowV2(row);
+      if (!parsed) continue;
+
+      // 1. Lookup Project by Code
+      const projectSnapshot = await collections.projectLocations
+        .where('projectCode', '==', parsed.projectCode)
+        .limit(1)
+        .get();
+      
+      let project = projectSnapshot.empty ? null : projectSnapshot.docs[0];
+
+      // 2. Lookup DC by Employee ID
+      const dcSnapshot = await collections.dailyContractors
+        .where('employeeId', '==', parsed.employeeId)
+        .limit(1)
+        .get();
+      const dc = dcSnapshot.empty ? null : dcSnapshot.docs[0];
+
+      const baseInfo = {
+        date: parsed.date,
+        projectCode: parsed.projectCode,
+        employeeId: parsed.employeeId,
+        workerName: parsed.workerName,
+        taskName: parsed.taskName,
+        projectLocationId: project?.id || null,
+        projectName: (project?.data() as any)?.projectName || 'ไม่พบโครงการ',
+        dailyContractorId: dc?.id || null,
+        matchedWorkerName: (dc?.data() as any)?.name || 'ไม่พบพนักงาน',
+        isValid: !!project && !!dc,
+      };
+
+      // 3. Split into Multiple Entries based on Hours (T-371-1)
+      const workTypesConfig = [
+        { key: 'hoursRegular', type: 'regular', start: '08:00', end: '17:00' },
+        { key: 'hoursOTMorning', type: 'ot_morning', start: '05:00', end: '08:00' },
+        { key: 'hoursOTNoon', type: 'ot_noon', start: '12:00', end: '13:00' },
+        { key: 'hoursOTEvening', type: 'ot_evening', start: '17:00', end: null },
+      ];
+
+      for (const config of workTypesConfig) {
+        const hours = (parsed as any)[config.key];
+        if (hours && hours > 0) {
+          let startTime = config.start;
+          let endTime = config.end;
+
+          if (!endTime) {
+            // Calculate end time for OT Evening based on hours
+            const [h, m] = config.start.split(':').map(Number);
+            const endH = h + Math.floor(hours);
+            const endM = m + (hours % 1) * 60;
+            endTime = `${String(endH).padStart(2, '0')}:${String(Math.round(endM)).padStart(2, '0')}`;
+          }
+
+          results.push({
+            ...baseInfo,
+            workType: config.type,
+            netHours: hours,
+            startTime,
+            endTime,
+            id: `${parsed.employeeId}_${config.type}_${results.length}`, // Temp ID for Preview
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Bulk save daily reports (Aggregated)
+   */
+  async bulkCreateDailyReports(data: any[], user: string, importFileUrl?: string): Promise<number> {
+    let successCount = 0;
+    // Group by Project + Date to handle importFileUrl efficiently
+    const itemsByReport = data.reduce((acc, item) => {
+      const reportId = this.generateId(item.projectLocationId, new Date(item.date));
+      if (!acc[reportId]) acc[reportId] = [];
+      acc[reportId].push(item);
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    for (const reportId in itemsByReport) {
+      const items = itemsByReport[reportId];
+      if (items.length === 0) continue;
+
+      try {
+        // Process each entry in the report
+        for (const item of items) {
+          if (!item.isValid) continue;
+          await this.addWorkEntry(
+            item.projectLocationId,
+            new Date(item.date),
+            {
+              dailyContractorId: item.dailyContractorId,
+              employeeId: item.employeeId,
+              taskName: item.taskName,
+              workType: item.workType,
+              startTime: item.startTime,
+              endTime: item.endTime,
+              verificationStatus: 'unverified',
+            } as any,
+            user
+          );
+          successCount++;
+        }
+
+        // After adding entries, link the import file to the aggregated report
+        if (importFileUrl) {
+          await collections.dailyReports.doc(reportId).update({
+            importFileUrls: admin.firestore.FieldValue.arrayUnion(importFileUrl),
+            updatedAt: new Date(),
+            updatedBy: user
+          });
+        }
+      } catch (err) {
+        console.error(`Bulk Import Error for report ${reportId}:`, err);
+      }
+    }
+    return successCount;
   }
 }
 

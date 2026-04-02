@@ -11,6 +11,10 @@
 
 import { Request, Response } from 'express';
 import { dailyReportService } from '../services/dailyReport/DailyReportService';
+import * as XLSX from 'xlsx';
+import { DAILY_REPORT_COLUMNS } from '../utils/dailyReportExcel';
+import { storage } from '../config/storage';
+import { logger } from '../utils/logger';
 
 /**
  * POST /api/daily-reports/entry
@@ -97,5 +101,95 @@ export async function getByProjectAndMonth(req: Request, res: Response): Promise
   } catch (error) {
     console.error('Error fetching monthly reports:', error);
     return res.status(500).json({ error: (error as Error).message });
+  }
+}
+/**
+ * POST /api/daily-reports/import-excel
+ * Parse Excel file and return preview
+ */
+export async function importExcel(req: Request, res: Response): Promise<Response> {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const buffer = req.file.buffer;
+    const preview = await dailyReportService.parseDailyReportExcel(buffer);
+
+    // T-371-5: Upload the original file for audit trail
+    let importFileUrl = null;
+    try {
+      importFileUrl = await storage.uploadBuffer(
+        buffer,
+        'daily-reports/imports',
+        req.file.originalname,
+        req.file.mimetype
+      );
+    } catch (error) {
+      logger.error('Failed to upload import source file', { error });
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      data: preview,
+      importFileUrl 
+    });
+  } catch (error) {
+    console.error('Error importing Excel:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+/**
+ * POST /api/daily-reports/bulk-create
+ * Save many work entries at once
+ */
+export async function bulkCreate(req: Request, res: Response): Promise<Response> {
+  try {
+    const { data, importFileUrl } = req.body;
+    const userId = (req as any).user?.uid;
+
+    if (!data || !Array.isArray(data)) {
+      return res.status(400).json({ error: 'Invalid data format' });
+    }
+
+    const count = await dailyReportService.bulkCreateDailyReports(data, userId, importFileUrl);
+    return res.status(200).json({ success: true, count });
+  } catch (error) {
+    console.error('Error bulk creating reports:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+/**
+ * GET /api/daily-reports/template
+ * Download Excel Template (v2)
+ */
+export async function downloadTemplate(_req: Request, res: Response): Promise<void> {
+  try {
+    const headers = [
+      DAILY_REPORT_COLUMNS.DATE,
+      DAILY_REPORT_COLUMNS.PROJECT_CODE,
+      DAILY_REPORT_COLUMNS.EMPLOYEE_ID,
+      DAILY_REPORT_COLUMNS.WORKER_NAME,
+      DAILY_REPORT_COLUMNS.TASK_NAME,
+      DAILY_REPORT_COLUMNS.HOURS_REGULAR,
+      DAILY_REPORT_COLUMNS.HOURS_OT_MORNING,
+      DAILY_REPORT_COLUMNS.HOURS_OT_NOON,
+      DAILY_REPORT_COLUMNS.HOURS_OT_EVENING,
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=daily_report_template.xlsx');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error downloading template:', error);
+    res.status(500).json({ error: (error as Error).message });
   }
 }

@@ -107,4 +107,33 @@ export const storage = {
 
     return saveLocally(buffer, sanitizedFolder, extension);
   },
+
+  async uploadBuffer(buffer: Buffer, folder: string, filename: string, mimeType: string): Promise<string> {
+    const sanitizedFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, '-');
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '-');
+    const key = `${sanitizedFolder.replace(/\/+$/g, '')}/${Date.now()}-${sanitizedFilename}`;
+
+    if (s3Client && bucketName) {
+      try {
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            Body: buffer,
+            ContentType: mimeType,
+          })
+        );
+
+        return buildPublicUrl(key);
+      } catch (error) {
+        logger.error(
+          'Failed to upload buffer to Cloudflare R2. Falling back to local storage.',
+          { error }
+        );
+      }
+    }
+
+    const extension = path.extname(filename).slice(1) || 'bin';
+    return saveLocally(buffer, sanitizedFolder, extension);
+  },
 };

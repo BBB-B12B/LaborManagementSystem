@@ -382,3 +382,26 @@
 *   ปรับ Container เป็น Full Width (`maxWidth={false}`)
 *   ปรับสีปุ่ม "คำนวณค่าแรง" เป็นสีน้ำเงิน
 *   ปรับสัดส่วนคอลัมน์ใน DataGrid ให้พอดีกับหน้าจอเพื่อนำ horizontal scrollbar ออก
+---
+
+### Task ID: T-370 (Daily Report Excel Import)
+**Feature Ref**: F-013 Excel Import
+**Status**: [x] Complete
+#### 1. Concept / Goal
+*   พัฒนาระบบนำเข้าข้อมูลรายงานประจำวัน (Daily Report) ผ่านไฟล์ Excel เพื่อความรวดเร็วในการบันทึกข้อมูลจำนวนมาก
+#### 2. Detailed Sub-tasks
+*   [x] **T-370-1**: (Models) ออกแบบ Excel Template ภาษาไทย และฟังก์ชันการดาวน์โหลด
+*   [x] **T-370-2**: (Backend) สร้าง API `POST /import-excel` เพื่อรับไฟล์และ Parse ข้อมูลด้วย `xlsx`
+*   [x] **T-370-3**: (Backend) พัฒนา Logic การ Match `Project Code` และ `Employee ID` พร้อมคำนวณ `netHours` อัตโนมัติ
+*   [x] **T-370-4**: (Frontend) สร้าง `ExcelImportModal.tsx` เพื่อเลือกไฟล์และแสดงผล Preview ก่อนบันทึก
+### Task ID: T-371 (Excel Import Refactor v2)
+**Feature Ref**: F-013 Excel Import
+**Status**: [x] Complete
+#### 1. Concept / Goal
+*   Refactor ให้กรอก 1 แถว/คน/วัน (9 คอลัมน์) และสร้างระบบ Download Template
+#### 2. Detailed Sub-tasks
+*   [x] **T-371-1**: (Models) ปรับปรุง Excel Template และ Logic การ Parse (Split Rows)
+*   [x] **T-371-2**: (Backend) เพิ่ม Endpoint `GET /template` สำหรับ Download Excel ว่าง
+*   [x] **T-371-3**: (Frontend) เพิ่มปุ่ม Download Template ใน `ExcelImportModal.tsx`
+*   [x] **T-371-4**: (Frontend) ปรับปรุง Preview Table ให้แสดงผล Flattened Data
+*   [x] **T-371-5**: (Backend) ระบบจัดเก็บไฟล์ Excel ต้นฉบับลง Storage (File Persistence)

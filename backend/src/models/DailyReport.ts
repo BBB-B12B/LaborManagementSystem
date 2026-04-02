@@ -13,6 +13,8 @@ export type ReportStatus = 'draft' | 'submitted' | 'verified' | 'locked';
 export interface DailyReportEntry {
   id: string; // UUID
   dailyContractorId: string;
+  employeeId?: string; // Denormalized ID for scan matching (T-400)
+  verificationStatus?: 'unverified' | 'auto_verified' | 'manual_verified' | 'discrepancy'; // (T-401)
   taskName: string;
   workType: WorkType;
   startTime: Date;
@@ -31,6 +33,7 @@ export interface DailyReport {
   entries: DailyReportEntry[]; // Array of work entries
   status: ReportStatus;
   notes?: string;
+  importFileUrls?: string[]; // URLs to source Excel files (Audit Trail)
 
   // Metadata
   createdAt: Date;
@@ -111,6 +114,7 @@ export const dailyReportConverter = {
       })),
       status: report.status,
       notes: report.notes || null,
+      importFileUrls: report.importFileUrls || [],
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
       createdBy: report.createdBy,
@@ -132,6 +136,7 @@ export const dailyReportConverter = {
       })),
       status: data.status,
       notes: data.notes,
+      importFileUrls: data.importFileUrls || [],
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
       createdBy: data.createdBy,

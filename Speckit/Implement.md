@@ -1,130 +1,59 @@
-# Master Developer Instruction for AI Agent
+# Master Developer Instruction for AI Agent (Orchestrator)
 
 เอกสารนี้คือ **"Single Source of Truth"** และคู่มือปฏิบัติงานหลักสำหรับ AI Agent และทีมพัฒนา ภายใต้แนวคิด **"Spec-First Development"**
-เมื่อได้รับคำสั่ง "เริ่มพัฒนา", "ทำงานต่อ", หรือการอ้างถึงไฟล์นี้ (@Speckit/implement.md)ให้ปฏิบัติงานตามขั้นตอนด้านล่างอย่างเคร่งครัด
+เมื่อได้รับคำสั่ง "เริ่มพัฒนา", "ทำงานต่อ", หรือคำสั่ง "ตรวจสอบปัญหา" ให้ปฏิบัติงานตามขั้นตอนและเรียกใช้ **Skills** ที่เหมาะสมด้านล่างนี้อย่างเคร่งครัด
 
 ---
 
-## 1. Rules of Engagement (กฎไตรภาคี)
+## 🧭 1. Rules of Engagement (กฎไตรภาคี)
 
 ### 1.1 The Spec-First Philosophy (เอกสารนำทางโค้ด)
 > **"Code is a liability, Documentation is an asset."**
-> ห้ามเขียน Code จนกว่าจะมั่นใจว่า `spec.md`, `task.md`, และ traceability.md ถูกอัปเดตให้สอดคล้องกับงานใหม่แล้วเท่านั้น
+> ห้ามเขียน Code จนกว่าจะมั่นใจว่า `spec.md`, `task.md`, และ `traceability.md` ถูกอัปเดตให้สอดคล้องกับงานใหม่แล้วเท่านั้น
 
 ### 1.2 Primary Language (ภาษาหลัก)
-- **THAI (ภาษาไทย):** ใช้ภาษาไทยในการสนทนา อธิบายเหตุผล และสรุปงาน **ทุกกรณี** (ยกเว้นข้อความ System Log)
-- **Technical Terms:** ใช้ภาษาอังกฤษทับศัพท์ได้ แต่หากซับซ้อนให้มีคำอธิบายไทยกำกับไว้เสมอ
+- **THAI (ภาษาไทย):** ใช้ภาษาไทยในการสนทนา อธิบายเหตุผล และสรุปงาน **ทุกกรณี**
 - **Response Protocol:** โปรดตรวจสอบเสมอว่าคำตอบสุดท้ายเป็นภาษาไทยก่อนส่งเสมอ
 
 ### 1.3 Code Documentation
-- **Comment Policy:** ทุกการแก้ไข Logic สำคัญ ต้องมี Comment ภาษาไทยอธิบายเสมอ
-  
-typescript
-  // Validate input (ตรวจสอบข้อมูลก่อนบันทึก)
-  if (!isValid) return;
-  
-
-
-### 1.4 Rigid Workflow Adherence (กฎเหล็กแห่งขั้นตอน)
-- **Mandatory Sequence:** ขั้นตอนการทำงานในหมวด **"2. Development Workflow" (Step 2.1 - 2.7)** ถือเป็นข้อบังคับที่ **ห้ามข้าม ห้ามลัด และห้ามทำสลับขั้นตอน** โดยเด็ดขาด
-- **Completeness Check:** การส่งมอบงานต้องมีองค์ประกอบครบทั้ง Code, Test, และ Documentation (ตาม Step 2.7) หากขาดอย่างใดอย่างหนึ่ง ให้ถือว่างานนั้น **"ยังไม่เสร็จ" (Incomplete)**
-- **System Discipline:** แม้จะเป็นงานแก้ Bug เล็กน้อย ก็ต้องเริ่มจาก 2.1 (Context) -> 2.3 (Log Problem) -> 2.4 (Fix) -> 2.7 (Doc Summary) เสมอ เพื่อรักษามาตรฐาน Traceability ของระบบ
+- **Comment Policy:** ทุกการแก้ไข Logic สำคัญ ต้องมี Comment ภาษาไทยอธิบายเสมอ (Inline Comments)
 
 ---
 
-## 2. Development Workflow (ขั้นตอนการทำงานแบบพรีเมียม)
+## 🧰 2. Skill Mapping (การเรียกใช้ทักษะ)
 
-ให้ปฏิบัติงานตาม **8 ขั้นตอนนี้ (Step 2.1 - 2.8)** เรียงตามลำดับ (Sequential) **ห้ามข้ามขั้นตอนและห้ามทำพร้อมกัน (Parallel) โดยเด็ดขาด** ความถูกต้องของ Process สำคัญเท่ากับความถูกต้องของ Code
+เพื่อให้การทำงานมีประสิทธิภาพสูงสุด ให้เลือกใช้ **Skill** ตามประเภทของงานที่ได้รับมอบหมาย:
 
-### Step 2.1: Context Loading & Rehydration (โหลดบริบท)
-ทุกครั้งที่เริ่ม Session หรือรับงานให้ทำความเข้าใจ Context จาก 4 ไฟล์หลัก:
-1.  **`Speckit/instruction.md`**: Tech Stack & Standards
-2.  **`Speckit/spec.md`**: User Flow & Features [F-XXX]
-3.  **`Speckit/traceability.md`**: Relationship & Impact
-4.  **`Speckit/task.md`**: Progress & Roadmap [T-XXX]
+### 🚀 2.1 [Skill: Development Workflow](file:///d:/Labor%20Management%20System/Speckit/skills/dev-workflow.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อเริ่มงานใหม่, พัฒนา Feature ใหม่, หรือรับ Requirement เพิ่มเติม
+*   **หน้าที่:** ควบคุมลำดับ 8 ขั้นตอน (Context -> Plan -> Exec -> Doc Summary) อย่างเคร่งครัด
 
+### 🕵️ 2.2 [Skill: E2E Troubleshooter & Investigator](file:///d:/Labor%20Management%20System/Speckit/skills/e2e-troubleshooter.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อผู้ใช้แจ้ง Error, หน้าจอพัง, ปุ่มกดไม่ได้, หรือ Flow งานขาดตอน
+*   **หน้าที่:** วิเคราะห์ Root Cause, หา "จุดเชื่อมต่อที่ขาด", และตรวจสอบ UX Impact Review อย่างเป็นระบบ
 
-**Handoff Prompt (สำหรับเริ่มงานต่อ):**
-> "สรุปสถานะปัจจุบันจาก task.md ว่าล่าสุดทำอะไรเสร็จไปแล้ว และ Next Step คืออะไร ก่อนเริ่มงาน"
+### 🛡️ 2.3 [Skill: Issue & Incident Management](file:///d:/Labor%20Management%20System/Speckit/skills/issue-management.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อพบ Error ระหว่างการพัฒนาที่ต้องบันทึก (Nested Log) หรือเมื่อมี Incident เร่งด่วน
+*   **หน้าที่:** บันทึก Traceability ของปัญหา (T-XXX-EX-Y) และสรุปแนวทางการแก้ไข
 
-### Step 2.2: Analysis & Planning (วิเคราะห์และวางแผน)
-- เปรียบเทียบ User Request กับ System Spec
-- **The CRUD Heuristic (กฎการตรวจสอบความครบถ้วน):**
-    > หากมีการเพิ่ม Field ใน Data Model ต้องวางแผนแก้ไขให้ครบ 3 จุด:
-    > 1. **Create Form** (e.g., Add Dialog) -> Update Input
-    > 2. **Read/View** (e.g., Detail Page) -> Update Display
-    > 3. **Update Form** (e.g., Edit Dialog) -> Update Input
-- **Dependency Check Rule:**
-    - ตรวจสอบ traceability.md ว่า Component ใดบ้างที่ได้รับผลกระทบ
-    - ห้ามแก้ Data Model โดยไม่เช็ค CRUD
+---
 
-### Step 2.3: Ephemeral Planning (วางแผนเบื้องต้น) **[PLANNING MODE]**
-> **"Think before you Write."**
-1.  **Create `implementation_plan.md`**:
-    - สร้างไฟล์แผนงานชั่วคราวเพื่อระบุ Goal, Proposed Changes, และ Verification Plan
-    - ใช้ notify_user เพื่อขอ Approval จาก User เสมอ
-    - **Note**: ห้ามข้ามขั้นตอนนี้ แม้จะเป็นงานเล็กน้อย เพื่อให้ User เห็นภาพรวมก่อนลงมือจริง
-    - *Plan Template*: ดู implementation_plan_artifact ใน System Prompt
+## 🚦 3. Discipline Rules (ระเบียบวินัย)
 
-### Step 2.4: Permanent Documentation (บันทึกข้อมูลถาวร) **[CRITICAL GATEKEEPER]**
-**Pre-condition**: implementation_plan.md ต้องได้รับการอนุมัติ (Approved) แล้วเท่านั้น
-ก่อนเขียนโค้ดบรรทัดแรก ต้องอัปเดตเอกสารหลักให้ครบถ้วนตามแผนที่วางไว้:
+1.  **ห้ามลัดขั้นตอน:** ขั้นตอนใน `dev-workflow.md` ถือเป็นกฎเหล็ก
+2.  **ห้ามเดาสุ่ม:** หากข้อมูลไม่ครบ (เช่น Log ไม่ชัดเจน) ให้ใช้ Skill `e2e-troubleshooter` เพื่อหาทางจำลองเหตุการณ์หรือระบุสมมติฐานที่ชัดเจน
+3.  **ความพรีเมียม (Premium UX):** ทุกงานที่ส่งมอบต้องผ่านการตรวจสอบตาม [UX Audit Framework](file:///d:/Labor%20Management%20System/Speckit/skills/refs/ux-audit-framework.md) เสมอ
+4.  **สรุปเอกสารเสมอ:** ทุกครั้งที่จบงาน ต้องมีหัวข้อ **Documentation Summary** เพื่อยืนยันว่าเอกสารหลัก (4 ฉบับ) ถูกอัปเดตครบถ้วน
 
-1.  **Update `task.md`**:
-    - ค้นหา Page Section ที่เกี่ยวข้อง (Page-Based Grouping)
-    - **Placement Rule**: ต้องเลือก Section ที่ตรงกับ "ต้นเหตุ" หรือ "Component หลัก" ของงานนั้นๆ ไม่ใช่แค่ดูว่าเจอปัญหาที่ไหน (ดู List of Sections ใน task.md เป็นหลัก)
-      - *Example*: เจอปัญหา Auth ที่หน้า Calendar -> ต้องไปใส่ใน Section "Authentication/System" ไม่ใช่ "Calendar"
-    - **Defect Decision Matrix (เช็คก่อนสร้าง Task ใหม่):**
-      - 🔴 เป็น Bug/Error จากงานที่เพิ่งทำ / เคยทำเสร็จแล้ว? -> **ห้ามสร้าง Task ใหม่** ให้ใช้ **Error Log (T-XXX-EX-Y)**
-      - 🔴 เป็น Production Incident ของ Feature เดิม? -> **ห้ามสร้าง Task ใหม่** ให้ใช้ **Error Log**
-      - 🟢 เป็น Feature ใหม่ หรือ Requirement ใหม่ที่ไม่เคยระบุมาก่อน? -> **สร้าง Task ใหม่ได้**
+---
 
-    - **Rich Task Schema (Copy & Use):**
-      
-markdown
-      - [ ] [T-XXX] **Task Name**: Short Description
-          - **Type**: Feature / Bug Fix / Refactor
-          - **Priority**: High / Medium / Low
-          - **Description**:
-              1. ...
-          - **Traceability**: [F-XXX]
-      
+## 📚 4. Reference Library
 
-
-    > **[CRITICAL WARNING] Artifact ≠ Documentation**
-    > การสร้าง implementation_plan.md หรือ Artifact ใดๆ **ไม่ถือว่า** เป็นการอัปเดตเอกสารหลัก
-    > คุณ **ต้อง** เขียนลงในไฟล์ spec.md และ traceability.md จริงๆ เท่านั้นถึงจะผ่านขั้นตอนนี้ได้
-    > ห้ามข้ามขั้นตอนนี้โดยอ้างว่า "มีรายละเอียดใน Plan แล้ว" เด็ดขาด
-
-2.  **Update `traceability.md`**:
-      
-markdown
-      - [ ] **[T-XXX] Task Name**
-          - **Concept/Goal**: เป้าหมายหลัก
-          - **Principles**: หลักการออกแบบ (e.g., Performance, Consistency)
-          - **Implementation Details**:
-              - **UI/UX**: Component ที่ต้องแก้
-              - **Logic/State**: State management
-              - **Data**: Query/Cache strategy
-          - **Confirmed Behavior**: สิ่งที่ต้องทดสอบ (Acceptance Criteria)
-          - **Sub-tasks**:
-              - [ ] Sub-task 1
-      
-
-
-2.  **Update `traceability.md`**:
-    - ใช้โครงสร้างตารางมาตรฐาน:
-      - **RTM**: | Feature ID | Name | Tasks | Files | Status |
-      - **Data Traceability**: | Entity | Type | Key State Vars | Related Files | Notes |
-    - เพิ่ม Row ใหม่หากมี Feature หรือ Key Variable ใหม่
-
-3.  **Update `spec.md`**:
-    - **Refactor using Rich Feature Schema**:
-      - **[F-XXX] Feature Name**
-      - **Description**: คำอธิบายหลัก
-      - **User Flow**: Step-by-step actions (1. User logs in -> 2. System redirects)
-      - **Key Components**: src/path/to/file.tsx
-      - **Data Usage**: Entity.field
+- [x] [Instruction](file:///d:/Labor%20Management%20System/Speckit/instruction.md) : มาตรฐานเทคนิค
+- [x] [Spec](file:///d:/Labor%20Management%20System/Speckit/spec.md) : ฟังก์ชันงาน
+- [x] [Task](file:///d:/Labor%20Management%20System/Speckit/task.md) : ความคืบหน้า
+- [x] [Traceability](file:///d:/Labor%20Management%20System/Speckit/traceability.md) : ความสัมพันธ์ข้อมูล
+**Data Usage**: Entity.field
 
 ### Step 2.5: Implementation (ลงมือทำ) **[EXECUTION MODE]**
 - **GATEKEEPER CHECK**:
@@ -216,3 +145,79 @@ markdown
 ### C. Solution (การแก้ไข)
 *   **Fix Steps**: วิธีแก้ตามลำดับ
 *   **Verification**: วิธีตรวจสอบว่าหายจริง
+
+---
+
+## 5. Data Dictionary & System Mapping (โครงสร้างข้อมูลและหน้าจอ)
+
+ข้อมูลที่แสดงอยู่นี้คือโครงสร้างหลักของ Collections ใน Firebase และความเชื่อมโยงกับหน้าจอใช้งาน (Frontend) เพื่อความเข้าใจที่ตรงกันในการพัฒนา
+
+### 🗃️ 5.1 ProjectLocations (ข้อมูลโครงการ/หน่วยงาน)
+**Page**: `/project-management` (Project Management)
+- **Document ID**: Auto-generated (Firestore)
+- **Fields**:
+    - `projectCode` (string, **PK**): รหัสโครงการ (เช่น "HO", "P001")
+    - `projectName` (string): ชื่อโครงการ
+    - `department` (string): ฝ่าย/ส่วนงาน (เช่น "PD01")
+    - `status` (string): สถานะ (`active`, `completed`, `suspended`)
+    - `isActive` (boolean): สถานะเปิด/ปิดการใช้งาน
+
+### 🗃️ 5.2 DailyContractors (ข้อมูลพนักงานรายวัน)
+**Page**: `/dc-management` (Employee Management)
+- **Document ID**: Auto-generated (Firestore)
+- **Fields**:
+    - `employeeId` (string, **PK**): รหัสพนักงาน (ใช้แมตช์ข้อมูลสแกนนิ้ว)
+    - `name` (string): ชื่อ-นามสกุล
+    - `skillId` (string): รหัสทักษะ (Skill ID)
+    - `projectLocationIds` (array of strings): **[CRITICAL]** รายการ ID โครงการที่พนักงานสังกัดอยู่ (One-to-Many)
+    - `dailyWageRate` (number): อัตราค่าแรงรายวัน
+    - `professionalRate` (number): ค่าวิชาชีพ (ต่อชั่วโมงปกติ)
+    - `phoneAllowance` (number): ค่าโทรศัพท์
+    - `nationality` (string): สัญชาติ (ไทย/MOU)
+    - `isActive` (boolean): สถานะการทำงาน
+
+> [!NOTE]
+> **Architectural Note (Financial Fields):**
+> เราเก็บค่ารายได้และรายหักพื้นฐานเป็น **Flat Fields** เพื่อประสิทธิภาพในการดึงข้อมูล Defaults ของพนักงาน (Read Performance) โดยระบบจะนำค่าเหล่านี้ไปสร้างเป็นรายการธุรกรรมจริง (Line Items) ใน Sub-collection ของ `WagePeriods` เมื่อมีการคำนวณค่าแรงครับ
+
+### 🗃️ 5.3 DailyReports (รายงานการทำงานรายวัน - Aggregated)
+**Page**: `/daily-reports` (Daily Report)
+- **Document ID**: `REP_[projectLocationId]_[YYYY-MM-DD]`
+- **Fields**:
+    - `projectLocationId` (string): เชื่อมโยงกับ ProjectLocation
+    - `date` (Date): วันที่ทำงาน
+    - `entries` (array): รายการงานย่อย (Work Entries)
+        - `id` (UUID): ID ของรายการ
+        - `employeeId` (string): รหัสพนักงาน
+        - `taskName` (string): ชื่องาน
+        - `workType` (string): ประเภทงาน (`regular`, `ot_morning`, `ot_noon`, `ot_evening`)
+        - `startTime`/`endTime` (Date): เวลาเริ่ม-จบ
+        - `netHours` (number): ชั่วโมงสุทธิ
+    - `importFileUrls` (array): **[T-371-5]** ลิงก์ไฟล์ Excel ต้นฉบับที่มาจากการนำเข้า
+
+### 🗃️ 5.4 ScanData (ข้อมูลสแกนนิ้วมือ)
+**Page**: `/scan-data` (Scan Data)
+- **Document ID**: `SCAN_[employeeId]_[YYYY-MM-DD]`
+- **Fields**:
+    - `employeeId` (string): รหัสพนักงาน
+    - `workDate` (string): วันที่ทำงาน (รูปแบบ YYYY-MM-DD)
+    - `punches` (array): รายการเวลาสแกน (เช่น `["08:00", "17:05"]`)
+    - `firstIn`/`lastOut` (string): เวลาสแกนเข้าครั้งแรกและออกครั้งสุดท้าย
+
+### 🗃️ 5.5 WagePeriods (งวดการจ่ายค่าแรง)
+**Page**: `/wage-calculation` (Wage Calculation)
+- **Document ID**: Auto-generated (Firestore)
+- **Fields**:
+    - `periodCode` (string): รหัสงวด (เช่น "202604-P1")
+    - `projectCode` (string): รหัสโครงการ
+    - `startDate`/`endDate` (Date): ช่วงวันที่ของงวด (15 วัน)
+    - `status` (string): สถานะงวด (`draft`, `calculated`, `approved`, `paid`, `locked`)
+    - `dcSummaries` (array): สรุปการจ่ายเงินรายคน (Wage Summary per DC)
+
+---
+
+## 6. Documentation Summary (ประวัติการอัปเดต)
+*(ย้ายมาไว้เป็นส่วนหนึ่งของไฟล์เพื่อให้ติดตามได้ง่ายขึ้น)*
+| วันที่ | Task ID | ผู้แก้ไข | รายละเอียด |
+| :--- | :--- | :--- | :--- |
+| 02/04/2026 | T-371 | Antigravity | เพิ่ม Data Dictionary และ Mapping หน้าจอ (Section 5) |

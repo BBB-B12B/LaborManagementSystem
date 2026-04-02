@@ -31,6 +31,8 @@ import { dailyReportService } from '@/services/dailyReportService';
 import { overtimeService } from '@/services/overtimeService';
 import { formatDate, formatTime } from '@/utils/dateUtils';
 import { getOTPeriodLabel, type OTPeriod } from '@/validation/overtimeSchema';
+import { ExcelImportModal } from './components/ExcelImportModal';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 // Fix for MUI X DataGrid v5 type mismatch
 const GridActionsCellItemAny = GridActionsCellItem as any;
@@ -107,6 +109,7 @@ export default function WorkRecordsPage() {
   const [dcFilter, setDCFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'regular' | 'ot'>('all');
   const [periodFilter, setPeriodFilter] = useState<OTPeriod | ''>('');
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   useEffect(() => {
     const queryView = Array.isArray(router.query.view)
@@ -393,13 +396,23 @@ export default function WorkRecordsPage() {
             }}
           >
             <Typography variant="h4">บันทึกการทำงานรายวัน</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleCreate}
-            >
-              เพิ่มการ์ดงาน
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                color="success"
+                startIcon={<FileUploadIcon />}
+                onClick={() => setIsImportModalOpen(true)}
+              >
+                นำเข้า Excel
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreate}
+              >
+                เพิ่มการ์ดงาน
+              </Button>
+            </Box>
           </Box>
 
           <Paper sx={{ p: 2, mb: 3 }}>
@@ -512,6 +525,15 @@ export default function WorkRecordsPage() {
           </Paper>
 
           <DeleteConfirmDialog />
+          
+          <ExcelImportModal
+            open={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['work-records'] });
+                setIsImportModalOpen(false);
+            }}
+          />
         </Container>
       </Layout>
     </ProtectedRoute>

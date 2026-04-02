@@ -146,20 +146,22 @@
 ---
 ### Feature ID: F-010
 **Name**: การคำนวณค่าแรงแบบบูรณาการ (Integrated Wage Calculation)
-**Status**: ✅ Complete
+**Status**: 🔄 In Progress (Refining Mapping Logic)
 #### 1. User Flow
 1. Admin เลือกงวดค่าแรง (Flexible Period) และโครงการที่ต้องการ
 2. เมื่อกดปุ่ม "คำนวณ":
    - ระบบดึงข้อมูล Daily Report (วันทำงาน, OT) ในช่วงงวดนั้น
-   - ระบบดึงข้อมูลสแกนนิ้ว (Scan Data) มาเปรียบเทียบ (Requirement 2)
+   - **Verification Step**: ระบบทำกระบวนการ "ประกบข้อมูล" (Auto-Matching) ระหว่าง Daily Report Entry กับ Scan Data ผ่านรหัส `employeeId` ที่บันทึกไว้ใน Entry
+   - ระบบอัปเดต `verificationStatus` (auto_verified / discrepancy)
    - ระบบระบุความผิดปกติ (Discrepancy) เช่น ชั่วโมงไม่ตรง หรือข้อมูลขาดหาย
-   - ระบบตรวจสอบการมาสาย และสร้างรายการหักเงินมาสายอัตโนมัติ ( Requirement 2)
-3. ระบบสรุปยอดรายบุคคล (รายได้ + รายได้พิเศษ - รายจ่าย - รายจ่ายพิเศษ - หักประกันสังคม - หักมาสาย)
-4. แสดงผลในตาราง 1 แถวต่อ 1 คน (Requirement 3)
+   - ระบบตรวจสอบการมาสาย และสร้างรายการหักเงินมาสายอัตโนมัติ
+3. ระบบสรุปยอดรายบุคคล **เฉพาะรายการที่ผ่านการตกลง (Verified)** หรือรายการที่ได้รับการยืนยันด้วยมือ (Manual Verified)
+4. แสดงผลในตาราง 1 แถวต่อ 1 คน
 
 #### 2. Architecture
-*   **Related Entities**: `WagePeriod`, `DailyReport`, `ScanData`, `LateRecord`, `ScanDataDiscrepancy`
-*   **Logic**: `WagePeriodService.calculateWages` + `ScanDataService.detectDiscrepancies`
+*   **Related Entities| **T-360** | Wage Mapping Refinement | Denormalize employeeId & Link Scans | `DailyReport.ts`, `DailyReportService.ts`, `WagePeriodService.ts` |
+| **T-370** | Daily Report Excel Import | Build Excel parsing and bulk upload | `dailyReportRoutes.ts`, `DailyReportService.ts`, `ExcelImportModal.tsx` |
+*   **Data Integrity**: Denormalized `employeeId` ใน `DailyReportEntry` เพื่อป้องกันรหัสพนักงานเปลี่ยนแปลงภายหลัง
 
 ---
 
@@ -192,9 +194,16 @@
 
 ---
 
-## 4. Task Traceability
-| Task ID | Name | Goal | key Components |
-| :--- | :--- | :--- | :--- |
-| **T-230** | DC Migration & Update | Migrate IDs & Add Wage Schema | `DailyContractor.ts`, `DailyContractorService.ts`, `migrateDCIds.ts`, `index.tsx` |
-| **T-350** | Wage Period Soft Delete | Soft Delete Logic | `WagePeriod.ts`, `WagePeriodService.ts` |
-| **T-360** | Refactor Project Identity | projectCode & projectName | `WagePeriod.ts`, `WagePeriodService.ts` |
+---
+
+### Feature ID: F-013
+**Name**: การนำเข้ารายงานประจำวันจาก Excel (Excel Import v2)
+**Status**: [ ] Refactoring (v2)
+#### 1. User Flow
+1. Admin/Foreman พิมพ์รหัสโครงการและรหัสพนักงานในแถวเดียวกัน
+2. กรอกชั่วโมงในช่วงเวลาต่างๆ (ปกติ, OT เช้า/เที่ยง/เย็น) ลงใน 9 คอลัมน์มาตรฐาน
+3. ระบบ "แยกข้อมูล (Split Entries)" บันทึกลงฐานข้อมูลแยกตามประเภทงานโดยอัตโนมัติ
+4. มีปุ่ม Download Template จากระบบเพื่อให้หัวตารางถูกต้อง
+#### 2. Architecture
+* **Endpoints**: `POST /api/daily-reports/import-excel`, `GET /api/daily-reports/template`
+* **Logic**: Split Row into aggregated Multiple Entries inside DailyReport document.

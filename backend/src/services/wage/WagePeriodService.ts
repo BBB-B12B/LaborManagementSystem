@@ -18,7 +18,6 @@ import { AdditionalExpense } from '../../models/AdditionalExpense';
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
-import { scanDataService } from '../scanData/ScanDataService';
 import { lateRecordService } from '../scanData/LateRecordService';
 
 /**
@@ -188,15 +187,13 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       ]);
       const pastPeriodsInMonth = otherPeriodsInMonth.filter(p => p.id !== periodId && p.status === 'paid' || p.status === 'approved');
 
-      // 5.5 Detect discrepancies and generate late records before calculation
-      await scanDataService.detectDiscrepancies(
+      // [T-401] Trigger Work Verification Sync
+      const { workVerificationService } = await import('./WorkVerificationService');
+      await workVerificationService.syncVerification(
         projectLocationId,
         period.startDate,
-        period.endDate,
-        calculatedBy
+        period.endDate
       );
-
-
 
       const dcSummaries: DCWageSummary[] = [];
       let totalRegularHours = 0;
@@ -208,6 +205,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       // 6. Calculate for each DC
       for (const dc of dcs) {
         // Filter entries for this DC
+        // [T-401] In the future, we could filter here: e.g., e.verificationStatus === 'auto_verified'
         const dcEntries = allEntries.filter((e: any) => e.dailyContractorId === dc.id);
 
         // Aggregate hours
@@ -494,6 +492,31 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
     } catch (error: any) {
       logger.error('Error getting wage periods by status:', error);
       throw error;
+    }
+  }
+
+  /**
+   * [P2] Check if a date is locked for editing
+   * Checks if any Approved or Paid wage period covers this date and project
+   */
+  async isDateLocked(date: Date, projectCode: string): Promise<boolean> {
+    try {
+      const results = await this.query([
+        { field: 'projectCode', operator: '==', value: projectCode },
+        { field: 'startDate', operator: '<=', value: date }
+      ]);
+
+      // Filter in memory: endDate >= date AND status is approved/paid
+      const lockedPeriod = results.find(p => 
+        p.isDeleted !== true &&
+        p.endDate >= date &&
+        (p.status === 'approved' || p.status === 'paid' || p.status === 'locked')
+      );
+
+      return !!lockedPeriod;
+    } catch (error: any) {
+      logger.error('Error checking if date is locked:', error);
+      return false; // Default to unlocked if check fails to avoid blocking UI
     }
   }
 }

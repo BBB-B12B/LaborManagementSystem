@@ -52,3 +52,4 @@ Mapping ระหว่าง System Config และตัวแปรที่
 | **T-360** | Refactor Project Identity | projectCode & projectName | `WagePeriod.ts`, `WagePeriodService.ts` |
 | **T-361** | Wage Calculation UI Refinement | Adjust button color and table display | `index.tsx` (frontend) |
 | **T-362** | Wage Detail UI Refinement | Full width table and button color | `[id].tsx` (frontend) |
+| **F-013** | Excel Import | Import Daily Reports from Excel | `dailyReportRoutes.ts`, `DailyReportService.ts` |

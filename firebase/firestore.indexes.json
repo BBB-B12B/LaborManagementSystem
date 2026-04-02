@@ -65,7 +65,21 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "date",
+          "fieldPath": "workDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dailyContractorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "workDate",
           "order": "DESCENDING"
         }
       ]
@@ -127,6 +141,20 @@
         {
           "fieldPath": "periodStart",
           "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "wagePeriods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "projectCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startDate",
+          "order": "ASCENDING"
         }
       ]
     },
