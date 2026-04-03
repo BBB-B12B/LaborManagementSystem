@@ -56,6 +56,12 @@ export interface ScanData {
   lastOut?: string | null;
   projectCode?: string;
   projectName?: string;
+  // Aggregated Metrics
+  normalStatus?: 0 | 1;
+  regularHours?: number;
+  lunchStatus?: 0 | 1;
+  otMorningHours?: number;
+  otEveningHours?: number;
   // Soft Delete
   isDeleted?: boolean;
   deletedAt?: Date;
@@ -141,48 +147,62 @@ export function checkLate(scanTime: Date): { isLate: boolean; lateMinutes: numbe
  * Firestore document converter for ScanData
  */
 export const scanDataConverter = {
-  toFirestore: (scan: Omit<ScanData, 'id'>): any => {
-    return {
+  toFirestore: (scan: Partial<Omit<ScanData, 'id'>>): any => {
+    const data: any = {
       dailyContractorId: scan.dailyContractorId,
       employeeId: scan.employeeId,
-      employeeNumber: scan.employeeNumber || scan.employeeId,
-      name: scan.name || null,
-      position: scan.position || null,
+      employeeNumber: scan.employeeNumber,
+      name: scan.name,
+      position: scan.position,
       projectLocationId: scan.projectLocationId,
-      projectLocationIds: scan.projectLocationIds || [],
+      projectLocationIds: scan.projectLocationIds,
       scanDateTime: scan.scanDateTime,
-      scanDate: scan.scanDate || null,
+      scanDate: scan.scanDate,
       scanBehavior: scan.scanBehavior,
       workDate: scan.workDate,
       roundedTime: scan.roundedTime,
       isLate: scan.isLate,
       lateMinutes: scan.lateMinutes,
-      matchedDailyReportId: scan.matchedDailyReportId || null,
+      matchedDailyReportId: scan.matchedDailyReportId,
       hasDiscrepancy: scan.hasDiscrepancy,
-      notes: scan.notes || null,
+      notes: scan.notes,
       createdAt: scan.createdAt,
       importedAt: scan.importedAt,
       importedBy: scan.importedBy,
       importBatchId: scan.importBatchId,
-      importSource: scan.importSource || null,
-      importNote: scan.importNote || null,
-      rawData: scan.rawData || null,
-      Time1: scan.Time1 || null,
-      Time2: scan.Time2 || null,
-      Time3: scan.Time3 || null,
-      Time4: scan.Time4 || null,
-      Time5: scan.Time5 || null,
-      Time6: scan.Time6 || null,
-      allScans: scan.allScans || null,
-      punches: scan.punches || [],
-      firstIn: scan.firstIn || null,
-      lastOut: scan.lastOut || null,
-      projectCode: scan.projectCode || null,
-      projectName: scan.projectName || null,
-      isDeleted: scan.isDeleted || false,
-      deletedAt: scan.deletedAt || null,
-      deletedBy: scan.deletedBy || null,
+      importSource: scan.importSource,
+      importNote: scan.importNote,
+      rawData: scan.rawData,
+      Time1: scan.Time1,
+      Time2: scan.Time2,
+      Time3: scan.Time3,
+      Time4: scan.Time4,
+      Time5: scan.Time5,
+      Time6: scan.Time6,
+      allScans: scan.allScans,
+      punches: scan.punches,
+      firstIn: scan.firstIn,
+      lastOut: scan.lastOut,
+      projectCode: scan.projectCode,
+      projectName: scan.projectName,
+      normalStatus: scan.normalStatus,
+      regularHours: scan.regularHours,
+      lunchStatus: scan.lunchStatus,
+      otMorningHours: scan.otMorningHours,
+      otEveningHours: scan.otEveningHours,
+      isDeleted: scan.isDeleted,
+      deletedAt: scan.deletedAt,
+      deletedBy: scan.deletedBy,
     };
+
+    // Strip undefined out so {merge: true} works correctly without overwriting fields
+    Object.keys(data).forEach(k => {
+      if (data[k] === undefined) {
+        delete data[k];
+      }
+    });
+
+    return data;
   },
   fromFirestore: (snapshot: any): ScanData => {
     const data = snapshot.data();
@@ -195,18 +215,18 @@ export const scanDataConverter = {
       position: data.position,
       projectLocationId: data.projectLocationId,
       projectLocationIds: data.projectLocationIds || [],
-      scanDateTime: data.scanDateTime.toDate(),
+      scanDateTime: data.scanDateTime?.toDate ? data.scanDateTime.toDate() : (data.scanDateTime instanceof Date ? data.scanDateTime : new Date()),
       scanDate: data.scanDate,
-      scanBehavior: data.scanBehavior,
-      workDate: data.workDate.toDate(),
-      roundedTime: data.roundedTime.toDate(),
+      scanBehavior: data.scanBehavior || 'regular_in',
+      workDate: data.workDate?.toDate ? data.workDate.toDate() : (data.workDate instanceof Date ? data.workDate : new Date()),
+      roundedTime: data.roundedTime?.toDate ? data.roundedTime.toDate() : (data.roundedTime instanceof Date ? data.roundedTime : new Date()),
       isLate: data.isLate || false,
       lateMinutes: data.lateMinutes || 0,
       matchedDailyReportId: data.matchedDailyReportId,
       hasDiscrepancy: data.hasDiscrepancy || false,
       notes: data.notes,
-      createdAt: data.createdAt.toDate(),
-      importedAt: data.importedAt.toDate(),
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt instanceof Date ? data.createdAt : new Date()),
+      importedAt: data.importedAt?.toDate ? data.importedAt.toDate() : (data.importedAt instanceof Date ? data.importedAt : new Date()),
       importedBy: data.importedBy,
       importBatchId: data.importBatchId,
       importSource: data.importSource || undefined,
@@ -224,8 +244,13 @@ export const scanDataConverter = {
       lastOut: data.lastOut,
       projectCode: data.projectCode,
       projectName: data.projectName,
+      normalStatus: data.normalStatus,
+      regularHours: data.regularHours,
+      lunchStatus: data.lunchStatus,
+      otMorningHours: data.otMorningHours,
+      otEveningHours: data.otEveningHours,
       isDeleted: data.isDeleted || false,
-      deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : data.deletedAt,
+      deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : (data.deletedAt instanceof Date ? data.deletedAt : undefined),
       deletedBy: data.deletedBy,
     };
   },

@@ -81,18 +81,12 @@ const tableHeaders = [
   'Time4',
   'Time5',
   'Time6',
-  'สถานะเวลางานปกติ',
+  'สถานะงาน',
+  'ชั่วโมงการทำงาน',
   'สถานะผ่าเที่ยง',
-  'จำนวน OT เช้าสแกนนิ้ว',
-  'จำนวน OT เช้าจากตารางงาน',
-  'จำนวน OT เย็นสแกนนิ้ว',
-  'สถานะเวลางานปกติจากตารางงาน',
-  'จำนวน OTผ่าเที่ยงจากตารางงาน',
-  'จำนวน OT เย็นจากตารางงาน',
+  'จำนวน OT เช้า',
+  'จำนวน OT เย็น',
   'จำนวนนาทีมาสาย',
-  'ความขัดแย้ง OT เที่ยง',
-  'ความขัดแย้ง OT เช้า',
-  'ความขัดแย้ง OT เย็น',
   'ส่วนงาน',
 ];
 
@@ -108,6 +102,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
   const [pastedText, setPastedText] = useState('');
   const [validationResult, setValidationResult] = useState<ImportResult | null>(null);
   const [finalResult, setFinalResult] = useState<ImportResult | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
   const {
     control,
@@ -161,8 +156,9 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
     },
     onSuccess: async (result) => {
       setFinalResult(result);
-      setStep('result');
+      
       if (result.success) {
+        // Handle auto-download if applicable
         if (result.importBatchId) {
           try {
             const response = await apiClient.get(`/scan-data/batch/${result.importBatchId}/export`, {
@@ -175,14 +171,17 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
             document.body.appendChild(link);
             link.click();
             link.remove();
-            if (onSuccess) onSuccess(result);
           } catch (err) {
             console.error("Auto-download failed", err);
-            if (onSuccess) onSuccess(result);
           }
-        } else if (onSuccess) {
-          onSuccess(result);
         }
+        
+        // Trigger parent refresh and close dialog
+        if (onSuccess) onSuccess(result);
+        handleClose();
+      } else {
+        // Only show result step if there are errors
+        setStep('result');
       }
     },
   });
@@ -366,11 +365,18 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                   startIcon={<DownloadIcon />}
                   onClick={handleDownloadTemplate}
                   sx={{
-                    borderRadius: 2,
+                    borderRadius: 2.5,
+                    height: 40,
                     textTransform: 'none',
                     fontWeight: 600,
-                    bgcolor: '#2e3b4e',
-                    '&:hover': { bgcolor: '#1a2433' }
+                    bgcolor: '#1a333c', // Dark Theme
+                    boxShadow: '0 4px 10px rgba(26, 51, 60, 0.2)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': { 
+                      bgcolor: '#2a4d5a', 
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 6px 15px rgba(26, 51, 60, 0.3)' 
+                    }
                   }}
                 >
                   ดาวน์โหลด Template
@@ -382,7 +388,6 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                   onClick={() => {
                     const newMethod = inputMethod === 'file' ? 'text' : 'file';
                     setInputMethod(newMethod);
-                    // Clear the file field when switching to ensure we use the correct input
                     if (newMethod === 'text') {
                       if (pastedText.trim()) {
                         const file = new File([pastedText], 'pasted_data.txt', { type: 'text/plain' });
@@ -399,16 +404,20 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                     }
                   }}
                   sx={{
-                    borderRadius: 2,
+                    borderRadius: 2.5,
+                    height: 40,
                     textTransform: 'none',
                     fontWeight: 600,
-                    ml: 1,
-                    bgcolor: inputMethod === 'text' ? '#2e3b4e' : 'transparent',
-                    borderColor: '#2e3b4e',
-                    color: inputMethod === 'text' ? 'white' : '#2e3b4e',
+                    ml: 1.5,
+                    bgcolor: inputMethod === 'text' ? '#1a333c' : 'transparent',
+                    borderColor: '#1a333c',
+                    color: inputMethod === 'text' ? 'white' : '#1a333c',
+                    boxShadow: inputMethod === 'text' ? '0 4px 10px rgba(26, 51, 60, 0.2)' : 'none',
+                    transition: 'all 0.3s ease',
                     '&:hover': {
-                      bgcolor: inputMethod === 'text' ? '#1a2433' : 'rgba(46, 59, 78, 0.04)',
-                      borderColor: '#1a2433'
+                      bgcolor: inputMethod === 'text' ? '#2a4d5a' : 'rgba(26, 51, 60, 0.04)',
+                      borderColor: '#2a4d5a',
+                      transform: 'translateY(-1px)',
                     }
                   }}
                 >
@@ -437,19 +446,29 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                     }}
                     sx={{
                       mt: 2,
-                      p: 4,
+                      p: 5,
                       border: '2px dashed',
-                      borderColor: errors.file ? 'error.main' : 'primary.main',
-                      borderRadius: 2,
-                      bgcolor: 'background.paper',
+                      borderColor: errors.file ? 'error.main' : 'rgba(26, 51, 60, 0.2)',
+                      borderRadius: 4,
+                      bgcolor: '#fcfcfc',
                       textAlign: 'center',
                       cursor: 'pointer',
-                      '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' },
+                      transition: 'all 0.3s ease',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&:hover': { 
+                        bgcolor: 'rgba(26, 51, 60, 0.02)',
+                        borderColor: 'primary.main',
+                        '& .upload-icon': {
+                          transform: 'translateY(-5px)',
+                          color: 'primary.main'
+                        }
+                      },
                     }}
                     onClick={() => document.getElementById('scan-data-file')?.click()}
                   >
-                    <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-                    <Typography variant="body1">
+                    <CloudUpload className="upload-icon" sx={{ fontSize: 48, color: 'text.secondary', mb: 2, transition: 'all 0.3s' }} />
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
                       {selectedFile ? `ไฟล์: ${selectedFile.name}` : 'ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -573,10 +592,20 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               />
             </Box>
 
-            {/* Help Alert */}
-            <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>รูปแบบไฟล์ที่รองรับ:</Typography>
-              <Typography variant="body2" component="div" sx={{ mt: 0.5 }}>
+            {/* Help Alert - Modernized */}
+            <Alert 
+              severity="info" 
+              icon={<InfoIcon sx={{ color: '#1a333c' }} />}
+              sx={{ 
+                mt: 3, 
+                borderRadius: 3,
+                bgcolor: 'rgba(26, 51, 60, 0.04)',
+                border: '1px solid rgba(26, 51, 60, 0.1)',
+                color: '#1a333c'
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>รูปแบบไฟล์ที่รองรับ:</Typography>
+              <Typography variant="body2" component="div">
                 • <strong>.xlsx / .xls</strong> คอลัมน์สำคัญ: EmployeeNumber, Date และ Time1-Time10
               </Typography>
               <Typography variant="body2" component="div">
@@ -657,18 +686,27 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', width: 60, borderBottom: '1px solid #586e75' }}>แถว</TableCell>
-                    <TableCell sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', borderBottom: '1px solid #586e75' }}>สถานะ</TableCell>
+                    <TableCell sx={{ bgcolor: '#1a333c', color: 'white', fontWeight: 'bold', width: 60, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>แถว</TableCell>
+                    <TableCell sx={{ bgcolor: '#1a333c', color: 'white', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>สถานะ</TableCell>
                     {tableHeaders.map((h) => (
-                      <TableCell key={h} sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', whiteSpace: 'nowrap', borderBottom: '1px solid #586e75' }}>
+                      <TableCell 
+                        key={h} 
+                        sx={{ 
+                          bgcolor: '#1a333c', 
+                          color: 'white', 
+                          fontWeight: 'bold', 
+                          whiteSpace: 'nowrap', 
+                          borderBottom: '1px solid rgba(255,255,255,0.1)',
+                          ...(h === 'Date' ? { minWidth: 150 } : {})
+                        }}
+                      >
                         {h}
                       </TableCell>
                     ))}
-                    <TableCell sx={{ bgcolor: '#073642', color: '#93a1a1', fontWeight: 'bold', borderBottom: '1px solid #586e75' }}>ข้อผิดพลาด</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(validationResult?.records || []).map((record) => {
+                  {(validationResult?.records || []).map((record, index) => {
                     const timeValues = [
                       getValueByKeys(record.data, ['Time1', 'เวลา1']),
                       getValueByKeys(record.data, ['Time2', 'เวลา2']),
@@ -695,7 +733,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                               : 'transparent',
                         }}
                       >
-                        <TableCell sx={{ color: 'text.secondary' }}>{record.row}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary', fontWeight: 500 }}>{index + 1}</TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             {record.status === 'failed' ? (
@@ -717,7 +755,20 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                         {getValueByKeys(record.data, ['EmployeeNumber', 'EmployeeId', 'EmpNo', 'รหัสพนักงาน', 'employeeid', 'employee_no']) || record.employeeNumber}
                       </TableCell>
                       <TableCell>
-                        {getValueByKeys(record.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'date_time', 'time'])}
+                        <Typography variant="body2">
+                          {(() => {
+                            const rawDate = getValueByKeys(record.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'date_time', 'time']);
+                            if (!rawDate) return '-';
+                            // Parse and format to YYYY-MM-DD
+                            const d = new Date(rawDate);
+                            if (isNaN(d.getTime())) return rawDate; // Fallback to raw if unparseable
+                            
+                            const year = d.getFullYear();
+                            const month = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            return `${year}-${month}-${day}`;
+                          })()}
+                        </Typography>
                       </TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time1', 'เวลา1'], '')}</TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time2', 'เวลา2'], '')}</TableCell>
@@ -726,64 +777,37 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       <TableCell>{getValueByKeys(record.data, ['Time5', 'เวลา5'], '')}</TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'], '')}</TableCell>
                       
-                      {/* Computed actual metrics */}
-                      <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'inherit' }}>
-                        {normalVal === '1' ? 'ปกติ' : 'ไม่ครบ'}
+                      {/* Text Status - ปกติ / ผิดปกติ */}
+                      <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'success.main', textAlign: 'center' }}>
+                        {normalVal === '1' ? 'ปกติ' : 'ผิดปกติ'}
                       </TableCell>
-                      <TableCell>
+
+                      {/* ชั่วโมงการทำงาน (actual calculated hours) */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['RegularHours', 'regularHours'], '0.0')}
+                      </TableCell>
+
+                      {/* สถานะผ่าเที่ยง */}
+                      <TableCell sx={{ textAlign: 'center' }}>
                         {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], '0')}
                       </TableCell>
-                      <TableCell>
-                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], '0.00')}
+                      {/* OT เช้า */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], '0')}
                       </TableCell>
 
-                      {/* Extracted from Daily Report */}
-                      <TableCell sx={{ color: 'primary.main' }}>
-                        {getValueByKeys(record.data, ['ReportMorningOT', 'จำนวน OT เช้าจากตารางงาน'], '0.00')}
+                      {/* OT เย็น */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], '0')}
                       </TableCell>
 
-                      {/* Computed actual metrics */}
-                      <TableCell>
-                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], '0.00')}
-                      </TableCell>
-
-                      {/* Extracted from Daily Report */}
-                      <TableCell sx={{ color: 'primary.main' }}>
-                        {getValueByKeys(record.data, ['ReportNormalStatus', 'สถานะเวลางานปกติจากตารางงาน'], '0')}
-                      </TableCell>
-                      <TableCell sx={{ color: 'primary.main' }}>
-                        {getValueByKeys(record.data, ['ReportLunchOT', 'จำนวน OTผ่าเที่ยงจากตารางงาน'], '0.00')}
-                      </TableCell>
-                      <TableCell sx={{ color: 'primary.main' }}>
-                        {getValueByKeys(record.data, ['ReportEveningOT', 'จำนวน OT เย็นจากตารางงาน'], '0.00')}
-                      </TableCell>
-
-                      <TableCell sx={{ color: 'error.main', fontWeight: 'bold' }}>
-                        {getValueByKeys(record.data, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], '')}
+                      {/* นาทีมาสาย */}
+                      <TableCell sx={{ textAlign: 'center', color: 'error.main', fontWeight: 'bold' }}>
+                        {getValueByKeys(record.data, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], '0')}
                       </TableCell>
                       
-                      {/* Discrepancies */}
-                      <TableCell sx={{ fontWeight: 'bold' }}>{getValueByKeys(record.data, ['DiffLunch', 'ความขัดแย้ง OT เที่ยง'], '0')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{getValueByKeys(record.data, ['DiffMorning', 'ความขัดแย้ง OT เช้า'], '0')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{getValueByKeys(record.data, ['DiffEvening', 'ความขัดแย้ง OT เย็น'], '0')}</TableCell>
-                      
-                      <TableCell>{getValueByKeys(record.data, ['Department', 'ส่วนงาน'], '#N/A')}</TableCell>
-                      <TableCell sx={{ color: 'error.main', maxWidth: 250 }}>
-                        {record.error}
-                        {record.error?.includes('ไม่พบข้อมูลแรงงาน') && (
-                          <Box sx={{ mt: 0.5 }}>
-                            <Button
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem', py: 0, px: 1 }}
-                              onClick={() => window.open('/labor/dc-management', '_blank')}
-                            >
-                              เพิ่มพนักงาน
-                            </Button>
-                          </Box>
-                        )}
-                      </TableCell>
+                      {/* ส่วนงาน */}
+                      <TableCell sx={{ textAlign: 'center' }}>{getValueByKeys(record.data, ['Department', 'ส่วนงาน', 'department'], '-')}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -913,7 +937,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
             </Button>
             <Box sx={{ flexGrow: 1 }} />
             <Button
-              onClick={onConfirmUpload}
+              onClick={() => setConfirmDialogOpen(true)}
               variant="contained"
               color="primary"
               disabled={!canUpload || uploadMutation.isPending}
@@ -925,7 +949,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                 '&:hover': { bgcolor: '#1a2433' }
               }}
             >
-              {uploadMutation.isPending ? 'กำลังบันทึก...' : 'Confirm Upload'}
+              {uploadMutation.isPending ? 'กำลังบันทึก...' : 'ยืนยันข้อมูล'}
             </Button>
           </>
         )}
@@ -944,7 +968,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               color="info"
               sx={{ borderRadius: 2, px: 3, mr: 1 }}
             >
-              ตรวจสอบ Discrepancies
+              ดูข้อมูลในหน้า ScanData Monitoring
             </Button>
             <Button onClick={handleClose} variant="contained" sx={{ borderRadius: 2, px: 4, bgcolor: '#2e3b4e' }}>
               ปิดหน้าต่าง
@@ -956,6 +980,32 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
       {validationMutation.isPending && (
         <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
       )}
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>ยืนยันการนำเข้าข้อมูล</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1">
+            คุณได้ตรวจสอบความถูกต้องของข้อมูลแล้ว และต้องการบันทึกข้อมูลเข้าสู่ระบบใช่หรือไม่?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setConfirmDialogOpen(false)} color="inherit" sx={{ borderRadius: 2 }}>
+            ยกเลิก
+          </Button>
+          <Button 
+            onClick={() => { 
+              setConfirmDialogOpen(false); 
+              onConfirmUpload(); 
+            }} 
+            variant="contained" 
+            color="primary"
+            sx={{ borderRadius: 2, bgcolor: '#2e3b4e', '&:hover': { bgcolor: '#1a2433' } }}
+          >
+            ยืนยันการนำเข้าข้อมูล
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };
