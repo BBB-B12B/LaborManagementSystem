@@ -194,17 +194,18 @@ export default function ScanDataMonitoringPage() {
   };
 
   const handleOpenEdit = (row: any) => {
-    // Collect existing punches from top-level fields
+    const baseRow = row.detailedView || row;
     const punches = [
-      row.time1, row.time2, row.time3, 
-      row.time4, row.time5, row.time6
-    ].filter(p => p && p !== '-');
+      baseRow.time1, baseRow.time2, baseRow.time3, 
+      baseRow.time4, baseRow.time5, baseRow.time6
+    ].filter(p => p && p !== '-' && p !== '');
     
     setSelectedRecord({
-      contractorId: row.dailyContractorId,
+      id: row.id,
+      contractorId: row.dailyContractorId || row.employeeNumber,
       contractorName: row.dailyContractorName || '-',
       employeeNumber: row.employeeNumber,
-      workDate: new Date(row.workDate),
+      workDate: new Date(row.workDate || row.scanDate || row.date),
       punches
     });
     setEditDialogOpen(true);
@@ -277,10 +278,7 @@ export default function ScanDataMonitoringPage() {
     { label: 'สถานะงาน', width: 100 },
     { label: 'ชั่วโมงการทำงาน', width: 140 },
     { label: 'สถานะผ่าเที่ยง', width: 120 },
-    { label: 'จำนวน OT เช้า', width: 130 },
-    { label: 'จำนวน OT เย็น', width: 130 },
-    { label: 'จำนวนนาทีมาสาย', width: 120 },
-    { label: 'ส่วนงาน', width: 200 },
+    { label: 'จำนวน OT', width: 130 },
     { label: 'จัดการ', width: 80, sticky: 'right', right: 0 }
   ];
 
@@ -727,10 +725,9 @@ export default function ScanDataMonitoringPage() {
                           time5: getValueByKeys(raw, ['Time5', 'เวลา5'], baseRow.Time5 || baseRow.time5 || (baseRow.allScans && baseRow.allScans[4]) || (baseRow.timeScans && baseRow.timeScans[4]) || (baseRow.punches && baseRow.punches[4]) || '-'),
                           time6: getValueByKeys(raw, ['Time6', 'เวลา6'], baseRow.Time6 || baseRow.time6 || (baseRow.allScans && baseRow.allScans[5]) || (baseRow.timeScans && baseRow.timeScans[5]) || (baseRow.punches && baseRow.punches[5]) || '-'),
                           scanNormalStatus: getValueByKeys(raw, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], String(baseRow.normalStatus ?? baseRow.NormalStatus ?? baseRow.scanNormalStatus ?? 0)),
-                          regularHours: getValueByKeys(raw, ['RegularHours', 'regularHours'], String(baseRow.regularHours ?? baseRow.scanRegularHours ?? 0)),
+                          regularHours: getValueByKeys(raw, ['RegularHours', 'regularHours', 'WorkingHours', 'ชั่วโมงทำงาน'], String(baseRow.regularHours ?? baseRow.scanRegularHours ?? baseRow.WorkingHours ?? 0)),
                           scanLunchStatus: getValueByKeys(raw, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], String(baseRow.lunchStatus ?? baseRow.LunchStatus ?? baseRow.scanLunchStatus ?? 0)),
-                          scanOTMorning: getValueByKeys(raw, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], String(baseRow.otMorningHours ?? baseRow.MorningOT ?? baseRow.scanOTMorning ?? 0)),
-                          scanOTEvening: getValueByKeys(raw, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], String(baseRow.otEveningHours ?? baseRow.EveningOT ?? baseRow.scanOTEvening ?? 0)),
+                          scanOTTotal: String(Number(baseRow.scanOTMorning || 0) + Number(baseRow.scanOTEvening || 0) || getValueByKeys(raw, ['OT', 'จำนวน OT'], '0')),
                           lateMinutes: getValueByKeys(raw, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], String(baseRow.lateMinutes ?? baseRow.LateMinutes ?? 0)),
                           projectName: getValueByKeys(raw, ['Department', 'ส่วนงาน', 'department'], baseRow.projectName || baseRow.projectCode || baseRow.Department || '-'),
                       };
@@ -792,12 +789,23 @@ export default function ScanDataMonitoringPage() {
                           </TableCell>
   
                           {/* 4-9. Time1-Time6 */}
-                          <TableCell align="center">{displayRow.time1 || '-'}</TableCell>
-                          <TableCell align="center">{displayRow.time2 || '-'}</TableCell>
-                          <TableCell align="center">{displayRow.time3 || '-'}</TableCell>
-                          <TableCell align="center">{displayRow.time4 || '-'}</TableCell>
-                          <TableCell align="center">{displayRow.time5 || '-'}</TableCell>
-                          <TableCell align="center">{displayRow.time6 || '-'}</TableCell>
+                          {[1, 2, 3, 4, 5, 6].map((i) => {
+                            const val = (displayRow as any)?.[`time${i}`] || '-';
+                            const display = val && val !== '-' ? val.toString().substring(0, 5) : '-';
+                            const isEdited = row.isManuallyEdited || baseRow.isManuallyEdited || (row.scanSummary && row.scanSummary.isManuallyEdited);
+                            return (
+                              <TableCell 
+                                key={i} 
+                                align="center"
+                                sx={{ 
+                                  color: (isEdited && display !== '-') ? '#ff6d00' : 'inherit',
+                                  fontWeight: (isEdited && display !== '-') ? 900 : 'normal'
+                                }}
+                              >
+                                {display}
+                              </TableCell>
+                            );
+                          })}
   
                           {/* 10. สถานะงาน */}
                           <TableCell align="center" sx={{ 
@@ -813,19 +821,8 @@ export default function ScanDataMonitoringPage() {
                           {/* 12. สถานะผ่าเที่ยง */}
                           <TableCell align="center">{displayRow.scanLunchStatus}</TableCell>
   
-                          {/* 12. OT เช้า */}
-                          <TableCell align="center">{displayRow.scanOTMorning}</TableCell>
-  
-                          {/* 13. OT เย็น */}
-                          <TableCell align="center">{displayRow.scanOTEvening}</TableCell>
-  
-                          {/* 14. มาสาย */}
-                          <TableCell align="center" sx={{ color: Number(displayRow.lateMinutes || 0) > 0 ? 'error.main' : 'inherit', fontWeight: Number(displayRow.lateMinutes || 0) > 0 ? 'bold' : 'normal' }}>
-                            {displayRow.lateMinutes || 0}
-                          </TableCell>
-  
-                          {/* 15. ส่วนงาน */}
-                          <TableCell align="center">{displayRow.projectName || '-'}</TableCell>
+                          {/* 12. OT รวม */}
+                          <TableCell align="center">{displayRow.scanOTTotal}</TableCell>
   
                           {/* 16. จัดการ */}
                           <TableCell sx={{ position: 'sticky', right: 0, bgcolor: 'inherit', zIndex: 5, borderLeft: '1px solid #eee' }} align="center">
@@ -905,6 +902,7 @@ export default function ScanDataMonitoringPage() {
               setEditDialogOpen(false);
               setSelectedRecord(null);
             }}
+            id={selectedRecord.id}
             contractorId={selectedRecord.contractorId}
             contractorName={selectedRecord.contractorName}
             employeeNumber={selectedRecord.employeeNumber}

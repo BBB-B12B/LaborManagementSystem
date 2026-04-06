@@ -147,34 +147,19 @@ export class ScanDataAggregator {
          if (firstScan !== null && lastScan !== null && firstScan < 720 && lastScan > 780 && !hasLunchScan) {
            lunchStatus = 1; // 1.0 hour for missing lunch
          }
- 
-         // 5. OT Evening (After 17:00)
-         if (lastScan !== null && lastScan > 1020) {
-           let eveningOTStart = 1020; // 17:00
- 
-           // If they have scans between 16:30 - 17:30, the first one is Regular Out
-           // and the NEXT one is potentially the OT In.
-           let regularOutIndex = -1;
-           for (let i = 0; i < scanMins.length; i++) {
-             const m = scanMins[i];
-             if (m >= 16.5 * 60 && m <= 17.5 * 60) {
-               regularOutIndex = i;
-               break; 
-             }
-           }
- 
-           // If there's a subsequent scan after regular out, that's our OT starting point
-           if (regularOutIndex !== -1 && regularOutIndex < scanMins.length - 1) {
-             eveningOTStart = scanMins[regularOutIndex + 1];
-           }
- 
-           // Calculate OT in 30-min blocks (round down)
-           if (lastScan > eveningOTStart) {
-             const otDuration = lastScan - eveningOTStart;
-             otEveningHours = Math.floor(otDuration / 30) * 0.5;
-             if (isNaN(otEveningHours)) otEveningHours = 0;
-           }
-         }
+          // 5. OT Evening (After 18:00)
+          // 17:00 - 18:00 is treated as a break/regular finish window.
+          // OT starts from 18:00 onwards.
+          if (lastScan !== null && lastScan >= 1110) { // Must stay at least until 18:30 to get 0.5 OT
+            const eveningOTStart = 1080; // 18:00
+  
+            // Calculate OT in 30-min blocks (round down)
+            if (lastScan >= eveningOTStart + 30) {
+              const otDuration = lastScan - eveningOTStart;
+              otEveningHours = Math.floor(otDuration / 30) * 0.5;
+              if (isNaN(otEveningHours)) otEveningHours = 0;
+            }
+          }
        }
 
       results.push({

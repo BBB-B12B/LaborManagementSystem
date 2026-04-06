@@ -529,6 +529,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
             time5: (scan as any).Time5 || '-',
             time6: (scan as any).Time6 || '-',
             scanNormalStatus: (scan as any).normalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
+            scanRegularHours: (scan as any).regularHours || 0,
+            regularHours: (scan as any).regularHours || 0,
             scanLunchStatus: String((scan as any).lunchStatus || 0),
             scanOTMorning: (scan as any).otMorningHours || 0,
             scanOTEvening: (scan as any).otEveningHours || 0,
@@ -541,10 +543,18 @@ class ScanDataService extends BaseCrudService<ScanData> {
             eveningOTDiff: '-',
             lunchOTDiff: '-',
             projectName: scan.projectName || '-',
-            errorNote: scan.importNote || '-'
+            errorNote: scan.importNote || '-',
+            isManuallyEdited: (scan as any).isManuallyEdited || false
           }
         });
       }
+
+      // Sort by date ascending (oldest first)
+      enriched.sort((a, b) => {
+        const dateA = a.workDate instanceof Date ? a.workDate.getTime() : (a.workDate as any).toDate().getTime();
+        const dateB = b.workDate instanceof Date ? b.workDate.getTime() : (b.workDate as any).toDate().getTime();
+        return dateA - dateB;
+      });
 
       if (options.page && options.pageSize) {
          const start = (options.page - 1) * options.pageSize;
@@ -617,7 +627,22 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const items = snapshot.docs.map(doc => {
         const data = doc.data() as any;
         if (data.workDate && data.workDate.toDate) data.workDate = data.workDate.toDate();
-        return { id: doc.id, ...data, detailedView: { ...data, date: data.workDate } };
+        return { 
+          id: doc.id, 
+          ...data, 
+          detailedView: { 
+            ...data, 
+            date: data.workDate,
+            isManuallyEdited: data.isManuallyEdited || false
+          } 
+        };
+      });
+
+      // Sort by workDate ascending (oldest first)
+      items.sort((a, b) => {
+        const dateA = a.workDate instanceof Date ? a.workDate.getTime() : (a.workDate as any).toDate().getTime();
+        const dateB = b.workDate instanceof Date ? b.workDate.getTime() : (b.workDate as any).toDate().getTime();
+        return dateA - dateB;
       });
 
       const total = items.length;
@@ -683,20 +708,95 @@ class ScanDataService extends BaseCrudService<ScanData> {
     contractorId: string,
     date: Date,
     punches: any[],
-    updatedBy: string
+    updatedBy: string,
+    scanDataId?: string
   ): Promise<ScanData | null> {
     try {
       const scanDate = this.formatDate(date);
-      const uniqueKey = `SCAN_${contractorId}_${scanDate}`;
+      const uniqueKey = scanDataId || `SCAN_${contractorId}_${scanDate}`;
       const docRef = collections.scanData.doc(uniqueKey);
+
+      // Recalculate metrics based on new punches
+      let metrics: any = {
+        normalStatus: 0,
+        regularHours: 0,
+        lunchStatus: 0,
+        otMorningHours: 0,
+        otEveningHours: 0,
+        lateMinutes: 0
+      };
+
+      if (punches.length > 0) {
+        const records: BulkImportRecord[] = punches.map((p, i) => {
+          const [h, m] = p.split(':').map(Number);
+          const scanTime = new Date(date);
+          scanTime.setHours(h, m, 0, 0);
+          return {
+            rowNumber: i,
+            employeeNumber: contractorId,
+            scanDateTime: scanTime
+          };
+        });
+
+        const aggregated = ScanDataAggregator.aggregate(records);
+        if (aggregated.length > 0) {
+          const agg = aggregated[0];
+          metrics = {
+            normalStatus: agg.normalStatus,
+            regularHours: agg.regularHours,
+            lunchStatus: agg.lunchStatus,
+            otMorningHours: agg.otMorningHours,
+            otEveningHours: agg.otEveningHours,
+            lateMinutes: agg.lateMinutes
+          };
+        }
+      }
+
       const updateData: any = { 
         ...Object.fromEntries(punches.map((p, i) => [`Time${i+1}`, p])),
+        // Clear remaining slots if any
+        ...Object.fromEntries(Array.from({ length: 10 - punches.length }, (_, i) => [`Time${punches.length + i + 1}`, '-'])),
+        ...metrics,
+        isManuallyEdited: true, // Flag for highlighting in UI
         updatedAt: new Date(),
         updatedBy
       };
+
       await docRef.set(updateData, { merge: true });
-      const updated = await docRef.get();
-      return { id: updated.id, ...updated.data() } as ScanData;
+      const updatedScan = await docRef.get();
+      const updatedScanData = updatedScan.data() as ScanData;
+      
+      // Update discrepancy record if it exists
+      try {
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Use the actual employeeNumber from the record, not the contractor UUID
+        const empCode = updatedScanData.employeeNumber || updatedScanData.employeeId;
+        
+        if (empCode) {
+          const discQuery = await db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
+            .where('employeeNumber', '==', empCode)
+            .where('workDate', '>=', startOfDay)
+            .where('workDate', '<=', endOfDay)
+            .limit(1)
+            .get();
+          
+          if (!discQuery.empty) {
+            await discQuery.docs[0].ref.update({ 
+              isManuallyEdited: true,
+              updatedAt: new Date()
+            });
+            logger.info(`Updated discrepancy highlight for ${empCode} on ${scanDate}`);
+          }
+        }
+      } catch (discErr) {
+        logger.warn('Could not update discrepancy highlight flag:', discErr);
+      }
+
+      return { ...updatedScanData, id: updatedScan.id } as ScanData;
     } catch (error: any) {
       logger.error('Error updating daily punches:', error);
       throw error;

@@ -143,18 +143,22 @@ export default function ScanDataMonitoringPage() {
   };
 
   const handleOpenEdit = (row: any) => {
-    // Get existing punches from scanSummary or manually if needed
-    const summary = row.scanSummary || {};
-    const punches = [
-      summary.time1, summary.time2, summary.time3, 
-      summary.time4, summary.time5, summary.time6
-    ].filter(Boolean);
+    // Robust extraction for Time1-Time6 (any case)
+    const baseRow = row.scanSummary || row.detailedView || row;
+    const punches: string[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const val = baseRow[`time${i}`] || baseRow[`Time${i}`] || baseRow[`TIME${i}`];
+      if (val && val !== '-' && val !== '') {
+        punches.push(val.toString());
+      }
+    }
     
     setSelectedRecord({
+      id: row.id,
       contractorId: row.dailyContractorId,
       contractorName: row.dailyContractorName || '-',
       employeeNumber: row.employeeNumber,
-      workDate: new Date(row.workDate),
+      workDate: new Date(row.workDate || row.scanDate || row.date),
       punches
     });
     setEditDialogOpen(true);
@@ -248,8 +252,12 @@ export default function ScanDataMonitoringPage() {
       field: 'scanDateTime',
       headerName: 'วันเวลา',
       width: 180,
-      valueFormatter: (params) =>
-        new Date(params.value).toLocaleString('th-TH'),
+      valueFormatter: (params) => {
+        const d = new Date(params.value);
+        const datePart = d.toLocaleDateString('th-TH');
+        const timePart = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        return `${datePart} ${timePart} น.`;
+      },
     },
     {
       field: 'employeeNumber',
@@ -628,12 +636,23 @@ export default function ScanDataMonitoringPage() {
                         </TableCell>
 
                         {/* 5-10. Time1-Time6 */}
-                        <TableCell align="center">{row.detailedView?.time1 || '-'}</TableCell>
-                        <TableCell align="center">{row.detailedView?.time2 || '-'}</TableCell>
-                        <TableCell align="center">{row.detailedView?.time3 || '-'}</TableCell>
-                        <TableCell align="center">{row.detailedView?.time4 || '-'}</TableCell>
-                        <TableCell align="center">{row.detailedView?.time5 || '-'}</TableCell>
-                        <TableCell align="center">{row.detailedView?.time6 || '-'}</TableCell>
+                        {[1, 2, 3, 4, 5, 6].map((i) => {
+                          const val = (row.detailedView as any)?.[`time${i}`] || row[`time${i}`] || '-';
+                          const display = val && val !== '-' ? val.toString().substring(0, 5) : '-';
+                          const isEdited = row.isManuallyEdited || row.detailedView?.isManuallyEdited || row.scanSummary?.isManuallyEdited;
+                          return (
+                            <TableCell 
+                              key={i} 
+                              align="center"
+                              sx={{ 
+                                color: (isEdited && display !== '-') ? '#ff6d00' : 'inherit',
+                                fontWeight: (isEdited && display !== '-') ? 900 : 'normal'
+                              }}
+                            >
+                              {display}
+                            </TableCell>
+                          );
+                        })}
 
                         {/* 11. สถานะเวลางานปกติ */}
                         <TableCell align="center">{row.detailedView?.scanNormalStatus || '-'}</TableCell>
@@ -742,11 +761,12 @@ export default function ScanDataMonitoringPage() {
             setEditDialogOpen(false);
             setSelectedRecord(null);
           }}
-          contractorId={selectedRecord.contractorId}
-          contractorName={selectedRecord.contractorName}
-          employeeNumber={selectedRecord.employeeNumber}
-          workDate={selectedRecord.workDate}
-          existingPunches={selectedRecord.punches}
+          id={selectedRecord?.id}
+          contractorId={selectedRecord?.contractorId}
+          contractorName={selectedRecord?.contractorName}
+          employeeNumber={selectedRecord?.employeeNumber}
+          workDate={selectedRecord?.workDate || new Date()}
+          existingPunches={selectedRecord?.punches || []}
         />
       )}
 
