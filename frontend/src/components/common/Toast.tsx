@@ -9,6 +9,7 @@ import React from 'react';
 import { SnackbarProvider, useSnackbar, VariantType } from 'notistack';
 import { IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { useFeedbackStore } from '@/store/feedbackStore';
 
 /**
  * Toast Provider wrapper component
@@ -59,14 +60,16 @@ export const useToast = () => {
      * Show success message
      */
     success: (message: string) => {
-      enqueueSnackbar(message, { variant: 'success' });
+      // Show the big global feedback modal
+      useFeedbackStore.getState().showFeedback('success', 'ทำรายการสำเร็จ', message);
     },
 
     /**
      * Show error message
      */
     error: (message: string) => {
-      enqueueSnackbar(message, { variant: 'error' });
+      // Show the big global feedback modal
+      useFeedbackStore.getState().showFeedback('error', 'เกิดข้อผิดพลาด', message);
     },
 
     /**

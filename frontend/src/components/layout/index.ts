@@ -6,5 +6,5 @@
  */
 
 export { Layout, type LayoutProps } from './Layout';
-export { Navbar } from './Navbar';
+export { Navbar, SIDEBAR_WIDTH } from './Navbar';
 export { ProtectedRoute, type ProtectedRouteProps } from './ProtectedRoute';

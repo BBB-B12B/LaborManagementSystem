@@ -1,0 +1,30 @@
+Connected to: firebase-emulator:8080
+Found 1 users:
+{
+  "employeeId": "EMP001",
+  "username": "admin",
+  "passwordHash": "$2b$10$gwBwjtqF35yng130dYh.LOHSfSwiHldIPcny3tMT5XaipmgjFyr7C",
+  "name": "Admin User",
+  "roleId": "AM",
+  "department": "PD01",
+  "dateOfBirth": null,
+  "startDate": {
+    "_seconds": 1672617600,
+    "_nanoseconds": 0
+  },
+  "projectLocationIds": [
+    "project-p001",
+    "project-p002"
+  ],
+  "isActive": true,
+  "createdAt": {
+    "_seconds": 1767760106,
+    "_nanoseconds": 697000000
+  },
+  "updatedAt": {
+    "_seconds": 1767760106,
+    "_nanoseconds": 697000000
+  },
+  "createdBy": "seed-script",
+  "updatedBy": "seed-script"
+}

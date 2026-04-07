@@ -70,7 +70,8 @@ export interface DCWageSummary {
 export interface WagePeriod {
   id: string;
   periodCode: string;
-  projectLocationId: string;
+  projectCode: string; // [T-360]
+  projectName: string; // [T-360] Denormalized
   startDate: Date;
   endDate: Date;
   periodDays: number;
@@ -106,15 +107,15 @@ export interface WagePeriodListResponse {
  * GET /api/wage-periods
  */
 export async function getAllWagePeriods(filters?: {
-  projectLocationId?: string;
+  projectCode?: string;
   status?: PeriodStatus;
   page?: number;
   pageSize?: number;
 }): Promise<WagePeriodListResponse> {
   const params = new URLSearchParams();
 
-  if (filters?.projectLocationId)
-    params.append('projectLocationId', filters.projectLocationId);
+  if (filters?.projectCode)
+    params.append('projectCode', filters.projectCode);
   if (filters?.status) params.append('status', filters.status);
   if (filters?.page) params.append('page', String(filters.page));
   if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
@@ -148,12 +149,18 @@ export async function getWagePeriodById(id: string): Promise<WagePeriod> {
 export async function createWagePeriod(
   data: WagePeriodCreateInput
 ): Promise<WagePeriod> {
-  const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
-    '/wage-periods',
-    data
-  );
-
-  return response.data.data;
+  try {
+    const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
+      '/wage-periods',
+      data
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -164,11 +171,17 @@ export async function createWagePeriod(
  * SC-011: Calculation <5 min
  */
 export async function calculateWages(id: string): Promise<WagePeriod> {
-  const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
-    `/wage-periods/${id}/calculate`
-  );
-
-  return response.data.data;
+  try {
+    const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
+      `/wage-periods/${id}/calculate`
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -176,11 +189,35 @@ export async function calculateWages(id: string): Promise<WagePeriod> {
  * POST /api/wage-periods/:id/approve
  */
 export async function approveWagePeriod(id: string): Promise<WagePeriod> {
-  const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
-    `/wage-periods/${id}/approve`
-  );
+  try {
+    const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
+      `/wage-periods/${id}/approve`
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
+}
 
-  return response.data.data;
+/**
+ * Mark wage period as paid
+ * POST /api/wage-periods/:id/mark-paid
+ */
+export async function markAsPaid(id: string): Promise<WagePeriod> {
+  try {
+    const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
+      `/wage-periods/${id}/mark-paid`
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error.response && error.response.data && error.response.data.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -194,8 +231,6 @@ export async function deleteWagePeriod(id: string): Promise<void> {
 /**
  * Export wage period to Excel
  * GET /api/wage-periods/:id/export
- *
- * SC-014: Export <10s
  */
 export async function exportWagePeriodToExcel(id: string): Promise<Blob> {
   const response = await apiClient.get(`/wage-periods/${id}/export`, {
@@ -213,7 +248,14 @@ export async function addAdditionalIncome(
   periodId: string,
   data: AdditionalIncomeInput
 ): Promise<void> {
-  await apiClient.post(`/wage-periods/${periodId}/additional-income`, data);
+  try {
+    await apiClient.post(`/wage-periods/${periodId}/additional-income`, data);
+  } catch (error: any) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -224,27 +266,34 @@ export async function addAdditionalExpense(
   periodId: string,
   data: AdditionalExpenseInput
 ): Promise<void> {
-  await apiClient.post(`/wage-periods/${periodId}/additional-expense`, data);
+  try {
+    await apiClient.post(`/wage-periods/${periodId}/additional-expense`, data);
+  } catch (error: any) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
 }
 
 /**
  * Delete additional income
- * DELETE /api/additional-income/:id
+ * DELETE /api/wage-periods/additional-income/:id
  */
 export async function deleteAdditionalIncome(id: string): Promise<void> {
-  await apiClient.delete(`/additional-income/${id}`);
+  await apiClient.delete(`/wage-periods/additional-income/${id}`);
 }
 
 /**
  * Delete additional expense
- * DELETE /api/additional-expense/:id
+ * DELETE /api/wage-periods/additional-expense/:id
  */
 export async function deleteAdditionalExpense(id: string): Promise<void> {
-  await apiClient.delete(`/additional-expense/${id}`);
+  await apiClient.delete(`/wage-periods/additional-expense/${id}`);
 }
 
 /**
- * Set DC income details (wage rates)
+ * Set DC income details
  * POST /api/dc-income-details
  */
 export async function setDCIncomeDetails(
@@ -304,6 +353,7 @@ export const wageService = {
   createWagePeriod,
   calculateWages,
   approveWagePeriod,
+  markAsPaid,
   deleteWagePeriod,
   exportWagePeriodToExcel,
   addAdditionalIncome,

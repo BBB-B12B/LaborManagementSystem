@@ -3,7 +3,6 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
-  // สำหรับ production build
   output: 'standalone',
   transpilePackages: ['@mui/x-date-pickers', '@mui/x-data-grid'],
 
@@ -26,6 +25,7 @@ const nextConfig = {
     NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
     NEXT_PUBLIC_FIREBASE_EMULATOR_HOST: process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST,
     NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST: process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST,
+    NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED: process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED,
   },
 
   // Webpack configuration

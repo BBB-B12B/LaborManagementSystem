@@ -125,16 +125,28 @@ export const Modal: React.FC<ModalProps> = ({
       <DialogContent dividers>{children}</DialogContent>
 
       {!hideActions && (
-        <DialogActions>
-          <Button onClick={onClose} color="inherit">
+        <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            color="error"
+            sx={{ borderRadius: '10px', px: 3 }}
+          >
             {cancelText}
           </Button>
           {onConfirm && (
             <Button
               onClick={onConfirm}
               variant="contained"
-              color="primary"
+              color="success"
               disabled={confirmDisabled}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
               {confirmText}
             </Button>

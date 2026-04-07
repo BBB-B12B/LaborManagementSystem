@@ -16,15 +16,7 @@ import {
   errorMessages,
 } from './baseSchemas';
 
-/**
- * Validate 15-day period
- * FR-WC-001: Wage period must be exactly 15 days
- */
-export function validate15DayPeriod(startDate: Date, endDate: Date): boolean {
-  const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays === 15;
-}
+
 
 /**
  * Wage period creation schema
@@ -33,7 +25,8 @@ export function validate15DayPeriod(startDate: Date, endDate: Date): boolean {
 export const wagePeriodCreateSchema = z
   .object({
     // Project selection
-    projectLocationId: requiredString('โครงการ'),
+    projectCode: requiredString('รหัสโครงการ'),
+    projectName: requiredString('ชื่อโครงการ'),
 
     // Period dates
     startDate: baseDate('วันที่เริ่มต้นงวด')
@@ -51,20 +44,7 @@ export const wagePeriodCreateSchema = z
     // Notes
     notes: optionalString,
   })
-  .refine(
-    (data) => data.endDate > data.startDate,
-    {
-      message: 'วันที่สิ้นสุดต้องมาหลังวันที่เริ่มต้น',
-      path: ['endDate'],
-    }
-  )
-  .refine(
-    (data) => validate15DayPeriod(data.startDate, data.endDate),
-    {
-      message: 'งวดค่าแรงต้องเป็น 15 วันพอดี (FR-WC-001)',
-      path: ['endDate'],
-    }
-  );
+
 
 /**
  * Additional Income schema
@@ -72,17 +52,13 @@ export const wagePeriodCreateSchema = z
  */
 export const additionalIncomeSchema = z.object({
   dailyContractorId: requiredString('แรงงานรายวัน'),
-
   wagePeriodId: requiredString('งวดค่าแรง'),
-
+  incomeType: requiredString('ประเภทรายได้'),
   description: requiredString('รายละเอียด')
     .min(2, errorMessages.minLength(2))
     .max(200, errorMessages.maxLength(200)),
-
   amount: positiveNumber('จำนวนเงิน')
     .max(50000, 'รายได้พิเศษสูงสุด 50,000 บาท'),
-
-  date: baseDate('วันที่'),
 });
 
 /**
@@ -91,17 +67,13 @@ export const additionalIncomeSchema = z.object({
  */
 export const additionalExpenseSchema = z.object({
   dailyContractorId: requiredString('แรงงานรายวัน'),
-
   wagePeriodId: requiredString('งวดค่าแรง'),
-
+  expenseType: requiredString('ประเภทรายจ่าย'),
   description: requiredString('รายละเอียด')
     .min(2, errorMessages.minLength(2))
     .max(200, errorMessages.maxLength(200)),
-
   amount: positiveNumber('จำนวนเงิน')
     .max(50000, 'รายจ่ายพิเศษสูงสุด 50,000 บาท'),
-
-  date: baseDate('วันที่'),
 });
 
 /**
@@ -161,7 +133,7 @@ export const dcExpenseDetailsSchema = z.object({
  * Used for filtering wage periods
  */
 export const wagePeriodFilterSchema = z.object({
-  projectLocationId: z.string().optional(),
+  projectCode: z.string().optional(),
   status: z.enum(['draft', 'calculated', 'approved', 'paid', 'locked']).optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
@@ -184,5 +156,5 @@ export default {
   dcIncomeDetailsSchema,
   dcExpenseDetailsSchema,
   wagePeriodFilterSchema,
-  validate15DayPeriod,
+
 };

@@ -5,7 +5,7 @@
  * Manages labor skills with CRUD operations and additional queries.
  */
 
-import { CrudService } from '../base/CrudService';
+import { BaseCrudService } from '../base/BaseCrudService';
 import { Skill, CreateSkillInput, UpdateSkillInput } from '../../models/Skill';
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
@@ -15,7 +15,7 @@ import { logger } from '../../utils/logger';
  * SkillService
  * Extends CrudService with skill-specific operations
  */
-class SkillService extends CrudService<Skill> {
+class SkillService extends BaseCrudService<Skill> {
   constructor() {
     super(collections.skills);
   }

@@ -1,7 +1,4 @@
-# Labor Management System - Docker Compose Configuration
 # Development Environment
-
-version: '3.9'
 
 services:
   # Frontend Service (Next.js)
@@ -25,6 +22,10 @@ services:
       - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
       - NEXT_PUBLIC_FIREBASE_APP_ID=${FIREBASE_APP_ID}
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID:-}
+      - NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED=false
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - WATCHPACK_POLLING_INTERVAL=1000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -35,7 +36,7 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
-    command: npm run dev
+    command: npm run dev -- --hostname 0.0.0.0
 
   # Backend Service (Express.js)
   backend:
@@ -54,6 +55,9 @@ services:
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
       - FIREBASE_API_KEY=${FIREBASE_API_KEY}
       - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_EMULATOR_ENABLED=false
+      - FIREBASE_SERVICE_ACCOUNT_KEY=${FIREBASE_SERVICE_ACCOUNT_KEY}
 
       # Firebase Emulator Configuration
       - FIREBASE_EMULATOR_HOST=firebase-emulator
@@ -70,28 +74,30 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
       - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-10}
       - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
     volumes:
       - ./backend:/app
       - /app/node_modules
       - ./uploads:/app/uploads
     networks:
       - app-network
-    depends_on:
-      - firebase-emulator
+    # depends_on:
+    #   - firebase-emulator
     restart: unless-stopped
     command: npm run dev
 
-  # Firebase Emulator Suite
+  # Firebase Emulator Suite (Enabled for Local Dev)
   firebase-emulator:
     build:
       context: ./firebase
       dockerfile: Dockerfile
     container_name: labor-firebase-emulator
     ports:
-      - "4001:4000"  # Emulator UI (mapped to 4001 to avoid conflict with backend)
-      - "8080:8080"  # Firestore Emulator
-      - "9099:9099"  # Authentication Emulator
-      - "9000:9000"  # Realtime Database Emulator
+      - "4001:4000"
+      - "8080:8080"
+      - "9099:9099"
+      - "9000:9000"
     environment:
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
     volumes:

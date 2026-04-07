@@ -15,8 +15,7 @@ import {
   dailyReportConverter,
   editHistoryConverter,
   wagePeriodConverter,
-  dcIncomeDetailsConverter,
-  dcExpenseDetailsConverter,
+
   additionalIncomeConverter,
   additionalExpenseConverter,
   socialSecurityCalculationConverter,
@@ -24,6 +23,7 @@ import {
   scanDataDiscrepancyConverter,
   lateRecordConverter,
   fileAttachmentConverter,
+  socialSecurityRuleConverter,
 } from '../models';
 
 /**
@@ -33,7 +33,7 @@ export const COLLECTIONS = {
   USERS: 'users',
   ROLES: 'roles',
   SKILLS: 'skills',
-  PROJECT_LOCATIONS: 'projectLocations',
+  PROJECT_LOCATIONS: 'Project',
   DAILY_CONTRACTORS: 'dailyContractors',
   DAILY_REPORTS: 'dailyReports',
   EDIT_HISTORY: 'editHistory',
@@ -47,6 +47,7 @@ export const COLLECTIONS = {
   SCAN_DATA_DISCREPANCIES: 'scanDataDiscrepancies',
   LATE_RECORDS: 'lateRecords',
   FILE_ATTACHMENTS: 'fileAttachments',
+  SOCIAL_SECURITY_RULES: 'socialSecurityRules',
 } as const;
 
 /**
@@ -66,12 +67,13 @@ export const collections = {
   dailyReports: db.collection(COLLECTIONS.DAILY_REPORTS).withConverter(dailyReportConverter),
   editHistory: db.collection(COLLECTIONS.EDIT_HISTORY).withConverter(editHistoryConverter),
   wagePeriods: db.collection(COLLECTIONS.WAGE_PERIODS).withConverter(wagePeriodConverter),
-  dcIncomeDetails: db
-    .collection(COLLECTIONS.DC_INCOME_DETAILS)
-    .withConverter(dcIncomeDetailsConverter),
-  dcExpenseDetails: db
-    .collection(COLLECTIONS.DC_EXPENSE_DETAILS)
-    .withConverter(dcExpenseDetailsConverter),
+  // [DEPRECATED] Moved to Sub-collection of 'dailyContractors'
+  // dcIncomeDetails: db
+  //   .collection(COLLECTIONS.DC_INCOME_DETAILS)
+  //   .withConverter(dcIncomeDetailsConverter),
+  // dcExpenseDetails: db
+  //   .collection(COLLECTIONS.DC_EXPENSE_DETAILS)
+  //   .withConverter(dcExpenseDetailsConverter),
   additionalIncome: db
     .collection(COLLECTIONS.ADDITIONAL_INCOME)
     .withConverter(additionalIncomeConverter),
@@ -89,6 +91,9 @@ export const collections = {
   fileAttachments: db
     .collection(COLLECTIONS.FILE_ATTACHMENTS)
     .withConverter(fileAttachmentConverter),
+  socialSecurityRules: db
+    .collection(COLLECTIONS.SOCIAL_SECURITY_RULES)
+    .withConverter(socialSecurityRuleConverter),
 };
 
 /**

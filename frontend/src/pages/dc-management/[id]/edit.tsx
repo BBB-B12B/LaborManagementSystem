@@ -131,13 +131,7 @@ export default function EditDCPage() {
           employeeId: dc.employeeId,
           name: dc.name,
           skillId: dc.skillId,
-          phoneNumber: dc.phoneNumber,
-          idCardNumber: dc.idCardNumber,
-          address: dc.address,
-          emergencyContact: dc.emergencyContact,
-          emergencyPhone: dc.emergencyPhone,
           startDate: dc.startDate,
-          endDate: dc.endDate,
           projectLocationIds: dc.projectLocationIds,
           isActive: dc.isActive,
         }}

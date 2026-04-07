@@ -1,12 +1,10 @@
 /**
  * Authentication Service
- * บริการยืนยันตัวตน
- *
- * Service for handling authentication (login, logout, token generation)
  */
 
 import { userService } from './UserService';
 import { User } from '../../models/User';
+import { auth as firebaseAuth } from '../../config/firebase';
 
 export interface LoginCredentials {
   username: string;
@@ -19,86 +17,95 @@ export interface AuthResponse {
     employeeId: string;
     username: string;
     name: string;
+    fullNameEn?: string;
     roleId: string;
     roleCode: string;
     department: string;
     projectLocationIds: string[];
     isActive: boolean;
   };
-  token?: string; // Optional: JWT token (can be implemented later)
+  token?: string;
 }
 
 export class AuthService {
   /**
-   * เข้าสู่ระบบ
-   * Login with username and password
+   * Login with username and password (single source: `users` collection)
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const { username, password } = credentials;
+    // Debug Log
+    console.log(`[AuthService] Attempting login for username: '${username}'`);
 
-    // ค้นหาผู้ใช้จาก username
     const user = await userService.findByUsername(username);
     if (!user) {
+      console.warn(`[AuthService] User not found: '${username}'`);
       throw new Error('Invalid username or password');
     }
 
-    // ตรวจสอบว่าผู้ใช้ active หรือไม่
     if (!user.isActive) {
+      console.warn(`[AuthService] User inactive: '${username}'`);
       throw new Error('User account is inactive');
     }
 
-    // ตรวจสอบรหัสผ่าน
-    const isValidPassword = await userService.verifyPassword(user, password);
+    // Debug Log
+    console.log(`[AuthService] Login attempt: username=${username}, active=${user?.isActive}, userId=${user?.id}`);
+
+    const isValidPassword = await userService.verifyPassword(user.id, password);
+    console.log(`[AuthService] Password valid: ${isValidPassword}`);
+
     if (!isValidPassword) {
+      console.warn(`[AuthService] Password mismatch for user: '${username}'`);
       throw new Error('Invalid username or password');
     }
 
-    // สร้าง response (ไม่รวม sensitive data)
+    console.log(`[AuthService] Login successful for: '${username}'`);
+
+    const customClaims = {
+      role: user.roleId,
+      department: user.department,
+    };
+
+    // Create Firebase Custom Token
+    // Frontend must use signInWithCustomToken() to exchange this for an ID Token
+    const token = await firebaseAuth.createCustomToken(user.id, customClaims);
+
     return {
       user: {
         id: user.id,
         employeeId: user.employeeId,
         username: user.username,
         name: user.name,
+        fullNameEn: user.name,
         roleId: user.roleId,
         roleCode: user.roleId,
         department: user.department,
         projectLocationIds: user.projectLocationIds || [],
         isActive: user.isActive,
       },
-      token: 'mock-token',
+      token,
     };
   }
 
   /**
-   * ออกจากระบบ
    * Logout (clear session/token)
    */
   async logout(_userId: string): Promise<void> {
-    // TODO: Implement token revocation if using JWT
-    // For now, this is handled client-side by clearing the token
     return;
   }
 
   /**
-   * รีเฟรช token
    * Refresh authentication token
    */
   async refreshToken(_userId: string): Promise<string> {
-    // TODO: Implement JWT token refresh
     throw new Error('Not implemented');
   }
 
   /**
-   * ตรวจสอบ token
    * Verify authentication token
    */
   async verifyToken(_token: string): Promise<User | null> {
-    // TODO: Implement JWT token verification
     throw new Error('Not implemented');
   }
-
 }
 
-// Export singleton instance
 export const authService = new AuthService();

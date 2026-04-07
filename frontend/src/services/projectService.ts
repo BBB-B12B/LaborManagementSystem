@@ -9,24 +9,22 @@
  */
 
 import { api, apiClient } from './api/client';
-import { type ProjectFormData, type ProjectStatus } from '@/validation/projectSchema';
+import {
+  type ProjectFormData,
+  type ProjectStatus,
+  PROJECT_STATUS_OPTIONS,
+} from '@/validation/projectSchema';
 
 export interface Project {
   id: string;
   code: string;
-  name: string;
-  location: string;
+  projectCode: string;
+  projectName: string;
   department: string;
-  projectManager?: string;
-  startDate?: Date;
-  endDate?: Date;
+  projectManager?: string | null;
   status: ProjectStatus;
-  description?: string;
-  isActive: boolean;
   createdBy: string;
-  createdByName?: string;
   updatedBy: string;
-  updatedByName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,9 +43,11 @@ class ProjectService {
   private normalize(project: any): Project {
     return {
       ...project,
+      projectCode: project.projectCode ?? '',
+      projectName: project.projectName ?? '',
       department: project.department ?? '',
-      startDate: project.startDate ? new Date(project.startDate) : undefined,
-      endDate: project.endDate ? new Date(project.endDate) : undefined,
+      projectManager: project.projectManager ?? null,
+      status: (project.status || PROJECT_STATUS_OPTIONS[0]) as ProjectStatus,
       createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
       updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date(),
     };
@@ -76,7 +76,7 @@ class ProjectService {
    * Get active projects only
    */
   async getActive(): Promise<Project[]> {
-    return this.getAll({ isActive: true, status: 'active' });
+    return this.getAll({ status: PROJECT_STATUS_OPTIONS[0] });
   }
 
   /**
@@ -117,7 +117,7 @@ class ProjectService {
   }
 
   /**
-   * Delete a project (soft delete)
+   * Delete a project
    */
   async delete(id: string): Promise<void> {
     await apiClient.delete(`/projects/${id}`);

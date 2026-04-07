@@ -4,8 +4,66 @@
  */
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import { useFeedbackStore } from '@/store/feedbackStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+/**
+ * Convert mock user JSON into an ASCII-safe header value.
+ * Uses base64 encoding in the browser, with a Node-compatible fallback for tests.
+ */
+const encodeMockUserHeader = (value: string): string => {
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    return window
+      .btoa(
+        encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_match, hex) =>
+          String.fromCharCode(Number.parseInt(hex, 16))
+        )
+      );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nodeBuffer = (globalThis as any)?.Buffer;
+  if (nodeBuffer) {
+    return nodeBuffer.from(value, 'utf8').toString('base64');
+  }
+
+  return value;
+};
+
+const DEFAULT_DEV_USER: Record<string, unknown> = {
+  id: 'dev-admin',
+  employeeId: '101527',
+  username: 'thiti.m',
+  name: 'Dev Admin',
+  fullNameEn: 'Dev Admin',
+  roleId: 'AM',
+  roleCode: 'AM',
+  department: 'PD01',
+  projectLocationIds: ['P001', 'P002', 'P003', 'P004'],
+  isActive: true,
+};
+
+const ensureMockUser = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const existing = localStorage.getItem('user');
+  if (existing) {
+    return existing;
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    const override = process.env.NEXT_PUBLIC_DEV_MOCK_USER;
+    const payload =
+      override && override.trim().length > 0 ? override : JSON.stringify(DEFAULT_DEV_USER);
+    localStorage.setItem('user', payload);
+    return payload;
+  }
+
+  return null;
+};
 
 /**
  * API Response type
@@ -42,15 +100,16 @@ const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // เพิ่ม auth token ถ้ามี
-    const token = localStorage.getItem('authToken');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     // ส่งข้อมูล user mock สำหรับ backend dev
-    const storedUser = localStorage.getItem('user');
+    const storedUser = ensureMockUser();
     if (storedUser && config.headers) {
-      config.headers['X-Mock-User'] = storedUser;
+      // Encode mock user JSON to keep header ASCII-safe during dev
+      config.headers['X-Mock-User'] = encodeMockUserHeader(storedUser);
     }
 
     // Log in development
@@ -58,17 +117,32 @@ apiClient.interceptors.request.use(
       console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
     }
 
+    // Show global loading spinner for mutations (POST, PUT, PATCH, DELETE)
+    // We skip GET to not block the screen during normal data fetching
+    const method = config.method?.toUpperCase();
+    if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      useFeedbackStore.getState().showLoading();
+    }
+
     return config;
   },
   (error) => {
+    useFeedbackStore.getState().hideLoading();
     return Promise.reject(error);
   }
 );
 
 // Response interceptor
 apiClient.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: AxiosResponse) => {
+    // Hide global loading spinner
+    useFeedbackStore.getState().hideLoading();
+    return response;
+  },
   (error: AxiosError) => {
+    // Hide global loading spinner
+    useFeedbackStore.getState().hideLoading();
+
     // Handle common errors
     if (error.response) {
       switch (error.response.status) {

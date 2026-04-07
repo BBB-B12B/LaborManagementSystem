@@ -11,19 +11,44 @@ import {
   Typography,
   Button,
   Paper,
-  Grid,
   Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton, DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
+import { BackButton, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { projectService, type Project } from '@/services/projectService';
-import { getProjectStatusLabel } from '@/validation/projectSchema';
 import { ProjectDrawer } from './components/ProjectDrawer';
-import type { ProjectFormData } from '@/validation/projectSchema';
+import { ProjectCreateModal } from './components/ProjectCreateModal';
+import { PROJECT_STATUS_OPTIONS, type ProjectFormData } from '@/validation/projectSchema';
+
+const CODE_PREFIX = 'P';
+const CODE_PAD = 3;
+const ACTIVE_STATUS = PROJECT_STATUS_OPTIONS[0];
+const STATUS_COLOR_MAP: Record<string, 'success' | 'warning' | 'error'> = {
+  [PROJECT_STATUS_OPTIONS[0]]: 'success',
+  [PROJECT_STATUS_OPTIONS[1]]: 'warning',
+  [PROJECT_STATUS_OPTIONS[2]]: 'error',
+};
+
+const extractCodeNumber = (code?: string | null): number | null => {
+  if (!code) return null;
+  const match = code.match(/(\d+)$/);
+  if (!match) return null;
+  const num = Number.parseInt(match[1], 10);
+  return Number.isNaN(num) ? null : num;
+};
+
+const getNextProjectCodeFromList = (items: Project[]): string => {
+  const max = items.reduce((acc, item) => {
+    const value = extractCodeNumber(item.code) ?? extractCodeNumber(item.id);
+    return value !== null && value > acc ? value : acc;
+  }, 0);
+  const next = Math.max(max + 1, 1);
+  return `${CODE_PREFIX}${next.toString().padStart(CODE_PAD, '0')}`;
+};
 
 export default function ProjectListPage() {
   const toast = useToast();
@@ -35,6 +60,7 @@ export default function ProjectListPage() {
 
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
   const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<ProjectFormData> | undefined>(undefined);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -49,7 +75,7 @@ export default function ProjectListPage() {
     mutationFn: (id: string) => projectService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-       queryClient.invalidateQueries({ queryKey: ['projectDepartments'] });
+      queryClient.invalidateQueries({ queryKey: ['projectDepartments'] });
       toast.success('ลบโครงการสำเร็จ');
     },
     onError: (error) => {
@@ -92,14 +118,12 @@ export default function ProjectListPage() {
   };
 
   const handleCreate = () => {
-    setDrawerMode('create');
-    setEditingProjectId(null);
-    setDrawerInitialValues({
-      status: 'active',
-      isActive: true,
-    });
-    setDrawerLoading(false);
-    setDrawerOpen(true);
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateSubmit = async (data: ProjectFormData) => {
+    await createMutation.mutateAsync(data);
+    setCreateModalOpen(false);
   };
 
   const handleEdit = async (project: Project) => {
@@ -110,9 +134,12 @@ export default function ProjectListPage() {
       const detail = await projectService.getById(project.id);
       setEditingProjectId(project.id);
       setDrawerInitialValues({
-        ...detail,
-        startDate: detail.startDate ? detail.startDate : undefined,
-        endDate: detail.endDate ? detail.endDate : undefined,
+        code: detail.code,
+        projectCode: detail.projectCode || '',
+        projectName: detail.projectName,
+        department: detail.department,
+        status: detail.status,
+        projectManager: detail.projectManager || '',
       });
     } catch (error: any) {
       toast.error(error.message || 'ไม่สามารถโหลดข้อมูลโครงการได้');
@@ -122,8 +149,9 @@ export default function ProjectListPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    await showDeleteConfirm(`โครงการ: ${name}`, async () => {
+  const handleDelete = async (id: string, projectName?: string) => {
+    const displayName = projectName || id;
+    await showDeleteConfirm(`โครงการ: ${displayName}`, async () => {
       await deleteMutation.mutateAsync(id);
     });
   };
@@ -139,89 +167,89 @@ export default function ProjectListPage() {
   const columns: GridColDef[] = [
     {
       field: 'code',
-      headerName: 'รหัส',
-      width: 120,
+      headerName: 'ลำดับ',
+      width: 140,
     },
     {
-      field: 'name',
+      field: 'projectCode',
+      headerName: 'รหัสโครงการ',
+      width: 160,
+    },
+    {
+      field: 'projectName',
       headerName: 'ชื่อโครงการ',
-      width: 250,
       flex: 1,
+      minWidth: 220,
+      valueGetter: (params) => params.value || '-',
     },
     {
       field: 'department',
       headerName: 'สังกัด',
-      width: 100,
+      width: 120,
       renderCell: (params) => (
         <Chip label={params.value || '-'} size="small" color="default" />
       ),
     },
     {
-      field: 'location',
-      headerName: 'ที่อยู่',
-      width: 200,
-      flex: 1,
-    },
-    {
       field: 'status',
       headerName: 'สถานะ',
-      width: 130,
+      width: 160,
       renderCell: (params) => {
-        const colors: Record<string, 'success' | 'warning' | 'error'> = {
-          active: 'success',
-          completed: 'warning',
-          suspended: 'error',
-        };
         return (
           <Chip
-            label={getProjectStatusLabel(params.value)}
+            label={params.value || '-'}
             size="small"
-            color={colors[params.value] || 'default'}
+            color={STATUS_COLOR_MAP[params.value as string] || 'default'}
           />
         );
       },
     },
     {
       field: 'actions',
-      type: 'actions',
       headerName: 'จัดการ',
       width: 120,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={<EditIcon />}
-          label="แก้ไข"
-          onClick={() => handleEdit(params.row as Project)}
-          showInMenu
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon />}
-          label="ลบ"
-          onClick={() => handleDelete(params.id as string, params.row.name)}
-          showInMenu
-        />,
-      ],
+      sortable: false,
+      filterable: false,
+      renderCell: (params: GridRenderCellParams) => (
+        <Box>
+          <Tooltip title="แก้ไข">
+            <IconButton
+              size="small"
+              onClick={() => handleEdit(params.row as Project)}
+              color="primary"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="ลบ">
+            <IconButton
+              size="small"
+              onClick={() =>
+                handleDelete(
+                  params.id as string,
+                  params.row.projectName || params.row.code
+                )
+              }
+              color="error"
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
     },
   ];
-
-  if (isLoading) {
-    return (
-      <ProtectedRoute>
-        <Layout>
-          <LoadingSpinner message="กำลังโหลดข้อมูลโครงการ..." />
-        </Layout>
-      </ProtectedRoute>
-    );
-  }
 
   return (
     <ProtectedRoute requiredRoles={['GOD', 'FM', 'PM', 'AM']}>
       <Layout>
-        <Container maxWidth="xl" sx={{ py: 4 }}>
-          <BackButton href="/management" />
+        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+          {/* <BackButton href="/management" /> removed as per global header change */}
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h4">จัดการโครงการ</Typography>
             <Button
               variant="contained"
+              color="info"
               startIcon={<AddIcon />}
               onClick={handleCreate}
             >
@@ -229,32 +257,52 @@ export default function ProjectListPage() {
             </Button>
           </Box>
 
-          <Paper elevation={2}>
-            <DataGrid
-              rows={projects || []}
-              columns={columns}
-              loading={isLoading}
-              autoHeight
-              disableRowSelectionOnClick
-              initialState={{
-                pagination: { paginationModel: { pageSize: 25 } },
-                sorting: { sortModel: [{ field: 'code', sort: 'asc' }] },
-              }}
-              pageSizeOptions={[10, 25, 50, 100]}
-            />
+          <Paper sx={{ width: '100%' }}>
+            {isLoading ? (
+              <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+                <LoadingSpinner size="large" />
+              </Box>
+            ) : (
+              <DataGrid
+                rows={projects || []}
+                columns={columns}
+                autoHeight
+                disableSelectionOnClick
+                hideFooter
+                pageSize={100}
+                initialState={{
+                  sorting: { sortModel: [{ field: 'code', sort: 'asc' }] },
+                }}
+                sx={{
+                  '& .MuiDataGrid-cell': {
+                    borderBottom: '1px solid #f0f0f0',
+                  },
+                  '& .MuiDataGrid-columnHeaders': {
+                    backgroundColor: '#fafafa',
+                    borderBottom: '2px solid #e0e0e0',
+                  },
+                }}
+              />
+            )}
           </Paper>
           <DeleteConfirmDialog />
 
           <ProjectDrawer
-            title={drawerMode === 'create' ? 'สร้างโครงการใหม่' : 'แก้ไขโครงการ'}
             key={drawerMode === 'edit' ? editingProjectId ?? 'edit' : 'create'}
             open={drawerOpen}
             onClose={handleCloseDrawer}
             mode={drawerMode}
             defaultValues={drawerInitialValues}
             loading={drawerLoading}
-            isLoading={drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending}
+            isLoading={updateMutation.isPending}
             onSubmit={handleDrawerSubmit}
+          />
+
+          <ProjectCreateModal
+            open={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            onSubmit={handleCreateSubmit}
+            isLoading={createMutation.isPending}
           />
         </Container>
       </Layout>

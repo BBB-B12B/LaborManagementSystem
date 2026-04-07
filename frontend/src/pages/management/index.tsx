@@ -12,14 +12,14 @@ import {
   Grid,
   Card,
   CardContent,
-  CardActions,
+  CardActionArea,
   Button,
 } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import GroupsIcon from '@mui/icons-material/Groups';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton } from '@/components/common/BackButton';
+
 import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/utils/permissions';
 
@@ -51,6 +51,15 @@ const MANAGEMENT_SECTIONS = [
     permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
       permissions.canAccessDCManagement,
   },
+  {
+    key: 'social-security-rules',
+    label: 'จัดการเกณฑ์ประกันสังคม',
+    description: 'ตั้งค่าเงื่อนไขการหักเงินประกันสังคมตามรายได้',
+    icon: <EngineeringIcon fontSize="large" color="primary" />, // Can reuse icon or import a new one like SettingsIcon
+    href: '/management/social-security-rules',
+    permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
+      permissions.canAccessSSOManagement,
+  },
 ] as const;
 
 export default function ManagementHubPage() {
@@ -66,13 +75,10 @@ export default function ManagementHubPage() {
     <ProtectedRoute requiredRoles={['AM', 'FM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
-          <BackButton href="/dashboard" />
+
           <Box sx={{ mb: 4 }}>
             <Typography variant="h4" gutterBottom>
               การจัดการข้อมูล
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              เข้าถึงเครื่องมือจัดการโครงการ สมาชิก และแรงงานรายวันจากหน้านี้
             </Typography>
           </Box>
 
@@ -88,22 +94,67 @@ export default function ManagementHubPage() {
           ) : (
             <Grid container spacing={3}>
               {sections.map((section) => (
-                <Grid key={section.key} item xs={12} md={4}>
-                  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ flexGrow: 1 }}>
-                      <Box sx={{ mb: 2 }}>{section.icon}</Box>
-                      <Typography variant="h6" gutterBottom>
-                        {section.label}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {section.description}
-                      </Typography>
-                    </CardContent>
-                    <CardActions>
-                      <Button size="small" onClick={() => router.push(section.href)}>
-                        เข้าสู่หน้าจัดการ
-                      </Button>
-                    </CardActions>
+                <Grid key={section.key} item xs={12} sm={6} md={3}>
+                  <Card
+                    sx={{
+                      height: '100%',
+                      minHeight: 220,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      borderRadius: '24px',
+                      border: '2px solid transparent',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                        transform: 'translateY(-4px)',
+                      },
+                    }}
+                  >
+                    <CardActionArea
+                      onClick={() => router.push(section.href)}
+                      sx={{
+                        flexGrow: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        p: 3,
+                      }}
+                    >
+                      <CardContent
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          width: '100%',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            mb: 2,
+                            color: 'primary.main',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            '& svg': {
+                              fontSize: '64px !important',
+                            },
+                          }}
+                        >
+                          {section.icon}
+                        </Box>
+                        <Typography
+                          variant="h6"
+                          sx={{ fontWeight: 600, color: 'text.primary' }}
+                        >
+                          {section.label}
+                        </Typography>
+                      </CardContent>
+                    </CardActionArea>
                   </Card>
                 </Grid>
               ))}

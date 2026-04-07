@@ -46,7 +46,7 @@ export interface FileUploadProps {
  * - Upload progress indicator
  * - Preview selected file
  */
-export const FileUpload: React.FC<FileUploadProps> = ({
+export const FileUpload = React.forwardRef<HTMLInputElement, FileUploadProps>(({
   onFileSelect,
   onFileRemove,
   accept = '.xlsx,.xls',
@@ -59,8 +59,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   required = false,
   showPreview = true,
   uploadProgress,
-}) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+}, ref) => {
+  // Use forwarded ref or fallback to local ref
+  const localRef = useRef<HTMLInputElement>(null);
+  const inputRef = (ref as React.MutableRefObject<HTMLInputElement>) || localRef;
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -159,8 +162,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const handleRemove = () => {
     setSelectedFile(null);
     setValidationError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    if (inputRef.current) {
+      inputRef.current.value = '';
     }
     if (onFileRemove) {
       onFileRemove();
@@ -171,7 +174,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
    * Trigger file input click
    */
   const handleClick = () => {
-    fileInputRef.current?.click();
+    inputRef.current?.click();
   };
 
   /**
@@ -210,8 +213,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           backgroundColor: dragActive
             ? 'action.hover'
             : disabled
-            ? 'action.disabledBackground'
-            : 'background.paper',
+              ? 'action.disabledBackground'
+              : 'background.paper',
           borderColor: displayError ? 'error.main' : dragActive ? 'primary.main' : 'divider',
           borderWidth: dragActive ? 2 : 1,
           transition: 'all 0.2s',
@@ -222,7 +225,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         onClick={!disabled ? handleClick : undefined}
       >
         <input
-          ref={fileInputRef}
+          ref={inputRef}
           type="file"
           accept={accept}
           onChange={handleInputChange}
@@ -304,7 +307,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       )}
     </Box>
   );
-};
+});
+
+FileUpload.displayName = 'FileUpload';
 
 /**
  * Validate Excel file format

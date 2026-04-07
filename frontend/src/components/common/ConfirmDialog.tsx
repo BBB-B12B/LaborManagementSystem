@@ -133,12 +133,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </DialogContentText>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions sx={{ px: 3, pb: 2, justifyContent: 'flex-end', gap: 2 }}>
         <Button
           onClick={onClose}
           disabled={loading}
           variant="outlined"
-          color="inherit"
+          color="error"
+          sx={{ borderRadius: '10px', px: 3 }}
         >
           {cancelText || defaultCancelText}
         </Button>
@@ -149,6 +150,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           color={getButtonColor()}
           autoFocus
           startIcon={loading ? <CircularProgress size={16} /> : null}
+          sx={{
+            borderRadius: '10px',
+            px: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            textTransform: 'none',
+            fontWeight: 600,
+          }}
         >
           {loading ? 'กำลังดำเนินการ...' : (confirmText || defaultConfirmText)}
         </Button>

@@ -99,6 +99,7 @@ firebase_data/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+backend/keys/
 
 # ============================================
 # Temporary Files

@@ -9,8 +9,20 @@ import { Router, Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { projectLocationService } from '../../services/project/ProjectLocationService';
 import { AppError } from '../middleware/errorHandler';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 
 const router = Router();
+router.use(authenticate);
+const STATUS_MAP: Record<string, 'active' | 'completed' | 'suspended'> = {
+  active: 'active',
+  completed: 'completed',
+  suspended: 'suspended',
+  'กำลังดำเนินการอยู่': 'active',
+  'ปิดโครงการ': 'completed',
+  'ระงับชั่วคราว': 'suspended',
+};
+const STATUS_OPTIONS = Object.keys(STATUS_MAP);
 
 /**
  * GET /api/projects
@@ -20,7 +32,7 @@ router.get(
   '/',
   [
     query('department').optional().isString().trim(),
-    query('status').optional().isIn(['active', 'completed', 'suspended']),
+    query('status').optional().isIn(STATUS_OPTIONS),
     query('search').optional().isString().trim(),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
@@ -39,14 +51,15 @@ router.get(
       if (department) {
         projects = await projectLocationService.getByDepartment(department as string);
       } else if (status) {
-        projects = await projectLocationService.getByStatus(status as any);
+        const normalizedStatus = STATUS_MAP[status as string];
+        projects = await projectLocationService.getByStatus(normalizedStatus);
       } else if (search) {
         const result = await projectLocationService.getAll();
         const keyword = (search as string).toLowerCase();
         projects = result.items.filter(
           (project) =>
             project.code.toLowerCase().includes(keyword) ||
-            project.name.toLowerCase().includes(keyword)
+            project.projectName.toLowerCase().includes(keyword)
         );
       } else {
         const result = await projectLocationService.getAll({
@@ -140,9 +153,10 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post(
   '/',
+  authorize(['AM', 'OE', 'PE', 'PM', 'PD']),
   [
     body('code').notEmpty().trim(),
-    body('name').notEmpty().trim(),
+    body('projectName').notEmpty().trim(), // Updated from name
     body('location').notEmpty().trim(),
     body('department').notEmpty().trim(),
     body('projectManager').optional().trim(),
@@ -159,8 +173,10 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get createdBy from authenticated user
-      const createdBy = req.body.createdBy || 'system';
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input = {
@@ -191,9 +207,10 @@ router.post(
  */
 router.put(
   '/:id',
+  authorize(['AM', 'OE', 'PE', 'PM', 'PD']),
   [
     body('code').optional().trim(),
-    body('name').optional().trim(),
+    body('projectName').optional().trim(), // Updated from name
     body('location').optional().trim(),
     body('department').optional().trim(),
     body('projectManager').optional().trim(),
@@ -210,8 +227,10 @@ router.put(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get updatedBy from authenticated user
-      const updatedBy = req.body.updatedBy || 'system';
+      const updatedBy = (req as AuthRequest).user?.id;
+      if (!updatedBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input: any = { ...req.body };

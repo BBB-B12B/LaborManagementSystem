@@ -3,21 +3,21 @@ import { config } from './index';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
-  // Development: Use emulator
-  if (config.nodeEnv === 'development') {
-    admin.initializeApp({
-      projectId: config.firebase.projectId,
-    });
+  console.log(`[Feature Flag] Use Emulator: ${config.firebase.useEmulator}`);
+  console.log(`[Feature Flag] NODE_ENV: ${config.nodeEnv}`);
 
-    // Set emulator hosts
+  if (config.firebase.useEmulator) {
     process.env.FIRESTORE_EMULATOR_HOST = config.firebase.firestoreEmulatorHost;
     process.env.FIREBASE_AUTH_EMULATOR_HOST = config.firebase.authEmulatorHost;
 
-    console.log('🔥 Firebase Admin initialized with emulators');
-    console.log(`   - Firestore: ${config.firebase.firestoreEmulatorHost}`);
-    console.log(`   - Auth: ${config.firebase.authEmulatorHost}`);
+    console.log('[firebase-admin] Setting up emulators:');
+    console.log(`[firebase-admin] Firestore: ${config.firebase.firestoreEmulatorHost}`);
+    console.log(`[firebase-admin] Auth: ${config.firebase.authEmulatorHost}`);
+
+    admin.initializeApp({
+      projectId: config.firebase.projectId,
+    });
   } else {
-    // Production: Use service account
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
       ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
       : undefined;
@@ -29,7 +29,7 @@ if (!admin.apps.length) {
       projectId: config.firebase.projectId,
     });
 
-    console.log('🔥 Firebase Admin initialized for production');
+    console.log('[firebase-admin] Initialized with production credentials');
   }
 }
 

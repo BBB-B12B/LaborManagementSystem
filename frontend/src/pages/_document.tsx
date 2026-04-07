@@ -15,7 +15,7 @@ export default function Document() {
         <meta name="description" content="ระบบจัดการแรงงาน - Labor Management System สำหรับการบันทึกข้อมูลแรงงานรายวัน การคำนวณค่าแรง และการจัดการโครงการ" />
         <meta name="keywords" content="ระบบจัดการแรงงาน, Labor Management, Daily Report, Wage Calculation, แรงงานรายวัน, ค่าแรง" />
         <meta name="author" content="Labor Management System" />
-        <meta name="theme-color" content="#1976d2" />
+        <meta name="theme-color" content="#2b2337" />
 
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />

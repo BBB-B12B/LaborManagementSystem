@@ -32,6 +32,7 @@ const BACKEND_VARS = [
   'FIRESTORE_EMULATOR_HOST',
   'FIREBASE_AUTH_EMULATOR_HOST',
   'FIREBASE_EMULATOR_HOST',
+  'FIREBASE_EMULATOR_ENABLED',
 
   // Firebase Service Account (Production)
   'FIREBASE_SERVICE_ACCOUNT_KEY',
@@ -128,9 +129,10 @@ function generateBackendEnv() {
       'FIREBASE_MEASUREMENT_ID',
     ],
     'Firebase Emulator (Development)': [
-      'FIRESTORE_EMULATOR_HOST',
-      'FIREBASE_AUTH_EMULATOR_HOST',
-      'FIREBASE_EMULATOR_HOST',
+    'FIRESTORE_EMULATOR_HOST',
+    'FIREBASE_AUTH_EMULATOR_HOST',
+    'FIREBASE_EMULATOR_HOST',
+    'FIREBASE_EMULATOR_ENABLED',
     ],
     'Firebase Service Account (Production)': [
       'FIREBASE_SERVICE_ACCOUNT_KEY',

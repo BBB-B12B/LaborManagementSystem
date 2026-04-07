@@ -6,24 +6,22 @@
  */
 
 import bcrypt from 'bcrypt';
-import { CrudService, PaginationOptions } from '../base/CrudService';
+import { BaseCrudService, PaginationOptions } from '../base/BaseCrudService';
 import {
   DailyContractor,
   DailyContractorDTO,
   CreateDailyContractorInput,
   UpdateDailyContractorInput,
-} from '../../models/DailyContractor';
-import {
   DCIncomeDetails,
   CreateDCIncomeDetailsInput,
   UpdateDCIncomeDetailsInput,
-} from '../../models/DCIncomeDetails';
-import {
   DCExpenseDetails,
   CreateDCExpenseDetailsInput,
   UpdateDCExpenseDetailsInput,
+  dcIncomeDetailsConverter,
+  dcExpenseDetailsConverter,
   calculateFollowerAccommodation,
-} from '../../models/DCExpenseDetails';
+} from '../../models';
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
@@ -33,9 +31,9 @@ import { config } from '../../config';
  * DailyContractorService
  * Extends CrudService with DC-specific operations
  */
-class DailyContractorService extends CrudService<DailyContractor> {
+class DailyContractorService extends BaseCrudService<DailyContractor> {
   constructor() {
-    super(collections.dailyContractors);
+    super(collections.dailyContractors as any);
   }
 
   /**
@@ -49,7 +47,8 @@ class DailyContractorService extends CrudService<DailyContractor> {
       const employeeId = (input.employeeId ?? '').trim();
       const name = (input.name ?? '').trim();
       const skillId = (input.skillId ?? '').trim();
-      const username = input.username ? input.username.trim() : undefined;
+      // Normalize username to lowercase
+      const username = input.username ? input.username.trim().toLowerCase() : undefined;
 
       // Check for duplicate employeeId when provided
       if (employeeId) {
@@ -93,10 +92,38 @@ class DailyContractorService extends CrudService<DailyContractor> {
         updatedAt: now,
         createdBy,
         updatedBy: createdBy,
+        // T-230: Defaults
+        dailyWageRate: input.dailyWageRate || 0,
+        professionalRate: input.professionalRate || 0,
+        phoneAllowance: input.phoneAllowance || 0,
+        mouDeductionRate: input.mouDeductionRate || 0,
+        nationality: input.nationality || 'ไทย',
+        // T-240: Defaults
+        otherIncome: input.otherIncome || 0,
+        housingFee: input.housingFee || 0,
+        followerCount: input.followerCount || 0,
+        refrigeratorFee: input.refrigeratorFee || 0,
+        soundSystemFee: input.soundSystemFee || 0,
+        tvFee: input.tvFee || 0,
+        laundryFee: input.laundryFee || 0,
+        airConFee: input.airConFee || 0,
+        otherDeduction: input.otherDeduction || 0,
       };
 
-      const dc = await this.create(dcData);
-      logger.info(`Daily contractor created: ${dc.employeeId}`, { dcId: dc.id });
+      // Enforce DocumentID = DC-EmployeeID (F-006 & T-230)
+      if (!employeeId) {
+        throw new AppError('Employee ID is required', 400);
+      }
+
+      // T-230: Changed ID format to DC-[employeeId]
+      const docId = `DC-${employeeId}`;
+      const existingDoc = await this.getById(docId);
+      if (existingDoc) {
+        throw new AppError('Daily Contractor ID already exists (Duplicate Employee ID)', 409);
+      }
+
+      const dc = await this.createWithId(docId, dcData);
+      logger.info(`Daily contractor created: ${dc.employeeId} (ID: ${dc.id})`, { dcId: dc.id });
 
       return this.toDTO(dc);
     } catch (error: any) {
@@ -138,7 +165,7 @@ class DailyContractorService extends CrudService<DailyContractor> {
       }
 
       // Check for duplicate username if being changed
-      const username = input.username ? input.username.trim() : undefined;
+      const username = input.username ? input.username.trim().toLowerCase() : undefined;
       if (username && username !== existing.username) {
         const duplicate = await this.findByUsername(username);
         if (duplicate) {
@@ -218,6 +245,24 @@ class DailyContractorService extends CrudService<DailyContractor> {
         updateData.endDate = input.endDate || null;
       }
 
+      // T-230: Update new fields
+      if (input.dailyWageRate !== undefined) updateData.dailyWageRate = input.dailyWageRate;
+      if (input.professionalRate !== undefined) updateData.professionalRate = input.professionalRate;
+      if (input.phoneAllowance !== undefined) updateData.phoneAllowance = input.phoneAllowance;
+      if (input.mouDeductionRate !== undefined) updateData.mouDeductionRate = input.mouDeductionRate;
+      if (input.nationality !== undefined) updateData.nationality = input.nationality;
+
+      // T-240: Update new financial fields
+      if (input.otherIncome !== undefined) updateData.otherIncome = input.otherIncome;
+      if (input.housingFee !== undefined) updateData.housingFee = input.housingFee;
+      if (input.followerCount !== undefined) updateData.followerCount = input.followerCount;
+      if (input.refrigeratorFee !== undefined) updateData.refrigeratorFee = input.refrigeratorFee;
+      if (input.soundSystemFee !== undefined) updateData.soundSystemFee = input.soundSystemFee;
+      if (input.tvFee !== undefined) updateData.tvFee = input.tvFee;
+      if (input.laundryFee !== undefined) updateData.laundryFee = input.laundryFee;
+      if (input.airConFee !== undefined) updateData.airConFee = input.airConFee;
+      if (input.otherDeduction !== undefined) updateData.otherDeduction = input.otherDeduction;
+
       // Remove password from update data (we use passwordHash)
       delete (updateData as any).password;
 
@@ -255,15 +300,41 @@ class DailyContractorService extends CrudService<DailyContractor> {
   }
 
   /**
+   * Find DC by employeeId or idHistory
+   */
+  async findByEmployeeIdOrHistory(employeeId: string): Promise<DailyContractor | null> {
+    try {
+      // 1. Check current ID
+      const byCurrentId = await this.findByEmployeeId(employeeId);
+      if (byCurrentId) return byCurrentId;
+
+      // 2. Check history
+      const results = await this.query([
+        {
+          field: 'idHistory',
+          operator: 'array-contains',
+          value: employeeId,
+        },
+      ]);
+
+      return results.length > 0 ? results[0] : null;
+    } catch (error: any) {
+      logger.error('Error finding DC by employeeId or history:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Find DC by username
    */
   async findByUsername(username: string): Promise<DailyContractor | null> {
     try {
+      const normalizedUsername = username.trim().toLowerCase();
       const results = await this.query([
         {
           field: 'username',
           operator: '==',
-          value: username,
+          value: normalizedUsername,
         },
       ]);
 
@@ -352,8 +423,11 @@ class DailyContractorService extends CrudService<DailyContractor> {
   private async getIncomeDetailsRecord(
     dailyContractorId: string
   ): Promise<DCIncomeDetails | null> {
-    const snapshot = await collections.dcIncomeDetails
-      .where('dailyContractorId', '==', dailyContractorId)
+    // T-DB-001: Sub-collection Logic
+    const snapshot = await collections.dailyContractors
+      .doc(dailyContractorId)
+      .collection('dcIncomeDetails')
+      .withConverter(dcIncomeDetailsConverter)
       .get();
 
     if (snapshot.empty) {
@@ -367,8 +441,11 @@ class DailyContractorService extends CrudService<DailyContractor> {
   private async getExpenseDetailsRecord(
     dailyContractorId: string
   ): Promise<DCExpenseDetails | null> {
-    const snapshot = await collections.dcExpenseDetails
-      .where('dailyContractorId', '==', dailyContractorId)
+    // T-DB-001: Sub-collection Logic
+    const snapshot = await collections.dailyContractors
+      .doc(dailyContractorId)
+      .collection('dcExpenseDetails')
+      .withConverter(dcExpenseDetailsConverter)
       .get();
 
     if (snapshot.empty) {
@@ -418,6 +495,7 @@ class DailyContractorService extends CrudService<DailyContractor> {
     expense: DCExpenseDetails | null;
   }> {
     const now = new Date();
+    const dcRef = collections.dailyContractors.doc(dailyContractorId);
 
     if (data.income) {
       const existingIncome = await this.getIncomeDetailsRecord(dailyContractorId);
@@ -429,11 +507,14 @@ class DailyContractorService extends CrudService<DailyContractor> {
       };
 
       if (existingIncome) {
-        await collections.dcIncomeDetails.doc(existingIncome.id).update({
-          ...payload,
-          updatedAt: now,
-          updatedBy,
-        });
+        await dcRef
+          .collection('dcIncomeDetails')
+          .doc(existingIncome.id)
+          .update({
+            ...payload,
+            updatedAt: now,
+            updatedBy,
+          });
       } else {
         const docData: Omit<DCIncomeDetails, 'id'> = {
           dailyContractorId,
@@ -447,7 +528,10 @@ class DailyContractorService extends CrudService<DailyContractor> {
           createdBy: updatedBy,
           updatedBy,
         };
-        await collections.dcIncomeDetails.add(docData as any);
+        await dcRef
+          .collection('dcIncomeDetails')
+          .withConverter(dcIncomeDetailsConverter)
+          .add(docData as any);
       }
     }
 
@@ -466,12 +550,15 @@ class DailyContractorService extends CrudService<DailyContractor> {
       };
 
       if (existingExpense) {
-        await collections.dcExpenseDetails.doc(existingExpense.id).update({
-          ...payload,
-          followerAccommodation,
-          updatedAt: now,
-          updatedBy,
-        });
+        await dcRef
+          .collection('dcExpenseDetails')
+          .doc(existingExpense.id)
+          .update({
+            ...payload,
+            followerAccommodation,
+            updatedAt: now,
+            updatedBy,
+          });
       } else {
         const docData: Omit<DCExpenseDetails, 'id'> = {
           dailyContractorId,
@@ -490,7 +577,10 @@ class DailyContractorService extends CrudService<DailyContractor> {
           createdBy: updatedBy,
           updatedBy,
         };
-        await collections.dcExpenseDetails.add(docData as any);
+        await dcRef
+          .collection('dcExpenseDetails')
+          .withConverter(dcExpenseDetailsConverter)
+          .add(docData as any);
       }
     }
 
@@ -551,6 +641,34 @@ class DailyContractorService extends CrudService<DailyContractor> {
   async getByIdDTO(id: string): Promise<DailyContractorDTO | null> {
     const dc = await this.getById(id);
     return dc ? this.toDTO(dc) : null;
+  }
+  /**
+   * Soft delete DC (set isActive = false)
+   * Override BaseCrudService to use isActive instead of isDeleted
+   */
+  async softDelete(id: string, updatedBy?: string): Promise<boolean> {
+    try {
+      logger.info(`Attempting to soft delete DC with ID: ${id}`);
+      const docRef = this.collection.doc(id);
+      const doc = await docRef.get();
+
+      if (!doc.exists) {
+        logger.warn(`Soft delete failed: DC not found (ID: ${id})`);
+        return false;
+      }
+
+      await docRef.update({
+        isActive: false,
+        updatedAt: new Date(),
+        updatedBy: updatedBy || 'system',
+      } as any);
+
+      logger.info(`Soft deleted DC successfully: ${id}`);
+      return true;
+    } catch (error: any) {
+      logger.error(`Error soft deleting DC (ID: ${id}):`, error);
+      throw error;
+    }
   }
 }
 

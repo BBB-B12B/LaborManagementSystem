@@ -5,7 +5,7 @@
  * Manages project locations with CRUD operations and additional queries.
  */
 
-import { CrudService } from '../base/CrudService';
+import { BaseCrudService } from '../base/BaseCrudService';
 import {
   ProjectLocation,
   CreateProjectLocationInput,
@@ -20,7 +20,7 @@ import { logger } from '../../utils/logger';
  * ProjectLocationService
  * Extends CrudService with project-specific operations
  */
-class ProjectLocationService extends CrudService<ProjectLocation> {
+class ProjectLocationService extends BaseCrudService<ProjectLocation> {
   constructor() {
     super(collections.projectLocations);
   }
@@ -42,7 +42,7 @@ class ProjectLocationService extends CrudService<ProjectLocation> {
       const now = new Date();
       const projectData: Omit<ProjectLocation, 'id'> = {
         code: input.code.toUpperCase(),
-        name: input.name,
+        projectName: input.projectName, // Updated field
         location: input.location,
         department: input.department.trim(),
         projectManager: input.projectManager,

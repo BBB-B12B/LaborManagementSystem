@@ -32,7 +32,7 @@ import {
   type User,
   type UserFilterOptions,
 } from '../../services/memberService';
-import { BackButton } from '../../components/common/BackButton';
+
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
@@ -64,7 +64,7 @@ export default function MemberManagementPage() {
     department: '',
     isActive: undefined,
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
@@ -159,12 +159,12 @@ export default function MemberManagementPage() {
     setFilters((prev) => ({ ...prev, search: value, page: 1 }));
   };
 
-  const handleRoleChange = (roleId: string) => {
-    setFilters((prev) => ({ ...prev, roleId, page: 1 }));
+  const handleRoleChange = (roleId: string | null) => {
+    setFilters((prev) => ({ ...prev, roleId: roleId || '', page: 1 }));
   };
 
-  const handleDepartmentChange = (department: string) => {
-    setFilters((prev) => ({ ...prev, department, page: 1 }));
+  const handleDepartmentChange = (department: string | null) => {
+    setFilters((prev) => ({ ...prev, department: department || '', page: 1 }));
   };
 
   const handleCreateUser = () => {
@@ -300,13 +300,13 @@ export default function MemberManagementPage() {
 
   const importErrorMessage = userImportMutation.isError
     ? (userImportMutation.error as any)?.response?.data?.error ||
-      (userImportMutation.error as Error)?.message ||
-      'เกิดข้อผิดพลาดในการนำเข้าผู้ใช้'
+    (userImportMutation.error as Error)?.message ||
+    'เกิดข้อผิดพลาดในการนำเข้าผู้ใช้'
     : null;
 
   const pageContent = (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <BackButton href="/management" />
+
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
@@ -333,7 +333,7 @@ export default function MemberManagementPage() {
           </Button>
           <Button
             variant="contained"
-            color="primary"
+            color="info"
             startIcon={<Add />}
             onClick={handleCreateUser}
           >
@@ -367,7 +367,6 @@ export default function MemberManagementPage() {
               value={filters.roleId || ''}
               onChange={handleRoleChange}
               label="กรอง Role"
-              showAll
             />
           </Grid>
 
@@ -377,7 +376,6 @@ export default function MemberManagementPage() {
               value={filters.department || ''}
               onChange={handleDepartmentChange}
               label="กรองสังกัด"
-              showAll
             />
           </Grid>
 
@@ -415,7 +413,7 @@ export default function MemberManagementPage() {
             columns={columns}
             pagination
             page={(filters.page || 1) - 1}
-            pageSize={filters.pageSize || 25}
+            pageSize={filters.pageSize || 10}
             rowsPerPageOptions={[10, 25, 50, 100]}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}

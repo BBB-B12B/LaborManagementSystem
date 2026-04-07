@@ -19,9 +19,13 @@ import {
   ListItem,
   ListItemText,
   Chip,
+  Tabs,
+  Tab,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
-import { CloudUpload, CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
-import { useForm, Controller } from 'react-hook-form';
+import { CloudUpload, CheckCircle, Error as ErrorIcon, ContentPaste, Description } from '@mui/icons-material';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -30,9 +34,10 @@ import {
 } from '../../../validation/scanDataSchema';
 import {
   uploadScanDataFile,
+  importScanDataText,
   type ImportResult,
 } from '../../../services/scanDataService';
-import ProjectSelect from '../../../components/forms/ProjectSelect';
+import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 
 interface ScanDataUploadDialogProps {
   open: boolean;
@@ -61,15 +66,26 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
     defaultValues: {
       projectLocationId: defaultProjectId || '',
       importNote: '',
+      mode: 'file',
       // placeholder สำหรับ register field ผ่าน react-hook-form
       file: undefined as unknown as File,
+      textData: '',
     },
   });
 
+  const mode = useWatch({ control, name: 'mode' });
+
   const uploadMutation = useMutation({
     mutationFn: async (data: ScanDataUploadInput) => {
+      if (data.mode === 'text' && data.textData) {
+        return await importScanDataText(
+          data.textData,
+          data.projectLocationId,
+          data.importNote
+        );
+      }
       return await uploadScanDataFile(
-        data.file,
+        data.file!,
         data.projectLocationId,
         data.importNote
       );
@@ -91,13 +107,13 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
   };
 
   const onSubmit = async (data: ScanDataUploadInput) => {
-    if (!selectedFile) {
+    if (data.mode === 'file' && !selectedFile) {
       return;
     }
 
     const formData: ScanDataUploadInput = {
       ...data,
-      file: selectedFile,
+      file: selectedFile || undefined,
     };
 
     uploadMutation.mutate(formData);
@@ -152,44 +168,96 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               )}
             />
 
-            {/* File Upload */}
-            <Box sx={{ mt: 3 }}>
-              <input
-                accept=".dat,.xlsx,.xls"
-                style={{ display: 'none' }}
-                id="scan-data-file"
-                type="file"
-                onChange={handleFileChange}
+            {/* Mode Selection Tabs */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3, mt: 3 }}>
+              <Controller
+                name="mode"
+                control={control}
+                render={({ field }) => (
+                  <Tabs
+                    value={field.value}
+                    onChange={(_, val) => {
+                      field.onChange(val);
+                      // Reset validation state when switching
+                    }}
+                    aria-label="import mode"
+                  >
+                    <Tab icon={<Description />} iconPosition="start" label="อัปโหลดไฟล์" value="file" />
+                    <Tab icon={<ContentPaste />} iconPosition="start" label="วางข้อความ (Paste)" value="text" />
+                  </Tabs>
+                )}
               />
-              <label htmlFor="scan-data-file">
-                <Button
-                  variant="outlined"
-                  component="span"
-                  startIcon={<CloudUpload />}
-                  fullWidth
-                  sx={{ py: 2 }}
-                >
-                  เลือกไฟล์ (.dat, .xlsx, .xls)
-                </Button>
-              </label>
-
-              {selectedFile && (
-                <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
-                  <Typography variant="body2" color="success.dark">
-                    ✓ ไฟล์ที่เลือก: {selectedFile.name}
-                  </Typography>
-                  <Typography variant="caption" color="success.dark">
-                    ขนาด: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                  </Typography>
-                </Box>
-              )}
-
-              {errors.file && (
-                <Alert severity="error" sx={{ mt: 2 }}>
-                  {errors.file.message}
-                </Alert>
-              )}
             </Box>
+
+            {/* File Upload Mode */}
+            {mode === 'file' && (
+              <Box sx={{ mt: 3 }}>
+                <input
+                  accept=".dat,.xlsx,.xls"
+                  style={{ display: 'none' }}
+                  id="scan-data-file"
+                  type="file"
+                  onChange={handleFileChange}
+                />
+                <label htmlFor="scan-data-file">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<CloudUpload />}
+                    fullWidth
+                    sx={{ py: 2 }}
+                  >
+                    เลือกไฟล์ (.dat, .xlsx, .xls)
+                  </Button>
+                </label>
+
+                {selectedFile && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
+                    <Typography variant="body2" color="success.dark">
+                      ✓ ไฟล์ที่เลือก: {selectedFile.name}
+                    </Typography>
+                    <Typography variant="caption" color="success.dark">
+                      ขนาด: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                    </Typography>
+                  </Box>
+                )}
+
+                {errors.file && (
+                  <Alert severity="error" sx={{ mt: 2 }}>
+                    {errors.file.message}
+                  </Alert>
+                )}
+              </Box>
+            )}
+
+            {/* Text Paste Mode */}
+            {mode === 'text' && (
+              <Box sx={{ mt: 3 }}>
+                <Controller
+                  name="textData"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="วางข้อมูลสแกนนิ้วที่นี่"
+                      multiline
+                      rows={10}
+                      fullWidth
+                      variant="outlined"
+                      placeholder={`ตัวอย่าง:\n1001 2024-01-23 08:00:00\n1002 2024-01-23 08:05:00`}
+                      error={!!errors.textData}
+                      helperText={errors.textData?.message}
+                      sx={{ fontFamily: 'monospace' }}
+                    />
+                  )}
+                />
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  รองรับการวางข้อมูลดิบจาก Notepad หรือ Excel (Copy Only)
+                  <br />
+                  รูปแบบ: <strong>รหัสพนักงาน วันที่ เวลา</strong>
+                </Alert>
+              </Box>
+            )}
 
             {/* Import Note (Optional) */}
             <Box sx={{ mt: 3 }}>
@@ -233,6 +301,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                 รองรับสูงสุด <strong>100,000 รายการ</strong> ต่อครั้ง และขนาดไฟล์ไม่เกิน <strong>100MB</strong>
               </Typography>
             </Alert>
+
 
             {/* Upload Progress */}
             {uploadMutation.isPending && (
@@ -400,25 +469,56 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
         )}
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
         {!uploadResult ? (
           <>
-            <Button onClick={handleClose}>ยกเลิก</Button>
+            <Button
+              onClick={handleClose}
+              variant="outlined"
+              color="error"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
+              ยกเลิก
+            </Button>
             <Button
               onClick={handleSubmit(onSubmit)}
               variant="contained"
-              disabled={!selectedFile || uploadMutation.isPending}
-              startIcon={uploadMutation.isPending ? <CircularProgress size={20} /> : <CloudUpload />}
+              color="success"
+              disabled={uploadMutation.isPending || (mode === 'file' && !selectedFile)}
+              startIcon={uploadMutation.isPending ? <CircularProgress size={20} /> : (mode === 'text' ? <ContentPaste /> : <CloudUpload />)}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
-              {uploadMutation.isPending ? 'กำลัง Upload...' : 'Upload'}
+              {uploadMutation.isPending ? 'กำลัง Process...' : (mode === 'text' ? 'นำเข้าข้อมูล' : 'Upload')}
             </Button>
           </>
         ) : (
           <>
-            <Button onClick={handleUploadAnother} variant="outlined">
+            <Button
+              onClick={handleUploadAnother}
+              variant="outlined"
+              color="primary"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
               Upload อีกครั้ง
             </Button>
-            <Button onClick={handleClose} variant="contained">
+            <Button
+              onClick={handleClose}
+              variant="contained"
+              color="error"
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
               ปิด
             </Button>
           </>

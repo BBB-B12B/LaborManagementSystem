@@ -8,13 +8,13 @@
 
 import React from 'react';
 import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
-  SelectChangeEvent,
+  Autocomplete,
+  TextField,
   Chip,
+  CircularProgress,
+  FormHelperText,
+  Box,
+  Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
@@ -23,11 +23,10 @@ import projectService, { type Project } from '@/services/projectService';
 export interface ProjectLocation {
   id: string;
   code: string;
-  name: string;
-  location: string;
+  projectCode?: string; // Added field
+  projectName: string;
   department: string;
-  status: 'active' | 'completed' | 'suspended';
-  isActive: boolean;
+  status: string;
 }
 
 export interface ProjectSelectProps {
@@ -42,6 +41,8 @@ export interface ProjectSelectProps {
   size?: 'small' | 'medium';
   showOnlyActive?: boolean;
   multiple?: boolean;
+  displayProjectNameOnly?: boolean;
+  onSelectProject?: (project: ProjectLocation | null) => void;
 }
 
 /**
@@ -62,6 +63,8 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   size = 'medium',
   showOnlyActive = true,
   multiple = false,
+  displayProjectNameOnly = false,
+  onSelectProject,
 }) => {
   const { user } = useAuthStore();
 
@@ -81,6 +84,11 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
 
       return baseProjects
         .filter((project) => {
+          // Admin and GOD roles can see all projects
+          if (user?.roleId === 'AM' || user?.roleCode === 'AM' || user?.roleCode === 'GOD') {
+            return true;
+          }
+
           if (user?.projectLocationIds?.length) {
             return user.projectLocationIds.includes(project.id);
           }
@@ -89,12 +97,12 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         .map((project) => ({
           id: project.id,
           code: project.code,
-          name: project.name,
-          location: project.location,
+          projectCode: project.projectCode, // Map new field
+          projectName: project.projectName,
           department: project.department,
           status: project.status,
-          isActive: project.isActive,
-        }));
+        }))
+        .sort((a, b) => (a.projectCode || a.code).localeCompare(b.projectCode || b.code)); // Sort by ProjectCode
     },
     enabled: Boolean(user),
     staleTime: 5 * 60 * 1000,
@@ -102,106 +110,164 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
 
   const displayHelperText = helperText ?? (isError ? 'ไม่สามารถโหลดรายชื่อโครงการได้' : undefined);
 
-  /**
-   * Handle selection change
-   */
-  const handleChange = (event: SelectChangeEvent<string | string[]>) => {
-    const raw = event.target.value;
+  const createFallbackProject = (id: string): ProjectLocation => ({
+    id,
+    code: id,
+    projectName: id,
+    department: '',
+    status: '',
+  });
+
+  const selectedProjects = React.useMemo(() => {
+    const codes = Array.isArray(value) ? value : value ? [value] : [];
+    return codes.map(
+      (code) => projects.find((project) => project.code === code) ?? createFallbackProject(code)
+    );
+  }, [value, projects]);
+
+  const selectedValue = multiple ? selectedProjects : selectedProjects[0] ?? null;
+
+  const options = React.useMemo(() => {
+    if (!selectedValue) {
+      return projects; // Already sorted
+    }
+    const map = new Map<string, ProjectLocation>();
+    projects.forEach((project) => map.set(project.code, project));
 
     if (multiple) {
-      const selectedValues = Array.isArray(raw)
-        ? raw
-        : typeof raw === 'string'
-        ? raw.split(',').filter(Boolean)
-        : [];
-      onChange(selectedValues);
-    } else {
-      const selectedId = Array.isArray(raw) ? raw[0] : raw;
-      const normalized = selectedId || null;
-      onChange(normalized);
+      (selectedValue as ProjectLocation[]).forEach((project) => {
+        map.set(project.code, project);
+      });
+    } else if (selectedValue) {
+      map.set((selectedValue as ProjectLocation).code, selectedValue as ProjectLocation);
+    }
 
-      if (normalized && user?.id) {
-        localStorage.setItem(`lastProject_${user.id}`, normalized);
+    return Array.from(map.values()).sort((a, b) => (a.projectCode || a.code).localeCompare(b.projectCode || b.code));
+  }, [projects, selectedValue, multiple]);
+
+  const autocompleteValue = React.useMemo(() => {
+    if (multiple) {
+      return (selectedValue as ProjectLocation[]) || [];
+    }
+    return (selectedValue as ProjectLocation | null) ?? null;
+  }, [multiple, selectedValue]);
+
+  const handleAutocompleteChange = (
+    _event: React.SyntheticEvent,
+    newValue: ProjectLocation | ProjectLocation[] | null
+  ) => {
+    if (multiple) {
+      const selectedCodes = Array.isArray(newValue)
+        ? newValue.map((project) => project.code)
+        : [];
+      onChange(selectedCodes);
+    } else {
+      const selected = (newValue as ProjectLocation | null)?.code ?? null;
+      onChange(selected);
+
+      if (onSelectProject) {
+        onSelectProject(newValue as ProjectLocation | null);
+      }
+
+      if (selected && user?.id) {
+        localStorage.setItem(`lastProject_${user.id}`, selected);
       }
     }
   };
 
-  /**
-   * Get department color
-   */
-  const getDepartmentColor = (department: string): 'primary' | 'secondary' | 'success' | 'warning' | 'error' => {
-    const colorMap: Record<string, any> = {
-      PD01: 'primary',
-      PD02: 'secondary',
-      PD03: 'success',
-      PD04: 'warning',
-      PD05: 'error',
-    };
-    return colorMap[department] || 'primary';
-  };
-
-  const selectedValue = multiple
-    ? (Array.isArray(value) ? value : value ? [value] : [])
-    : (Array.isArray(value) ? value[0] ?? '' : value || '');
-
-  const renderValue = (selected: string | string[]) => {
-    if (!multiple) {
-      const project = projects.find((p) => p.id === selected);
-      return project ? `${project.code} - ${project.name}` : '-- เลือกโครงการ --';
-    }
-
-    const selectedArray = Array.isArray(selected) ? selected : [selected];
-    if (selectedArray.length === 0) return 'เลือกโครงการ';
-    const labels = selectedArray
-      .map((id) => {
-        const project = projects.find((p) => p.id === id);
-        return project ? project.code : id;
-      })
-      .join(', ');
-    return labels;
-  };
+  const renderTags = (tagValue: ProjectLocation[], getTagProps: any) =>
+    tagValue.map((option, index) => (
+      <Chip
+        {...getTagProps({ index })}
+        key={option.id}
+        label={
+          displayProjectNameOnly && option.projectName
+            ? option.projectName
+            : (option.projectCode || option.code) // Use ProjectCode
+        }
+        size="small"
+        sx={{ borderRadius: '6px', fontWeight: 500 }}
+      />
+    ));
 
   return (
-    <FormControl
-      fullWidth={fullWidth}
-      error={error}
-      disabled={disabled || isLoading}
-      size={size}
-      required={required}
-    >
-      <InputLabel>{label}</InputLabel>
-      <Select
+    <Box>
+      <Autocomplete
         multiple={multiple}
-        value={selectedValue}
-        onChange={handleChange}
-        label={label}
-        renderValue={renderValue as any}
-      >
-        {!multiple && (
-          <MenuItem value="">
-            <em>-- เลือกโครงการ --</em>
-          </MenuItem>
+        options={options}
+        loading={isLoading}
+        value={autocompleteValue}
+        onChange={handleAutocompleteChange}
+        getOptionLabel={(option) => {
+          // Display logic: Preference to ProjectCode
+          return displayProjectNameOnly
+            ? option.projectName
+            : `${option.projectCode || option.code} : ${option.projectName}`;
+        }}
+        renderTags={multiple ? (renderTags as any) : undefined}
+        size={size}
+        disabled={disabled || isLoading}
+        fullWidth={fullWidth}
+        noOptionsText="ไม่พบโครงการ"
+        loadingText="กำลังโหลด..."
+        isOptionEqualToValue={(option, val) => option.code === val.code}
+        renderOption={(props, option) => (
+          <li {...props} key={option.id} style={{ padding: '8px 16px' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  color: 'primary.main',
+                  minWidth: '40px'
+                }}
+              >
+                {option.projectCode || option.code}
+              </Typography>
+              <Box sx={{
+                height: '16px',
+                width: '1px',
+                bgcolor: 'divider',
+                mx: 0.5
+              }} />
+              <Typography
+                variant="body2"
+                sx={{
+                  flex: 1,
+                  color: 'text.primary',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {option.projectName}
+              </Typography>
+            </Box>
+          </li>
         )}
-        {projects.map((project) => (
-          <MenuItem key={project.id} value={project.id}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-              <span style={{ flex: 1 }}>
-                {project.code} - {project.name}
-              </span>
-              <Chip
-                label={project.department}
-                size="small"
-                color={getDepartmentColor(project.department)}
-              />
-            </div>
-          </MenuItem>
-        ))}
-      </Select>
-      {displayHelperText && <FormHelperText>{displayHelperText}</FormHelperText>}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={label}
+            required={required}
+            error={error}
+            helperText={displayHelperText}
+            InputProps={{
+              ...params.InputProps,
+              endAdornment: (
+                <>
+                  {isLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                  {params.InputProps.endAdornment}
+                </>
+              ),
+            }}
+          />
+        )}
+      />
       {!displayHelperText && projects.length === 0 && !isLoading && !isError && (
         <FormHelperText>ไม่พบโครงการที่สามารถเข้าถึงได้</FormHelperText>
       )}
-    </FormControl>
+    </Box>
   );
 };
 

@@ -4,21 +4,14 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { I18nextProvider } from 'react-i18next';
-import { ErrorBoundary } from '@/components/common';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { GlobalFeedback } from '@/components/common/GlobalFeedback';
 import { theme } from '@/theme';
 import i18n from '@/i18n/config';
 import '@/styles/globals.css';
 
 // Create React Query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-});
+import { queryClient } from '@/config/queryClient';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
@@ -28,6 +21,7 @@ export default function App({ Component, pageProps }: AppProps) {
           <ThemeProvider theme={theme}>
             <CssBaseline />
             <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
+              <GlobalFeedback />
               <Component {...pageProps} />
             </SnackbarProvider>
           </ThemeProvider>

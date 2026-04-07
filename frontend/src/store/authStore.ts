@@ -10,6 +10,7 @@ export interface User {
   id: string;
   username: string;
   name: string;
+  fullNameEn?: string;
   roleId: string;
   roleCode?: 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD'; // User role code (AM, FM, SE, OE, PE, PM, PD, MD, GOD)
   department: string;
@@ -40,7 +41,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true,
 
       // Actions
       setUser: (user) =>
@@ -73,6 +74,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           token: null,
           isAuthenticated: false,
+          isLoading: false,
         }),
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -92,6 +94,13 @@ export const useAuthStore = create<AuthState>()(
           };
         }
         return persistedState;
+      },
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          state?.setLoading(false);
+          return;
+        }
+        state?.setLoading(false);
       },
       partialize: (state) => ({
         user: state.user,

@@ -9,8 +9,13 @@ import { Router, Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { wagePeriodService } from '../../services/wage/WagePeriodService';
 import { AppError } from '../middleware/errorHandler';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 
 const router = Router();
+
+// All wage period routes require authentication
+router.use(authenticate);
 
 /**
  * GET /api/wage-periods
@@ -19,7 +24,7 @@ const router = Router();
 router.get(
   '/',
   [
-    query('projectId').optional().isString(),
+    query('projectCode').optional().isString(),
     query('status').optional().isIn(['draft', 'calculated', 'approved', 'paid', 'locked']),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
@@ -31,25 +36,41 @@ router.get(
         throw new AppError('Validation failed', 400);
       }
 
-      const { projectId, status } = req.query;
+      const { projectCode, status } = req.query;
+      let periodsData;
 
-      let periods;
-
-      if (projectId) {
-        periods = await wagePeriodService.getByProject(projectId as string);
+      if (projectCode) {
+        const items = await wagePeriodService.getByProject(projectCode as string);
+        periodsData = {
+          wagePeriods: items,
+          total: items.length,
+          page: 1,
+          pageSize: items.length || 50,
+        };
       } else if (status) {
-        periods = await wagePeriodService.getByStatus(status as any);
+        const items = await wagePeriodService.getByStatus(status as any);
+        periodsData = {
+          wagePeriods: items,
+          total: items.length,
+          page: 1,
+          pageSize: items.length || 50,
+        };
       } else {
         const result = await wagePeriodService.getAll({
           page: parseInt(req.query.page as string) || 1,
           pageSize: parseInt(req.query.pageSize as string) || 50,
         });
-        periods = result.items;
+        periodsData = {
+          wagePeriods: result.items,
+          total: result.total,
+          page: result.page,
+          pageSize: result.pageSize,
+        };
       }
 
       res.json({
         success: true,
-        data: periods,
+        data: periodsData,
       });
     } catch (error: any) {
       res.status(500).json({
@@ -92,10 +113,12 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post(
   '/',
   [
-    body('projectLocationId').notEmpty(),
+    body('projectCode').notEmpty(),
+    body('projectName').notEmpty(),
     body('startDate').isISO8601(),
     body('endDate').isISO8601(),
   ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -103,12 +126,15 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get createdBy from authenticated user
-      const createdBy = req.body.createdBy || 'system';
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       // Convert date strings to Date objects
       const input = {
-        projectLocationId: req.body.projectLocationId,
+        projectCode: req.body.projectCode,
+        projectName: req.body.projectName,
         startDate: new Date(req.body.startDate),
         endDate: new Date(req.body.endDate),
       };
@@ -133,76 +159,265 @@ router.post(
  * POST /api/wage-periods/:id/calculate
  * คำนวณค่าแรงสำหรับงวด
  */
-router.post('/:id/calculate', async (req: Request, res: Response) => {
-  try {
-    // TODO: Get calculatedBy from authenticated user
-    const calculatedBy = req.body.calculatedBy || 'system';
+router.post(
+  '/:id/calculate',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const calculatedBy = (req as AuthRequest).user?.id;
+      if (!calculatedBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
-    const period = await wagePeriodService.calculateWages(req.params.id, calculatedBy);
+      const period = await wagePeriodService.calculateWages(req.params.id, calculatedBy);
 
-    if (!period) {
-      throw new AppError('Wage period not found', 404);
+      if (!period) {
+        throw new AppError('Wage period not found', 404);
+      }
+
+      res.json({
+        success: true,
+        data: period,
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message,
+      });
     }
-
-    res.json({
-      success: true,
-      data: period,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: error.message,
-    });
   }
-});
+);
 
 /**
  * POST /api/wage-periods/:id/approve
  * อนุมัติงวดค่าแรง
  */
-router.post('/:id/approve', async (req: Request, res: Response) => {
-  try {
-    // TODO: Get approvedBy from authenticated user
-    const approvedBy = req.body.approvedBy || 'system';
+router.post(
+  '/:id/approve',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const approvedBy = (req as AuthRequest).user?.id;
+      if (!approvedBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
-    const period = await wagePeriodService.approvePeriod(req.params.id, approvedBy);
+      const period = await wagePeriodService.approvePeriod(req.params.id, approvedBy);
 
-    if (!period) {
-      throw new AppError('Wage period not found', 404);
+      if (!period) {
+        throw new AppError('Wage period not found', 404);
+      }
+
+      res.json({
+        success: true,
+        data: period,
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message,
+      });
     }
-
-    res.json({
-      success: true,
-      data: period,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: error.message,
-    });
   }
-});
+);
 
 /**
  * POST /api/wage-periods/:id/mark-paid
  * ทำเครื่องหมายว่าจ่ายแล้ว
  */
-router.post('/:id/mark-paid', async (req: Request, res: Response) => {
+router.post(
+  '/:id/mark-paid',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const paidBy = (req as AuthRequest).user?.id;
+      if (!paidBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
+
+      const period = await wagePeriodService.markAsPaid(req.params.id, paidBy);
+
+      if (!period) {
+        throw new AppError('Wage period not found', 404);
+      }
+
+      res.json({
+        success: true,
+        data: period,
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/wage-periods/:id/additional-income
+ * เพิ่มรายได้เพิ่มเติม
+ */
+router.post(
+  '/:id/additional-income',
+  [
+    body('dailyContractorId').notEmpty(),
+    body('incomeType').notEmpty(),
+    body('description').notEmpty(),
+    body('amount').isNumeric(),
+  ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Validation failed', 400);
+      }
+
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized', 401);
+      }
+
+      const { additionalIncomeService } = await import('../../services/wage/AdditionalIncomeService');
+      const item = await additionalIncomeService.create({
+        wagePeriodId: req.params.id,
+        dailyContractorId: req.body.dailyContractorId,
+        incomeType: req.body.incomeType,
+        description: req.body.description,
+        amount: Number(req.body.amount),
+        notes: req.body.notes,
+        createdAt: new Date(),
+        createdBy
+      });
+
+      res.status(201).json({
+        success: true,
+        data: item,
+        message: 'Additional income added. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /api/wage-periods/additional-income/:itemId
+ * ลบรายได้เพิ่มเติม
+ */
+router.delete(
+  '/additional-income/:itemId',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const { additionalIncomeService } = await import('../../services/wage/AdditionalIncomeService');
+      await additionalIncomeService.delete(req.params.itemId);
+
+      res.json({
+        success: true,
+        message: 'Additional income deleted. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wage-periods/:id/additional-expense
+ * เพิ่มรายจ่ายเพิ่มเติม
+ */
+router.post(
+  '/:id/additional-expense',
+  [
+    body('dailyContractorId').notEmpty(),
+    body('expenseType').notEmpty(),
+    body('description').notEmpty(),
+    body('amount').isNumeric(),
+  ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Validation failed', 400);
+      }
+
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized', 401);
+      }
+
+      const { additionalExpenseService } = await import('../../services/wage/AdditionalExpenseService');
+      const item = await additionalExpenseService.create({
+        wagePeriodId: req.params.id,
+        dailyContractorId: req.body.dailyContractorId,
+        expenseType: req.body.expenseType,
+        description: req.body.description,
+        amount: Number(req.body.amount),
+        notes: req.body.notes,
+        createdAt: new Date(),
+        createdBy
+      });
+
+      res.status(201).json({
+        success: true,
+        data: item,
+        message: 'Additional expense added. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /api/wage-periods/additional-expense/:itemId
+ * ลบรายจ่ายเพิ่มเติม
+ */
+router.delete(
+  '/additional-expense/:itemId',
+  authorize(['AM', 'PM', 'PD', 'MD']),
+  async (req: Request, res: Response) => {
+    try {
+      const { additionalExpenseService } = await import('../../services/wage/AdditionalExpenseService');
+      await additionalExpenseService.delete(req.params.itemId);
+
+      res.json({
+        success: true,
+        message: 'Additional expense deleted. Please re-calculate wage period.'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /api/wage-periods/:id
+ * ลบงวดค่าแรง (Soft Delete)
+ * [T-350] แก้ไขปัญหา 404 error เมื่อกดถังขยะ
+ */
+router.delete('/:id', async (req: any, res: Response) => {
   try {
-    // TODO: Get paidBy from authenticated user
-    const paidBy = req.body.paidBy || 'system';
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError('Unauthorized - Missing user context', 401);
+    }
 
-    const period = await wagePeriodService.markAsPaid(req.params.id, paidBy);
+    const success = await wagePeriodService.softDelete(req.params.id, userId);
 
-    if (!period) {
+    if (!success) {
       throw new AppError('Wage period not found', 404);
     }
 
     res.json({
       success: true,
-      data: period,
+      message: 'ลบงวดค่าแรงสำเร็จ',
     });
   } catch (error: any) {
     const statusCode = error.statusCode || 500;

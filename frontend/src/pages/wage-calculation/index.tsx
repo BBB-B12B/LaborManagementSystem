@@ -39,7 +39,6 @@ import {
   Download,
   Visibility,
   CheckCircle,
-  CloudUpload,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,16 +52,13 @@ import {
 import {
   wagePeriodCreateSchema,
   type WagePeriodCreateInput,
-  validate15DayPeriod,
 } from '../../validation/wageSchema';
-import { BackButton } from '../../components/common/BackButton';
+
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
-import ScanDataUploadDialog from '../scan-data-monitoring/components/ScanDataUploadDialog';
-import type { ImportResult } from '../../services/scanDataService';
 import { Layout, ProtectedRoute } from '@/components/layout';
 
 /**
@@ -83,7 +79,6 @@ export default function WageCalculationPage() {
   } = useDeleteConfirmDialog();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [calculatingId, setCalculatingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
 
@@ -139,18 +134,13 @@ export default function WageCalculationPage() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<WagePeriodCreateInput>({
     resolver: zodResolver(wagePeriodCreateSchema),
   });
 
   const startDate = watch('startDate');
-  const endDate = watch('endDate');
-
-  // Check if period is valid 15 days
-  const isValid15Days =
-    startDate && endDate ? validate15DayPeriod(startDate, endDate) : false;
-
   // Handlers
   const handleCreatePeriod = async (data: WagePeriodCreateInput) => {
     await createMutation.mutateAsync(data);
@@ -184,12 +174,7 @@ export default function WageCalculationPage() {
     });
   };
 
-  const handleUploadSuccess = (result: ImportResult) => {
-    showSuccess(
-      `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
-    );
-    // สามารถ refresh discrepancy data ได้ถ้ามี
-  };
+
 
   // Status color mapping
   const getStatusColor = (status: PeriodStatus) => {
@@ -235,12 +220,15 @@ export default function WageCalculationPage() {
       width: 130,
     },
     {
-      field: 'projectLocationId',
+      field: 'projectName',
       headerName: 'โครงการ',
-      width: 150,
+      width: 250,
       renderCell: (params: GridRenderCellParams) => {
-        // TODO: Map projectLocationId to project name
-        return params.value;
+        return (
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {params.value}
+          </Typography>
+        );
       },
     },
     {
@@ -369,7 +357,7 @@ export default function WageCalculationPage() {
 
     return (
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        <BackButton href="/management" />
+
 
         {/* Header */}
         <Box
@@ -384,17 +372,15 @@ export default function WageCalculationPage() {
             คำนวณค่าแรง
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<CloudUpload />}
-              onClick={() => setUploadDialogOpen(true)}
-            >
-              Upload ScanData
-            </Button>
+
             <Button
               variant="contained"
-              color="primary"
+              sx={{ 
+                backgroundColor: '#1976d2', // Blue color
+                '&:hover': {
+                  backgroundColor: '#115293',
+                }
+              }}
               startIcon={<Add />}
               onClick={() => setCreateDialogOpen(true)}
             >
@@ -442,16 +428,21 @@ export default function WageCalculationPage() {
                 {/* Project Selection */}
                 <Grid item xs={12}>
                   <Controller
-                    name="projectLocationId"
+                    name="projectCode"
                     control={control}
                     render={({ field }) => (
                       <ProjectSelect
                         value={field.value || ''}
-                        onChange={(value) =>
-                          field.onChange(Array.isArray(value) ? value[0] ?? '' : value)
-                        }
-                        error={!!errors.projectLocationId}
-                        helperText={errors.projectLocationId?.message}
+                        onChange={(value) => {
+                          field.onChange(value);
+                        }}
+                        onSelectProject={(project) => {
+                          if (project) {
+                            setValue('projectName', project.projectName);
+                          }
+                        }}
+                        error={!!errors.projectCode}
+                        helperText={errors.projectCode?.message || ''}
                         required
                       />
                     )}
@@ -496,27 +487,7 @@ export default function WageCalculationPage() {
                   />
                 </Grid>
 
-                {/* 15-Day Period Validation */}
-                {startDate && endDate && (
-                  <Grid item xs={12}>
-                    <Box
-                      sx={{
-                        p: 2,
-                        bgcolor: isValid15Days ? 'success.light' : 'error.light',
-                        borderRadius: 1,
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        color={isValid15Days ? 'success.dark' : 'error.dark'}
-                      >
-                        {isValid15Days
-                          ? '✓ งวดนี้เป็น 15 วันพอดี (ถูกต้อง)'
-                          : '✗ งวดค่าแรงต้องเป็น 15 วันพอดี (FR-WC-001)'}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
+
 
                 {/* Notes */}
                 <Grid item xs={12}>
@@ -538,12 +509,27 @@ export default function WageCalculationPage() {
               </Grid>
             </Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCreateDialogOpen(false)}>ยกเลิก</Button>
+          <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+            <Button
+              onClick={() => setCreateDialogOpen(false)}
+              variant="outlined"
+              color="error"
+              sx={{ borderRadius: '10px', px: 3 }}
+            >
+              ยกเลิก
+            </Button>
             <Button
               variant="contained"
+              color="success"
               onClick={handleSubmit(handleCreatePeriod)}
               disabled={createMutation.isPending}
+              sx={{
+                borderRadius: '10px',
+                px: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
             >
               {createMutation.isPending ? <CircularProgress size={20} /> : 'สร้างงวด'}
             </Button>
@@ -558,11 +544,6 @@ export default function WageCalculationPage() {
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
         <DeleteConfirmDialog />
-        <ScanDataUploadDialog
-          open={uploadDialogOpen}
-          onClose={() => setUploadDialogOpen(false)}
-          onSuccess={handleUploadSuccess}
-        />
       </Layout>
     </ProtectedRoute>
   );

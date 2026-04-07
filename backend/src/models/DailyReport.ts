@@ -1,31 +1,44 @@
 /**
- * DailyReport Model
- * รายงานประจำวัน
+ * DailyReport Model (Aggregated)
+ * รายงานประจำวัน (รวมตามวันและโครงการ)
  *
- * Description: Daily work records for contractors including regular hours and overtime tracking.
+ * Description: Aggregated daily work records per Project-Day.
  * Firestore Collection: dailyReports
+ * Document ID: REP_[projectId]_[YYYY-MM-DD]
  */
 
 export type WorkType = 'regular' | 'ot_morning' | 'ot_noon' | 'ot_evening';
 export type ReportStatus = 'draft' | 'submitted' | 'verified' | 'locked';
 
-export interface DailyReport {
-  id: string;
-  projectLocationId: string;
+export interface DailyReportEntry {
+  id: string; // UUID
   dailyContractorId: string;
+  employeeId?: string;
   taskName: string;
-  workDate: Date;
-  startTime: Date;
-  endTime: Date;
   workType: WorkType;
-  totalHours: number;
-  breakHours: number;
-  netHours: number;
-  isOvernight: boolean;
+  hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
   notes?: string;
-  fileAttachmentIds?: string[];
+  createdAt: Date;
+}
+
+export interface DailyReportSummary {
+  workerCount: number;         // จำนวนคน
+  totalNetHours: number;       // ชั่วโมงสุทธิรวม
+  regularHours: number;        // ชั่วโมงปกติรวม
+  otHours: number;             // ชั่วโมง OT ทุกประเภท
+  lastImportAt?: Date;         // วันที่นำเข้าล่าสุด
+}
+
+export interface DailyReport {
+  id: string; // REP_[projectId]_[YYYY-MM-DD]
+  projectLocationId: string;
+  date: Date; // YYYY-MM-DD 00:00:00
   status: ReportStatus;
-  isDeleted: boolean;
+  summary: DailyReportSummary; // [CACHE] ข้อมูลสรุปภาพรวม
+  notes?: string;
+  importFileUrls?: string[]; // URLs ของไฟล์ต้นฉบับ
+
+  // Metadata
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -33,52 +46,54 @@ export interface DailyReport {
   version: number;
 }
 
+export interface DailyWorkerReportLog {
+  action: 'import' | 'create' | 'update' | 'delete';
+  timestamp: Date;
+  userId: string;
+  details: string;
+}
+
+export interface DailyWorkerReport {
+  id: string; // dailyContractorId
+  dailyContractorId: string;
+  employeeId: string;
+  workerName: string;
+  
+  // [ALIGNMENT] ฟิลด์ที่สอดคล้องกับ ScanData ของทีม
+  regularHours: number;
+  otMorningHours: number;
+  otNoonHours: number;
+  otEveningHours: number;
+  totalNetHours: number;
+
+  entries: DailyReportEntry[]; // ข้อมูลดิบรายคน
+  editHistory: DailyWorkerReportLog[]; // ประวัติ Audit Log
+  updatedAt: Date;
+}
+
 export interface CreateDailyReportInput {
   projectLocationId: string;
-  dailyContractorId: string;
-  taskName: string;
-  workDate: Date;
-  startTime: Date;
-  endTime: Date;
-  workType: WorkType;
-  isOvernight?: boolean;
-  notes?: string;
-  fileAttachmentIds?: string[];
+  date: Date;
+  entries: DailyReportEntry[];
   status?: ReportStatus;
+  notes?: string;
 }
 
 export interface UpdateDailyReportInput {
-  projectLocationId?: string;
-  dailyContractorId?: string;
-  taskName?: string;
-  workDate?: Date;
-  startTime?: Date;
-  endTime?: Date;
-  workType?: WorkType;
-  isOvernight?: boolean;
-  notes?: string;
-  fileAttachmentIds?: string[];
+  entries?: DailyReportEntry[];
   status?: ReportStatus;
+  notes?: string;
 }
 
 /**
  * คำนวณจำนวนชั่วโมงทั้งหมด (รวมการปัดเศษลง 5 นาที)
- * Calculate total hours with 5-minute rounding down
  */
 export function calculateTotalHours(
   startTime: Date,
-  endTime: Date,
-  isOvernight: boolean
+  endTime: Date
 ): number {
-  let hours: number;
-  if (isOvernight) {
-    // เพิ่ม 24 ชั่วโมงสำหรับการทำงานข้ามวัน
-    const milliseconds = endTime.getTime() + 24 * 60 * 60 * 1000 - startTime.getTime();
-    hours = milliseconds / (1000 * 60 * 60);
-  } else {
-    const milliseconds = endTime.getTime() - startTime.getTime();
-    hours = milliseconds / (1000 * 60 * 60);
-  }
+  const milliseconds = endTime.getTime() - startTime.getTime();
+  const hours = milliseconds / (1000 * 60 * 60);
 
   // ปัดเศษลงเป็น 5 นาที (0.083 ชั่วโมง) ตาม FR-SD-006
   const minutes = Math.floor((hours * 60) / 5) * 5;
@@ -87,7 +102,6 @@ export function calculateTotalHours(
 
 /**
  * คำนวณชั่วโมงสุทธิ (หักพักเที่ยง)
- * Calculate net hours (minus break hours)
  */
 export function calculateNetHours(
   totalHours: number,
@@ -102,61 +116,50 @@ export function calculateNetHours(
     const startHour = startTime.getHours();
     const endHour = endTime.getHours();
 
-    if (startHour < 13 && endHour > 12) {
+    if (startHour <= 12 && endHour >= 13) {
       breakHours = 1.0; // พักเที่ยงมาตรฐาน
     }
   }
+
+  // Noon OT Constraints handled in Service/Frontend logic (Fixed 1hr)
 
   return Math.max(0, totalHours - breakHours);
 }
 
 /**
- * Firestore document converter for DailyReport
+ * Firestore document converter for DailyReport (Summary Cache)
  */
 export const dailyReportConverter = {
-  toFirestore: (report: Omit<DailyReport, 'id'>): any => {
-    return {
-      projectLocationId: report.projectLocationId,
-      dailyContractorId: report.dailyContractorId,
-      taskName: report.taskName,
-      workDate: report.workDate,
-      startTime: report.startTime,
-      endTime: report.endTime,
-      workType: report.workType,
-      totalHours: report.totalHours,
-      breakHours: report.breakHours,
-      netHours: report.netHours,
-      isOvernight: report.isOvernight,
-      notes: report.notes || null,
-      fileAttachmentIds: report.fileAttachmentIds || [],
-      status: report.status,
-      isDeleted: report.isDeleted,
-      createdAt: report.createdAt,
-      updatedAt: report.updatedAt,
-      createdBy: report.createdBy,
-      updatedBy: report.updatedBy,
-      version: report.version,
-    };
+  toFirestore: (report: Partial<DailyReport>): any => {
+    const data: any = {};
+    if (report.projectLocationId !== undefined) data.projectLocationId = report.projectLocationId;
+    if (report.date !== undefined) data.date = report.date;
+    if (report.summary !== undefined) data.summary = report.summary;
+    if (report.status !== undefined) data.status = report.status;
+    if (report.notes !== undefined) data.notes = report.notes;
+    if (report.importFileUrls !== undefined) data.importFileUrls = report.importFileUrls;
+    if (report.createdAt !== undefined) data.createdAt = report.createdAt;
+    if (report.updatedAt !== undefined) data.updatedAt = report.updatedAt;
+    if (report.createdBy !== undefined) data.createdBy = report.createdBy;
+    if (report.updatedBy !== undefined) data.updatedBy = report.updatedBy;
+    if (report.version !== undefined) data.version = report.version;
+    return data;
   },
   fromFirestore: (snapshot: any): DailyReport => {
     const data = snapshot.data();
     return {
       id: snapshot.id,
       projectLocationId: data.projectLocationId,
-      dailyContractorId: data.dailyContractorId,
-      taskName: data.taskName,
-      workDate: data.workDate.toDate(),
-      startTime: data.startTime.toDate(),
-      endTime: data.endTime.toDate(),
-      workType: data.workType,
-      totalHours: data.totalHours,
-      breakHours: data.breakHours,
-      netHours: data.netHours,
-      isOvernight: data.isOvernight || false,
-      notes: data.notes,
-      fileAttachmentIds: data.fileAttachmentIds || [],
+      date: data.date.toDate(),
+      summary: data.summary || {
+        workerCount: 0,
+        totalNetHours: 0,
+        regularHours: 0,
+        otHours: 0
+      },
       status: data.status,
-      isDeleted: data.isDeleted || false,
+      notes: data.notes,
+      importFileUrls: data.importFileUrls || [],
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
       createdBy: data.createdBy,

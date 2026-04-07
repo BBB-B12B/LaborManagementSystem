@@ -1,18 +1,16 @@
 /**
- * DC Form Component
- * ฟอร์มจัดการแรงงานรายวัน (Daily Contractor)
+ * DC Form Component (Refactored for T-240)
  *
  * Features:
- * - Create/Edit DC
- * - EmployeeNumber validation (unique, starts with "9" = social security exempt)
- * - Skill selection
- * - Multi-select authorized projects
- * - Contact and emergency information
- * - Authorization: FM, SE, PM, Admin (FR-DC-001)
+ * - Tabs: Personal Info vs Financial Info
+ * - Income Fields: Daily Wage, Professional, Phone, Other
+ * - Auto-calc: OT Rate = (Daily Wage / 8) * 1.5
+ * - Deduction Fields: Housing, Follower (Auto Fee), Appliances, Other
+ * - Auto-calc: Follower Fee = Count * 300
  */
 
-import React from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import React, { useState } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
@@ -28,8 +26,11 @@ import {
   Divider,
   Tooltip,
   Chip,
+  Tabs,
+  Tab,
+  InputAdornment,
 } from '@mui/material';
-import { Info } from '@mui/icons-material';
+import { Info, Person, AttachMoney } from '@mui/icons-material';
 import {
   dcCreateSchema,
   dcEditSchema,
@@ -41,54 +42,67 @@ import { SkillSelect } from '../../../components/forms/SkillSelect';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 
 export interface DCFormProps {
-  /**
-   * Initial form data (for edit mode)
-   */
   defaultValues?: Partial<DCEditInput>;
-
-  /**
-   * Callback when form is submitted successfully
-   */
   onSubmit: (data: DCCreateInput | DCEditInput) => Promise<void>;
-
-  /**
-   * Callback when cancel button is clicked
-   */
   onCancel: () => void;
-
-  /**
-   * Form mode
-   */
   mode: 'create' | 'edit';
-
-  /**
-   * Loading state
-   */
   isLoading?: boolean;
+  formId?: string;
 }
 
-/**
- * DCForm Component
- *
- * FR-DC-002: Required fields: employeeId, name, skillId
- * FR-DC-004: DC must be linked to authorized projects
- */
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`dc-tabpanel-${index}`}
+      aria-labelledby={`dc-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
 export function DCForm({
   defaultValues,
   onSubmit,
   onCancel,
   mode,
   isLoading = false,
+  formId,
 }: DCFormProps) {
   const [submitError, setSubmitError] = React.useState<string | null>(null);
+  const [tabValue, setTabValue] = useState(0);
 
-  // Use different schema based on mode
   const schema = mode === 'create' ? dcCreateSchema : dcEditSchema;
 
   const initialValues = React.useMemo(
     () => ({
       isActive: true,
       projectLocationIds: [],
+      dailyWageRate: ('' as any),
+      professionalRate: ('' as any),
+      phoneAllowance: ('' as any),
+      otherIncome: ('' as any),
+      housingFee: ('' as any),
+      followerCount: ('' as any),
+      refrigeratorFee: ('' as any),
+      soundSystemFee: ('' as any),
+      tvFee: ('' as any),
+      laundryFee: ('' as any),
+      airConFee: ('' as any),
+      otherDeduction: ('' as any),
+      mouDeductionRate: ('' as any),
+      nationality: 'ไทย',
       ...defaultValues,
     }),
     [defaultValues]
@@ -98,21 +112,23 @@ export function DCForm({
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<DCCreateInput | DCEditInput>({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
   });
 
+  // Watch fields for Auto-Calculation
+  const dailyWageRate = useWatch({ control, name: 'dailyWageRate' });
+  const followerCount = useWatch({ control, name: 'followerCount' });
+
+  // Auto-calculated values
+  const otHourlyRate = dailyWageRate ? (Number(dailyWageRate) / 8) * 1.5 : 0;
+  const followerFee = followerCount ? Number(followerCount) * 300 : 0;
+
   React.useEffect(() => {
     reset(initialValues);
   }, [initialValues, reset]);
-
-  const employeeIdValue = watch('employeeId');
-
-  // Check if employeeId starts with "9" (social security exempt)
-  const isSocialSecurityExempt = employeeIdValue?.startsWith('9');
 
   const handleFormSubmit = async (data: DCCreateInput | DCEditInput) => {
     try {
@@ -123,358 +139,453 @@ export function DCForm({
     }
   };
 
-  return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        {mode === 'create' ? 'สร้างแรงงานรายวันใหม่' : 'แก้ไขข้อมูลแรงงานรายวัน'}
-      </Typography>
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
 
+  return (
+    <Box>
       {submitError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {submitError}
         </Alert>
       )}
 
-      <Box component="form" onSubmit={handleSubmit(handleFormSubmit)} noValidate>
-        <Grid container spacing={3}>
-          {/* Basic Information Section */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              ข้อมูลพื้นฐาน
-            </Typography>
-          </Grid>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 1.5 }}>
+        <Tabs value={tabValue} onChange={handleTabChange} aria-label="DC Form Tabs" variant="fullWidth">
+          <Tab icon={<Person />} iconPosition="start" label="ข้อมูลส่วนตัว" sx={{ minHeight: 48 }} />
+          <Tab icon={<AttachMoney />} iconPosition="start" label="ข้อมูลการเงิน" sx={{ minHeight: 48 }} />
+        </Tabs>
+      </Box>
 
-          {/* Employee ID */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="employeeId"
-              control={control}
-              render={({ field }) => (
-                <Box>
+      <Box
+        component="form"
+        id={formId} // Add ID for external submit
+        onSubmit={handleSubmit(handleFormSubmit)}
+        noValidate
+        sx={{ px: 3, pb: 3 }} // Padding matches DialogContent
+      >
+        {/* Tab 1: Personal Information */}
+        <TabPanel value={tabValue} index={0}>
+          <Grid container spacing={1}> {/* Reduce spacing for compact look */}
+            {/* Employee ID */}
+            <Grid item xs={6}>
+              <Controller
+                name="employeeId"
+                control={control}
+                render={({ field }) => (
                   <TextField
                     {...field}
                     value={field.value ?? ''}
                     label="รหัสพนักงาน"
                     fullWidth
+                    size="small" // Compact Input
                     error={!!errors.employeeId}
-                    helperText={
-                      errors.employeeId?.message ||
-                      'ระบุเป็นตัวพิมพ์ใหญ่และตัวเลขเท่านั้น (เพิ่มภายหลังได้)'
-                    }
+                    helperText={errors.employeeId?.message}
                     disabled={isLoading || isSubmitting}
-                    inputProps={{
-                      style: { textTransform: 'uppercase' },
-                    }}
+                    inputProps={{ style: { textTransform: 'uppercase' } }}
                   />
-                  {isSocialSecurityExempt && (
-                    <Box sx={{ mt: 1 }}>
-                      <Chip
-                        icon={<Info />}
-                        label="ยกเว้นประกันสังคม (เริ่มต้นด้วย 9)"
-                        color="info"
-                        size="small"
-                      />
-                    </Box>
-                  )}
-                </Box>
-              )}
-            />
-          </Grid>
+                )}
+              />
+            </Grid>
 
-          {/* Name */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="name"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  label="ชื่อ-นามสกุล"
-                  fullWidth
-                  error={!!errors.name}
-                  helperText={errors.name?.message || 'เว้นว่างได้และกรอกในภายหลัง'}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    value={field.value ?? ''}
+                    label="ชื่อ-นามสกุล"
+                    fullWidth
+                    size="small"
+                    error={!!errors.name}
+                    helperText={errors.name?.message}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Skill */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="skillId"
-              control={control}
-              render={({ field }) => (
-                <SkillSelect
-                  value={field.value ?? null}
-                  onChange={field.onChange}
-                  error={!!errors.skillId}
-                  helperText={errors.skillId?.message || 'เลือกทักษะ หรือเว้นว่างไว้ชั่วคราว'}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="skillId"
+                control={control}
+                render={({ field }) => (
+                  <SkillSelect
+                    value={field.value ?? null}
+                    onChange={field.onChange}
+                    error={!!errors.skillId}
+                    helperText={errors.skillId?.message}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          <Grid item xs={12}>
-            <Divider sx={{ my: 2 }} />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="startDate"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    label="วันที่เริ่มงาน"
+                    value={field.value ?? null}
+                    onChange={field.onChange}
+                    error={!!errors.startDate}
+                    helperText={errors.startDate?.message}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Contact Information Section */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              ข้อมูลติดต่อ
-            </Typography>
-          </Grid>
+            <Grid item xs={12}>
+              <Controller
+                name="projectLocationIds"
+                control={control}
+                render={({ field }) => (
+                  <ProjectSelect
+                    multiple
+                    value={Array.isArray(field.value) ? field.value : []}
+                    onChange={field.onChange}
+                    error={!!errors.projectLocationIds}
+                    helperText={errors.projectLocationIds?.message}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Phone Number */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="phoneNumber"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="เบอร์โทรศัพท์"
-                  fullWidth
-                  error={!!errors.phoneNumber}
-                  helperText={errors.phoneNumber?.message || 'รูปแบบ: 08X-XXX-XXXX'}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
+            <Grid item xs={12}>
+              <Controller
+                name="isActive"
+                control={control}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={<Switch checked={field.value} onChange={field.onChange} disabled={isLoading || isSubmitting} size="small" />}
+                    label="ใช้งาน (Active)"
+                  />
+                )}
+              />
+            </Grid>
           </Grid>
+        </TabPanel>
 
-          {/* ID Card Number */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="idCardNumber"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="เลขบัตรประชาชน"
-                  fullWidth
-                  error={!!errors.idCardNumber}
-                  helperText={errors.idCardNumber?.message || '13 หลัก'}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+        {/* Tab 2: Financial Information */}
+        <TabPanel value={tabValue} index={1}>
+          <Grid container spacing={1}>
+            {/* Income Section */}
+            <Grid item xs={12}>
+              <Box sx={{ bgcolor: '#e3f2fd', p: 1, borderRadius: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#1565c0' }}>
+                  รายได้ (Income)
+                </Typography>
+              </Box>
+            </Grid>
 
-          {/* Address */}
-          <Grid item xs={12}>
-            <Controller
-              name="address"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="ที่อยู่"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  error={!!errors.address}
-                  helperText={errors.address?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="dailyWageRate"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="1. ค่าแรงต่อวัน"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Emergency Contact */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="emergencyContact"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="ชื่อผู้ติดต่อฉุกเฉิน"
-                  fullWidth
-                  error={!!errors.emergencyContact}
-                  helperText={errors.emergencyContact?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <TextField
+                label="2. ค่าแรง OT (Auto)"
+                value={otHourlyRate.toFixed(2)}
+                fullWidth
+                size="small"
+                variant="outlined" // Use outlined for consistency
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">฿/ชม.</InputAdornment>,
+                  readOnly: true
+                }}
+                sx={{ bgcolor: '#F5F5F5', '& .MuiInputBase-input': { cursor: 'not-allowed' } }}
+              />
+            </Grid>
 
-          {/* Emergency Phone */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="emergencyPhone"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value || ''}
-                  label="เบอร์ติดต่อฉุกเฉิน"
-                  fullWidth
-                  error={!!errors.emergencyPhone}
-                  helperText={errors.emergencyPhone?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="professionalRate"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="3. ค่าวิชาชีพ"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          <Grid item xs={12}>
-            <Divider sx={{ my: 2 }} />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="phoneAllowance"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="4. ค่าโทรศัพท์"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Employment Section */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              ข้อมูลการจ้างงาน
-            </Typography>
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="otherIncome"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="5. อื่นๆ"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Start Date */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="startDate"
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label="วันที่เริ่มงาน"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={!!errors.startDate}
-                  helperText={errors.startDate?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6} />
 
-          {/* End Date */}
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="endDate"
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label="วันที่สิ้นสุดการจ้าง"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={!!errors.endDate}
-                  helperText={errors.endDate?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            {/* Deduction Section */}
+            <Grid item xs={12}>
+              <Box sx={{ bgcolor: '#ffebee', p: 1, borderRadius: 1, mt: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#c62828' }}>
+                  รายการหัก (Deductions)
+                </Typography>
+              </Box>
+            </Grid>
 
-          <Grid item xs={12}>
-            <Divider sx={{ my: 2 }} />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="housingFee"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="1. ค่าห้องพัก"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Project Access Section */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              โครงการที่สามารถทำงาน
-              <Tooltip title="เลือกโครงการที่แรงงานรายวันสามารถเข้าทำงานได้">
-                <Info fontSize="small" sx={{ ml: 1, verticalAlign: 'middle' }} />
-              </Tooltip>
-            </Typography>
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="followerCount"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="2. ผู้ติดตาม (คน)"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">คน</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Accessible Projects */}
-          <Grid item xs={12}>
-            <Controller
-              name="projectLocationIds"
-              control={control}
-              render={({ field }) => (
-                <ProjectSelect
-                  multiple
-                  value={
-                    Array.isArray(field.value)
-                      ? field.value
-                      : field.value
-                      ? [field.value]
-                      : []
-                  }
-                  onChange={(value) =>
-                    field.onChange(
-                      Array.isArray(value)
-                        ? value
-                        : value
-                        ? [value]
-                        : []
-                    )
-                  }
-                  error={!!errors.projectLocationIds}
-                  helperText={
-                    errors.projectLocationIds?.message ||
-                    'เลือกโครงการที่แรงงานสามารถเข้าทำงานได้ (เพิ่มภายหลังได้)'
-                  }
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <TextField
+                label="หักค่าผู้ติดตาม (Auto)"
+                value={followerFee.toFixed(0)}
+                fullWidth
+                size="small"
+                variant="outlined" // Use outlined for consistency
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">฿</InputAdornment>,
+                  readOnly: true
+                }}
+                sx={{ bgcolor: '#F5F5F5', '& .MuiInputBase-input': { cursor: 'not-allowed' } }}
+              />
+            </Grid>
 
-          <Grid item xs={12}>
-            <Divider sx={{ my: 2 }} />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="refrigeratorFee"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="3. ค่าตู้เย็น"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Status Section */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              สถานะ
-            </Typography>
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="soundSystemFee"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="4. ค่าเครื่องเสียง"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Active Status */}
-          <Grid item xs={12}>
-            <Controller
-              name="isActive"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={field.value}
-                      onChange={field.onChange}
-                      disabled={isLoading || isSubmitting}
-                    />
-                  }
-                  label="ใช้งาน (Active)"
-                />
-              )}
-            />
-          </Grid>
+            <Grid item xs={6}>
+              <Controller
+                name="tvFee"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="5. ค่าทีวี"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
 
-          {/* Form Actions */}
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                disabled={isLoading || isSubmitting}
-                startIcon={isSubmitting && <CircularProgress size={20} />}
-              >
-                {mode === 'create' ? 'สร้างแรงงานรายวัน' : 'บันทึกการแก้ไข'}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={onCancel}
-                disabled={isLoading || isSubmitting}
-              >
-                ยกเลิก
-              </Button>
-            </Box>
+            <Grid item xs={6}>
+              <Controller
+                name="laundryFee"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="6. ค่าเครื่องซักผ้า"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <Controller
+                name="airConFee"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="7. ค่าแอร์เคลื่อนที่"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <Controller
+                name="otherDeduction"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="8. ค่าอื่นๆ"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Controller
+                name="nationality"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    value={field.value ?? ''}
+                    label="สัญชาติ"
+                    fullWidth
+                    size="small"
+                    helperText={(errors as any).nationality?.message}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
           </Grid>
-        </Grid>
+        </TabPanel>
       </Box>
-    </Paper>
+    </Box>
   );
 }

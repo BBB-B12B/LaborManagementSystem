@@ -8,6 +8,16 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
+const shouldUseEmulators = (() => {
+  const flag = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED;
+
+  if (typeof flag === 'string') {
+    return flag.trim().toLowerCase() === 'true';
+  }
+
+  return process.env.NODE_ENV === 'development';
+})();
+
 // Initialize Firebase
 let app: FirebaseApp;
 let auth: Auth;
@@ -18,24 +28,22 @@ if (!getApps().length) {
   auth = getAuth(app);
   db = getFirestore(app);
 
-  // Connect to emulators in development
-  if (
-    process.env.NODE_ENV === 'development' &&
-    process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST
-  ) {
-    const emulatorHost = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST;
-    const firestoreHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST;
+  if (shouldUseEmulators) {
+    const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST || 'localhost:9099';
+    const firestoreEmulatorHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
 
-    // Auth emulator
-    if (emulatorHost && !auth.emulatorConfig) {
-      const [host, port] = emulatorHost.split(':');
+    const authWithMeta = auth as unknown as { emulatorConfig?: unknown };
+    if (!authWithMeta.emulatorConfig) {
+      const [host, portString] = authEmulatorHost.split(':');
+      const port = Number(portString) || 9099;
       connectAuthEmulator(auth, `http://${host}:${port}`);
     }
 
-    // Firestore emulator
-    if (firestoreHost && !(db as any)._settings.host) {
-      const [host, port] = firestoreHost.split(':');
-      connectFirestoreEmulator(db, host, parseInt(port));
+    const firestoreSettings = db as unknown as { _settings?: { host?: string } };
+    if (!firestoreSettings._settings?.host) {
+      const [host, portString] = firestoreEmulatorHost.split(':');
+      const port = Number(portString) || 8080;
+      connectFirestoreEmulator(db, host, port);
     }
   }
 } else {

@@ -30,7 +30,6 @@ import {
   Edit,
   Delete,
   Search,
-  MonetizationOn,
   FileDownload,
   CloudUpload,
 } from '@mui/icons-material';
@@ -42,15 +41,14 @@ import {
   type DCFilterOptions,
   type DCImportSummary,
 } from '../../services/dcService';
-import { BackButton } from '../../components/common/BackButton';
+
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import { SkillSelect } from '../../components/forms/SkillSelect';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { DCDrawer } from './components/DCDrawer';
-import { DCCompensationDrawer } from './components/DCCompensationDrawer';
+import { DCModal } from './components/DCModal';
 import { DCImportDialog } from './components/DCImportDialog';
 import type { DCCreateInput, DCEditInput } from '@/validation/dcSchema';
 import { getSkills } from '@/services/skillService';
@@ -77,16 +75,11 @@ const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: 
     username: toStringOrEmpty(payload.username as string | null | undefined),
     password: toStringOrEmpty(payload.password as string | null | undefined),
     skillId: toStringOrEmpty(payload.skillId),
-    phoneNumber: toStringOrEmpty(payload.phoneNumber as string | null | undefined),
-    idCardNumber: toStringOrEmpty(payload.idCardNumber as string | null | undefined),
-    address: toStringOrEmpty(payload.address as string | null | undefined),
-    emergencyContact: toStringOrEmpty(payload.emergencyContact as string | null | undefined),
-    emergencyPhone: toStringOrEmpty(payload.emergencyPhone as string | null | undefined),
+
     projectLocationIds: Array.isArray(payload.projectLocationIds)
       ? payload.projectLocationIds.filter(Boolean)
       : [],
     startDate: toIsoOrEmpty(payload.startDate as Date | string | null | undefined) as any,
-    endDate: toIsoOrEmpty(payload.endDate as Date | string | null | undefined) as any,
     isActive: payload.isActive ?? true,
   };
 };
@@ -113,15 +106,14 @@ export default function DCManagementPage() {
     projectLocationId: '',
     isActive: undefined,
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
   const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<DCEditInput> | undefined>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
-  const [compensationDrawerOpen, setCompensationDrawerOpen] = useState(false);
-  const [selectedContractor, setSelectedContractor] = useState<DailyContractor | null>(null);
+
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<DCImportSummary | null>(null);
 
@@ -160,22 +152,12 @@ export default function DCManagementPage() {
     setFilters((prev) => ({ ...prev, search: value, page: 1 }));
   };
 
-  const handleSkillChange = (skillId: string) => {
-    setFilters((prev) => ({ ...prev, skillId, page: 1 }));
+  const handleSkillChange = (skillId: string | null) => {
+    setFilters((prev) => ({ ...prev, skillId: skillId || '', page: 1 }));
   };
 
   const handleProjectChange = (projectLocationId: string) => {
     setFilters((prev) => ({ ...prev, projectLocationId, page: 1 }));
-  };
-
-  const handleOpenCompensation = (contractor: DailyContractor) => {
-    setSelectedContractor(contractor);
-    setCompensationDrawerOpen(true);
-  };
-
-  const handleCloseCompensation = () => {
-    setCompensationDrawerOpen(false);
-    setSelectedContractor(null);
   };
 
   const handleOpenImport = () => {
@@ -259,7 +241,6 @@ export default function DCManagementPage() {
       setDrawerInitialValues({
         ...detail,
         startDate: detail.startDate ? new Date(detail.startDate) : undefined,
-        endDate: detail.endDate ? new Date(detail.endDate) : undefined,
         projectLocationIds: detail.projectLocationIds || [],
       });
     } catch (error: any) {
@@ -331,12 +312,7 @@ export default function DCManagementPage() {
         return <Chip label={label} size="small" />;
       },
     },
-    {
-      field: 'phoneNumber',
-      headerName: 'เบอร์โทร',
-      width: 130,
-      renderCell: (params: GridRenderCellParams) => params.value || '-',
-    },
+
     {
       field: 'projectLocationIds',
       headerName: 'จำนวนโครงการ',
@@ -371,25 +347,6 @@ export default function DCManagementPage() {
       filterable: false,
       renderCell: (params: GridRenderCellParams) => (
         <Box>
-          <Tooltip
-            title={
-              (params.row as DailyContractor).hasCompensation
-                ? 'ตั้งค่าแล้ว - คลิกเพื่อแก้ไข'
-                : 'ยังไม่ได้ตั้งค่าค่าแรง'
-            }
-          >
-            <IconButton
-              size="small"
-              onClick={() => handleOpenCompensation(params.row as DailyContractor)}
-              sx={{
-                color: (params.row as DailyContractor).hasCompensation
-                  ? 'error.main'
-                  : 'text.disabled',
-              }}
-            >
-              <MonetizationOn fontSize="small" />
-            </IconButton>
-          </Tooltip>
           <Tooltip title="แก้ไข">
             <IconButton
               size="small"
@@ -415,13 +372,13 @@ export default function DCManagementPage() {
 
   const importErrorMessage = importMutation.isError
     ? (importMutation.error as any)?.response?.data?.error ||
-      (importMutation.error as Error)?.message ||
-      'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน'
+    (importMutation.error as Error)?.message ||
+    'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน'
     : null;
 
   const pageContent = (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <BackButton href="/management" />
+
       {/* Header */}
       <Box
         sx={{
@@ -455,7 +412,7 @@ export default function DCManagementPage() {
           </Button>
           <Button
             variant="contained"
-            color="primary"
+            color="info"
             startIcon={<Add />}
             onClick={handleCreateDC}
           >
@@ -491,7 +448,6 @@ export default function DCManagementPage() {
               value={filters.skillId || ''}
               onChange={handleSkillChange}
               label="กรองทักษะ"
-              showAll
             />
           </Grid>
 
@@ -504,7 +460,6 @@ export default function DCManagementPage() {
                 handleProjectChange(selected || '');
               }}
               label="กรองโครงการ"
-              showAll
             />
           </Grid>
 
@@ -542,7 +497,7 @@ export default function DCManagementPage() {
             columns={columns}
             pagination
             page={(filters.page || 1) - 1}
-            pageSize={filters.pageSize || 25}
+            pageSize={filters.pageSize || 10}
             rowsPerPageOptions={[10, 25, 50, 100]}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
@@ -565,21 +520,14 @@ export default function DCManagementPage() {
 
       <DeleteConfirmDialog />
 
-      <DCDrawer
+      <DCModal
         title={drawerMode === 'create' ? 'สร้างแรงงานรายวันใหม่' : 'แก้ไขแรงงานรายวัน'}
-        key={drawerMode === 'edit' ? editingId ?? 'edit' : 'create'}
         open={drawerOpen}
         onClose={handleCloseDrawer}
         mode={drawerMode}
         defaultValues={drawerInitialValues}
-        loading={drawerLoading}
-        isLoading={drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending}
+        isLoading={(drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending) || drawerLoading}
         onSubmit={handleDrawerSubmit}
-      />
-      <DCCompensationDrawer
-        open={compensationDrawerOpen}
-        contractor={selectedContractor}
-        onClose={handleCloseCompensation}
       />
       <DCImportDialog
         open={importDialogOpen}

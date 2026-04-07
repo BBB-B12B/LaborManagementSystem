@@ -76,16 +76,30 @@ export const UserImportDialog: React.FC<UserImportDialogProps> = ({
           </Box>
         )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={isLoading}>
-          ปิด
+      <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          color="error"
+          disabled={isLoading}
+          sx={{ borderRadius: '10px', px: 3 }}
+        >
+          ยกเลิก
         </Button>
         <Button
           variant="contained"
+          color="success"
           onClick={handleSubmit}
           disabled={!selectedFile || isLoading}
+          sx={{
+            borderRadius: '10px',
+            px: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            textTransform: 'none',
+            fontWeight: 600,
+          }}
         >
-          {isLoading ? 'กำลังนำเข้า...' : 'นำเข้า'}
+          {isLoading ? 'กำลังนำเข้า...' : 'นำเข้าข้อมูล'}
         </Button>
       </DialogActions>
     </Dialog>

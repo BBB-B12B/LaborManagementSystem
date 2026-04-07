@@ -81,6 +81,10 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${rootEnv['FIREBASE_MEASUREMENT_ID'] || ''}
   // Convert container hostnames to localhost for frontend (browser access)
   const firestoreEmulatorBrowser = firestoreEmulator.replace('firebase-emulator:', 'localhost:');
   const authEmulatorBrowser = authEmulator.replace('firebase-emulator:', 'localhost:');
+  const emulatorEnabled =
+    rootEnv['NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED'] ??
+    rootEnv['FIREBASE_EMULATOR_ENABLED'] ??
+    '';
 
   frontendContent += `# ============================================
 # Firebase Emulator (Development Only)
@@ -88,6 +92,7 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${rootEnv['FIREBASE_MEASUREMENT_ID'] || ''}
 # Frontend runs in browser, so it needs localhost instead of container names
 NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=${firestoreEmulatorBrowser}
 NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=${authEmulatorBrowser}
+NEXT_PUBLIC_FIREBASE_EMULATOR_ENABLED=${emulatorEnabled}
 
 `;
 

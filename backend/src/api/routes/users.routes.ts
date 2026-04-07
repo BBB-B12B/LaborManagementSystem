@@ -12,6 +12,8 @@ import { userService } from '../../services/auth/UserService';
 import { CreateUserInput } from '../../models/User';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authorize } from '../middleware/authorize';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -19,6 +21,10 @@ const upload = multer({
 });
 
 const normalizeKey = (value: string): string => value.trim().toLowerCase();
+
+const router = Router();
+router.use(authenticate);
+router.use(authorize(['AM']));
 
 function parseCsv(content: string): string[][] {
   const rows: string[][] = [];
@@ -106,9 +112,6 @@ const toProjectIds = (value: string): string[] => {
     .map((item) => item.trim())
     .filter(Boolean);
 };
-
-const router = Router();
-
 /**
  * GET /api/users
  * ดึงรายการผู้ใช้ทั้งหมด (พร้อม pagination)
@@ -123,6 +126,9 @@ router.get(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        logger.error('User create validation failed', {
+          errors: errors.array(),
+        });
         throw new AppError('Validation failed', 400);
       }
 
@@ -183,11 +189,15 @@ router.post(
   '/',
   [
     body('username').notEmpty().withMessage('Username is required'),
-    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('password')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters')
+      .matches(/^[A-Za-z0-9]+$/)
+      .withMessage('Password must contain only letters and numbers'),
     body('name').notEmpty().withMessage('Name is required'),
     body('employeeId').notEmpty().withMessage('Employee ID is required'),
     body('roleId').notEmpty().withMessage('Role ID is required'),
-    body('department').isIn(['PD01', 'PD02', 'PD03', 'PD04', 'PD05']).withMessage('Invalid department'),
+    body('department').isIn(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH']).withMessage('Invalid department'),
     body('projectLocationIds').isArray().withMessage('Project location IDs must be an array'),
     body('startDate').notEmpty().withMessage('Start date is required'),
     body('startDate').isISO8601().withMessage('Start date must be a valid ISO8601 date'),
@@ -203,8 +213,10 @@ router.post(
         throw new AppError('Validation failed', 400);
       }
 
-      // TODO: Get createdBy from authenticated user
-      const createdBy = req.body.createdBy || 'system';
+      const createdBy = (req as AuthRequest).user?.id;
+      if (!createdBy) {
+        throw new AppError('Unauthorized - Missing user context', 401);
+      }
 
       const startDate = new Date(req.body.startDate);
       if (Number.isNaN(startDate.getTime())) {
@@ -309,7 +321,7 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
         logger.warn('User import skipped: invalid role', { rowNumber, employeeId, roleId });
         continue;
       }
-      if (!['PD01', 'PD02', 'PD03', 'PD04', 'PD05'].includes(department)) {
+      if (!['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'].includes(department)) {
         summary.failed += 1;
         logger.warn('User import skipped: invalid department', { rowNumber, employeeId, department });
         continue;
@@ -369,8 +381,10 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
  */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    // TODO: Get updatedBy from authenticated user
-    const updatedBy = req.body.updatedBy || 'system';
+    const updatedBy = (req as AuthRequest).user?.id;
+    if (!updatedBy) {
+      throw new AppError('Unauthorized - Missing user context', 401);
+    }
 
     const user = await userService.updateUser(req.params.id, req.body, updatedBy);
 

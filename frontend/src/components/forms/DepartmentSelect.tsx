@@ -1,9 +1,5 @@
-/**
+﻿/**
  * Department Select Component
- * คอมโพเนนต์เลือกสังกัด
- *
- * Dropdown for selecting departments (PD01-PD05)
- * Used in Project and User management
  */
 
 import React from 'react';
@@ -14,18 +10,16 @@ import {
   MenuItem,
   FormHelperText,
   SelectChangeEvent,
-  Chip,
 } from '@mui/material';
 
 export interface Department {
   code: string;
-  name: string;
-  color: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
+  label: string;
 }
 
 export interface DepartmentSelectProps {
   label?: string;
-  value: string | null; // Department code (PD01, PD02, etc.)
+  value: string | null;
   onChange: (departmentCode: string | null) => void;
   error?: boolean;
   helperText?: string;
@@ -36,41 +30,18 @@ export interface DepartmentSelectProps {
 }
 
 /**
- * Predefined departments (PD01-PD05)
+ * Departments list (matches Project form dropdown)
  */
 export const DEPARTMENTS: Department[] = [
-  {
-    code: 'PD01',
-    name: 'สังกัด 1',
-    color: 'primary',
-  },
-  {
-    code: 'PD02',
-    name: 'สังกัด 2',
-    color: 'secondary',
-  },
-  {
-    code: 'PD03',
-    name: 'สังกัด 3',
-    color: 'success',
-  },
-  {
-    code: 'PD04',
-    name: 'สังกัด 4',
-    color: 'warning',
-  },
-  {
-    code: 'PD05',
-    name: 'สังกัด 5',
-    color: 'error',
-  },
+  { code: 'PD01', label: 'PD-01' },
+  { code: 'PD02', label: 'PD-02' },
+  { code: 'PD03', label: 'PD-03' },
+  { code: 'PD04', label: 'PD-04' },
+  { code: 'PD05', label: 'PD-05' },
+  { code: 'HO', label: 'HO' },
+  { code: 'WH', label: 'WH' },
 ];
 
-/**
- * Department Select component
- * - Shows 5 predefined departments
- * - Color-coded for easy identification
- */
 export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
   label = 'สังกัด',
   value,
@@ -82,9 +53,6 @@ export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
   fullWidth = true,
   size = 'medium',
 }) => {
-  /**
-   * Handle selection change
-   */
   const handleChange = (event: SelectChangeEvent<string>) => {
     const selectedCode = event.target.value;
     onChange(selectedCode || null);
@@ -99,24 +67,13 @@ export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
       required={required}
     >
       <InputLabel>{label}</InputLabel>
-      <Select
-        value={value || ''}
-        onChange={handleChange}
-        label={label}
-      >
+      <Select value={value || ''} onChange={handleChange} label={label}>
         <MenuItem value="">
           <em>-- เลือกสังกัด --</em>
         </MenuItem>
         {DEPARTMENTS.map((dept) => (
           <MenuItem key={dept.code} value={dept.code}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-              <span style={{ flex: 1 }}>{dept.name}</span>
-              <Chip
-                label={dept.code}
-                size="small"
-                color={dept.color}
-              />
-            </div>
+            {dept.label}
           </MenuItem>
         ))}
       </Select>
@@ -125,27 +82,13 @@ export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
   );
 };
 
-/**
- * Get department by code
- */
 export const getDepartmentByCode = (code: string): Department | undefined => {
   return DEPARTMENTS.find((dept) => dept.code === code);
 };
 
-/**
- * Get department name by code
- */
 export const getDepartmentName = (code: string): string => {
   const dept = getDepartmentByCode(code);
-  return dept ? dept.name : code;
-};
-
-/**
- * Get department color by code
- */
-export const getDepartmentColor = (code: string): Department['color'] => {
-  const dept = getDepartmentByCode(code);
-  return dept ? dept.color : 'primary';
+  return dept ? dept.label : code;
 };
 
 export default DepartmentSelect;

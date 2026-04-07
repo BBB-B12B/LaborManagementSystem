@@ -19,7 +19,7 @@ export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | '
 
 export interface User {
   id: string;
-  employeeId: string;
+  employeeId?: string;
   username: string;
   name: string;
   roleId: string;
@@ -116,6 +116,16 @@ export class Permissions {
   static canUploadScanData(role?: UserRole): boolean {
     if (role === 'GOD') return true;
     return role === 'AM';
+  }
+
+  /**
+   * Check if user can access Social Security Rules management
+   * Allowed: Admin, MD
+   */
+  static canAccessSSOManagement(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
+    if (!role) return false;
+    return ['AM', 'MD'].includes(role);
   }
 
   /**
@@ -280,6 +290,7 @@ export function usePermissions(user: User | null | undefined) {
     canAccessWageCalculation: Permissions.canAccessWageCalculation(role),
     canUploadScanData: Permissions.canUploadScanData(role),
     canAccessScanDataMonitoring: Permissions.canAccessScanDataMonitoring(role),
+    canAccessSSOManagement: Permissions.canAccessSSOManagement(role),
     canAccessAllProjects: Permissions.canAccessAllProjects(role),
     isDepartmentRestricted: Permissions.isDepartmentRestricted(role),
     canAccessProject: (projectId: string) =>

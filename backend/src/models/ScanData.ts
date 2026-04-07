@@ -1,166 +1,128 @@
 /**
- * ScanData Model
- * ข้อมูลสแกนนิ้ว
+ * ScanData Model (Daily Aggregation)
+ * ข้อมูลสแกนนิ้วแบบรายวัน (1 คน 1 วัน 1 เอกสาร)
  *
- * Description: Fingerprint scan records for tracking DC attendance and work hours.
+ * Description: Aggregated fingerprint scan records for a specific employee on a specific date.
  * Firestore Collection: scanData
+ * Document ID Format: SCAN_[employeeId]_[workDate] (e.g., SCAN_200247_2025-10-21)
  */
 
-export type ScanBehavior =
-  | 'ot_morning' // 05:00-08:00
-  | 'regular_in' // 08:00-17:00 (เข้างาน)
-  | 'lunch_out' // 12:00-13:00 (ออกพักเที่ยง)
-  | 'lunch_in' // 12:00-13:00 (กลับจากพักเที่ยง)
-  | 'regular_out' // 08:00-17:00 (เลิกงาน)
-  | 'ot_noon' // 12:00-13:00 (OT เที่ยง)
-  | 'ot_evening'; // 17:00-22:00
-
 export interface ScanData {
-  id: string;
-  dailyContractorId: string;
+  id: string; // SCAN_[employeeId]_[workDate]
   employeeId: string;
-  employeeNumber?: string;
+  employeeNumber?: string; // Cache for display
   projectLocationId: string;
-  scanDateTime: Date;
-  scanBehavior: ScanBehavior;
-  workDate: Date; // วันที่ทำงานจริง (อาจต่างจาก scanDateTime ถ้าข้ามวัน)
-  roundedTime: Date; // ปัดเศษลง 5 นาที
-  isLate: boolean; // มาสายหรือไม่ (>08:00)
-  lateMinutes: number; // จำนวนนาทีที่มาสาย
-  matchedDailyReportId?: string; // Link to matched DailyReport
-  hasDiscrepancy: boolean; // มีความผิดปกติหรือไม่
-  notes?: string;
+  workDate: string; // YYYY-MM-DD
+
+  // Aggregated Punches
+  punches: string[]; // ["07:42", "12:00", "13:00", "17:05"] (Sorted HH:mm)
+  firstIn: string; // "07:42" (From punches[0])
+  lastOut: string; // "17:05" (From punches[length-1])
+
+  // Status Flags
+  isDeleted: boolean; // Soft Delete
+  deletedAt?: Date;
+  deletedBy?: string;
+
+  // Metadata
   createdAt: Date;
+  updatedAt: Date;
   importedAt: Date;
   importedBy: string;
-  importBatchId: string;
+  importBatchId?: string;
   importSource?: string;
   importNote?: string;
+
+  // Legacy / Compatibility (Optional)
+  notes?: string;
   rawData?: Record<string, unknown>;
 }
 
 export interface CreateScanDataInput {
-  dailyContractorId: string;
+  dailyContractorId?: string; // Deprecated but might be needed for lookup
   employeeId: string;
   projectLocationId: string;
-  scanDateTime: Date;
+  scanDateTime: Date; // Used to derive workDate and punch time
   importNote?: string;
 }
 
 /**
- * ปัดเศษเวลาลง 5 นาที
- * Round time down to nearest 5 minutes
+ * Format Date to YYYY-MM-DD
  */
-export function roundDownToFiveMinutes(date: Date): Date {
-  const minutes = date.getMinutes();
-  const roundedMinutes = Math.floor(minutes / 5) * 5;
-  const rounded = new Date(date);
-  rounded.setMinutes(roundedMinutes);
-  rounded.setSeconds(0);
-  rounded.setMilliseconds(0);
-  return rounded;
+export function formatWorkDate(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /**
- * จำแนกพฤติกรรมการสแกน
- * Classify scan behavior based on time
+ * Format Date to HH:mm
  */
-export function classifyScanBehavior(scanTime: Date): ScanBehavior {
-  const hour = scanTime.getHours();
-  const minute = scanTime.getMinutes();
-  const timeInMinutes = hour * 60 + minute;
-
-  // OT เช้า: 05:00-08:00
-  if (timeInMinutes >= 5 * 60 && timeInMinutes < 8 * 60) {
-    return 'ot_morning';
-  }
-
-  // พักเที่ยง: 12:00-13:00
-  if (timeInMinutes >= 12 * 60 && timeInMinutes < 13 * 60) {
-    return 'ot_noon'; // Or could be lunch_out/lunch_in based on context
-  }
-
-  // OT เย็น: 17:00-22:00
-  if (timeInMinutes >= 17 * 60 && timeInMinutes < 22 * 60) {
-    return 'ot_evening';
-  }
-
-  // เวลาปกติ: 08:00-17:00
-  if (timeInMinutes >= 8 * 60 && timeInMinutes < 17 * 60) {
-    return timeInMinutes < 12 * 60 ? 'regular_in' : 'regular_out';
-  }
-
-  // Default
-  return 'regular_in';
+export function formatPunchTime(date: Date): string {
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 /**
- * ตรวจสอบการมาสาย
+ * Generate Document ID
  */
-export function checkLate(scanTime: Date): { isLate: boolean; lateMinutes: number } {
-  const hour = scanTime.getHours();
-  const minute = scanTime.getMinutes();
-  const scanMinutes = hour * 60 + minute;
-  const workStartMinutes = 8 * 60; // 08:00
-
-  const isLate = scanMinutes > workStartMinutes;
-  const lateMinutes = isLate ? scanMinutes - workStartMinutes : 0;
-
-  return { isLate, lateMinutes };
+export function generateScanDocId(employeeId: string, workDate: string): string {
+  return `SCAN_${employeeId}_${workDate}`;
 }
 
 /**
  * Firestore document converter for ScanData
  */
 export const scanDataConverter = {
-  toFirestore: (scan: Omit<ScanData, 'id'>): any => {
+  toFirestore: (data: Omit<ScanData, 'id'>): any => {
     return {
-      dailyContractorId: scan.dailyContractorId,
-      employeeId: scan.employeeId,
-      projectLocationId: scan.projectLocationId,
-      scanDateTime: scan.scanDateTime,
-      scanBehavior: scan.scanBehavior,
-      workDate: scan.workDate,
-      roundedTime: scan.roundedTime,
-      isLate: scan.isLate,
-      lateMinutes: scan.lateMinutes,
-      matchedDailyReportId: scan.matchedDailyReportId || null,
-      hasDiscrepancy: scan.hasDiscrepancy,
-      notes: scan.notes || null,
-      createdAt: scan.createdAt,
-      importedAt: scan.importedAt,
-      importedBy: scan.importedBy,
-      importBatchId: scan.importBatchId,
-      importSource: scan.importSource || null,
-      importNote: scan.importNote || null,
-      employeeNumber: scan.employeeNumber || scan.employeeId,
-      rawData: scan.rawData || null,
+      employeeId: data.employeeId,
+      employeeNumber: data.employeeNumber || null,
+      projectLocationId: data.projectLocationId,
+      workDate: data.workDate,
+      punches: data.punches,
+      firstIn: data.firstIn,
+      lastOut: data.lastOut,
+      isDeleted: data.isDeleted,
+      deletedAt: data.deletedAt || null,
+      deletedBy: data.deletedBy || null,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      importedAt: data.importedAt,
+      importedBy: data.importedBy,
+      importBatchId: data.importBatchId || null,
+      importSource: data.importSource || null,
+      importNote: data.importNote || null,
+      notes: data.notes || null,
+      rawData: data.rawData || null,
     };
   },
   fromFirestore: (snapshot: any): ScanData => {
     const data = snapshot.data();
     return {
       id: snapshot.id,
-      dailyContractorId: data.dailyContractorId,
       employeeId: data.employeeId,
-      employeeNumber: data.employeeNumber || data.employeeId,
+      employeeNumber: data.employeeNumber,
       projectLocationId: data.projectLocationId,
-      scanDateTime: data.scanDateTime.toDate(),
-      scanBehavior: data.scanBehavior,
-      workDate: data.workDate.toDate(),
-      roundedTime: data.roundedTime.toDate(),
-      isLate: data.isLate || false,
-      lateMinutes: data.lateMinutes || 0,
-      matchedDailyReportId: data.matchedDailyReportId,
-      hasDiscrepancy: data.hasDiscrepancy || false,
-      notes: data.notes,
-      createdAt: data.createdAt.toDate(),
-      importedAt: data.importedAt.toDate(),
+      workDate: data.workDate,
+      punches: data.punches || [],
+      firstIn: data.firstIn || '',
+      lastOut: data.lastOut || '',
+      isDeleted: data.isDeleted || false,
+      deletedAt: data.deletedAt?.toDate(),
+      deletedBy: data.deletedBy,
+      createdAt: data.createdAt?.toDate(),
+      updatedAt: data.updatedAt?.toDate(),
+      importedAt: data.importedAt?.toDate(),
       importedBy: data.importedBy,
       importBatchId: data.importBatchId,
-      importSource: data.importSource || undefined,
-      importNote: data.importNote || undefined,
-      rawData: data.rawData || undefined,
+      importSource: data.importSource,
+      importNote: data.importNote,
+      notes: data.notes,
+      rawData: data.rawData,
     };
   },
 };
+

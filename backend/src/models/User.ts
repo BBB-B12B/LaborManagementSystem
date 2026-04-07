@@ -6,7 +6,7 @@
  * Firestore Collection: users
  */
 
-export type Department = 'PD01' | 'PD02' | 'PD03' | 'PD04' | 'PD05';
+export type Department = 'PD01' | 'PD02' | 'PD03' | 'PD04' | 'PD05' | 'HO' | 'WH';
 
 export interface User {
   id: string;

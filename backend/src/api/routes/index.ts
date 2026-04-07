@@ -15,6 +15,7 @@ import skillRoutes from './skills.routes';
 import dailyContractorRoutes from './dailyContractors.routes';
 import wagePeriodRoutes from './wagePeriods.routes';
 import scanDataRoutes from './scanData.routes';
+import socialSecurityRulesRoutes from './socialSecurityRules.routes';
 
 const router = Router();
 
@@ -44,5 +45,8 @@ router.use('/wage-periods', wagePeriodRoutes);
 
 // Scan Data routes
 router.use('/scan-data', scanDataRoutes);
+
+// Social Security Rules routes
+router.use('/social-security-rules', socialSecurityRulesRoutes);
 
 export default router;

@@ -25,12 +25,17 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import HistoryIcon from '@mui/icons-material/History';
 import { GridActionsCellItem, GridColDef } from '@mui/x-data-grid';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { BackButton, DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
+import { DataGrid, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { ProjectSelect, DatePicker, DCAutoComplete } from '@/components/forms';
 import { dailyReportService } from '@/services/dailyReportService';
 import { overtimeService } from '@/services/overtimeService';
 import { formatDate, formatTime } from '@/utils/dateUtils';
 import { getOTPeriodLabel, type OTPeriod } from '@/validation/overtimeSchema';
+import DailyReportUploadDialog from './components/DailyReportUploadDialog';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+
+// Fix for MUI X DataGrid v5 type mismatch
+const GridActionsCellItemAny = GridActionsCellItem as any;
 
 type WorkType = 'regular' | 'ot_morning' | 'ot_noon' | 'ot_evening';
 
@@ -64,6 +69,31 @@ const otChipColors: Record<OTPeriod, 'warning' | 'info' | 'error'> = {
   evening: 'error',
 };
 
+const renderWorkTypeChip = (record: WorkRecordRow) => {
+  if (record.type === 'ot') {
+    const period = record.otPeriod || 'morning';
+    return (
+      <Chip
+        label={`OT (${getOTPeriodLabel(period)})`}
+        size="small"
+        color={otChipColors[period]}
+      />
+    );
+  }
+
+  const label = record.workType ? workTypeLabels[record.workType] : 'Regular Work';
+  const color: 'default' | 'success' =
+    record.workType && record.workType !== 'regular' ? 'success' : 'default';
+
+  return (
+    <Chip
+      label={label}
+      size="small"
+      color={color}
+    />
+  );
+};
+
 export default function WorkRecordsPage() {
   const router = useRouter();
   const toast = useToast();
@@ -79,6 +109,7 @@ export default function WorkRecordsPage() {
   const [dcFilter, setDCFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'regular' | 'ot'>('all');
   const [periodFilter, setPeriodFilter] = useState<OTPeriod | ''>('');
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   useEffect(() => {
     const queryView = Array.isArray(router.query.view)
@@ -111,18 +142,18 @@ export default function WorkRecordsPage() {
       const [regularReports, overtimeRecords] = await Promise.all([
         shouldFetchRegular
           ? dailyReportService.getAll({
-              projectId: projectFilter || undefined,
-              date: dateFilter || undefined,
-              dcId: dcFilter || undefined,
-            })
+            projectId: projectFilter || undefined,
+            date: dateFilter || undefined,
+            dcId: dcFilter || undefined,
+          })
           : Promise.resolve([]),
         shouldFetchOT
           ? overtimeService.getAll({
-              projectId: projectFilter || undefined,
-              date: dateFilter || undefined,
-              dcId: dcFilter || undefined,
-              otPeriod: periodFilter || undefined,
-            })
+            projectId: projectFilter || undefined,
+            date: dateFilter || undefined,
+            dcId: dcFilter || undefined,
+            otPeriod: periodFilter || undefined,
+          })
           : Promise.resolve([]),
       ]);
 
@@ -241,33 +272,6 @@ export default function WorkRecordsPage() {
     setTypeFilter('all');
   };
 
-  const typeColumnRenderer = useMemo(() => {
-    return (record: WorkRecordRow) => {
-      if (record.type === 'ot') {
-        const period = record.otPeriod || 'morning';
-        return (
-          <Chip
-            label={`OT (${getOTPeriodLabel(period)})`}
-            size="small"
-            color={otChipColors[period]}
-          />
-        );
-      }
-
-      const label = record.workType ? workTypeLabels[record.workType] : 'เวลาปกติ';
-      const color: 'default' | 'success' =
-        record.workType && record.workType !== 'regular' ? 'success' : 'default';
-
-      return (
-        <Chip
-          label={label}
-          size="small"
-          color={color}
-        />
-      );
-    };
-  }, []);
-
   const columns: GridColDef<WorkRecordRow>[] = [
     {
       field: 'reportDate',
@@ -280,7 +284,7 @@ export default function WorkRecordsPage() {
       headerName: 'ประเภท',
       width: 150,
       sortable: false,
-      renderCell: (params) => typeColumnRenderer(params.row),
+      renderCell: (params) => renderWorkTypeChip(params.row),
     },
     {
       field: 'projectName',
@@ -339,22 +343,22 @@ export default function WorkRecordsPage() {
       type: 'actions',
       headerName: 'การดำเนินการ',
       width: 140,
-      getActions: (params) => [
-        <GridActionsCellItem
+      getActions: (params: any) => [
+        <GridActionsCellItemAny
           key="edit"
           icon={<EditIcon />}
           label="แก้ไข"
           onClick={() => handleEdit(params.row)}
           showInMenu={false}
         />,
-        <GridActionsCellItem
+        <GridActionsCellItemAny
           key="history"
           icon={<HistoryIcon />}
           label="ประวัติการแก้ไข"
           onClick={() => handleViewHistory(params.row)}
           showInMenu
         />,
-        <GridActionsCellItem
+        <GridActionsCellItemAny
           key="delete"
           icon={<DeleteIcon />}
           label="ลบ"
@@ -362,7 +366,7 @@ export default function WorkRecordsPage() {
           showInMenu
         />,
       ],
-    },
+    } as any,
   ];
 
   const loadingMessage = 'กำลังโหลดรายการบันทึกการทำงาน...';
@@ -381,7 +385,7 @@ export default function WorkRecordsPage() {
     <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
       <Layout>
         <Container maxWidth="xl" sx={{ py: 4 }}>
-          <BackButton href="/dashboard" />
+
 
           <Box
             sx={{
@@ -392,13 +396,23 @@ export default function WorkRecordsPage() {
             }}
           >
             <Typography variant="h4">บันทึกการทำงานรายวัน</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleCreate}
-            >
-              เพิ่มการ์ดงาน
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                color="success"
+                startIcon={<FileUploadIcon />}
+                onClick={() => setIsImportModalOpen(true)}
+              >
+                นำเข้า Excel
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreate}
+              >
+                เพิ่มการ์ดงาน
+              </Button>
+            </Box>
           </Box>
 
           <Paper sx={{ p: 2, mb: 3 }}>
@@ -442,8 +456,8 @@ export default function WorkRecordsPage() {
                           value === 'ot'
                             ? { view: 'ot' }
                             : value === 'regular'
-                            ? { view: 'regular' }
-                            : {},
+                              ? { view: 'regular' }
+                              : {},
                       },
                       undefined,
                       { shallow: true }
@@ -494,9 +508,9 @@ export default function WorkRecordsPage() {
               columns={columns}
               loading={isLoading}
               autoHeight
-              pageSizeOptions={[10, 25, 50, 100]}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              pageSize={10}
               initialState={{
-                pagination: { paginationModel: { pageSize: 25 } },
                 sorting: {
                   sortModel: [{ field: 'reportDate', sort: 'desc' }],
                 },
@@ -511,6 +525,15 @@ export default function WorkRecordsPage() {
           </Paper>
 
           <DeleteConfirmDialog />
+          
+          <DailyReportUploadDialog
+            open={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['work-records'] });
+                setIsImportModalOpen(false);
+            }}
+          />
         </Container>
       </Layout>
     </ProtectedRoute>

@@ -1,90 +1,73 @@
 /**
- * Daily Report Routes
- * เส้นทาง API สำหรับรายงานการทำงานรายวัน
- *
- * All routes require authentication
- * Some routes require specific roles (SE, OE, PE, PM, PD, AM)
+ * Daily Report Routes (Aggregated)
+ * เส้นทาง API สำหรับรายงานการทำงานรายวัน (แบบรวม)
  */
 
 import { Router } from 'express';
 import {
-  getAllReports,
-  getReportById,
-  createReport,
-  updateReport,
-  deleteReport,
-  getReportHistory,
-  checkOverlap,
+  addWorkEntry,
+  removeWorkEntry,
+  getByProjectAndDate,
+  getByProjectAndMonth,
+  importExcel,
+  bulkCreate,
+  downloadTemplate
 } from '../../controllers/dailyReportController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
-/**
- * All routes require authentication
- */
 router.use(authenticate);
 
-/**
- * GET /api/daily-reports
- * Get all daily reports with filters
- * All authenticated users can view
- */
-router.get('/', getAllReports);
-
-/**
- * GET /api/daily-reports/:id
- * Get a single daily report
- * All authenticated users can view
- */
-router.get('/:id', getReportById);
-
-/**
- * POST /api/daily-reports
- * Create a new daily report
- * Requires: SE, OE, PE, PM, PD, AM roles
- */
+/** Add/Update Work Entry */
 router.post(
-  '/',
+  '/entry',
   authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
-  createReport
+  addWorkEntry
 );
 
-/**
- * PUT /api/daily-reports/:id
- * Update an existing daily report
- * Requires: SE, OE, PE, PM, PD, AM roles
- */
-router.put(
-  '/:id',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
-  updateReport
-);
-
-/**
- * DELETE /api/daily-reports/:id
- * Delete a daily report
- * Requires: PM, PD, AM roles (higher privileges)
- */
+/** Remove Work Entry */
 router.delete(
-  '/:id',
-  authorize(['PM', 'PD', 'AM']),
-  deleteReport
+  '/project/:projectId/date/:date/worker/:workerId/entry/:entryId',
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  removeWorkEntry
 );
 
-/**
- * GET /api/daily-reports/:id/history
- * Get edit history for a daily report
- * All authenticated users can view
- */
-router.get('/:id/history', getReportHistory);
+/** Get Report by Date */
+router.get(
+  '/project/:projectId/date/:date',
+  getByProjectAndDate
+);
 
-/**
- * POST /api/daily-reports/check-overlap
- * Check if time range overlaps with existing reports
- * All authenticated users can check
- */
-router.post('/check-overlap', checkOverlap);
+/** Get Reports by Month */
+router.get(
+  '/project/:projectId/month/:year/:month',
+  getByProjectAndMonth
+);
+
+/** Download Excel Template */
+router.get(
+  '/template',
+  downloadTemplate
+);
+
+/** Import Excel (Preview Mode) */
+router.post(
+  '/import-excel',
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  upload.single('file'),
+  importExcel
+);
+
+/** Bulk Create (Commit Mode) */
+router.post(
+  '/bulk-create',
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  bulkCreate
+);
 
 export default router;

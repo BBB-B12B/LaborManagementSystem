@@ -77,33 +77,8 @@ export const dcCreateSchema = z
     // Skill
     skillId: optionalText(1, 100),
 
-    // Contact Info
-    phoneNumber: optionalThaiPhone,
-
-    idCardNumber: optionalThaiIdCard,
-
-    address: optionalString
-      .refine(
-        (val) => !val || val.length <= 500,
-        {
-          message: errorMessages.maxLength(500),
-        }
-      ),
-
-    emergencyContact: optionalString
-      .refine(
-        (val) => !val || val.length >= 2,
-        {
-          message: errorMessages.minLength(2),
-        }
-      ),
-
-    emergencyPhone: optionalThaiPhone,
-
     // Employment
     startDate: optionalDate,
-
-    endDate: optionalDate,
 
     // Project Access
     projectLocationIds: z.preprocess(
@@ -119,20 +94,25 @@ export const dcCreateSchema = z
 
     // Status
     isActive: baseBoolean.default(true),
+
+    // T-230: New Wage Fields
+    dailyWageRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแรงรายวัน').default(0)),
+    professionalRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าวิชาชีพ').default(0)),
+    phoneAllowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าโทรศัพท์').default(0)),
+    mouDeductionRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าหัก MOU').default(0)),
+    nationality: z.string().default('ไทย'),
+
+    // T-240: Detailed Financial Fields
+    otherIncome: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('รายได้อื่นๆ').default(0)),
+    housingFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าห้องพัก').default(0)),
+    followerCount: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('จำนวนผู้ติดตาม').int().default(0)),
+    refrigeratorFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าตู้เย็น').default(0)),
+    soundSystemFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าเครื่องเสียง').default(0)),
+    tvFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าทีวี').default(0)),
+    laundryFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าเครื่องซักผ้า').default(0)),
+    airConFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแอร์เคลื่อนที่').default(0)),
+    otherDeduction: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าอื่นๆ').default(0)),
   })
-  .refine(
-    (data) => {
-      // If both dates are provided, end date must be after start date
-      if (data.startDate && data.endDate) {
-        return validateDateRange(data.startDate, data.endDate);
-      }
-      return true;
-    },
-    {
-      message: errorMessages.endDateBeforeStart,
-      path: ['endDate'],
-    }
-  )
   .refine(
     (data) => {
       // If username is provided, password must also be provided
@@ -166,27 +146,8 @@ export const dcEditSchema = z
     // Skill
     skillId: optionalText(1, 100),
 
-    // Contact Info
-    phoneNumber: optionalThaiPhone,
-
-    idCardNumber: optionalThaiIdCard,
-
-    address: optionalString
-      .refine(
-        (val) => !val || val.length <= 500,
-        {
-          message: errorMessages.maxLength(500),
-        }
-      ),
-
-    emergencyContact: optionalString,
-
-    emergencyPhone: optionalThaiPhone,
-
     // Employment
     startDate: optionalDate,
-
-    endDate: optionalDate,
 
     // Project Access
     projectLocationIds: z.preprocess(
@@ -202,20 +163,25 @@ export const dcEditSchema = z
 
     // Status
     isActive: baseBoolean.optional(),
-  })
-  .refine(
-    (data) => {
-      // If both dates are provided, end date must be after start date
-      if (data.startDate && data.endDate) {
-        return validateDateRange(data.startDate, data.endDate);
-      }
-      return true;
-    },
-    {
-      message: errorMessages.endDateBeforeStart,
-      path: ['endDate'],
-    }
-  );
+
+    // T-230: New Wage Fields
+    dailyWageRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแรงรายวัน').optional()),
+    professionalRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าวิชาชีพ').optional()),
+    phoneAllowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าโทรศัพท์').optional()),
+    mouDeductionRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าหัก MOU').optional()),
+    nationality: z.string().optional(),
+
+    // T-240: Detailed Financial Fields
+    otherIncome: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('รายได้อื่นๆ').optional()),
+    housingFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าห้องพัก').optional()),
+    followerCount: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('จำนวนผู้ติดตาม').int().optional()),
+    refrigeratorFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าตู้เย็น').optional()),
+    soundSystemFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าเครื่องเสียง').optional()),
+    tvFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าทีวี').optional()),
+    laundryFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าเครื่องซักผ้า').optional()),
+    airConFee: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแอร์เคลื่อนที่').optional()),
+    otherDeduction: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าอื่นๆ').optional()),
+  });
 
 /**
  * DC Income Details schema

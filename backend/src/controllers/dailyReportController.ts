@@ -1,248 +1,206 @@
 /**
- * Daily Report Controller
- * จัดการ HTTP requests สำหรับรายงานการทำงานรายวัน
+ * Daily Report Controller (Aggregated)
+ * จัดการ HTTP requests สำหรับรายงานการทำงานรายวัน (แบบรวม)
  *
  * Endpoints:
- * - GET /api/daily-reports - Get all reports with filters
- * - GET /api/daily-reports/:id - Get single report
- * - POST /api/daily-reports - Create new report
- * - PUT /api/daily-reports/:id - Update report
- * - DELETE /api/daily-reports/:id - Delete report
- * - GET /api/daily-reports/:id/history - Get edit history
- * - POST /api/daily-reports/check-overlap - Check time overlap
+ * - POST /api/daily-reports/entry - Add/Update work entry
+ * - DELETE /api/daily-reports/project/:projectId/date/:date/entry/:entryId - Remove work entry
+ * - GET /api/daily-reports/project/:projectId/date/:date - Get report by day
+ * - GET /api/daily-reports/project/:projectId/month/:year/:month - Get reports by month
  */
 
 import { Request, Response } from 'express';
-import {
-  createDailyReport,
-  updateDailyReport,
-  deleteDailyReport,
-  getDailyReportById,
-  getAllDailyReports,
-  getDailyReportHistory,
-  checkTimeOverlap,
-} from '../services/dailyReportService';
+import { dailyReportService } from '../services/dailyReport/DailyReportService';
+import * as XLSX from 'xlsx';
+import { DAILY_REPORT_COLUMNS } from '../utils/dailyReportExcel';
+import { storage } from '../config/storage';
+import { logger } from '../utils/logger';
 
 /**
- * GET /api/daily-reports
- *
- * Get all daily reports with optional filters
- *
- * Query params:
- * - projectId: Filter by project
- * - date: Filter by specific date
- * - dcId: Filter by DC
- * - startDate: Filter by date range start
- * - endDate: Filter by date range end
- * - workType: Filter by work type
+ * POST /api/daily-reports/entry
+ * Add or Update a Work Entry
  */
-export async function getAllReports(req: Request, res: Response): Promise<Response> {
+export async function addWorkEntry(req: Request, res: Response): Promise<Response> {
   try {
-    const filters: any = {};
-
-    if (req.query.projectId) filters.projectId = req.query.projectId as string;
-    if (req.query.date) filters.date = new Date(req.query.date as string);
-    if (req.query.dcId) filters.dcId = req.query.dcId as string;
-    if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
-    if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
-    if (req.query.workType) filters.workType = req.query.workType as string;
-
-    const reports = await getAllDailyReports(filters);
-
-    return res.status(200).json(reports);
-  } catch (error) {
-    console.error('Error fetching daily reports:', error);
-    return res.status(500).json({
-      error: 'เกิดข้อผิดพลาดในการดึงข้อมูล',
-      message: (error as Error).message,
-    });
-  }
-}
-
-/**
- * GET /api/daily-reports/:id
- *
- * Get a single daily report by ID
- */
-export async function getReportById(req: Request, res: Response): Promise<Response> {
-  try {
-    const { id } = req.params;
-
-    const report = await getDailyReportById(id);
-
-    return res.status(200).json(report);
-  } catch (error) {
-    console.error('Error fetching daily report:', error);
-    return res.status(404).json({
-      error: 'ไม่พบรายงานการทำงาน',
-      message: (error as Error).message,
-    });
-  }
-}
-
-/**
- * POST /api/daily-reports
- *
- * Create a new daily report
- *
- * Body:
- * - projectLocationId: string
- * - reportDate: Date
- * - dailyContractorIds: string[] (supports multi-select)
- * - workDescription: string
- * - startTime: string (HH:mm)
- * - endTime: string (HH:mm)
- * - workHours: number
- * - totalWage: number
- * - workType: 'regular' | 'ot_morning' | 'ot_noon' | 'ot_evening'
- * - isOvernight: boolean
- * - notes?: string
- * - imageUrls?: string[]
- */
-export async function createReport(req: Request, res: Response): Promise<Response> {
-  try {
-    const userId = (req as any).user?.uid; // From auth middleware
-
-    if (!userId) {
-      return res.status(401).json({ error: 'ไม่ได้รับอนุญาต' });
-    }
-
-    const data = {
-      ...req.body,
-      reportDate: new Date(req.body.reportDate),
-    };
-
-    const report = await createDailyReport(data, userId);
-
-    return res.status(201).json(report);
-  } catch (error) {
-    console.error('Error creating daily report:', error);
-    return res.status(400).json({
-      error: 'เกิดข้อผิดพลาดในการสร้างรายงาน',
-      message: (error as Error).message,
-    });
-  }
-}
-
-/**
- * PUT /api/daily-reports/:id
- *
- * Update an existing daily report
- *
- * Body: Partial DailyReportData
- */
-export async function updateReport(req: Request, res: Response): Promise<Response> {
-  try {
-    const { id } = req.params;
+    const { projectId, date, entry } = req.body;
     const userId = (req as any).user?.uid;
 
-    if (!userId) {
-      return res.status(401).json({ error: 'ไม่ได้รับอนุญาต' });
+    if (!projectId || !date || !entry) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const data = {
-      ...req.body,
-      reportDate: req.body.reportDate ? new Date(req.body.reportDate) : undefined,
-    };
-
-    // Remove undefined values
-    Object.keys(data).forEach((key) => {
-      if (data[key] === undefined) {
-        delete data[key];
-      }
-    });
-
-    const report = await updateDailyReport(id, data, userId);
+    const report = await dailyReportService.addWorkEntry(
+      projectId,
+      new Date(date),
+      {
+        ...entry,
+        startTime: new Date(entry.startTime),
+        endTime: new Date(entry.endTime)
+      },
+      userId
+    );
 
     return res.status(200).json(report);
   } catch (error) {
-    console.error('Error updating daily report:', error);
-    return res.status(400).json({
-      error: 'เกิดข้อผิดพลาดในการอัปเดทรายงาน',
-      message: (error as Error).message,
-    });
+    console.error('Error adding work entry:', error);
+    return res.status(500).json({ error: (error as Error).message });
   }
 }
 
 /**
- * DELETE /api/daily-reports/:id
- *
- * Delete a daily report
+ * DELETE /api/daily-reports/project/:projectId/date/:date/worker/:workerId/entry/:entryId
+ * Remove a Work Entry
  */
-export async function deleteReport(req: Request, res: Response): Promise<Response> {
+export async function removeWorkEntry(req: Request, res: Response): Promise<Response> {
   try {
-    const { id } = req.params;
+    const { projectId, date, workerId, entryId } = req.params;
+    const userId = (req as any).user?.uid;
 
-    await deleteDailyReport(id);
+    await dailyReportService.removeWorkEntry(
+      projectId,
+      new Date(date),
+      workerId,
+      entryId,
+      userId
+    );
 
     return res.status(204).send();
   } catch (error) {
-    console.error('Error deleting daily report:', error);
-    return res.status(400).json({
-      error: 'เกิดข้อผิดพลาดในการลบรายงาน',
-      message: (error as Error).message,
-    });
+    console.error('Error removing work entry:', error);
+    return res.status(500).json({ error: (error as Error).message });
   }
 }
 
 /**
- * GET /api/daily-reports/:id/history
- *
- * Get edit history for a daily report
+ * GET /api/daily-reports/project/:projectId/date/:date
+ * Get Daily Report by Project and Date
  */
-export async function getReportHistory(req: Request, res: Response): Promise<Response> {
+export async function getByProjectAndDate(req: Request, res: Response): Promise<Response> {
   try {
-    const { id } = req.params;
-
-    const history = await getDailyReportHistory(id);
-
-    return res.status(200).json(history);
+    const { projectId, date } = req.params;
+    const report = await dailyReportService.getByProjectAndDate(projectId, new Date(date));
+    return res.status(200).json(report);
   } catch (error) {
-    console.error('Error fetching edit history:', error);
-    return res.status(500).json({
-      error: 'เกิดข้อผิดพลาดในการดึงประวัติการแก้ไข',
-      message: (error as Error).message,
-    });
+    console.error('Error fetching report:', error);
+    return res.status(500).json({ error: (error as Error).message });
   }
 }
 
 /**
- * POST /api/daily-reports/check-overlap
- *
- * Check if time range overlaps with existing reports
- *
- * Body:
- * - dcId: string
- * - date: Date
- * - startTime: string (HH:mm)
- * - endTime: string (HH:mm)
- * - excludeReportId?: string
+ * GET /api/daily-reports/project/:projectId/month/:year/:month
+ * Get Daily Reports by Month
  */
-export async function checkOverlap(req: Request, res: Response): Promise<Response> {
+export async function getByProjectAndMonth(req: Request, res: Response): Promise<Response> {
   try {
-    const { dcId, date, startTime, endTime, excludeReportId } = req.body;
-
-    if (!dcId || !date || !startTime || !endTime) {
-      return res.status(400).json({
-        error: 'ข้อมูลไม่ครบถ้วน',
-        message: 'กรุณาระบุ dcId, date, startTime, endTime',
-      });
+    const { projectId, year, month } = req.params;
+    const reports = await dailyReportService.getByProjectAndMonth(
+      projectId,
+      parseInt(year),
+      parseInt(month)
+    );
+    return res.status(200).json(reports);
+  } catch (error) {
+    console.error('Error fetching monthly reports:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+/**
+ * POST /api/daily-reports/import-excel
+ * Parse Excel file and return preview
+ */
+export async function importExcel(req: Request, res: Response): Promise<Response> {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const result = await checkTimeOverlap(
-      dcId,
-      new Date(date),
-      startTime,
-      endTime,
-      excludeReportId
-    );
+    const buffer = req.file.buffer;
+    const preview = await dailyReportService.parseDailyReportExcel(buffer);
 
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('Error checking time overlap:', error);
-    return res.status(500).json({
-      error: 'เกิดข้อผิดพลาดในการตรวจสอบเวลาทับซ้อน',
-      message: (error as Error).message,
+    // T-371-5: Upload the original file for audit trail
+    let importFileUrl = null;
+    try {
+      importFileUrl = await storage.uploadBuffer(
+        buffer,
+        'daily-reports/imports',
+        req.file.originalname,
+        req.file.mimetype
+      );
+    } catch (error) {
+      logger.error('Failed to upload import source file', { error });
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      data: preview,
+      importFileUrl 
     });
+  } catch (error) {
+    console.error('Error importing Excel:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+/**
+ * POST /api/daily-reports/bulk-create
+ * Save many work entries at once
+ */
+export async function bulkCreate(req: Request, res: Response): Promise<Response> {
+  try {
+    const { data, importFileUrl } = req.body;
+    const userId = (req as any).user?.uid;
+
+    if (!data || !Array.isArray(data)) {
+      return res.status(400).json({ error: 'Invalid data format' });
+    }
+
+    const count = await dailyReportService.bulkCreateDailyReports(data, userId, importFileUrl);
+    return res.status(200).json({ success: true, count });
+  } catch (error) {
+    console.error('Error bulk creating reports:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+/**
+ * GET /api/daily-reports/template
+ * Download Excel Template (v2)
+ */
+export async function downloadTemplate(_req: Request, res: Response): Promise<void> {
+  try {
+    const headers = [
+      DAILY_REPORT_COLUMNS.DATE,
+      DAILY_REPORT_COLUMNS.EMPLOYEE_ID,
+      DAILY_REPORT_COLUMNS.WORKER_NAME,
+      // Regular
+      DAILY_REPORT_COLUMNS.HOURS_REGULAR,
+      DAILY_REPORT_COLUMNS.TASK_REGULAR,
+      DAILY_REPORT_COLUMNS.PROJECT_REGULAR,
+      // OT Morning
+      DAILY_REPORT_COLUMNS.HOURS_OT_MORNING,
+      DAILY_REPORT_COLUMNS.TASK_OT_MORNING,
+      DAILY_REPORT_COLUMNS.PROJECT_OT_MORNING,
+      // OT Noon
+      DAILY_REPORT_COLUMNS.HOURS_OT_NOON,
+      DAILY_REPORT_COLUMNS.TASK_OT_NOON,
+      DAILY_REPORT_COLUMNS.PROJECT_OT_NOON,
+      // OT Evening
+      DAILY_REPORT_COLUMNS.HOURS_OT_EVENING,
+      DAILY_REPORT_COLUMNS.TASK_OT_EVENING,
+      DAILY_REPORT_COLUMNS.PROJECT_OT_EVENING,
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=daily_report_template.xlsx');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error downloading template:', error);
+    res.status(500).json({ error: (error as Error).message });
   }
 }
