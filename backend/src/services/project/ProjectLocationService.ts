@@ -42,6 +42,7 @@ class ProjectLocationService extends BaseCrudService<ProjectLocation> {
       const now = new Date();
       const projectData: Omit<ProjectLocation, 'id'> = {
         code: input.code.toUpperCase(),
+        projectCode: input.projectCode || '', // Added
         projectName: input.projectName, // Updated field
         location: input.location,
         department: input.department.trim(),

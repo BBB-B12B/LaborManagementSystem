@@ -99,6 +99,7 @@ export async function authenticate(
   next: NextFunction
 ): Promise<void> {
   const authReq = req as AuthRequest;
+
   try {
     const authHeader = authReq.headers.authorization;
     const token = authHeader?.startsWith('Bearer ')

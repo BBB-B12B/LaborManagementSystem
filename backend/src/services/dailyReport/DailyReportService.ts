@@ -284,6 +284,36 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
   /**
    * Parse Excel for Daily Report Import (v3 Bulletproof Version)
    */
+  async getByProjectAndDateRange(
+    projectId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<DailyReport[]> {
+    const reports = await this.queryWithFallback([
+      { field: 'projectLocationId', operator: '==', value: projectId },
+      { field: 'workDate', operator: '>=', value: startDate },
+      { field: 'workDate', operator: '<=', value: endDate },
+    ]);
+
+    return reports;
+  }
+
+
+  /**
+   * ดึง Daily Reports ตามวันที่ (ทุกโครงการ)
+   * Get daily reports by date range (all projects)
+   */
+  async getByDateRange(startDate: Date, endDate: Date): Promise<DailyReport[]> {
+    const reports = await this.queryWithFallback([
+      { field: 'workDate', operator: '>=', value: startDate },
+      { field: 'workDate', operator: '<=', value: endDate },
+    ]);
+    return reports;
+  }
+
+  /**
+   * Parse Excel for Daily Report Import (v3 Bulletproof Version)
+   */
   async parseDailyReportExcel(buffer: Buffer): Promise<any[]> {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const allResults: any[] = [];
@@ -357,6 +387,19 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
   /**
    * Bulk save daily reports (High-Performance Sub-collection Refactor)
    */
+  async getByContractorAndDate(
+    contractorId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<DailyReport[]> {
+    const reports = await this.queryWithFallback([
+      { field: 'dailyContractorId', operator: '==', value: contractorId },
+      { field: 'workDate', operator: '>=', value: startDate },
+      { field: 'workDate', operator: '<=', value: endDate },
+    ]);
+    return reports;
+  }
+
   async bulkCreateDailyReports(data: any[], user: string, importFileUrl?: string): Promise<number> {
     let successCount = 0;
     console.log(`[BulkCreate] Received ${data.length} items from frontend.`);

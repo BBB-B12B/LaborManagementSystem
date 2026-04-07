@@ -67,6 +67,12 @@ export const Navbar: React.FC = () => {
       icon: <FingerprintIcon />,
       roles: ['AM', 'PM', 'PD', 'MD'],
     },
+    {
+      label: 'บันทึกแรงงาน',
+      path: '/labor/recording',
+      icon: <DescriptionIcon />, // Using DescriptionIcon temporarily
+      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
+    },
   ];
 
   const visibleMenuItems = !isClient

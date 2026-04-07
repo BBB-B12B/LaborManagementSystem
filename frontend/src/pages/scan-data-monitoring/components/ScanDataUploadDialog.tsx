@@ -1,9 +1,9 @@
 /**
  * ScanData Upload Dialog
- * Dialog สำหรับ upload ไฟล์ ScanData (.dat / Excel)
+ * Dialog สำหรับ upload ไฟล์ ScanData (.dat / Excel) พร้อมระบบ Validation และแสดงผลตาราง
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -15,17 +15,29 @@ import {
   Alert,
   CircularProgress,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
   Chip,
-  Tabs,
-  Tab,
-  TextField,
-  InputAdornment,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import { CloudUpload, CheckCircle, Error as ErrorIcon, ContentPaste, Description } from '@mui/icons-material';
-import { useForm, Controller, useWatch } from 'react-hook-form';
+import {
+  CloudUpload,
+  CheckCircle,
+  Error as ErrorIcon,
+  Close as CloseIcon,
+  ArrowBack,
+  Info as InfoIcon,
+  Warning as WarningIcon,
+  Download as DownloadIcon,
+  ContentPaste as PasteIcon,
+} from '@mui/icons-material';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -34,9 +46,11 @@ import {
 } from '../../../validation/scanDataSchema';
 import {
   uploadScanDataFile,
-  importScanDataText,
   type ImportResult,
+  deleteScanDataBatch,
+  deleteScanDataBulk,
 } from '../../../services/scanDataService';
+import { apiClient } from '../../../services/api/client';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 
 interface ScanDataUploadDialogProps {
@@ -46,54 +60,128 @@ interface ScanDataUploadDialogProps {
   defaultProjectId?: string;
 }
 
+type UploadStep = 'select' | 'preview' | 'result';
+
+const getValueByKeys = (data: any, keys: string[], defaultValue: string = '-'): string => {
+  if (!data) return defaultValue;
+  for (const key of keys) {
+    if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
+      return String(data[key]);
+    }
+  }
+  return defaultValue;
+};
+
+const tableHeaders = [
+  'EmployeeNumber',
+  'Date',
+  'Time1',
+  'Time2',
+  'Time3',
+  'Time4',
+  'Time5',
+  'Time6',
+  'สถานะงาน',
+  'ชั่วโมงการทำงาน',
+  'สถานะผ่าเที่ยง',
+  'จำนวน OT เช้า',
+  'จำนวน OT เย็น',
+  'จำนวนนาทีมาสาย',
+  'ส่วนงาน',
+];
+
 const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
   open,
   onClose,
   onSuccess,
   defaultProjectId,
 }) => {
+  const [step, setStep] = useState<UploadStep>('select');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadResult, setUploadResult] = useState<ImportResult | null>(null);
+  const [inputMethod, setInputMethod] = useState<'file' | 'text'>('file');
+  const [pastedText, setPastedText] = useState('');
+  const [validationResult, setValidationResult] = useState<ImportResult | null>(null);
+  const [finalResult, setFinalResult] = useState<ImportResult | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
   const {
     control,
     handleSubmit,
     reset,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<ScanDataUploadInput>({
     resolver: zodResolver(ScanDataUploadSchema),
     defaultValues: {
       projectLocationId: defaultProjectId || '',
       importNote: '',
-      mode: 'file',
-      // placeholder สำหรับ register field ผ่าน react-hook-form
       file: undefined as unknown as File,
-      textData: '',
     },
   });
 
-  const mode = useWatch({ control, name: 'mode' });
-
-  const uploadMutation = useMutation({
+  // Validation (Dry Run) Mutation
+  const validationMutation = useMutation({
     mutationFn: async (data: ScanDataUploadInput) => {
-      if (data.mode === 'text' && data.textData) {
-        return await importScanDataText(
-          data.textData,
-          data.projectLocationId,
-          data.importNote
-        );
-      }
+      console.log('Starting validation mutation for file:', data.file.name);
       return await uploadScanDataFile(
-        data.file!,
+        data.file,
         data.projectLocationId,
-        data.importNote
+        data.importNote,
+        true // dryRun = true
       );
     },
     onSuccess: (result) => {
-      setUploadResult(result);
-      if (result.success && onSuccess) {
-        onSuccess(result);
+      console.log('Validation success:', result);
+      setValidationResult(result);
+      setStep('preview');
+    },
+    onError: (error: any) => {
+      console.error('Validation mutation error:', error);
+    }
+  });
+
+  // Actual Upload Mutation
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      const data = getValues();
+      const fileToUpload = inputMethod === 'file' ? selectedFile : new File([pastedText], 'pasted_data.txt', { type: 'text/plain' });
+
+      return await uploadScanDataFile(
+        fileToUpload!,
+        data.projectLocationId,
+        data.importNote,
+        false // dryRun = false
+      );
+    },
+    onSuccess: async (result) => {
+      setFinalResult(result);
+      
+      if (result.success) {
+        // Handle auto-download if applicable
+        if (result.importBatchId) {
+          try {
+            const response = await apiClient.get(`/scan-data/batch/${result.importBatchId}/export`, {
+              responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `ScanData_Organized_${result.importBatchId}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          } catch (err) {
+            console.error("Auto-download failed", err);
+          }
+        }
+        
+        // Trigger parent refresh and close dialog
+        if (onSuccess) onSuccess(result);
+        handleClose();
+      } else {
+        // Only show result step if there are errors
+        setStep('result');
       }
     },
   });
@@ -106,167 +194,384 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
     }
   };
 
-  const onSubmit = async (data: ScanDataUploadInput) => {
-    if (data.mode === 'file' && !selectedFile) {
+  const onStartValidation = async (data: ScanDataUploadInput) => {
+    console.log('onStartValidation called with data:', data);
+
+    if (inputMethod === 'file' && !selectedFile) {
+      console.warn('onStartValidation: No file selected in state');
       return;
     }
 
-    const formData: ScanDataUploadInput = {
-      ...data,
-      file: selectedFile || undefined,
-    };
+    if (inputMethod === 'text' && !pastedText.trim()) {
+      console.warn('onStartValidation: No text pasted');
+      return;
+    }
 
-    uploadMutation.mutate(formData);
+    validationMutation.mutate(data);
+  };
+
+  const onConfirmUpload = () => {
+    uploadMutation.mutate();
   };
 
   const handleClose = () => {
     reset();
     setSelectedFile(null);
-    setUploadResult(null);
-    setValue('file', undefined as unknown as File, {
-      shouldValidate: false,
-      shouldDirty: false,
-    });
+    setPastedText('');
+    setInputMethod('file');
+    setValidationResult(null);
+    setFinalResult(null);
+    setStep('select');
+    validationMutation.reset();
     uploadMutation.reset();
     onClose();
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await apiClient.get('/scan-data/template', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'ScanData_Template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download template failed', err);
+    }
+  };
+
   const handleUploadAnother = () => {
-    reset();
     setSelectedFile(null);
-    setUploadResult(null);
-    setValue('file', undefined as unknown as File, {
-      shouldValidate: false,
-      shouldDirty: false,
-    });
+    setValidationResult(null);
+    setFinalResult(null);
+    setStep('select');
+    setValue('file', undefined as unknown as File);
+    validationMutation.reset();
     uploadMutation.reset();
   };
 
-  return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        Upload ข้อมูล ScanData
-      </DialogTitle>
+  const dateRange = useMemo(() => {
+    if (!validationResult || !validationResult.records.length) return null;
+    const dates = validationResult.records
+      .map((r) => {
+        const dStr = getValueByKeys(r.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'Scan Date']);
+        if (!dStr) return null;
+        const d = new Date(dStr);
+        return isNaN(d.getTime()) ? null : d;
+      })
+      .filter((d): d is Date => d !== null);
 
-      <DialogContent>
-        {!uploadResult ? (
-          <Box component="form" sx={{ mt: 2 }}>
+    if (dates.length === 0) return null;
+    
+    // Set to start/end of day to be safe for bulk delete
+    const minDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())));
+    
+    minDate.setHours(0, 0, 0, 0);
+    maxDate.setHours(23, 59, 59, 999);
+    
+    return { start: minDate, end: maxDate };
+  }, [validationResult]);
+
+  const deleteBatchMutation = useMutation({
+    mutationFn: (batchId: string) => deleteScanDataBatch(batchId),
+    onSuccess: (res) => {
+      alert(`ลบข้อมูลสำเร็จ ${res.deletedCount} รายการ`);
+      handleUploadAnother();
+    },
+  });
+
+  const deleteBulkMutation = useMutation({
+    mutationFn: () => {
+      if (!dateRange || !validationResult) throw new Error('Missing data range');
+      const projectId = getValues('projectLocationId');
+      return deleteScanDataBulk(projectId, dateRange.start, dateRange.end);
+    },
+    onSuccess: (res) => {
+      alert(`ล้างข้อมูลโครงการสำเร็จ ${res.deletedCount} รายการ คุณสามารถตรวจสอบ (Refresh) และอัปโหลดใหม่ได้ครับ`);
+      // Re-validate to show updated status
+      onStartValidation(getValues());
+    },
+  });
+
+  const canUpload = useMemo(() => {
+    return validationResult && validationResult.failedRecords === 0;
+  }, [validationResult]);
+
+  const renderStatusChips = (result: ImportResult) => (
+    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+      <Chip
+        label={`ทั้งหมด: ${result.totalRecords} รายการ`}
+        color="default"
+        variant="outlined"
+      />
+      <Chip
+        label={`รายการสำเร็จ: ${result.successfulRecords} รายการ`}
+        sx={{ bgcolor: '#2e7d32', color: 'white' }}
+      />
+      <Chip
+        label={`ล้มเหลว: ${result.failedRecords} รายการ`}
+        color="error"
+        sx={{ bgcolor: result.failedRecords > 0 ? '#d32f2f' : 'default' }}
+      />
+    </Box>
+  );
+
+  const renderContent = () => {
+    switch (step) {
+      case 'select':
+        return (
+          <form id="scan-data-upload-form" onSubmit={handleSubmit(onStartValidation)}>
             {/* Project Selection */}
-            <Controller
-              name="projectLocationId"
-              control={control}
-              render={({ field }) => (
-                <ProjectSelect
-                  label="โครงการ"
-                  value={field.value || ''}
-                  onChange={(value) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
-                  error={!!errors.projectLocationId}
-                  helperText={errors.projectLocationId?.message}
-                  required
-                  fullWidth
-                />
-              )}
-            />
-
-            {/* Mode Selection Tabs */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3, mt: 3 }}>
+            <Box sx={{ mt: 1 }}>
               <Controller
-                name="mode"
+                name="projectLocationId"
                 control={control}
                 render={({ field }) => (
-                  <Tabs
-                    value={field.value}
-                    onChange={(_, val) => {
-                      field.onChange(val);
-                      // Reset validation state when switching
-                    }}
-                    aria-label="import mode"
-                  >
-                    <Tab icon={<Description />} iconPosition="start" label="อัปโหลดไฟล์" value="file" />
-                    <Tab icon={<ContentPaste />} iconPosition="start" label="วางข้อความ (Paste)" value="text" />
-                  </Tabs>
+                  <ProjectSelect
+                    label="โครงการ"
+                    value={field.value || ''}
+                    onChange={(value) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
+                    error={!!errors.projectLocationId}
+                    helperText={errors.projectLocationId?.message}
+                    required
+                    fullWidth
+                  />
                 )}
               />
             </Box>
 
-            {/* File Upload Mode */}
-            {mode === 'file' && (
-              <Box sx={{ mt: 3 }}>
-                <input
-                  accept=".dat,.xlsx,.xls"
-                  style={{ display: 'none' }}
-                  id="scan-data-file"
-                  type="file"
-                  onChange={handleFileChange}
-                />
-                <label htmlFor="scan-data-file">
-                  <Button
-                    variant="outlined"
-                    component="span"
-                    startIcon={<CloudUpload />}
-                    fullWidth
-                    sx={{ py: 2 }}
-                  >
-                    เลือกไฟล์ (.dat, .xlsx, .xls)
-                  </Button>
-                </label>
+            {/* File Selection */}
+            <Box sx={{ mt: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mb: 1,
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                  เลือกไฟล์สำหรับ import
+                </Typography>
+                <Button
+                  size="medium"
+                  variant="contained"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleDownloadTemplate}
+                  sx={{
+                    borderRadius: 2.5,
+                    height: 40,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    bgcolor: '#1a333c', // Dark Theme
+                    boxShadow: '0 4px 10px rgba(26, 51, 60, 0.2)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': { 
+                      bgcolor: '#2a4d5a', 
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 6px 15px rgba(26, 51, 60, 0.3)' 
+                    }
+                  }}
+                >
+                  ดาวน์โหลด Template
+                </Button>
+                <Button
+                  size="medium"
+                  variant={inputMethod === 'text' ? 'contained' : 'outlined'}
+                  startIcon={<PasteIcon />}
+                  onClick={() => {
+                    const newMethod = inputMethod === 'file' ? 'text' : 'file';
+                    setInputMethod(newMethod);
+                    if (newMethod === 'text') {
+                      if (pastedText.trim()) {
+                        const file = new File([pastedText], 'pasted_data.txt', { type: 'text/plain' });
+                        setValue('file', file, { shouldValidate: true });
+                      } else {
+                        setValue('file', undefined as any, { shouldValidate: false });
+                      }
+                    } else {
+                      if (selectedFile) {
+                        setValue('file', selectedFile, { shouldValidate: true });
+                      } else {
+                        setValue('file', undefined as any, { shouldValidate: false });
+                      }
+                    }
+                  }}
+                  sx={{
+                    borderRadius: 2.5,
+                    height: 40,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    ml: 1.5,
+                    bgcolor: inputMethod === 'text' ? '#1a333c' : 'transparent',
+                    borderColor: '#1a333c',
+                    color: inputMethod === 'text' ? 'white' : '#1a333c',
+                    boxShadow: inputMethod === 'text' ? '0 4px 10px rgba(26, 51, 60, 0.2)' : 'none',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      bgcolor: inputMethod === 'text' ? '#2a4d5a' : 'rgba(26, 51, 60, 0.04)',
+                      borderColor: '#2a4d5a',
+                      transform: 'translateY(-1px)',
+                    }
+                  }}
+                >
+                  {inputMethod === 'text' ? 'สลับเป็นอัปโหลดไฟล์' : 'วางข้อมูล (Paste)'}
+                </Button>
+              </Box>
 
-                {selectedFile && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
-                    <Typography variant="body2" color="success.dark">
-                      ✓ ไฟล์ที่เลือก: {selectedFile.name}
+              {inputMethod === 'file' ? (
+                <>
+                  <input
+                    accept=".dat,.xlsx,.xls,.txt"
+                    style={{ display: 'none' }}
+                    id="scan-data-file"
+                    type="file"
+                    onChange={handleFileChange}
+                  />
+                  <Box
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) {
+                        setSelectedFile(file);
+                        setValue('file', file, { shouldValidate: true });
+                      }
+                    }}
+                    sx={{
+                      mt: 2,
+                      p: 5,
+                      border: '2px dashed',
+                      borderColor: errors.file ? 'error.main' : 'rgba(26, 51, 60, 0.2)',
+                      borderRadius: 4,
+                      bgcolor: '#fcfcfc',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&:hover': { 
+                        bgcolor: 'rgba(26, 51, 60, 0.02)',
+                        borderColor: 'primary.main',
+                        '& .upload-icon': {
+                          transform: 'translateY(-5px)',
+                          color: 'primary.main'
+                        }
+                      },
+                    }}
+                    onClick={() => document.getElementById('scan-data-file')?.click()}
+                  >
+                    <CloudUpload className="upload-icon" sx={{ fontSize: 48, color: 'text.secondary', mb: 2, transition: 'all 0.3s' }} />
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
+                      {selectedFile ? `ไฟล์: ${selectedFile.name}` : 'ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์'}
                     </Typography>
-                    <Typography variant="caption" color="success.dark">
+                    <Typography variant="caption" color="text.secondary">
+                      รองรับ .dat, .txt, .xlsx, .xls (สูงสุด 100MB)
+                    </Typography>
+                  </Box>
+                </>
+              ) : (
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                      วางข้อมูลดิบ (Format: รหัสพนักงาน วันที่ เวลา สถานะ...)
+                    </Typography>
+                    {pastedText && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="error"
+                        onClick={() => {
+                          setPastedText('');
+                          setValue('file', undefined as any, { shouldValidate: true });
+                        }}
+                        sx={{ fontSize: '0.75rem', py: 0 }}
+                      >
+                        ล้างข้อมูล
+                      </Button>
+                    )}
+                  </Box>
+                  <textarea
+                    rows={10}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid',
+                      borderColor: errors.file ? '#d32f2f' : '#ccc',
+                      fontFamily: 'monospace',
+                      fontSize: '0.8125rem',
+                      lineHeight: '1.4',
+                      outline: 'none',
+                      backgroundColor: '#fcfcfc',
+                      resize: 'vertical'
+                    }}
+                    placeholder={`ตัวอย่างการวางข้อมูล:&#10;200047 2025-08-25 04:22:19 0 1 0&#10;200247 2025-08-25 04:27:13 0 1 0&#10;&#10;(คัดลอกข้อมูลจาก Text File หรือ Excel มาวางได้เลย)`}
+                    value={pastedText}
+                    onChange={(e) => {
+                      const text = e.target.value;
+                      setPastedText(text);
+                      if (text.trim()) {
+                        const file = new File([text], 'pasted_data.txt', { type: 'text/plain' });
+                        setValue('file', file, { shouldValidate: true });
+                      } else {
+                        setValue('file', undefined as any, { shouldValidate: true });
+                      }
+                    }}
+                  />
+                  {errors.file && (
+                    <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                      กรุณาวางข้อมูลเพื่อตรวจสอบ
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {selectedFile && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(76, 175, 80, 0.08)', borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CheckCircle color="success" fontSize="small" />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.dark' }}>
+                      ไฟล์ที่เลือก: {selectedFile.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
                       ขนาด: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
                     </Typography>
                   </Box>
-                )}
+                  <Button
+                    size="small"
+                    variant="text"
+                    color="error"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setValue('file', undefined as any, { shouldValidate: true });
+                    }}
+                    sx={{ fontSize: '0.75rem', py: 0 }}
+                  >
+                    ล้างข้อมูล
+                  </Button>
+                </Box>
+              )}
 
-                {errors.file && (
-                  <Alert severity="error" sx={{ mt: 2 }}>
-                    {errors.file.message}
-                  </Alert>
-                )}
-              </Box>
-            )}
+              {errors.file && (
+                <Alert severity="error" sx={{ mt: 2 }}>{errors.file.message}</Alert>
+              )}
+            </Box>
 
-            {/* Text Paste Mode */}
-            {mode === 'text' && (
-              <Box sx={{ mt: 3 }}>
-                <Controller
-                  name="textData"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="วางข้อมูลสแกนนิ้วที่นี่"
-                      multiline
-                      rows={10}
-                      fullWidth
-                      variant="outlined"
-                      placeholder={`ตัวอย่าง:\n1001 2024-01-23 08:00:00\n1002 2024-01-23 08:05:00`}
-                      error={!!errors.textData}
-                      helperText={errors.textData?.message}
-                      sx={{ fontFamily: 'monospace' }}
-                    />
-                  )}
-                />
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  รองรับการวางข้อมูลดิบจาก Notepad หรือ Excel (Copy Only)
-                  <br />
-                  รูปแบบ: <strong>รหัสพนักงาน วันที่ เวลา</strong>
-                </Alert>
-              </Box>
-            )}
-
-            {/* Import Note (Optional) */}
+            {/* Note */}
             <Box sx={{ mt: 3 }}>
               <Controller
                 name="importNote"
                 control={control}
                 render={({ field }) => (
                   <Box>
-                    <Typography variant="body2" gutterBottom>
+                    <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold' }}>
                       หมายเหตุ (ไม่จำเป็น)
                     </Typography>
                     <textarea
@@ -274,10 +579,11 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       rows={3}
                       style={{
                         width: '100%',
-                        padding: '8px',
-                        borderRadius: '4px',
+                        padding: '12px',
+                        borderRadius: '8px',
                         border: '1px solid #ccc',
                         fontFamily: 'inherit',
+                        fontSize: '0.875rem'
                       }}
                       placeholder="ระบุรายละเอียดเพิ่มเติม..."
                     />
@@ -286,244 +592,420 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
               />
             </Box>
 
-            {/* Format Info */}
-            <Alert severity="info" sx={{ mt: 3 }}>
-              <Typography variant="body2" gutterBottom>
-                <strong>รูปแบบไฟล์ที่รองรับ:</strong>
+            {/* Help Alert - Modernized */}
+            <Alert 
+              severity="info" 
+              icon={<InfoIcon sx={{ color: '#1a333c' }} />}
+              sx={{ 
+                mt: 3, 
+                borderRadius: 3,
+                bgcolor: 'rgba(26, 51, 60, 0.04)',
+                border: '1px solid rgba(26, 51, 60, 0.1)',
+                color: '#1a333c'
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>รูปแบบไฟล์ที่รองรับ:</Typography>
+              <Typography variant="body2" component="div">
+                • <strong>.xlsx / .xls</strong> คอลัมน์สำคัญ: EmployeeNumber, Date และ Time1-Time10
               </Typography>
-              <Typography variant="caption" component="div">
-                • <strong>.dat</strong> ข้อมูลบันทึกจากเครื่องสแกน (โครงสร้าง: รหัสพนักงาน เวลาสแกน)
-              </Typography>
-              <Typography variant="caption" component="div">
-                • <strong>.xlsx / .xls</strong> ต้องมีคอลัมน์ <strong>EmployeeNumber</strong> และ <strong>Date/DateTime</strong>
-              </Typography>
-              <Typography variant="caption" component="div" sx={{ mt: 1 }}>
-                รองรับสูงสุด <strong>100,000 รายการ</strong> ต่อครั้ง และขนาดไฟล์ไม่เกิน <strong>100MB</strong>
+              <Typography variant="body2" component="div">
+                • <strong>.dat / .txt</strong> ข้อมูลจากเครื่องสแกน (รหัสพนักงาน เวลาสแกน)
               </Typography>
             </Alert>
 
-
-            {/* Upload Progress */}
-            {uploadMutation.isPending && (
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="body2" gutterBottom>
-                  กำลัง upload และประมวลผล...
-                </Typography>
-                <LinearProgress />
-              </Box>
-            )}
-
-            {/* Upload Error */}
-            {uploadMutation.isError && (
-              <Alert severity="error" sx={{ mt: 3 }}>
-                เกิดข้อผิดพลาด: {(uploadMutation.error as Error).message}
+            {/* Form Errors summary */}
+            {Object.keys(errors).length > 0 && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="subtitle2">กรุณาตรวจสอบข้อมูลให้ครบถ้วนก่อนตรวจสอบ:</Typography>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {Object.entries(errors).map(([key, error]) => (
+                    <li key={key}><Typography variant="caption">{(error as any)?.message || 'ข้อมูลไม่ถูกต้อง'}</Typography></li>
+                  ))}
+                </ul>
               </Alert>
             )}
-          </Box>
-        ) : (
-          /* Upload Result */
-          <Box sx={{ mt: 2 }}>
-            {uploadResult.success ? (
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <CheckCircle color="success" sx={{ mr: 1 }} />
-                  <Typography variant="h6" color="success.main">
-                    Upload สำเร็จ!
-                  </Typography>
+          </form>
+        );
+
+      case 'preview':
+        if (!validationResult) return null;
+        return (
+          <Box>
+            {validationResult.failedRecords > 0 ? (
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#d32f2f', mb: 1 }}>
+                  <ErrorIcon />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Upload ล้มเหลว</Typography>
                 </Box>
-
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="body1" gutterBottom>
-                    สรุปผลการ import:
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
-                    <Chip
-                      label={`ทั้งหมด: ${uploadResult.totalRecords} รายการ`}
-                      color="default"
-                    />
-                    <Chip
-                      label={`สำเร็จ: ${uploadResult.successfulRecords} รายการ`}
-                      color="success"
-                    />
-                    {uploadResult.failedRecords > 0 && (
-                      <Chip
-                        label={`ล้มเหลว: ${uploadResult.failedRecords} รายการ`}
-                        color="error"
-                      />
-                    )}
-                  </Box>
-                </Box>
-
-                {uploadResult.errors.length > 0 && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="error" gutterBottom>
-                      รายการที่ล้มเหลว:
-                    </Typography>
-                    <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
-                      {uploadResult.errors.map((error, index) => (
-                        <ListItem key={index}>
-                          <ErrorIcon color="error" sx={{ mr: 1, fontSize: '1rem' }} />
-                          <ListItemText
-                            primary={`แถว ${error.row}: ${error.error}`}
-                            secondary={error.employeeNumber}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                            secondaryTypographyProps={{ variant: 'caption' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
-                )}
-
-                {uploadResult.warnings.length > 0 && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="warning.main" gutterBottom>
-                      คำเตือน:
-                    </Typography>
-                    <List dense>
-                      {uploadResult.warnings.map((warning, index) => (
-                        <ListItem key={index}>
-                          <ListItemText
-                            primary={warning}
-                            primaryTypographyProps={{ variant: 'caption' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
-                )}
-
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  Batch ID: {uploadResult.importBatchId || '-'}
+                <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                  กรุณาตรวจสอบรูปแบบไฟล์หรือข้อมูลที่ผิดพลาดก่อนลองใหม่อีกครั้ง
                 </Alert>
               </Box>
             ) : (
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <ErrorIcon color="error" sx={{ mr: 1 }} />
-                  <Typography variant="h6" color="error">
-                    Upload ล้มเหลว
-                  </Typography>
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#2e7d32', mb: 1 }}>
+                  <CheckCircle />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>ตรวจสอบข้อมูลสำเร็จ</Typography>
                 </Box>
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  กรุณาตรวจสอบรูปแบบไฟล์หรือข้อมูลที่ผิดพลาดก่อนลองใหม่อีกครั้ง
-                </Alert>
-
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-                  <Chip label={`ทั้งหมด: ${uploadResult.totalRecords} รายการ`} />
-                  <Chip
-                    label={`สำเร็จ: ${uploadResult.successfulRecords} รายการ`}
-                    color="success"
-                  />
-                  <Chip
-                    label={`ล้มเหลว: ${uploadResult.failedRecords} รายการ`}
-                    color="error"
-                  />
-                </Box>
-
-                {uploadResult.errors.length > 0 && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="error" gutterBottom>
-                      รายการที่ล้มเหลว:
-                    </Typography>
-                    <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
-                      {uploadResult.errors.map((error, index) => (
-                        <ListItem key={index}>
-                          <ErrorIcon color="error" sx={{ mr: 1, fontSize: '1rem' }} />
-                          <ListItemText
-                            primary={`แถว ${error.row}: ${error.error}`}
-                            secondary={error.employeeNumber}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                            secondaryTypographyProps={{ variant: 'caption' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
-                )}
-
-                {uploadResult.warnings.length > 0 && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="warning.main" gutterBottom>
-                      คำเตือน:
-                    </Typography>
-                    <List dense>
-                      {uploadResult.warnings.map((warning, index) => (
-                        <ListItem key={index}>
-                          <ListItemText
-                            primary={warning}
-                            primaryTypographyProps={{ variant: 'caption' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
-                )}
-
-                <Alert severity="info">
-                  Batch ID: {uploadResult.importBatchId || '-'}
+                <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
+                  ข้อมูลถูกต้องทั้งหมด พร้อมสำหรับ Upload
                 </Alert>
               </Box>
             )}
+
+            {validationResult.duplicateRecords && validationResult.duplicateRecords > 0 && (
+              <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">
+                    พบข้อมูลที่มีอยู่แล้วในระบบ <strong>{validationResult.duplicateRecords}</strong> รายการ หากต้องการบันทึกทับ (Overwrite) กรุณาล้างข้อมูลเก่าออกก่อน
+                  </Typography>
+                  <Button 
+                    color="warning" 
+                    variant="contained" 
+                    size="small" 
+                    onClick={() => {
+                      if (window.confirm('คุณต้องการล้างข้อมูลเก่าของโครงการนี้ในช่วงวันที่ดังกล่าวเพื่อนำเข้าใหม่ใช่หรือไม่?')) {
+                        deleteBulkMutation.mutate();
+                      }
+                    }}
+                    disabled={deleteBulkMutation.isPending}
+                  >
+                    {deleteBulkMutation.isPending ? 'กำลังสั่งลบ...' : 'ล้างข้อมูลเก่าออก'}
+                  </Button>
+                </Box>
+              </Alert>
+            )}
+
+            {renderStatusChips(validationResult)}
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: validationResult.failedRecords > 0 ? 'error.main' : 'text.primary', fontWeight: 'bold' }}>
+              รายการข้อมูล:
+            </Typography>
+
+            <TableContainer component={Paper} sx={{ maxHeight: 500, borderRadius: 2, border: '1px solid #e0e0e0', bgcolor: 'white' }}>
+              <Table stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ bgcolor: '#1a333c', color: 'white', fontWeight: 'bold', width: 60, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>แถว</TableCell>
+                    <TableCell sx={{ bgcolor: '#1a333c', color: 'white', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>สถานะ</TableCell>
+                    {tableHeaders.map((h) => (
+                      <TableCell 
+                        key={h} 
+                        sx={{ 
+                          bgcolor: '#1a333c', 
+                          color: 'white', 
+                          fontWeight: 'bold', 
+                          whiteSpace: 'nowrap', 
+                          borderBottom: '1px solid rgba(255,255,255,0.1)',
+                          ...(h === 'Date' ? { minWidth: 150 } : {})
+                        }}
+                      >
+                        {h}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(validationResult?.records || []).map((record, index) => {
+                    const timeValues = [
+                      getValueByKeys(record.data, ['Time1', 'เวลา1']),
+                      getValueByKeys(record.data, ['Time2', 'เวลา2']),
+                      getValueByKeys(record.data, ['Time3', 'เวลา3']),
+                      getValueByKeys(record.data, ['Time4', 'เวลา4']),
+                      getValueByKeys(record.data, ['Time5', 'เวลา5']),
+                      getValueByKeys(record.data, ['Time6', 'เวลา6']),
+                    ].filter(v => v && v !== '' && v !== '-');
+                    
+                    const isIncomplete = timeValues.length > 0 && timeValues.length < 2;
+                    const normalVal = getValueByKeys(record.data, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], '0').toString();
+                    const isNormalStatusZero = normalVal === '0';
+                    const hasWarning = record.status === 'success' && (isIncomplete || isNormalStatusZero);
+                    
+                    return (
+                      <TableRow 
+                        key={record.row} 
+                        hover 
+                        sx={{ 
+                          bgcolor: record.status === 'failed' 
+                            ? 'rgba(211, 47, 47, 0.05)' 
+                            : hasWarning 
+                              ? 'rgba(255, 152, 0, 0.08)' 
+                              : 'transparent',
+                        }}
+                      >
+                        <TableCell sx={{ color: 'text.secondary', fontWeight: 500 }}>{index + 1}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {record.status === 'failed' ? (
+                              <Chip label="ผิดพลาด" size="small" color="error" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            ) : record.status === 'duplicate' ? (
+                              <Chip label="ซ้ำ" size="small" color="warning" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            ) : (
+                              <Chip label="สำเร็จ" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem' }} />
+                            )}
+                            {hasWarning && (
+                              <Tooltip title={isIncomplete ? "สแกนเพียง 1 ครั้ง (ข้อมูลอาจไม่ครบ)" : "สถานะงานปกติเป็น 0 (อาจมีปัญหาการคำนวณ)"}>
+                                <WarningIcon color="warning" sx={{ fontSize: 16 }} />
+                              </Tooltip>
+                            )}
+                          </Box>
+                        </TableCell>
+                      {/* Mapping raw data columns */}
+                      <TableCell sx={{ fontWeight: 'bold' }}>
+                        {getValueByKeys(record.data, ['EmployeeNumber', 'EmployeeId', 'EmpNo', 'รหัสพนักงาน', 'employeeid', 'employee_no']) || record.employeeNumber}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {(() => {
+                            const rawDate = getValueByKeys(record.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'date_time', 'time']);
+                            if (!rawDate) return '-';
+                            // Parse and format to YYYY-MM-DD
+                            const d = new Date(rawDate);
+                            if (isNaN(d.getTime())) return rawDate; // Fallback to raw if unparseable
+                            
+                            const year = d.getFullYear();
+                            const month = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            return `${year}-${month}-${day}`;
+                          })()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time1', 'เวลา1'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time2', 'เวลา2'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time3', 'เวลา3'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time4', 'เวลา4'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time5', 'เวลา5'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'], '')}</TableCell>
+                      
+                      {/* Text Status - ปกติ / ผิดปกติ */}
+                      <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'success.main', textAlign: 'center' }}>
+                        {normalVal === '1' ? 'ปกติ' : 'ผิดปกติ'}
+                      </TableCell>
+
+                      {/* ชั่วโมงการทำงาน (actual calculated hours) */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['RegularHours', 'regularHours'], '0.0')}
+                      </TableCell>
+
+                      {/* สถานะผ่าเที่ยง */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], '0')}
+                      </TableCell>
+                      {/* OT เช้า */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], '0')}
+                      </TableCell>
+
+                      {/* OT เย็น */}
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], '0')}
+                      </TableCell>
+
+                      {/* นาทีมาสาย */}
+                      <TableCell sx={{ textAlign: 'center', color: 'error.main', fontWeight: 'bold' }}>
+                        {getValueByKeys(record.data, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], '0')}
+                      </TableCell>
+                      
+                      {/* ส่วนงาน */}
+                      <TableCell sx={{ textAlign: 'center' }}>{getValueByKeys(record.data, ['Department', 'ส่วนงาน', 'department'], '-')}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Alert severity="info" sx={{ mt: 2, borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InfoIcon fontSize="small" />
+                <Typography variant="caption">Batch ID: {validationResult.importBatchId || 'ยังไม่ได้สร้าง'}</Typography>
+              </Box>
+            </Alert>
           </Box>
+        );
+
+      case 'result':
+        if (!finalResult) return null;
+        return (
+          <Box sx={{ py: 4, textAlign: 'center' }}>
+            {finalResult.success ? (
+              <>
+                <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>Upload สำเร็จ!</Typography>
+                <Typography color="text.secondary" sx={{ mb: 3 }}>
+                  ระบบได้บันทึกข้อมูลสแกนนิ้วเข้าสู่โครงการเรียบร้อยแล้ว
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  {renderStatusChips(finalResult)}
+                </Box>
+                <Alert severity="info" sx={{ mt: 3, maxWidth: 500, mx: 'auto', borderRadius: 2, textAlign: 'left' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography variant="body2"><strong>Batch ID:</strong> {finalResult.importBatchId}</Typography>
+                      <Typography variant="caption">ระบบย้ายข้อมูลดิบเข้าสู่ฐานข้อมูลแล้ว</Typography>
+                    </Box>
+                    <Button 
+                      size="small" 
+                      color="error" 
+                      variant="outlined"
+                      onClick={() => {
+                        if (window.confirm('คุณต้องการลบ Batch ที่เพิ่งอัปโหลดนี้ออกหรือไม่?')) {
+                          deleteBatchMutation.mutate(finalResult.importBatchId);
+                        }
+                      }}
+                      disabled={deleteBatchMutation.isPending}
+                    >
+                      ยกเลิก Batch นี้
+                    </Button>
+                  </Box>
+                </Alert>
+              </>
+            ) : (
+              <>
+                <ErrorIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>การ Upload ไม่สมบูรณ์</Typography>
+                <Typography color="text.secondary" sx={{ mb: 3 }}>
+                  พบข้อผิดพลาดขณะบันทึกข้อมูลจริง กรุณาตรวจสอบ Batch และลองอีกครั้ง
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  {renderStatusChips(finalResult)}
+                </Box>
+              </>
+            )}
+          </Box>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="xl" fullWidth>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {step === 'preview' && (
+            <IconButton onClick={() => setStep('select')} size="small">
+              <ArrowBack />
+            </IconButton>
+          )}
+          <Typography variant="h6">Upload ข้อมูล ScanData</Typography>
+        </Box>
+        <IconButton onClick={handleClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+
+      <DialogContent dividers sx={{ bgcolor: '#fafafa', position: 'relative' }}>
+        {validationMutation.isPending && (
+          <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
         )}
+
+        {/* Global Error Alert */}
+        {(validationMutation.isError || uploadMutation.isError) && (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>ไม่สามารถดำเนินการได้:</Typography>
+            <Typography variant="body2">
+              {(validationMutation.error as any)?.message || (uploadMutation.error as any)?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'}
+            </Typography>
+          </Alert>
+        )}
+
+        {renderContent()}
       </DialogContent>
 
-      <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
-        {!uploadResult ? (
+      <DialogActions sx={{ px: 3, py: 2, bgcolor: '#f5f5f5' }}>
+        {step === 'select' && (
           <>
+            <Button onClick={handleClose} color="inherit">ยกเลิก</Button>
+            <Box sx={{ flexGrow: 1 }} />
             <Button
-              onClick={handleClose}
-              variant="outlined"
-              color="error"
-              sx={{ borderRadius: '10px', px: 3 }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleSubmit(onSubmit)}
+              form="scan-data-upload-form"
+              type="submit"
               variant="contained"
-              color="success"
-              disabled={uploadMutation.isPending || (mode === 'file' && !selectedFile)}
-              startIcon={uploadMutation.isPending ? <CircularProgress size={20} /> : (mode === 'text' ? <ContentPaste /> : <CloudUpload />)}
-              sx={{
-                borderRadius: '10px',
-                px: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                textTransform: 'none',
-                fontWeight: 600,
-              }}
+              disabled={(inputMethod === 'file' ? !selectedFile : !pastedText.trim()) || validationMutation.isPending}
+              startIcon={validationMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <InfoIcon />}
+              sx={{ borderRadius: 2, px: 3, bgcolor: '#2e3b4e', '&:hover': { bgcolor: '#1a2433' } }}
             >
-              {uploadMutation.isPending ? 'กำลัง Process...' : (mode === 'text' ? 'นำเข้าข้อมูล' : 'Upload')}
+              ตรวจสอบข้อมูล
             </Button>
           </>
-        ) : (
+        )}
+        {step === 'preview' && (
           <>
-            <Button
-              onClick={handleUploadAnother}
-              variant="outlined"
-              color="primary"
-              sx={{ borderRadius: '10px', px: 3 }}
-            >
-              Upload อีกครั้ง
+            <Button onClick={() => setStep('select')} startIcon={<ArrowBack />} disabled={uploadMutation.isPending}>
+              เลือกไฟล์ใหม่
             </Button>
+            <Box sx={{ flexGrow: 1 }} />
             <Button
-              onClick={handleClose}
+              onClick={() => setConfirmDialogOpen(true)}
               variant="contained"
-              color="error"
+              color="primary"
+              disabled={!canUpload || uploadMutation.isPending}
+              startIcon={uploadMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <CheckCircle />}
               sx={{
-                borderRadius: '10px',
+                borderRadius: 2,
                 px: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                textTransform: 'none',
-                fontWeight: 600,
+                bgcolor: canUpload ? '#2e3b4e' : 'action.disabledBackground',
+                '&:hover': { bgcolor: '#1a2433' }
               }}
             >
-              ปิด
+              {uploadMutation.isPending ? 'กำลังบันทึก...' : 'ยืนยันข้อมูล'}
+            </Button>
+          </>
+        )}
+        {step === 'result' && (
+          <>
+            <Button onClick={handleUploadAnother} variant="outlined" sx={{ borderRadius: 2 }}>
+              Upload ไฟล์อื่น
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button
+              onClick={() => {
+                handleClose();
+                window.location.href = '/scan-data-monitoring';
+              }}
+              variant="contained"
+              color="info"
+              sx={{ borderRadius: 2, px: 3, mr: 1 }}
+            >
+              ดูข้อมูลในหน้า ScanData Monitoring
+            </Button>
+            <Button onClick={handleClose} variant="contained" sx={{ borderRadius: 2, px: 4, bgcolor: '#2e3b4e' }}>
+              ปิดหน้าต่าง
             </Button>
           </>
         )}
       </DialogActions>
+
+      {validationMutation.isPending && (
+        <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
+      )}
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>ยืนยันการนำเข้าข้อมูล</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1">
+            คุณได้ตรวจสอบความถูกต้องของข้อมูลแล้ว และต้องการบันทึกข้อมูลเข้าสู่ระบบใช่หรือไม่?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setConfirmDialogOpen(false)} color="inherit" sx={{ borderRadius: 2 }}>
+            ยกเลิก
+          </Button>
+          <Button 
+            onClick={() => { 
+              setConfirmDialogOpen(false); 
+              onConfirmUpload(); 
+            }} 
+            variant="contained" 
+            color="primary"
+            sx={{ borderRadius: 2, bgcolor: '#2e3b4e', '&:hover': { bgcolor: '#1a2433' } }}
+          >
+            ยืนยันการนำเข้าข้อมูล
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

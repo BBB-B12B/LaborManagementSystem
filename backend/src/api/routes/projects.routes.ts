@@ -86,7 +86,7 @@ router.get(
  * GET /api/projects/active
  * ดึงรายการโครงการที่ active เท่านั้น
  */
-router.get('/active', async (req: Request, res: Response) => {
+router.get('/active', async (_req: Request, res: Response) => {
   try {
     const projects = await projectLocationService.getActiveProjects();
 

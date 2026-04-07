@@ -11,10 +11,7 @@ import {
   DCWageSummary,
   CreateWagePeriodInput,
   generatePeriodCode,
-  PeriodStatus,
 } from '../../models/WagePeriod';
-import { AdditionalIncome } from '../../models/AdditionalIncome';
-import { AdditionalExpense } from '../../models/AdditionalExpense';
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
@@ -26,7 +23,7 @@ import { lateRecordService } from '../scanData/LateRecordService';
  */
 class WagePeriodService extends BaseCrudService<WagePeriod> {
   constructor() {
-    super(collections.wagePeriods as any);
+    super(collections.wagePeriods);
   }
 
   /**
@@ -129,7 +126,6 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
   /**
    * Calculate wages for a period
-   * TODO: Implement full wage calculation logic
    */
   async calculateWages(
     periodId: string,
@@ -138,7 +134,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
     try {
       const period = await this.getById(periodId);
       if (!period) {
-        return null;
+        throw new AppError('Wage period not found', 404);
       }
 
       // [T-360] Get project UUID for querying related collections
@@ -154,10 +150,10 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         .where('date', '>=', period.startDate)
         .where('date', '<=', period.endDate)
         .get()
-        .then(s => s.docs.map(doc => doc.data()));
+        .then((s: any) => s.docs.map((doc: any) => doc.data()));
 
       // Flatten all entries from all reports
-      const allEntries = reports.flatMap(report => (report.entries || []));
+      const allEntries = reports.flatMap((report: any) => (report.entries || []));
 
       // 2. Fetch all daily contractors active in this project
       const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
@@ -172,12 +168,12 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const additionalIncomes = (await collections.additionalIncome
         .where('wagePeriodId', '==', periodId)
         .get()
-        .then(s => s.docs.map(doc => doc.data()))) as AdditionalIncome[];
+        .then((s: any) => s.docs.map((doc: any) => doc.data()))) as any[];
 
       const additionalExpenses = (await collections.additionalExpense
         .where('wagePeriodId', '==', periodId)
         .get()
-        .then(s => s.docs.map(doc => doc.data()))) as AdditionalExpense[];
+        .then((s: any) => s.docs.map((doc: any) => doc.data()))) as any[];
 
       // 5. Fetch other periods in the same month for social security calculation
       const monthPrefix = period.periodCode.split('-')[0]; // e.g. "202401"
@@ -346,7 +342,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       const updated = await this.update(periodId, updateData);
       if (updated) {
-        logger.info(`Wages calculated for period: ${period.periodCode}`, { periodId });
+        logger.info(`Wages calculated for period: ${period.periodCode}`, {
+          periodId,
+          workerCount: dcSummaries.length,
+          totalNetWages
+        });
       }
 
       return updated;
@@ -477,7 +477,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Get wage periods by status
    */
-  async getByStatus(status: PeriodStatus): Promise<WagePeriod[]> {
+  async getByStatus(status: any): Promise<WagePeriod[]> {
     try {
       const results = await this.query([
         {

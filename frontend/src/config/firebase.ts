@@ -67,7 +67,7 @@ const shouldUseEmulators = (() => {
     return flag.trim().toLowerCase() === 'true';
   }
 
-  return process.env.NODE_ENV === 'development';
+  return false; // Force Real Firestore for Import Task
 })();
 
 /**

@@ -262,7 +262,7 @@ async function seedUsers(db: admin.firestore.Firestore) {
       id: 'user-admin',
       employeeId: 'EMP001',
       username: 'admin',
-      password: 'admin123',
+      password: 'admin1',
       name: 'Admin User',
       roleId: 'AM',
       department: 'PD01',

@@ -29,6 +29,7 @@ export interface CreateEditHistoryInput {
   oldValues: Record<string, any>;
   newValues: Record<string, any>;
   changeReason?: string;
+  createdBy: string;
 }
 
 /**

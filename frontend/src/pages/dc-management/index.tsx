@@ -41,6 +41,7 @@ import {
   type DCFilterOptions,
   type DCImportSummary,
 } from '../../services/dcService';
+import { projectService, type Project } from '@/services/projectService';
 
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
@@ -128,6 +129,22 @@ export default function DCManagementPage() {
     skills.forEach((skill) => map.set(skill.id, skill.name));
     return map;
   }, [skills]);
+
+  // Fetch all projects for display mapping
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectService.getAll(),
+  });
+
+  const projectDepartmentMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (projects as Project[]).forEach((proj) => {
+      if (proj.department) {
+        map.set(proj.id, proj.department);
+      }
+    });
+    return map;
+  }, [projects]);
 
   // Fetch DCs
   const { data, isLoading, error } = useQuery({
@@ -299,28 +316,48 @@ export default function DCManagementPage() {
     {
       field: 'name',
       headerName: 'ชื่อ-นามสกุล',
-      width: 200,
-      flex: 1,
+      width: 250,
     },
     {
       field: 'skillId',
-      headerName: 'ทักษะ',
-      width: 120,
+      headerName: 'ตำแหน่ง',
+      width: 150,
       renderCell: (params: GridRenderCellParams) => {
         const skillId = params.value as string | undefined;
         const label = skillId ? skillNameMap.get(skillId) || skillId : '-';
-        return <Chip label={label} size="small" />;
+        return <Chip label={label} size="small" variant="outlined" />;
+      },
+    },
+    {
+      field: 'department',
+      headerName: 'ส่วนงาน/หน่วยงาน',
+      width: 250,
+      valueGetter: (params) => params.row.projectLocationIds,
+      renderCell: (params: GridRenderCellParams) => {
+        const ids = (params.value as string[]) || [];
+        const departments = Array.from(new Set(ids.map(id => projectDepartmentMap.get(id)).filter(Boolean)));
+
+        if (departments.length === 0) return <Typography variant="caption" color="text.secondary">ไม่ระบุ</Typography>;
+
+        return (
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', py: 1 }}>
+            {departments.map((dept, index) => (
+              <Chip key={index} label={dept} size="small" color="primary" variant="outlined" />
+            ))}
+          </Box>
+        );
       },
     },
 
     {
-      field: 'projectLocationIds',
+      field: 'projectCount',
       headerName: 'จำนวนโครงการ',
-      width: 120,
+      width: 130,
       align: 'center',
+      valueGetter: (params) => params.row.projectLocationIds?.length || 0,
       renderCell: (params: GridRenderCellParams) => (
         <Chip
-          label={`${params.value?.length || 0} โครงการ`}
+          label={`${params.value} โครงการ`}
           size="small"
           color="primary"
           variant="outlined"

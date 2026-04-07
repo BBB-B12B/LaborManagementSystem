@@ -27,6 +27,7 @@ export * from './DCExpenseDetails';
 export * from './AdditionalIncome';
 export * from './AdditionalExpense';
 export * from './SocialSecurityCalculation';
+export * from './ImportedWageSystem';
 
 // Scan Data Models
 export * from './ScanData';

@@ -24,6 +24,7 @@ import {
   lateRecordConverter,
   fileAttachmentConverter,
   socialSecurityRuleConverter,
+  importedWageSystemConverter,
 } from '../models';
 
 /**
@@ -48,6 +49,7 @@ export const COLLECTIONS = {
   LATE_RECORDS: 'lateRecords',
   FILE_ATTACHMENTS: 'fileAttachments',
   SOCIAL_SECURITY_RULES: 'socialSecurityRules',
+  IMPORTED_WAGE_SYSTEM: 'Wage Calculation system',
 } as const;
 
 /**
@@ -94,6 +96,9 @@ export const collections = {
   socialSecurityRules: db
     .collection(COLLECTIONS.SOCIAL_SECURITY_RULES)
     .withConverter(socialSecurityRuleConverter),
+  importedWageSystem: db
+    .collection(COLLECTIONS.IMPORTED_WAGE_SYSTEM)
+    .withConverter(importedWageSystemConverter),
 };
 
 /**

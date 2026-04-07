@@ -49,7 +49,7 @@ export interface UpdateProjectLocationInput {
 }
 
 export const projectLocationConverter = {
-  toFirestore: (project: any): any => {
+  toFirestore: (project: ProjectLocation): any => {
     return {
       code: project.code,
       projectCode: project.projectCode,

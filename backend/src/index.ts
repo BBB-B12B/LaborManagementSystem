@@ -21,9 +21,10 @@ const PORT = config.port || 4000;
 app.use(helmet());
 
 // CORS
+const corsOrigins = config.corsOrigin.split(',').map(origin => origin.trim());
 app.use(
   cors({
-    origin: config.corsOrigin,
+    origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0],
     credentials: true,
   })
 );
@@ -144,3 +145,4 @@ process.on('SIGINT', () => {
 });
 
 export default app;
+

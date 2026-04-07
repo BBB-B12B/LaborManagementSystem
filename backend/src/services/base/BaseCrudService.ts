@@ -9,6 +9,7 @@ import type {
     CollectionReference,
     Query,
     WhereFilterOp,
+    FieldPath,
 } from 'firebase-admin/firestore';
 
 export interface PaginationOptions {
@@ -142,7 +143,7 @@ export class BaseCrudService<T extends { id: string }> {
     }
 
     async query(
-        filters: Array<{ field: string; operator: WhereFilterOp; value: any }>,
+        filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
         options?: PaginationOptions
     ): Promise<T[]> {
         console.log(`[BaseCrudService] Querying ${this.collectionName || 'unknown'} with filters: ${JSON.stringify(filters)}`);
@@ -175,8 +176,89 @@ export class BaseCrudService<T extends { id: string }> {
         }
     }
 
+    /**
+     * ค้นหาข้อมูลพร้อมระบบสำรองหากไม่มี Index (Fallback)
+     * Queries with fallback to in-memory filtering if Firestore index is missing
+     */
+    async queryWithFallback(
+        filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
+        options?: PaginationOptions
+    ): Promise<T[]> {
+        try {
+            // Try standard query first
+            return await this.query(filters, options);
+        } catch (error: any) {
+            // Check if it's a missing index error (FAILED_PRECONDITION)
+            if (error?.code === 9 || error?.message?.includes('FAILED_PRECONDITION') || error?.message?.includes('index')) {
+                console.warn(`[BaseCrudService] Missing index for ${this.collectionName || 'unknown'}. Falling back to in-memory filtering.`);
+                
+                // Fallback: Use only the first filter (usually an ID or something with a single-field index)
+                if (filters.length === 0) {
+                    const all = await this.getAll({ ...options, pageSize: 5000 });
+                    return all.items;
+                }
+
+                const firstFilter = filters[0];
+                let fallbackQuery = this.collection.where(firstFilter.field, firstFilter.operator, firstFilter.value);
+                
+                const LIMIT = 5000;
+                const snapshot = await fallbackQuery.limit(LIMIT).get();
+                let results = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
+
+                // Helper to normalize values (Dates, Timestamps, etc.)
+                const normalize = (v: any) => {
+                    if (v instanceof Date) return v.getTime();
+                    if (v && typeof v === 'object' && typeof v.toDate === 'function') return v.toDate().getTime();
+                    return v;
+                };
+
+                // Apply remaining filters in memory
+                const remainingFilters = filters.slice(1);
+                remainingFilters.forEach(f => {
+                    const filterVal = normalize(f.value);
+                    results = results.filter(item => {
+                        const itemVal = normalize((item as any)[f.field as string]);
+
+                        switch (f.operator) {
+                            case '==': return itemVal === filterVal;
+                            case '!=': return itemVal !== filterVal;
+                            case '>':  return itemVal > filterVal;
+                            case '>=': return itemVal >= filterVal;
+                            case '<':  return itemVal < filterVal;
+                            case '<=': return itemVal <= filterVal;
+                            default: return true;
+                        }
+                    });
+                });
+
+                // Apply sorting if requested
+                if (options?.orderBy) {
+                    const field = options.orderBy;
+                    const direction = options.orderDirection || 'asc';
+                    results.sort((a, b) => {
+                        const valA = normalize((a as any)[field]);
+                        const valB = normalize((b as any)[field]);
+                        if (valA < valB) return direction === 'asc' ? -1 : 1;
+                        if (valA > valB) return direction === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                }
+
+                // Apply simple pagination slice
+                if (options?.pageSize) {
+                    results = results.slice(0, options.pageSize);
+                }
+
+                return results;
+            }
+            
+            // Re-throw if it's a different kind of error
+            throw error;
+        }
+    }
+
     async count(
-        filters?: Array<{ field: string; operator: WhereFilterOp; value: any }>
+        filters?: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>
     ): Promise<number> {
         let query: Query<T> = this.collection as any;
 

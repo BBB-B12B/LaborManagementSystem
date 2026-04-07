@@ -121,12 +121,20 @@ export interface ImportResult {
   totalRecords: number;
   successfulRecords: number;
   failedRecords: number;
+  duplicateRecords?: number;
   errors: Array<{
     row: number;
     employeeNumber?: string;
     error: string;
   }>;
   warnings: string[];
+  records: Array<{
+    row: number;
+    status: 'success' | 'failed' | 'duplicate';
+    employeeNumber?: string;
+    data: any;
+    error?: string;
+  }>;
 }
 
 /**
@@ -148,7 +156,8 @@ export interface DiscrepancySummary {
 export async function uploadScanDataFile(
   file: File,
   projectLocationId: string,
-  importNote?: string
+  importNote?: string,
+  dryRun?: boolean
 ): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
@@ -161,6 +170,9 @@ export async function uploadScanDataFile(
     '/scan-data/import',
     formData,
     {
+      params: {
+        dryRun: dryRun ? 'true' : 'false'
+      },
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -172,29 +184,10 @@ export async function uploadScanDataFile(
 export const uploadScanDataExcel = uploadScanDataFile;
 
 /**
- * Import ScanData via Raw Text (Smart Notepad)
- */
-export async function importScanDataText(
-  textData: string,
-  projectLocationId: string,
-  importNote?: string
-): Promise<ImportResult> {
-  const response = await apiClient.post<{ success: boolean; data: ImportResult }>(
-    '/scan-data/import-text',
-    {
-      textData,
-      projectLocationId,
-      importNote,
-    }
-  );
-  return response.data.data;
-}
-
-/**
  * Get all scan data with filtering
  */
 export async function getAllScanData(
-  filter?: ScanDataFilter,
+  filter?: ScanDataFilter & { enriched?: boolean },
   page: number = 1,
   pageSize: number = 50
 ): Promise<{
@@ -220,19 +213,20 @@ export async function getAllScanData(
     if (filter.hasDiscrepancy !== undefined)
       params.append('hasDiscrepancy', String(filter.hasDiscrepancy));
     if (filter.importBatchId) params.append('importBatchId', filter.importBatchId);
+    if (filter.enriched) params.append('enriched', 'true');
   }
 
   const response = await apiClient.get<{
     success: boolean;
     data: ScanData[];
-    pagination: { total: number; page: number; pageSize: number };
+    total: number;
   }>(`/scan-data?${params.toString()}`);
 
   return {
     data: response.data.data,
-    total: response.data.pagination.total,
-    page: response.data.pagination.page,
-    pageSize: response.data.pagination.pageSize,
+    total: response.data.total || 0,
+    page,
+    pageSize,
   };
 }
 
@@ -247,17 +241,34 @@ export async function getScanDataById(id: string): Promise<ScanData> {
 }
 
 /**
- * Soft delete scan data
+ * Delete scan data (ลบทั้ง batch)
  */
-export async function softDeleteScanData(id: string): Promise<void> {
-  await apiClient.delete(`/scan-data/${id}`);
+export async function deleteScanDataBatch(importBatchId: string): Promise<{ deletedCount: number }> {
+  const response = await apiClient.delete<{
+    success: boolean;
+    data: { deletedCount: number };
+  }>(`/scan-data/batch/${importBatchId}`);
+  return response.data.data;
 }
 
 /**
- * Delete scan data (ลบทั้ง batch)
+ * Delete scan data (ลบตามโครงการและวันที่)
  */
-export async function deleteScanDataBatch(importBatchId: string): Promise<void> {
-  await apiClient.delete(`/scan-data/batch/${importBatchId}`);
+export async function deleteScanDataBulk(
+  projectLocationId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{ deletedCount: number }> {
+  const params = new URLSearchParams();
+  params.append('projectLocationId', projectLocationId);
+  params.append('startDate', startDate.toISOString());
+  params.append('endDate', endDate.toISOString());
+
+  const response = await apiClient.delete<{
+    success: boolean;
+    data: { deletedCount: number };
+  }>(`/scan-data/bulk?${params.toString()}`);
+  return response.data.data;
 }
 
 /**
@@ -407,6 +418,13 @@ export async function getLateRecords(
 }
 
 /**
+ * Delete a single scan data record
+ */
+export async function softDeleteScanData(id: string): Promise<void> {
+  await apiClient.delete(`/scan-data/${id}`);
+}
+
+/**
  * Trigger discrepancy detection for a date range
  */
 export async function triggerDiscrepancyDetection(
@@ -430,4 +448,97 @@ export async function triggerDiscrepancyDetection(
     detectCounted: response.data.data.detected,
     discrepanciesCreated: response.data.data.discrepanciesCreated,
   };
+}
+
+/**
+ * Add a manual scan record
+ */
+export async function addManualScan(payload: {
+  employeeNumber: string;
+  projectLocationId: string;
+  scanDateTime: Date;
+  notes?: string;
+}): Promise<ScanData> {
+  const response = await apiClient.post<{ success: boolean; data: ScanData }>(
+    '/scan-data/manual',
+    payload
+  );
+  return response.data.data;
+}
+
+/**
+ * Update a scan record
+ */
+export async function updateScanDataRecord(
+  id: string,
+  updates: Partial<ScanData>
+): Promise<ScanData> {
+  const response = await apiClient.patch<{ success: boolean; data: ScanData }>(
+    `/scan-data/${id}`,
+    updates
+  );
+  return response.data.data;
+}
+
+
+/**
+ * Update all punches for a specific contractor and date (Manual correction)
+ */
+export async function updateDailyPunches(
+  contractorId: string,
+  date: Date,
+  punches: string[]
+): Promise<{ success: boolean; count: number }> {
+  const response = await apiClient.put<{ success: boolean; count: number }>(
+    '/scan-data/punches',
+    {
+      contractorId,
+      date: date.toISOString(),
+      punches
+    }
+  );
+  return response.data;
+}
+
+/**
+ * Re-open a resolved discrepancy
+ */
+export async function reopenDiscrepancy(id: string): Promise<ScanDataDiscrepancy> {
+  const response = await apiClient.post<{ success: boolean; data: ScanDataDiscrepancy }>(
+    `/scan-data/discrepancies/${id}/reopen`
+  );
+  return response.data.data;
+}
+
+/**
+ * Export scan data to Excel
+ */
+export async function exportScanData(params: {
+  projectLocationId: string;
+  startDate: Date;
+  endDate: Date;
+  employeeNumber?: string;
+}): Promise<Blob> {
+  const queryParams = new URLSearchParams();
+  queryParams.append('projectLocationId', params.projectLocationId);
+  queryParams.append('startDate', params.startDate.toISOString());
+  queryParams.append('endDate', params.endDate.toISOString());
+  if (params.employeeNumber) {
+    queryParams.append('employeeNumber', params.employeeNumber);
+  }
+
+  const response = await apiClient.get(`/scan-data/export?${queryParams.toString()}`, {
+    responseType: 'blob',
+  });
+  
+  // Create a download link for the excel file
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `scan-data-${params.projectLocationId}.xlsx`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  
+  return response.data;
 }
