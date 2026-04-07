@@ -81,7 +81,7 @@ async function createAdminUser() {
       username,
       passwordHash: hashedPassword,
       name: 'Admin User',
-      roleId: 'role-admin', // Admin role ID
+      roleId: 'AM',
       department: 'PD01',
       dateOfBirth: null,
       startDate: admin.firestore.Timestamp.now(),
@@ -93,7 +93,21 @@ async function createAdminUser() {
       updatedBy: 'system',
     };
 
-    await db.collection('users').doc(authUser.uid).set(userDoc);
+    const normalizedUsername = username.toLowerCase();
+
+    await db.collection('User').doc(employeeId).set({
+      ...userDoc,
+      Employeeid: employeeId,
+      Username: normalizedUsername,
+      UsernameLower: normalizedUsername,
+      Fullname: userDoc.name,
+      Fullnameen: userDoc.name,
+      Role: 'AM',
+      Department: userDoc.department,
+      Password: password,
+      projectLocation: userDoc.projectLocationIds,
+      Active: userDoc.isActive ? 'On' : 'Off',
+    });
     console.log('✅ Firestore user document created');
 
     // 4. Print credentials

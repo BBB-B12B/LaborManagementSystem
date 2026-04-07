@@ -1,6 +1,11 @@
+﻿'use client';
 /**
  * User Form Component
+<<<<<<< Updated upstream
  * Create / Edit user with validation
+=======
+ * Central popup form for creating/editing members
+>>>>>>> Stashed changes
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -14,20 +19,18 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  FormControlLabel,
-  Switch,
   InputAdornment,
   IconButton,
-  Paper,
+  MenuItem,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+
 import {
   userCreateSchema,
   userEditSchema,
   type UserCreateInput,
   type UserEditInput,
 } from '../../../validation/userSchema';
-import { DatePicker } from '../../../components/forms/DatePicker';
 import { RoleSelect } from '../../../components/forms/RoleSelect';
 import { DepartmentSelect } from '../../../components/forms/DepartmentSelect';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
@@ -40,6 +43,14 @@ export interface UserFormProps {
   isLoading?: boolean;
 }
 
+<<<<<<< Updated upstream
+=======
+const ACTIVE_OPTIONS = [
+  { label: 'On', value: true },
+  { label: 'Off', value: false },
+];
+
+>>>>>>> Stashed changes
 export function UserForm({
   defaultValues,
   onSubmit,
@@ -48,15 +59,19 @@ export function UserForm({
   isLoading = false,
 }: UserFormProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const schema = mode === 'create' ? userCreateSchema : userEditSchema;
 
   const initialValues = useMemo(
     () => ({
+      employeeId: '',
+      username: '',
+      password: '',
+      name: '',
+      fullNameEn: '',
+      projectLocationIds: [] as string[],
       isActive: true,
-      projectLocationIds: [],
       ...defaultValues,
     }),
     [defaultValues]
@@ -81,6 +96,7 @@ export function UserForm({
       setSubmitError(null);
       await onSubmit(data);
     } catch (error: any) {
+<<<<<<< Updated upstream
       setSubmitError(error.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง');
     }
   };
@@ -118,6 +134,39 @@ export function UserForm({
             </Typography>
           </Grid>
 
+=======
+      setSubmitError(error.message || 'Failed to submit user data. Please try again.');
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        p: 3,
+        borderRadius: 3,
+        minWidth: { xs: '100%', md: 640 },
+        bgcolor: 'background.paper',
+        boxShadow: 2,
+      }}
+    >
+      <Box
+        component="form"
+        onSubmit={handleSubmit(handleFormSubmit)}
+        sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+        noValidate
+      >
+        {submitError && (
+          <Alert severity="error" onClose={() => setSubmitError(null)}>
+            {submitError}
+          </Alert>
+        )}
+
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Basic Information
+        </Typography>
+
+        <Grid container spacing={2.5}>
+>>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='employeeId'
@@ -125,18 +174,25 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
+<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='รหัสพนักงาน *'
+=======
+                  label="Employee ID"
+>>>>>>> Stashed changes
                   required
                   fullWidth
                   error={!!errors.employeeId}
                   helperText={errors.employeeId?.message}
-                  disabled={isLoading || isSubmitting}
+                  disabled={isLoading || isSubmitting || mode === 'edit'}
                 />
               )}
             />
           </Grid>
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='name'
@@ -144,8 +200,12 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
+<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='ชื่อ-นามสกุล *'
+=======
+                  label="Full Name (TH)"
+>>>>>>> Stashed changes
                   required
                   fullWidth
                   error={!!errors.name}
@@ -155,7 +215,26 @@ export function UserForm({
               )}
             />
           </Grid>
+<<<<<<< Updated upstream
 
+=======
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="fullNameEn"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  label="Full Name (EN)"
+                  fullWidth
+                  error={!!errors.fullNameEn}
+                  helperText={errors.fullNameEn?.message}
+                  disabled={isLoading || isSubmitting}
+                />
+              )}
+            />
+          </Grid>
+>>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='username'
@@ -163,18 +242,33 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
+<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='Username *'
                   required
                   fullWidth
                   error={!!errors.username}
                   helperText={errors.username?.message || 'ไม่สามารถมีช่องว่างและต้องไม่ซ้ำ'}
+=======
+                  label="Username"
+                  required
+                  fullWidth
+                  error={!!errors.username}
+                  helperText={
+                    errors.username?.message || 'Lowercase letters, numbers, dot or underscore only'
+                  }
+>>>>>>> Stashed changes
                   disabled={isLoading || isSubmitting}
+                  value={field.value ?? ''}
+                  onChange={(event) => field.onChange(event.target.value.toLowerCase())}
                 />
               )}
             />
           </Grid>
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='password'
@@ -182,12 +276,17 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
+<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='รหัสผ่าน *'
+=======
+                  label="Password"
+>>>>>>> Stashed changes
                   type={showPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
                   error={!!errors.password}
+<<<<<<< Updated upstream
                   helperText={errors.password?.message || passwordHelper}
                   disabled={isLoading || isSubmitting}
                   InputProps={{
@@ -199,6 +298,18 @@ export function UserForm({
                           disabled={isLoading || isSubmitting}
                           aria-label='toggle password visibility'
                         >
+=======
+                  helperText={
+                    mode === 'edit'
+                      ? errors.password?.message || 'Leave blank to keep existing password'
+                      : errors.password?.message
+                  }
+                  disabled={isLoading || isSubmitting}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton onClick={() => setShowPassword((prev) => !prev)} edge="end">
+>>>>>>> Stashed changes
                           {showPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
                       </InputAdornment>
@@ -208,7 +319,9 @@ export function UserForm({
               )}
             />
           </Grid>
+        </Grid>
 
+<<<<<<< Updated upstream
           <Grid item xs={12} md={6}>
             <Controller
               name='confirmPassword'
@@ -249,14 +362,21 @@ export function UserForm({
             </Typography>
           </Grid>
 
+=======
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Role & Department
+        </Typography>
+
+        <Grid container spacing={2.5}>
+>>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='roleId'
               control={control}
               render={({ field }) => (
                 <RoleSelect
-                  value={field.value}
-                  onChange={field.onChange}
+                  {...field}
+                  label="Role"
                   error={!!errors.roleId}
                   helperText={errors.roleId?.message}
                   disabled={isLoading || isSubmitting}
@@ -265,15 +385,18 @@ export function UserForm({
               )}
             />
           </Grid>
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='department'
               control={control}
               render={({ field }) => (
                 <DepartmentSelect
-                  value={field.value}
-                  onChange={field.onChange}
+                  {...field}
+                  label="Department"
                   error={!!errors.department}
                   helperText={errors.department?.message}
                   disabled={isLoading || isSubmitting}
@@ -282,6 +405,7 @@ export function UserForm({
               )}
             />
           </Grid>
+<<<<<<< Updated upstream
 
           <Grid item xs={12}>
             <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
@@ -419,8 +543,75 @@ export function UserForm({
               </Button>
             </Box>
           </Grid>
+=======
+>>>>>>> Stashed changes
         </Grid>
+
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Project Access
+        </Typography>
+
+        <Controller
+          name="projectLocationIds"
+          control={control}
+          render={({ field }) => (
+            <ProjectSelect
+              multiple
+              displayProjectNameOnly
+              value={Array.isArray(field.value) ? field.value : []}
+              onChange={(value) =>
+                field.onChange(Array.isArray(value) ? value : value ? [value] : [])
+              }
+              error={!!errors.projectLocationIds}
+              helperText=
+                errors.projectLocationIds?.message || 'Select at least one accessible project'
+              disabled={isLoading || isSubmitting}
+              required
+            />
+          )}
+        />
+
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Active Status
+        </Typography>
+
+        <Controller
+          name="isActive"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              select
+              fullWidth
+              label="Active"
+              value={field.value ? 'On' : 'Off'}
+              onChange={(event) => field.onChange(event.target.value === 'On')}
+              disabled={isLoading || isSubmitting}
+            >
+              {ACTIVE_OPTIONS.map((option) => (
+                <MenuItem key={option.label} value={option.label}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
+
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 1 }}>
+          <Button variant="outlined" onClick={onCancel} disabled={isLoading || isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isLoading || isSubmitting}
+            startIcon={isSubmitting && <CircularProgress size={20} />}
+          >
+            {mode === 'create' ? 'Create User' : 'Update User'}
+          </Button>
+        </Box>
       </Box>
-    </Paper>
+    </Box>
   );
 }
+
+export default UserForm;
