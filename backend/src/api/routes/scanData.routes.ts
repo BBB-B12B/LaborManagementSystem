@@ -311,6 +311,83 @@ router.get(
 );
 
 /**
+ * GET /api/scan-data/export
+ * Export filtered scan data to Excel
+ */
+router.get('/export', async (req: Request, res: Response) => {
+  try {
+    const { projectLocationId, startDate, endDate, employeeNumber } = req.query;
+    
+    if (!projectLocationId || !startDate || !endDate) {
+       throw new AppError('กรุณาระบุโครงการและช่วงวันที่', 400);
+    }
+
+    const rows = await scanDataService.getAggregatedDataForExport({
+      projectLocationId: projectLocationId as string,
+      startDate: new Date(startDate as string),
+      endDate: new Date(endDate as string)
+    });
+
+    let filteredRows = rows;
+    if (employeeNumber) {
+      filteredRows = rows.filter((r: any) => 
+        String(r.EmployeeNumber).includes(employeeNumber as string)
+      );
+    }
+
+    if (!filteredRows || filteredRows.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับเงื่อนไขนี้', 404);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(filteredRows, { 
+      header: [
+        'EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6',
+        'NormalStatus', 'RegularHours', 'LunchStatus', 'MorningOT', 'EveningOT', 'LateMinutes',
+        'DiffMorning', 'DiffLunch', 'DiffEvening', 'Department'
+      ] 
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Export_${new Date().getTime()}.xlsx`);
+    res.send(buffer);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Export failed' });
+  }
+});
+
+/**
+ * GET /api/scan-data/batch/:batchId/export
+ */
+router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+    const rows = await scanDataService.getAggregatedDataForExport({ batchId });
+    
+    if (!rows || rows.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับ Batch นี้', 404);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows, { 
+      header: [
+        'EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6',
+        'NormalStatus', 'RegularHours', 'LunchStatus', 'MorningOT', 'EveningOT', 'LateMinutes',
+        'DiffMorning', 'DiffLunch', 'DiffEvening', 'Department'
+      ] 
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Batch_${batchId}.xlsx`);
+    res.send(buffer);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Export failed' });
+  }
+});
+
+/**
  * GET /api/scan-data/:id
  */
 router.get('/:id', async (req: Request, res: Response) => {
@@ -383,12 +460,18 @@ router.post(
         return rowA - rowB;
       });
 
+      const totalParseErrors = parseErrors.length;
+      const combinedTotalRecords = importSummary.totalRecords + totalParseErrors;
+      const combinedFailedRecords = importSummary.failedRecords + totalParseErrors;
+      const combinedSuccessRecords = importSummary.successfulRecords;
+
       return res.json({
-        success: importSummary.success && parseErrors.length === 0,
+        success: combinedFailedRecords === 0,
         data: {
           ...importSummary,
-          totalRecords: importSummary.totalRecords + parseErrors.length,
-          failedRecords: importSummary.failedRecords + parseErrors.length,
+          totalRecords: combinedTotalRecords,
+          successfulRecords: combinedSuccessRecords,
+          failedRecords: combinedFailedRecords,
           errors: [...parseErrors, ...importSummary.errors],
           warnings: [...warnings, ...importSummary.warnings],
           records: combinedRecords,
@@ -396,7 +479,7 @@ router.post(
       });
     } catch (error: any) {
       console.error('CRASH IN /import ROUTE:', error);
-      return res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Import failed', stack: error.stack });
+      return res.status(error.statusCode || 500).json({ success: false, error: error.stack || error.message || 'Import failed', stack: error.stack });
     }
   }
 );
@@ -572,148 +655,6 @@ router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Respons
 });
 
 /**
- * GET /api/scan-data/export
- * Export filtered scan data to Excel
- */
-router.get('/export', async (req: Request, res: Response) => {
-  try {
-    const { projectLocationId, startDate, endDate, employeeNumber } = req.query;
-    
-    if (!projectLocationId || !startDate || !endDate) {
-       throw new AppError('กรุณาระบุโครงการและช่วงวันที่', 400);
-    }
-
-    const scans = await scanDataService.getByProjectAndDate(
-      projectLocationId as string,
-      new Date(startDate as string),
-      new Date(endDate as string)
-    );
-
-    let filteredScans = scans;
-    if (employeeNumber) {
-      filteredScans = scans.filter(s => 
-        (s.employeeNumber && s.employeeNumber.includes(employeeNumber as string)) || 
-        (s.employeeId && s.employeeId.includes(employeeNumber as string))
-      );
-    }
-
-    if (!filteredScans || filteredScans.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับเงื่อนไขนี้', 404);
-
-    const grouped = new Map<string, any>();
-    filteredScans.sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
-
-    filteredScans.forEach(scan => {
-      const dateStr = scan.scanDateTime.toISOString().split('T')[0];
-      const empNum = scan.employeeNumber || scan.employeeId || 'Unknown';
-      const key = `${empNum}_${dateStr}`;
-
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          EmployeeNumber: empNum,
-          Date: dateStr,
-          Times: [],
-        });
-      }
-      const entry = grouped.get(key);
-      const timeStr = scan.scanDateTime.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
-      entry.Times.push(timeStr);
-    });
-
-    const rows: any[] = [];
-    const keys = Array.from(grouped.keys());
-
-    keys.sort((a, b) => {
-      const [empA, dateA] = a.split('_');
-      const [empB, dateB] = b.split('_');
-      if (empA !== empB) return empA.localeCompare(empB, undefined, { numeric: true });
-      return dateA.localeCompare(dateB);
-    });
-
-    keys.forEach(key => {
-      const data = grouped.get(key);
-      const row: any = { EmployeeNumber: data.EmployeeNumber, Date: data.Date };
-      data.Times.slice(0, 6).forEach((t: string, i: number) => {
-        row[`Time${i + 1}`] = t;
-      });
-      rows.push(row);
-    });
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows, { header: ['EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6'] });
-
-    XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Export_${new Date().getTime()}.xlsx`);
-    res.send(buffer);
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message || 'Export failed' });
-  }
-});
-
-/**
- * GET /api/scan-data/batch/:batchId/export
- */
-router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
-  try {
-    const { batchId } = req.params;
-    const scans = await scanDataService.getByBatchId(batchId);
-    if (!scans || scans.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับ Batch นี้', 404);
-
-    const grouped = new Map<string, any>();
-    scans.sort((a, b) => a.scanDateTime.getTime() - b.scanDateTime.getTime());
-
-    scans.forEach(scan => {
-      const dateStr = scan.scanDateTime.toISOString().split('T')[0];
-      const empNum = scan.employeeNumber || scan.employeeId || 'Unknown';
-      const key = `${empNum}_${dateStr}`;
-
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          EmployeeNumber: empNum,
-          Date: dateStr,
-          Times: [],
-        });
-      }
-      const entry = grouped.get(key);
-      const timeStr = scan.scanDateTime.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
-      entry.Times.push(timeStr);
-    });
-
-    const rows: any[] = [];
-    const keys = Array.from(grouped.keys());
-
-    keys.sort((a, b) => {
-      const [empA, dateA] = a.split('_');
-      const [empB, dateB] = b.split('_');
-      if (empA !== empB) return empA.localeCompare(empB, undefined, { numeric: true });
-      return dateA.localeCompare(dateB);
-    });
-
-    keys.forEach(key => {
-      const data = grouped.get(key);
-      const row: any = { EmployeeNumber: data.EmployeeNumber, Date: data.Date };
-      data.Times.slice(0, 6).forEach((t: string, i: number) => {
-        row[`Time${i + 1}`] = t;
-      });
-      rows.push(row);
-    });
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows, { header: ['EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6'] });
-
-    XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Batch_${batchId}.xlsx`);
-    res.send(buffer);
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message || 'Export failed' });
-  }
-});
-/**
  * Add a manual scan record
  */
 router.post('/manual', async (req: Request, res: Response) => {
@@ -787,14 +728,15 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const authReq = req as AuthRequest;
-      const { contractorId, date, punches } = req.body;
+      const { id, contractorId, date, punches } = req.body;
       const updatedBy = authReq.user?.name || authReq.user?.username || 'admin';
       
       const result = await scanDataService.updateDailyPunches(
         contractorId,
         new Date(date),
         punches,
-        updatedBy
+        updatedBy,
+        id
       );
       
       res.json(result);

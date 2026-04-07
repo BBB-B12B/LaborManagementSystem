@@ -249,13 +249,13 @@ const ScanDataMonitoringWidget: React.FC<ScanDataMonitoringWidgetProps> = ({
               <Typography variant="subtitle2" gutterBottom>
                 ความผิดปกติล่าสุด:
               </Typography>
-              {summary.recentDiscrepancies.length === 0 ? (
+              {(summary.recentDiscrepancies || []).length === 0 ? (
                 <Alert severity="success" sx={{ mt: 1 }}>
                   ไม่พบความผิดปกติ ✓
                 </Alert>
               ) : (
                 <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
-                  {summary.recentDiscrepancies.map((discrepancy) => (
+                  {(summary.recentDiscrepancies || []).map((discrepancy) => (
                     <ListItemButton
                       key={discrepancy.id}
                       onClick={() => handleViewDiscrepancy(discrepancy.id)}

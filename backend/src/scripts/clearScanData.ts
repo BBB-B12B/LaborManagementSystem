@@ -1,61 +1,47 @@
-import admin from 'firebase-admin';
-import dotEnv from 'dotenv';
-dotEnv.config();
+import { db } from '../config/firebase';
 
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    : undefined;
+async function deleteCollection(collectionPath: string, batchSize: number = 100) {
+  const collectionRef = db.collection(collectionPath);
+  const query = collectionRef.orderBy('__name__').limit(batchSize);
 
-if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: serviceAccount ? admin.credential.cert(serviceAccount) : admin.credential.applicationDefault(),
-        projectId: process.env.FIREBASE_PROJECT_ID || 'labor-management-system-33b06',
-    });
+  return new Promise((resolve, reject) => {
+    deleteQueryBatch(query, resolve).catch(reject);
+  });
 }
 
-const db = admin.firestore();
+async function deleteQueryBatch(query: FirebaseFirestore.Query, resolve: any) {
+  const snapshot = await query.get();
 
-async function clearScanData() {
-    console.log("Preparing to clear all scanData documents...");
-    
-    const collectionRef = db.collection('scanData');
-    const snapshot = await collectionRef.get();
-    
-    if (snapshot.empty) {
-        console.log("No documents found in scanData.");
-        return;
-    }
+  const batchSize = snapshot.size;
+  if (batchSize === 0) {
+    resolve();
+    return;
+  }
 
-    console.log(`Found ${snapshot.size} documents. Starting deletion...`);
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
 
-    const batchSize = 500;
-    let batch = db.batch();
-    let count = 0;
-    let totalDeleted = 0;
-
-    for (const doc of snapshot.docs) {
-        batch.delete(doc.ref);
-        count++;
-        totalDeleted++;
-        
-        if (count >= batchSize) {
-            await batch.commit();
-            console.log(`Deleted ${totalDeleted} documents...`);
-            batch = db.batch();
-            count = 0;
-        }
-    }
-
-    if (count > 0) {
-        await batch.commit();
-        console.log(`Deleted ${totalDeleted} documents...`);
-    }
-
-    console.log("\nSuccess: scanData collection has been cleared.");
-    process.exit(0);
+  process.nextTick(() => {
+    deleteQueryBatch(query, resolve);
+  });
 }
 
-clearScanData().catch(err => {
-    console.error("Failed to clear scanData:", err);
+async function main() {
+  console.log('Clearing scanData...');
+  await deleteCollection('scanData');
+  console.log('scanData cleared.');
+
+  console.log('Clearing scanDataDiscrepancies...');
+  await deleteCollection('scanDataDiscrepancies');
+  console.log('scanDataDiscrepancies cleared.');
+  
+  process.exit(0);
+}
+
+main().catch((err) => {
+    console.error(err);
     process.exit(1);
 });

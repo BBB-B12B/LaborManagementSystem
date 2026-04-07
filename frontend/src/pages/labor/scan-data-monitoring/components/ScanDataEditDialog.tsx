@@ -8,18 +8,19 @@ import {
   Typography,
   Box,
   IconButton,
-  TextField,
   Stack,
   Alert,
   Divider,
 } from '@mui/material';
-import { Add, Delete, AccessTime, Save, Cancel } from '@mui/icons-material';
+import { Add, Delete, AccessTime, Save, Cancel, ArrowUpward, ArrowDownward, Sort } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { updateDailyPunches } from '../../../../services/scanDataService';
+import { TimePicker } from '../../../../components/forms/TimePicker';
 
 interface ScanDataEditDialogProps {
   open: boolean;
   onClose: () => void;
+  id?: string;
   contractorId: string;
   contractorName: string;
   employeeNumber: string;
@@ -34,6 +35,7 @@ interface ScanDataEditDialogProps {
 export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
   open,
   onClose,
+  id,
   contractorId,
   contractorName,
   employeeNumber,
@@ -46,12 +48,37 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
 
   useEffect(() => {
     if (open) {
-      // Sort punches for better UX
-      const sorted = [...existingPunches].sort();
-      setPunches(sorted.length > 0 ? sorted : ['']);
+      // Very aggressive cleanup: Extract only HH:mm from any string
+      const cleaned = existingPunches.map(p => {
+        if (!p) return null;
+        const s = p.toString().trim();
+        const match = s.match(/(\d{1,2}):(\d{1,2})/);
+        if (match) {
+          return `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
+        }
+        return null;
+      }).filter(Boolean) as string[];
+      
+      setPunches(cleaned.length > 0 ? cleaned : ['']);
       setError(null);
     }
   }, [open, existingPunches]);
+
+  const sortPunches = () => {
+    const sorted = [...punches]
+      .filter(p => p !== '')
+      .sort((a, b) => a.localeCompare(b));
+    setPunches(sorted.length > 0 ? sorted : ['']);
+  };
+
+  const movePunch = (index: number, direction: 'up' | 'down') => {
+    const newPunches = [...punches];
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= punches.length) return;
+    
+    [newPunches[index], newPunches[targetIdx]] = [newPunches[targetIdx], newPunches[index]];
+    setPunches(newPunches);
+  };
 
   const addPunch = () => {
     setPunches([...punches, '']);
@@ -69,7 +96,7 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
   };
 
   const mutation = useMutation({
-    mutationFn: () => updateDailyPunches(contractorId, workDate, punches.filter(p => p !== '')),
+    mutationFn: () => updateDailyPunches(contractorId, workDate, punches.filter(p => p !== ''), id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['discrepancies'] });
       queryClient.invalidateQueries({ queryKey: ['allScanData'] });
@@ -119,16 +146,45 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
         )}
 
         <Stack spacing={2}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button 
+              size="small" 
+              startIcon={<Sort />} 
+              onClick={sortPunches}
+              disabled={punches.filter(p => p !== '').length < 2}
+            >
+              เรียงตามเวลา (T1 → T6)
+            </Button>
+          </Box>
+          
           {punches.map((punch, index) => (
-            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <TextField
-                type="time"
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexGrow: 1 }}>
+              <Stack spacing={0}>
+                <IconButton 
+                  size="small" 
+                  disabled={index === 0} 
+                  onClick={() => movePunch(index, 'up')}
+                  sx={{ p: 0, color: index === 0 ? 'action.disabled' : 'primary.main' }}
+                >
+                  <ArrowUpward sx={{ fontSize: 18 }} />
+                </IconButton>
+                <IconButton 
+                  size="small" 
+                  disabled={index === punches.length - 1} 
+                  onClick={() => movePunch(index, 'down')}
+                  sx={{ p: 0, color: index === punches.length - 1 ? 'action.disabled' : 'primary.main' }}
+                >
+                  <ArrowDownward sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Stack>
+              <TimePicker
+                label={index === 0 ? 'T1 (เข้าเลิกงาน)' : `T${index + 1}`}
                 value={punch}
-                onChange={(e) => updatePunch(index, e.target.value)}
+                onChange={(newValue) => updatePunch(index, newValue || '')}
                 size="small"
                 fullWidth
-                InputLabelProps={{ shrink: true }}
               />
+              <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', mt: 1 }}>น.</Typography>
               <IconButton 
                 color="error" 
                 onClick={() => removePunch(index)}

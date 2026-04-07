@@ -487,11 +487,13 @@ export async function updateScanDataRecord(
 export async function updateDailyPunches(
   contractorId: string,
   date: Date,
-  punches: string[]
+  punches: string[],
+  scanDataId?: string
 ): Promise<{ success: boolean; count: number }> {
   const response = await apiClient.put<{ success: boolean; count: number }>(
     '/scan-data/punches',
     {
+      id: scanDataId,
       contractorId,
       date: date.toISOString(),
       punches
@@ -508,4 +510,34 @@ export async function reopenDiscrepancy(id: string): Promise<ScanDataDiscrepancy
     `/scan-data/discrepancies/${id}/reopen`
   );
   return response.data.data;
+}
+
+/**
+ * Export scan data to Excel
+ */
+export async function exportScanData(params: {
+  projectLocationId: string;
+  startDate: Date;
+  endDate: Date;
+  employeeNumber?: string;
+}): Promise<void> {
+  // apiClient already handles the /api prefix, so we just need the path here
+  const response = await apiClient.get('/scan-data/export', {
+    params: {
+      projectLocationId: params.projectLocationId,
+      startDate: params.startDate.toISOString(),
+      endDate: params.endDate.toISOString(),
+      employeeNumber: params.employeeNumber,
+    },
+    responseType: 'blob',
+  });
+
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `ScanData_Export_${new Date().getTime()}.xlsx`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }

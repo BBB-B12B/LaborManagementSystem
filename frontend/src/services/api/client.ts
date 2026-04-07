@@ -144,8 +144,13 @@ apiClient.interceptors.response.use(
           break;
         case 500:
           // Server error
-          console.error('Server error');
+          console.error('Server error', error.response.data);
           break;
+      }
+      
+      // Attempt to extract backend error message if available
+      if (error.response.data && (error.response.data as any).error) {
+        return Promise.reject(new Error((error.response.data as any).error));
       }
     }
     return Promise.reject(error);

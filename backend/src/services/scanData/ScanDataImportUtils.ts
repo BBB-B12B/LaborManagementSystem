@@ -176,12 +176,13 @@ function parseDateValue(raw: unknown): Date | null {
   for (const format of DATE_FORMATS) {
     const parsed = parse(normalizedValue, format, new Date());
     if (isValidDate(parsed)) {
+      if (parsed.getFullYear() < 1000) continue; // Prevent "25-08-25" matching "dd-MM-yyyy" yielding year 25
       return fromZonedTime(parsed, 'Asia/Bangkok');
     }
   }
 
   const parsed = new Date(normalizedValue);
-  if (!Number.isNaN(parsed.getTime())) {
+  if (!Number.isNaN(parsed.getTime()) && parsed.getFullYear() >= 1000) {
     return parsed;
   }
 
