@@ -31,7 +31,7 @@ import { dailyReportService } from '@/services/dailyReportService';
 import { overtimeService } from '@/services/overtimeService';
 import { formatDate, formatTime } from '@/utils/dateUtils';
 import { getOTPeriodLabel, type OTPeriod } from '@/validation/overtimeSchema';
-import { ExcelImportModal } from './components/ExcelImportModal';
+import DailyReportUploadDialog from './components/DailyReportUploadDialog';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 // Fix for MUI X DataGrid v5 type mismatch
@@ -526,7 +526,7 @@ export default function WorkRecordsPage() {
 
           <DeleteConfirmDialog />
           
-          <ExcelImportModal
+          <DailyReportUploadDialog
             open={isImportModalOpen}
             onClose={() => setIsImportModalOpen(false)}
             onSuccess={() => {

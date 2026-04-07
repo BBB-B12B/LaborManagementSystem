@@ -13,27 +13,30 @@ export type ReportStatus = 'draft' | 'submitted' | 'verified' | 'locked';
 export interface DailyReportEntry {
   id: string; // UUID
   dailyContractorId: string;
-  employeeId?: string; // Denormalized ID for scan matching (T-400)
-  verificationStatus?: 'unverified' | 'auto_verified' | 'manual_verified' | 'discrepancy'; // (T-401)
+  employeeId?: string;
   taskName: string;
   workType: WorkType;
-  startTime: Date;
-  endTime: Date;
-  totalHours: number;
-  netHours: number;
+  hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
   notes?: string;
-  fileAttachmentIds?: string[];
   createdAt: Date;
+}
+
+export interface DailyReportSummary {
+  workerCount: number;         // จำนวนคน
+  totalNetHours: number;       // ชั่วโมงสุทธิรวม
+  regularHours: number;        // ชั่วโมงปกติรวม
+  otHours: number;             // ชั่วโมง OT ทุกประเภท
+  lastImportAt?: Date;         // วันที่นำเข้าล่าสุด
 }
 
 export interface DailyReport {
   id: string; // REP_[projectId]_[YYYY-MM-DD]
   projectLocationId: string;
   date: Date; // YYYY-MM-DD 00:00:00
-  entries: DailyReportEntry[]; // Array of work entries
   status: ReportStatus;
+  summary: DailyReportSummary; // [CACHE] ข้อมูลสรุปภาพรวม
   notes?: string;
-  importFileUrls?: string[]; // URLs to source Excel files (Audit Trail)
+  importFileUrls?: string[]; // URLs ของไฟล์ต้นฉบับ
 
   // Metadata
   createdAt: Date;
@@ -41,6 +44,31 @@ export interface DailyReport {
   createdBy: string;
   updatedBy: string;
   version: number;
+}
+
+export interface DailyWorkerReportLog {
+  action: 'import' | 'create' | 'update' | 'delete';
+  timestamp: Date;
+  userId: string;
+  details: string;
+}
+
+export interface DailyWorkerReport {
+  id: string; // dailyContractorId
+  dailyContractorId: string;
+  employeeId: string;
+  workerName: string;
+  
+  // [ALIGNMENT] ฟิลด์ที่สอดคล้องกับ ScanData ของทีม
+  regularHours: number;
+  otMorningHours: number;
+  otNoonHours: number;
+  otEveningHours: number;
+  totalNetHours: number;
+
+  entries: DailyReportEntry[]; // ข้อมูลดิบรายคน
+  editHistory: DailyWorkerReportLog[]; // ประวัติ Audit Log
+  updatedAt: Date;
 }
 
 export interface CreateDailyReportInput {
@@ -99,28 +127,23 @@ export function calculateNetHours(
 }
 
 /**
- * Firestore document converter for DailyReport
+ * Firestore document converter for DailyReport (Summary Cache)
  */
 export const dailyReportConverter = {
-  toFirestore: (report: Omit<DailyReport, 'id'>): any => {
-    return {
-      projectLocationId: report.projectLocationId,
-      date: report.date,
-      entries: report.entries.map(e => ({
-        ...e,
-        startTime: e.startTime,
-        endTime: e.endTime,
-        createdAt: e.createdAt
-      })),
-      status: report.status,
-      notes: report.notes || null,
-      importFileUrls: report.importFileUrls || [],
-      createdAt: report.createdAt,
-      updatedAt: report.updatedAt,
-      createdBy: report.createdBy,
-      updatedBy: report.updatedBy,
-      version: report.version,
-    };
+  toFirestore: (report: Partial<DailyReport>): any => {
+    const data: any = {};
+    if (report.projectLocationId !== undefined) data.projectLocationId = report.projectLocationId;
+    if (report.date !== undefined) data.date = report.date;
+    if (report.summary !== undefined) data.summary = report.summary;
+    if (report.status !== undefined) data.status = report.status;
+    if (report.notes !== undefined) data.notes = report.notes;
+    if (report.importFileUrls !== undefined) data.importFileUrls = report.importFileUrls;
+    if (report.createdAt !== undefined) data.createdAt = report.createdAt;
+    if (report.updatedAt !== undefined) data.updatedAt = report.updatedAt;
+    if (report.createdBy !== undefined) data.createdBy = report.createdBy;
+    if (report.updatedBy !== undefined) data.updatedBy = report.updatedBy;
+    if (report.version !== undefined) data.version = report.version;
+    return data;
   },
   fromFirestore: (snapshot: any): DailyReport => {
     const data = snapshot.data();
@@ -128,12 +151,12 @@ export const dailyReportConverter = {
       id: snapshot.id,
       projectLocationId: data.projectLocationId,
       date: data.date.toDate(),
-      entries: (data.entries || []).map((e: any) => ({
-        ...e,
-        startTime: e.startTime.toDate(),
-        endTime: e.endTime.toDate(),
-        createdAt: e.createdAt.toDate()
-      })),
+      summary: data.summary || {
+        workerCount: 0,
+        totalNetHours: 0,
+        regularHours: 0,
+        otHours: 0
+      },
       status: data.status,
       notes: data.notes,
       importFileUrls: data.importFileUrls || [],

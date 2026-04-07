@@ -32,7 +32,7 @@ router.post(
 
 /** Remove Work Entry */
 router.delete(
-  '/project/:projectId/date/:date/entry/:entryId',
+  '/project/:projectId/date/:date/worker/:workerId/entry/:entryId',
   authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
   removeWorkEntry
 );

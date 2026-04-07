@@ -11,24 +11,47 @@ export type ReportStatus = 'draft' | 'submitted' | 'verified' | 'locked';
 export interface DailyReportEntry {
   id: string; // UUID
   dailyContractorId: string;
+  employeeId?: string;
   taskName: string;
   workType: WorkType;
-  startTime: string; // ISO String
-  endTime: string;   // ISO String
-  totalHours: number;
-  netHours: number;
+  hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
   notes?: string;
-  fileAttachmentIds?: string[];
   createdAt: string; // ISO String
+}
+
+export interface DailyReportSummary {
+  workerCount: number;
+  totalNetHours: number;
+  regularHours: number;
+  otHours: number;
+  lastImportAt?: string;
+}
+
+export interface DailyWorkerReport {
+  id: string; // dailyContractorId
+  dailyContractorId: string;
+  employeeId: string;
+  workerName: string;
+  
+  // [ALIGNMENT] ฟิลด์ที่สอดคล้องกับ ScanData ของทีม
+  regularHours: number;
+  otMorningHours: number;
+  otNoonHours: number;
+  otEveningHours: number;
+  totalNetHours: number;
+
+  entries: DailyReportEntry[];
+  updatedAt: string;
 }
 
 export interface DailyReport {
   id: string;
   projectLocationId: string;
   date: string; // ISO String or YYYY-MM-DD
-  entries: DailyReportEntry[];
   status: ReportStatus;
+  summary: DailyReportSummary; // [CACHE] ข้อมูลสรุปภาพรวม
   notes?: string;
+  importFileUrls?: string[];
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -39,7 +62,17 @@ export interface DailyReport {
 export interface AddEntryInput {
   projectId: string;
   date: Date;
-  entry: Omit<DailyReportEntry, 'id' | 'createdAt' | 'totalHours' | 'netHours'>;
+  entry: Omit<DailyReportEntry, 'id' | 'createdAt'>;
+}
+
+export interface DailyReportImportResult {
+  success: boolean;
+  totalRecords: number;
+  successfulRecords: number;
+  failedRecords: number;
+  errors: Array<{ row: number; error: string; employeeNumber?: string }>;
+  warnings: string[];
+  importBatchId?: string;
 }
 
 class DailyReportService {
@@ -62,8 +95,7 @@ class DailyReportService {
       date: input.date.toISOString(),
       entry: {
         ...input.entry,
-        startTime: new Date(input.entry.startTime).toISOString(),
-        endTime: new Date(input.entry.endTime).toISOString()
+        hours: Number(input.entry.hours || 0)
       }
     });
     return data;
@@ -72,9 +104,9 @@ class DailyReportService {
   /**
    * Remove Work Entry
    */
-  async removeWorkEntry(projectId: string, date: Date, entryId: string): Promise<void> {
+  async removeWorkEntry(projectId: string, date: Date, workerId: string, entryId: string): Promise<void> {
     const dateStr = date.toISOString().split('T')[0];
-    await apiClient.delete(`/daily-reports/project/${projectId}/date/${dateStr}/entry/${entryId}`);
+    await apiClient.delete(`/daily-reports/project/${projectId}/date/${dateStr}/worker/${workerId}/entry/${entryId}`);
   }
 
   /**
@@ -94,24 +126,15 @@ class DailyReportService {
    */
   async create(data: any): Promise<any> {
     const results = [];
-    // If data comes from legacy form, it has dailyContractorIds array
     const dcIds = data.dailyContractorIds || [];
 
     for (const dcId of dcIds) {
-      // Construct entry
       const entryData = {
         dailyContractorId: dcId,
         taskName: data.taskName,
         workType: data.workType || 'regular',
-        startTime: typeof data.startTime === 'string'
-          ? new Date(`${data.workDate.toISOString().split('T')[0]}T${data.startTime}:00`)
-          : data.startTime,
-        endTime: typeof data.endTime === 'string'
-          ? new Date(`${data.workDate.toISOString().split('T')[0]}T${data.endTime}:00`)
-          : data.endTime,
-        netHours: data.netHours || 0,
-        notes: data.notes,
-        fileAttachmentIds: data.imageUrls // Legacy field mapping
+        hours: Number(data.workHours || 0),
+        notes: data.notes
       };
 
       const result = await this.addWorkEntry({
@@ -126,8 +149,6 @@ class DailyReportService {
 
   /**
    * Adapter: GetAll (Flattens aggregated reports)
-   * Note: This is an approximation. It tries to fetch by project/date if available.
-   * If not, it defaults to current month/project.
    */
   async getAll(filters: any): Promise<any[]> {
     let reports: DailyReport[] = [];
@@ -136,37 +157,27 @@ class DailyReportService {
       const report = await this.getByProjectAndDate(filters.projectId, new Date(filters.date));
       if (report) reports.push(report);
     } else if (filters?.projectId) {
-      // Default to current month if only project specified
       const now = new Date();
       reports = await this.getByProjectAndMonth(filters.projectId, now.getFullYear(), now.getMonth() + 1);
     } else {
-      // Fallback: Return empty or handle as needed. 
-      // Warning: Fetches without project are expensive/not supported by new API efficiently yet.
       return [];
     }
 
-    // Flatten entries to look like old DailyReport objects
     const flattened = [];
     for (const report of reports) {
-      if (!report.entries) continue;
-      for (const entry of report.entries) {
+      const entries = (report as any).entries || [];
+      for (const entry of entries) {
         flattened.push({
-          // Composite ID for legacy actions (delete/update)
-          id: `${report.projectLocationId}|${report.date}|${entry.id}`,
-
-          // Fields expected by Index.tsx
+          // Composite ID: [projectId]|[date]|[workerId]|[entryId]
+          id: `${report.projectLocationId}|${report.date}|${entry.dailyContractorId}|${entry.id}`,
           projectLocationId: report.projectLocationId,
-          reportDate: new Date(report.date), // Ensure Date object
-          dailyContractorIds: [entry.dailyContractorId], // Array of 1
-          dcNames: [entry.dailyContractorId], // We don't have names here, might need lookup or UI handles it
+          reportDate: new Date(report.date),
+          dailyContractorIds: [entry.dailyContractorId],
+          dcNames: [entry.dailyContractorId],
           workDescription: entry.taskName,
-          startTime: entry.startTime,
-          endTime: entry.endTime,
-          workHours: entry.netHours,
-          totalWage: 0, // Not calculated here
+          workHours: entry.hours,
           workType: entry.workType,
           createdAt: entry.createdAt,
-          // Add original entry ID for reference
           entryId: entry.id
         });
       }
@@ -176,84 +187,50 @@ class DailyReportService {
 
   /**
    * Adapter: Delete
-   * Expects composite ID: "projectId|date|entryId"
    */
   async delete(compositeId: string): Promise<void> {
     const parts = compositeId.split('|');
-    if (parts.length === 3) {
-      const [projectId, dateStr, entryId] = parts;
-      await this.removeWorkEntry(projectId, new Date(dateStr), entryId);
-    } else {
-      console.error("Invalid composite ID for delete", compositeId);
-      throw new Error("Invalid ID format");
+    if (parts.length === 4) {
+      const [projectId, dateStr, workerId, entryId] = parts;
+      await this.removeWorkEntry(projectId, new Date(dateStr), workerId, entryId);
     }
   }
 
   /**
    * Adapter: Update
-   * Expects composite ID
    */
   async update(compositeId: string, data: any): Promise<any> {
-    // For update, we actually remove and re-add (as entry update logic)
-    // Or implement specific updateEntry endpoint. 
-    // Current API only has add (upsert) and remove.
-    // We can use addWorkEntry to overwrite? Upsert relies on ID?
-    // Wait, AddEntryInput excludes ID. It creates NEW ID.
-    // So 'Edit' is tricky without a specific 'updateEntry' endpoint that takes ID.
-    // Backend DailyReportService.addWorkEntry adds new entry. It doesn't update existing.
-
-    // We need to implement updateEntry on backend or doing remove+add.
-    // Remove+Add is risky (ID changes).
-
-    // TODO: Implement proper updateEntry in backend if Legacy Edit is required.
-    // For now, let's throw or warn.
-    console.warn("Update not fully supported in legacy adapter yet");
-
-
     // Hack: Delete then Create
     await this.delete(compositeId);
     return this.create(data);
   }
 
   /**
-   * Adapter: Get By ID (Legacy Edit Page)
-   * Expects composite ID: "projectId|date|entryId"
+   * Adapter: Get By ID
    */
   async getById(compositeId: string): Promise<any> {
     try {
       const parts = compositeId.split('|');
-      if (parts.length !== 3) {
-        // Fallback: If it's a UUID (legacy data), this will fail. 
-        // We assume new system only uses composite IDs for navigation.
-        console.error("Invalid composite ID", compositeId);
-        return null;
-      }
+      if (parts.length !== 3) return null;
 
       const [projectId, dateStr, entryId] = parts;
       const report = await this.getByProjectAndDate(projectId, new Date(dateStr));
 
-      if (!report || !report.entries) return null;
-
-      const entry = report.entries.find(e => e.id === entryId);
+      const entries = (report as any)?.entries || [];
+      const entry = entries.find((e: any) => e.id === entryId);
       if (!entry) return null;
 
-      // Map to Legacy Format
       return {
         id: compositeId,
-        projectLocationId: report.projectLocationId,
-        reportDate: new Date(report.date),
+        projectLocationId: report?.projectLocationId,
+        reportDate: new Date(report?.date || ''),
         dailyContractorIds: [entry.dailyContractorId],
-        workDescription: entry.taskName, // Map back from taskName
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        workHours: entry.netHours,
+        workDescription: entry.taskName,
+        workHours: entry.hours,
         workType: entry.workType,
         notes: entry.notes,
-        imageUrls: entry.fileAttachmentIds || [],
-        // Extra fields to satisfy type check
         createdAt: entry.createdAt,
-        updatedAt: entry.createdAt, // Approximate
-        status: report.status
+        status: report?.status
       };
 
     } catch (error) {
@@ -271,7 +248,153 @@ class DailyReportService {
   }
 
 
+
+  /**
+   * Upload and Commit Daily Report Excel
+   * กระบวนการ 2 จังหวะ: Upload (Preview) -> Commit (Bulk Create)
+   * เพื่อความสอดคล้องกับ UX ของ ScanData
+   */
+  async uploadDailyReportFile(file: File, projectId: string, note?: string): Promise<DailyReportImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('projectId', projectId);
+    if (note) formData.append('importNote', note);
+
+    // Step 1: Upload & Parse
+    const { data: uploadResp } = await apiClient.post('/daily-reports/import-excel', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    if (!uploadResp.success) {
+      throw new Error(uploadResp.error || 'Failed to parse Excel file');
+    }
+
+    const previewData = uploadResp.data || [];
+    const importFileUrl = uploadResp.importFileUrl;
+
+    const validRows = previewData.filter((row: any) => row.isValid);
+    const failedData = previewData.filter((row: any) => !row.isValid);
+
+    if (validRows.length === 0 && failedData.length === 0) {
+      return {
+        success: false,
+        totalRecords: 0,
+        successfulRecords: 0,
+        failedRecords: 0,
+        errors: [{
+          row: 0,
+          error: 'ไม่พบ Sheet ที่มีหัวตารางที่ถูกต้อง (เช่น รหัสพนักงาน, วันที่) กรุณาตรวจสอบไฟล์อีกครั้ง'
+        }],
+        warnings: []
+      };
+    }
+
+    // [FIX] T-EX-IMPORT-1: Expand rows ก่อน commit
+    // Excel row 1 แถว = หลาย WorkType → ต้อง Expand เป็น items แยก 1 ต่อ 1
+    // เพราะ backend bulkCreateDailyReports รอรับ { hours, workType, taskName } ต่อ item
+    const expandedItems = this.expandRowsToItems(validRows);
+
+    if (expandedItems.length === 0) {
+      return {
+        success: false,
+        totalRecords: previewData.length,
+        successfulRecords: 0,
+        failedRecords: failedData.length,
+        errors: [{ row: 0, error: 'ไม่พบรายการที่มีชั่วโมงทำงาน กรุณาตรวจสอบข้อมูลในไฟล์ Excel' }],
+        warnings: []
+      };
+    }
+
+    // Step 2: Commit (Bulk Create) ด้วย expanded items
+    const { data: commitResp } = await apiClient.post('/daily-reports/bulk-create', {
+      data: expandedItems,
+      importFileUrl: importFileUrl
+    });
+
+    return {
+      success: commitResp.success,
+      totalRecords: previewData.length,
+      successfulRecords: commitResp.count || 0,
+      failedRecords: failedData.length,
+      errors: failedData.map((row: any) => ({
+        row: row.row || 0,
+        error: 'ข้อมูลโครงการหรือพนักงานไม่ถูกต้อง',
+        employeeNumber: row.employeeId
+      })),
+      warnings: [],
+      importBatchId: importFileUrl
+    };
+  }
+
+  /**
+   * [FIX] Expand Excel Rows → Flat Work Items (1 per WorkType)
+   *
+   * Excel row format (v3): { hoursRegular, hoursOTMorning, hoursOTNoon, hoursOTEvening, ... }
+   * Backend expected per item: { hours, workType, taskName, date, dailyContractorId, projectLocationId }
+   *
+   * แก้ข้อผิดพลาด: item.hours = 0 เสมอ เพราะ field ชื่อ "hours" ไม่มีใน parsed row โดยตรง
+   */
+  private expandRowsToItems(rows: any[]): any[] {
+    const items: any[] = [];
+
+    for (const row of rows) {
+      // ข้อมูลพื้นฐานที่ทุก item ใช้ร่วมกัน
+      const base = {
+        date: row.date,
+        employeeId: row.employeeId,
+        dailyContractorId: row.dailyContractorId,
+        projectLocationId: row.projectLocationId,
+        workerName: row.workerName,
+        matchedWorkerName: row.matchedWorkerName || row.workerName,
+        isValid: true,
+      };
+
+      // Regular Work — ชั่วโมงปกติ
+      if (row.hoursRegular && Number(row.hoursRegular) > 0) {
+        items.push({
+          ...base,
+          hours: Number(row.hoursRegular),
+          workType: 'regular',
+          taskName: row.taskRegular || 'งานทั่วไป',
+        });
+      }
+
+      // OT Morning — โอทีเช้า
+      if (row.hoursOTMorning && Number(row.hoursOTMorning) > 0) {
+        items.push({
+          ...base,
+          hours: Number(row.hoursOTMorning),
+          workType: 'ot_morning',
+          taskName: row.taskOTMorning || 'โอทีเช้า',
+        });
+      }
+
+      // OT Noon — โอทีเที่ยง
+      if (row.hoursOTNoon && Number(row.hoursOTNoon) > 0) {
+        items.push({
+          ...base,
+          hours: Number(row.hoursOTNoon),
+          workType: 'ot_noon',
+          taskName: row.taskOTNoon || 'โอทีเที่ยง',
+        });
+      }
+
+      // OT Evening — โอทีเย็น
+      if (row.hoursOTEvening && Number(row.hoursOTEvening) > 0) {
+        items.push({
+          ...base,
+          hours: Number(row.hoursOTEvening),
+          workType: 'ot_evening',
+          taskName: row.taskOTEvening || 'โอทีเย็น',
+        });
+      }
+    }
+
+    return items;
+  }
 }
+
 
 export const dailyReportService = new DailyReportService();
 export default dailyReportService;
+

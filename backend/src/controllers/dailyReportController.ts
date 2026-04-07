@@ -48,17 +48,18 @@ export async function addWorkEntry(req: Request, res: Response): Promise<Respons
 }
 
 /**
- * DELETE /api/daily-reports/project/:projectId/date/:date/entry/:entryId
+ * DELETE /api/daily-reports/project/:projectId/date/:date/worker/:workerId/entry/:entryId
  * Remove a Work Entry
  */
 export async function removeWorkEntry(req: Request, res: Response): Promise<Response> {
   try {
-    const { projectId, date, entryId } = req.params;
+    const { projectId, date, workerId, entryId } = req.params;
     const userId = (req as any).user?.uid;
 
     await dailyReportService.removeWorkEntry(
       projectId,
       new Date(date),
+      workerId,
       entryId,
       userId
     );
@@ -169,14 +170,24 @@ export async function downloadTemplate(_req: Request, res: Response): Promise<vo
   try {
     const headers = [
       DAILY_REPORT_COLUMNS.DATE,
-      DAILY_REPORT_COLUMNS.PROJECT_CODE,
       DAILY_REPORT_COLUMNS.EMPLOYEE_ID,
       DAILY_REPORT_COLUMNS.WORKER_NAME,
-      DAILY_REPORT_COLUMNS.TASK_NAME,
+      // Regular
       DAILY_REPORT_COLUMNS.HOURS_REGULAR,
+      DAILY_REPORT_COLUMNS.TASK_REGULAR,
+      DAILY_REPORT_COLUMNS.PROJECT_REGULAR,
+      // OT Morning
       DAILY_REPORT_COLUMNS.HOURS_OT_MORNING,
+      DAILY_REPORT_COLUMNS.TASK_OT_MORNING,
+      DAILY_REPORT_COLUMNS.PROJECT_OT_MORNING,
+      // OT Noon
       DAILY_REPORT_COLUMNS.HOURS_OT_NOON,
+      DAILY_REPORT_COLUMNS.TASK_OT_NOON,
+      DAILY_REPORT_COLUMNS.PROJECT_OT_NOON,
+      // OT Evening
       DAILY_REPORT_COLUMNS.HOURS_OT_EVENING,
+      DAILY_REPORT_COLUMNS.TASK_OT_EVENING,
+      DAILY_REPORT_COLUMNS.PROJECT_OT_EVENING,
     ];
 
     const worksheet = XLSX.utils.aoa_to_sheet([headers]);

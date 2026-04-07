@@ -1,21 +1,29 @@
 # Traceability Matrix (Full Project)
 
+- **2026-04-06 09:36Z:** **PHASE 1.5 AUDIT & POLISH STARTED.** Addressing frontend instructions and backend API consistency based on UX Framework.
+- **2026-04-06 09:46Z:** **PHASE 1.6 BULLETPROOF IMPORT ACTIVATED.** Implemented multi-sheet scanning and fuzzy header matching for maximum reliability.
+
 ## 1. RTM (Requirements Traceability Matrix)
 Mapping ระหว่าง Feature หลักและไฟล์ Code ที่สำคัญ
 
-| Feature ID | Controller / Route | Model File | Description |
-| :--- | :--- | :--- | :--- |
-| **F-001** (Auth) | `auth.routes.ts` | `User.ts` | Authentication System |
-| **F-002** (User) | `users.routes.ts` | `User.ts`, `Role.ts` | User Administration |
-| **F-003** (Report) | `dailyReports.routes.ts` | `DailyReport.ts`, `FileAttachment.ts` | Daily Work Records |
-| **F-004** (Project) | `projects.routes.ts` | `ProjectLocation.ts` | Site Management |
-| **F-005** (Skill) | `skills.routes.ts` | `Skill.ts` | Skill Categories |
-| **F-006** (DC) | `dailyContractors.routes.ts` | `DailyContractor.ts`, `SocialSecurityCalculation.ts` | Contractor Data |
-| **F-007** (Wage) | `wagePeriods.routes.ts` | `WagePeriod.ts`, `AdditionalIncome.ts` | Wage Calculation |
-| **F-008** (Scan) | `scanData.routes.ts` | `ScanData.ts`, `LateRecord.ts` | Finger Scan Processing |
-| **F-007, F-008** | `seedWageTestData.ts` | - | Mock Data for Wage Testing |
-| **F-010** (Integrated Wage) | `wagePeriods.routes.ts` | `WagePeriod.ts`, `ScanData.ts`, `LateRecord.ts` | Integrated Wage Calculation |
-| **F-012** (SS Rules) | `socialSecurityRules.routes.ts` | `SocialSecurityRule.ts` | Social Security Rules Config |
+| Feature ID | Task ID | Controller / Route | Model File | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **F-013** | **T-709, T-710** | `DailyReportService.ts` | - | Multi-sheet & Fuzzy Parsing Logic |
+| **F-013** | **T-711** | `dailyReportService.ts` (FE) | - | Descriptive Error Messaging |
+| **F-001** (Auth) | - | `auth.routes.ts` | `User.ts` | Authentication System |
+| **F-002** (User) | - | `users.routes.ts` | `User.ts`, `Role.ts` | User Administration |
+| **F-003** (Report) | - | `dailyReports.routes.ts` | `DailyReport.ts`, `FileAttachment.ts` | Daily Work Records |
+| **F-004** (Project) | - | `projects.routes.ts` | `ProjectLocation.ts` | Site Management |
+| **F-005** (Skill) | - | `skills.routes.ts` | `Skill.ts` | Skill Categories |
+| **F-013** | **T-706** | `backend/src/api/routes/dailyReports.routes.ts` | - | Fix removal route matching |
+| **F-013** | **T-707** | `backend/src/utils/dailyReportExcel.ts` | - | Robust Excel Parsing logic |
+| **F-013** | **T-708** | `frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx` | - | UX Refinement and Update Help Text |
+| **F-006** (DC) | - | `dailyContractors.routes.ts` | `DailyContractor.ts`, `SocialSecurityCalculation.ts` | Contractor Data |
+| **F-007** (Wage) | - | `wagePeriods.routes.ts` | `WagePeriod.ts`, `AdditionalIncome.ts` | Wage Calculation |
+| **F-008** (Scan) | - | `scanData.routes.ts` | `ScanData.ts`, `LateRecord.ts` | Finger Scan Processing |
+| **F-007, F-008** | - | `seedWageTestData.ts` | - | Mock Data for Wage Testing |
+| **F-010** (Integrated Wage) | - | `wagePeriods.routes.ts` | `WagePeriod.ts`, `ScanData.ts`, `LateRecord.ts` | Integrated Wage Calculation |
+| **F-012** (SS Rules) | - | `socialSecurityRules.routes.ts` | `SocialSecurityRule.ts` | Social Security Rules Config |
 
 ## 2. Data & Component Traceability
 Mapping ระหว่าง Entity และความหมายในระบบ
