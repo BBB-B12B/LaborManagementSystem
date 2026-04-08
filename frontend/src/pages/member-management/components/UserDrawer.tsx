@@ -1,23 +1,5 @@
-<<<<<<< Updated upstream
 import React from 'react';
 import { Box, IconButton, Typography, CircularProgress, Dialog, DialogContent } from '@mui/material';
-=======
-/**
- * User Drawer Component
- * Centered dialog wrapper for UserForm
- */
-
-import React from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  IconButton,
-  Typography,
-  Box,
-  CircularProgress,
-} from '@mui/material';
->>>>>>> Stashed changes
 import CloseIcon from '@mui/icons-material/Close';
 
 import { UserForm, type UserFormProps } from './UserForm';
@@ -36,23 +18,14 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
   loading = false,
   ...formProps
 }) => {
-<<<<<<< Updated upstream
   const resolvedTitle =
     title || (formProps.mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้');
-=======
-  const dialogTitle =
-    title ||
-    (formProps.mode === 'create'
-      ? '�,��,��1%�,��,؅,o�,1�1%�1��,S�1%�1��,��,��1^'
-      : '�1?�,?�1%�1,�,,�,o�,1�1%�1��,S�1%');
->>>>>>> Stashed changes
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
       fullWidth
-<<<<<<< Updated upstream
       maxWidth="xl"
       scroll="body"
       PaperProps={{
@@ -82,25 +55,6 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
         </IconButton>
       </Box>
       <DialogContent sx={{ p: { xs: 2.5, md: 4 }, overflow: 'visible' }}>
-=======
-      maxWidth="md"
-      PaperProps={{ sx: { borderRadius: 4, p: 0 } }}
-    >
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          pr: 1,
-        }}
-      >
-        <Typography variant="h6">{dialogTitle}</Typography>
-        <IconButton onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ pt: 0 }}>
->>>>>>> Stashed changes
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
             <CircularProgress />

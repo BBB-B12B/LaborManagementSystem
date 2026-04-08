@@ -55,6 +55,7 @@ Mapping ระหว่าง System Config และตัวแปรที่
 | Task ID | Name | Goal | key Components |
 | :--- | :--- | :--- | :--- |
 | **T-300** | Mobile Daily Report | Schema Refactor & Unified UI | `DailyReport.ts`, `DailyReportService.ts`, `new.tsx`, `MobileDailyReportView.tsx` |
+| **T-301** | Daily Report UI Lift & Shift | Mock rendering of Post-Sale UI components | `new.tsx`, `WorkOrderContext.tsx`, `legacy.ts`, `imageCompression.ts` |
 | **T-330** | Master Form Modal | Multi-section Form (Regular, OT Morning/Noon/Evening), Worker Subset Logic, Batch Save | `DailyReportEntryModal.tsx` |
 | **T-350** | Wage Period Soft Delete | Implement Soft Delete for Wage Periods | `WagePeriod.ts`, `WagePeriodService.ts`, `wagePeriods.routes.ts` |
 | **T-360** | Refactor Project Identity | projectCode & projectName | `WagePeriod.ts`, `WagePeriodService.ts` |

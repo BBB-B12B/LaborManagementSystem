@@ -156,6 +156,32 @@ markdown
 
 ---
 
+## 3. Core Skills & References (ทักษะและกรอบการทำงาน)
+
+ให้พิจารณาเลือกใช้ **Skill** และ **Framework** ต่อไปนี้ตลอดการทำงานเพื่อยกระดับคุณภาพของโค้ดและ UX:
+
+### 🚀 3.1 [Skill: Development Workflow](file:///d:/Labor%20Management%20System/Speckit/skills/dev-workflow.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อตั้งต้นเริ่มงานใหม่ ฟีเจอร์ใหม่ หรือรับ Requirements
+*   **หน้าที่:** ควบคุมแผนงานตลอดเส้นทางเพื่อไม่ให้หลุด Concept และบังคับการทำเอกสารตาม Step
+
+### 🕵️ 3.2 [Skill: E2E Troubleshooter](file:///d:/Labor%20Management%20System/Speckit/skills/e2e-troubleshooter.md) & [Checklist](file:///d:/Labor%20Management%20System/Speckit/skills/refs/investigation-checklist.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อเจอบั๊ก, หน้าจอพัง, ข้อมูลไม่อัปเดต, หรือต้องวิเคราะห์ Root Cause
+*   **หน้าที่:** ค้นหาจุดเชื่อมต่อ (Connectivity) วิเคราะห์ Log และหา Missing Link ตั้งแต่หน้าจอจนถึงฐานข้อมูล
+
+### 🛡️ 3.3 [Skill: Issue Management](file:///d:/Labor%20Management%20System/Speckit/skills/issue-management.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อหน้างานเกิดปัญหาไม่คาดคิดที่บล็อกการทำงาน (Blocker) หรือต้องออกแพตช์ฉุกเฉิน
+*   **หน้าที่:** กำหนด Error Type และสร้างเอกสารบันทึกเหตุการณ์ (EX-Log) เพื่อให้ง่ายต่อการย้อนกลับ
+
+### 💰 3.4 [Skill: Wage Sync & Formula](file:///d:/Labor%20Management%20System/Speckit/skills/wage-sync-skill.md)
+*   **เมื่อไหร่ที่ควรใช้:** เมื่อต้องเขียน/แก้ไข ส่วนที่เกี่ยวข้องกับการคำนวณเงิน ค่าแรง OT ส่วนลด ฯลฯ
+*   **หน้าที่:** ควบคุม Logic ของเงินให้ทำงานแบบ Transactional และลดข้อผิดพลาดการผูกสูตร
+
+### 🎨 3.5 [Ref: UX Audit Framework](file:///d:/Labor%20Management%20System/Speckit/skills/refs/ux-audit-framework.md)
+*   **เมื่อไหร่ที่ควรใช้:** ก่อนส่งมอบงานหน้าจอ (UI/UX) เสมอ
+*   **หน้าที่:** ประเมิน 5 มิติ (System Status, Control, Consistency, Error Prevention, Flow) เพื่อสร้างประสบการณ์ระดับ Premium ให้กับผู้ใช้งาน
+
+---
+
 ## 4. Incident Resolution Template (Production Issues)
 *(สำหรับปัญหาเร่งด่วน หรือ Critical Bug)*
 
@@ -173,232 +199,24 @@ markdown
 
 ---
 
-## 5. Data Dictionary & System Mapping (โครงสร้างข้อมูลและหน้าจอ)
+## 5. Daily Report Core Concept & Migration Strategy (แผนพัฒนาระบบรายงานประจำวัน)
+> **สถานะ:** 🔵 กำลังดำเนินการ (รอรับไฟล์อ้างอิงจาก User)
 
-ข้อมูลที่แสดงอยู่นี้คือโครงสร้างหลักของ Collections ใน Firebase และความเชื่อมโยงกับหน้าจอใช้งาน (Frontend) เพื่อความเข้าใจที่ตรงกันในการพัฒนา
+**เป้าหมายหลัก (Core Objective):** 
+นำหน้าจอและ Flow การทำงาน (UI Source Code) ของระบบ Daily Report จากระบบอ้างอิง (ระบบหลังการขาย) นำเข้ามาติดตั้งในระบบโปรเจกต์งาน ก่อสร้าง/จัดการแรงงาน ของเรา จากนั้นทำการ Refactor เพื่อให้เข้ากับประสบการณ์ใช้งาน (UX) ของเรา พร้อมเชื่อมข้อมูลวิ่งเข้า Production Firebase อย่างสมบูรณ์
 
-### 🗃️ 5.1 ProjectLocations (ข้อมูลโครงการ/หน่วยงาน)
-**Page**: `/project-management` (Project Management)
-- **Document ID**: Auto-generated (Firestore)
-- **Fields**:
-    - `projectCode` (string, **PK**): รหัสโครงการ (เช่น "HO", "P001")
-    - `projectName` (string): ชื่อโครงการ
-    - `department` (string): ฝ่าย/ส่วนงาน (เช่น "PD01")
-    - `status` (string): สถานะ (`active`, `completed`, `suspended`)
-    - `isActive` (boolean): สถานะเปิด/ปิดการใช้งาน
+### 🔄 A. Integration Lifecycle (วงจรการเชื่อมต่อ)
+1. **Source Integration (รอโค้ดจากผู้ใช้งาน):**
+    - นำเข้าไฟล์ UI Components, React Hooks, หรือ Utils ที่เกี่ยวข้องจากระบบอ้างอิงเข้ามาใน Workspace
+2. **Refactoring & UX Adaptation (ปรับจูนประสบการณ์):**
+    - แปลง Form Logic ให้เข้ากับ Tech Stack ในระบบเรา 
+    - ตกแต่งหน้าตา (Styling) ให้เนียนตาและดู Premium สอดคล้องกับภาพรวมแอปพลิเคชันของเรา ผ่านมาตรฐาน `UX Audit Framework`
+3. **Data Model Mapping (Mapping ข้อมูล):**
+    - สำรวจโครงสร้าง Payload (เช่น JSON ส่งออก) จากระบบเก่า
+    - นำมาแปลง (Adapter Pattern) ให้ตรงสเปกของ Collection บน Firestore (`collections.ts` เช่น `users`, `dailyReports` เป็นต้น)
+4. **Permanent Docs Update:**
+    - สรุป Logic การทำงานใหม่ลงใน `spec.md` และสร้าง `task.md` เพื่อบันทึก Traceability
 
-### 🗃️ 5.2 DailyContractors (ข้อมูลพนักงานรายวัน)
-**Page**: `/dc-management` (Employee Management)
-- **Document ID**: Auto-generated (Firestore)
-- **Fields**:
-    - `employeeId` (string, **PK**): รหัสพนักงาน (ใช้แมตช์ข้อมูลสแกนนิ้ว)
-    - `name` (string): ชื่อ-นามสกุล
-    - `skillId` (string): รหัสทักษะ (Skill ID)
-    - `projectLocationIds` (array of strings): **[CRITICAL]** รายการ ID โครงการที่พนักงานสังกัดอยู่ (One-to-Many)
-    - `dailyWageRate` (number): อัตราค่าแรงรายวัน
-    - `professionalRate` (number): ค่าวิชาชีพ (ต่อชั่วโมงปกติ)
-    - `phoneAllowance` (number): ค่าโทรศัพท์
-    - `nationality` (string): สัญชาติ (ไทย/MOU)
-    - `isActive` (boolean): สถานะการทำงาน
-
-> [!NOTE]
-> **Architectural Note (Financial Fields):**
-> เราเก็บค่ารายได้และรายหักพื้นฐานเป็น **Flat Fields** เพื่อประสิทธิภาพในการดึงข้อมูล Defaults ของพนักงาน (Read Performance) โดยระบบจะนำค่าเหล่านี้ไปสร้างเป็นรายการธุรกรรมจริง (Line Items) ใน Sub-collection ของ `WagePeriods` เมื่อมีการคำนวณค่าแรงครับ
-
-### 🗃️ 5.3 DailyReports (รายงานการทำงานรายวัน - Aggregated)
-**Page**: `/daily-reports` (Daily Report)
-- **Document ID**: `REP_[projectLocationId]_[YYYY-MM-DD]`
-- **Fields**:
-    - `projectLocationId` (string): เชื่อมโยงกับ ProjectLocation
-    - `date` (Date): วันที่ทำงาน
-    - `entries` (array): รายการงานย่อย (Work Entries)
-        - `id` (UUID): ID ของรายการ
-        - `employeeId` (string): รหัสพนักงาน
-        - `taskName` (string): ชื่องาน
-        - `workType` (string): ประเภทงาน (`regular`, `ot_morning`, `ot_noon`, `ot_evening`)
-        - `startTime`/`endTime` (Date): เวลาเริ่ม-จบ
-        - `netHours` (number): ชั่วโมงสุทธิ
-    - `importFileUrls` (array): **[T-371-5]** ลิงก์ไฟล์ Excel ต้นฉบับที่มาจากการนำเข้า
-
-### 🗃️ 5.4 ScanData (ข้อมูลสแกนนิ้วมือ)
-**Page**: `/scan-data` (Scan Data)
-- **Document ID**: `SCAN_[employeeId]_[YYYY-MM-DD]`
-- **Fields**:
-    - `employeeId` (string): รหัสพนักงาน
-    - `workDate` (string): วันที่ทำงาน (รูปแบบ YYYY-MM-DD)
-    - `punches` (array): รายการเวลาสแกน (เช่น `["08:00", "17:05"]`)
-    - `firstIn`/`lastOut` (string): เวลาสแกนเข้าครั้งแรกและออกครั้งสุดท้าย
-
-### 🗃️ 5.5 WagePeriods (งวดการจ่ายค่าแรง)
-**Page**: `/wage-calculation` (Wage Calculation)
-- **Document ID**: Auto-generated (Firestore)
-- **Fields**:
-    - `periodCode` (string): รหัสงวด (เช่น "202604-P1")
-    - `projectCode` (string): รหัสโครงการ
-    - `startDate`/`endDate` (Date): ช่วงวันที่ของงวด (15 วัน)
-    - `status` (string): สถานะงวด (`draft`, `calculated`, `approved`, `paid`, `locked`)
-    - `dcSummaries` (array): สรุปการจ่ายเงินรายคน (Wage Summary per DC)
-
----
-
-## 7. Daily Report — E2E Flow Analysis 🕵️
-> **Skill ที่ใช้:** E2E Troubleshooter & Investigator | **Investigation Checklist** ✅
-> **วันที่วิเคราะห์:** 07/04/2026 | **สถานะ:** Living Document (อัปเดตตามโค้ดจริง)
-
-ระบบ Daily Report มี **2 เส้นทางหลัก** ในการสร้างข้อมูล: (1) กรอก Manual ผ่าน Form และ (2) นำเข้า Excel แบบ Bulk
-
----
-
-### 🛣️ Path A: Manual Entry (กรอกฟอร์มทีละรายการ)
-
-#### Phase 1: User Action (หน้าจอ)
-| ขั้น | ไฟล์ | รายละเอียด |
-|---|---|---|
-| A1 | `pages/daily-reports/index.tsx` | User กดปุ่ม **"เพิ่มการ์ดงาน"** → `router.push('/daily-reports/new')` |
-| A2 | `pages/daily-reports/new.tsx` | Render `DailyReportForm` ใน Create Mode |
-| A3 | `components/DailyReportForm.tsx` | User กรอก: โครงการ, วันที่, แรงงาน (multi-select), งาน, เวลาเริ่ม-จบ |
-
-#### Phase 2: Auto-Calculation (Logic ใน Form)
-| Logic | กลไก |
-|---|---|
-| **คำนวณชั่วโมง** | `useEffect` watch `startTime` + `endTime` → เรียก `calculateHours()` + `calculateNetHours()` → set `netHours` อัตโนมัติ |
-| **คำนวณค่าแรง** | `useEffect` watch `selectedDCs` + `calculatedHours` → `Σ(hourlyRate × hours + professionalRate)` → set `totalWage` (disabled field) |
-| **Validation** | `zodResolver(dailyReportSchema)` — ป้องกันก่อน submit |
-
-#### Phase 3: Frontend → API
-```
-DailyReportForm.onSubmit(data)
-  → dailyReportService.create(data)         [frontend/src/services/dailyReportService.ts]
-  → loop dcIds → addWorkEntry({ projectId, date, entry })
-  → apiClient.post('/daily-reports/entry', payload)
-```
-
-#### Phase 4: Backend Processing
-```
-POST /api/daily-reports/entry
-  → authenticate + authorize(['SE','OE','PE','PM','PD','AM'])
-  → dailyReportController.addWorkEntry()    [backend/src/controllers/dailyReportController.ts]
-  → dailyReportService.addWorkEntry()       [backend/src/services/dailyReport/DailyReportService.ts]
-```
-
-#### Phase 5: Service Logic (Backend)
-| ขั้น | Logic |
-|---|---|
-| **Lock Check** | ตรวจสอบ `wagePeriodService.isDateLocked(workDate, projectCode)` → ถ้า locked จะ throw 403 |
-| **Multi-DC** | ถ้ามี DC มากกว่า 1 คน จะ loop สร้าง Document แยกทุกคน |
-| **DC Lookup** | `dailyContractorService.getById(dcId)` → ดึง `employeeId` มา denormalize ลง Document |
-| **Image Upload** | ถ้ามี `imageUrls` ที่เป็น `data:` → upload ไป Cloudflare R2 |
-| **Firestore Write** | `db.collection('daily_reports').doc().set(reportData)` |
-| **Audit Trail** | `createEditHistory({ entityId, action: 'create', editedBy })` → เขียนลง `edit_history` collection |
-
-#### Phase 6: Firestore Schema (ที่เขียนจริง)
-```json
-{
-  "projectLocationId": "string",
-  "workDate": "Timestamp",
-  "dailyContractorId": "string",        // singular (per document)
-  "employeeId": "string",               // [T-400] denormalized
-  "taskName": "string",
-  "workType": "regular|ot_morning|ot_noon|ot_evening",
-  "startTime": "HH:mm",
-  "endTime": "HH:mm",
-  "netHours": "number",
-  "totalWage": "number",
-  "isOvernight": "boolean",
-  "verificationStatus": "unverified",   // [T-401]
-  "status": "submitted",
-  "imageUrls": ["string"],
-  "version": 1,
-  "createdBy": "uid",
-  "createdAt": "ServerTimestamp",
-  "updatedAt": "ServerTimestamp"
-}
-```
-
----
-
-### 📥 Path B: Excel Import (นำเข้าข้อมูลแบบ Bulk)
-
-#### Phase 1: User Action
-| ขั้น | ไฟล์ | รายละเอียด |
-|---|---|---|
-| B1 | `pages/daily-reports/index.tsx` | User กดปุ่ม **"นำเข้า Excel"** → `setIsImportModalOpen(true)` |
-| B2 | `components/DailyReportUploadDialog.tsx` | Dialog เปิด — รองรับไฟล์ `.dat`, `.xlsx`, `.xls` |
-| B3 | Dialog | User เลือกไฟล์ + (ไม่บังคับ) ใส่หมายเหตุ → กด **Upload** |
-
-#### Phase 2: 2-Phase Upload Flow
-```
-Step 1 — Upload & Parse (Preview):
-  dailyReportService.uploadDailyReportFile(file, projectId, note)
-    → apiClient.post('/daily-reports/import-excel', FormData)
-    → Controller: importExcel()
-      → dailyReportService.parseDailyReportExcel(buffer)    [parse Excel rows]
-      → storage.uploadBuffer(buffer, 'daily-reports/imports')  [T-371-5 Audit Trail]
-    → Response: { success, data: parsedRows[], importFileUrl }
-
-Step 2 — Commit (Bulk Create):
-  filter validData (isValid === true)
-    → apiClient.post('/daily-reports/bulk-create', { data: validData, importFileUrl })
-    → Controller: bulkCreate()
-      → dailyReportService.bulkCreateDailyReports(data, userId)
-        → loop: createDailyReport() ต่อแต่ละ row
-```
-
-#### Phase 3: Excel Parsing Logic (Backend)
-| ขั้น | Logic |
-|---|---|
-| **อ่าน Excel** | `XLSX.read(buffer)` → `sheet_to_json()` → loop แต่ละแถว |
-| **parseExcelRow** | Map column headers → internal fields (Date, EmployeeId, Hours, WorkType) |
-| **Lookup Project** | `db.collection('Project').where('code', '==', parsed.projectCode)` |
-| **Lookup DC** | `db.collection('daily_contractors').where('employeeId', '==', parsed.employeeId)` |
-| **คำนวณชั่วโมง** | ถ้า `hours` มีค่า → ใช้ตรง / ไม่มี → คำนวณจาก startTime-endTime หัก break 1ชม (regular) |
-| **isValid Flag** | `!!project && !!dc` — ใช้กรองก่อน Bulk Create |
-
-#### Phase 4: Audit Trail (T-371-5)
-- ไฟล์ Excel ต้นฉบับ → upload ไปยัง **Cloudflare R2** ที่ path `daily-reports/imports/`
-- URL ที่ได้ (`importFileUrl`) ถูกส่งพ่วงไปกับ `bulk-create` request
-- บันทึกไว้ใน field `importFileUrls[]` ของ DailyReport Document (ตาม Data Dict 5.3)
-
----
-
-### 📊 Path C: Read / Display (การดึงข้อมูลแสดงผล)
-
-```
-index.tsx → useQuery(['work-records', filters])
-  → Promise.all([
-      dailyReportService.getAll({ projectId, date, dcId }),
-      overtimeService.getAll({ projectId, date, dcId, otPeriod })
-    ])
-  → Merge + Sort by date DESC → แสดงใน DataGrid
-```
-
-**getAll() Adapter Logic:**
-- ถ้ามี `projectId + date` → `getByProjectAndDate()` (1 วัน)
-- ถ้ามี `projectId` เท่านั้น → `getByProjectAndMonth()` (เดือนปัจจุบัน)
-- ถ้าไม่มี filter → **return `[]` (ไม่ query ทั้ง collection)**
-- Flatten entries array → composite ID = `projectId|date|workerId|entryId`
-
----
-
-### ⚠️ Known Issues / Observations (จากการวิเคราะห์)
-
-| # | สิ่งที่พบ | ระดับ | หมายเหตุ |
-|---|---|---|---|
-| 1 | `getAll()` ใน `dailyReportService` คืนค่า `[]` ถ้าไม่มี `projectId` — หน้าจอแสดงผลว่างเปล่าโดยไม่มี Empty State | Medium | UX Impact: User อาจคิดว่าไม่มีข้อมูล |
-| 2 | `update()` Adapter ทำแบบ Delete-then-Create (Hack) — History Tracking จะขาดตอน | Medium | ควร Refactor เป็น true Update |
-| 3 | `getHistory()` คืนค่า `[]` เสมอ — History Page ยังไม่ทำงานในสถาปัตยกรรมใหม่ | Low | Feature ยัง incomplete |
-| 4 | `bulkCreateDailyReports()` บันทึก `totalWage: 0` เสมอ — ต้องรอ WagePeriodService คำนวณทีหลัง | Info | By Design แต่ควร document ชัด |
-| 5 | `getAllDailyReports()` ใน backend orderBy `reportDate` แต่ field จริงในข้อมูลคือ `workDate` | ⚠️ High | อาจทำให้ Query Error หรือ Sort ผิด |
-| 6 | **[FIXED 07/04/2026]** `uploadDailyReportFile()` ส่ง raw parsed rows ไป bulk-create โดยไม่ Expand → `item.hours = 0` เสมอ → ไม่มีข้อมูลถูกบันทึก | 🔴 Critical | แก้แล้วใน `dailyReportService.ts` (frontend) — เพิ่ม `expandRowsToItems()` ที่ Expand 1 row → หลาย items แยกตาม WorkType |
-| 7 | **[FIXED 07/04/2026]** `bulkCreateDailyReports()` เกิด Error "Read after Write" ใน Firestore Transaction ทำให้ล่มและข้อมูลบันทึกเป็น 0 แบบเงียบๆ | 🔴 Critical | แก้แล้วใน `DailyReportService.ts` (backend) — แยกวงจร t.get() ทั้งหมดให้ทำงานล่วงหน้า (Pre-fetch) ก่อนที่จะมี t.set() แรกเกิดขึ้น |
-
----
-
-## 6. Documentation Summary (ประวัติการอัปเดต)
-*(ย้ายมาไว้เป็นส่วนหนึ่งของไฟล์เพื่อให้ติดตามได้ง่ายขึ้น)*
-| วันที่ | Task ID | ผู้แก้ไข | รายละเอียด |
-| :--- | :--- | :--- | :--- |
-| 02/04/2026 | T-371 | Antigravity | เพิ่ม Data ট্র Dictionary และ Mapping หน้าจอ (Section 5) |
-| 07/04/2026 | - | Antigravity | เพิ่ม Skill Refs (Section 2) และ E2E Flow Analysis Daily Report (Section 7) |
-| 07/04/2026 | BUG-FIX | Antigravity | แก้ Excel Import ไม่บันทึกข้อมูล (Known Issue #6) — เพิ่ม expandRowsToItems() ใน frontend |
-| 07/04/2026 | BUG-FIX | Antigravity | แก้ Transaction ล่มแบบเงียบใน Add/BulkCreate DailyReport (Known Issue #7) |
+### 🎯 B. Expected Outcome (สิ่งที่มุ่งหวัง)
+- **Zero-Friction UX:** UI ทำงานลื่นไหล ไม่รู้สึกถึงความแตกต่างของการนำโค้ดจากโปรเจกต์อื่นมาต่อ
+- **Data Integrity:** ข้อมูลวิ่งเข้า Database ของ Production ได้แบบไร้รอยต่อ ไม่มี Error หรือ Data Loss อันเกิดจากความไม่ตรงกันของ Schema (Type/Variables)

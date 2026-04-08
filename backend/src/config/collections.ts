@@ -30,7 +30,7 @@ import {
  * Collection Names (ชื่อ Collections ใน Firestore)
  */
 export const COLLECTIONS = {
-  USERS: 'User',
+  USERS: 'users',
   ROLES: 'roles',
   SKILLS: 'skills',
   PROJECT_LOCATIONS: 'Project',

@@ -1,11 +1,7 @@
 ﻿'use client';
 /**
  * User Form Component
-<<<<<<< Updated upstream
  * Create / Edit user with validation
-=======
- * Central popup form for creating/editing members
->>>>>>> Stashed changes
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -43,14 +39,6 @@ export interface UserFormProps {
   isLoading?: boolean;
 }
 
-<<<<<<< Updated upstream
-=======
-const ACTIVE_OPTIONS = [
-  { label: 'On', value: true },
-  { label: 'Off', value: false },
-];
-
->>>>>>> Stashed changes
 export function UserForm({
   defaultValues,
   onSubmit,
@@ -96,7 +84,6 @@ export function UserForm({
       setSubmitError(null);
       await onSubmit(data);
     } catch (error: any) {
-<<<<<<< Updated upstream
       setSubmitError(error.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง');
     }
   };
@@ -134,39 +121,6 @@ export function UserForm({
             </Typography>
           </Grid>
 
-=======
-      setSubmitError(error.message || 'Failed to submit user data. Please try again.');
-    }
-  };
-
-  return (
-    <Box
-      sx={{
-        p: 3,
-        borderRadius: 3,
-        minWidth: { xs: '100%', md: 640 },
-        bgcolor: 'background.paper',
-        boxShadow: 2,
-      }}
-    >
-      <Box
-        component="form"
-        onSubmit={handleSubmit(handleFormSubmit)}
-        sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-        noValidate
-      >
-        {submitError && (
-          <Alert severity="error" onClose={() => setSubmitError(null)}>
-            {submitError}
-          </Alert>
-        )}
-
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Basic Information
-        </Typography>
-
-        <Grid container spacing={2.5}>
->>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='employeeId'
@@ -174,12 +128,8 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
-<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='รหัสพนักงาน *'
-=======
-                  label="Employee ID"
->>>>>>> Stashed changes
                   required
                   fullWidth
                   error={!!errors.employeeId}
@@ -189,10 +139,7 @@ export function UserForm({
               )}
             />
           </Grid>
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='name'
@@ -200,12 +147,8 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
-<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='ชื่อ-นามสกุล *'
-=======
-                  label="Full Name (TH)"
->>>>>>> Stashed changes
                   required
                   fullWidth
                   error={!!errors.name}
@@ -215,26 +158,7 @@ export function UserForm({
               )}
             />
           </Grid>
-<<<<<<< Updated upstream
 
-=======
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="fullNameEn"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Full Name (EN)"
-                  fullWidth
-                  error={!!errors.fullNameEn}
-                  helperText={errors.fullNameEn?.message}
-                  disabled={isLoading || isSubmitting}
-                />
-              )}
-            />
-          </Grid>
->>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='username'
@@ -242,22 +166,12 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
-<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='Username *'
                   required
                   fullWidth
                   error={!!errors.username}
                   helperText={errors.username?.message || 'ไม่สามารถมีช่องว่างและต้องไม่ซ้ำ'}
-=======
-                  label="Username"
-                  required
-                  fullWidth
-                  error={!!errors.username}
-                  helperText={
-                    errors.username?.message || 'Lowercase letters, numbers, dot or underscore only'
-                  }
->>>>>>> Stashed changes
                   disabled={isLoading || isSubmitting}
                   value={field.value ?? ''}
                   onChange={(event) => field.onChange(event.target.value.toLowerCase())}
@@ -265,10 +179,7 @@ export function UserForm({
               )}
             />
           </Grid>
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='password'
@@ -276,17 +187,12 @@ export function UserForm({
               render={({ field }) => (
                 <TextField
                   {...field}
-<<<<<<< Updated upstream
                   value={field.value ?? ''}
                   label='รหัสผ่าน *'
-=======
-                  label="Password"
->>>>>>> Stashed changes
                   type={showPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
                   error={!!errors.password}
-<<<<<<< Updated upstream
                   helperText={errors.password?.message || passwordHelper}
                   disabled={isLoading || isSubmitting}
                   InputProps={{
@@ -298,18 +204,6 @@ export function UserForm({
                           disabled={isLoading || isSubmitting}
                           aria-label='toggle password visibility'
                         >
-=======
-                  helperText={
-                    mode === 'edit'
-                      ? errors.password?.message || 'Leave blank to keep existing password'
-                      : errors.password?.message
-                  }
-                  disabled={isLoading || isSubmitting}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setShowPassword((prev) => !prev)} edge="end">
->>>>>>> Stashed changes
                           {showPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
                       </InputAdornment>
@@ -321,7 +215,6 @@ export function UserForm({
           </Grid>
         </Grid>
 
-<<<<<<< Updated upstream
           <Grid item xs={12} md={6}>
             <Controller
               name='confirmPassword'
@@ -362,13 +255,6 @@ export function UserForm({
             </Typography>
           </Grid>
 
-=======
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Role & Department
-        </Typography>
-
-        <Grid container spacing={2.5}>
->>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='roleId'
@@ -385,10 +271,7 @@ export function UserForm({
               )}
             />
           </Grid>
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
           <Grid item xs={12} md={6}>
             <Controller
               name='department'
@@ -405,7 +288,6 @@ export function UserForm({
               )}
             />
           </Grid>
-<<<<<<< Updated upstream
 
           <Grid item xs={12}>
             <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
@@ -543,8 +425,6 @@ export function UserForm({
               </Button>
             </Box>
           </Grid>
-=======
->>>>>>> Stashed changes
         </Grid>
 
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
