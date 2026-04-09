@@ -9,6 +9,11 @@ export interface DailyAggregatedRow {
   time4: string | null;
   time5: string | null;
   time6: string | null;
+  time7: string | null;
+  time8: string | null;
+  time9: string | null;
+  time10: string | null;
+
   punches: string[]; // HH:mm format
   firstIn: string | null;
   lastOut: string | null;
@@ -58,21 +63,32 @@ export class ScanDataAggregator {
     for (const [key, scans] of grouped.entries()) {
       const [employeeNumber, workDate] = key.split('_');
       
-      // Sort times chronologically
+      // Sort and deduplicate times (keep the latest scan within a 5-minute window)
       scans.sort((a, b) => a.getTime() - b.getTime());
+      const deduplicatedScans = this.deduplicateScans(scans, 15);
+      
+      // Use deduplicated scans for slots
+      const displayScans = deduplicatedScans;
 
       // Assign slots chronologically
       const times = {
-        time1: scans.length > 0 ? this.formatTime(scans[0]) : null,
-        time2: scans.length > 1 ? this.formatTime(scans[1]) : null,
-        time3: scans.length > 2 ? this.formatTime(scans[2]) : null,
-        time4: scans.length > 3 ? this.formatTime(scans[3]) : null,
-        time5: scans.length > 4 ? this.formatTime(scans[4]) : null,
-        time6: scans.length > 5 ? this.formatTime(scans[5]) : null,
+        time1: displayScans.length > 0 ? this.formatTime(displayScans[0]) : null,
+        time2: displayScans.length > 1 ? this.formatTime(displayScans[1]) : null,
+        time3: displayScans.length > 2 ? this.formatTime(displayScans[2]) : null,
+        time4: displayScans.length > 3 ? this.formatTime(displayScans[3]) : null,
+        time5: displayScans.length > 4 ? this.formatTime(displayScans[4]) : null,
+        time6: displayScans.length > 5 ? this.formatTime(displayScans[5]) : null,
+        time7: displayScans.length > 6 ? this.formatTime(displayScans[6]) : null,
+        time8: displayScans.length > 7 ? this.formatTime(displayScans[7]) : null,
+        time9: displayScans.length > 8 ? this.formatTime(displayScans[8]) : null,
+        time10: displayScans.length > 9 ? this.formatTime(displayScans[9]) : null,
       };
 
+
+
       // Convert times to fractional minutes from midnight for exact math
-      const scanMins = scans.map(s => s.getHours() * 60 + s.getMinutes() + (s.getSeconds() / 60));
+      const scanMins = displayScans.map(s => s.getHours() * 60 + s.getMinutes() + (s.getSeconds() / 60));
+
 
        let normalStatus: 0 | 1 = 0;
        let regularHours = 0;
@@ -171,15 +187,22 @@ export class ScanDataAggregator {
         time4: times.time4,
         time5: times.time5,
         time6: times.time6,
-        punches: scans.map(s => {
+        time7: times.time7,
+        time8: times.time8,
+        time9: times.time9,
+        time10: times.time10,
+
+        punches: displayScans.map(s => {
           if (isNaN(s.getTime())) return '??:??';
           const hours = String(s.getHours()).padStart(2, '0');
           const mins = String(s.getMinutes()).padStart(2, '0');
           return `${hours}:${mins}`;
         }),
         firstIn: times.time1 ? times.time1.substring(0, 5) : null, // HH:mm from HH:mm:ss
-        lastOut: scans.length > 0 ? this.formatTime(scans[scans.length - 1]).substring(0, 5) : null,
-        timeScans: scans,
+        lastOut: displayScans.length > 0 ? this.formatTime(displayScans[displayScans.length - 1]).substring(0, 5) : null,
+        timeScans: displayScans,
+        allScans: displayScans.map(s => this.formatTime(s)),
+
         normalStatus,
         regularHours,
         lunchStatus,
@@ -194,17 +217,58 @@ export class ScanDataAggregator {
   }
 
   private static formatDate(d: Date): string {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
   }
 
   private static formatTime(d: Date): string {
-    const hour = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    const sec = String(d.getSeconds()).padStart(2, '0');
-    return `${hour}:${min}:${sec}`;
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(d);
   }
+
+  /**
+   * Filter out scans that are within windowMinutes of each other.
+   * Keeps the LATEST scan in each cluster.
+   */
+  private static deduplicateScans(scans: Date[], windowMinutes: number = 15): Date[] {
+    if (scans.length <= 1) return scans;
+
+    const windowMs = windowMinutes * 60 * 1000;
+    const result: Date[] = [];
+    
+    // Sort just in case
+    const sorted = [...scans].sort((a, b) => a.getTime() - b.getTime());
+    
+    let currentClusterEnd = sorted[0];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const nextScan = sorted[i];
+      const diff = nextScan.getTime() - currentClusterEnd.getTime();
+
+      if (diff <= windowMs) {
+        // Within window, update the "latest" for this cluster
+        currentClusterEnd = nextScan;
+      } else {
+        // Outside window, push the finished cluster's latest scan and start new cluster
+        result.push(currentClusterEnd);
+        currentClusterEnd = nextScan;
+      }
+    }
+    
+    // Don't forget the last one
+    result.push(currentClusterEnd);
+    
+    return result;
+  }
+
 
 }

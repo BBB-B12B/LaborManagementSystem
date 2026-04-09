@@ -151,6 +151,8 @@ export const Layout: React.FC<LayoutProps> = ({
           display: 'flex',
           flexDirection: 'column',
           pt: `${TOPBAR_HEIGHT + 12}px`,
+          height: '100vh',
+          overflow: 'hidden',
         }}
       >
         <Topbar />

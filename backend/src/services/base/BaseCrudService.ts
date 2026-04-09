@@ -149,8 +149,14 @@ export class BaseCrudService<T extends { id: string }> {
         }
 
         if (options?.pageSize) {
-            query = query.limit(options.pageSize);
+            const page = options.page || 1;
+            const offset = (page - 1) * options.pageSize;
+            if (offset > 0) {
+                query = query.offset(offset) as any;
+            }
+            query = query.limit(options.pageSize) as any;
         }
+
 
         const snapshot = await query.get();
         console.log(`[BaseCrudService] Found ${snapshot.size} documents in ${this.collectionName || 'unknown'} (for filters: ${JSON.stringify(filters)})`);
@@ -225,10 +231,13 @@ export class BaseCrudService<T extends { id: string }> {
                     });
                 }
 
-                // Apply simple pagination slice
+                // Apply pagination slice
                 if (options?.pageSize) {
-                    results = results.slice(0, options.pageSize);
+                    const page = options.page || 1;
+                    const offset = (page - 1) * options.pageSize;
+                    results = results.slice(offset, offset + options.pageSize);
                 }
+
 
                 return results;
             }

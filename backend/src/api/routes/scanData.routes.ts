@@ -101,7 +101,10 @@ router.get(
         endDate: endDate ? new Date(endDate as string) : undefined,
         page: parseInt(req.query.page as string) || 1,
         pageSize: parseInt(req.query.pageSize as string) || 50,
+        onlyDeleted: req.query.onlyDeleted === 'true',
+        enriched: req.query.enriched === 'true'
       };
+
 
       if (enriched === 'true') {
         result = await scanDataService.getDetailedScanReport(options);
@@ -325,8 +328,10 @@ router.get('/export', async (req: Request, res: Response) => {
     const rows = await scanDataService.getAggregatedDataForExport({
       projectLocationId: projectLocationId as string,
       startDate: new Date(startDate as string),
-      endDate: new Date(endDate as string)
+      endDate: new Date(endDate as string),
+      onlyDeleted: req.query.onlyDeleted === 'true'
     });
+
 
     let filteredRows = rows;
     if (employeeNumber) {
@@ -641,6 +646,25 @@ router.post(
 );
 
 /**
+ * DELETE /api/scan-data/discrepancies/:id
+ */
+router.delete('/discrepancies/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  try {
+    const deletedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+    const success = await scanDataService.deleteDiscrepancy(req.params.id, deletedBy);
+    if (!success) {
+      return res.status(404).json({ success: false, error: 'Discrepancy not found' });
+    }
+    res.json({ success: true, message: 'Discrepancy deleted successfully' });
+    return;
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+    return;
+  }
+});
+
+/**
  * DELETE /api/scan-data/:id
  */
 router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
@@ -653,6 +677,26 @@ router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Respons
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+/**
+ * POST /api/scan-data/:id/restore
+ * กู้คืนข้อมูลที่ถูกลบ (Soft-deleted)
+ */
+router.post('/:id/restore', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
+  try {
+    const success = await scanDataService.restore(req.params.id);
+    if (!success) {
+      return res.status(404).json({ success: false, error: 'Scan data not found' });
+    }
+    res.json({ success: true, message: 'Scan data restored successfully' });
+    return;
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+    return;
+  }
+});
+
+
 
 /**
  * Add a manual scan record
@@ -675,10 +719,14 @@ router.post('/manual', async (req: Request, res: Response) => {
     );
 
     res.status(201).json({ success: true, data: result });
+    return;
   } catch (error: any) {
     res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    return;
   }
 });
+
+
 
 /**
  * Update a scan record

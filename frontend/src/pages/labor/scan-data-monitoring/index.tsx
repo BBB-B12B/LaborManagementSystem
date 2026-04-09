@@ -53,6 +53,7 @@ import {
   History,
   List,
   Edit,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -62,6 +63,8 @@ import {
   getAllDiscrepancies,
   type ScanDataDiscrepancy,
   deleteScanDataBulk,
+  deleteScanDataById,
+  deleteDiscrepancyById,
   getAllScanData,
   addManualScan,
   type ScanData,
@@ -73,6 +76,7 @@ import {
   getSeverityColor,
 } from '../../../validation/scanDataSchema';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
+import { useToast } from '../../../components/common';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 import { DatePicker } from '../../../components/forms/DatePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
@@ -83,6 +87,7 @@ import { Layout, ProtectedRoute } from '@/components/layout';
 export default function ScanDataMonitoringPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { success: showSuccess } = useToast();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [currentTab, setCurrentTab] = useState(0); // 0: Discrepancies, 1: All Scans
@@ -182,6 +187,38 @@ export default function ScanDataMonitoringPage() {
     }
   };
 
+  const handleDeleteRow = async (row: any) => {
+    const empNo = row.employeeNumber || row.detailedView?.employeeNumber || '-';
+    let dateStr = '-';
+    try {
+      const dateVal = row.workDate || row.scanDate || row.date;
+      if (dateVal) {
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          dateStr = d.toISOString().substring(0, 10);
+        }
+      }
+    } catch (e) {
+      console.error('Date parsing error:', e);
+    }
+
+    if (!window.confirm(`คุณต้องการลบข้อมูลสแกนของพนักงาน ${empNo} วันที่ ${dateStr} หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้`)) {
+      return;
+    }
+    
+    try {
+      if (currentTab === 0) {
+        await deleteDiscrepancyById(row.id);
+      } else {
+        await deleteScanDataById(row.id);
+      }
+      showSuccess('ลบข้อมูลสำเร็จ');
+      handleRefresh();
+    } catch (err: any) {
+      alert(`เกิดข้อผิดพลาด: ${err.message}`);
+    }
+  };
+
   // Status color mapping
   const getStatusColor = (
     status: 'pending' | 'verified' | 'fixed' | 'ignored'
@@ -241,7 +278,7 @@ export default function ScanDataMonitoringPage() {
     { label: 'ความขัดแย้ง OT เย็น', width: 180 },
     { label: 'ส่วนงาน', width: 150 },
     { label: 'ข้อผิดพลาด', width: 250 },
-    { label: 'จัดการ', width: 80, sticky: 'right', right: 0 }
+    { label: 'จัดการ', width: 110, sticky: 'right', right: 0 }
   ];
 
 
@@ -337,14 +374,23 @@ export default function ScanDataMonitoringPage() {
   const { control: manualControl, handleSubmit: handleManualSubmit, reset: resetManual } = useForm();
 
   const renderContent = () => (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="xl" sx={{ 
+      mt: 0, 
+      mb: 0, 
+      pt: 2,
+      height: 'calc(100vh - 76px)',
+      display: 'flex', 
+      flexDirection: 'column', 
+      overflow: 'hidden',
+    }}>
       {/* Header */}
       <Box
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 3,
+          mb: 2,
+          flexShrink: 0,
         }}
       >
         <Box>
@@ -403,14 +449,14 @@ export default function ScanDataMonitoringPage() {
           setCurrentTab(newValue);
           setPage(0);
         }}
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+        sx={{ mb: 1, flexShrink: 0, borderBottom: 1, borderColor: 'divider' }}
       >
         <Tab icon={<History />} label="รายการความผิดปกติ" iconPosition="start" />
         <Tab icon={<List />} label="ข้อมูลสแกนทั้งหมด" iconPosition="start" />
       </Tabs>
 
       {/* Filters */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 2, mb: 0, flexShrink: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <FilterList sx={{ mr: 1 }} />
           <Typography variant="h6">ตัวกรอง</Typography>
@@ -572,7 +618,7 @@ export default function ScanDataMonitoringPage() {
       </Paper>
 
       {/* Data Table */}
-      <Paper sx={{ width: '100%' }}>
+      <Paper sx={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mt: 1 }}>
         {currentTab === 0 ? (
           <>
             {isDiscrepancyLoading ? (
@@ -580,8 +626,8 @@ export default function ScanDataMonitoringPage() {
                 <LoadingSpinner size="large" />
               </Box>
             ) : (
-            <Box sx={{ width: '100%', overflow: 'hidden' }}>
-              <TableContainer sx={{ maxHeight: 600, border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+            <Box sx={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <TableContainer sx={{ flex: 1, overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
                 <Table stickyHeader size="small" sx={{ minWidth: 3500 }}>
                   <TableHead>
                     <TableRow>
@@ -611,7 +657,7 @@ export default function ScanDataMonitoringPage() {
                     {discrepancyData?.data.map((row: any) => (
                       <TableRow key={row.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                         {/* 1. แถว */}
-                        <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'white', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
+                        <TableCell sx={{ position: 'sticky', left: 0, bgcolor: '#ffffff', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
                           {row.detailedView?.row || '-'}
                         </TableCell>
                         
@@ -626,7 +672,7 @@ export default function ScanDataMonitoringPage() {
                         </TableCell>
 
                         {/* 3. EmployeeNumber */}
-                        <TableCell sx={{ position: 'sticky', left: 60, bgcolor: 'white', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
+                        <TableCell sx={{ position: 'sticky', left: 60, bgcolor: '#ffffff', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
                           {row.employeeNumber}
                         </TableCell>
 
@@ -697,12 +743,19 @@ export default function ScanDataMonitoringPage() {
                         </TableCell>
 
                         {/* 25. จัดการ */}
-                        <TableCell sx={{ position: 'sticky', right: 0, bgcolor: 'white', zIndex: 5, borderLeft: '1px solid #eee' }} align="center">
-                          <Tooltip title="แก้ไขเวลาสแกน">
-                            <IconButton size="small" onClick={() => handleOpenEdit(row)} color="info">
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                        <TableCell sx={{ position: 'sticky', right: 0, bgcolor: '#ffffff', zIndex: 5, borderLeft: '1px solid #eee' }} align="center">
+                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                            <Tooltip title="แก้ไขเวลาสแกน">
+                              <IconButton size="small" onClick={() => handleOpenEdit(row)} color="info">
+                                <Edit fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="ลบแถวนี้">
+                              <IconButton size="small" onClick={() => handleDeleteRow(row)} color="error">
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}

@@ -41,7 +41,18 @@ export interface ScanData {
   calculatedHours?: number;
   roundedHours?: number;
   lateMinutes?: number;
+  time1?: string;
+  time2?: string;
+  time3?: string;
+  time4?: string;
+  time5?: string;
+  time6?: string;
+  time7?: string;
+  time8?: string;
+  time9?: string;
+  time10?: string;
   importBatchId: string;
+
   importTimestamp: Date;
   hasDiscrepancy: boolean;
   notes?: string;
@@ -187,7 +198,7 @@ export const uploadScanDataExcel = uploadScanDataFile;
  * Get all scan data with filtering
  */
 export async function getAllScanData(
-  filter?: ScanDataFilter & { enriched?: boolean },
+  filter?: ScanDataFilter & { enriched?: boolean; onlyDeleted?: boolean },
   page: number = 1,
   pageSize: number = 50
 ): Promise<{
@@ -214,7 +225,9 @@ export async function getAllScanData(
       params.append('hasDiscrepancy', String(filter.hasDiscrepancy));
     if (filter.importBatchId) params.append('importBatchId', filter.importBatchId);
     if (filter.enriched) params.append('enriched', 'true');
+    if (filter.onlyDeleted) params.append('onlyDeleted', 'true');
   }
+
 
   const response = await apiClient.get<{
     success: boolean;
@@ -520,6 +533,7 @@ export async function exportScanData(params: {
   startDate: Date;
   endDate: Date;
   employeeNumber?: string;
+  onlyDeleted?: boolean;
 }): Promise<void> {
   // apiClient already handles the /api prefix, so we just need the path here
   const response = await apiClient.get('/scan-data/export', {
@@ -528,9 +542,11 @@ export async function exportScanData(params: {
       startDate: params.startDate.toISOString(),
       endDate: params.endDate.toISOString(),
       employeeNumber: params.employeeNumber,
+      onlyDeleted: params.onlyDeleted ? 'true' : 'false',
     },
     responseType: 'blob',
   });
+
 
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
@@ -541,3 +557,31 @@ export async function exportScanData(params: {
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
+/**
+ * Delete a single scan data record by ID
+ * DELETE /api/scan-data/:id
+ */
+export async function deleteScanDataById(id: string): Promise<{ success: boolean }> {
+  const response = await apiClient.delete(`/scan-data/${id}`);
+  return response.data;
+}
+
+/**
+ * Delete a discrepancy record by ID
+ * DELETE /api/scan-data/discrepancies/:id
+ */
+export async function deleteDiscrepancyById(id: string): Promise<{ success: boolean }> {
+  const response = await apiClient.delete(`/scan-data/discrepancies/${id}`);
+  return response.data;
+}
+
+/**
+ * Restore a single scan data record by ID
+ * POST /api/scan-data/:id/restore
+ */
+export async function restoreScanDataById(id: string): Promise<{ success: boolean }> {
+  const response = await apiClient.post(`/scan-data/${id}/restore`);
+  return response.data;
+}
+

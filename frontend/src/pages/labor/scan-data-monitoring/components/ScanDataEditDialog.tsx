@@ -14,8 +14,10 @@ import {
 } from '@mui/material';
 import { Add, Delete, AccessTime, Save, Cancel, ArrowUpward, ArrowDownward, Sort } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { updateDailyPunches } from '../../../../services/scanDataService';
+import { deleteScanDataById, updateDailyPunches } from '../../../../services/scanDataService';
 import { TimePicker } from '../../../../components/forms/TimePicker';
+import { useDeleteConfirmDialog } from '../../../../components/common/ConfirmDialog';
+
 
 interface ScanDataEditDialogProps {
   open: boolean;
@@ -42,9 +44,11 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
   workDate,
   existingPunches,
 }) => {
-  const queryClient = useQueryClient();
+   const queryClient = useQueryClient();
+  const { confirmDelete, ConfirmDialog: DeleteConfirmDialog } = useDeleteConfirmDialog();
   const [punches, setPunches] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (open) {
@@ -107,7 +111,7 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
     },
   });
 
-  const handleSave = () => {
+   const handleSave = () => {
     // Validate: At least one punch if we want to record something
     const filtered = punches.filter(p => p !== '');
     if (filtered.length === 0) {
@@ -117,6 +121,33 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
     }
     mutation.mutate();
   };
+
+  const handleFullDelete = async () => {
+    if (!id) return;
+    
+    // Format date for the confirmation dialog
+    let dateStr = '-';
+    try {
+      dateStr = workDate.toISOString().substring(0, 10);
+    } catch (e) {
+      dateStr = workDate.toLocaleDateString('th-TH');
+    }
+
+    await confirmDelete(
+      `ข้อมูลสแกนของพนักงาน ${employeeNumber} วันที่ ${dateStr}`,
+      async () => {
+        try {
+          await deleteScanDataById(id as string);
+          queryClient.invalidateQueries({ queryKey: ['discrepancies'] });
+          queryClient.invalidateQueries({ queryKey: ['allScanData'] });
+          onClose();
+        } catch (err: any) {
+          setError(err.message || 'เกิดข้อผิดพลาดในการลบข้อมูล');
+        }
+      }
+    );
+  };
+
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
@@ -153,8 +184,9 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
               onClick={sortPunches}
               disabled={punches.filter(p => p !== '').length < 2}
             >
-              เรียงตามเวลา (T1 → T6)
+              เรียงตามเวลา (T1 → T10)
             </Button>
+
           </Box>
           
           {punches.map((punch, index) => (
@@ -214,19 +246,35 @@ export const ScanDataEditDialog: React.FC<ScanDataEditDialogProps> = ({
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, pt: 0 }}>
-        <Button onClick={onClose} startIcon={<Cancel />}>
-          ยกเลิก
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          startIcon={<Save />}
-          disabled={mutation.isPending}
-        >
-          {mutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
-        </Button>
+       <DialogActions sx={{ p: 2, pt: 1, justifyContent: 'space-between' }}>
+        <Box>
+          {id && (
+            <Button 
+              onClick={handleFullDelete} 
+              color="error" 
+              startIcon={<Delete />}
+              sx={{ fontWeight: 'bold' }}
+            >
+              ลบบันทึกนี้
+            </Button>
+          )}
+        </Box>
+        <Stack direction="row" spacing={1}>
+          <Button onClick={onClose} startIcon={<Cancel />}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            startIcon={<Save />}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+          </Button>
+        </Stack>
       </DialogActions>
+      <DeleteConfirmDialog />
     </Dialog>
+
   );
 };

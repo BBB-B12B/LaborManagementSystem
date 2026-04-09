@@ -6,13 +6,17 @@
  */
 
 import { randomUUID } from 'crypto';
-import { BaseCrudService } from '../base/BaseCrudService';
+import { BaseCrudService, PaginatedResult, PaginationOptions } from '../base/BaseCrudService';
 import {
   ScanData,
   CreateScanDataInput,
   classifyScanBehavior,
   checkLate,
 } from '../../models/ScanData';
+import { 
+  ScanDataDiscrepancy, 
+  calculateSeverity 
+} from '../../models/ScanDataDiscrepancy';
 import { COLLECTIONS, collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
@@ -114,7 +118,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
       allScans.sort();
 
       const timeSlots: any = {};
-      allScans.slice(0, 6).forEach((time, index) => {
+      allScans.slice(0, 10).forEach((time, index) => {
         timeSlots[`Time${index + 1}`] = time;
       });
 
@@ -154,17 +158,22 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   private formatDate(d: Date): string {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
   }
 
   private formatTime(d: Date): string {
-    const hour = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    const sec = String(d.getSeconds()).padStart(2, '0');
-    return `${hour}:${min}:${sec}`;
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(d);
   }
 
   /**
@@ -176,11 +185,13 @@ class ScanDataService extends BaseCrudService<ScanData> {
     endDate: Date
   ): Promise<ScanData[]> {
     try {
-      return await this.query([
+      const scans = await this.query([
         { field: 'dailyContractorId', operator: '==', value: dailyContractorId },
         { field: 'workDate', operator: '>=', value: startDate },
         { field: 'workDate', operator: '<=', value: endDate },
       ]);
+      // Filter in-memory to include documents where isDeleted is missing or false
+      return scans.filter(s => (s as any).isDeleted !== true);
     } catch (error: any) {
       logger.error('Error getting scan data by contractor:', error);
       throw error;
@@ -193,15 +204,19 @@ class ScanDataService extends BaseCrudService<ScanData> {
   async getByProjectAndDate(
     projectLocationId: string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    onlyDeleted: boolean = false
   ): Promise<ScanData[]> {
     try {
-      return await this.queryWithFallback([
+      const scans = await this.queryWithFallback([
         { field: 'projectLocationId', operator: '==', value: projectLocationId },
         { field: 'workDate', operator: '>=', value: startDate },
         { field: 'workDate', operator: '<=', value: endDate },
       ]);
+      // Filter in-memory to include documents based on onlyDeleted flag
+      return scans.filter(s => onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true);
     } catch (error: any) {
+
       logger.error('Error getting scan data by project:', error);
       throw error;
     }
@@ -272,6 +287,48 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   /**
+   * Get all scan data with complex filtering and proper pagination
+   */
+  async getAllFiltered(options: any): Promise<PaginatedResult<ScanData>> {
+    const page = parseInt(options.page || '1', 10);
+    const pageSize = parseInt(options.pageSize || '50', 10);
+    const orderBy = options.orderBy || 'workDate';
+    const orderDirection = options.orderDirection || 'desc';
+    const onlyDeleted = options.onlyDeleted === true || options.onlyDeleted === 'true';
+
+    const filters: any[] = [];
+    if (options.projectId) filters.push({ field: 'projectLocationId', operator: '==', value: options.projectId });
+    if (options.startDate) filters.push({ field: 'workDate', operator: '>=', value: options.startDate });
+    if (options.endDate) filters.push({ field: 'workDate', operator: '<=', value: options.endDate });
+    
+    // Total count for these filters
+    // Note: We use queryWithFallback style logic if needed, but for now we'll assume indexes exist or use base query
+    const total = await this.count([
+      ...filters,
+      { field: 'isDeleted', operator: '==', value: onlyDeleted }
+    ]).catch(() => this.count(filters)); // Fallback if isDeleted index is missing
+
+    // Get paginated items
+    const items = await this.queryWithFallback([
+      ...filters,
+      { field: 'isDeleted', operator: '==', value: onlyDeleted }
+    ], {
+      page,
+      pageSize,
+      orderBy,
+      orderDirection
+    });
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  /**
    * Bulk import scan data records
    */
   async bulkImport(
@@ -319,16 +376,21 @@ class ScanDataService extends BaseCrudService<ScanData> {
       }
     };
 
-    for (const record of records) {
-      if (!employeeCache.has(record.employeeNumber)) {
+    // 1. Optimize employee lookup: collect unique employee numbers first
+    const uniqueEmployeeNumbers = Array.from(new Set(records.map(r => r.employeeNumber).filter(Boolean)));
+    
+    // 2. Fetch all unique employees in parallel to prevent timeouts
+    await Promise.all(uniqueEmployeeNumbers.map(async (empNum) => {
+      if (!employeeCache.has(empNum)) {
         try {
-          const contractor = await dailyContractorService.findByEmployeeIdOrHistory(record.employeeNumber);
-          employeeCache.set(record.employeeNumber, contractor ? contractor.id : null);
+          const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empNum);
+          employeeCache.set(empNum, contractor ? contractor.id : null);
         } catch (e: any) {
-          employeeCache.set(record.employeeNumber, null);
+          employeeCache.set(empNum, null);
         }
       }
-    }
+    }));
+
 
     const aggregatedDailyRows = ScanDataAggregator.aggregate(records);
     
@@ -385,6 +447,11 @@ class ScanDataService extends BaseCrudService<ScanData> {
           Time4: group.time4 || '',
           Time5: group.time5 || '',
           Time6: group.time6 || '',
+          Time7: group.time7 || '',
+          Time8: group.time8 || '',
+          Time9: group.time9 || '',
+          Time10: group.time10 || '',
+
           allScans: group.timeScans.map(t => isNaN(t.getTime()) ? '??:??:??' : this.formatTime(t)),
           normalStatus: isNaN(group.normalStatus) ? 0 : group.normalStatus,
           regularHours: isNaN(group.regularHours) ? 0 : group.regularHours,
@@ -450,12 +517,17 @@ class ScanDataService extends BaseCrudService<ScanData> {
           Time4: group.time4 || '',
           Time5: group.time5 || '',
           Time6: group.time6 || '',
+          Time7: group.time7 || '',
+          Time8: group.time8 || '',
+          Time9: group.time9 || '',
+          Time10: group.time10 || '',
           NormalStatus: group.normalStatus,
           RegularHours: group.regularHours,
           LunchStatus: group.lunchStatus,
           MorningOT: group.otMorningHours,
           EveningOT: group.otEveningHours,
           LateMinutes: group.lateMinutes,
+
           Department: rowDepartment
         }
       });
@@ -487,6 +559,20 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   /**
+   * Restore soft-deleted scan data
+   */
+  async restore(id: string): Promise<boolean> {
+    try {
+      await this.update(id, { isDeleted: false } as any);
+      return true;
+    } catch (error: any) {
+      logger.error('Error restoring scan data:', error);
+      throw error;
+    }
+  }
+
+
+  /**
    * GET /api/scan-data/detailed
    */
   async getDetailedScanReport(options: any): Promise<{ data: any[]; total: number }> {
@@ -494,28 +580,44 @@ class ScanDataService extends BaseCrudService<ScanData> {
       let scans: ScanData[] = [];
       let total = 0;
 
-      if (options.projectId && options.startDate && options.endDate) {
-        scans = await this.getByProjectAndDate(options.projectId, options.startDate, options.endDate);
-        total = scans.length;
-      } else {
-        const result = await super.getAll(options);
-        scans = result.items;
-        total = result.total;
-      }
+      // Extract filter parameters
+      const projectLocationId = options.projectLocationId || options.projectId;
+      const startDate = options.startDate;
+      const endDate = options.endDate;
+      const onlyDeleted = options.onlyDeleted === true || options.onlyDeleted === 'true';
 
-      const enriched = [];
-      for (const scan of scans) {
+      // Always use the robust getAllFiltered which handles pagination and fallbacks correctly
+      const result = await this.getAllFiltered({
+        ...options,
+        projectId: projectLocationId,
+        startDate,
+        endDate,
+        onlyDeleted
+      });
+      
+      scans = result.items;
+      total = result.total;
+
+
+      // Optimize: Fetch all supplementary data in parallel
+      const enriched = await Promise.all(scans.map(async (scan) => {
         const workDate = scan.workDate instanceof Date ? scan.workDate : (scan.workDate as any).toDate ? (scan.workDate as any).toDate() : new Date(scan.workDate);
-        const dayReports = await dailyReportService.getByContractorAndDate(scan.dailyContractorId, workDate, workDate);
+        
+        let reportData = { regular: 0, otMorning: 0, otNoon: 0, otEvening: 0 };
+        
+        try {
+          const dayReports = await dailyReportService.getByContractorAndDate(scan.dailyContractorId, workDate, workDate);
+          reportData = {
+            regular: dayReports.some((r: any) => r.workType === 'regular') ? 1 : 0,
+            otMorning: dayReports.reduce((sum: number, r: DailyReport) => sum + (r.workType === 'ot_morning' ? r.netHours : 0), 0),
+            otNoon: dayReports.some((r: any) => r.workType === 'ot_noon') ? 1 : 0,
+            otEvening: dayReports.reduce((sum: number, r: DailyReport) => sum + (r.workType === 'ot_evening' ? r.netHours : 0), 0),
+          };
+        } catch (err) {
+          // Keep defaults if fetch fails
+        }
 
-        const reportData = {
-          regular: dayReports.some((r: any) => r.workType === 'regular') ? 1 : 0,
-          otMorning: dayReports.reduce((sum: number, r: DailyReport) => sum + (r.workType === 'ot_morning' ? r.netHours : 0), 0),
-          otNoon: dayReports.some((r: any) => r.workType === 'ot_noon') ? 1 : 0,
-          otEvening: dayReports.reduce((sum: number, r: DailyReport) => sum + (r.workType === 'ot_evening' ? r.netHours : 0), 0),
-        };
-
-        enriched.push({
+        return {
           ...scan,
           detailedView: {
             row: 0,
@@ -528,6 +630,10 @@ class ScanDataService extends BaseCrudService<ScanData> {
             time4: (scan as any).Time4 || '-',
             time5: (scan as any).Time5 || '-',
             time6: (scan as any).Time6 || '-',
+            time7: (scan as any).Time7 || '-',
+            time8: (scan as any).Time8 || '-',
+            time9: (scan as any).Time9 || '-',
+            time10: (scan as any).Time10 || '-',
             scanNormalStatus: (scan as any).normalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
             scanRegularHours: (scan as any).regularHours || 0,
             regularHours: (scan as any).regularHours || 0,
@@ -546,20 +652,16 @@ class ScanDataService extends BaseCrudService<ScanData> {
             errorNote: scan.importNote || '-',
             isManuallyEdited: (scan as any).isManuallyEdited || false
           }
-        });
-      }
+        };
+      }));
 
-      // Sort by date ascending (oldest first)
+      // Sort by date ascending
       enriched.sort((a, b) => {
-        const dateA = a.workDate instanceof Date ? a.workDate.getTime() : (a.workDate as any).toDate().getTime();
-        const dateB = b.workDate instanceof Date ? b.workDate.getTime() : (b.workDate as any).toDate().getTime();
+        const dateA = a.detailedView.date.getTime();
+        const dateB = b.detailedView.date.getTime();
         return dateA - dateB;
       });
 
-      if (options.page && options.pageSize) {
-         const start = (options.page - 1) * options.pageSize;
-         return { data: enriched.slice(start, start + options.pageSize), total };
-      }
       return { data: enriched, total };
     } catch (err) {
       logger.error('Error getting detailed scan report:', err);
@@ -587,14 +689,38 @@ class ScanDataService extends BaseCrudService<ScanData> {
   }
 
   /**
+   * Delete a discrepancy record
+   */
+  async deleteDiscrepancy(discrepancyId: string, deletedBy: string): Promise<boolean> {
+    try {
+      const docRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discrepancyId);
+      const doc = await docRef.get();
+      if (!doc.exists) return false;
+
+      await docRef.update({
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy
+      });
+      return true;
+    } catch (error) {
+      logger.error('Error deleting discrepancy:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get summary of discrepancies for Dashboard
    */
   async getDiscrepancySummary(projectId?: string): Promise<any> {
     try {
-      let queryRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).where('status', '==', 'pending');
+      let queryRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
+        .where('status', '==', 'pending');
       if (projectId) queryRef = queryRef.where('projectLocationId', '==', projectId);
       const snapshot = await queryRef.get();
-      const discrepancies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const discrepancies = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((d: any) => d.isDeleted !== true);
       return {
         totalDiscrepancies: discrepancies.length,
         pendingCount: discrepancies.length,
@@ -618,25 +744,28 @@ class ScanDataService extends BaseCrudService<ScanData> {
     endDate?: Date;
   }): Promise<{ items: any[]; total: number; page: number; pageSize: number; totalPages: number }> {
     try {
+      const projectLocationId = options.projectId;
       let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES);
-      if (options.projectId) query = query.where('projectLocationId', '==', options.projectId);
+      if (projectLocationId) query = query.where('projectLocationId', '==', projectLocationId);
       if (options.startDate) query = query.where('workDate', '>=', options.startDate);
       if (options.endDate) query = query.where('workDate', '<=', options.endDate);
 
       const snapshot = await query.get();
-      const items = snapshot.docs.map(doc => {
-        const data = doc.data() as any;
-        if (data.workDate && data.workDate.toDate) data.workDate = data.workDate.toDate();
-        return { 
-          id: doc.id, 
-          ...data, 
-          detailedView: { 
+      const items = snapshot.docs
+        .map(doc => {
+          const data = doc.data() as any;
+          if (data.workDate && data.workDate.toDate) data.workDate = data.workDate.toDate();
+          return { 
+            id: doc.id, 
             ...data, 
-            date: data.workDate,
-            isManuallyEdited: data.isManuallyEdited || false
-          } 
-        };
-      });
+            detailedView: { 
+              ...data, 
+              date: data.workDate,
+              isManuallyEdited: data.isManuallyEdited || false
+            } 
+          };
+        })
+        .filter(item => item.isDeleted !== true);
 
       // Sort by workDate ascending (oldest first)
       items.sort((a, b) => {
@@ -902,17 +1031,188 @@ class ScanDataService extends BaseCrudService<ScanData> {
    * Detect discrepancies
    */
   async detectDiscrepancies(
-    _projectLocationId: string,
-    _startDate: Date,
-    _endDate: Date,
-    _detectedBy: string,
-    _projectName?: string,
-    _projectCode?: string
+    projectLocationId: string,
+    startDate: Date,
+    endDate: Date,
+    detectedBy: string,
+    projectName?: string,
+    projectCode?: string
   ): Promise<{ detected: number; discrepanciesCreated: number }> {
     try {
-      // Logic for discrepancy detection goes here...
-      return { detected: 0, discrepanciesCreated: 0 };
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      // 1. Delete existing discrepancies for this project and range to avoid duplicates
+      // Use a simpler query to avoid index requirement
+      const existingQuery = collections.scanDataDiscrepancies
+        .where('projectLocationId', '==', projectLocationId);
+
+      const existingDocs = await existingQuery.get();
+      const docsToDelete = existingDocs.docs.filter(doc => {
+        const d = doc.data() as ScanDataDiscrepancy;
+        const workDate = d.workDate instanceof Date ? d.workDate : (d.workDate as any).toDate();
+        return workDate >= start && workDate <= end;
+      });
+
+      if (docsToDelete.length > 0) {
+        const delBatch = db.batch();
+        docsToDelete.forEach(doc => delBatch.delete(doc.ref));
+        await delBatch.commit();
+      }
+
+      // 2. Fetch ScanData records
+      // Use simpler query for ScanData too if possible, but let's see if it works as is
+      const scansSnapshot = await collections.scanData
+        .where('projectLocationId', '==', projectLocationId)
+        .get();
+
+      const scansSnapshotFiltered = scansSnapshot.docs.filter(doc => {
+        const d = doc.data() as ScanData;
+        const workDate = d.workDate instanceof Date ? d.workDate : (d.workDate as any).toDate();
+        return workDate >= start && workDate <= end && d.isDeleted === false;
+      });
+
+      // 3. Fetch DailyReports
+      const reportsSnapshot = await collections.dailyReports
+        .where('projectLocationId', '==', projectLocationId)
+        .get();
+
+      const reportsSnapshotFiltered = reportsSnapshot.docs.filter(doc => {
+        const d = doc.data() as DailyReport;
+        const workDate = d.workDate instanceof Date ? d.workDate : (d.workDate as any).toDate();
+        return workDate >= start && workDate <= end;
+      });
+
+      const scanMap = new Map<string, ScanData>();
+      scansSnapshotFiltered.forEach(doc => {
+        const data = doc.data() as ScanData;
+        const workDate = data.workDate instanceof Date ? data.workDate : (data.workDate as any).toDate();
+        const key = `${data.employeeNumber}_${workDate.toISOString().split('T')[0]}`;
+        scanMap.set(key, { ...data, id: doc.id });
+      });
+
+      const reportMap = new Map<string, DailyReport[]>();
+      reportsSnapshotFiltered.forEach(doc => {
+        const data = doc.data() as DailyReport;
+        const workDate = data.workDate instanceof Date ? data.workDate : (data.workDate as any).toDate();
+        const key = `${data.employeeId}_${workDate.toISOString().split('T')[0]}`;
+        const existing = reportMap.get(key) || [];
+        reportMap.set(key, [...existing, { ...data, id: doc.id }]);
+      });
+
+      // 4. Collect all unique employee/date keys
+      const allKeys = new Set([...scanMap.keys(), ...reportMap.keys()]);
+      const discrepanciesToCreate: Omit<ScanDataDiscrepancy, 'id'>[] = [];
+
+      for (const key of allKeys) {
+        const scan = scanMap.get(key);
+        const reports = reportMap.get(key) || [];
+        const [empNum, dateStr] = key.split('_');
+
+        let discrepancy: Omit<ScanDataDiscrepancy, 'id' | 'createdAt' | 'status' | 'severity' | 'hoursDifference'> | null = null;
+        let detectionReason = '';
+        let type: 'Type1' | 'Type2' | 'Type3' = 'Type1';
+
+        const workDate = scan ? (scan.workDate instanceof Date ? scan.workDate : (scan.workDate as any).toDate()) : new Date(dateStr);
+        
+        // Sum reported hours
+        const reportedRegularHours = reports.filter(r => r.workType === 'regular').reduce((sum, r) => sum + (r.netHours || 0), 0);
+        const reportedMorningOT = reports.filter(r => r.workType === 'ot_morning').reduce((sum, r) => sum + (r.netHours || 0), 0);
+        const reportedEveningOT = reports.filter(r => r.workType === 'ot_evening').reduce((sum, r) => sum + (r.netHours || 0), 0);
+        const totalReportedHours = reports.reduce((sum, r) => sum + (r.netHours || 0), 0);
+
+        const scannedHours = scan ? (scan.regularHours || 0) : 0;
+        const scanNormalStatus = scan ? (scan.normalStatus || 0) : 0;
+
+        // --- DETECTION LOGIC ---
+        
+        // Case A: Missing Scan Data for a reported day (Type 1)
+        if (!scan && reports.length > 0) {
+          type = 'Type1';
+          detectionReason = 'มีชื่อในรายงานการทำงานประจำวัน แต่ไม่พบข้อมูลการสแกนนิ้ว';
+        }
+        // Case B: Abnormal Scan (Type 2 - Missing in/out)
+        else if (scan && scan.normalStatus === 0) {
+          type = 'Type2';
+          detectionReason = 'สแกนไม่ครบ (ไม่มีเวลาสแกนเข้า หรือ สแกนออก)';
+        }
+        // Case C: Hours mismatch (Type 3)
+        else if (scan && reports.length > 0) {
+          const hoursDiff = Math.abs(scannedHours - reportedRegularHours);
+          if (hoursDiff > 0.01) {
+             type = 'Type3';
+             detectionReason = `ชั่วโมงงานไม่ตรงกัน (สแกนนิ้ว: ${scannedHours} ชม., รายงาน: ${reportedRegularHours} ชม.)`;
+          }
+        }
+
+        if (detectionReason) {
+          discrepancy = {
+            dailyReportId: reports[0]?.id || 'NONE',
+            dailyContractorId: scan?.dailyContractorId || reports[0]?.dailyContractorId || '',
+            projectLocationId,
+            workDate,
+            discrepancyType: type,
+            reportedHours: reportedRegularHours,
+            scannedHours: scannedHours,
+            scanNormalStatus,
+            scanStatusLabel: scanNormalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
+            detectionReason,
+            detectedBy,
+            projectName: projectName || scan?.projectName,
+            projectCode: projectCode || scan?.projectCode,
+            employeeNumber: empNum,
+            
+            // Detailed metrics for UI display
+            time1: scan?.Time1,
+            time2: scan?.Time2,
+            time3: scan?.Time3,
+            time4: scan?.Time4,
+            time5: scan?.Time5,
+            time6: scan?.Time6,
+            lateMinutes: scan?.lateMinutes || 0,
+            reportNormalStatus: reportedRegularHours > 0 ? 1 : 0,
+            reportOTMorning: reportedMorningOT,
+            reportOTEvening: reportedEveningOT,
+            scanOTMorning: scan?.otMorningHours || 0,
+            scanOTEvening: scan?.otEveningHours || 0,
+          };
+
+          const hoursDifference = discrepancy.reportedHours - discrepancy.scannedHours;
+          discrepanciesToCreate.push({
+            ...discrepancy,
+            hoursDifference,
+            severity: calculateSeverity(hoursDifference),
+            status: 'pending',
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      // 5. Batch save discrepancies
+      if (discrepanciesToCreate.length > 0) {
+        let batch = db.batch();
+        let ops = 0;
+        for (const disc of discrepanciesToCreate) {
+          const docRef = collections.scanDataDiscrepancies.doc();
+          batch.set(docRef, disc);
+          ops++;
+          if (ops >= 500) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        await batch.commit();
+      }
+
+      return { 
+        detected: allKeys.size, 
+        discrepanciesCreated: discrepanciesToCreate.length 
+      };
     } catch (error: any) {
+      logger.error('Error in detectDiscrepancies:', error);
       throw error;
     }
   }
@@ -925,19 +1225,55 @@ class ScanDataService extends BaseCrudService<ScanData> {
     startDate?: Date;
     endDate?: Date;
     batchId?: string;
+    onlyDeleted?: boolean;
   }): Promise<any[]> {
     let scans: ScanData[] = [];
     if (params.batchId) scans = await this.getByBatchId(params.batchId);
     else if (params.projectLocationId && params.startDate && params.endDate) {
-      scans = await this.getByProjectAndDate(params.projectLocationId, params.startDate, params.endDate);
+      scans = await this.getByProjectAndDate(params.projectLocationId, params.startDate, params.endDate, params.onlyDeleted);
     }
+
     if (scans.length === 0) return [];
 
-    const records: BulkImportRecord[] = scans.map((s, idx) => ({
-      rowNumber: idx + 1,
-      employeeNumber: s.employeeNumber || s.employeeId,
-      scanDateTime: s.scanDateTime instanceof Date ? s.scanDateTime : (s.scanDateTime as any).toDate(),
-    }));
+    const records: BulkImportRecord[] = [];
+    scans.forEach((s, sIdx) => {
+      const baseDate = s.scanDateTime instanceof Date ? s.scanDateTime : (s.scanDateTime as any).toDate();
+      const empNo = s.employeeNumber || s.employeeId;
+      
+      // Look for Time1 through Time10 fields in the record
+      for (let i = 1; i <= 10; i++) {
+        const timeKey = `Time${i}`;
+        const timeStr = (s as any)[timeKey];
+        
+        if (timeStr && timeStr !== '-' && timeStr !== '') {
+          try {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            if (!isNaN(hours) && !isNaN(minutes)) {
+              const punchDate = new Date(baseDate);
+              punchDate.setHours(hours, minutes, 0, 0);
+              
+              records.push({
+                rowNumber: sIdx * 10 + i,
+                employeeNumber: empNo,
+                scanDateTime: punchDate
+              });
+            }
+          } catch (e) {
+            // Skip invalid times
+          }
+        }
+      }
+      
+      // fallback if no TimeX fields found, use scanDateTime
+      if (records.filter(r => r.employeeNumber === empNo).length === 0) {
+        records.push({
+          rowNumber: sIdx + 1,
+          employeeNumber: empNo,
+          scanDateTime: baseDate
+        });
+      }
+    });
+
 
     const aggregated = ScanDataAggregator.aggregate(records);
     const results: any[] = [];

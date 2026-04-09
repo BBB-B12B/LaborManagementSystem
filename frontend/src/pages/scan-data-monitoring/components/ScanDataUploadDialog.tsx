@@ -81,6 +81,11 @@ const tableHeaders = [
   'Time4',
   'Time5',
   'Time6',
+  'Time7',
+  'Time8',
+  'Time9',
+  'Time10',
+
   'สถานะงาน',
   'ชั่วโมงการทำงาน',
   'สถานะผ่าเที่ยง',
@@ -714,6 +719,11 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       getValueByKeys(record.data, ['Time4', 'เวลา4']),
                       getValueByKeys(record.data, ['Time5', 'เวลา5']),
                       getValueByKeys(record.data, ['Time6', 'เวลา6']),
+                      getValueByKeys(record.data, ['Time7', 'เวลา7']),
+                      getValueByKeys(record.data, ['Time8', 'เวลา8']),
+                      getValueByKeys(record.data, ['Time9', 'เวลา9']),
+                      getValueByKeys(record.data, ['Time10', 'เวลา10']),
+
                     ].filter(v => v && v !== '' && v !== '-');
                     
                     const isIncomplete = timeValues.length > 0 && timeValues.length < 2;
@@ -776,6 +786,11 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       <TableCell>{getValueByKeys(record.data, ['Time4', 'เวลา4'], '')}</TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time5', 'เวลา5'], '')}</TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time7', 'เวลา7'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time8', 'เวลา8'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time9', 'เวลา9'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time10', 'เวลา10'], '')}</TableCell>
+
                       
                       {/* Text Status - ปกติ / ผิดปกติ */}
                       <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'success.main', textAlign: 'center' }}>
