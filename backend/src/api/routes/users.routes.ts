@@ -24,7 +24,6 @@ const normalizeKey = (value: string): string => value.trim().toLowerCase();
 
 const router = Router();
 router.use(authenticate);
-router.use(authorize(['AM']));
 
 function parseCsv(content: string): string[][] {
   const rows: string[][] = [];
@@ -118,6 +117,7 @@ const toProjectIds = (value: string): string[] => {
  */
 router.get(
   '/',
+  authorize(['AM', 'PM', 'PD', 'SE']),
   [
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
@@ -160,7 +160,7 @@ router.get(
  * GET /api/users/:id
  * ดึงข้อมูลผู้ใช้ตาม ID
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authorize(['AM', 'PM', 'PD', 'SE']), async (req: Request, res: Response) => {
   try {
     const user = await userService.getById(req.params.id);
 
@@ -187,6 +187,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post(
   '/',
+  authorize(['AM']),
   [
     body('username').notEmpty().withMessage('Username is required'),
     body('password')
@@ -262,7 +263,7 @@ router.post(
   }
 );
 
-router.post('/import', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/import', authorize(['AM']), upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       throw new AppError('กรุณาอัปโหลดไฟล์ CSV', 400);
@@ -379,7 +380,7 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
  * PUT /api/users/:id
  * อัปเดทข้อมูลผู้ใช้
  */
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authorize(['AM']), async (req: Request, res: Response) => {
   try {
     const updatedBy = (req as AuthRequest).user?.id;
     if (!updatedBy) {
@@ -409,7 +410,7 @@ router.put('/:id', async (req: Request, res: Response) => {
  * DELETE /api/users/:id
  * ลบผู้ใช้ (soft delete)
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authorize(['AM']), async (req: Request, res: Response) => {
   try {
     const success = await userService.softDelete(req.params.id);
 

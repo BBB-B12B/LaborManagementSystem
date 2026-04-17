@@ -7,6 +7,7 @@ import {
   Description as DescriptionIcon,
   Fingerprint as FingerprintIcon,
   ManageAccounts as ManageAccountsIcon,
+  ViewKanban as ViewKanbanIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
@@ -66,6 +67,12 @@ export const Navbar: React.FC = () => {
       path: '/scan-data-monitoring',
       icon: <FingerprintIcon />,
       roles: ['AM', 'PM', 'PD', 'MD'],
+    },
+    {
+      label: t('nav.workspace', 'Workspace'),
+      path: '/workspace',
+      icon: <ViewKanbanIcon />,
+      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
   ];
 

@@ -62,3 +62,6 @@ Mapping ระหว่าง System Config และตัวแปรที่
 | **T-361** | Wage Calculation UI Refinement | Adjust button color and table display | `index.tsx` (frontend) |
 | **T-362** | Wage Detail UI Refinement | Full width table and button color | `[id].tsx` (frontend) |
 | **F-013** | Excel Import | Import Daily Reports from Excel | `dailyReportRoutes.ts`, `DailyReportService.ts` |
+| **T-302** | Workspace Kanban UI | Mock rendering of Task Board with Gradient borders based on UX Audit | `workspace/index.tsx`, `Navbar.tsx` |
+| **T-303** | Workspace API Integration | Real data integration, Task creation logic with running number, Modal UI | `TaskService.ts`, `Task.ts`, `TaskCreateModal.tsx`, `workspace/index.tsx` |
+| **T-304** | UserForm DatePicker Fix | Fix LocalizationProvider crash by using custom DatePicker component | `UserForm.tsx` |

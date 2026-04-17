@@ -267,6 +267,7 @@ const ScanDataMonitoringWidget: React.FC<ScanDataMonitoringWidgetProps> = ({
                       }}
                     >
                       <ListItemText
+                        disableTypography
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Typography variant="body2" fontWeight="medium">

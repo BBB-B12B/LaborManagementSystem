@@ -32,6 +32,9 @@ export interface DatePickerProps {
   fullWidth?: boolean;
   size?: 'small' | 'medium';
   format?: string;
+  sx?: any;
+  variant?: 'standard' | 'outlined' | 'filled';
+  InputProps?: any;
 }
 
 /**
@@ -55,6 +58,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   fullWidth = true,
   size = 'medium',
   format: dateFormat = 'dd/MM/yyyy',
+  sx,
+  variant,
+  InputProps,
 }) => {
   /**
    * Convert value to Bangkok timezone for display
@@ -113,6 +119,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             required,
             fullWidth,
             size,
+            sx,
+            variant,
+            InputProps,
           } as TextFieldProps,
         }}
       />

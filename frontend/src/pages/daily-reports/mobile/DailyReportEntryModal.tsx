@@ -21,7 +21,8 @@ import {
     CardContent,
     Divider,
     Chip,
-    Avatar
+    Avatar,
+    Autocomplete
 } from '@mui/material';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -35,6 +36,8 @@ import AddLocationIcon from '@mui/icons-material/AddLocation';
 import { useQuery } from '@tanstack/react-query';
 import { dcService as dailyContractorService } from '@/services/dcService';
 import { DailyReportEntry, WorkType } from '@/services/dailyReportService';
+import { taskService, type Task } from '@/services/taskService';
+import { useAuthStore } from '@/store/authStore';
 import { format, setHours, setMinutes } from 'date-fns';
 
 interface DailyReportEntryModalProps {
@@ -51,6 +54,7 @@ interface DailyReportEntryModalProps {
 // Helper types for form sections
 interface WorkSectionState {
     enabled: boolean;
+    taskId?: string;
     taskName: string;
     startTime: Date | null;
     endTime: Date | null;
@@ -71,6 +75,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     // 1. Regular Work (Always Enabled)
     const [regular, setRegular] = useState<WorkSectionState>({
         enabled: true,
+        taskId: undefined,
         taskName: '',
         startTime: setHours(setMinutes(new Date(), 0), 8),
         endTime: setHours(setMinutes(new Date(), 0), 17),
@@ -80,6 +85,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     // 2. OT Sections
     const [otMorning, setOtMorning] = useState<WorkSectionState>({
         enabled: false,
+        taskId: undefined,
         taskName: '',
         startTime: setHours(setMinutes(new Date(), 0), 5), // Default 5 AM?
         endTime: setHours(setMinutes(new Date(), 0), 8),
@@ -88,6 +94,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
 
     const [otNoon, setOtNoon] = useState<WorkSectionState>({
         enabled: false,
+        taskId: undefined,
         taskName: '',
         startTime: setHours(setMinutes(new Date(), 0), 12),
         endTime: setHours(setMinutes(new Date(), 0), 13), // Fixed 1hr
@@ -96,6 +103,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
 
     const [otEvening, setOtEvening] = useState<WorkSectionState>({
         enabled: false,
+        taskId: undefined,
         taskName: '',
         startTime: setHours(setMinutes(new Date(), 0), 17),
         endTime: setHours(setMinutes(new Date(), 0), 20),
@@ -114,12 +122,34 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
         staleTime: 5 * 60 * 1000
     });
 
+    // Fetch Tasks for Autocomplete
+    const currentUser = useAuthStore((state) => state.user);
+    const { data: allTasks = [] } = useQuery({
+        queryKey: ['tasks', projectId],
+        queryFn: async () => {
+            const res = await taskService.getTasks();
+            return res;
+        },
+        enabled: !!projectId && open,
+    });
+
+    // Filter Tasks (Only show tasks assigned to this user and matching projectId)
+    const availableTasks = React.useMemo(() => {
+        return allTasks.filter(t => 
+            t.projectId === projectId &&
+            t.status !== 'completed' &&
+            // If user has GOD role, they can see all, otherwise filter by assignees
+            (currentUser?.roleId === 'GOD' || t.assignees.some(a => a.id === currentUser?.id))
+        );
+    }, [allTasks, projectId, currentUser]);
+
     // Reset on Open
     useEffect(() => {
         if (open && !initialData) {
             // Reset to defaults
             const resetState = (startH: number, endH: number) => ({
                 enabled: false,
+                taskId: undefined,
                 taskName: '',
                 startTime: setHours(setMinutes(new Date(), 0), startH),
                 endTime: setHours(setMinutes(new Date(), 0), endH),
@@ -177,6 +207,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                 state.workerIds.forEach(workerId => {
                     onSave({
                         dailyContractorId: workerId,
+                        taskId: state.taskId,
                         taskName: state.taskName,
                         workType: type,
                         startTime: state.startTime!.toISOString(),
@@ -277,13 +308,32 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                                 <WorkIcon color="primary" /> งานปกติ (08:00 - 17:00)
                             </Typography>
 
-                            <TextField
-                                label="งานที่ทำ"
-                                placeholder="ระบุงาน..."
-                                size="small"
-                                fullWidth
+                            <Autocomplete
+                                freeSolo
+                                options={availableTasks}
+                                getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
                                 value={regular.taskName}
-                                onChange={e => setRegular({ ...regular, taskName: e.target.value })}
+                                onChange={(e, newValue) => {
+                                    if (typeof newValue === 'string') {
+                                        setRegular({ ...regular, taskName: newValue, taskId: undefined });
+                                    } else if (newValue) {
+                                        setRegular({ ...regular, taskName: newValue.title, taskId: newValue.id });
+                                    } else {
+                                        setRegular({ ...regular, taskName: '', taskId: undefined });
+                                    }
+                                }}
+                                onInputChange={(e, newInputValue) => {
+                                    setRegular({ ...regular, taskName: newInputValue });
+                                }}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="งานที่ทำ"
+                                        placeholder="พิมพ์หรืองานที่ได้รับมอบหมาย..."
+                                        size="small"
+                                        fullWidth
+                                    />
+                                )}
                             />
 
                             <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -354,12 +404,31 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                         <Card variant="outlined" sx={{ borderRadius: 2, borderLeft: '5px solid #ed6c02' }}>
                             <CardContent sx={{ p: '16px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <Typography variant="subtitle2" fontWeight="bold" color="warning.main">OT เช้า</Typography>
-                                <TextField
-                                    label="งาน OT"
-                                    size="small"
-                                    fullWidth
+                                <Autocomplete
+                                    freeSolo
+                                    options={availableTasks}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
                                     value={otMorning.taskName}
-                                    onChange={e => setOtMorning({ ...otMorning, taskName: e.target.value })}
+                                    onChange={(e, newValue) => {
+                                        if (typeof newValue === 'string') {
+                                            setOtMorning({ ...otMorning, taskName: newValue, taskId: undefined });
+                                        } else if (newValue) {
+                                            setOtMorning({ ...otMorning, taskName: newValue.title, taskId: newValue.id });
+                                        } else {
+                                            setOtMorning({ ...otMorning, taskName: '', taskId: undefined });
+                                        }
+                                    }}
+                                    onInputChange={(e, newInputValue) => {
+                                        setOtMorning({ ...otMorning, taskName: newInputValue });
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="งาน OT"
+                                            size="small"
+                                            fullWidth
+                                        />
+                                    )}
                                 />
                                 <LocalizationProvider dateAdapter={AdapterDateFns}>
                                     <Box display="flex" gap={1} alignItems="center">
@@ -385,12 +454,31 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                         <Card variant="outlined" sx={{ borderRadius: 2, borderLeft: '5px solid #ed6c02' }}>
                             <CardContent sx={{ p: '16px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <Typography variant="subtitle2" fontWeight="bold" color="warning.main">OT เที่ยง (12:00 - 13:00)</Typography>
-                                <TextField
-                                    label="งาน OT"
-                                    size="small"
-                                    fullWidth
+                                <Autocomplete
+                                    freeSolo
+                                    options={availableTasks}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
                                     value={otNoon.taskName}
-                                    onChange={e => setOtNoon({ ...otNoon, taskName: e.target.value })}
+                                    onChange={(e, newValue) => {
+                                        if (typeof newValue === 'string') {
+                                            setOtNoon({ ...otNoon, taskName: newValue, taskId: undefined });
+                                        } else if (newValue) {
+                                            setOtNoon({ ...otNoon, taskName: newValue.title, taskId: newValue.id });
+                                        } else {
+                                            setOtNoon({ ...otNoon, taskName: '', taskId: undefined });
+                                        }
+                                    }}
+                                    onInputChange={(e, newInputValue) => {
+                                        setOtNoon({ ...otNoon, taskName: newInputValue });
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="งาน OT"
+                                            size="small"
+                                            fullWidth
+                                        />
+                                    )}
                                 />
                                 <Box display="flex" alignItems="center" gap={1} bgcolor="#fff3e0" p={1} borderRadius={1}>
                                     <AccessTimeIcon color="warning" fontSize="small" />
@@ -407,12 +495,31 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                         <Card variant="outlined" sx={{ borderRadius: 2, borderLeft: '5px solid #ed6c02' }}>
                             <CardContent sx={{ p: '16px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <Typography variant="subtitle2" fontWeight="bold" color="warning.main">OT เย็น</Typography>
-                                <TextField
-                                    label="งาน OT"
-                                    size="small"
-                                    fullWidth
+                                <Autocomplete
+                                    freeSolo
+                                    options={availableTasks}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
                                     value={otEvening.taskName}
-                                    onChange={e => setOtEvening({ ...otEvening, taskName: e.target.value })}
+                                    onChange={(e, newValue) => {
+                                        if (typeof newValue === 'string') {
+                                            setOtEvening({ ...otEvening, taskName: newValue, taskId: undefined });
+                                        } else if (newValue) {
+                                            setOtEvening({ ...otEvening, taskName: newValue.title, taskId: newValue.id });
+                                        } else {
+                                            setOtEvening({ ...otEvening, taskName: '', taskId: undefined });
+                                        }
+                                    }}
+                                    onInputChange={(e, newInputValue) => {
+                                        setOtEvening({ ...otEvening, taskName: newInputValue });
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="งาน OT"
+                                            size="small"
+                                            fullWidth
+                                        />
+                                    )}
                                 />
                                 <LocalizationProvider dateAdapter={AdapterDateFns}>
                                     <Box display="flex" gap={1} alignItems="center">

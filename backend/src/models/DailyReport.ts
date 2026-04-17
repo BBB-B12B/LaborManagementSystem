@@ -14,6 +14,7 @@ export interface DailyReportEntry {
   id: string; // UUID
   dailyContractorId: string;
   employeeId?: string;
+  taskId?: string; // [T-400] เชื่อมโยงกับ Task ID
   taskName: string;
   workType: WorkType;
   hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา

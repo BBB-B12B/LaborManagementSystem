@@ -12,6 +12,7 @@ export interface DailyReportEntry {
   id: string; // UUID
   dailyContractorId: string;
   employeeId?: string;
+  taskId?: string; // [T-400] เชื่อมโยงกับ Task ID
   taskName: string;
   workType: WorkType;
   hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
@@ -131,6 +132,7 @@ class DailyReportService {
     for (const dcId of dcIds) {
       const entryData = {
         dailyContractorId: dcId,
+        taskId: data.taskId,
         taskName: data.taskName,
         workType: data.workType || 'regular',
         hours: Number(data.workHours || 0),
@@ -174,6 +176,7 @@ class DailyReportService {
           reportDate: new Date(report.date),
           dailyContractorIds: [entry.dailyContractorId],
           dcNames: [entry.dailyContractorId],
+          taskId: entry.taskId,
           workDescription: entry.taskName,
           workHours: entry.hours,
           workType: entry.workType,

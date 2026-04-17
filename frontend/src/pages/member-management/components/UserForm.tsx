@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 /**
  * User Form Component
  * Create / Edit user with validation
@@ -18,22 +18,26 @@ import {
   InputAdornment,
   IconButton,
   MenuItem,
+  Paper,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
+import { DatePicker } from '@/components/forms/DatePicker';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 import {
   userCreateSchema,
-  userEditSchema,
-  type UserCreateInput,
-  type UserEditInput,
-} from '../../../validation/userSchema';
-import { RoleSelect } from '../../../components/forms/RoleSelect';
-import { DepartmentSelect } from '../../../components/forms/DepartmentSelect';
-import { ProjectSelect } from '../../../components/forms/ProjectSelect';
+  userUpdateSchema,
+  type UserCreateFormData,
+  type UserUpdateFormData,
+} from '@/validation/userManagementSchema';
+import { RoleSelect } from '@/components/forms/RoleSelect';
+import { DepartmentSelect } from '@/components/forms/DepartmentSelect';
+import { ProjectSelect } from '@/components/forms/ProjectSelect';
 
 export interface UserFormProps {
-  defaultValues?: Partial<UserEditInput>;
-  onSubmit: (data: UserCreateInput | UserEditInput) => Promise<void>;
+  defaultValues?: Partial<UserUpdateFormData>;
+  onSubmit: (data: UserCreateFormData | UserUpdateFormData) => Promise<void>;
   onCancel: () => void;
   mode: 'create' | 'edit';
   isLoading?: boolean;
@@ -47,9 +51,10 @@ export function UserForm({
   isLoading = false,
 }: UserFormProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const schema = mode === 'create' ? userCreateSchema : userEditSchema;
+  const schema = mode === 'create' ? userCreateSchema : userUpdateSchema;
 
   const initialValues = useMemo(
     () => ({
@@ -57,7 +62,6 @@ export function UserForm({
       username: '',
       password: '',
       name: '',
-      fullNameEn: '',
       projectLocationIds: [] as string[],
       isActive: true,
       ...defaultValues,
@@ -70,7 +74,7 @@ export function UserForm({
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<UserCreateInput | UserEditInput>({
+  } = useForm<UserCreateFormData | UserUpdateFormData>({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
   });
@@ -79,7 +83,7 @@ export function UserForm({
     reset(initialValues);
   }, [initialValues, reset]);
 
-  const handleFormSubmit = async (data: UserCreateInput | UserEditInput) => {
+  const handleFormSubmit = async (data: UserCreateFormData | UserUpdateFormData) => {
     try {
       setSubmitError(null);
       await onSubmit(data);
@@ -173,7 +177,6 @@ export function UserForm({
                   error={!!errors.username}
                   helperText={errors.username?.message || 'ไม่สามารถมีช่องว่างและต้องไม่ซ้ำ'}
                   disabled={isLoading || isSubmitting}
-                  value={field.value ?? ''}
                   onChange={(event) => field.onChange(event.target.value.toLowerCase())}
                 />
               )}
@@ -213,7 +216,6 @@ export function UserForm({
               )}
             />
           </Grid>
-        </Grid>
 
           <Grid item xs={12} md={6}>
             <Controller
@@ -297,17 +299,17 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='dateOfBirth'
+              name='birthDate'
               control={control}
               render={({ field }) => (
                 <DatePicker
                   label='วันเกิด'
-                  value={field.value ?? null}
-                  onChange={field.onChange}
-                  error={!!errors.dateOfBirth}
-                  helperText={errors.dateOfBirth?.message}
+                  value={field.value ? new Date(field.value as string | Date) : null}
+                  onChange={(date) => field.onChange(date)}
                   disabled={isLoading || isSubmitting}
                   maxDate={new Date()}
+                  error={!!errors.birthDate}
+                  helperText={errors.birthDate?.message}
                 />
               )}
             />
@@ -320,13 +322,13 @@ export function UserForm({
               render={({ field }) => (
                 <DatePicker
                   label='วันที่เริ่มงาน *'
-                  value={field.value}
-                  onChange={field.onChange}
+                  value={field.value ? new Date(field.value as string | Date) : null}
+                  onChange={(date) => field.onChange(date)}
+                  disabled={isLoading || isSubmitting}
+                  maxDate={new Date()}
                   error={!!errors.startDate}
                   helperText={errors.startDate?.message}
-                  disabled={isLoading || isSubmitting}
                   required
-                  maxDate={new Date()}
                 />
               )}
             />
@@ -426,71 +428,8 @@ export function UserForm({
             </Box>
           </Grid>
         </Grid>
-
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Project Access
-        </Typography>
-
-        <Controller
-          name="projectLocationIds"
-          control={control}
-          render={({ field }) => (
-            <ProjectSelect
-              multiple
-              displayProjectNameOnly
-              value={Array.isArray(field.value) ? field.value : []}
-              onChange={(value) =>
-                field.onChange(Array.isArray(value) ? value : value ? [value] : [])
-              }
-              error={!!errors.projectLocationIds}
-              helperText=
-                errors.projectLocationIds?.message || 'Select at least one accessible project'
-              disabled={isLoading || isSubmitting}
-              required
-            />
-          )}
-        />
-
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Active Status
-        </Typography>
-
-        <Controller
-          name="isActive"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              select
-              fullWidth
-              label="Active"
-              value={field.value ? 'On' : 'Off'}
-              onChange={(event) => field.onChange(event.target.value === 'On')}
-              disabled={isLoading || isSubmitting}
-            >
-              {ACTIVE_OPTIONS.map((option) => (
-                <MenuItem key={option.label} value={option.label}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-        />
-
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 1 }}>
-          <Button variant="outlined" onClick={onCancel} disabled={isLoading || isSubmitting}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={isLoading || isSubmitting}
-            startIcon={isSubmitting && <CircularProgress size={20} />}
-          >
-            {mode === 'create' ? 'Create User' : 'Update User'}
-          </Button>
-        </Box>
       </Box>
-    </Box>
+    </Paper>
   );
 }
 

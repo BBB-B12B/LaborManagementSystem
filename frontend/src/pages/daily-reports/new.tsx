@@ -11,9 +11,10 @@ import { compressImage } from '@/utils/imageCompression';
 import { logService } from '@/services/logService';
 import { useRouter } from 'next/router';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { WorkOrderProvider } from '@/context/WorkOrderContext';
-import { AuthProvider } from '@/context/AuthContext';
-
+import { useAuthStore } from '@/store/authStore';
+import { taskService } from '@/services/taskService';
+import { dailyReportService } from '@/services/dailyReportService';
+import { useQuery } from '@tanstack/react-query';
 // Helper for SLA Countdown component
 const SLACountdown = ({ startTime, durationHours = 24 }: { startTime: string, durationHours?: number }) => {
     const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, isOverdue: boolean } | null>(null);
@@ -232,15 +233,12 @@ const BatchAddModal = ({
 
 
 const DailyReport = () => {
-    const { workOrders, addTaskUpdate } = useWorkOrders();
-    const { user: realUser } = useAuth() as { user: any }; 
-    // 🔥 MOCK: บังคับให้ User เป็น Admin เพื่อให้มองเห็นงาน (Task) ทุกตัวใน Mock Data
-    const user = realUser ? { ...realUser, role: 'Admin' } : { id: 'admin-initial', role: 'Admin' };
+    const { user } = useAuthStore();
     const NextRouter = useRouter(); // [MOCK next/router to react-router]
     const navigate = (path: string, options?: any) => NextRouter.replace(path);
     const location = { search: NextRouter.asPath.split('?')[1] ? `?${NextRouter.asPath.split('?')[1]}` : '', pathname: NextRouter.pathname };
 
-    const foremanId = user?.id || 'admin-initial';
+    const foremanId = user?.id || '';
     const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
     const [selectedTaskInfo, setSelectedTaskInfo] = useState<{ task: MasterTask; wo: WorkOrder } | null>(null);
@@ -278,43 +276,56 @@ const DailyReport = () => {
         }
     }, [user]);
 
+    const { data: allTasks = [], isLoading: tasksLoading } = useQuery({
+        queryKey: ['tasks'],
+        queryFn: async () => {
+            return taskService.getTasks();
+        }
+    });
+
     const { newTasks, inProgressTasks } = useMemo(() => {
-        const _newTasks: { task: MasterTask; wo: WorkOrder }[] = [];
-        const _inProgressTasks: { task: MasterTask; wo: WorkOrder }[] = [];
+        const _newTasks: { task: any; wo: any }[] = [];
+        const _inProgressTasks: { task: any; wo: any }[] = [];
 
-        workOrders.forEach(wo => {
-            // Only show work orders that are active (Approved, Partially Approved, Pending, In Progress)
-            // Note: 'Pending' is used for jobs that skipped evaluation or legacy
-            if (['Draft', 'Evaluating', 'Completed', 'Rejected'].includes(wo.status)) return;
+        allTasks.forEach(t => {
+            if (t.status === 'completed') return;
 
-            wo.categories.forEach((cat: any) => {
-                cat.tasks.forEach((task: any) => {
-                    // Show tasks that are Approved (Ready), Assigned (Specific person) or In Progress
-                    if (task.status !== 'Assigned' && task.status !== 'In Progress' && task.status !== 'Approved') return;
+            const isAssigned = user?.role === 'GOD' ||
+                user?.role === 'Admin' ||
+                user?.role === 'Manager' ||
+                t.assignees?.some(a => a.id === foremanId);
 
-                    // Filter by assigned staff (or show all for Admins/Managers)
-                    // Also show to the reporter if the task is Approved (Ready to start)
-                    const isAssigned = user?.role === 'Admin' ||
-                        user?.role === 'Manager' ||
-                        task.responsibleStaffIds?.includes(foremanId) ||
-                        (wo.reporterId === user?.id && task.status === 'Approved' && (!task.responsibleStaffIds || task.responsibleStaffIds.length === 0));
+            if (isAssigned) {
+                // Map to legacy MasterTask shape for UI compatibility
+                const mappedTask = {
+                    id: t.id,
+                    name: t.title,
+                    dailyProgress: t.status === 'in-progress' ? 50 : 0,
+                    status: t.status === 'in-progress' ? 'In Progress' : 'Approved',
+                    responsibleStaffIds: t.assignees?.map(a => a.id) || [],
+                    history: []
+                };
+                
+                const mappedWo = {
+                    id: t.taskCode || t.id,
+                    locationName: t.projectCode || 'Unknown Project',
+                    projectId: t.projectId
+                };
 
-                    if (isAssigned && task.dailyProgress < 100) {
-                        const item = { task, wo };
-                        const hasHistory = task.history && task.history.length > 0;
-                        if (searchTerm) {
-                            const match = task.name.toLowerCase().includes(searchTerm.toLowerCase()) || wo.locationName.toLowerCase().includes(searchTerm.toLowerCase()) || wo.id.toLowerCase().includes(searchTerm.toLowerCase());
-                            if (!match) return;
-                        }
-                        if (hasHistory) _inProgressTasks.push(item);
-                        else _newTasks.push(item);
-                    }
-                });
-            });
+                const item = { task: mappedTask, wo: mappedWo };
+
+                if (searchTerm) {
+                    const match = mappedTask.name.toLowerCase().includes(searchTerm.toLowerCase()) || mappedWo.locationName.toLowerCase().includes(searchTerm.toLowerCase()) || mappedWo.id.toLowerCase().includes(searchTerm.toLowerCase());
+                    if (!match) return;
+                }
+
+                if (t.status === 'in-progress') _inProgressTasks.push(item);
+                else _newTasks.push(item);
+            }
         });
 
         return { newTasks: _newTasks, inProgressTasks: _inProgressTasks };
-    }, [workOrders, searchTerm, foremanId, user?.role]);
+    }, [allTasks, searchTerm, foremanId, user?.role]);
 
     // ✅ Deep Link: Open Work Order if ID is in URL
     useEffect(() => {
@@ -536,17 +547,74 @@ const DailyReport = () => {
 
         setIsSubmitting(true);
         try {
-                const newUpdate: TaskUpdate = {
-                    id: `h-${Date.now()}`,
-                    date: new Date().toISOString(),
-                    note,
-                    progress,
-                    photos,
-                    labor,
-                    type: reportType
-                };
+            const entriesToCreate: any[] = [];
+            
+            labor.forEach(l => {
+                if (l.shifts?.normal) {
+                    entriesToCreate.push({
+                        taskId: selectedTaskInfo.task.id,
+                        taskName: selectedTaskInfo.task.name,
+                        dailyContractorId: l.staffId || l.id, // For mock staffs or DC
+                        startTime: l.shiftTimes?.day?.split('-')[0].trim() || '08:00',
+                        endTime: l.shiftTimes?.day?.split('-')[1].trim() || '17:00',
+                        workType: 'regular',
+                        isOvernight: false,
+                        notes: note,
+                        imageUrls: photos,
+                        hours: 8
+                    });
+                }
+                if (l.shifts?.otMorning) {
+                    entriesToCreate.push({
+                        taskId: selectedTaskInfo.task.id,
+                        taskName: selectedTaskInfo.task.name,
+                        dailyContractorId: l.staffId || l.id,
+                        startTime: l.shiftTimes?.otMorning?.split('-')[0].trim() || '06:00',
+                        endTime: l.shiftTimes?.otMorning?.split('-')[1].trim() || '08:00',
+                        workType: 'ot_morning',
+                        isOvernight: false,
+                        notes: note,
+                        imageUrls: photos,
+                        hours: 2
+                    });
+                }
+                if (l.shifts?.otNoon) {
+                    entriesToCreate.push({
+                        taskId: selectedTaskInfo.task.id,
+                        taskName: selectedTaskInfo.task.name,
+                        dailyContractorId: l.staffId || l.id,
+                        startTime: '12:00',
+                        endTime: '13:00',
+                        workType: 'ot_noon',
+                        isOvernight: false,
+                        notes: note,
+                        imageUrls: photos,
+                        hours: 1
+                    });
+                }
+                if (l.shifts?.otEvening) {
+                    entriesToCreate.push({
+                        taskId: selectedTaskInfo.task.id,
+                        taskName: selectedTaskInfo.task.name,
+                        dailyContractorId: l.staffId || l.id,
+                        startTime: l.shiftTimes?.otEvening?.split('-')[0].trim() || '18:00',
+                        endTime: l.shiftTimes?.otEvening?.split('-')[1].trim() || '21:00',
+                        workType: 'ot_evening',
+                        isOvernight: false,
+                        notes: note,
+                        imageUrls: photos,
+                        hours: 3
+                    });
+                }
+            });
 
-            await addTaskUpdate(selectedTaskInfo.task.id, selectedTaskInfo.wo.id, newUpdate);
+            for (const entry of entriesToCreate) {
+                await dailyReportService.addWorkEntry({
+                    projectId: selectedTaskInfo.wo.projectId || 'unknown',
+                    date: new Date(),
+                    entry: entry as any
+                });
+            }
             alert('บันทึกรายงานเรียบร้อยแล้ว');
             setSelectedTaskInfo(null);
             setProgress(0);
@@ -1087,13 +1155,9 @@ const DailyReport = () => {
 export default function WorkRecordComposerPage() {
   return (
     <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
-      <AuthProvider>
-        <WorkOrderProvider>
-          <Layout>
-            <DailyReport />
-          </Layout>
-        </WorkOrderProvider>
-      </AuthProvider>
+      <Layout>
+        <DailyReport />
+      </Layout>
     </ProtectedRoute>
   );
 }

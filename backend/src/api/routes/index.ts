@@ -16,6 +16,7 @@ import dailyContractorRoutes from './dailyContractors.routes';
 import wagePeriodRoutes from './wagePeriods.routes';
 import scanDataRoutes from './scanData.routes';
 import socialSecurityRulesRoutes from './socialSecurityRules.routes';
+import taskRoutes from './tasks.routes';
 
 const router = Router();
 
@@ -48,5 +49,8 @@ router.use('/scan-data', scanDataRoutes);
 
 // Social Security Rules routes
 router.use('/social-security-rules', socialSecurityRulesRoutes);
+
+// Task routes
+router.use('/tasks', taskRoutes);
 
 export default router;

@@ -23,6 +23,7 @@ export interface DailyReportData {
   projectLocationId: string;
   workDate: Date;
   dailyContractorIds: string[];
+  taskId?: string;
   taskName: string;
   startTime: string;
   endTime: string;
@@ -56,7 +57,7 @@ export async function createDailyReport(
   data: DailyReportData,
   createdBy: string
 ): Promise<any | any[]> {
-  const { dailyContractorIds, imageUrls, ...commonData } = data;
+  const { dailyContractorIds, imageUrls, taskId, ...commonData } = data;
 
   // Handle image uploads if provided
   let uploadedImageUrls: string[] = [];
@@ -90,6 +91,7 @@ export async function createDailyReport(
 
       const reportData = {
         ...commonData,
+        taskId: taskId || null,
         dailyContractorId: dcId, // Use singular field
         employeeId: dc?.employeeId || null, // [T-400] Link to ScanData
         verificationStatus: 'unverified' as const, // [T-401] Initial status
@@ -127,6 +129,7 @@ export async function createDailyReport(
 
   const reportData = {
     ...commonData,
+    taskId: taskId || null,
     dailyContractorId: dailyContractorIds[0], // Use singular field
     employeeId: dc?.employeeId || null, // [T-400] Link to ScanData
     verificationStatus: 'unverified' as const, // [T-401] Initial status
@@ -149,6 +152,17 @@ export async function createDailyReport(
     editedBy: createdBy,
     notes: 'สร้างรายการใหม่',
   });
+
+  // [T-400] Auto-update Task status to 'in-progress' if taskId is provided
+  if (taskId) {
+    try {
+      // Import here to avoid circular dependency if any, or use from top
+      const { taskService } = await import('./TaskService');
+      await taskService.updateTaskStatus(taskId, 'in-progress', createdBy);
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+    }
+  }
 
   return { id: reportRef.id, ...reportData };
 }
@@ -558,6 +572,7 @@ export async function bulkCreateDailyReports(
                 projectLocationId: item.projectLocationId,
                 workDate: new Date(item.date),
                 dailyContractorIds: [item.dailyContractorId],
+                taskId: item.taskId,
                 taskName: item.taskName,
                 startTime: item.startTime,
                 endTime: item.endTime,
