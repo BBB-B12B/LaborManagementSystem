@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography, Tooltip } from '@mui/material';
 import {
   Calculate as CalculateIcon,
   Dashboard as DashboardIcon,
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/authStore';
 import { type UserRole } from '@/utils/permissions';
 
 export const SIDEBAR_WIDTH = 260;
+export const COLLAPSED_WIDTH = 88;
 
 interface NavMenuItem {
   label: string;
@@ -26,10 +27,13 @@ export const NAV_TEXT = '#f5f5f8';
 const activeBg = 'rgba(255, 255, 255, 0.08)';
 const accent = '#d62828';
 
+import { useUIStore } from '@/store/uiStore';
+
 export const Navbar: React.FC = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
+  const { sidebarOpen } = useUIStore();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -94,7 +98,7 @@ export const Navbar: React.FC = () => {
     <Box
       component="aside"
       sx={{
-        width: SIDEBAR_WIDTH,
+        width: sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH,
         flexShrink: 0,
         position: 'fixed',
         left: 0,
@@ -104,41 +108,54 @@ export const Navbar: React.FC = () => {
         flexDirection: 'column',
         background: GRADIENT_BG,
         color: NAV_TEXT,
-        px: 2,
+        px: sidebarOpen ? 2 : 1.5,
         py: 3,
-        zIndex: (theme) => Math.max(theme.zIndex.appBar, 1200),
+        zIndex: 1200,
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        overflowX: 'hidden',
       }}
     >
       {/* Brand */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 1, mb: 3 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 1.5, 
+        px: sidebarOpen ? 1 : 0.5, 
+        mb: 4,
+        justifyContent: sidebarOpen ? 'flex-start' : 'center'
+      }}>
         <Box
           sx={{
-            width: 38,
-            height: 38,
-            borderRadius: 10,
+            width: 42,
+            height: 42,
+            borderRadius: 12,
             backgroundColor: '#fff',
             color: '#1f1a26',
             display: 'grid',
             placeItems: 'center',
             fontWeight: 800,
-            fontSize: 16,
+            fontSize: 18,
             letterSpacing: -0.5,
+            flexShrink: 0,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
           }}
         >
           LM
         </Box>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: 0.2 }}>
-            Labor Manager
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(245, 245, 248, 0.65)' }}>
-            Daily & OT reports
-          </Typography>
-        </Box>
+        {sidebarOpen && (
+          <Box sx={{ opacity: 1, transition: 'opacity 0.3s' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: 0.2, lineHeight: 1.2 }}>
+              Labor Manager
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(245, 245, 248, 0.65)', fontWeight: 500 }}>
+              Daily & OT reports
+            </Typography>
+          </Box>
+        )}
       </Box>
 
       {/* Nav Items */}
-      <List sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, px: 0 }}>
+      <List sx={{ display: 'flex', flexDirection: 'column', gap: 1, px: 0 }}>
         {visibleMenuItems.map((item) => {
           const isActive = router.pathname === item.path || router.pathname.startsWith(`${item.path}/`);
           return (
@@ -147,32 +164,48 @@ export const Navbar: React.FC = () => {
               onClick={() => handleNavigate(item.path)}
               sx={{
                 borderRadius: 12,
+                minHeight: 48,
                 bgcolor: isActive ? activeBg : 'transparent',
                 color: NAV_TEXT,
                 border: isActive ? `1px solid ${accent}` : '1px solid transparent',
                 boxShadow: isActive ? '0 10px 30px rgba(0,0,0,0.15)' : 'none',
-                transition: 'all 0.2s ease',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                px: sidebarOpen ? 2 : 0,
+                justifyContent: sidebarOpen ? 'flex-start' : 'center',
                 '&:hover': {
                   bgcolor: 'rgba(255,255,255,0.06)',
+                  transform: sidebarOpen ? 'none' : 'scale(1.05)',
                 },
               }}
             >
-              <ListItemIcon
-                sx={{
-                  color: NAV_TEXT,
-                  minWidth: 38,
-                  '& svg': { fontSize: 20 },
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Typography variant="body1" sx={{ fontWeight: isActive ? 700 : 500 }}>
-                    {item.label}
-                  </Typography>
-                }
-              />
+              <Tooltip title={!sidebarOpen ? item.label : ""} placement="right">
+                <ListItemIcon
+                  sx={{
+                    color: NAV_TEXT,
+                    minWidth: sidebarOpen ? 38 : 0,
+                    justifyContent: 'center',
+                    '& svg': { fontSize: 22 },
+                    transition: 'margin 0.3s',
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+              </Tooltip>
+              {sidebarOpen && (
+                <ListItemText
+                  primary={
+                    <Typography variant="body1" sx={{ 
+                      fontWeight: isActive ? 700 : 500,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {item.label}
+                    </Typography>
+                  }
+                  sx={{ opacity: 1, transition: 'opacity 0.2s' }}
+                />
+              )}
             </ListItemButton>
           );
         })}

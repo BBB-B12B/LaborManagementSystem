@@ -166,9 +166,14 @@ function parseDateValue(raw: unknown): Date | null {
     return null;
   }
 
-  const value = raw.trim().replace(/\s+/g, ' ');
-  if (value.length === 0) {
-    return null;
+  const valueInput = raw.trim().replace(/\s+/g, ' ');
+  let value = valueInput;
+
+  // Robust parsing: If we have a common timestamp pattern followed by extra data/numbers,
+  // truncate the value to just the timestamp part.
+  const timestampMatch = value.match(/^(\d{2,4}[-/\.]\d{1,2}[-/\.]\d{2,4}\s+\d{1,2}:\d{2}(:\d{2})?)/);
+  if (timestampMatch) {
+    value = timestampMatch[1];
   }
 
   const normalizedValue = normalizeThaiDate(value);
@@ -208,7 +213,8 @@ function parseDatLine(line: string): DatLineParseResult | null {
   } else if (hasTab) {
     tokens = line.split('\t').map(t => t.trim());
   } else {
-    tokens = line.split(/\s+/g).map(t => t.trim());
+    // Split by any consecutive whitespace (including tabs/spaces)
+    tokens = line.split(/\s+/).map(t => t.trim());
   }
 
   tokens = tokens.filter((token) => token.length > 0);
@@ -218,33 +224,41 @@ function parseDatLine(line: string): DatLineParseResult | null {
   }
 
   const employeeToken = tokens[0].replace(/[\uFEFF\u200B\s]+/g, '');
-  const remainingTokens = tokens.slice(1);
-
   if (looksLikeHeader(employeeToken)) {
     return null;
   }
 
-  const maybeDate = remainingTokens[0];
-  const timeTokens: string[] = [];
-  const extras: string[] = [];
-  
-  const timePattern = /^\d{1,2}:\d{2}(:\d{2})?$/;
-
-  for (let i = 1; i < remainingTokens.length; i++) {
-    const token = remainingTokens[i];
-    if (timePattern.test(token)) {
-      timeTokens.push(token);
-    } else {
-      extras.push(token);
+  // Case 1: Standard raw log format -> ID Date Time [Extra1] [Extra2]...
+  // We strictly take tokens[1] as date and tokens[2] as time.
+  if (tokens.length >= 3) {
+    const dateToken = tokens[1];
+    const timeToken = tokens[2];
+    const extras = tokens.slice(3);
+    
+    // Validate if the 3rd token contains a colon (Time separator)
+    if (timeToken.includes(':')) {
+      return {
+        employeeNumber: employeeToken,
+        dateToken,
+        timeTokens: [timeToken],
+        extras,
+        // CRITICAL: originalRemaining should only include Date and Time
+        originalRemaining: [dateToken, timeToken]
+      };
     }
   }
 
+  // Case 2: Only 2 tokens found (ID and Date/Combined timestamp)
+  const dateToken = tokens[1];
+  const extras = tokens.slice(2);
+
   return {
     employeeNumber: employeeToken,
-    dateToken: maybeDate,
-    timeTokens,
+    dateToken,
+    timeTokens: [],
     extras,
-    originalRemaining: remainingTokens
+    // CRITICAL: originalRemaining should only include the Date/DateTime part
+    originalRemaining: [dateToken]
   };
 }
 

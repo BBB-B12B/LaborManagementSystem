@@ -3,8 +3,13 @@ import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, 
 import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
-import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';
+import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH, COLLAPSED_WIDTH } from './Navbar';
 import { useAuthStore } from '@/store/authStore';
+import { useUIStore } from '@/store/uiStore';
+import { 
+  Menu as MenuIcon, 
+  ChevronLeft as ChevronLeftIcon 
+} from '@mui/icons-material';
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -18,6 +23,7 @@ const Topbar: React.FC = () => {
   const router = useRouter();
   const { t } = useTranslation();
   const { user, logout } = useAuthStore();
+  const { sidebarOpen, toggleSidebar } = useUIStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const englishInitial = useMemo(() => {
@@ -41,13 +47,14 @@ const Topbar: React.FC = () => {
       sx={{
         position: 'fixed',
         top: 0,
-        left: { xs: 0, md: SIDEBAR_WIDTH },
-        width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
+        left: { xs: 0, md: sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH },
+        width: { xs: '100%', md: `calc(100% - ${sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH}px)` },
         height: TOPBAR_HEIGHT,
-        zIndex: (theme) => Math.max(theme.zIndex.appBar, 1500),
+        zIndex: (theme) => theme.zIndex.appBar,
         backgroundColor: '#f7f7f9',
         color: '#1c1e2b',
         borderBottom: '1px solid #e5e7ed',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       <Box
@@ -61,6 +68,17 @@ const Topbar: React.FC = () => {
         }}
       >
         <Stack direction="row" alignItems="center" spacing={1.25}>
+          <IconButton
+            onClick={toggleSidebar}
+            sx={{
+              mr: 1,
+              color: '#1c1e2b',
+              display: { xs: 'none', md: 'inline-flex' },
+              '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' }
+            }}
+          >
+            {sidebarOpen ? <ChevronLeftIcon /> : <MenuIcon />}
+          </IconButton>
           <Button
             onClick={() => router.back()}
             startIcon={<ArrowBackIcon />}
@@ -138,6 +156,8 @@ export const Layout: React.FC<LayoutProps> = ({
   maxWidth = 'xl',
   disablePadding = false,
 }) => {
+  const { sidebarOpen } = useUIStore();
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
       <Navbar />
@@ -146,13 +166,14 @@ export const Layout: React.FC<LayoutProps> = ({
         component="main"
         sx={{
           flexGrow: 1,
-          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
-          width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
+          ml: { xs: 0, md: `${sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH}px` },
+          width: { xs: '100%', md: `calc(100% - ${sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH}px)` },
           display: 'flex',
           flexDirection: 'column',
           pt: `${TOPBAR_HEIGHT + 12}px`,
           height: '100vh',
           overflow: 'hidden',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
         <Topbar />

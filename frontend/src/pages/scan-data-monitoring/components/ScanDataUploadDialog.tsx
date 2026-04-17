@@ -765,55 +765,59 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                         {getValueByKeys(record.data, ['EmployeeNumber', 'EmployeeId', 'EmpNo', 'รหัสพนักงาน', 'employeeid', 'employee_no']) || record.employeeNumber}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">
-                          {(() => {
-                            const rawDate = getValueByKeys(record.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'date_time', 'time']);
-                            if (!rawDate) return '-';
-                            // Parse and format to YYYY-MM-DD
-                            const d = new Date(rawDate);
-                            if (isNaN(d.getTime())) return rawDate; // Fallback to raw if unparseable
-                            
-                            const year = d.getFullYear();
-                            const month = String(d.getMonth() + 1).padStart(2, '0');
-                            const day = String(d.getDate()).padStart(2, '0');
-                            return `${year}-${month}-${day}`;
-                          })()}
-                        </Typography>
+                        <Tooltip title={record.error || ''} arrow>
+                          <Typography variant="body2" sx={{ cursor: record.status === 'failed' ? 'help' : 'default', textDecoration: record.status === 'failed' ? 'underline dotted' : 'none' }}>
+                            {(() => {
+                              const rawDate = getValueByKeys(record.data, ['Date', 'ScanDate', 'DateTime', 'วันที่', 'date_time', 'time']);
+                              if (!rawDate) return '-';
+                              // Parse and format to YYYY-MM-DD
+                              const d = new Date(rawDate);
+                              if (isNaN(d.getTime())) return rawDate; // Fallback to raw if unparseable
+                              
+                              const year = d.getFullYear();
+                              const month = String(d.getMonth() + 1).padStart(2, '0');
+                              const day = String(d.getDate()).padStart(2, '0');
+                              return `${year}-${month}-${day}`;
+                            })()}
+                          </Typography>
+                        </Tooltip>
                       </TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time1', 'เวลา1'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time2', 'เวลา2'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time3', 'เวลา3'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time4', 'เวลา4'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time5', 'เวลา5'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time6', 'เวลา6'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time7', 'เวลา7'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time8', 'เวลา8'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time9', 'เวลา9'], '')}</TableCell>
-                      <TableCell>{getValueByKeys(record.data, ['Time10', 'เวลา10'], '')}</TableCell>
+                      
+                      {/* Check both cases: backend uses Time1 (Aggregated), parser uses time1 (Raw RowData) */}
+                      <TableCell>{getValueByKeys(record.data, ['Time1', 'time1', 'เวลา1'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time2', 'time2', 'เวลา2'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time3', 'time3', 'เวลา3'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time4', 'time4', 'เวลา4'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time5', 'time5', 'เวลา5'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time6', 'time6', 'เวลา6'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time7', 'time7', 'เวลา7'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time8', 'time8', 'เวลา8'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time9', 'time9', 'เวลา9'], '')}</TableCell>
+                      <TableCell>{getValueByKeys(record.data, ['Time10', 'time10', 'เวลา10'], '')}</TableCell>
 
                       
                       {/* Text Status - ปกติ / ผิดปกติ */}
                       <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'success.main', textAlign: 'center' }}>
-                        {normalVal === '1' ? 'ปกติ' : 'ผิดปกติ'}
+                        {normalVal === '1' ? 'ปกติ' : 'ไม่ครบ'}
                       </TableCell>
 
                       {/* ชั่วโมงการทำงาน (actual calculated hours) */}
                       <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['RegularHours', 'regularHours'], '0.0')}
+                        {getValueByKeys(record.data, ['RegularHours', 'regularHours', 'scannedRegularHours'], '0.0')}
                       </TableCell>
 
                       {/* สถานะผ่าเที่ยง */}
                       <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], '0')}
+                        {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus', 'scannedNoonOT'], '0')}
                       </TableCell>
                       {/* OT เช้า */}
                       <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours'], '0')}
+                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours', 'scannedMorningOT'], '0')}
                       </TableCell>
 
                       {/* OT เย็น */}
                       <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours'], '0')}
+                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours', 'scannedEveningOT'], '0')}
                       </TableCell>
 
                       {/* นาทีมาสาย */}

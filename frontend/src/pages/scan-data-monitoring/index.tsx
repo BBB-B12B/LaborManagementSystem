@@ -12,7 +12,7 @@
  * FR-SD-009 to FR-SD-014
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import {
   Box,
@@ -59,6 +59,10 @@ import {
   RestoreFromTrash,
   SettingsBackupRestore,
   Undo as UndoIcon,
+  Fullscreen,
+  FullscreenExit,
+  ExpandMore,
+  ExpandLess,
 } from '@mui/icons-material';
 
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -95,6 +99,8 @@ import { ScanDataEditDialog } from '../labor/scan-data-monitoring/components/Sca
 import type { ImportResult } from '../../services/scanDataService';
 import { useToast } from '../../components/common/Toast';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
+import { useUIStore } from '../../store/uiStore';
+import { SIDEBAR_WIDTH, COLLAPSED_WIDTH } from '@/components/layout/Navbar';
 
 /**
  * ScanData Monitoring Page
@@ -122,12 +128,37 @@ export default function ScanDataMonitoringPage() {
   const { confirmDelete, ConfirmDialog: DeleteConfirmDialog } = useDeleteConfirmDialog();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(100);
   const [currentTab, setCurrentTab] = useState(1); // 0: Discrepancies, 1: All Scans, 2: Deleted History
   const [manualScanOpen, setManualScanOpen] = useState(false);
-
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
+
+  // Fullscreen and Layout states
+  const { sidebarOpen, setSidebarOpen } = useUIStore();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
+
+  // Auto-collapse sidebar when upload dialog is open
+  useEffect(() => {
+    if (uploadDialogOpen) {
+      setSidebarOpen(false);
+    } else {
+      setSidebarOpen(true);
+    }
+  }, [uploadDialogOpen, setSidebarOpen]);
+
+  const toggleFullscreen = () => {
+    const nextState = !isFullscreen;
+    setIsFullscreen(nextState);
+    if (nextState) {
+      setSidebarOpen(false);
+      setShowFilters(false);
+    } else {
+      setSidebarOpen(true);
+      setShowFilters(true);
+    }
+  };
 
   // Filter form
   const { control, watch, reset, handleSubmit: handleFilterSubmit } = useForm<DiscrepancyFilter>({
@@ -360,10 +391,9 @@ export default function ScanDataMonitoringPage() {
     { label: 'สถานะงาน', width: 100 },
     { label: 'ชั่วโมงการทำงาน', width: 140 },
     { label: 'สถานะผ่าเที่ยง', width: 120 },
-    { label: 'จำนวน OT', width: 130 },
-    { label: 'นาทีที่มาสาย', width: 120 },
-    { label: 'จัดการ', width: 110, sticky: 'right', right: 0 }
-
+    { label: 'OT เช้า', width: 100 },
+    { label: 'OT เย็น', width: 100 },
+    { label: 'นาทีที่มาสาย', width: 120 }
   ];
 
 
@@ -456,16 +486,27 @@ export default function ScanDataMonitoringPage() {
     <Container maxWidth="xl" sx={{ 
       mt: 0, 
       mb: 0, 
-      pt: 2,
-      height: 'calc(100vh - 76px)',
+      pt: isFullscreen ? 0 : 2,
+      px: isFullscreen ? 0 : { xs: 2, md: 4 },
+      height: isFullscreen ? '100vh' : 'calc(100vh - 76px)',
       display: 'flex', 
       flexDirection: 'column', 
-      overflow: 'hidden',
+      overflow: isFullscreen ? 'hidden' : 'visible',
+      maxWidth: isFullscreen ? '100% !important' : 'xl',
+      position: isFullscreen ? 'fixed' : 'relative',
+      top: isFullscreen ? 0 : 'auto',
+      left: isFullscreen ? { xs: 0, md: sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH } : 'auto',
+      width: isFullscreen ? { xs: '100%', md: `calc(100% - ${sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH}px)` } : '100%',
+      right: isFullscreen ? 0 : 'auto',
+      bottom: isFullscreen ? 0 : 'auto',
+      zIndex: isFullscreen ? 1250 : 1,
+      bgcolor: '#f5f7f9',
+      transition: 'all 0.3s ease',
     }}>
-      {/* Header & Actions Row - Modernized with Glassmorphism and soft shadows */}
+      {/* Header & Actions Row */}
       <Box
         sx={{
-          display: 'flex',
+          display: isFullscreen ? 'none' : 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           mb: 2,
@@ -599,7 +640,7 @@ export default function ScanDataMonitoringPage() {
       </Box>
 
 
-      {/* Filters with modern interactive hover effects and perfectly balanced layout */}
+      {/* Filters Section */}
       <Paper 
         elevation={0}
         sx={{ 
@@ -609,6 +650,7 @@ export default function ScanDataMonitoringPage() {
           borderRadius: 3, 
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
           border: '1px solid rgba(0,0,0,0.06)',
+          display: showFilters ? 'block' : 'none',
           transition: 'all 0.3s ease-in-out',
           '&:hover': {
             boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
@@ -616,9 +658,19 @@ export default function ScanDataMonitoringPage() {
           }
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
-          <FilterList sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>พารามิเตอร์การกรอง</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <FilterList sx={{ mr: 1, color: 'primary.main' }} />
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>พารามิเตอร์การกรอง</Typography>
+          </Box>
+          <Button 
+            size="small" 
+            variant="text" 
+            onClick={() => setShowFilters(false)}
+            startIcon={<ExpandLess />}
+          >
+            ซ่อนตัวกรอง
+          </Button>
         </Box>
 
         <Box sx={{ 
@@ -727,18 +779,18 @@ export default function ScanDataMonitoringPage() {
         elevation={0}
         sx={{ 
           width: '100%', 
-          borderRadius: 4, 
+          borderRadius: isFullscreen ? 0 : 4, 
           overflow: 'hidden',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.08)',
-          border: '1px solid rgba(0, 0, 0, 0.05)',
-          mt: 2,
+          boxShadow: isFullscreen ? 'none' : '0 10px 30px rgba(0, 0, 0, 0.08)',
+          border: isFullscreen ? 'none' : '1px solid rgba(0, 0, 0, 0.05)',
+          mt: isFullscreen ? 0 : 2,
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
         }}
       >
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Tabs 
             value={currentTab} 
             onChange={(_e, newValue) => {
@@ -759,6 +811,43 @@ export default function ScanDataMonitoringPage() {
             <Tab icon={<List />} iconPosition="start" label="ข้อมูลสแกนทั้งหมด" />
             <Tab icon={<History />} iconPosition="start" label="ประวัติการลบ" />
           </Tabs>
+
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {!showFilters && !isFullscreen && (
+              <Button 
+                size="small" 
+                startIcon={<ExpandMore />} 
+                onClick={() => setShowFilters(true)}
+                sx={{ borderRadius: 2 }}
+              >
+                แสดงตัวกรอง
+              </Button>
+            )}
+            {isFullscreen && (
+              <Button 
+                size="small" 
+                startIcon={showFilters ? <ExpandLess /> : <ExpandMore />} 
+                onClick={() => setShowFilters(!showFilters)}
+                sx={{ borderRadius: 2 }}
+              >
+                {showFilters ? 'ซ่อนตัวกรอง' : 'ตัวกรอง'}
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={isFullscreen ? <FullscreenExit /> : <Fullscreen />}
+              onClick={toggleFullscreen}
+              color={isFullscreen ? "secondary" : "primary"}
+              sx={{ 
+                borderRadius: 2, 
+                fontWeight: 600,
+                borderColor: 'divider',
+              }}
+            >
+              {isFullscreen ? 'ออกจากโหมดขยาย' : 'ขยายตาราง'}
+            </Button>
+          </Box>
         </Box>
 
         {(currentTab === 0 ? isDiscrepancyLoading : currentTab === 1 ? isAllScanLoading : isDeletedLoading) ? (
@@ -838,7 +927,8 @@ export default function ScanDataMonitoringPage() {
                           scanNormalStatus: getValueByKeys(raw, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], String(baseRow.normalStatus ?? baseRow.NormalStatus ?? baseRow.scanNormalStatus ?? 0)),
                           regularHours: getValueByKeys(raw, ['RegularHours', 'regularHours', 'WorkingHours', 'ชั่วโมงทำงาน'], String(baseRow.regularHours ?? baseRow.scanRegularHours ?? baseRow.WorkingHours ?? 0)),
                           scanLunchStatus: getValueByKeys(raw, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], String(baseRow.lunchStatus ?? baseRow.LunchStatus ?? baseRow.scanLunchStatus ?? 0)),
-                          scanOTTotal: String(Number(baseRow.scanOTMorning || 0) + Number(baseRow.scanOTEvening || 0) || getValueByKeys(raw, ['OT', 'จำนวน OT'], '0')),
+                          scanOTMorning: baseRow.scanOTMorning ?? (baseRow.OT_Morning || 0),
+                          scanOTEvening: baseRow.scanOTEvening ?? (baseRow.OT_Evening || 0),
                           lateMinutes: getValueByKeys(raw, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], String(baseRow.lateMinutes ?? baseRow.LateMinutes ?? 0)),
                           projectName: getValueByKeys(raw, ['Department', 'ส่วนงาน', 'department'], baseRow.projectName || baseRow.projectCode || baseRow.Department || '-'),
                       };
@@ -906,7 +996,7 @@ export default function ScanDataMonitoringPage() {
                           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => {
 
                             const val = (displayRow as any)?.[`time${i}`] || '-';
-                            const display = val && val !== '-' ? val.toString().substring(0, 5) : '-';
+                            const display = val && val !== '-' ? val.toString().substring(0, 8) : '-';
                             const isEdited = row.isManuallyEdited || baseRow.isManuallyEdited || (row.scanSummary && row.scanSummary.isManuallyEdited);
                             return (
                               <TableCell 
@@ -936,10 +1026,13 @@ export default function ScanDataMonitoringPage() {
                           {/* 12. สถานะผ่าเที่ยง */}
                           <TableCell align="center">{displayRow.scanLunchStatus}</TableCell>
   
-                          {/* 13. OT รวม */}
-                          <TableCell align="center">{displayRow.scanOTTotal}</TableCell>
+                          {/* 13. OT เช้า */}
+                          <TableCell align="center">{displayRow.scanOTMorning}</TableCell>
+
+                          {/* 14. OT เย็น */}
+                          <TableCell align="center">{displayRow.scanOTEvening}</TableCell>
   
-                          {/* 14. นาทีที่มาสาย */}
+                          {/* 15. นาทีที่มาสาย */}
                           <TableCell 
                             align="center" 
                             sx={{ 
@@ -951,41 +1044,6 @@ export default function ScanDataMonitoringPage() {
                           </TableCell>
 
   
-                          {/* 16. จัดการ */}
-
-                          <TableCell data-sticky="true" sx={{ position: 'sticky', right: 0, bgcolor: rowBgColor, zIndex: 5, borderLeft: '1px solid #eee' }} align="center">
-                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                              {currentTab === 2 ? (
-                                <Tooltip title="กู้คืนข้อมูลสแกน">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleRestoreRow(row)} 
-                                    sx={{ 
-                                      color: 'success.main',
-                                      bgcolor: 'rgba(46, 125, 50, 0.08)',
-                                      '&:hover': { bgcolor: 'rgba(46, 125, 50, 0.15)' }
-                                    }}
-                                  >
-                                    <UndoIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              ) : (
-                                <Tooltip title={currentTab === 0 ? "ดูรายละเอียดข้อผิดพลาด" : "แก้ไขเวลาสแกน"}>
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => currentTab === 0 ? handleViewDetails(row.id) : handleOpenEdit(row)} 
-                                    color="info"
-                                    sx={{ 
-                                      bgcolor: 'rgba(2, 136, 209, 0.08)',
-                                      '&:hover': { bgcolor: 'rgba(2, 136, 209, 0.15)' }
-                                    }}
-                                  >
-                                    {currentTab === 0 ? <Visibility fontSize="small" /> : <Edit fontSize="small" />}
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
 
                         </TableRow>
                       );
@@ -995,7 +1053,7 @@ export default function ScanDataMonitoringPage() {
             </TableContainer>
             <Box sx={{ p: 2, borderTop: '1px solid rgba(0,0,0,0.05)', bgcolor: 'rgba(26, 51, 60, 0.01)' }}>
               <TablePagination
-                rowsPerPageOptions={[10, 25, 50, 100]}
+                rowsPerPageOptions={[25, 50, 100, 200, 500]}
                 component="div"
                 count={(currentTab === 0 ? discrepancyData?.total : currentTab === 1 ? allScanData?.total : deletedScanData?.total) || 0}
 
