@@ -30,7 +30,8 @@ if (!getApps().length) {
 
   if (shouldUseEmulators) {
     const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST || 'localhost:9099';
-    const firestoreEmulatorHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
+    const firestoreEmulatorHost =
+      process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
 
     const authWithMeta = auth as unknown as { emulatorConfig?: unknown };
     if (!authWithMeta.emulatorConfig) {

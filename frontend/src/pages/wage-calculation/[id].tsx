@@ -174,7 +174,7 @@ export default function WageCalculationDetailsPage() {
     },
     {
       field: 'skillName',
-      headerName: 'ทักษะ',
+      headerName: 'ตำแหน่ง',
       minWidth: 140,
       flex: 1,
     },

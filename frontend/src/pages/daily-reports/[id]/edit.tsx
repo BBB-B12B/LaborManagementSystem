@@ -27,7 +27,11 @@ export default function DailyReportEditPage() {
   const queryClient = useQueryClient();
 
   // Fetch existing daily report
-  const { data: report, isLoading, error } = useQuery({
+  const {
+    data: report,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['dailyReport', id],
     queryFn: () => dailyReportService.getById(id as string),
     enabled: !!id,
@@ -35,8 +39,7 @@ export default function DailyReportEditPage() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: (data: DailyReportFormData) =>
-      dailyReportService.update(id as string, data),
+    mutationFn: (data: DailyReportFormData) => dailyReportService.update(id as string, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['work-records'] });
       queryClient.invalidateQueries({ queryKey: ['dailyReports'] });
@@ -68,9 +71,7 @@ export default function DailyReportEditPage() {
       <ProtectedRoute>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Alert severity="error">
-              ไม่พบข้อมูลรายงานการทำงาน หรือคุณไม่มีสิทธิ์เข้าถึง
-            </Alert>
+            <Alert severity="error">ไม่พบข้อมูลรายงานการทำงาน หรือคุณไม่มีสิทธิ์เข้าถึง</Alert>
           </Container>
         </Layout>
       </ProtectedRoute>

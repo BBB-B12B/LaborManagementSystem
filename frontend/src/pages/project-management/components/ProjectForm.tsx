@@ -1,7 +1,16 @@
 import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Box, Button, Grid, TextField, Alert, CircularProgress, MenuItem, InputAdornment } from '@mui/material';
+import {
+  Box,
+  Button,
+  Grid,
+  TextField,
+  Alert,
+  CircularProgress,
+  MenuItem,
+  InputAdornment,
+} from '@mui/material';
 import LabelIcon from '@mui/icons-material/Label';
 import CodeIcon from '@mui/icons-material/Code';
 import BusinessIcon from '@mui/icons-material/Business';
@@ -86,8 +95,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         .getNextCode()
         .then((code) => {
           if (!isMounted) return;
-          const resolvedCode =
-            (code ?? '').trim() || defaultValues?.code || 'P001';
+          const resolvedCode = (code ?? '').trim() || defaultValues?.code || 'P001';
           setValue('code', resolvedCode, { shouldValidate: true });
           setCodeLocked(true);
         })
@@ -145,7 +153,6 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       sx={{ maxWidth: 900, mx: 'auto', pt: 1 }}
     >
       <Grid container spacing={3}>
-
         {Object.keys(errors).length > 0 && (
           <Grid item xs={12}>
             <Alert severity="error">กรุณาตรวจสอบข้อมูลให้ครบถ้วน</Alert>

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ScanData, classifyScanBehavior } from '../models/ScanData';
 import { scanDataService } from '../services/scanData/ScanDataService';
 

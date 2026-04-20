@@ -2,18 +2,22 @@
  * DCIncomeDetails Model
  * รายละเอียดรายได้ DC
  *
- * Description: Standard income details for each DC that apply across all wage periods.
- * Firestore Collection: dcIncomeDetails
+ * Description: Income details for each DC stored in sub-collection.
+ * Firestore Collection: dailyContractors/{dcId}/dcIncomeDetails
+ *
+ * NOTE: hourlyRate is derived at calculation time: dailyWageRate / 8
  */
 
 export interface DCIncomeDetails {
   id: string;
   dailyContractorId: string;
-  hourlyRate: number; // ค่าแรงต่อชั่วโมง
-  professionalRate: number; // ค่าช่าง/ค่าฝีมือต่อชั่วโมง
-  phoneAllowance: number; // ค่าโทรศัพท์ต่องวด
+  dailyWageRate: number;   // ค่าแรงต่อวัน (hourlyRate = dailyWageRate / 8)
+  professionalRate: number; // ค่าช่าง/ค่าฝีมือต่อวัน
+  phoneAllowance: number;   // ค่าโทรศัพท์ต่องวด
+  otherIncome: number;      // รายได้อื่นๆ ต่องวด
+  mouDeductionRate: number; // อัตราหัก MOU (%)
   isActive: boolean;
-  effectiveDate: Date; // วันที่มีผลบังคับใช้
+  effectiveDate: Date;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -22,16 +26,20 @@ export interface DCIncomeDetails {
 
 export interface CreateDCIncomeDetailsInput {
   dailyContractorId: string;
-  hourlyRate: number;
+  dailyWageRate: number;
   professionalRate: number;
   phoneAllowance: number;
+  otherIncome?: number;
+  mouDeductionRate?: number;
   effectiveDate: Date;
 }
 
 export interface UpdateDCIncomeDetailsInput {
-  hourlyRate?: number;
+  dailyWageRate?: number;
   professionalRate?: number;
   phoneAllowance?: number;
+  otherIncome?: number;
+  mouDeductionRate?: number;
   effectiveDate?: Date;
   isActive?: boolean;
 }
@@ -43,9 +51,11 @@ export const dcIncomeDetailsConverter = {
   toFirestore: (details: Omit<DCIncomeDetails, 'id'>): any => {
     return {
       dailyContractorId: details.dailyContractorId,
-      hourlyRate: details.hourlyRate,
+      dailyWageRate: details.dailyWageRate,
       professionalRate: details.professionalRate,
       phoneAllowance: details.phoneAllowance,
+      otherIncome: details.otherIncome || 0,
+      mouDeductionRate: details.mouDeductionRate || 0,
       isActive: details.isActive,
       effectiveDate: details.effectiveDate,
       createdAt: details.createdAt,
@@ -59,9 +69,12 @@ export const dcIncomeDetailsConverter = {
     return {
       id: snapshot.id,
       dailyContractorId: data.dailyContractorId,
-      hourlyRate: data.hourlyRate,
-      professionalRate: data.professionalRate,
-      phoneAllowance: data.phoneAllowance,
+      // Support legacy 'hourlyRate' field: if dailyWageRate missing, fallback to hourlyRate * 8
+      dailyWageRate: data.dailyWageRate || (data.hourlyRate ? data.hourlyRate * 8 : 0),
+      professionalRate: data.professionalRate || 0,
+      phoneAllowance: data.phoneAllowance || 0,
+      otherIncome: data.otherIncome || 0,
+      mouDeductionRate: data.mouDeductionRate || 0,
       isActive: data.isActive !== undefined ? data.isActive : true,
       effectiveDate: data.effectiveDate.toDate(),
       createdAt: data.createdAt.toDate(),

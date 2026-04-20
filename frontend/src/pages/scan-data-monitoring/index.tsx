@@ -80,7 +80,7 @@ import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import ScanDataUploadDialog from './components/ScanDataUploadDialog';
-import { ScanDataEditDialog } from '../labor/scan-data-monitoring/components/ScanDataEditDialog';
+import { ScanDataEditDialog } from './components/ScanDataEditDialog';
 import type { ImportResult } from '../../services/scanDataService';
 import { useToast } from '../../components/common/Toast';
 
@@ -116,7 +116,12 @@ export default function ScanDataMonitoringPage() {
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
 
   // Filter form
-  const { control, watch, reset, handleSubmit: handleFilterSubmit } = useForm<DiscrepancyFilter>({
+  const {
+    control,
+    watch,
+    reset,
+    handleSubmit: handleFilterSubmit,
+  } = useForm<DiscrepancyFilter>({
     defaultValues: {
       status: 'pending', // แสดงเฉพาะรอแก้ไขตอนเริ่มต้น
     },
@@ -124,13 +129,12 @@ export default function ScanDataMonitoringPage() {
 
   const filter = watch();
 
-
   // Fetch discrepancies
-  const { 
-    data: discrepancyData, 
-    isLoading: isDiscrepancyLoading, 
-    error: discrepancyError, 
-    refetch: refetchDiscrepancies 
+  const {
+    data: discrepancyData,
+    isLoading: isDiscrepancyLoading,
+    error: discrepancyError,
+    refetch: refetchDiscrepancies,
   } = useQuery({
     queryKey: ['discrepancies', filter, page, pageSize],
     queryFn: () => getAllDiscrepancies(filter, page + 1, pageSize),
@@ -141,16 +145,21 @@ export default function ScanDataMonitoringPage() {
   const {
     data: allScanData,
     isLoading: isAllScanLoading,
-    refetch: refetchAllScans
+    refetch: refetchAllScans,
   } = useQuery({
     queryKey: ['allScanData', filter, page, pageSize],
-    queryFn: () => getAllScanData({
-      projectLocationId: filter.projectLocationId,
-      employeeNumber: filter.employeeNumber,
-      startDate: filter.startDate,
-      endDate: filter.endDate,
-      enriched: true,
-    }, page + 1, pageSize),
+    queryFn: () =>
+      getAllScanData(
+        {
+          projectLocationId: filter.projectLocationId,
+          employeeNumber: filter.employeeNumber,
+          startDate: filter.startDate,
+          endDate: filter.endDate,
+          enriched: true,
+        },
+        page + 1,
+        pageSize
+      ),
     enabled: currentTab === 1,
   });
 
@@ -198,17 +207,21 @@ export default function ScanDataMonitoringPage() {
   const handleOpenEdit = (row: any) => {
     const baseRow = row.detailedView || row;
     const punches = [
-      baseRow.time1, baseRow.time2, baseRow.time3, 
-      baseRow.time4, baseRow.time5, baseRow.time6
-    ].filter(p => p && p !== '-' && p !== '');
-    
+      baseRow.time1,
+      baseRow.time2,
+      baseRow.time3,
+      baseRow.time4,
+      baseRow.time5,
+      baseRow.time6,
+    ].filter((p) => p && p !== '-' && p !== '');
+
     setSelectedRecord({
       id: row.id,
       contractorId: row.dailyContractorId || row.employeeNumber,
       contractorName: row.dailyContractorName || '-',
       employeeNumber: row.employeeNumber,
       workDate: new Date(row.workDate || row.scanDate || row.date),
-      punches
+      punches,
     });
     setEditDialogOpen(true);
   };
@@ -216,7 +229,11 @@ export default function ScanDataMonitoringPage() {
   const handleClearProjectData = async () => {
     if (!filter.projectLocationId || !filter.startDate || !filter.endDate) return;
 
-    if (window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "ข้อมูลสแกนดิบ" และ "ผลการวิเคราะห์/ความผิดปกติ" ทั้งหมดของโครงการนี้ ตั้งแต่วันที่ ${new Date(filter.startDate).toLocaleDateString('th-TH')} ถึง ${new Date(filter.endDate).toLocaleDateString('th-TH')}? \n\n*ข้อมูลทั้งหมดจะถูกลบถาวรและไม่สามารถเรียกคืนได้*`)) {
+    if (
+      window.confirm(
+        `คุณแน่ใจหรือไม่ว่าต้องการลบ "ข้อมูลสแกนดิบ" และ "ผลการวิเคราะห์/ความผิดปกติ" ทั้งหมดของโครงการนี้ ตั้งแต่วันที่ ${new Date(filter.startDate).toLocaleDateString('th-TH')} ถึง ${new Date(filter.endDate).toLocaleDateString('th-TH')}? \n\n*ข้อมูลทั้งหมดจะถูกลบถาวรและไม่สามารถเรียกคืนได้*`
+      )
+    ) {
       try {
         const res = await deleteScanDataBulk(
           filter.projectLocationId,
@@ -281,7 +298,7 @@ export default function ScanDataMonitoringPage() {
     { label: 'ชั่วโมงการทำงาน', width: 140 },
     { label: 'สถานะผ่าเที่ยง', width: 120 },
     { label: 'จำนวน OT', width: 130 },
-    { label: 'จัดการ', width: 80, sticky: 'right', right: 0 }
+    { label: 'จัดการ', width: 80, sticky: 'right', right: 0 },
   ];
 
   // All Scan Data columns
@@ -290,8 +307,7 @@ export default function ScanDataMonitoringPage() {
       field: 'scanDateTime',
       headerName: 'วันเวลา',
       width: 180,
-      valueFormatter: (params) =>
-        new Date(params.value).toLocaleString('th-TH'),
+      valueFormatter: (params) => new Date(params.value).toLocaleString('th-TH'),
     },
     {
       field: 'employeeNumber',
@@ -332,10 +348,7 @@ export default function ScanDataMonitoringPage() {
       renderCell: (params: GridRenderCellParams) => (
         <Box>
           <Tooltip title="ดูรายละเอียด/แก้ไข">
-            <IconButton
-              size="small"
-              color="primary"
-            >
+            <IconButton size="small" color="primary">
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -367,7 +380,11 @@ export default function ScanDataMonitoringPage() {
     });
   };
 
-  const { control: manualControl, handleSubmit: handleManualSubmit, reset: resetManual } = useForm();
+  const {
+    control: manualControl,
+    handleSubmit: handleManualSubmit,
+    reset: resetManual,
+  } = useForm();
   const renderContent = () => (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header & Actions Row - Modernized with Glassmorphism and soft shadows */}
@@ -386,14 +403,14 @@ export default function ScanDataMonitoringPage() {
         }}
       >
         <Box>
-          <Typography 
-            variant="h4" 
-            component="h1" 
-            sx={{ 
-              fontWeight: 800, 
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 800,
               color: '#1a333c',
               letterSpacing: '-0.02em',
-              mb: 0.5
+              mb: 0.5,
             }}
           >
             ScanData Monitoring
@@ -416,9 +433,9 @@ export default function ScanDataMonitoringPage() {
               });
               setManualScanOpen(true);
             }}
-            sx={{ 
-              borderRadius: 2.5, 
-              height: 42, 
+            sx={{
+              borderRadius: 2.5,
+              height: 42,
               px: 2.5,
               textTransform: 'none',
               fontWeight: 600,
@@ -427,7 +444,7 @@ export default function ScanDataMonitoringPage() {
               '&:hover': {
                 transform: 'translateY(-2px)',
                 boxShadow: '0 6px 20px rgba(25, 118, 210, 0.4)',
-              }
+              },
             }}
           >
             เพิ่มข้อมูลสแกน (Manual)
@@ -438,21 +455,21 @@ export default function ScanDataMonitoringPage() {
             size="medium"
             startIcon={<CloudUpload />}
             onClick={() => setUploadDialogOpen(true)}
-            sx={{ 
-              borderRadius: 2.5, 
-              height: 42, 
+            sx={{
+              borderRadius: 2.5,
+              height: 42,
               px: 2.5,
               textTransform: 'none',
               fontWeight: 600,
               bgcolor: '#1a333c', // Theme consistent dark color
-              color: '#fff', 
+              color: '#fff',
               boxShadow: '0 4px 14px rgba(26, 51, 60, 0.3)',
               transition: 'all 0.3s ease',
-              '&:hover': { 
+              '&:hover': {
                 bgcolor: '#2a4d5a',
                 transform: 'translateY(-2px)',
                 boxShadow: '0 6px 20px rgba(26, 51, 60, 0.4)',
-              } 
+              },
             }}
           >
             Upload ScanData
@@ -464,9 +481,9 @@ export default function ScanDataMonitoringPage() {
             startIcon={<List />}
             onClick={handleExport}
             disabled={!filter.projectLocationId || !filter.startDate || !filter.endDate}
-            sx={{ 
-              borderRadius: 2.5, 
-              height: 42, 
+            sx={{
+              borderRadius: 2.5,
+              height: 42,
               px: 2.5,
               textTransform: 'none',
               fontWeight: 600,
@@ -475,7 +492,7 @@ export default function ScanDataMonitoringPage() {
               '&:hover': {
                 transform: 'translateY(-2px)',
                 boxShadow: '0 6px 20px rgba(46, 125, 50, 0.4)',
-              }
+              },
             }}
           >
             Export to Excel
@@ -489,9 +506,9 @@ export default function ScanDataMonitoringPage() {
                 startIcon={<DeleteForever />}
                 onClick={handleClearProjectData}
                 disabled={!filter.projectLocationId || !filter.startDate || !filter.endDate}
-                sx={{ 
-                  borderRadius: 2.5, 
-                  height: 42, 
+                sx={{
+                  borderRadius: 2.5,
+                  height: 42,
                   px: 2,
                   textTransform: 'none',
                   fontWeight: 600,
@@ -500,7 +517,7 @@ export default function ScanDataMonitoringPage() {
                     borderWidth: 2,
                     bgcolor: 'rgba(211, 47, 47, 0.04)',
                     transform: 'translateY(-2px)',
-                  }
+                  },
                 }}
               >
                 ล้างข้อมูลโครงการ
@@ -509,16 +526,16 @@ export default function ScanDataMonitoringPage() {
           </Tooltip>
           <Box sx={{ borderLeft: '1px solid rgba(0,0,0,0.1)', ml: 1, pl: 2 }}>
             <Tooltip title="รีเฟรชข้อมูล">
-              <IconButton 
-                onClick={handleRefresh} 
+              <IconButton
+                onClick={handleRefresh}
                 color="primary"
-                sx={{ 
+                sx={{
                   bgcolor: 'rgba(25, 118, 210, 0.08)',
                   transition: 'all 0.3s ease',
                   '&:hover': {
                     bgcolor: 'rgba(25, 118, 210, 0.15)',
                     transform: 'rotate(180deg)',
-                  }
+                  },
                 }}
               >
                 <Refresh />
@@ -528,34 +545,37 @@ export default function ScanDataMonitoringPage() {
         </Box>
       </Box>
 
-
       {/* Filters with modern interactive hover effects and perfectly balanced layout */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          p: 3, 
-          mb: 3, 
-          borderRadius: 3, 
+        sx={{
+          p: 3,
+          mb: 3,
+          borderRadius: 3,
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
           border: '1px solid rgba(0,0,0,0.06)',
           transition: 'all 0.3s ease-in-out',
           '&:hover': {
             boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
             borderColor: 'primary.light',
-          }
+          },
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
           <FilterList sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>พารามิเตอร์การกรอง</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            พารามิเตอร์การกรอง
+          </Typography>
         </Box>
 
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 2, 
-          alignItems: 'flex-end',
-          flexWrap: { xs: 'wrap', md: 'nowrap' }
-        }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            alignItems: 'flex-end',
+            flexWrap: { xs: 'wrap', md: 'nowrap' },
+          }}
+        >
           {/* Project Filter - Now equal width with others */}
           <Box sx={{ flex: 1, minWidth: { xs: '100%', md: '150px' } }}>
             <Controller
@@ -565,7 +585,9 @@ export default function ScanDataMonitoringPage() {
                 <ProjectSelect
                   label="เลือกโครงการ"
                   value={field.value || ''}
-                  onChange={(value: string | string[] | null) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
+                  onChange={(value: string | string[] | null) =>
+                    field.onChange(Array.isArray(value) ? (value[0] ?? '') : value)
+                  }
                   fullWidth
                 />
               )}
@@ -632,9 +654,9 @@ export default function ScanDataMonitoringPage() {
               variant="outlined"
               fullWidth
               onClick={handleResetFilters}
-              sx={{ 
-                height: '40px', 
-                borderRadius: 2, 
+              sx={{
+                height: '40px',
+                borderRadius: 2,
                 textTransform: 'none',
                 color: 'text.secondary',
                 borderColor: 'divider',
@@ -642,8 +664,8 @@ export default function ScanDataMonitoringPage() {
                 '&:hover': {
                   borderColor: 'primary.main',
                   color: 'primary.main',
-                  bgcolor: 'rgba(25, 118, 210, 0.04)'
-                }
+                  bgcolor: 'rgba(25, 118, 210, 0.04)',
+                },
               }}
             >
               ล้างค่า
@@ -652,15 +674,15 @@ export default function ScanDataMonitoringPage() {
         </Box>
       </Paper>
       {/* Data Table - Modernized */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          width: '100%', 
-          borderRadius: 4, 
+        sx={{
+          width: '100%',
+          borderRadius: 4,
           overflow: 'hidden',
           boxShadow: '0 10px 30px rgba(0, 0, 0, 0.08)',
           border: '1px solid rgba(0, 0, 0, 0.05)',
-          mt: 3
+          mt: 3,
         }}
       >
         {(currentTab === 0 ? isDiscrepancyLoading : isAllScanLoading) ? (
@@ -669,16 +691,16 @@ export default function ScanDataMonitoringPage() {
           </Box>
         ) : (
           <Box sx={{ width: '100%' }}>
-            <TableContainer 
-              sx={{ 
+            <TableContainer
+              sx={{
                 maxHeight: 650,
                 '&::-webkit-scrollbar': { width: 8, height: 8 },
                 '&::-webkit-scrollbar-track': { bgcolor: 'rgba(0,0,0,0.02)' },
-                '&::-webkit-scrollbar-thumb': { 
-                  bgcolor: 'rgba(26, 51, 60, 0.1)', 
+                '&::-webkit-scrollbar-thumb': {
+                  bgcolor: 'rgba(26, 51, 60, 0.1)',
                   borderRadius: 4,
-                  '&:hover': { bgcolor: 'rgba(26, 51, 60, 0.2)' }
-                }
+                  '&:hover': { bgcolor: 'rgba(26, 51, 60, 0.2)' },
+                },
               }}
             >
               <Table stickyHeader size="small" sx={{ minWidth: 1800 }}>
@@ -707,74 +729,239 @@ export default function ScanDataMonitoringPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                   {(currentTab === 0 ? (discrepancyData?.data || []) : (allScanData?.data || [])).map((row: any, rowIndex: number) => {
+                  {(currentTab === 0 ? discrepancyData?.data || [] : allScanData?.data || []).map(
+                    (row: any, rowIndex: number) => {
                       // Map discrepancy fields vs raw scan fields to the same UI structure
                       const baseRow = row.detailedView || row;
                       const raw = baseRow.rawData || baseRow.data || baseRow;
 
                       const displayRow = {
-                          row: rowIndex + 1,
-                          status: 'success',
-                          employeeNumber: getValueByKeys(raw, ['EmployeeNumber', 'EmployeeId', 'EmpNo', 'รหัสพนักงาน', 'employeeid', 'employee_no'], baseRow.employeeNumber || baseRow.employeeId || baseRow.EmployeeNumber || baseRow.EmployeeId || baseRow.empNo || '-'),
-                          date: baseRow.workDate || baseRow.scanDate || baseRow.scanDateTime || baseRow.Date, // Keep as date/string for Date format
-                          time1: getValueByKeys(raw, ['Time1', 'เวลา1'], baseRow.Time1 || baseRow.time1 || (baseRow.allScans && baseRow.allScans[0]) || (baseRow.timeScans && baseRow.timeScans[0]) || (baseRow.punches && baseRow.punches[0]) || '-'),
-                          time2: getValueByKeys(raw, ['Time2', 'เวลา2'], baseRow.Time2 || baseRow.time2 || (baseRow.allScans && baseRow.allScans[1]) || (baseRow.timeScans && baseRow.timeScans[1]) || (baseRow.punches && baseRow.punches[1]) || '-'),
-                          time3: getValueByKeys(raw, ['Time3', 'เวลา3'], baseRow.Time3 || baseRow.time3 || (baseRow.allScans && baseRow.allScans[2]) || (baseRow.timeScans && baseRow.timeScans[2]) || (baseRow.punches && baseRow.punches[2]) || '-'),
-                          time4: getValueByKeys(raw, ['Time4', 'เวลา4'], baseRow.Time4 || baseRow.time4 || (baseRow.allScans && baseRow.allScans[3]) || (baseRow.timeScans && baseRow.timeScans[3]) || (baseRow.punches && baseRow.punches[3]) || '-'),
-                          time5: getValueByKeys(raw, ['Time5', 'เวลา5'], baseRow.Time5 || baseRow.time5 || (baseRow.allScans && baseRow.allScans[4]) || (baseRow.timeScans && baseRow.timeScans[4]) || (baseRow.punches && baseRow.punches[4]) || '-'),
-                          time6: getValueByKeys(raw, ['Time6', 'เวลา6'], baseRow.Time6 || baseRow.time6 || (baseRow.allScans && baseRow.allScans[5]) || (baseRow.timeScans && baseRow.timeScans[5]) || (baseRow.punches && baseRow.punches[5]) || '-'),
-                          scanNormalStatus: getValueByKeys(raw, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], String(baseRow.normalStatus ?? baseRow.NormalStatus ?? baseRow.scanNormalStatus ?? 0)),
-                          regularHours: getValueByKeys(raw, ['RegularHours', 'regularHours', 'WorkingHours', 'ชั่วโมงทำงาน'], String(baseRow.regularHours ?? baseRow.scanRegularHours ?? baseRow.WorkingHours ?? 0)),
-                          scanLunchStatus: getValueByKeys(raw, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], String(baseRow.lunchStatus ?? baseRow.LunchStatus ?? baseRow.scanLunchStatus ?? 0)),
-                          scanOTTotal: String(Number(baseRow.scanOTMorning || 0) + Number(baseRow.scanOTEvening || 0) || getValueByKeys(raw, ['OT', 'จำนวน OT'], '0')),
-                          lateMinutes: getValueByKeys(raw, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], String(baseRow.lateMinutes ?? baseRow.LateMinutes ?? 0)),
-                          projectName: getValueByKeys(raw, ['Department', 'ส่วนงาน', 'department'], baseRow.projectName || baseRow.projectCode || baseRow.Department || '-'),
+                        row: rowIndex + 1,
+                        status: 'success',
+                        employeeNumber: getValueByKeys(
+                          raw,
+                          [
+                            'EmployeeNumber',
+                            'EmployeeId',
+                            'EmpNo',
+                            'รหัสพนักงาน',
+                            'employeeid',
+                            'employee_no',
+                          ],
+                          baseRow.employeeNumber ||
+                            baseRow.employeeId ||
+                            baseRow.EmployeeNumber ||
+                            baseRow.EmployeeId ||
+                            baseRow.empNo ||
+                            '-'
+                        ),
+                        date:
+                          baseRow.workDate ||
+                          baseRow.scanDate ||
+                          baseRow.scanDateTime ||
+                          baseRow.Date, // Keep as date/string for Date format
+                        time1: getValueByKeys(
+                          raw,
+                          ['Time1', 'เวลา1'],
+                          baseRow.Time1 ||
+                            baseRow.time1 ||
+                            (baseRow.allScans && baseRow.allScans[0]) ||
+                            (baseRow.timeScans && baseRow.timeScans[0]) ||
+                            (baseRow.punches && baseRow.punches[0]) ||
+                            '-'
+                        ),
+                        time2: getValueByKeys(
+                          raw,
+                          ['Time2', 'เวลา2'],
+                          baseRow.Time2 ||
+                            baseRow.time2 ||
+                            (baseRow.allScans && baseRow.allScans[1]) ||
+                            (baseRow.timeScans && baseRow.timeScans[1]) ||
+                            (baseRow.punches && baseRow.punches[1]) ||
+                            '-'
+                        ),
+                        time3: getValueByKeys(
+                          raw,
+                          ['Time3', 'เวลา3'],
+                          baseRow.Time3 ||
+                            baseRow.time3 ||
+                            (baseRow.allScans && baseRow.allScans[2]) ||
+                            (baseRow.timeScans && baseRow.timeScans[2]) ||
+                            (baseRow.punches && baseRow.punches[2]) ||
+                            '-'
+                        ),
+                        time4: getValueByKeys(
+                          raw,
+                          ['Time4', 'เวลา4'],
+                          baseRow.Time4 ||
+                            baseRow.time4 ||
+                            (baseRow.allScans && baseRow.allScans[3]) ||
+                            (baseRow.timeScans && baseRow.timeScans[3]) ||
+                            (baseRow.punches && baseRow.punches[3]) ||
+                            '-'
+                        ),
+                        time5: getValueByKeys(
+                          raw,
+                          ['Time5', 'เวลา5'],
+                          baseRow.Time5 ||
+                            baseRow.time5 ||
+                            (baseRow.allScans && baseRow.allScans[4]) ||
+                            (baseRow.timeScans && baseRow.timeScans[4]) ||
+                            (baseRow.punches && baseRow.punches[4]) ||
+                            '-'
+                        ),
+                        time6: getValueByKeys(
+                          raw,
+                          ['Time6', 'เวลา6'],
+                          baseRow.Time6 ||
+                            baseRow.time6 ||
+                            (baseRow.allScans && baseRow.allScans[5]) ||
+                            (baseRow.timeScans && baseRow.timeScans[5]) ||
+                            (baseRow.punches && baseRow.punches[5]) ||
+                            '-'
+                        ),
+                        scanNormalStatus: getValueByKeys(
+                          raw,
+                          ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'],
+                          String(
+                            baseRow.normalStatus ??
+                              baseRow.NormalStatus ??
+                              baseRow.scanNormalStatus ??
+                              0
+                          )
+                        ),
+                        regularHours: getValueByKeys(
+                          raw,
+                          ['RegularHours', 'regularHours', 'WorkingHours', 'ชั่วโมงทำงาน'],
+                          String(
+                            baseRow.regularHours ??
+                              baseRow.scanRegularHours ??
+                              baseRow.WorkingHours ??
+                              0
+                          )
+                        ),
+                        scanLunchStatus: getValueByKeys(
+                          raw,
+                          ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'],
+                          String(
+                            baseRow.lunchStatus ??
+                              baseRow.LunchStatus ??
+                              baseRow.scanLunchStatus ??
+                              0
+                          )
+                        ),
+                        scanOTTotal: String(
+                          Number(baseRow.scanOTMorning || 0) + Number(baseRow.scanOTEvening || 0) ||
+                            getValueByKeys(raw, ['OT', 'จำนวน OT'], '0')
+                        ),
+                        lateMinutes: getValueByKeys(
+                          raw,
+                          ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'],
+                          String(baseRow.lateMinutes ?? baseRow.LateMinutes ?? 0)
+                        ),
+                        projectName: getValueByKeys(
+                          raw,
+                          ['Department', 'ส่วนงาน', 'department'],
+                          baseRow.projectName || baseRow.projectCode || baseRow.Department || '-'
+                        ),
                       };
 
                       const timeValues = [
-                        displayRow.time1, displayRow.time2, displayRow.time3,
-                        displayRow.time4, displayRow.time5, displayRow.time6
-                      ].filter(v => v && v !== '' && v !== '-');
-                      
+                        displayRow.time1,
+                        displayRow.time2,
+                        displayRow.time3,
+                        displayRow.time4,
+                        displayRow.time5,
+                        displayRow.time6,
+                      ].filter((v) => v && v !== '' && v !== '-');
+
                       const isIncomplete = timeValues.length > 0 && timeValues.length < 2;
                       const isNormalStatusZero = displayRow.scanNormalStatus === '0';
                       const hasWarning = isIncomplete || isNormalStatusZero;
 
                       return (
-                        <TableRow 
-                          key={row.id} 
-                          hover 
-                          sx={{ 
+                        <TableRow
+                          key={row.id}
+                          hover
+                          sx={{
                             '&:last-child td, &:last-child th': { border: 0 },
                             bgcolor: hasWarning ? 'rgba(255, 152, 0, 0.05)' : 'transparent',
                             transition: 'background-color 0.2s ease',
                             '&:hover': {
-                              bgcolor: hasWarning ? 'rgba(255, 152, 0, 0.08) !important' : 'rgba(26, 51, 60, 0.02) !important'
-                            }
+                              bgcolor: hasWarning
+                                ? 'rgba(255, 152, 0, 0.08) !important'
+                                : 'rgba(26, 51, 60, 0.02) !important',
+                            },
                           }}
                         >
                           {/* 1. แถว */}
-                          <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'inherit', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
+                          <TableCell
+                            sx={{
+                              position: 'sticky',
+                              left: 0,
+                              bgcolor: 'inherit',
+                              zIndex: 5,
+                              borderRight: '1px solid #eee',
+                            }}
+                            align="center"
+                          >
                             {displayRow.row || rowIndex + 1}
                           </TableCell>
 
                           {/* 2. สถานะ */}
-                          <TableCell sx={{ position: 'sticky', left: 60, bgcolor: 'inherit', zIndex: 5, borderRight: '1px solid #eee' }} align="center">
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                              <Chip label="สำเร็จ" size="small" color="success" sx={{ height: 20, fontSize: '0.65rem' }} />
+                          <TableCell
+                            sx={{
+                              position: 'sticky',
+                              left: 60,
+                              bgcolor: 'inherit',
+                              zIndex: 5,
+                              borderRight: '1px solid #eee',
+                            }}
+                            align="center"
+                          >
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 0.5,
+                              }}
+                            >
+                              <Chip
+                                label="สำเร็จ"
+                                size="small"
+                                color="success"
+                                sx={{ height: 20, fontSize: '0.65rem' }}
+                              />
                               {hasWarning && (
-                                <Tooltip title={isIncomplete ? "สแกนเพียง 1 ครั้ง (ข้อมูลอาจไม่ครบ)" : "สถานะงานผิดปกติ"}>
+                                <Tooltip
+                                  title={
+                                    isIncomplete
+                                      ? 'สแกนเพียง 1 ครั้ง (ข้อมูลอาจไม่ครบ)'
+                                      : 'สถานะงานผิดปกติ'
+                                  }
+                                >
                                   <WarningIcon color="warning" sx={{ fontSize: 16 }} />
                                 </Tooltip>
                               )}
                             </Box>
                           </TableCell>
-                          
+
                           {/* 3. EmployeeNumber */}
-                          <TableCell sx={{ position: 'sticky', left: 140, bgcolor: 'inherit', zIndex: 5, borderRight: '1px solid #eee', fontWeight: 'bold' }} align="center">
+                          <TableCell
+                            sx={{
+                              position: 'sticky',
+                              left: 140,
+                              bgcolor: 'inherit',
+                              zIndex: 5,
+                              borderRight: '1px solid #eee',
+                              fontWeight: 'bold',
+                            }}
+                            align="center"
+                          >
                             {displayRow.employeeNumber || row.employeeNumber}
                           </TableCell>
-  
+
                           {/* 4. Date */}
                           <TableCell align="center">
                             {(() => {
@@ -786,58 +973,92 @@ export default function ScanDataMonitoringPage() {
                               return `${year}-${month}-${day}`;
                             })()}
                           </TableCell>
-  
+
                           {/* 4-9. Time1-Time6 */}
                           {[1, 2, 3, 4, 5, 6].map((i) => {
                             const val = (displayRow as any)?.[`time${i}`] || '-';
-                            const display = val && val !== '-' ? val.toString().substring(0, 5) : '-';
-                            const isEdited = row.isManuallyEdited || baseRow.isManuallyEdited || (row.scanSummary && row.scanSummary.isManuallyEdited);
+                            const display =
+                              val && val !== '-' ? val.toString().substring(0, 5) : '-';
+                            const isEdited =
+                              row.isManuallyEdited ||
+                              baseRow.isManuallyEdited ||
+                              (row.scanSummary && row.scanSummary.isManuallyEdited);
                             return (
-                              <TableCell 
-                                key={i} 
+                              <TableCell
+                                key={i}
                                 align="center"
-                                sx={{ 
-                                  color: (isEdited && display !== '-') ? '#ff6d00' : 'inherit',
-                                  fontWeight: (isEdited && display !== '-') ? 900 : 'normal'
+                                sx={{
+                                  color: isEdited && display !== '-' ? '#ff6d00' : 'inherit',
+                                  fontWeight: isEdited && display !== '-' ? 900 : 'normal',
                                 }}
                               >
                                 {display}
                               </TableCell>
                             );
                           })}
-  
+
                           {/* 10. สถานะงาน */}
-                          <TableCell align="center" sx={{ 
-                            color: (String(displayRow.scanNormalStatus) === '1' || String(displayRow.scanNormalStatus) === 'ปกติ') ? 'success.main' : 'error.main',
-                            fontWeight: 'bold'
-                          }}>
-                            {(String(displayRow.scanNormalStatus) === '1' || String(displayRow.scanNormalStatus) === 'ปกติ') ? 'ปกติ' : 'ผิดปกติ'}
+                          <TableCell
+                            align="center"
+                            sx={{
+                              color:
+                                String(displayRow.scanNormalStatus) === '1' ||
+                                String(displayRow.scanNormalStatus) === 'ปกติ'
+                                  ? 'success.main'
+                                  : 'error.main',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {String(displayRow.scanNormalStatus) === '1' ||
+                            String(displayRow.scanNormalStatus) === 'ปกติ'
+                              ? 'ปกติ'
+                              : 'ผิดปกติ'}
                           </TableCell>
-  
+
                           {/* 11. ชั่วโมงการทำงาน */}
                           <TableCell align="center">{displayRow.regularHours}</TableCell>
-  
+
                           {/* 12. สถานะผ่าเที่ยง */}
                           <TableCell align="center">{displayRow.scanLunchStatus}</TableCell>
-  
+
                           {/* 12. OT รวม */}
                           <TableCell align="center">{displayRow.scanOTTotal}</TableCell>
-  
+
                           {/* 16. จัดการ */}
-                          <TableCell sx={{ position: 'sticky', right: 0, bgcolor: 'inherit', zIndex: 5, borderLeft: '1px solid #eee' }} align="center">
+                          <TableCell
+                            sx={{
+                              position: 'sticky',
+                              right: 0,
+                              bgcolor: 'inherit',
+                              zIndex: 5,
+                              borderLeft: '1px solid #eee',
+                            }}
+                            align="center"
+                          >
                             <Tooltip title="แก้ไขเวลาสแกน">
-                              <IconButton size="small" onClick={() => handleOpenEdit(row)} color="info">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenEdit(row)}
+                                color="info"
+                              >
                                 <Edit fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           </TableCell>
                         </TableRow>
                       );
-                   })}
+                    }
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
-            <Box sx={{ p: 2, borderTop: '1px solid rgba(0,0,0,0.05)', bgcolor: 'rgba(26, 51, 60, 0.01)' }}>
+            <Box
+              sx={{
+                p: 2,
+                borderTop: '1px solid rgba(0,0,0,0.05)',
+                bgcolor: 'rgba(26, 51, 60, 0.01)',
+              }}
+            >
               <TablePagination
                 rowsPerPageOptions={[10, 25, 50, 100]}
                 component="div"
@@ -853,21 +1074,20 @@ export default function ScanDataMonitoringPage() {
                   '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
                     fontSize: '0.85rem',
                     color: 'text.secondary',
-                    fontWeight: 500
+                    fontWeight: 500,
                   },
                   '& .MuiTablePagination-select': {
                     borderRadius: 1,
                     bgcolor: 'white',
                     border: '1px solid rgba(0,0,0,0.1)',
-                    px: 1
-                  }
+                    px: 1,
+                  },
                 }}
               />
             </Box>
           </Box>
         )}
       </Paper>
-
     </Container>
   );
 
@@ -910,7 +1130,12 @@ export default function ScanDataMonitoringPage() {
         )}
 
         {/* Manual Scan Dialog */}
-        <Dialog open={manualScanOpen} onClose={() => setManualScanOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={manualScanOpen}
+          onClose={() => setManualScanOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
           <DialogTitle>เพิ่มข้อมูลสแกน (Manual)</DialogTitle>
           <form onSubmit={handleManualSubmit(onAddManualScan)}>
             <DialogContent>
@@ -951,7 +1176,13 @@ export default function ScanDataMonitoringPage() {
                     control={manualControl}
                     rules={{ required: 'กรุณาระบุวันที่' }}
                     render={({ field }) => (
-                      <TextField {...field} label="วันที่" type="date" fullWidth InputLabelProps={{ shrink: true }} />
+                      <TextField
+                        {...field}
+                        label="วันที่"
+                        type="date"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                      />
                     )}
                   />
                   <Controller
@@ -959,7 +1190,13 @@ export default function ScanDataMonitoringPage() {
                     control={manualControl}
                     rules={{ required: 'กรุณาระบุเวลา' }}
                     render={({ field }) => (
-                      <TextField {...field} label="เวลา" type="time" fullWidth InputLabelProps={{ shrink: true }} />
+                      <TextField
+                        {...field}
+                        label="เวลา"
+                        type="time"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                      />
                     )}
                   />
                 </Box>

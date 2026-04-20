@@ -106,9 +106,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   };
 
   // Default text
-  const defaultTitle = severity === 'error' || severity === 'warning'
-    ? 'ยืนยันการดำเนินการ'
-    : 'แจ้งเตือน';
+  const defaultTitle =
+    severity === 'error' || severity === 'warning' ? 'ยืนยันการดำเนินการ' : 'แจ้งเตือน';
 
   const defaultConfirmText = t('common.confirm');
   const defaultCancelText = t('common.cancel');
@@ -128,9 +127,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </DialogTitle>
 
       <DialogContent>
-        <DialogContentText id="confirm-dialog-description">
-          {message}
-        </DialogContentText>
+        <DialogContentText id="confirm-dialog-description">{message}</DialogContentText>
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2, justifyContent: 'flex-end', gap: 2 }}>
@@ -158,7 +155,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             fontWeight: 600,
           }}
         >
-          {loading ? 'กำลังดำเนินการ...' : (confirmText || defaultConfirmText)}
+          {loading ? 'กำลังดำเนินการ...' : confirmText || defaultConfirmText}
         </Button>
       </DialogActions>
     </Dialog>
@@ -248,10 +245,7 @@ export const useConfirmDialog = () => {
 export const useDeleteConfirmDialog = () => {
   const confirmDialog = useConfirmDialog();
 
-  const confirmDelete = (
-    itemName: string,
-    onDelete: () => void | Promise<void>
-  ) => {
+  const confirmDelete = (itemName: string, onDelete: () => void | Promise<void>) => {
     return confirmDialog.confirm({
       title: 'ยืนยันการลบ',
       message: `คุณต้องการลบ "${itemName}" ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้`,
@@ -300,9 +294,7 @@ export const useSaveConfirmDialog = () => {
 export const useDiscardChangesDialog = () => {
   const confirmDialog = useConfirmDialog();
 
-  const confirmDiscard = (
-    onDiscard: () => void | Promise<void>
-  ) => {
+  const confirmDiscard = (onDiscard: () => void | Promise<void>) => {
     return confirmDialog.confirm({
       title: 'ยกเลิกการเปลี่ยนแปลง',
       message: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการยกเลิกการเปลี่ยนแปลงใช่หรือไม่?',

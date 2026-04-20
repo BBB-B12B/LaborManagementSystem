@@ -67,15 +67,12 @@ export default function ManagementHubPage() {
   const { user } = useAuthStore();
   const permissions = usePermissions(user);
 
-  const sections = MANAGEMENT_SECTIONS.filter((section) =>
-    section.permissionCheck(permissions)
-  );
+  const sections = MANAGEMENT_SECTIONS.filter((section) => section.permissionCheck(permissions));
 
   return (
     <ProtectedRoute requiredRoles={['AM', 'FM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
-
           <Box sx={{ mb: 4 }}>
             <Typography variant="h4" gutterBottom>
               การจัดการข้อมูล
@@ -87,7 +84,8 @@ export default function ManagementHubPage() {
               <CardContent>
                 <Typography variant="h6">ไม่มีสิทธิ์เข้าถึง</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  บัญชีผู้ใช้นี้ยังไม่ได้รับสิทธิ์จัดการข้อมูลในส่วนใด หากต้องการเข้าถึงให้ติดต่อผู้ดูแลระบบ
+                  บัญชีผู้ใช้นี้ยังไม่ได้รับสิทธิ์จัดการข้อมูลในส่วนใด
+                  หากต้องการเข้าถึงให้ติดต่อผู้ดูแลระบบ
                 </Typography>
               </CardContent>
             </Card>
@@ -147,10 +145,7 @@ export default function ManagementHubPage() {
                         >
                           {section.icon}
                         </Box>
-                        <Typography
-                          variant="h6"
-                          sx={{ fontWeight: 600, color: 'text.primary' }}
-                        >
+                        <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                           {section.label}
                         </Typography>
                       </CardContent>

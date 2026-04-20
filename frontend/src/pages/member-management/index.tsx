@@ -27,11 +27,7 @@ import {
 import { Add, Edit, Delete, Search, FileDownload, CloudUpload } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  memberService,
-  type User,
-  type UserFilterOptions,
-} from '../../services/memberService';
+import { memberService, type User, type UserFilterOptions } from '../../services/memberService';
 
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
@@ -52,10 +48,8 @@ import { UserImportDialog } from './components/UserImportDialog';
 export default function MemberManagementPage() {
   const queryClient = useQueryClient();
   const { success: showSuccess, error: showError } = useToast();
-  const {
-    confirmDelete: showDeleteConfirm,
-    ConfirmDialog: DeleteConfirmDialog,
-  } = useDeleteConfirmDialog();
+  const { confirmDelete: showDeleteConfirm, ConfirmDialog: DeleteConfirmDialog } =
+    useDeleteConfirmDialog();
 
   // Filters
   const [filters, setFilters] = useState<UserFilterOptions>({
@@ -68,11 +62,15 @@ export default function MemberManagementPage() {
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
-  const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<UserEditInput> | undefined>(undefined);
+  const [drawerInitialValues, setDrawerInitialValues] = useState<
+    Partial<UserEditInput> | undefined
+  >(undefined);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importSummary, setImportSummary] = useState<{ success: number; failed: number } | null>(null);
+  const [importSummary, setImportSummary] = useState<{ success: number; failed: number } | null>(
+    null
+  );
 
   const handleCloseDrawer = () => {
     setDrawerOpen(false);
@@ -300,13 +298,12 @@ export default function MemberManagementPage() {
 
   const importErrorMessage = userImportMutation.isError
     ? (userImportMutation.error as any)?.response?.data?.error ||
-    (userImportMutation.error as Error)?.message ||
-    'เกิดข้อผิดพลาดในการนำเข้าผู้ใช้'
+      (userImportMutation.error as Error)?.message ||
+      'เกิดข้อผิดพลาดในการนำเข้าผู้ใช้'
     : null;
 
   const pageContent = (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
@@ -331,12 +328,7 @@ export default function MemberManagementPage() {
           >
             นำเข้าจากไฟล์
           </Button>
-          <Button
-            variant="contained"
-            color="info"
-            startIcon={<Add />}
-            onClick={handleCreateUser}
-          >
+          <Button variant="contained" color="info" startIcon={<Add />} onClick={handleCreateUser}>
             สร้างผู้ใช้ใหม่
           </Button>
         </Box>
@@ -438,16 +430,12 @@ export default function MemberManagementPage() {
 
       <UserDrawer
         title={drawerMode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้'}
-        key={drawerMode === 'edit' ? editingUserId ?? 'edit' : 'create'}
+        key={drawerMode === 'edit' ? (editingUserId ?? 'edit') : 'create'}
         open={drawerOpen}
         onClose={handleCloseDrawer}
         mode={drawerMode}
         defaultValues={drawerInitialValues}
-        isLoading={
-          drawerMode === 'create'
-            ? createMutation.isPending
-            : updateMutation.isPending
-        }
+        isLoading={drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending}
         loading={drawerLoading}
         onSubmit={handleDrawerSubmit}
       />

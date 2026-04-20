@@ -1,5 +1,13 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, Box, IconButton, CircularProgress, Typography } from '@mui/material';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Box,
+  IconButton,
+  CircularProgress,
+  Typography,
+} from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ProjectForm, type ProjectFormProps } from './ProjectForm';
 
@@ -49,7 +57,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           bgcolor: '#f8f9fa',
-          borderBottom: '1px solid #e0e0e0'
+          borderBottom: '1px solid #e0e0e0',
         }}
       >
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -67,7 +75,9 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
       </DialogTitle>
       <DialogContent sx={{ p: 3, pt: 2 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}
+          >
             <CircularProgress />
           </Box>
         ) : (

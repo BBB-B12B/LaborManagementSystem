@@ -24,10 +24,7 @@ export interface ProtectedRouteProps {
  * - Redirects to login if not authenticated
  * - Shows access denied if role requirement not met
  */
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requiredRoles,
-}) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles }) => {
   const router = useRouter();
   const { t } = useTranslation();
   const { isAuthenticated, user, isLoading } = useAuthStore();

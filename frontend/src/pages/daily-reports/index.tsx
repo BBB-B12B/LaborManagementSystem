@@ -73,11 +73,7 @@ const renderWorkTypeChip = (record: WorkRecordRow) => {
   if (record.type === 'ot') {
     const period = record.otPeriod || 'morning';
     return (
-      <Chip
-        label={`OT (${getOTPeriodLabel(period)})`}
-        size="small"
-        color={otChipColors[period]}
-      />
+      <Chip label={`OT (${getOTPeriodLabel(period)})`} size="small" color={otChipColors[period]} />
     );
   }
 
@@ -85,23 +81,15 @@ const renderWorkTypeChip = (record: WorkRecordRow) => {
   const color: 'default' | 'success' =
     record.workType && record.workType !== 'regular' ? 'success' : 'default';
 
-  return (
-    <Chip
-      label={label}
-      size="small"
-      color={color}
-    />
-  );
+  return <Chip label={label} size="small" color={color} />;
 };
 
 export default function WorkRecordsPage() {
   const router = useRouter();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const {
-    confirmDelete: showDeleteConfirm,
-    ConfirmDialog: DeleteConfirmDialog,
-  } = useDeleteConfirmDialog();
+  const { confirmDelete: showDeleteConfirm, ConfirmDialog: DeleteConfirmDialog } =
+    useDeleteConfirmDialog();
 
   // Filters
   const [projectFilter, setProjectFilter] = useState<string>('');
@@ -112,9 +100,7 @@ export default function WorkRecordsPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   useEffect(() => {
-    const queryView = Array.isArray(router.query.view)
-      ? router.query.view[0]
-      : router.query.view;
+    const queryView = Array.isArray(router.query.view) ? router.query.view[0] : router.query.view;
 
     if (queryView === 'ot') {
       setTypeFilter('ot');
@@ -142,18 +128,18 @@ export default function WorkRecordsPage() {
       const [regularReports, overtimeRecords] = await Promise.all([
         shouldFetchRegular
           ? dailyReportService.getAll({
-            projectId: projectFilter || undefined,
-            date: dateFilter || undefined,
-            dcId: dcFilter || undefined,
-          })
+              projectId: projectFilter || undefined,
+              date: dateFilter || undefined,
+              dcId: dcFilter || undefined,
+            })
           : Promise.resolve([]),
         shouldFetchOT
           ? overtimeService.getAll({
-            projectId: projectFilter || undefined,
-            date: dateFilter || undefined,
-            dcId: dcFilter || undefined,
-            otPeriod: periodFilter || undefined,
-          })
+              projectId: projectFilter || undefined,
+              date: dateFilter || undefined,
+              dcId: dcFilter || undefined,
+              otPeriod: periodFilter || undefined,
+            })
           : Promise.resolve([]),
       ]);
 
@@ -255,9 +241,7 @@ export default function WorkRecordsPage() {
 
   const handleDelete = async (record: WorkRecordRow) => {
     const description =
-      record.type === 'ot'
-        ? `OT: ${record.workDescription}`
-        : record.workDescription;
+      record.type === 'ot' ? `OT: ${record.workDescription}` : record.workDescription;
 
     await showDeleteConfirm(description, async () => {
       await deleteMutation.mutateAsync({ id: record.id, type: record.type });
@@ -385,8 +369,6 @@ export default function WorkRecordsPage() {
     <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
       <Layout>
         <Container maxWidth="xl" sx={{ py: 4 }}>
-
-
           <Box
             sx={{
               display: 'flex',
@@ -405,11 +387,7 @@ export default function WorkRecordsPage() {
               >
                 นำเข้า Excel
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleCreate}
-              >
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
                 เพิ่มการ์ดงาน
               </Button>
             </Box>
@@ -525,13 +503,13 @@ export default function WorkRecordsPage() {
           </Paper>
 
           <DeleteConfirmDialog />
-          
+
           <DailyReportUploadDialog
             open={isImportModalOpen}
             onClose={() => setIsImportModalOpen(false)}
             onSuccess={() => {
-                queryClient.invalidateQueries({ queryKey: ['work-records'] });
-                setIsImportModalOpen(false);
+              queryClient.invalidateQueries({ queryKey: ['work-records'] });
+              setIsImportModalOpen(false);
             }}
           />
         </Container>

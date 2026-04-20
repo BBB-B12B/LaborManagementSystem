@@ -35,8 +35,4 @@ export {
 export type { ConfirmDialogProps } from './ConfirmDialog';
 
 // Error Handling
-export {
-  ErrorBoundary,
-  withErrorBoundary,
-  SimpleErrorFallback,
-} from './ErrorBoundary';
+export { ErrorBoundary, withErrorBoundary, SimpleErrorFallback } from './ErrorBoundary';

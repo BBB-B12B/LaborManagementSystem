@@ -184,11 +184,10 @@ export const DCAutoComplete: React.FC<DCAutoCompleteProps> = ({
       }
 
       const ids = Array.isArray(value) ? value : [value];
-      return ids
-        .map((id) => {
-          const dc = resolveDC(id) ?? createPlaceholderDC(id);
-          return createOptionFromDC(dc);
-        }) as AutoCompleteOption[];
+      return ids.map((id) => {
+        const dc = resolveDC(id) ?? createPlaceholderDC(id);
+        return createOptionFromDC(dc);
+      }) as AutoCompleteOption[];
     }
 
     const id = Array.isArray(value) ? value[0] : value;
@@ -224,7 +223,7 @@ export const DCAutoComplete: React.FC<DCAutoCompleteProps> = ({
     }
 
     const ids = selectedDCs.map((dc) => dc.id);
-    onChange(multiple ? ids : ids[0] ?? null, selectedDCs);
+    onChange(multiple ? ids : (ids[0] ?? null), selectedDCs);
   };
 
   /**

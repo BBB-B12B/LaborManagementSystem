@@ -170,9 +170,7 @@ export const OvertimeForm: React.FC<OvertimeFormProps> = ({
   const handleFormSubmit = async (data: OvertimeFormData) => {
     try {
       await onSubmit(data);
-      toast.success(
-        mode === 'create' ? 'บันทึก OT สำเร็จ' : 'อัปเดท OT สำเร็จ'
-      );
+      toast.success(mode === 'create' ? 'บันทึก OT สำเร็จ' : 'อัปเดท OT สำเร็จ');
     } catch (error) {
       toast.error(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
     }
@@ -257,10 +255,7 @@ export const OvertimeForm: React.FC<OvertimeFormProps> = ({
             </Typography>
           </Alert>
 
-          <Box
-            component="form"
-            onSubmit={handleSubmit(handleFormSubmit, handleFormError)}
-          >
+          <Box component="form" onSubmit={handleSubmit(handleFormSubmit, handleFormError)}>
             <Grid container spacing={3}>
               {/* Project Selection */}
               <Grid item xs={12} md={6}>
@@ -451,12 +446,14 @@ export const OvertimeForm: React.FC<OvertimeFormProps> = ({
                   control={control}
                   render={({ field }) => (
                     <FileUpload
-                      {...field}
                       label="อัปโหลดรูปภาพ (ถ้ามี)"
                       accept="image/*"
-                      multiple
-                      maxFiles={5}
-                      helperText="อัปโหลดรูปภาพได้สูงสุด 5 รูป (ขนาดไม่เกิน 5 MB ต่อรูป)"
+                      helperText="อัปโหลดรูปภาพ (ขนาดไม่เกิน 5 MB)"
+                      onFileSelect={(file) => {
+                        const url = URL.createObjectURL(file);
+                        field.onChange([...(field.value || []), url]);
+                      }}
+                      onFileRemove={() => field.onChange([])}
                     />
                   )}
                 />
@@ -465,9 +462,7 @@ export const OvertimeForm: React.FC<OvertimeFormProps> = ({
               {/* Validation Error Summary */}
               {Object.keys(errors).length > 0 && (
                 <Grid item xs={12}>
-                  <Alert severity="error">
-                    กรุณาตรวจสอบข้อมูลให้ครบถ้วนและถูกต้อง
-                  </Alert>
+                  <Alert severity="error">กรุณาตรวจสอบข้อมูลให้ครบถ้วนและถูกต้อง</Alert>
                 </Grid>
               )}
 
@@ -490,8 +485,8 @@ export const OvertimeForm: React.FC<OvertimeFormProps> = ({
                         ? 'กำลังบันทึก...'
                         : 'กำลังอัปเดท...'
                       : mode === 'create'
-                      ? 'บันทึก OT'
-                      : 'อัปเดท OT'}
+                        ? 'บันทึก OT'
+                        : 'อัปเดท OT'}
                   </Button>
                 </Box>
               </Grid>

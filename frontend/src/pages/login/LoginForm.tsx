@@ -136,13 +136,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         control={control}
         render={({ field }) => (
           <FormControlLabel
-            control={
-              <Checkbox
-                {...field}
-                checked={field.value}
-                disabled={isFormLoading}
-              />
-            }
+            control={<Checkbox {...field} checked={field.value} disabled={isFormLoading} />}
             label={t('auth.rememberMe')}
             sx={{ mt: 1 }}
           />

@@ -123,7 +123,7 @@
     "newDC": "เพิ่มแรงงานรายวัน",
     "employeeId": "รหัสพนักงาน",
     "name": "ชื่อ-นามสกุล",
-    "skill": "ทักษะ",
+    "skill": "ตำแหน่ง",
     "hourlyRate": "ค่าแรงต่อชั่วโมง",
     "overtimeRate": "ค่าแรงโอที",
     "professionalRate": "ค่าวิชาชีพ",

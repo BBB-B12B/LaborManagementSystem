@@ -14,7 +14,7 @@ interface FeedbackState {
   title: string;
   message: string;
   onConfirm: (() => void) | null;
-  
+
   showFeedback: (
     type: FeedbackType,
     title: string,

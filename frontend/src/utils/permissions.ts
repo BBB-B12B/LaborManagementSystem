@@ -159,10 +159,7 @@ export class Permissions {
   /**
    * Check if user has access to specific project
    */
-  static canAccessProject(
-    user: User | null | undefined,
-    projectId: string
-  ): boolean {
+  static canAccessProject(user: User | null | undefined, projectId: string): boolean {
     if (!user) return false;
 
     // MD can access all projects
@@ -293,8 +290,7 @@ export function usePermissions(user: User | null | undefined) {
     canAccessSSOManagement: Permissions.canAccessSSOManagement(role),
     canAccessAllProjects: Permissions.canAccessAllProjects(role),
     isDepartmentRestricted: Permissions.isDepartmentRestricted(role),
-    canAccessProject: (projectId: string) =>
-      Permissions.canAccessProject(user, projectId),
+    canAccessProject: (projectId: string) => Permissions.canAccessProject(user, projectId),
     accessibleMenuItems: Permissions.getAccessibleMenuItems(role),
     roleName: role ? Permissions.getRoleName(role) : '',
     roleLevel: role ? Permissions.getRoleLevel(role) : 99,

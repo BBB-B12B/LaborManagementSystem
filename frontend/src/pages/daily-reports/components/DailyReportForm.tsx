@@ -142,11 +142,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
   const handleFormSubmit = async (data: DailyReportFormData) => {
     try {
       await onSubmit(data);
-      toast.success(
-        mode === 'create'
-          ? 'บันทึกข้อมูลสำเร็จ'
-          : 'อัปเดทข้อมูลสำเร็จ'
-      );
+      toast.success(mode === 'create' ? 'บันทึกข้อมูลสำเร็จ' : 'อัปเดทข้อมูลสำเร็จ');
     } catch (error) {
       toast.error(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
     }
@@ -185,7 +181,9 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
               <ProjectSelect
                 label="โครงการ/สังกัด *"
                 value={field.value || ''}
-                onChange={(value) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
+                onChange={(value) =>
+                  field.onChange(Array.isArray(value) ? (value[0] ?? '') : value)
+                }
                 error={!!errors.projectLocationId}
                 helperText={errors.projectLocationId?.message as string}
               />
@@ -399,9 +397,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
         {/* Validation Error Summary */}
         {Object.keys(errors).length > 0 && (
           <Grid item xs={12}>
-            <Alert severity="error">
-              กรุณาตรวจสอบข้อมูลให้ครบถ้วนและถูกต้อง
-            </Alert>
+            <Alert severity="error">กรุณาตรวจสอบข้อมูลให้ครบถ้วนและถูกต้อง</Alert>
           </Grid>
         )}
 
@@ -409,11 +405,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
             {onCancel && (
-              <Button
-                variant="outlined"
-                onClick={onCancel}
-                disabled={isLoading}
-              >
+              <Button variant="outlined" onClick={onCancel} disabled={isLoading}>
                 ยกเลิก
               </Button>
             )}

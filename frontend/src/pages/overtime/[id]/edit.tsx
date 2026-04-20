@@ -27,7 +27,11 @@ export default function OvertimeEditPage() {
   const queryClient = useQueryClient();
 
   // Fetch existing overtime record
-  const { data: record, isLoading, error } = useQuery({
+  const {
+    data: record,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['overtimeRecord', id],
     queryFn: () => overtimeService.getById(id as string),
     enabled: !!id,
@@ -35,8 +39,7 @@ export default function OvertimeEditPage() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: (data: OvertimeFormData) =>
-      overtimeService.update(id as string, data),
+    mutationFn: (data: OvertimeFormData) => overtimeService.update(id as string, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['work-records'] });
       queryClient.invalidateQueries({ queryKey: ['overtimeRecords'] });
@@ -68,9 +71,7 @@ export default function OvertimeEditPage() {
       <ProtectedRoute>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Alert severity="error">
-              ไม่พบข้อมูล OT หรือคุณไม่มีสิทธิ์เข้าถึง
-            </Alert>
+            <Alert severity="error">ไม่พบข้อมูล OT หรือคุณไม่มีสิทธิ์เข้าถึง</Alert>
           </Container>
         </Layout>
       </ProtectedRoute>

@@ -78,11 +78,11 @@ export const Navbar: React.FC = () => {
   const visibleMenuItems = !isClient
     ? menuItems
     : menuItems.filter((item) => {
-      if (!user) return false;
-      if (!user.roleCode) return true;
-      if (user.roleCode === 'GOD') return true;
-      return item.roles.includes(user.roleCode as UserRole);
-    });
+        if (!user) return false;
+        if (!user.roleCode) return true;
+        if (user.roleCode === 'GOD') return true;
+        return item.roles.includes(user.roleCode as UserRole);
+      });
 
   const handleNavigate = (path: string) => {
     // Prevent navigation to current path or double clicking
@@ -140,7 +140,8 @@ export const Navbar: React.FC = () => {
       {/* Nav Items */}
       <List sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, px: 0 }}>
         {visibleMenuItems.map((item) => {
-          const isActive = router.pathname === item.path || router.pathname.startsWith(`${item.path}/`);
+          const isActive =
+            router.pathname === item.path || router.pathname.startsWith(`${item.path}/`);
           return (
             <ListItemButton
               key={item.path}
@@ -177,7 +178,6 @@ export const Navbar: React.FC = () => {
           );
         })}
       </List>
-
     </Box>
   );
 };

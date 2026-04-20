@@ -13,11 +13,7 @@ import {
   CreateDailyContractorInput,
   UpdateDailyContractorInput,
   DCIncomeDetails,
-  CreateDCIncomeDetailsInput,
-  UpdateDCIncomeDetailsInput,
   DCExpenseDetails,
-  CreateDCExpenseDetailsInput,
-  UpdateDCExpenseDetailsInput,
   dcIncomeDetailsConverter,
   dcExpenseDetailsConverter,
   calculateFollowerAccommodation,
@@ -79,35 +75,15 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         passwordHash,
         name,
         skillId,
-        projectLocationIds: input.projectLocationIds || [],
-        phoneNumber: input.phoneNumber || undefined,
-        idCardNumber: input.idCardNumber || undefined,
-        address: input.address || undefined,
-        emergencyContact: input.emergencyContact || undefined,
-        emergencyPhone: input.emergencyPhone || undefined,
+        projectLocationId: input.projectLocationId || '',
+        dateOfBirth: input.dateOfBirth || null,
         isActive: input.isActive !== undefined ? input.isActive : true,
-        startDate: input.startDate,
-        endDate: input.endDate,
+        startDate: input.startDate || null,
+        endDate: input.endDate || null,
         createdAt: now,
         updatedAt: now,
         createdBy,
         updatedBy: createdBy,
-        // T-230: Defaults
-        dailyWageRate: input.dailyWageRate || 0,
-        professionalRate: input.professionalRate || 0,
-        phoneAllowance: input.phoneAllowance || 0,
-        mouDeductionRate: input.mouDeductionRate || 0,
-        nationality: input.nationality || 'ไทย',
-        // T-240: Defaults
-        otherIncome: input.otherIncome || 0,
-        housingFee: input.housingFee || 0,
-        followerCount: input.followerCount || 0,
-        refrigeratorFee: input.refrigeratorFee || 0,
-        soundSystemFee: input.soundSystemFee || 0,
-        tvFee: input.tvFee || 0,
-        laundryFee: input.laundryFee || 0,
-        airConFee: input.airConFee || 0,
-        otherDeduction: input.otherDeduction || 0,
       };
 
       // Enforce DocumentID = DC-EmployeeID (F-006 & T-230)
@@ -140,15 +116,6 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     input: UpdateDailyContractorInput,
     updatedBy: string
   ): Promise<DailyContractorDTO | null> {
-    const normalizeOptionalString = (
-      value?: string | null
-    ): string | null | undefined => {
-      if (value === undefined) return undefined;
-      if (value === null) return null;
-      const trimmed = value.trim();
-      return trimmed.length === 0 ? null : trimmed;
-    };
-
     try {
       const existing = await this.getById(id);
       if (!existing) {
@@ -204,33 +171,12 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         updateData.skillId = input.skillId.trim();
       }
 
-      if (input.projectLocationIds !== undefined) {
-        updateData.projectLocationIds = input.projectLocationIds;
+      if (input.projectLocationId !== undefined) {
+        updateData.projectLocationId = input.projectLocationId;
       }
 
-      const phoneNumber = normalizeOptionalString(input.phoneNumber);
-      if (phoneNumber !== undefined) {
-        updateData.phoneNumber = phoneNumber || undefined;
-      }
-
-      const idCardNumber = normalizeOptionalString(input.idCardNumber);
-      if (idCardNumber !== undefined) {
-        updateData.idCardNumber = idCardNumber || undefined;
-      }
-
-      const address = normalizeOptionalString(input.address);
-      if (address !== undefined) {
-        updateData.address = address || undefined;
-      }
-
-      const emergencyContact = normalizeOptionalString(input.emergencyContact);
-      if (emergencyContact !== undefined) {
-        updateData.emergencyContact = emergencyContact || undefined;
-      }
-
-      const emergencyPhone = normalizeOptionalString(input.emergencyPhone);
-      if (emergencyPhone !== undefined) {
-        updateData.emergencyPhone = emergencyPhone || undefined;
+      if (input.dateOfBirth !== undefined) {
+        updateData.dateOfBirth = input.dateOfBirth || null;
       }
 
       if (input.isActive !== undefined) {
@@ -238,30 +184,12 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       }
 
       if (input.startDate !== undefined) {
-        updateData.startDate = input.startDate || undefined;
+        updateData.startDate = input.startDate || null;
       }
 
       if (input.endDate !== undefined) {
-        updateData.endDate = input.endDate || undefined;
+        updateData.endDate = input.endDate || null;
       }
-
-      // T-230: Update new fields
-      if (input.dailyWageRate !== undefined) updateData.dailyWageRate = input.dailyWageRate;
-      if (input.professionalRate !== undefined) updateData.professionalRate = input.professionalRate;
-      if (input.phoneAllowance !== undefined) updateData.phoneAllowance = input.phoneAllowance;
-      if (input.mouDeductionRate !== undefined) updateData.mouDeductionRate = input.mouDeductionRate;
-      if (input.nationality !== undefined) updateData.nationality = input.nationality;
-
-      // T-240: Update new financial fields
-      if (input.otherIncome !== undefined) updateData.otherIncome = input.otherIncome;
-      if (input.housingFee !== undefined) updateData.housingFee = input.housingFee;
-      if (input.followerCount !== undefined) updateData.followerCount = input.followerCount;
-      if (input.refrigeratorFee !== undefined) updateData.refrigeratorFee = input.refrigeratorFee;
-      if (input.soundSystemFee !== undefined) updateData.soundSystemFee = input.soundSystemFee;
-      if (input.tvFee !== undefined) updateData.tvFee = input.tvFee;
-      if (input.laundryFee !== undefined) updateData.laundryFee = input.laundryFee;
-      if (input.airConFee !== undefined) updateData.airConFee = input.airConFee;
-      if (input.otherDeduction !== undefined) updateData.otherDeduction = input.otherDeduction;
 
       // Remove password from update data (we use passwordHash)
       delete (updateData as any).password;
@@ -372,8 +300,8 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     try {
       const results = await this.query([
         {
-          field: 'projectLocationIds',
-          operator: 'array-contains',
+          field: 'projectLocationId',
+          operator: '==',
           value: projectLocationId,
         },
       ]);
@@ -475,9 +403,11 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     dailyContractorId: string,
     data: {
       income?: {
-        hourlyRate: number;
+        dailyWageRate: number;
         professionalRate: number;
         phoneAllowancePerPeriod: number;
+        otherIncome?: number;
+        mouDeductionRate?: number;
       };
       expense?: {
         accommodationCostPerPeriod: number;
@@ -487,6 +417,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         tvCostPerPeriod: number;
         washingMachineCostPerPeriod: number;
         portableAcCostPerPeriod: number;
+        otherDeduction?: number;
       };
     },
     updatedBy: string
@@ -499,10 +430,12 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
 
     if (data.income) {
       const existingIncome = await this.getIncomeDetailsRecord(dailyContractorId);
-      const payload: CreateDCIncomeDetailsInput | UpdateDCIncomeDetailsInput = {
-        hourlyRate: data.income.hourlyRate,
+      const payload = {
+        dailyWageRate: data.income.dailyWageRate,
         professionalRate: data.income.professionalRate,
         phoneAllowance: data.income.phoneAllowancePerPeriod,
+        otherIncome: data.income.otherIncome ?? 0,
+        mouDeductionRate: data.income.mouDeductionRate ?? 0,
         effectiveDate: now,
       };
 
@@ -518,9 +451,11 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       } else {
         const docData: Omit<DCIncomeDetails, 'id'> = {
           dailyContractorId,
-          hourlyRate: payload.hourlyRate as number,
-          professionalRate: payload.professionalRate as number,
-          phoneAllowance: payload.phoneAllowance as number,
+          dailyWageRate: payload.dailyWageRate,
+          professionalRate: payload.professionalRate,
+          phoneAllowance: payload.phoneAllowance,
+          otherIncome: payload.otherIncome,
+          mouDeductionRate: payload.mouDeductionRate,
           isActive: true,
           effectiveDate: now,
           createdAt: now,
@@ -538,7 +473,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     if (data.expense) {
       const existingExpense = await this.getExpenseDetailsRecord(dailyContractorId);
       const followerAccommodation = calculateFollowerAccommodation(data.expense.followerCount);
-      const payload: CreateDCExpenseDetailsInput | UpdateDCExpenseDetailsInput = {
+      const payload = {
         accommodationCost: data.expense.accommodationCostPerPeriod,
         followerCount: data.expense.followerCount,
         refrigeratorCost: data.expense.refrigeratorCostPerPeriod,
@@ -546,6 +481,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         tvCost: data.expense.tvCostPerPeriod,
         washingMachineCost: data.expense.washingMachineCostPerPeriod,
         portableAcCost: data.expense.portableAcCostPerPeriod,
+        otherDeduction: data.expense.otherDeduction ?? 0,
         effectiveDate: now,
       };
 
@@ -562,14 +498,15 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       } else {
         const docData: Omit<DCExpenseDetails, 'id'> = {
           dailyContractorId,
-          accommodationCost: payload.accommodationCost as number,
-          followerCount: payload.followerCount as number,
+          accommodationCost: payload.accommodationCost,
+          followerCount: payload.followerCount,
           followerAccommodation,
           refrigeratorCost: payload.refrigeratorCost ?? 0,
           soundSystemCost: payload.soundSystemCost ?? 0,
           tvCost: payload.tvCost ?? 0,
           washingMachineCost: payload.washingMachineCost ?? 0,
           portableAcCost: payload.portableAcCost ?? 0,
+          otherDeduction: payload.otherDeduction ?? 0,
           isActive: true,
           effectiveDate: now,
           createdAt: now,

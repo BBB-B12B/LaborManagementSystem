@@ -1,7 +1,7 @@
 /**
  * Authentication Service
  * บริการจัดการการ Authentication
- * 
+ *
  * Handles login, logout, token management
  */
 
@@ -65,7 +65,7 @@ export const authService = {
         response.token = idToken;
       } catch (error) {
         console.error('Token exchange failed:', error);
-        // Fallback or re-throw? 
+        // Fallback or re-throw?
         // If exchange fails, we can't authenticate.
         throw error;
       }

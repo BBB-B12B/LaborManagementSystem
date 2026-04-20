@@ -77,7 +77,6 @@ export const useResponsive = () => {
      * Wide desktop
      */
     isXl: useMediaQuery(theme.breakpoints.only('xl')),
-
   };
 };
 

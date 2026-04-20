@@ -14,18 +14,36 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { CreateSocialSecurityRuleInput, SocialSecurityRule } from '@/services/socialSecurityRuleService';
+import {
+  CreateSocialSecurityRuleInput,
+  SocialSecurityRule,
+} from '@/services/socialSecurityRuleService';
 import { useToast } from '@/components/common/Toast';
 
 const ruleSchema = z.object({
   name: z.string().min(1, 'กรุณาระบุชื่อเกณฑ์'),
   conditionOperator: z.enum(['<=', '<', '>=', '>', '==']),
-  conditionValue: z.preprocess((val) => (val === '' ? undefined : Number(val)), z.number().min(0, 'ต้องเป็นตัวเลขมากกว่าหรือเท่ากับ 0')),
+  conditionValue: z.preprocess(
+    (val) => (val === '' ? undefined : Number(val)),
+    z.number().min(0, 'ต้องเป็นตัวเลขมากกว่าหรือเท่ากับ 0')
+  ),
   deductionType: z.enum(['percentage', 'fixed']),
-  deductionValue: z.preprocess((val) => (val === '' ? undefined : Number(val)), z.number().min(0, 'ต้องเป็นตัวเลขมากกว่าหรือเท่ากับ 0')),
-  minDeduction: z.preprocess((val) => (val === '' || val === null ? null : Number(val)), z.number().optional().nullable()),
-  maxDeduction: z.preprocess((val) => (val === '' || val === null ? null : Number(val)), z.number().optional().nullable()),
-  order: z.preprocess((val) => (val === '' ? undefined : Number(val)), z.number().min(1, 'ลำดับต้องเริ่มต้นที่ 1')),
+  deductionValue: z.preprocess(
+    (val) => (val === '' ? undefined : Number(val)),
+    z.number().min(0, 'ต้องเป็นตัวเลขมากกว่าหรือเท่ากับ 0')
+  ),
+  minDeduction: z.preprocess(
+    (val) => (val === '' || val === null ? null : Number(val)),
+    z.number().optional().nullable()
+  ),
+  maxDeduction: z.preprocess(
+    (val) => (val === '' || val === null ? null : Number(val)),
+    z.number().optional().nullable()
+  ),
+  order: z.preprocess(
+    (val) => (val === '' ? undefined : Number(val)),
+    z.number().min(1, 'ลำดับต้องเริ่มต้นที่ 1')
+  ),
   isActive: z.boolean().default(true),
 });
 
@@ -38,7 +56,12 @@ interface SocialSecurityRuleModalProps {
   initialData?: SocialSecurityRule | null;
 }
 
-export function SocialSecurityRuleModal({ open, onClose, onSave, initialData }: SocialSecurityRuleModalProps) {
+export function SocialSecurityRuleModal({
+  open,
+  onClose,
+  onSave,
+  initialData,
+}: SocialSecurityRuleModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
 
@@ -79,7 +102,7 @@ export function SocialSecurityRuleModal({ open, onClose, onSave, initialData }: 
   const onSubmit = async (data: RuleFormData) => {
     try {
       setIsSubmitting(true);
-      
+
       const payload: CreateSocialSecurityRuleInput = {
         name: data.name,
         conditionOperator: data.conditionOperator,
@@ -203,7 +226,11 @@ export function SocialSecurityRuleModal({ open, onClose, onSave, initialData }: 
                   <TextField
                     {...field}
                     type="number"
-                    label={deductionTypeWatcher === 'percentage' ? 'จำนวนเปอร์เซ็นต์ (เช่น 5)' : 'ยอดเงิน (บาท)'}
+                    label={
+                      deductionTypeWatcher === 'percentage'
+                        ? 'จำนวนเปอร์เซ็นต์ (เช่น 5)'
+                        : 'ยอดเงิน (บาท)'
+                    }
                     fullWidth
                     error={!!errors.deductionValue}
                     helperText={errors.deductionValue?.message}
@@ -273,7 +300,10 @@ export function SocialSecurityRuleModal({ open, onClose, onSave, initialData }: 
                     label="ลำดับคิวของกฎ (เช่น 1 = เช็คเป็นข้อแรก)"
                     fullWidth
                     error={!!errors.order}
-                    helperText={errors.order?.message || 'ระบบจะเช็คตามลำดับ ถ้ารายได้เข้าเงื่อนไขข้อไหนก่อน จะใช้ข้อนั้นคำนวณทันที'}
+                    helperText={
+                      errors.order?.message ||
+                      'ระบบจะเช็คตามลำดับ ถ้ารายได้เข้าเงื่อนไขข้อไหนก่อน จะใช้ข้อนั้นคำนวณทันที'
+                    }
                     onChange={(e) => field.onChange(e.target.value)}
                     value={field.value}
                   />
@@ -281,17 +311,12 @@ export function SocialSecurityRuleModal({ open, onClose, onSave, initialData }: 
               />
             </Grid>
 
-             <Grid item xs={12}>
+            <Grid item xs={12}>
               <Controller
                 name="isActive"
                 control={control}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    select
-                    label="สถานะ"
-                    fullWidth
-                  >
+                  <TextField {...field} select label="สถานะ" fullWidth>
                     <MenuItem value={true as any}>เปิดใช้งาน</MenuItem>
                     <MenuItem value={false as any}>ปิดใช้งานชั่วคราว</MenuItem>
                   </TextField>
@@ -299,13 +324,13 @@ export function SocialSecurityRuleModal({ open, onClose, onSave, initialData }: 
               />
             </Grid>
           </Grid>
-          
-          <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                  <strong>วิธีการทำงาน:</strong> ระบบจะใช้รายได้ทั้งหมดรวมแล้ว (Total Income) มาเช็คกับ "เงื่อนไข" ข้างต้น หากเข้าเงื่อนไข จะทำการหักเงินตาม "ผลลัพธ์" ที่ตั้งไว้
-              </Typography>
-          </Box>
 
+          <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>วิธีการทำงาน:</strong> ระบบจะใช้รายได้ทั้งหมดรวมแล้ว (Total Income) มาเช็คกับ
+              "เงื่อนไข" ข้างต้น หากเข้าเงื่อนไข จะทำการหักเงินตาม "ผลลัพธ์" ที่ตั้งไว้
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
           <Button

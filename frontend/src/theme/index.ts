@@ -202,9 +202,9 @@ const baseThemeOptions: ThemeOptions = {
       styleOverrides: {
         root: {
           '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within, & .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within':
-          {
-            outline: 'none !important',
-          },
+            {
+              outline: 'none !important',
+            },
         },
       },
     },

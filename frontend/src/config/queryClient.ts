@@ -79,7 +79,8 @@ export const queryKeys = {
   dailyContractors: {
     all: ['daily-contractors'] as const,
     lists: () => [...queryKeys.dailyContractors.all, 'list'] as const,
-    list: (filters: Record<string, any>) => [...queryKeys.dailyContractors.lists(), filters] as const,
+    list: (filters: Record<string, any>) =>
+      [...queryKeys.dailyContractors.lists(), filters] as const,
     details: () => [...queryKeys.dailyContractors.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.dailyContractors.details(), id] as const,
     active: () => [...queryKeys.dailyContractors.all, 'active'] as const,

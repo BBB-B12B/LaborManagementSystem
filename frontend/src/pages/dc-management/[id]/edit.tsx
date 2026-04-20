@@ -54,9 +54,7 @@ export default function EditDCPage() {
       router.push('/dc-management');
     },
     onError: (error: any) => {
-      showError(
-        error.message || 'เกิดข้อผิดพลาดในการอัปเดทข้อมูลแรงงานรายวัน'
-      );
+      showError(error.message || 'เกิดข้อผิดพลาดในการอัปเดทข้อมูลแรงงานรายวัน');
     },
   });
 
@@ -88,9 +86,7 @@ export default function EditDCPage() {
   if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="error">
-          เกิดข้อผิดพลาด: {(error as Error).message}
-        </Alert>
+        <Alert severity="error">เกิดข้อผิดพลาด: {(error as Error).message}</Alert>
         <Button startIcon={<ArrowBack />} onClick={handleCancel} sx={{ mt: 2 }}>
           กลับไปรายการแรงงานรายวัน
         </Button>
@@ -132,7 +128,7 @@ export default function EditDCPage() {
           name: dc.name,
           skillId: dc.skillId,
           startDate: dc.startDate,
-          projectLocationIds: dc.projectLocationIds,
+          projectLocationId: dc.projectLocationId,
           isActive: dc.isActive,
         }}
         onSubmit={handleSubmit}

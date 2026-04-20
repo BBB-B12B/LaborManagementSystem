@@ -126,7 +126,9 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
   /**
    * Get role color by level
    */
-  const getRoleColor = (level: number): 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' => {
+  const getRoleColor = (
+    level: number
+  ): 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' => {
     if (level <= 2) return 'error'; // MD, PD
     if (level <= 4) return 'warning'; // PM, PE
     if (level <= 6) return 'info'; // OE, SE
@@ -142,11 +144,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
       required={required}
     >
       <InputLabel>{label}</InputLabel>
-      <Select
-        value={value || ''}
-        onChange={handleChange}
-        label={label}
-      >
+      <Select value={value || ''} onChange={handleChange} label={label}>
         <MenuItem value="">
           <em>-- เลือกบทบาท --</em>
         </MenuItem>
@@ -156,11 +154,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
               <span style={{ flex: 1 }}>
                 {role.name} ({role.nameEnglish})
               </span>
-              <Chip
-                label={role.code}
-                size="small"
-                color={getRoleColor(role.level)}
-              />
+              <Chip label={role.code} size="small" color={getRoleColor(role.level)} />
             </div>
           </MenuItem>
         ))}

@@ -1,0 +1,19 @@
+﻿src/components/forms/AutoCompleteSearch.tsx(18,26): error TS7016: Could not find a declaration file for module 'lodash'. 'D:/LaborManagementSystem/node_modules/lodash/lodash.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/lodash` if it exists or add a new declaration (.d.ts) file containing `declare module 'lodash';`
+src/pages/daily-reports/[id]/history.tsx(21,108): error TS2307: Cannot find module '@mui/lab' or its corresponding type declarations.
+src/pages/daily-reports/[id]/history.tsx(25,10): error TS2724: '"@/utils/dateUtils"' has no exported member named 'formatDateTime'. Did you mean 'formatDate'?
+src/pages/daily-reports/components/DailyReportDashboard.tsx(69,39): error TS2554: Expected 4 arguments, but got 3.
+src/pages/daily-reports/components/DailyReportDashboard.tsx(91,29): error TS2339: Property 'entries' does not exist on type 'DailyReport'.
+src/pages/daily-reports/components/DailyReportDashboard.tsx(154,39): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+src/pages/daily-reports/components/DailyReportDashboard.tsx(232,33): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-reports/components/DailyReportDashboard.tsx(233,30): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-reports/mobile/create.tsx(75,39): error TS2554: Expected 4 arguments, but got 3.
+src/pages/daily-reports/mobile/create.tsx(100,29): error TS2339: Property 'entries' does not exist on type 'DailyReport'.
+src/pages/daily-reports/mobile/create.tsx(139,39): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+src/pages/daily-reports/mobile/create.tsx(199,18): error TS2741: Property 'date' is missing in type '{ open: boolean; onClose: () => void; onSave: (entryData: Omit<DailyReportEntry, "id" | "createdAt" | "totalHours" | "netHours">) => Promise<void>; projectId: string; initialData: DailyReportEntry | undefined; }' but required in type 'DailyReportEntryModalProps'.
+src/pages/daily-reports/mobile/DailyReportEntryModal.tsx(182,25): error TS2353: Object literal may only specify known properties, and 'startTime' does not exist in type 'Omit<DailyReportEntry, "id" | "createdAt" | "totalHours" | "netHours">'.
+src/pages/overtime/[id]/history.tsx(21,108): error TS2307: Cannot find module '@mui/lab' or its corresponding type declarations.
+src/pages/overtime/[id]/history.tsx(26,10): error TS2724: '"@/utils/dateUtils"' has no exported member named 'formatDateTime'. Did you mean 'formatDate'?
+src/pages/overtime/components/OvertimeForm.tsx(457,23): error TS2322: Type '{ label: string; accept: string; multiple: true; maxFiles: number; helperText: string; onChange: (...event: any[]) => void; onBlur: Noop; value: string[]; disabled?: boolean | undefined; name: "imageUrls"; ref: RefCallBack; }' is not assignable to type 'IntrinsicAttributes & FileUploadProps & RefAttributes<HTMLInputElement>'.
+  Property 'multiple' does not exist on type 'IntrinsicAttributes & FileUploadProps & RefAttributes<HTMLInputElement>'.
+src/pages/scan-data-monitoring/index.tsx(83,36): error TS2307: Cannot find module '../labor/scan-data-monitoring/components/ScanDataEditDialog' or its corresponding type declarations.

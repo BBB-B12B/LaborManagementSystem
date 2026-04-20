@@ -24,6 +24,8 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Add,
@@ -52,7 +54,6 @@ import { Layout, ProtectedRoute } from '@/components/layout';
 import { DCModal } from './components/DCModal';
 import { DCImportDialog } from './components/DCImportDialog';
 import type { DCCreateInput, DCEditInput } from '@/validation/dcSchema';
-import { getSkills } from '@/services/skillService';
 
 const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: T): T => {
   const toStringOrEmpty = (value?: string | null) => {
@@ -76,10 +77,7 @@ const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: 
     username: toStringOrEmpty(payload.username as string | null | undefined),
     password: toStringOrEmpty(payload.password as string | null | undefined),
     skillId: toStringOrEmpty(payload.skillId),
-
-    projectLocationIds: Array.isArray(payload.projectLocationIds)
-      ? payload.projectLocationIds.filter(Boolean)
-      : [],
+    projectLocationId: toStringOrEmpty(payload.projectLocationId),
     startDate: toIsoOrEmpty(payload.startDate as Date | string | null | undefined) as any,
     isActive: payload.isActive ?? true,
   };
@@ -118,17 +116,6 @@ export default function DCManagementPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<DCImportSummary | null>(null);
 
-  // Fetch skills for display mapping
-  const { data: skills = [] } = useQuery({
-    queryKey: ['skills'],
-    queryFn: getSkills,
-  });
-
-  const skillNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    skills.forEach((skill) => map.set(skill.id, skill.name));
-    return map;
-  }, [skills]);
 
   // Fetch all projects for display mapping
   const { data: projects = [] } = useQuery({
@@ -243,7 +230,7 @@ export default function DCManagementPage() {
   const handleCreateDC = () => {
     setDrawerMode('create');
     setEditingId(null);
-    setDrawerInitialValues({ isActive: true, projectLocationIds: [] });
+    setDrawerInitialValues({ isActive: true, projectLocationId: '' });
     setDrawerLoading(false);
     setDrawerOpen(true);
   };
@@ -253,12 +240,32 @@ export default function DCManagementPage() {
     setDrawerLoading(true);
     setDrawerOpen(true);
     try {
-      const detail = await dcService.getDCById(contractor.id);
+      const [detail, compensation] = await Promise.all([
+        dcService.getDCById(contractor.id),
+        dcService.getDCCompensation(contractor.id).catch(() => null)
+      ]);
       setEditingId(contractor.id);
+      
+      const income = compensation?.income as any;
+      const expense = compensation?.expense as any;
+
       setDrawerInitialValues({
         ...detail,
         startDate: detail.startDate ? new Date(detail.startDate) : undefined,
-        projectLocationIds: detail.projectLocationIds || [],
+        projectLocationId: detail.projectLocationId || '',
+        dailyWageRate: income?.dailyWageRate ?? '',
+        professionalRate: income?.professionalRate ?? '',
+        phoneAllowance: income?.phoneAllowancePerPeriod ?? '',
+        otherIncome: income?.otherIncome ?? '',
+        mouDeductionRate: income?.mouDeductionRate ?? '',
+        housingFee: expense?.accommodationCostPerPeriod ?? '',
+        followerCount: expense?.followerCount ?? '',
+        refrigeratorFee: expense?.refrigeratorCostPerPeriod ?? '',
+        soundSystemFee: expense?.soundSystemCostPerPeriod ?? '',
+        tvFee: expense?.tvCostPerPeriod ?? '',
+        laundryFee: expense?.washingMachineCostPerPeriod ?? '',
+        airConFee: expense?.portableAcCostPerPeriod ?? '',
+        otherDeduction: expense?.otherDeduction ?? '',
       });
     } catch (error: any) {
       showError(error.message || 'ไม่สามารถโหลดข้อมูลแรงงานรายวันได้');
@@ -322,48 +329,29 @@ export default function DCManagementPage() {
       field: 'skillId',
       headerName: 'ตำแหน่ง',
       width: 150,
-      renderCell: (params: GridRenderCellParams) => {
-        const skillId = params.value as string | undefined;
-        const label = skillId ? skillNameMap.get(skillId) || skillId : '-';
-        return <Chip label={label} size="small" variant="outlined" />;
-      },
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">{params.value || 'ไม่ระบุ'}</Typography>
+      ),
     },
     {
       field: 'department',
       headerName: 'ส่วนงาน/หน่วยงาน',
       width: 250,
-      valueGetter: (params) => params.row.projectLocationIds,
+      valueGetter: (params) => params.row.projectLocationId,
       renderCell: (params: GridRenderCellParams) => {
-        const ids = (params.value as string[]) || [];
-        const departments = Array.from(new Set(ids.map(id => projectDepartmentMap.get(id)).filter(Boolean)));
+        const id = params.value as string;
+        const department = id ? projectDepartmentMap.get(id) : null;
 
-        if (departments.length === 0) return <Typography variant="caption" color="text.secondary">ไม่ระบุ</Typography>;
+        if (!department) return <Typography variant="caption" color="text.secondary">ไม่ระบุ</Typography>;
 
         return (
-          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', py: 1 }}>
-            {departments.map((dept, index) => (
-              <Chip key={index} label={dept} size="small" color="primary" variant="outlined" />
-            ))}
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+            <Chip label={department} size="small" color="primary" variant="outlined" />
           </Box>
         );
       },
     },
 
-    {
-      field: 'projectCount',
-      headerName: 'จำนวนโครงการ',
-      width: 130,
-      align: 'center',
-      valueGetter: (params) => params.row.projectLocationIds?.length || 0,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={`${params.value} โครงการ`}
-          size="small"
-          color="primary"
-          variant="outlined"
-        />
-      ),
-    },
     {
       field: 'isActive',
       headerName: 'สถานะ',
@@ -484,7 +472,7 @@ export default function DCManagementPage() {
             <SkillSelect
               value={filters.skillId || ''}
               onChange={handleSkillChange}
-              label="กรองทักษะ"
+              label="กรองตำแหน่ง"
             />
           </Grid>
 

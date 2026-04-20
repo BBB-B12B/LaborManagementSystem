@@ -1,27 +1,22 @@
 /**
  * Skill Select Component
- * คอมโพเนนต์เลือกทักษะ
+ * คอมโพเนนต์เลือกตำแหน่ง (Text อิสระ)
  *
- * Dropdown for selecting labor skills
- * Used in DC management (FR-DC-002)
+ * Autocomplete for typing or selecting labor positions
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
-  SelectChangeEvent,
+  Autocomplete,
+  TextField,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { getSkills, type Skill } from '@/services/skillService';
+import { getActiveDCs } from '@/services/dcService';
 
 export interface SkillSelectProps {
   label?: string;
-  value: string | null; // Skill ID
-  onChange: (skillId: string | null) => void;
+  value: string | null;
+  onChange: (skillText: string | null) => void;
   error?: boolean;
   helperText?: string;
   disabled?: boolean;
@@ -30,13 +25,8 @@ export interface SkillSelectProps {
   size?: 'small' | 'medium';
 }
 
-/**
- * Skill Select component
- * - Lists all active skills
- * - Shows Thai name (English name as subtitle)
- */
 export const SkillSelect: React.FC<SkillSelectProps> = ({
-  label = 'ทักษะ',
+  label = 'ตำแหน่ง',
   value,
   onChange,
   error = false,
@@ -46,52 +36,52 @@ export const SkillSelect: React.FC<SkillSelectProps> = ({
   fullWidth = true,
   size = 'medium',
 }) => {
-  /**
-   * Fetch skills from API
-   */
-  const { data: skills = [], isLoading } = useQuery({
-    queryKey: ['skills'],
-    queryFn: getSkills,
+  // Fetch active DCs to extract unique skills
+  const { data: dcs = [], isLoading } = useQuery({
+    queryKey: ['dailyContractors-active'],
+    queryFn: getActiveDCs,
   });
 
-  /**
-   * Handle selection change
-   */
-  const handleChange = (event: SelectChangeEvent<string>) => {
-    const selectedId = event.target.value;
-    onChange(selectedId || null);
-  };
+  const uniqueSkills = useMemo(() => {
+    const skillSet = new Set<string>();
+    dcs.forEach((dc) => {
+      if (dc.skillId) {
+        const val = dc.skillId.trim();
+        // Ignore legacy Firestore IDs (20 chars alphanumeric) and legacy POS_XXX codes
+        if (val.length === 20 && /^[a-zA-Z0-9]{20}$/.test(val)) return;
+        if (/^POS_\d{3,}$/.test(val)) return;
+        
+        skillSet.add(val);
+      }
+    });
+    return Array.from(skillSet).sort();
+  }, [dcs]);
 
   return (
-    <FormControl
+    <Autocomplete
+      freeSolo
       fullWidth={fullWidth}
-      error={error}
       disabled={disabled || isLoading}
       size={size}
-      required={required}
-    >
-      <InputLabel>{label}</InputLabel>
-      <Select
-        value={value || ''}
-        onChange={handleChange}
-        label={label}
-      >
-        <MenuItem value="">
-          <em>-- เลือกทักษะ --</em>
-        </MenuItem>
-        {skills.map((skill) => (
-          <MenuItem key={skill.id} value={skill.id}>
-            {skill.name}
-            {skill.nameEnglish && (
-              <span style={{ marginLeft: 8, fontSize: '0.875rem', color: '#666' }}>
-                ({skill.nameEnglish})
-              </span>
-            )}
-          </MenuItem>
-        ))}
-      </Select>
-      {helperText && <FormHelperText>{helperText}</FormHelperText>}
-    </FormControl>
+      options={uniqueSkills}
+      value={value || ''}
+      onChange={(_, newValue) => {
+        onChange(newValue || null);
+      }}
+      onInputChange={(_, newInputValue) => {
+        onChange(newInputValue || null);
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label={label}
+          required={required}
+          error={error}
+          helperText={helperText}
+          placeholder="พิมพ์เพื่อเพิ่ม หรือเลือกข้างต้น"
+        />
+      )}
+    />
   );
 };
 

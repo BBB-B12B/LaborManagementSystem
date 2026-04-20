@@ -17,6 +17,7 @@ export interface DCExpenseDetails {
   tvCost: number; // ค่าทีวี
   washingMachineCost: number; // ค่าเครื่องซักผ้า
   portableAcCost: number; // ค่าแอร์เคลื่อนที่
+  otherDeduction: number; // รายหักอื่นๆ
   isActive: boolean;
   effectiveDate: Date;
   createdAt: Date;
@@ -34,6 +35,7 @@ export interface CreateDCExpenseDetailsInput {
   tvCost?: number;
   washingMachineCost?: number;
   portableAcCost?: number;
+  otherDeduction?: number;
   effectiveDate: Date;
 }
 
@@ -45,6 +47,7 @@ export interface UpdateDCExpenseDetailsInput {
   tvCost?: number;
   washingMachineCost?: number;
   portableAcCost?: number;
+  otherDeduction?: number;
   effectiveDate?: Date;
   isActive?: boolean;
 }
@@ -72,6 +75,7 @@ export const dcExpenseDetailsConverter = {
       tvCost: details.tvCost,
       washingMachineCost: details.washingMachineCost,
       portableAcCost: details.portableAcCost,
+      otherDeduction: details.otherDeduction || 0,
       isActive: details.isActive,
       effectiveDate: details.effectiveDate,
       createdAt: details.createdAt,
@@ -93,6 +97,7 @@ export const dcExpenseDetailsConverter = {
       tvCost: data.tvCost || 0,
       washingMachineCost: data.washingMachineCost || 0,
       portableAcCost: data.portableAcCost || 0,
+      otherDeduction: data.otherDeduction || 0,
       isActive: data.isActive !== undefined ? data.isActive : true,
       effectiveDate: data.effectiveDate.toDate(),
       createdAt: data.createdAt.toDate(),

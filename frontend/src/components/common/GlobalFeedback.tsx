@@ -13,15 +13,7 @@ import HighlightOffIcon from '@mui/icons-material/HighlightOff';
 import { useFeedbackStore } from '@/store/feedbackStore';
 
 export const GlobalFeedback: React.FC = () => {
-  const {
-    isLoading,
-    isOpen,
-    type,
-    title,
-    message,
-    hideFeedback,
-    onConfirm,
-  } = useFeedbackStore();
+  const { isLoading, isOpen, type, title, message, hideFeedback, onConfirm } = useFeedbackStore();
 
   const handleClose = () => {
     hideFeedback();
@@ -70,21 +62,14 @@ export const GlobalFeedback: React.FC = () => {
           {/* Icon */}
           <Box sx={{ mb: 3 }}>
             {isSuccess ? (
-              <CheckCircleOutlineIcon
-                sx={{ fontSize: 96, color: 'success.main' }}
-              />
+              <CheckCircleOutlineIcon sx={{ fontSize: 96, color: 'success.main' }} />
             ) : (
-              <HighlightOffIcon
-                sx={{ fontSize: 96, color: 'error.main' }}
-              />
+              <HighlightOffIcon sx={{ fontSize: 96, color: 'error.main' }} />
             )}
           </Box>
 
           {/* Title */}
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}
-          >
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
             {title || (isSuccess ? 'ทำรายการสำเร็จ' : 'เกิดข้อผิดพลาด')}
           </Typography>
 

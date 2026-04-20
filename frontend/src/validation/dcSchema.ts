@@ -74,23 +74,16 @@ export const dcCreateSchema = z
 
     password: password.optional().nullable(),
 
-    // Skill
+    // Skill (Position)
     skillId: optionalText(1, 100),
+
+    dateOfBirth: optionalDate,
 
     // Employment
     startDate: optionalDate,
 
     // Project Access
-    projectLocationIds: z.preprocess(
-      (val) => {
-        if (Array.isArray(val)) return val;
-        if (typeof val === 'string') {
-          return val ? [val] : [];
-        }
-        return val ?? [];
-      },
-      baseArray(z.string()).default([])
-    ),
+    projectLocationId: optionalText(1, 100),
 
     // Status
     isActive: baseBoolean.default(true),
@@ -100,7 +93,6 @@ export const dcCreateSchema = z
     professionalRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าวิชาชีพ').default(0)),
     phoneAllowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าโทรศัพท์').default(0)),
     mouDeductionRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าหัก MOU').default(0)),
-    nationality: z.string().default('ไทย'),
 
     // T-240: Detailed Financial Fields
     otherIncome: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('รายได้อื่นๆ').default(0)),
@@ -143,23 +135,16 @@ export const dcEditSchema = z
 
     password: password.optional().nullable(),
 
-    // Skill
+    // Skill (Position)
     skillId: optionalText(1, 100),
+
+    dateOfBirth: optionalDate,
 
     // Employment
     startDate: optionalDate,
 
     // Project Access
-    projectLocationIds: z.preprocess(
-      (val) => {
-        if (Array.isArray(val)) return val;
-        if (typeof val === 'string') {
-          return val ? [val] : [];
-        }
-        return val ?? [];
-      },
-      baseArray(z.string()).default([])
-    ),
+    projectLocationId: optionalText(1, 100),
 
     // Status
     isActive: baseBoolean.optional(),
@@ -169,7 +154,6 @@ export const dcEditSchema = z
     professionalRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าวิชาชีพ').optional()),
     phoneAllowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าโทรศัพท์').optional()),
     mouDeductionRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าหัก MOU').optional()),
-    nationality: z.string().optional(),
 
     // T-240: Detailed Financial Fields
     otherIncome: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('รายได้อื่นๆ').optional()),

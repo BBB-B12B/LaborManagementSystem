@@ -53,16 +53,16 @@ const getNextProjectCodeFromList = (items: Project[]): string => {
 export default function ProjectListPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const {
-    confirmDelete: showDeleteConfirm,
-    ConfirmDialog: DeleteConfirmDialog,
-  } = useDeleteConfirmDialog();
+  const { confirmDelete: showDeleteConfirm, ConfirmDialog: DeleteConfirmDialog } =
+    useDeleteConfirmDialog();
 
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
-  const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<ProjectFormData> | undefined>(undefined);
+  const [drawerInitialValues, setDrawerInitialValues] = useState<
+    Partial<ProjectFormData> | undefined
+  >(undefined);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
@@ -186,9 +186,7 @@ export default function ProjectListPage() {
       field: 'department',
       headerName: 'สังกัด',
       width: 120,
-      renderCell: (params) => (
-        <Chip label={params.value || '-'} size="small" color="default" />
-      ),
+      renderCell: (params) => <Chip label={params.value || '-'} size="small" color="default" />,
     },
     {
       field: 'status',
@@ -225,10 +223,7 @@ export default function ProjectListPage() {
             <IconButton
               size="small"
               onClick={() =>
-                handleDelete(
-                  params.id as string,
-                  params.row.projectName || params.row.code
-                )
+                handleDelete(params.id as string, params.row.projectName || params.row.code)
               }
               color="error"
             >
@@ -245,14 +240,11 @@ export default function ProjectListPage() {
       <Layout>
         <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
           {/* <BackButton href="/management" /> removed as per global header change */}
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box
+            sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
             <Typography variant="h4">จัดการโครงการ</Typography>
-            <Button
-              variant="contained"
-              color="info"
-              startIcon={<AddIcon />}
-              onClick={handleCreate}
-            >
+            <Button variant="contained" color="info" startIcon={<AddIcon />} onClick={handleCreate}>
               สร้างโครงการใหม่
             </Button>
           </Box>
@@ -288,7 +280,7 @@ export default function ProjectListPage() {
           <DeleteConfirmDialog />
 
           <ProjectDrawer
-            key={drawerMode === 'edit' ? editingProjectId ?? 'edit' : 'create'}
+            key={drawerMode === 'edit' ? (editingProjectId ?? 'edit') : 'create'}
             open={drawerOpen}
             onClose={handleCloseDrawer}
             mode={drawerMode}

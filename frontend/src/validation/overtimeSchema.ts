@@ -242,7 +242,9 @@ export const getOTPeriodLabel = (period: 'morning' | 'noon' | 'evening'): string
 /**
  * Get OT period time range
  */
-export const getOTPeriodRange = (period: 'morning' | 'noon' | 'evening'): { start: string; end: string } => {
+export const getOTPeriodRange = (
+  period: 'morning' | 'noon' | 'evening'
+): { start: string; end: string } => {
   return {
     start: OT_PERIODS[period].start,
     end: OT_PERIODS[period].end,

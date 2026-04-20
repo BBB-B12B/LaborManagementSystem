@@ -57,20 +57,26 @@ export class BaseCrudService<T extends { id: string }> {
         const orderBy = options?.orderBy || 'createdAt';
         const orderDirection = options?.orderDirection || 'desc';
 
-        // [P1] Scalability Optimization: Use count aggregation O(1)
-        const totalResult = await this.collection.count().get();
-        const total = totalResult.data().count;
-
-        let query = this.collection.orderBy(orderBy, orderDirection);
-
-        const offset = (page - 1) * pageSize;
-        if (offset > 0) {
-            query = query.offset(offset) as any;
-        }
-
-        query = query.limit(pageSize) as any;
-
         try {
+            // [P1] Scalability Optimization: Use count aggregation O(1)
+            let total = 0;
+            try {
+                const totalResult = await this.collection.count().get();
+                total = totalResult.data().count;
+            } catch (countError: any) {
+                console.warn(`[BaseCrudService] Error getting count for ${this.collectionName || 'collection'}, falling back to get().size:`, countError.message);
+                const snapshot = await this.collection.get();
+                total = snapshot.size;
+            }
+
+            let query = this.collection.orderBy(orderBy, orderDirection);
+
+            const offset = (page - 1) * pageSize;
+            if (offset > 0) {
+                query = query.offset(offset) as any;
+            }
+
+            query = query.limit(pageSize) as any;
             const snapshot = await query.get();
             const items = snapshot.docs.map((doc) => doc.data());
 
@@ -268,7 +274,13 @@ export class BaseCrudService<T extends { id: string }> {
             });
         }
 
-        const totalResult = await query.count().get();
-        return totalResult.data().count;
+        try {
+            const totalResult = await query.count().get();
+            return totalResult.data().count;
+        } catch (error: any) {
+            console.warn(`[BaseCrudService] Error getting count, falling back to get().size:`, error.message);
+            const snapshot = await query.get();
+            return snapshot.size;
+        }
     }
 }

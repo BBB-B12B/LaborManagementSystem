@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import {
-  Box,
-  Button,
-  Container,
-  Typography,
-  Paper,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
+import { Box, Button, Container, Typography, Paper, IconButton, Tooltip } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -126,37 +118,37 @@ export default function SocialSecurityRulesPage() {
       renderCell: (params: GridRenderCellParams<SocialSecurityRule>) => {
         const { deductionType, deductionValue, minDeduction, maxDeduction } = params.row;
         if (deductionType === 'fixed') return `คงที่ ${formatNumber(deductionValue)} ฿`;
-        
+
         let txt = `${deductionValue}%`;
         if (minDeduction && maxDeduction) {
-            txt += ` (ขั้นต่ำ ${minDeduction} - สูงสุด ${maxDeduction})`;
+          txt += ` (ขั้นต่ำ ${minDeduction} - สูงสุด ${maxDeduction})`;
         } else if (maxDeduction) {
-            txt += ` (ไม่เกิน ${maxDeduction})`;
+          txt += ` (ไม่เกิน ${maxDeduction})`;
         } else if (minDeduction) {
-            txt += ` (ไม่ต่ำกว่า ${minDeduction})`;
+          txt += ` (ไม่ต่ำกว่า ${minDeduction})`;
         }
         return txt;
       },
     },
     {
-        field: 'isActive',
-        headerName: 'สถานะ',
-        width: 120,
-        renderCell: (params: GridRenderCellParams<SocialSecurityRule>) => (
-            <Box
-            sx={{
-                bgcolor: params.row.isActive ? 'success.light' : 'error.light',
-                color: params.row.isActive ? 'success.dark' : 'error.dark',
-                px: 2,
-                py: 0.5,
-                borderRadius: 1,
-                fontSize: '0.875rem',
-                fontWeight: 'bold'
-            }}
-            >
-            {params.row.isActive ? 'ใช้งาน' : 'ปืด'}
-            </Box>
-        )
+      field: 'isActive',
+      headerName: 'สถานะ',
+      width: 120,
+      renderCell: (params: GridRenderCellParams<SocialSecurityRule>) => (
+        <Box
+          sx={{
+            bgcolor: params.row.isActive ? 'success.light' : 'error.light',
+            color: params.row.isActive ? 'success.dark' : 'error.dark',
+            px: 2,
+            py: 0.5,
+            borderRadius: 1,
+            fontSize: '0.875rem',
+            fontWeight: 'bold',
+          }}
+        >
+          {params.row.isActive ? 'ใช้งาน' : 'ปืด'}
+        </Box>
+      ),
     },
     {
       field: 'actions',
@@ -190,7 +182,9 @@ export default function SocialSecurityRulesPage() {
               <ArrowBackIcon />
             </IconButton>
             <Box sx={{ flexGrow: 1 }}>
-              <Typography variant="h4" fontWeight="bold">การจัดการเกณฑ์ประกันสังคม</Typography>
+              <Typography variant="h4" fontWeight="bold">
+                การจัดการเกณฑ์ประกันสังคม
+              </Typography>
               <Typography variant="subtitle1" color="text.secondary">
                 กำหนดกฎการหักเงินประกันสังคมจากรายได้รวม (Total Income) ตามลำดับความสำคัญ
               </Typography>

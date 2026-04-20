@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { DailyReportDashboard } from './components/DailyReportDashboard';
 import { Layout, ProtectedRoute } from '@/components/layout';
@@ -6,7 +5,7 @@ import { Container } from '@mui/material';
 
 /**
  * Unified Daily Report Page (Desktop & Mobile)
- * 
+ *
  * Replaces the legacy "WorkRecordComposerPage" (Card UI).
  * Now renders the Unified Daily Report View for all devices.
  */

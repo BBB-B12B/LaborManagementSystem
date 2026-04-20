@@ -7,15 +7,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import {
-  Box,
-  Container,
-  Paper,
-  Typography,
-  Button,
-  Alert,
-  Collapse,
-} from '@mui/material';
+import { Box, Container, Paper, Typography, Button, Alert, Collapse } from '@mui/material';
 import {
   Error as ErrorIcon,
   Refresh as RefreshIcon,
@@ -179,10 +171,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             >
               ลองใหม่
             </Button>
-            <Button
-              variant="outlined"
-              onClick={this.handleReload}
-            >
+            <Button variant="outlined" onClick={this.handleReload}>
               โหลดหน้าใหม่
             </Button>
           </Box>
@@ -278,11 +267,7 @@ export const SimpleErrorFallback: React.FC<{ error?: Error }> = ({ error }) => (
     <Typography variant="h6" gutterBottom>
       เกิดข้อผิดพลาด
     </Typography>
-    {error && (
-      <Typography variant="body2">
-        {error.message}
-      </Typography>
-    )}
+    {error && <Typography variant="body2">{error.message}</Typography>}
   </Box>
 );
 

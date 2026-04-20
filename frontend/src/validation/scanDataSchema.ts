@@ -29,12 +29,7 @@ export const SeverityEnum = z.enum(['low', 'medium', 'high']);
 export type Severity = z.infer<typeof SeverityEnum>;
 
 // Status Enum
-export const DiscrepancyStatusEnum = z.enum([
-  'pending',
-  'verified',
-  'fixed',
-  'ignored',
-]);
+export const DiscrepancyStatusEnum = z.enum(['pending', 'verified', 'fixed', 'ignored']);
 export type DiscrepancyStatus = z.infer<typeof DiscrepancyStatusEnum>;
 
 // Resolution Action Enum
@@ -67,19 +62,19 @@ const hasAllowedExtension = (fileName: string): boolean => {
 
 export const ScanDataUploadSchema = z.object({
   file: z
-    .custom<File>((v) => v instanceof File || (v && typeof v === 'object' && 'name' in v && 'size' in v), {
-      message: 'กรุณาเลือกไฟล์',
-    })
+    .custom<File>(
+      (v) => v instanceof File || (v && typeof v === 'object' && 'name' in v && 'size' in v),
+      {
+        message: 'กรุณาเลือกไฟล์',
+      }
+    )
     .refine((file) => file.size <= MAX_UPLOAD_SIZE_BYTES, {
       message: 'ขนาดไฟล์ต้องไม่เกิน 100MB',
     })
     .refine(
       (file) => {
         const mime = file.type?.toLowerCase() ?? '';
-        return (
-          ALLOWED_MIME_TYPES.includes(mime) ||
-          hasAllowedExtension(file.name)
-        );
+        return ALLOWED_MIME_TYPES.includes(mime) || hasAllowedExtension(file.name);
       },
       {
         message: 'รองรับเฉพาะไฟล์ .dat, .txt, .xlsx หรือ .xls',
@@ -194,9 +189,7 @@ export function validateExcelColumns(headers: string[]): {
   missingColumns: string[];
 } {
   const requiredColumns = ['EmployeeNumber', 'Date'];
-  const normalizedHeaders = headers.map((h) =>
-    h.trim().toLowerCase().replace(/[_\s]/g, '')
-  );
+  const normalizedHeaders = headers.map((h) => h.trim().toLowerCase().replace(/[_\s]/g, ''));
 
   const missingColumns: string[] = [];
 
@@ -258,9 +251,7 @@ export function getSeverityColor(severity: Severity): 'error' | 'warning' | 'inf
 /**
  * แปลง discrepancy type เป็นสี
  */
-export function getDiscrepancyTypeColor(
-  type: DiscrepancyType
-): 'error' | 'warning' | 'info' {
+export function getDiscrepancyTypeColor(type: DiscrepancyType): 'error' | 'warning' | 'info' {
   const colors: Record<DiscrepancyType, 'error' | 'warning' | 'info'> = {
     Type1: 'error', // แดง
     Type2: 'warning', // เหลือง

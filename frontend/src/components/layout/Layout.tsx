@@ -1,5 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Container,
+  IconButton,
+  Menu,
+  MenuItem,
+  Stack,
+  Typography,
+  Button,
+} from '@mui/material';
 import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
@@ -70,8 +80,8 @@ const Topbar: React.FC = () => {
               textTransform: 'none',
               fontSize: '1rem',
               '&:hover': {
-                backgroundColor: 'rgba(0,0,0,0.04)'
-              }
+                backgroundColor: 'rgba(0,0,0,0.04)',
+              },
             }}
           >
             ย้อนกลับ

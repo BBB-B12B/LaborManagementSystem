@@ -11,12 +11,12 @@ export interface LoadingSpinnerProps {
    * Loading message
    */
   message?: string;
-  
+
   /**
    * Size of spinner (small, medium, large)
    */
   size?: 'small' | 'medium' | 'large';
-  
+
   /**
    * Show full page overlay
    */
@@ -35,13 +35,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   fullPage = false,
 }) => {
   const content = (
-    <Box
-      display="flex"
-      flexDirection="column"
-      alignItems="center"
-      justifyContent="center"
-      gap={2}
-    >
+    <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" gap={2}>
       <CircularProgress size={sizeMap[size]} />
       {message && (
         <Typography variant="body2" color="text.secondary">

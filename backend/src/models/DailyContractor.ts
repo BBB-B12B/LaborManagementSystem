@@ -2,8 +2,13 @@
  * DailyContractor Model
  * แรงงานรายวัน (DC)
  *
- * Description: Daily laborers who work on projects. Each DC has specific skills and can be assigned to multiple projects.
+ * Description: Daily laborers who work on projects. Each DC has specific skill (ตำแหน่ง)
+ * and can be assigned to multiple projects.
  * Firestore Collection: dailyContractors
+ *
+ * NOTE: Financial data (income/expense) is stored in sub-collections:
+ *   - dcIncomeDetails
+ *   - dcExpenseDetails
  */
 
 export interface DailyContractor {
@@ -13,12 +18,8 @@ export interface DailyContractor {
   passwordHash?: string;
   name: string;
   skillId: string;
-  projectLocationIds: string[];
-  phoneNumber?: string | null;
-  idCardNumber?: string | null;
-  address?: string | null;
-  emergencyContact?: string | null;
-  emergencyPhone?: string | null;
+  projectLocationId?: string;
+  dateOfBirth?: Date | null;
   isActive: boolean;
   startDate?: Date | null;
   endDate?: Date | null;
@@ -27,22 +28,6 @@ export interface DailyContractor {
   createdBy: string;
   updatedBy: string;
   idHistory?: string[]; // History of previous employeeIds
-  // New Fields for Wage Configuration (T-230)
-  dailyWageRate: number; // Default: 0
-  professionalRate: number; // Default: 0
-  phoneAllowance: number; // Default: 0
-  mouDeductionRate: number; // Default: 0
-  nationality: string; // Default: 'ไทย'
-  // New Fields for Financial Refinement (T-240)
-  otherIncome: number; // Default: 0
-  housingFee: number; // Default: 0
-  followerCount: number; // Default: 0
-  refrigeratorFee: number; // Default: 0
-  soundSystemFee: number; // Default: 0
-  tvFee: number; // Default: 0
-  laundryFee: number; // Default: 0
-  airConFee: number; // Default: 0
-  otherDeduction: number; // Default: 0
 }
 
 export interface DailyContractorDTO {
@@ -50,32 +35,13 @@ export interface DailyContractorDTO {
   employeeId: string;
   name: string;
   skillId: string;
-  projectLocationIds: string[];
-  phoneNumber?: string | null;
-  idCardNumber?: string | null;
-  address?: string | null;
-  emergencyContact?: string | null;
-  emergencyPhone?: string | null;
+  projectLocationId?: string;
+  dateOfBirth?: Date | null;
   isActive: boolean;
   startDate?: Date | null;
   endDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  dailyWageRate: number;
-  professionalRate: number;
-  phoneAllowance: number;
-  mouDeductionRate: number;
-  nationality: string;
-  // T-240 Fields
-  otherIncome: number;
-  housingFee: number;
-  followerCount: number;
-  refrigeratorFee: number;
-  soundSystemFee: number;
-  tvFee: number;
-  laundryFee: number;
-  airConFee: number;
-  otherDeduction: number;
 }
 
 export interface CreateDailyContractorInput {
@@ -84,30 +50,11 @@ export interface CreateDailyContractorInput {
   password?: string;
   name?: string;
   skillId?: string;
-  projectLocationIds?: string[];
-  phoneNumber?: string;
-  idCardNumber?: string;
-  address?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
+  projectLocationId?: string;
+  dateOfBirth?: Date;
   isActive?: boolean;
   startDate?: Date;
   endDate?: Date;
-  // T-230 & T-240
-  dailyWageRate?: number;
-  professionalRate?: number;
-  phoneAllowance?: number;
-  mouDeductionRate?: number;
-  nationality?: string;
-  otherIncome?: number;
-  housingFee?: number;
-  followerCount?: number;
-  refrigeratorFee?: number;
-  soundSystemFee?: number;
-  tvFee?: number;
-  laundryFee?: number;
-  airConFee?: number;
-  otherDeduction?: number;
 }
 
 export interface UpdateDailyContractorInput {
@@ -116,31 +63,23 @@ export interface UpdateDailyContractorInput {
   password?: string;
   name?: string;
   skillId?: string;
-  projectLocationIds?: string[];
-  phoneNumber?: string;
-  idCardNumber?: string;
-  address?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
+  projectLocationId?: string;
+  dateOfBirth?: Date;
   isActive?: boolean;
   startDate?: Date;
   endDate?: Date;
-  // T-230 & T-240
-  dailyWageRate?: number;
-  professionalRate?: number;
-  phoneAllowance?: number;
-  mouDeductionRate?: number;
-  nationality?: string;
-  otherIncome?: number;
-  housingFee?: number;
-  followerCount?: number;
-  refrigeratorFee?: number;
-  soundSystemFee?: number;
-  tvFee?: number;
-  laundryFee?: number;
-  airConFee?: number;
-  otherDeduction?: number;
 }
+
+const parseDate = (val: any) => {
+  if (!val) return null;
+  if (typeof val.toDate === 'function') return val.toDate();
+  if (val instanceof Date) return val;
+  if (typeof val === 'string' || typeof val === 'number') {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
 
 /**
  * Firestore document converter for DailyContractor
@@ -153,12 +92,8 @@ export const dailyContractorConverter = {
       passwordHash: dc.passwordHash || null,
       name: dc.name,
       skillId: dc.skillId,
-      projectLocationIds: dc.projectLocationIds,
-      phoneNumber: dc.phoneNumber || null,
-      idCardNumber: dc.idCardNumber || null,
-      address: dc.address || null,
-      emergencyContact: dc.emergencyContact || null,
-      emergencyPhone: dc.emergencyPhone || null,
+      projectLocationId: dc.projectLocationId || null,
+      dateOfBirth: dc.dateOfBirth || null,
       isActive: dc.isActive,
       startDate: dc.startDate || null,
       endDate: dc.endDate || null,
@@ -166,62 +101,33 @@ export const dailyContractorConverter = {
       updatedAt: dc.updatedAt,
       createdBy: dc.createdBy,
       updatedBy: dc.updatedBy,
-      // T-230: New fields
-      dailyWageRate: dc.dailyWageRate || 0,
-      professionalRate: dc.professionalRate || 0,
-      phoneAllowance: dc.phoneAllowance || 0,
-      mouDeductionRate: dc.mouDeductionRate || 0,
-      nationality: dc.nationality || 'ไทย',
-      // T-240: New fields
-      otherIncome: dc.otherIncome || 0,
-      housingFee: dc.housingFee || 0,
-      followerCount: dc.followerCount || 0,
-      refrigeratorFee: dc.refrigeratorFee || 0,
-      soundSystemFee: dc.soundSystemFee || 0,
-      tvFee: dc.tvFee || 0,
-      laundryFee: dc.laundryFee || 0,
-      airConFee: dc.airConFee || 0,
-      otherDeduction: dc.otherDeduction || 0,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
     const data = snapshot.data();
+    
+    // Support for legacy data: if projectLocationIds exists and is an array with at least one element, use its first element
+    let projectLocationId = data.projectLocationId;
+    if (!projectLocationId && Array.isArray(data.projectLocationIds) && data.projectLocationIds.length > 0) {
+      projectLocationId = data.projectLocationIds[0];
+    }
+
     return {
       id: snapshot.id,
       employeeId: data.employeeId,
       username: data.username,
       passwordHash: data.passwordHash,
       name: data.name,
-      skillId: data.skillId,
-      projectLocationIds: data.projectLocationIds || [],
-      phoneNumber: data.phoneNumber,
-      idCardNumber: data.idCardNumber,
-      address: data.address,
-      emergencyContact: data.emergencyContact,
-      emergencyPhone: data.emergencyPhone,
+      skillId: data.skillId || '',
+      projectLocationId: projectLocationId || '',
+      dateOfBirth: parseDate(data.dateOfBirth),
       isActive: data.isActive !== undefined ? data.isActive : true,
-      startDate: data.startDate?.toDate(),
-      endDate: data.endDate?.toDate(),
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate(),
+      startDate: parseDate(data.startDate),
+      endDate: parseDate(data.endDate),
+      createdAt: parseDate(data.createdAt) || new Date(),
+      updatedAt: parseDate(data.updatedAt) || new Date(),
       createdBy: data.createdBy,
       updatedBy: data.updatedBy,
-      // T-230: New fields
-      dailyWageRate: data.dailyWageRate || 0,
-      professionalRate: data.professionalRate || 0,
-      phoneAllowance: data.phoneAllowance || 0,
-      mouDeductionRate: data.mouDeductionRate || 0,
-      nationality: data.nationality || 'ไทย',
-      // T-240: New fields
-      otherIncome: data.otherIncome || 0,
-      housingFee: data.housingFee || 0,
-      followerCount: data.followerCount || 0,
-      refrigeratorFee: data.refrigeratorFee || 0,
-      soundSystemFee: data.soundSystemFee || 0,
-      tvFee: data.tvFee || 0,
-      laundryFee: data.laundryFee || 0,
-      airConFee: data.airConFee || 0,
-      otherDeduction: data.otherDeduction || 0,
     };
   },
 };

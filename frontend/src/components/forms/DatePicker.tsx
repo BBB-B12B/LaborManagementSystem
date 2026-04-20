@@ -135,13 +135,7 @@ export const validateDateRange = (
     exactDays?: number;
   }
 ): string | null => {
-  const {
-    requiredStart = false,
-    requiredEnd = false,
-    minDays,
-    maxDays,
-    exactDays,
-  } = options || {};
+  const { requiredStart = false, requiredEnd = false, minDays, maxDays, exactDays } = options || {};
 
   // Check required dates
   if (requiredStart && !startDate) {

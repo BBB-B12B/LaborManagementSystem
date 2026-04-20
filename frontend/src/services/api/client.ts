@@ -14,12 +14,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
  */
 const encodeMockUserHeader = (value: string): string => {
   if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
-    return window
-      .btoa(
-        encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_match, hex) =>
-          String.fromCharCode(Number.parseInt(hex, 16))
-        )
-      );
+    return window.btoa(
+      encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_match, hex) =>
+        String.fromCharCode(Number.parseInt(hex, 16))
+      )
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -71,7 +71,11 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   /**
    * Fetch accessible projects for current user
    */
-  const { data: projects = [], isLoading, isError } = useQuery({
+  const {
+    data: projects = [],
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: [
       'projects',
       showOnlyActive,
@@ -125,7 +129,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     );
   }, [value, projects]);
 
-  const selectedValue = multiple ? selectedProjects : selectedProjects[0] ?? null;
+  const selectedValue = multiple ? selectedProjects : (selectedProjects[0] ?? null);
 
   const options = React.useMemo(() => {
     if (!selectedValue) {
@@ -142,7 +146,9 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
       map.set((selectedValue as ProjectLocation).code, selectedValue as ProjectLocation);
     }
 
-    return Array.from(map.values()).sort((a, b) => (a.projectCode || a.code).localeCompare(b.projectCode || b.code));
+    return Array.from(map.values()).sort((a, b) =>
+      (a.projectCode || a.code).localeCompare(b.projectCode || b.code)
+    );
   }, [projects, selectedValue, multiple]);
 
   const autocompleteValue = React.useMemo(() => {
@@ -157,9 +163,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     newValue: ProjectLocation | ProjectLocation[] | null
   ) => {
     if (multiple) {
-      const selectedCodes = Array.isArray(newValue)
-        ? newValue.map((project) => project.code)
-        : [];
+      const selectedCodes = Array.isArray(newValue) ? newValue.map((project) => project.code) : [];
       onChange(selectedCodes);
     } else {
       const selected = (newValue as ProjectLocation | null)?.code ?? null;
@@ -183,7 +187,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
         label={
           displayProjectNameOnly && option.projectName
             ? option.projectName
-            : (option.projectCode || option.code) // Use ProjectCode
+            : option.projectCode || option.code // Use ProjectCode
         }
         size="small"
         sx={{ borderRadius: '6px', fontWeight: 500 }}
@@ -219,17 +223,19 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
                 sx={{
                   fontWeight: 700,
                   color: 'primary.main',
-                  minWidth: '40px'
+                  minWidth: '40px',
                 }}
               >
                 {option.projectCode || option.code}
               </Typography>
-              <Box sx={{
-                height: '16px',
-                width: '1px',
-                bgcolor: 'divider',
-                mx: 0.5
-              }} />
+              <Box
+                sx={{
+                  height: '16px',
+                  width: '1px',
+                  bgcolor: 'divider',
+                  mx: 0.5,
+                }}
+              />
               <Typography
                 variant="body2"
                 sx={{
@@ -237,7 +243,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
                   color: 'text.primary',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {option.projectName}

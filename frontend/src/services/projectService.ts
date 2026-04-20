@@ -64,11 +64,7 @@ class ProjectService {
     if (filters?.search) params.search = filters.search;
 
     const result = await api.get<Project[] | { items: Project[] }>('/projects', params);
-    const items = Array.isArray(result)
-      ? result
-      : Array.isArray(result?.items)
-      ? result.items
-      : [];
+    const items = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : [];
     return items.map((project) => this.normalize(project));
   }
 
@@ -97,9 +93,7 @@ class ProjectService {
 
   async getNextCode(): Promise<string> {
     try {
-      const result = await api.get<{ code?: string; lastCode?: string }>(
-        '/projects/next-code'
-      );
+      const result = await api.get<{ code?: string; lastCode?: string }>('/projects/next-code');
       const code = result.code || result.lastCode || '';
       return code || 'P001';
     } catch (error) {
@@ -145,8 +139,8 @@ class ProjectService {
   }
 
   /**
-    * Get unique department list from projects
-    */
+   * Get unique department list from projects
+   */
   async getDepartments(): Promise<string[]> {
     const departments = await api.get<string[]>('/projects/departments');
     return departments;

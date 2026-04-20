@@ -27,7 +27,6 @@ const REQUIRED_ENV_VARS: FirebaseEnvKey[] = [
   'NEXT_PUBLIC_FIREBASE_APP_ID',
 ];
 
-
 /**
  * Firebase configuration object
  * NOTE: Using explicit process.env access is required for Next.js to inline variables at build time.
@@ -50,11 +49,11 @@ const requiredVars = [
   'projectId',
   'storageBucket',
   'messagingSenderId',
-  'appId'
+  'appId',
 ] as const;
 
 if (typeof window !== 'undefined') {
-  const missing = requiredVars.filter(key => !firebaseConfig[key]);
+  const missing = requiredVars.filter((key) => !firebaseConfig[key]);
   if (missing.length > 0) {
     console.error(`[firebase-config] Missing required configuration: ${missing.join(', ')}`);
   }
@@ -87,7 +86,8 @@ try {
 
   // Connect to Firebase Emulator when enabled
   if (shouldUseEmulators && typeof window !== 'undefined') {
-    const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+    const authEmulatorHost =
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
     const firestoreEmulatorHost =
       process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
 

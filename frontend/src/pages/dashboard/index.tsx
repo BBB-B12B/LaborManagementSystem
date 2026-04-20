@@ -9,15 +9,7 @@
  */
 
 import React from 'react';
-import {
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
-  Avatar,
-  Chip,
-} from '@mui/material';
+import { Box, Grid, Card, CardContent, Typography, Avatar, Chip } from '@mui/material';
 import {
   Engineering as EngineeringIcon,
   Folder as FolderIcon,
@@ -39,13 +31,7 @@ interface StatCardProps {
   subtitle?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({
-  title,
-  value,
-  icon,
-  color = 'primary',
-  subtitle,
-}) => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color = 'primary', subtitle }) => {
   return (
     <Card elevation={2}>
       <CardContent>

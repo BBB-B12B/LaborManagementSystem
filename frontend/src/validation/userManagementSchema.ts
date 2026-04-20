@@ -34,112 +34,114 @@ const employeeId = requiredString('รหัสพนักงาน')
  * User create schema
  * Used when creating new user (requires password)
  */
-export const userCreateSchema = z.object({
-  // Username (unique, no spaces, 3-20 chars)
-  username,
+export const userCreateSchema = z
+  .object({
+    // Username (unique, no spaces, 3-20 chars)
+    username,
 
-  // Password (min 8 chars, must contain letter and number) - FR-M-006
-  password: strongPassword,
+    // Password (min 8 chars, must contain letter and number) - FR-M-006
+    password: strongPassword,
 
-  // Confirm password
-  confirmPassword: strongPassword,
+    // Confirm password
+    confirmPassword: strongPassword,
 
-  // Full name
-  name: requiredString('ชื่อ-นามสกุล')
-    .min(2, errorMessages.minLength(2))
-    .max(100, errorMessages.maxLength(100)),
+    // Full name
+    name: requiredString('ชื่อ-นามสกุล')
+      .min(2, errorMessages.minLength(2))
+      .max(100, errorMessages.maxLength(100)),
 
-  // Employee ID (unique, uppercase)
-  employeeId,
+    // Employee ID (unique, uppercase)
+    employeeId,
 
-  // Role (8 roles: AM, FM, SE, OE, PE, PM, PD, MD)
-  roleId: roleEnum,
+    // Role (8 roles: AM, FM, SE, OE, PE, PM, PD, MD)
+    roleId: roleEnum,
 
-  // Department (PD01-PD05)
-  department: departmentEnum,
+    // Department (PD01-PD05)
+    department: departmentEnum,
 
-  // Accessible Projects (multi-select, array of project IDs)
-  projectLocationIds: baseArray(z.string()).default([]),
+    // Accessible Projects (multi-select, array of project IDs)
+    projectLocationIds: baseArray(z.string()).default([]),
 
-  // Birth Date (optional)
-  birthDate: optionalDate,
+    // Birth Date (optional)
+    birthDate: optionalDate,
 
-  // Start Date (optional)
-  startDate: optionalDate,
+    // Start Date (optional)
+    startDate: optionalDate,
 
-  // Active status
-  isActive: baseBoolean.default(true),
-}).refine(
-  (data) => data.password === data.confirmPassword,
-  {
+    // Active status
+    isActive: baseBoolean.default(true),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
     message: errorMessages.passwordMismatch,
     path: ['confirmPassword'],
-  }
-);
+  });
 
 /**
  * User update schema
  * Used when editing existing user (password optional)
  */
-export const userUpdateSchema = z.object({
-  // Username (unique, no spaces, 3-20 chars)
-  username,
+export const userUpdateSchema = z
+  .object({
+    // Username (unique, no spaces, 3-20 chars)
+    username,
 
-  // Password (optional - only if user wants to change it)
-  password: z.string().optional(),
+    // Password (optional - only if user wants to change it)
+    password: z.string().optional(),
 
-  // Confirm password (only if password provided)
-  confirmPassword: z.string().optional(),
+    // Confirm password (only if password provided)
+    confirmPassword: z.string().optional(),
 
-  // Full name
-  name: requiredString('ชื่อ-นามสกุล')
-    .min(2, errorMessages.minLength(2))
-    .max(100, errorMessages.maxLength(100)),
+    // Full name
+    name: requiredString('ชื่อ-นามสกุล')
+      .min(2, errorMessages.minLength(2))
+      .max(100, errorMessages.maxLength(100)),
 
-  // Employee ID (unique, uppercase)
-  employeeId,
+    // Employee ID (unique, uppercase)
+    employeeId,
 
-  // Role (8 roles)
-  roleId: roleEnum,
+    // Role (8 roles)
+    roleId: roleEnum,
 
-  // Department (PD01-PD05)
-  department: departmentEnum,
+    // Department (PD01-PD05)
+    department: departmentEnum,
 
-  // Accessible Projects (multi-select, array of project IDs)
-  projectLocationIds: baseArray(z.string()).default([]),
+    // Accessible Projects (multi-select, array of project IDs)
+    projectLocationIds: baseArray(z.string()).default([]),
 
-  // Birth Date (optional)
-  birthDate: optionalDate,
+    // Birth Date (optional)
+    birthDate: optionalDate,
 
-  // Start Date (optional)
-  startDate: optionalDate,
+    // Start Date (optional)
+    startDate: optionalDate,
 
-  // Active status
-  isActive: baseBoolean.default(true),
-}).refine(
-  (data) => {
-    // If password provided, must match confirmPassword
-    if (data.password || data.confirmPassword) {
-      return data.password === data.confirmPassword;
+    // Active status
+    isActive: baseBoolean.default(true),
+  })
+  .refine(
+    (data) => {
+      // If password provided, must match confirmPassword
+      if (data.password || data.confirmPassword) {
+        return data.password === data.confirmPassword;
+      }
+      return true;
+    },
+    {
+      message: errorMessages.passwordMismatch,
+      path: ['confirmPassword'],
     }
-    return true;
-  },
-  {
-    message: errorMessages.passwordMismatch,
-    path: ['confirmPassword'],
-  }
-).refine(
-  (data) => {
-    if (data.password && data.password.length > 0) {
-      return /^[A-Za-z]{6,}$/.test(data.password);
+  )
+  .refine(
+    (data) => {
+      if (data.password && data.password.length > 0) {
+        return /^[A-Za-z]{6,}$/.test(data.password);
+      }
+      return true;
+    },
+    {
+      message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษรภาษาอังกฤษ',
+      path: ['password'],
     }
-    return true;
-  },
-  {
-    message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษรภาษาอังกฤษ',
-    path: ['password'],
-  }
-);
+  );
 
 /**
  * User filter schema

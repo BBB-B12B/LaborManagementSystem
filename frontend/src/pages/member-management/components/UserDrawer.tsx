@@ -1,5 +1,12 @@
 import React from 'react';
-import { Box, IconButton, Typography, CircularProgress, Dialog, DialogContent } from '@mui/material';
+import {
+  Box,
+  IconButton,
+  Typography,
+  CircularProgress,
+  Dialog,
+  DialogContent,
+} from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { UserForm, type UserFormProps } from './UserForm';
 
@@ -17,8 +24,7 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
   loading = false,
   ...formProps
 }) => {
-  const resolvedTitle =
-    title || (formProps.mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้');
+  const resolvedTitle = title || (formProps.mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้');
 
   return (
     <Dialog
@@ -55,7 +61,9 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
       </Box>
       <DialogContent sx={{ p: { xs: 2.5, md: 4 }, overflow: 'visible' }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}
+          >
             <CircularProgress />
           </Box>
         ) : (

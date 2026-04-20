@@ -99,12 +99,7 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth={maxWidth}
-      fullWidth={fullWidth}
-    >
+    <Dialog open={open} onClose={handleClose} maxWidth={maxWidth} fullWidth={fullWidth}>
       {title && (
         <DialogTitle>
           <Box display="flex" alignItems="center" justifyContent="space-between">

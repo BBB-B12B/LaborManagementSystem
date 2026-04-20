@@ -159,10 +159,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
       const dcs = await dailyContractorService.getByProject(projectLocationId);
 
-      // 3. Fetch skills for names
-      const { skillService } = await import('../skill/SkillService');
-      const skills = await skillService.getAll();
-      const skillMap = new Map(skills.items.map(s => [s.id, s.name]));
+      // 3. (Deprecated) Fetch skills for names - now using dc.skillId directly
 
       // 4. Fetch additional income/expenses for this period
       const additionalIncomes = (await collections.additionalIncome
@@ -221,9 +218,10 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           continue;
         }
 
-        // Calculate wages
-        const regularWages = regHours * income.hourlyRate;
-        const otWages = dcTotalOtHours * income.hourlyRate * 1.5;
+        // Calculate wages (hourlyRate is derived from dailyWageRate)
+        const hourlyRate = income.dailyWageRate / 8;
+        const regularWages = regHours * hourlyRate;
+        const otWages = dcTotalOtHours * hourlyRate * 1.5;
         const professionalFees = regHours * income.professionalRate;
 
         // Sum additional income for this DC
@@ -286,14 +284,14 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           dailyContractorId: dc.id,
           employeeId: dc.employeeId,
           name: dc.name,
-          skillName: skillMap.get(dc.skillId) || 'N/A',
+          skillName: dc.skillId || 'ไม่ระบุ',
           regularHours: regHours,
           otMorningHours: otMorning,
           otNoonHours: otNoon,
           otEveningHours: otEvening,
           totalOtHours: dcTotalOtHours,
           totalHours: regHours + dcTotalOtHours,
-          hourlyRate: income.hourlyRate,
+          hourlyRate: income.dailyWageRate / 8,
           professionalRate: income.professionalRate,
           phoneAllowance: income.phoneAllowance || 0,
           regularWages,

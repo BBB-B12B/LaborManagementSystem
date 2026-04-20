@@ -9,7 +9,6 @@ import { db } from './firebase';
 import {
   userConverter,
   roleConverter,
-  skillConverter,
   projectLocationConverter,
   dailyContractorConverter,
   dailyReportConverter,
@@ -59,7 +58,6 @@ export const COLLECTIONS = {
 export const collections = {
   users: db.collection(COLLECTIONS.USERS).withConverter(userConverter),
   roles: db.collection(COLLECTIONS.ROLES).withConverter(roleConverter),
-  skills: db.collection(COLLECTIONS.SKILLS).withConverter(skillConverter),
   projectLocations: db
     .collection(COLLECTIONS.PROJECT_LOCATIONS)
     .withConverter(projectLocationConverter),

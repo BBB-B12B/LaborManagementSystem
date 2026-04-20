@@ -1,6 +1,6 @@
 
 import { migrateWagePeriodsIsDeleted } from './migrateWagePeriodsIsDeleted';
-import { db } from '../config/firebase';
+
 
 async function run() {
     console.log('--- Migration Start ---');

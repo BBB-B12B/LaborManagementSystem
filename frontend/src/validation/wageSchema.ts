@@ -16,35 +16,29 @@ import {
   errorMessages,
 } from './baseSchemas';
 
-
-
 /**
  * Wage period creation schema
  * Used when creating a new wage period
  */
-export const wagePeriodCreateSchema = z
-  .object({
-    // Project selection
-    projectCode: requiredString('รหัสโครงการ'),
-    projectName: requiredString('ชื่อโครงการ'),
+export const wagePeriodCreateSchema = z.object({
+  // Project selection
+  projectCode: requiredString('รหัสโครงการ'),
+  projectName: requiredString('ชื่อโครงการ'),
 
-    // Period dates
-    startDate: baseDate('วันที่เริ่มต้นงวด')
-      .refine(
-        (date) => date <= new Date(),
-        'วันที่เริ่มต้นต้องไม่เกินวันปัจจุบัน'
-      ),
+  // Period dates
+  startDate: baseDate('วันที่เริ่มต้นงวด').refine(
+    (date) => date <= new Date(),
+    'วันที่เริ่มต้นต้องไม่เกินวันปัจจุบัน'
+  ),
 
-    endDate: baseDate('วันที่สิ้นสุดงวด')
-      .refine(
-        (date) => date <= new Date(),
-        'วันที่สิ้นสุดต้องไม่เกินวันปัจจุบัน'
-      ),
+  endDate: baseDate('วันที่สิ้นสุดงวด').refine(
+    (date) => date <= new Date(),
+    'วันที่สิ้นสุดต้องไม่เกินวันปัจจุบัน'
+  ),
 
-    // Notes
-    notes: optionalString,
-  })
-
+  // Notes
+  notes: optionalString,
+});
 
 /**
  * Additional Income schema
@@ -57,8 +51,7 @@ export const additionalIncomeSchema = z.object({
   description: requiredString('รายละเอียด')
     .min(2, errorMessages.minLength(2))
     .max(200, errorMessages.maxLength(200)),
-  amount: positiveNumber('จำนวนเงิน')
-    .max(50000, 'รายได้พิเศษสูงสุด 50,000 บาท'),
+  amount: positiveNumber('จำนวนเงิน').max(50000, 'รายได้พิเศษสูงสุด 50,000 บาท'),
 });
 
 /**
@@ -72,8 +65,7 @@ export const additionalExpenseSchema = z.object({
   description: requiredString('รายละเอียด')
     .min(2, errorMessages.minLength(2))
     .max(200, errorMessages.maxLength(200)),
-  amount: positiveNumber('จำนวนเงิน')
-    .max(50000, 'รายจ่ายพิเศษสูงสุด 50,000 บาท'),
+  amount: positiveNumber('จำนวนเงิน').max(50000, 'รายจ่ายพิเศษสูงสุด 50,000 บาท'),
 });
 
 /**
@@ -87,11 +79,12 @@ export const dcIncomeDetailsSchema = z.object({
     .min(50, 'ค่าแรงต่ำสุด 50 บาท')
     .max(1000, 'ค่าแรงสูงสุด 1,000 บาท'),
 
-  professionalRate: nonNegativeNumber('ค่าวิชาชีพ')
-    .max(500, 'ค่าวิชาชีพสูงสุด 500 บาท'),
+  professionalRate: nonNegativeNumber('ค่าวิชาชีพ').max(500, 'ค่าวิชาชีพสูงสุด 500 บาท'),
 
-  phoneAllowancePerPeriod: nonNegativeNumber('ค่าโทรศัพท์ต่องวด')
-    .max(500, 'ค่าโทรศัพท์สูงสุด 500 บาท'),
+  phoneAllowancePerPeriod: nonNegativeNumber('ค่าโทรศัพท์ต่องวด').max(
+    500,
+    'ค่าโทรศัพท์สูงสุด 500 บาท'
+  ),
 
   effectiveDate: baseDate('วันที่มีผลบังคับใช้'),
 });
@@ -103,27 +96,36 @@ export const dcIncomeDetailsSchema = z.object({
 export const dcExpenseDetailsSchema = z.object({
   dailyContractorId: requiredString('แรงงานรายวัน'),
 
-  accommodationCostPerPeriod: nonNegativeNumber('ค่าที่พักต่องวด')
-    .max(5000, 'ค่าที่พักสูงสุด 5,000 บาท'),
+  accommodationCostPerPeriod: nonNegativeNumber('ค่าที่พักต่องวด').max(
+    5000,
+    'ค่าที่พักสูงสุด 5,000 บาท'
+  ),
 
   followerCount: nonNegativeNumber('จำนวนผู้ติดตาม')
     .int('ต้องเป็นจำนวนเต็ม')
     .max(10, 'ผู้ติดตามสูงสุด 10 คน'),
 
-  refrigeratorCostPerPeriod: nonNegativeNumber('ค่าตู้เย็นต่องวด')
-    .max(500, 'ค่าตู้เย็นสูงสุด 500 บาท'),
+  refrigeratorCostPerPeriod: nonNegativeNumber('ค่าตู้เย็นต่องวด').max(
+    500,
+    'ค่าตู้เย็นสูงสุด 500 บาท'
+  ),
 
-  soundSystemCostPerPeriod: nonNegativeNumber('ค่าเครื่องเสียงต่องวด')
-    .max(500, 'ค่าเครื่องเสียงสูงสุด 500 บาท'),
+  soundSystemCostPerPeriod: nonNegativeNumber('ค่าเครื่องเสียงต่องวด').max(
+    500,
+    'ค่าเครื่องเสียงสูงสุด 500 บาท'
+  ),
 
-  tvCostPerPeriod: nonNegativeNumber('ค่าทีวีต่องวด')
-    .max(500, 'ค่าทีวีสูงสุด 500 บาท'),
+  tvCostPerPeriod: nonNegativeNumber('ค่าทีวีต่องวด').max(500, 'ค่าทีวีสูงสุด 500 บาท'),
 
-  washingMachineCostPerPeriod: nonNegativeNumber('ค่าเครื่องซักผ้าต่องวด')
-    .max(500, 'ค่าเครื่องซักผ้าสูงสุด 500 บาท'),
+  washingMachineCostPerPeriod: nonNegativeNumber('ค่าเครื่องซักผ้าต่องวด').max(
+    500,
+    'ค่าเครื่องซักผ้าสูงสุด 500 บาท'
+  ),
 
-  portableAcCostPerPeriod: nonNegativeNumber('ค่าแอร์เคลื่อนที่ต่องวด')
-    .max(1000, 'ค่าแอร์เคลื่อนที่สูงสุด 1,000 บาท'),
+  portableAcCostPerPeriod: nonNegativeNumber('ค่าแอร์เคลื่อนที่ต่องวด').max(
+    1000,
+    'ค่าแอร์เคลื่อนที่สูงสุด 1,000 บาท'
+  ),
 
   effectiveDate: baseDate('วันที่มีผลบังคับใช้'),
 });
@@ -138,6 +140,22 @@ export const wagePeriodFilterSchema = z.object({
   startDate: z.date().optional(),
   endDate: z.date().optional(),
 });
+
+/**
+ * Validates that a period spans exactly 15 days,
+ * typically 1st to 15th, or 16th to the end of the month.
+ */
+export const validate15DayPeriod = (startDate: Date, endDate: Date): boolean => {
+  const startDay = startDate.getDate();
+  const endDay = endDate.getDate();
+
+  if (startDay === 1 && endDay === 15) return true;
+
+  const lastDayOfMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+  if (startDay === 16 && endDay === lastDayOfMonth) return true;
+
+  return false;
+};
 
 /**
  * Type exports
@@ -156,5 +174,5 @@ export default {
   dcIncomeDetailsSchema,
   dcExpenseDetailsSchema,
   wagePeriodFilterSchema,
-
+  validate15DayPeriod,
 };

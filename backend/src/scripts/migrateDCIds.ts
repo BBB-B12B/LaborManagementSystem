@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { db } from '../config/firebase';
 import { collections } from '../config/collections';
 import { logger } from '../utils/logger';

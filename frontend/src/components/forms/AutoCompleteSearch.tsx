@@ -7,14 +7,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import {
-  Autocomplete,
-  TextField,
-  CircularProgress,
-  Chip,
-  Box,
-  Typography,
-} from '@mui/material';
+import { Autocomplete, TextField, CircularProgress, Chip, Box, Typography } from '@mui/material';
 import { debounce } from 'lodash';
 
 export interface AutoCompleteOption {
@@ -75,11 +68,11 @@ export const AutoCompleteSearch: React.FC<AutoCompleteSearchProps> = ({
     ? Array.isArray(value)
       ? value
       : value
-      ? [value as AutoCompleteOption]
-      : []
+        ? [value as AutoCompleteOption]
+        : []
     : Array.isArray(value)
-    ? (value[0] as AutoCompleteOption | undefined) ?? null
-    : ((value as AutoCompleteOption | null) ?? null);
+      ? ((value[0] as AutoCompleteOption | undefined) ?? null)
+      : ((value as AutoCompleteOption | null) ?? null);
 
   /**
    * Debounced search handler (500ms)
@@ -134,12 +127,7 @@ export const AutoCompleteSearch: React.FC<AutoCompleteSearchProps> = ({
    */
   const renderTags = (tagValue: AutoCompleteOption[], getTagProps: any) =>
     tagValue.map((option, index) => (
-      <Chip
-        label={option.label}
-        size="small"
-        {...getTagProps({ index })}
-        key={option.id}
-      />
+      <Chip label={option.label} size="small" {...getTagProps({ index })} key={option.id} />
     ));
 
   return (

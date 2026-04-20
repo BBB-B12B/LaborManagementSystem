@@ -6,8 +6,17 @@
 import { db } from '../../config/firebase';
 import { collections } from '../../config/collections';
 import { logger } from '../../utils/logger';
-import { ScanData, formatWorkDate } from '../../models/ScanData';
+import { ScanData } from '../../models/ScanData';
 import { DailyReportEntry } from '../../models/DailyReport';
+
+
+/** Local helper: format a Date to YYYY-MM-DD string */
+function formatWorkDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export interface VerificationResult {
   totalEntries: number;
@@ -39,8 +48,8 @@ class WorkVerificationService {
       }
 
       // 2. Fetch Scan Data for the same period
-      const startStr = formatWorkDate(startDate);
-      const endStr = formatWorkDate(endDate);
+      const startStr = formatWorkDateStr(startDate);
+      const endStr = formatWorkDateStr(endDate);
       const scansSnapshot = await collections.scanData
         .where('projectLocationId', '==', projectLocationId)
         .where('workDate', '>=', startStr)
@@ -67,8 +76,8 @@ class WorkVerificationService {
         // [T-401] Handle both Date and Timestamp correctly
         const rawDate = reportData.date;
         const reportDate = (rawDate instanceof Date) ? rawDate : (rawDate as any).toDate();
-        const reportDateStr = formatWorkDate(reportDate);
-        const entries = reportData.entries as DailyReportEntry[];
+        const reportDateStr = formatWorkDateStr(reportDate);
+        const entries = (reportData as any).entries as DailyReportEntry[];
         let updated = false;
 
         const updatedEntries = entries.map(entry => {
@@ -77,7 +86,7 @@ class WorkVerificationService {
           // Use denormalized employeeId (T-400)
           const empId = entry.employeeId;
           if (!empId) {
-            entry.verificationStatus = 'discrepancy';
+            (entry as any).verificationStatus = 'discrepancy';
             discrepancies++;
             updated = true;
             return entry;
@@ -87,13 +96,13 @@ class WorkVerificationService {
           const scan = scanMap.get(scanKey);
 
           // Verification Logic
-          if (scan && scan.punches.length >= 2) {
+          if (scan && (scan.punches ?? []).length >= 2) {
             // Check hours (Optional refinement: check if scan hours match report hours)
             // For now, if punches exist, we consider it "Auto Verified"
-            entry.verificationStatus = 'auto_verified';
+            (entry as any).verificationStatus = 'auto_verified';
             autoVerified++;
           } else {
-            entry.verificationStatus = 'discrepancy';
+            (entry as any).verificationStatus = 'discrepancy';
             discrepancies++;
           }
           

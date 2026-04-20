@@ -19,7 +19,7 @@ import { db } from '../../config/firebase';
 import { dailyContractorService } from '../dailyContractor/DailyContractorService';
 import { dailyReportService } from '../dailyReport/DailyReportService';
 
-import { DailyReport } from '../../models/DailyReport';
+
 import { ScanDataAggregator } from './ScanDataAggregator';
 import { projectLocationService } from '../project/ProjectLocationService';
 
@@ -127,7 +127,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
         name: contractor.name,
         position: contractor.skillId,
         projectLocationId: input.projectLocationId,
-        projectLocationIds: contractor.projectLocationIds || [input.projectLocationId],
         scanDateTime: input.scanDateTime,
         scanDate,
         scanBehavior: classifyScanBehavior(input.scanDateTime),

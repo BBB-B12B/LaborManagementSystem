@@ -11,7 +11,7 @@ import userRoutes from './users.routes';
 import dailyReportRoutes from './dailyReports.routes';
 import overtimeRoutes from './overtime.routes';
 import projectRoutes from './project.routes';
-import skillRoutes from './skills.routes';
+
 import dailyContractorRoutes from './dailyContractors.routes';
 import wagePeriodRoutes from './wagePeriods.routes';
 import scanDataRoutes from './scanData.routes';
@@ -35,8 +35,6 @@ router.use('/overtime', overtimeRoutes);
 // Project routes
 router.use('/projects', projectRoutes);
 
-// Skill routes
-router.use('/skills', skillRoutes);
 
 // Daily Contractor routes
 router.use('/daily-contractors', dailyContractorRoutes);

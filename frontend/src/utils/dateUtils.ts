@@ -3,7 +3,16 @@
  * ฟังก์ชันช่วยจัดการวันที่และเวลา (Thai timezone)
  */
 
-import { format, parse, addDays, subDays, startOfDay, endOfDay, differenceInMinutes, differenceInHours } from 'date-fns';
+import {
+  format,
+  parse,
+  addDays,
+  subDays,
+  startOfDay,
+  endOfDay,
+  differenceInMinutes,
+  differenceInHours,
+} from 'date-fns';
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import { th } from 'date-fns/locale';
 
@@ -21,7 +30,10 @@ export const formatDate = (date: Date | string, formatStr: string = 'dd/MM/yyyy'
 /**
  * Format date with Thai timezone
  */
-export const formatDateThai = (date: Date | string, formatStr: string = 'dd/MM/yyyy HH:mm'): string => {
+export const formatDateThai = (
+  date: Date | string,
+  formatStr: string = 'dd/MM/yyyy HH:mm'
+): string => {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   return formatInTimeZone(dateObj, THAI_TIMEZONE, formatStr, { locale: th });
 };
@@ -61,12 +73,12 @@ export const getToday = (): Date => {
 export const calculateHours = (startTime: Date | string, endTime: Date | string): number => {
   const start = typeof startTime === 'string' ? new Date(startTime) : startTime;
   const end = typeof endTime === 'string' ? new Date(endTime) : endTime;
-  
+
   const minutes = differenceInMinutes(end, start);
-  
+
   // Round down to nearest 5 minutes
   const roundedMinutes = Math.floor(minutes / 5) * 5;
-  
+
   return roundedMinutes / 60;
 };
 
@@ -90,13 +102,13 @@ export const isTimeInRange = (time: Date, startTime: string, endTime: string): b
   const hour = time.getHours();
   const minute = time.getMinutes();
   const timeInMinutes = hour * 60 + minute;
-  
+
   const [startHour, startMinute] = startTime.split(':').map(Number);
   const [endHour, endMinute] = endTime.split(':').map(Number);
-  
+
   const startMinutes = startHour * 60 + startMinute;
   const endMinutes = endHour * 60 + endMinute;
-  
+
   return timeInMinutes >= startMinutes && timeInMinutes < endMinutes;
 };
 
@@ -125,4 +137,11 @@ export const isToday = (date: Date | string): boolean => {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   const today = getToday();
   return format(dateObj, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+};
+
+/**
+ * Format date with time for display (alias used by history pages)
+ */
+export const formatDateTime = (date: Date | string, formatStr: string = 'dd/MM/yyyy HH:mm'): string => {
+  return formatDate(date, formatStr);
 };

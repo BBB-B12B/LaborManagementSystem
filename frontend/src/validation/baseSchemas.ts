@@ -53,7 +53,10 @@ export const optionalString = z.string().optional().nullable();
  * Required non-empty string
  */
 export const requiredString = (fieldName?: string) =>
-  baseString(fieldName).min(1, fieldName ? errorMessages.requiredField(fieldName) : errorMessages.required);
+  baseString(fieldName).min(
+    1,
+    fieldName ? errorMessages.requiredField(fieldName) : errorMessages.required
+  );
 
 /**
  * String with min/max length
@@ -71,8 +74,10 @@ export const email = requiredString('อีเมล').email(errorMessages.inval
 /**
  * Thai phone number validation (10 digits starting with 0)
  */
-export const thaiPhone = requiredString('เบอร์โทรศัพท์')
-  .regex(/^0[0-9]{9}$/, errorMessages.invalidPhone);
+export const thaiPhone = requiredString('เบอร์โทรศัพท์').regex(
+  /^0[0-9]{9}$/,
+  errorMessages.invalidPhone
+);
 
 /**
  * Optional Thai phone number
@@ -160,23 +165,36 @@ export const optionalNumber = z.number().optional().nullable();
  * Number with min/max
  */
 export const numberWithRange = (min: number, max: number, fieldName?: string) =>
-  baseNumber(fieldName)
-    .min(min, errorMessages.minValue(min))
-    .max(max, errorMessages.maxValue(max));
+  baseNumber(fieldName).min(min, errorMessages.minValue(min)).max(max, errorMessages.maxValue(max));
 
 /**
  * Date schema with Thai error messages
  */
 export const baseDate = (fieldName?: string) =>
-  z.date({
+  z.preprocess((val) => {
+    if (val instanceof Date) return val;
+    if (typeof val === 'string') {
+      const parsed = new Date(val);
+      return isNaN(parsed.getTime()) ? val : parsed;
+    }
+    return val;
+  }, z.date({
     required_error: fieldName ? errorMessages.requiredField(fieldName) : errorMessages.required,
     invalid_type_error: errorMessages.invalidDate,
-  });
+  }));
 
 /**
  * Optional date
  */
-export const optionalDate = z.date().optional().nullable();
+export const optionalDate = z.preprocess((val) => {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  if (typeof val === 'string') {
+    const parsed = new Date(val);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return val;
+}, z.date().optional().nullable());
 
 /**
  * Past date (must be before today)
@@ -227,10 +245,7 @@ export const optionalBoolean = z.boolean().optional().nullable();
 /**
  * Enum validation
  */
-export const createEnum = <T extends [string, ...string[]]>(
-  values: T,
-  fieldName?: string
-) =>
+export const createEnum = <T extends [string, ...string[]]>(values: T, fieldName?: string) =>
   z.enum(values, {
     required_error: fieldName ? errorMessages.requiredField(fieldName) : errorMessages.required,
     invalid_type_error: errorMessages.invalidSelection,
@@ -249,12 +264,18 @@ export const baseArray = <T extends z.ZodTypeAny>(schema: T) =>
  * Non-empty array
  */
 export const nonEmptyArray = <T extends z.ZodTypeAny>(schema: T, fieldName?: string) =>
-  baseArray(schema).min(1, fieldName ? `กรุณาเลือก${fieldName}อย่างน้อย 1 รายการ` : 'กรุณาเลือกอย่างน้อย 1 รายการ');
+  baseArray(schema).min(
+    1,
+    fieldName ? `กรุณาเลือก${fieldName}อย่างน้อย 1 รายการ` : 'กรุณาเลือกอย่างน้อย 1 รายการ'
+  );
 
 /**
  * Department enum (PD01-PD05)
  */
-export const departmentEnum = createEnum(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'], 'สังกัด');
+export const departmentEnum = createEnum(
+  ['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'],
+  'สังกัด'
+);
 
 /**
  * Role enum (8 roles)

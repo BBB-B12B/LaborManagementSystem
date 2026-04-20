@@ -88,7 +88,8 @@ export function DCForm({
   const initialValues = React.useMemo(
     () => ({
       isActive: true,
-      projectLocationIds: [],
+      projectLocationId: '',
+      dateOfBirth: null,
       dailyWageRate: ('' as any),
       professionalRate: ('' as any),
       phoneAllowance: ('' as any),
@@ -102,7 +103,6 @@ export function DCForm({
       airConFee: ('' as any),
       otherDeduction: ('' as any),
       mouDeductionRate: ('' as any),
-      nationality: 'ไทย',
       ...defaultValues,
     }),
     [defaultValues]
@@ -210,6 +210,23 @@ export function DCForm({
 
             <Grid item xs={6}>
               <Controller
+                name="dateOfBirth"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    label="วันเกิด"
+                    value={field.value ?? null}
+                    onChange={field.onChange}
+                    error={!!errors.dateOfBirth}
+                    helperText={errors.dateOfBirth?.message as string | undefined}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <Controller
                 name="skillId"
                 control={control}
                 render={({ field }) => (
@@ -243,15 +260,14 @@ export function DCForm({
 
             <Grid item xs={12}>
               <Controller
-                name="projectLocationIds"
+                name="projectLocationId"
                 control={control}
                 render={({ field }) => (
                   <ProjectSelect
-                    multiple
-                    value={Array.isArray(field.value) ? field.value : []}
+                    value={field.value ?? ''}
                     onChange={field.onChange}
-                    error={!!errors.projectLocationIds}
-                    helperText={errors.projectLocationIds?.message}
+                    error={!!errors.projectLocationId}
+                    helperText={errors.projectLocationId?.message}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
@@ -566,23 +582,6 @@ export function DCForm({
               />
             </Grid>
 
-            <Grid item xs={12}>
-              <Controller
-                name="nationality"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    value={field.value ?? ''}
-                    label="สัญชาติ"
-                    fullWidth
-                    size="small"
-                    helperText={(errors as any).nationality?.message}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
           </Grid>
         </TabPanel>
       </Box>

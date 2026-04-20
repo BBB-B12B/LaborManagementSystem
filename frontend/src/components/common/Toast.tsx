@@ -1,7 +1,7 @@
 /**
  * Toast Notification Component
  * คอมโพเนนต์แสดงการแจ้งเตือน
- * 
+ *
  * Using notistack (already in dependencies)
  */
 
@@ -23,9 +23,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         horizontal: 'right',
       }}
       autoHideDuration={5000}
-      action={(snackbarKey) => (
-        <DismissButton snackbarKey={snackbarKey} />
-      )}
+      action={(snackbarKey) => <DismissButton snackbarKey={snackbarKey} />}
     >
       {children}
     </SnackbarProvider>
@@ -39,11 +37,7 @@ const DismissButton: React.FC<{ snackbarKey: string | number }> = ({ snackbarKey
   const { closeSnackbar } = useSnackbar();
 
   return (
-    <IconButton
-      size="small"
-      color="inherit"
-      onClick={() => closeSnackbar(snackbarKey)}
-    >
+    <IconButton size="small" color="inherit" onClick={() => closeSnackbar(snackbarKey)}>
       <CloseIcon fontSize="small" />
     </IconButton>
   );

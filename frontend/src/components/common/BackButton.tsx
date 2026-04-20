@@ -14,11 +14,7 @@ export interface BackButtonProps {
   sx?: object;
 }
 
-export const BackButton: React.FC<BackButtonProps> = ({
-  label = 'ย้อนกลับ',
-  href,
-  sx,
-}) => {
+export const BackButton: React.FC<BackButtonProps> = ({ label = 'ย้อนกลับ', href, sx }) => {
   const router = useRouter();
 
   const handleClick = () => {

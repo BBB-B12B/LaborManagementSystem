@@ -100,33 +100,33 @@ export function UserForm({
         backgroundColor: '#fafafa',
       }}
     >
-      <Typography variant='h5' gutterBottom sx={{ fontWeight: 700 }}>
+      <Typography variant="h5" gutterBottom sx={{ fontWeight: 700 }}>
         {mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้'}
       </Typography>
 
       {submitError && (
-        <Alert severity='error' sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {submitError}
         </Alert>
       )}
 
-      <Box component='form' onSubmit={handleSubmit(handleFormSubmit)} noValidate>
+      <Box component="form" onSubmit={handleSubmit(handleFormSubmit)} noValidate>
         <Grid container spacing={{ xs: 2, md: 3 }}>
           <Grid item xs={12}>
-            <Typography variant='subtitle1' sx={{ mb: 1, fontWeight: 600 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
               ข้อมูลพื้นฐาน
             </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='employeeId'
+              name="employeeId"
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label='รหัสพนักงาน *'
+                  label="รหัสพนักงาน *"
                   required
                   fullWidth
                   error={!!errors.employeeId}
@@ -139,13 +139,13 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='name'
+              name="name"
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label='ชื่อ-นามสกุล *'
+                  label="ชื่อ-นามสกุล *"
                   required
                   fullWidth
                   error={!!errors.name}
@@ -158,13 +158,13 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='username'
+              name="username"
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label='Username *'
+                  label="Username *"
                   required
                   fullWidth
                   error={!!errors.username}
@@ -177,13 +177,13 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='password'
+              name="password"
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label='รหัสผ่าน *'
+                  label="รหัสผ่าน *"
                   type={showPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
@@ -192,12 +192,12 @@ export function UserForm({
                   disabled={isLoading || isSubmitting}
                   InputProps={{
                     endAdornment: (
-                      <InputAdornment position='end'>
+                      <InputAdornment position="end">
                         <IconButton
                           onClick={() => setShowPassword((prev) => !prev)}
-                          edge='end'
+                          edge="end"
                           disabled={isLoading || isSubmitting}
-                          aria-label='toggle password visibility'
+                          aria-label="toggle password visibility"
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
@@ -211,13 +211,13 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='confirmPassword'
+              name="confirmPassword"
               control={control}
               render={({ field }) => (
                 <TextField
                   {...field}
                   value={field.value ?? ''}
-                  label='ยืนยันรหัสผ่าน *'
+                  label="ยืนยันรหัสผ่าน *"
                   type={showConfirmPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
@@ -226,12 +226,12 @@ export function UserForm({
                   disabled={isLoading || isSubmitting}
                   InputProps={{
                     endAdornment: (
-                      <InputAdornment position='end'>
+                      <InputAdornment position="end">
                         <IconButton
                           onClick={() => setShowConfirmPassword((prev) => !prev)}
-                          edge='end'
+                          edge="end"
                           disabled={isLoading || isSubmitting}
-                          aria-label='toggle confirm password visibility'
+                          aria-label="toggle confirm password visibility"
                         >
                           {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
@@ -244,14 +244,14 @@ export function UserForm({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               บทบาทและแผนก
             </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='roleId'
+              name="roleId"
               control={control}
               render={({ field }) => (
                 <RoleSelect
@@ -268,7 +268,7 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='department'
+              name="department"
               control={control}
               render={({ field }) => (
                 <DepartmentSelect
@@ -284,18 +284,18 @@ export function UserForm({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               วันที่
             </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='dateOfBirth'
+              name="dateOfBirth"
               control={control}
               render={({ field }) => (
                 <DatePicker
-                  label='วันเกิด'
+                  label="วันเกิด"
                   value={field.value ?? null}
                   onChange={field.onChange}
                   error={!!errors.dateOfBirth}
@@ -309,11 +309,11 @@ export function UserForm({
 
           <Grid item xs={12} md={6}>
             <Controller
-              name='startDate'
+              name="startDate"
               control={control}
               render={({ field }) => (
                 <DatePicker
-                  label='วันที่เริ่มงาน *'
+                  label="วันที่เริ่มงาน *"
                   value={field.value}
                   onChange={field.onChange}
                   error={!!errors.startDate}
@@ -327,34 +327,24 @@ export function UserForm({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               โครงการที่เข้าถึงได้
             </Typography>
           </Grid>
 
           <Grid item xs={12}>
             <Controller
-              name='projectLocationIds'
+              name="projectLocationIds"
               control={control}
               render={({ field }) => (
                 <ProjectSelect
                   multiple
                   displayProjectNameOnly
                   value={
-                    Array.isArray(field.value)
-                      ? field.value
-                      : field.value
-                      ? [field.value]
-                      : []
+                    Array.isArray(field.value) ? field.value : field.value ? [field.value] : []
                   }
                   onChange={(value) =>
-                    field.onChange(
-                      Array.isArray(value)
-                        ? value
-                        : value
-                        ? [value]
-                        : []
-                    )
+                    field.onChange(Array.isArray(value) ? value : value ? [value] : [])
                   }
                   error={!!errors.projectLocationIds}
                   helperText={errors.projectLocationIds?.message || 'เลือกหลายโครงการได้'}
@@ -366,14 +356,14 @@ export function UserForm({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
               สถานะ
             </Typography>
           </Grid>
 
           <Grid item xs={12}>
             <Controller
-              name='isActive'
+              name="isActive"
               control={control}
               render={({ field }) => (
                 <FormControlLabel
@@ -384,7 +374,7 @@ export function UserForm({
                       disabled={isLoading || isSubmitting}
                     />
                   }
-                  label='เปิดใช้งาน (Active)'
+                  label="เปิดใช้งาน (Active)"
                 />
               )}
             />
@@ -393,8 +383,8 @@ export function UserForm({
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
               <Button
-                variant='outlined'
-                color='error'
+                variant="outlined"
+                color="error"
                 onClick={onCancel}
                 disabled={isLoading || isSubmitting}
                 sx={{ borderRadius: '10px', px: 3 }}
@@ -402,9 +392,9 @@ export function UserForm({
                 ยกเลิก
               </Button>
               <Button
-                type='submit'
-                variant='contained'
-                color='success'
+                type="submit"
+                variant="contained"
+                color="success"
                 disabled={isLoading || isSubmitting}
                 startIcon={isSubmitting && <CircularProgress size={20} />}
                 sx={{

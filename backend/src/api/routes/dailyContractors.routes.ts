@@ -130,12 +130,9 @@ const toDate = (value: string): Date | undefined => {
   return parsed;
 };
 
-const toProjectIds = (value: string): string[] => {
-  if (!value) return [];
-  return value
-    .split(/[|,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+const toProjectId = (value: string): string => {
+  if (!value) return '';
+  return value.split(/[|,]/)[0].trim();
 };
 
 async function attachCompensationFlags(contractors: DailyContractorDTO[]) {
@@ -164,13 +161,13 @@ router.get(
     query('projectLocationId').optional().isString(),
     query('search').optional().isString(),
     query('page').optional().isInt({ min: 1 }),
-    query('pageSize').optional().isInt({ min: 1, max: 100 }),
+    query('pageSize').optional().isInt({ min: 1, max: 1000 }),
   ],
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        throw new AppError('Validation failed', 400);
+        throw new AppError(`Validation failed: ${errors.array().map(e => e.msg).join(', ')}`, 400);
       }
 
       const { skillId, projectLocationId, search } = req.query;
@@ -224,7 +221,8 @@ router.get(
         },
       });
     } catch (error: any) {
-      res.status(500).json({
+      console.error('[DailyContractors] GET / error:', error);
+      res.status(error.statusCode || 500).json({
         success: false,
         error: error.message,
       });
@@ -366,26 +364,32 @@ router.post(
 
         const employeeId = getValue(row, 'รหัสพนักงาน');
         const name = getValue(row, 'ชื่อ-นามสกุล');
-        const skillId = getValue(row, 'รหัสทักษะ');
+        const positionName = getValue(row, 'ตำแหน่ง');
 
-        if (!employeeId || !name || !skillId) {
+        if (!employeeId || !name || !positionName) {
           console.warn(`[CSV Import] Row ${rowNumber} missing required fields`);
           summary.skipped += 1;
           summary.errors.push({
             row: rowNumber,
             employeeId: employeeId || undefined,
-            message: 'ข้อมูลไม่ครบถ้วน (ต้องระบุ รหัสพนักงาน, ชื่อ-นามสกุล, รหัสทักษะ)',
+            message: 'ข้อมูลไม่ครบถ้วน (ต้องระบุ รหัสพนักงาน, ชื่อ-นามสกุล, ตำแหน่ง)',
           });
           continue;
         }
 
+        const skillId = positionName;
+
+        const dateOfBirth = toDate(getValue(row, 'วันเกิด (ปปปป-ดด-วว)'));
         const projectIdsRaw = getValue(row, 'รหัสโครงการ (คั่นด้วยคอมมา)');
         const startDate = toDate(getValue(row, 'วันเริ่มงาน (ปปปป-ดด-วว)'));
         const isActive = toBoolean(getValue(row, 'สถานะใช้งาน (TRUE/FALSE)'));
 
-        const hourlyRate = toNumber(getValue(row, 'ค่าแรงต่อชั่วโมง (บาท)'));
-        const professionalRate = toNumber(getValue(row, 'ค่าวิชาชีพ (บาท/วัน)'));
+        const dailyWageRate = toNumber(getValue(row, 'ค่าแรงต่อวัน (บาท)'));
+        const professionalRate = toNumber(getValue(row, 'ค่าช่าง/ค่าฝีมือต่อวัน (บาท)'));
         const phoneAllowance = toNumber(getValue(row, 'ค่าโทรศัพท์ต่องวด (บาท)'));
+        const mouDeductionRate = toNumber(getValue(row, 'เปอร์เซ็นต์หัก MOU (%)'));
+        const otherIncome = toNumber(getValue(row, 'รายได้อื่นๆ ต่องวด (บาท)'));
+        
         const accommodationCost = toNumber(getValue(row, 'ค่าที่พักต่องวด (บาท)'));
         const followerCount = toInteger(getValue(row, 'จำนวนผู้ติดตาม'));
         const refrigeratorCost = toNumber(getValue(row, 'ค่าตู้เย็นต่องวด (บาท)'));
@@ -393,7 +397,7 @@ router.post(
         const tvCost = toNumber(getValue(row, 'ค่าทีวีต่องวด (บาท)'));
         const washingMachineCost = toNumber(getValue(row, 'ค่าเครื่องซักผ้าต่องวด (บาท)'));
         const portableAcCost = toNumber(getValue(row, 'ค่าแอร์เคลื่อนที่ต่องวด (บาท)'));
-
+        const otherDeduction = toNumber(getValue(row, 'รายหักอื่นๆ ต่องวด (บาท)'));
 
         try {
           console.time(`[CSV Import] Row ${rowNumber} DB Ops`);
@@ -402,7 +406,8 @@ router.post(
               employeeId,
               name,
               skillId,
-              projectLocationIds: toProjectIds(projectIdsRaw),
+              dateOfBirth,
+              projectLocationId: toProjectId(projectIdsRaw),
               isActive,
               startDate,
             },
@@ -413,9 +418,11 @@ router.post(
             contractor.id,
             {
               income: {
-                hourlyRate,
+                dailyWageRate,
                 professionalRate,
                 phoneAllowancePerPeriod: phoneAllowance,
+                mouDeductionRate,
+                otherIncome,
               },
               expense: {
                 accommodationCostPerPeriod: accommodationCost,
@@ -425,6 +432,7 @@ router.post(
                 tvCostPerPeriod: tvCost,
                 washingMachineCostPerPeriod: washingMachineCost,
                 portableAcCostPerPeriod: portableAcCost,
+                otherDeduction,
               },
             },
             'import-csv'
@@ -501,10 +509,12 @@ router.get('/:id/compensation', async (req: Request, res: Response) => {
       data: {
         income: income
           ? {
-            hourlyRate: income.hourlyRate,
-            otHourlyRate: parseFloat((income.hourlyRate * 1.5).toFixed(2)),
+            dailyWageRate: income.dailyWageRate,
+            otHourlyRate: parseFloat(((income.dailyWageRate / 8) * 1.5).toFixed(2)),
             professionalRate: income.professionalRate,
             phoneAllowancePerPeriod: income.phoneAllowance,
+            mouDeductionRate: income.mouDeductionRate,
+            otherIncome: income.otherIncome,
             effectiveDate: income.effectiveDate,
           }
           : null,
@@ -559,9 +569,11 @@ router.put(
       const updatedBy = req.body.updatedBy || 'system';
       const incomePayload = req.body.income
         ? {
-          hourlyRate: Number(req.body.income.hourlyRate ?? 0),
+          dailyWageRate: Number(req.body.income.dailyWageRate ?? 0),
           professionalRate: Number(req.body.income.professionalRate ?? 0),
           phoneAllowancePerPeriod: Number(req.body.income.phoneAllowancePerPeriod ?? 0),
+          mouDeductionRate: Number(req.body.income.mouDeductionRate ?? 0),
+          otherIncome: Number(req.body.income.otherIncome ?? 0),
         }
         : undefined;
 
@@ -601,10 +613,12 @@ router.put(
         data: {
           income: income
             ? {
-              hourlyRate: income.hourlyRate,
-              otHourlyRate: parseFloat((income.hourlyRate * 1.5).toFixed(2)),
+              dailyWageRate: income.dailyWageRate,
+              otHourlyRate: parseFloat(((income.dailyWageRate / 8) * 1.5).toFixed(2)),
               professionalRate: income.professionalRate,
               phoneAllowancePerPeriod: income.phoneAllowance,
+              mouDeductionRate: income.mouDeductionRate,
+              otherIncome: income.otherIncome,
               effectiveDate: income.effectiveDate,
             }
             : null,
@@ -645,7 +659,7 @@ router.post(
     body('skillId').optional({ checkFalsy: true }).trim(),
     body('username').optional({ checkFalsy: true }).trim(),
     body('password').optional({ checkFalsy: true }).isLength({ min: 8 }),
-    body('projectLocationIds').optional().isArray(),
+    body('projectLocationId').optional().isString(),
     body('phoneNumber').optional({ checkFalsy: true }).trim(),
     body('idCardNumber').optional({ checkFalsy: true }).trim(),
     body('address').optional({ checkFalsy: true }).trim(),
@@ -701,8 +715,7 @@ router.post(
 
       // 2. Handle Financial Data (Single Action)
       // Extract fields from body. Note: DCForm uses specific names.
-      const dailyWage = Number(req.body.dailyWageRate ?? 0);
-      const hourlyRate = dailyWage > 0 ? dailyWage / 8 : 0; // Convert Day -> Hour
+      const dailyWageRate = Number(req.body.dailyWageRate ?? 0);
 
       // We only upsert if there's meaningful financial data provided
       // or to initialize defaults.
@@ -710,11 +723,11 @@ router.post(
         contractor.id,
         {
           income: {
-            hourlyRate: hourlyRate,
+            dailyWageRate: dailyWageRate,
             professionalRate: Number(req.body.professionalRate ?? 0),
             phoneAllowancePerPeriod: Number(req.body.phoneAllowance ?? 0),
-            // Note: otherIncome is stored in DC Profile itself (T-240) in createDC input, so strictly expense/income sub-collection might not duplicate it unless schema requires.
-            // Spec says "Income Details" has hourlyRate, professionalRate, phoneAllowance.
+            mouDeductionRate: Number(req.body.mouDeductionRate ?? 0),
+            otherIncome: Number(req.body.otherIncome ?? 0),
           },
           expense: {
             accommodationCostPerPeriod: Number(req.body.housingFee ?? 0),
@@ -760,7 +773,7 @@ router.put(
     body('skillId').optional({ checkFalsy: true }).trim(),
     body('username').optional({ checkFalsy: true }).trim(),
     body('password').optional({ checkFalsy: true }).isLength({ min: 8 }),
-    body('projectLocationIds').optional().isArray(),
+    body('projectLocationId').optional().isString(),
     body('phoneNumber').optional({ checkFalsy: true }).trim(),
     body('idCardNumber').optional({ checkFalsy: true }).trim(),
     body('address').optional({ checkFalsy: true }).trim(),
@@ -806,6 +819,7 @@ router.put(
 
       // Convert date strings to Date objects
       const input: any = { ...req.body };
+      if (input.dateOfBirth) input.dateOfBirth = new Date(input.dateOfBirth);
       if (input.startDate) input.startDate = new Date(input.startDate);
       if (input.endDate) input.endDate = new Date(input.endDate);
 
@@ -840,14 +854,13 @@ router.put(
         req.body.phoneAllowance !== undefined ||
         req.body.housingFee !== undefined) {
 
-        const hourlyRate = (req.body.dailyWageRate !== undefined)
-          ? Number(req.body.dailyWageRate) / 8
-          : undefined;
 
         const incomePayload: any = {};
-        if (hourlyRate !== undefined) incomePayload.hourlyRate = hourlyRate;
+        if (req.body.dailyWageRate !== undefined) incomePayload.dailyWageRate = Number(req.body.dailyWageRate);
         if (req.body.professionalRate !== undefined) incomePayload.professionalRate = Number(req.body.professionalRate);
         if (req.body.phoneAllowance !== undefined) incomePayload.phoneAllowancePerPeriod = Number(req.body.phoneAllowance);
+        if (req.body.mouDeductionRate !== undefined) incomePayload.mouDeductionRate = Number(req.body.mouDeductionRate);
+        if (req.body.otherIncome !== undefined) incomePayload.otherIncome = Number(req.body.otherIncome);
 
         const expensePayload: any = {};
         if (req.body.housingFee !== undefined) expensePayload.accommodationCostPerPeriod = Number(req.body.housingFee);
@@ -859,6 +872,7 @@ router.put(
         // In Create, I used laundryFee mapped to washingMachineCostPerPeriod. 
         if (req.body.laundryFee !== undefined) expensePayload.washingMachineCostPerPeriod = Number(req.body.laundryFee);
         if (req.body.airConFee !== undefined) expensePayload.portableAcCostPerPeriod = Number(req.body.airConFee);
+        if (req.body.otherDeduction !== undefined) expensePayload.otherDeduction = Number(req.body.otherDeduction);
 
         // Only call upsert if there's something to update
         if (Object.keys(incomePayload).length > 0 || Object.keys(expensePayload).length > 0) {

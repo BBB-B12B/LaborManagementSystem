@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { collections } from '../config/collections';
 import { logger } from '../utils/logger';
 import { ProjectLocation } from '../models/ProjectLocation';

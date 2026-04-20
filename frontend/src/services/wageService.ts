@@ -114,8 +114,7 @@ export async function getAllWagePeriods(filters?: {
 }): Promise<WagePeriodListResponse> {
   const params = new URLSearchParams();
 
-  if (filters?.projectCode)
-    params.append('projectCode', filters.projectCode);
+  if (filters?.projectCode) params.append('projectCode', filters.projectCode);
   if (filters?.status) params.append('status', filters.status);
   if (filters?.page) params.append('page', String(filters.page));
   if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
@@ -146,9 +145,7 @@ export async function getWagePeriodById(id: string): Promise<WagePeriod> {
  *
  * FR-WC-001: Validate 15-day period
  */
-export async function createWagePeriod(
-  data: WagePeriodCreateInput
-): Promise<WagePeriod> {
+export async function createWagePeriod(data: WagePeriodCreateInput): Promise<WagePeriod> {
   try {
     const response = await apiClient.post<{ success: boolean; data: WagePeriod }>(
       '/wage-periods',
@@ -296,9 +293,7 @@ export async function deleteAdditionalExpense(id: string): Promise<void> {
  * Set DC income details
  * POST /api/dc-income-details
  */
-export async function setDCIncomeDetails(
-  data: DCIncomeDetailsInput
-): Promise<void> {
+export async function setDCIncomeDetails(data: DCIncomeDetailsInput): Promise<void> {
   await apiClient.post('/dc-income-details', data);
 }
 
@@ -306,9 +301,7 @@ export async function setDCIncomeDetails(
  * Set DC expense details
  * POST /api/dc-expense-details
  */
-export async function setDCExpenseDetails(
-  data: DCExpenseDetailsInput
-): Promise<void> {
+export async function setDCExpenseDetails(data: DCExpenseDetailsInput): Promise<void> {
   await apiClient.post('/dc-expense-details', data);
 }
 

@@ -18,15 +18,18 @@ export default function ProjectEditPage() {
   const { id } = router.query;
   const queryClient = useQueryClient();
 
-  const { data: project, isLoading, error } = useQuery({
+  const {
+    data: project,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['project', id],
     queryFn: () => projectService.getById(id as string),
     enabled: !!id,
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: ProjectFormData) =>
-      projectService.update(id as string, data),
+    mutationFn: (data: ProjectFormData) => projectService.update(id as string, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['project', id] });
@@ -57,9 +60,7 @@ export default function ProjectEditPage() {
       <ProtectedRoute>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Alert severity="error">
-              ไม่พบข้อมูลโครงการ หรือคุณไม่มีสิทธิ์เข้าถึง
-            </Alert>
+            <Alert severity="error">ไม่พบข้อมูลโครงการ หรือคุณไม่มีสิทธิ์เข้าถึง</Alert>
           </Container>
         </Layout>
       </ProtectedRoute>

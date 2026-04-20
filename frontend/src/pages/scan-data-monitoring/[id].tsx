@@ -96,7 +96,11 @@ export default function DiscrepancyDetailPage() {
   >(null);
 
   // Fetch discrepancy details
-  const { data: discrepancy, isLoading, error } = useQuery({
+  const {
+    data: discrepancy,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['discrepancy', id],
     queryFn: () => getDiscrepancyById(id as string),
     enabled: !!id,
@@ -126,9 +130,7 @@ export default function DiscrepancyDetailPage() {
     },
   });
 
-  const handleResolveClick = (
-    method: 'update_dr' | 'create_dr' | 'verify' | 'ignore'
-  ) => {
+  const handleResolveClick = (method: 'update_dr' | 'create_dr' | 'verify' | 'ignore') => {
     setSelectedMethod(method);
     setResolveDialogOpen(true);
   };
@@ -175,11 +177,7 @@ export default function DiscrepancyDetailPage() {
           <AlertTitle>เกิดข้อผิดพลาด</AlertTitle>
           {error ? (error as Error).message : 'ไม่พบข้อมูลความผิดปกติ'}
         </Alert>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleBack}
-          sx={{ mt: 2 }}
-        >
+        <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mt: 2 }}>
           กลับ
         </Button>
       </Container>
@@ -192,11 +190,7 @@ export default function DiscrepancyDetailPage() {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleBack}
-          sx={{ mb: 2 }}
-        >
+        <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mb: 2 }}>
           กลับ
         </Button>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -315,17 +309,13 @@ export default function DiscrepancyDetailPage() {
                 <Typography variant="caption" color="text.secondary">
                   ชื่อ DC
                 </Typography>
-                <Typography variant="body1">
-                  {discrepancy.dailyContractorName || '-'}
-                </Typography>
+                <Typography variant="body1">{discrepancy.dailyContractorName || '-'}</Typography>
               </Grid>
               <Grid item xs={12}>
                 <Typography variant="caption" color="text.secondary">
                   โครงการ
                 </Typography>
-                <Typography variant="body1">
-                  {discrepancy.projectLocationName || '-'}
-                </Typography>
+                <Typography variant="body1">{discrepancy.projectLocationName || '-'}</Typography>
               </Grid>
             </Grid>
           </Paper>
@@ -419,20 +409,25 @@ export default function DiscrepancyDetailPage() {
                   variant="outlined"
                   sx={{
                     bgcolor:
-                      Math.abs(discrepancy.hoursDifference || 0) > 2
-                        ? 'error.50'
-                        : 'warning.50',
+                      Math.abs(discrepancy.hoursDifference || 0) > 2 ? 'error.50' : 'warning.50',
                     borderColor:
-                      Math.abs(discrepancy.hoursDifference || 0) > 2 ? 'error.main' : 'warning.main',
+                      Math.abs(discrepancy.hoursDifference || 0) > 2
+                        ? 'error.main'
+                        : 'warning.main',
                   }}
                 >
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                       ส่วนต่าง
                     </Typography>
-                    <Typography variant="h3" color={
-                      Math.abs(discrepancy.hoursDifference || 0) > 2 ? 'error.main' : 'warning.main'
-                    }>
+                    <Typography
+                      variant="h3"
+                      color={
+                        Math.abs(discrepancy.hoursDifference || 0) > 2
+                          ? 'error.main'
+                          : 'warning.main'
+                      }
+                    >
                       {discrepancy.hoursDifference != null
                         ? `${discrepancy.hoursDifference > 0 ? '+' : ''}${discrepancy.hoursDifference.toFixed(2)} ชม.`
                         : '-'}
@@ -461,7 +456,9 @@ export default function DiscrepancyDetailPage() {
                   <TableRow>
                     <TableCell sx={{ fontWeight: 'bold' }}>เวลา</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>ประเภท</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>ชั่วโมง (ปัดเศษ)</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                      ชั่วโมง (ปัดเศษ)
+                    </TableCell>
                     <TableCell align="center" width={50} sx={{ fontWeight: 'bold' }}></TableCell>
                   </TableRow>
                 </TableHead>
@@ -607,23 +604,20 @@ export default function DiscrepancyDetailPage() {
               {discrepancy.discrepancyType === 'Type1' && (
                 <>
                   <strong>Type1:</strong> Daily Report มีชั่วโมงน้อยกว่า ScanData
-                  <br />
-                  → แนะนำ: <strong>Update DR</strong> เพื่ออัพเดทให้ตรงกับ ScanData
+                  <br />→ แนะนำ: <strong>Update DR</strong> เพื่ออัพเดทให้ตรงกับ ScanData
                 </>
               )}
               {discrepancy.discrepancyType === 'Type2' && (
                 <>
                   <strong>Type2:</strong> มี Daily Report แต่ไม่มี ScanData
-                  <br />
-                  → แนะนำ: <strong>Verify</strong> หาก DC ทำงานจริง หรือ <strong>Update DR</strong>{' '}
-                  หากต้องแก้ไข
+                  <br />→ แนะนำ: <strong>Verify</strong> หาก DC ทำงานจริง หรือ{' '}
+                  <strong>Update DR</strong> หากต้องแก้ไข
                 </>
               )}
               {discrepancy.discrepancyType === 'Type3' && (
                 <>
                   <strong>Type3:</strong> มี ScanData แต่ไม่มี Daily Report
-                  <br />
-                  → แนะนำ: <strong>Create DR</strong> สร้าง Daily Report ใหม่จาก ScanData
+                  <br />→ แนะนำ: <strong>Create DR</strong> สร้าง Daily Report ใหม่จาก ScanData
                 </>
               )}
             </Typography>
@@ -650,12 +644,9 @@ export default function DiscrepancyDetailPage() {
               <Alert severity="info">
                 {selectedMethod === 'update_dr' &&
                   'จะอัพเดท Daily Report ให้ตรงกับข้อมูลจาก ScanData'}
-                {selectedMethod === 'create_dr' &&
-                  'จะสร้าง Daily Report ใหม่จากข้อมูล ScanData'}
-                {selectedMethod === 'verify' &&
-                  'ยืนยันว่าข้อมูลถูกต้อง ไม่ต้องแก้ไข'}
-                {selectedMethod === 'ignore' &&
-                  'ยกเว้นความผิดปกตินี้ จะไม่แสดงในรายการรอแก้ไข'}
+                {selectedMethod === 'create_dr' && 'จะสร้าง Daily Report ใหม่จากข้อมูล ScanData'}
+                {selectedMethod === 'verify' && 'ยืนยันว่าข้อมูลถูกต้อง ไม่ต้องแก้ไข'}
+                {selectedMethod === 'ignore' && 'ยกเว้นความผิดปกตินี้ จะไม่แสดงในรายการรอแก้ไข'}
               </Alert>
 
               {selectedMethod === 'update_dr' && (
@@ -745,9 +736,7 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function getStatusColor(
-  status: string
-): 'warning' | 'success' | 'info' | 'default' {
+function getStatusColor(status: string): 'warning' | 'success' | 'info' | 'default' {
   switch (status) {
     case 'pending':
       return 'warning';

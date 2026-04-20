@@ -18,7 +18,14 @@ import {
   Divider,
   Grid,
 } from '@mui/material';
-import { Timeline, TimelineItem, TimelineSeparator, TimelineConnector, TimelineContent, TimelineDot } from '@mui/lab';
+import {
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDot,
+} from '@mui/lab';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { LoadingSpinner } from '@/components/common';
 import { dailyReportService } from '@/services/dailyReportService';
@@ -38,7 +45,11 @@ export default function DailyReportHistoryPage() {
   const { id } = router.query;
 
   // Fetch edit history
-  const { data: history, isLoading, error } = useQuery({
+  const {
+    data: history,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['dailyReportHistory', id],
     queryFn: () => dailyReportService.getHistory(id as string),
     enabled: !!id,
@@ -66,9 +77,7 @@ export default function DailyReportHistoryPage() {
       <ProtectedRoute>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Alert severity="error">
-              ไม่พบประวัติการแก้ไข หรือคุณไม่มีสิทธิ์เข้าถึง
-            </Alert>
+            <Alert severity="error">ไม่พบประวัติการแก้ไข หรือคุณไม่มีสิทธิ์เข้าถึง</Alert>
           </Container>
         </Layout>
       </ProtectedRoute>
@@ -136,9 +145,7 @@ export default function DailyReportHistoryPage() {
               {history.map((entry, index) => (
                 <TimelineItem key={entry.id}>
                   <TimelineSeparator>
-                    <TimelineDot
-                      color={entry.action === 'create' ? 'success' : 'primary'}
-                    />
+                    <TimelineDot color={entry.action === 'create' ? 'success' : 'primary'} />
                     {index < history.length - 1 && <TimelineConnector />}
                   </TimelineSeparator>
                   <TimelineContent>
@@ -181,33 +188,35 @@ export default function DailyReportHistoryPage() {
                               รายการที่แก้ไข:
                             </Typography>
                             <Grid container spacing={2}>
-                              {Object.entries(entry.changedFields || {}).map(([field, change]: [string, any]) => (
-                                <Grid item xs={12} key={field}>
-                                  <Paper variant="outlined" sx={{ p: 2 }}>
-                                    <Typography variant="body2" fontWeight={600} gutterBottom>
-                                      {getFieldLabel(field)}
-                                    </Typography>
-                                    <Grid container spacing={2}>
-                                      <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                          ก่อนแก้ไข:
-                                        </Typography>
-                                        <Typography variant="body2">
-                                          {formatValue(field, change.before)}
-                                        </Typography>
+                              {Object.entries(entry.changedFields || {}).map(
+                                ([field, change]: [string, any]) => (
+                                  <Grid item xs={12} key={field}>
+                                    <Paper variant="outlined" sx={{ p: 2 }}>
+                                      <Typography variant="body2" fontWeight={600} gutterBottom>
+                                        {getFieldLabel(field)}
+                                      </Typography>
+                                      <Grid container spacing={2}>
+                                        <Grid item xs={6}>
+                                          <Typography variant="caption" color="text.secondary">
+                                            ก่อนแก้ไข:
+                                          </Typography>
+                                          <Typography variant="body2">
+                                            {formatValue(field, change.before)}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={6}>
+                                          <Typography variant="caption" color="text.secondary">
+                                            หลังแก้ไข:
+                                          </Typography>
+                                          <Typography variant="body2" color="primary">
+                                            {formatValue(field, change.after)}
+                                          </Typography>
+                                        </Grid>
                                       </Grid>
-                                      <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                          หลังแก้ไข:
-                                        </Typography>
-                                        <Typography variant="body2" color="primary">
-                                          {formatValue(field, change.after)}
-                                        </Typography>
-                                      </Grid>
-                                    </Grid>
-                                  </Paper>
-                                </Grid>
-                              ))}
+                                    </Paper>
+                                  </Grid>
+                                )
+                              )}
                             </Grid>
                           </Box>
                         )}

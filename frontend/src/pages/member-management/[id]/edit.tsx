@@ -35,7 +35,11 @@ export default function EditUserPage() {
   const { success: showSuccess, error: showError } = useToast();
 
   // Fetch user data
-  const { data: user, isLoading, error } = useQuery({
+  const {
+    data: user,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['user', id],
     queryFn: () => memberService.getUserById(id as string),
     enabled: !!id,
@@ -43,8 +47,7 @@ export default function EditUserPage() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: (data: UserEditInput) =>
-      memberService.updateUser(id as string, data),
+    mutationFn: (data: UserEditInput) => memberService.updateUser(id as string, data),
     onSuccess: () => {
       showSuccess('อัปเดทข้อมูลผู้ใช้สำเร็จ');
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -67,7 +70,14 @@ export default function EditUserPage() {
   if (isLoading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '50vh',
+          }}
+        >
           <LoadingSpinner size="large" />
         </Box>
       </Container>
@@ -77,14 +87,8 @@ export default function EditUserPage() {
   if (error) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="error">
-          เกิดข้อผิดพลาด: {(error as Error).message}
-        </Alert>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleCancel}
-          sx={{ mt: 2 }}
-        >
+        <Alert severity="error">เกิดข้อผิดพลาด: {(error as Error).message}</Alert>
+        <Button startIcon={<ArrowBack />} onClick={handleCancel} sx={{ mt: 2 }}>
           กลับไปรายการผู้ใช้
         </Button>
       </Container>
@@ -95,11 +99,7 @@ export default function EditUserPage() {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="warning">ไม่พบข้อมูลผู้ใช้</Alert>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleCancel}
-          sx={{ mt: 2 }}
-        >
+        <Button startIcon={<ArrowBack />} onClick={handleCancel} sx={{ mt: 2 }}>
           กลับไปรายการผู้ใช้
         </Button>
       </Container>
@@ -110,11 +110,7 @@ export default function EditUserPage() {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleCancel}
-          sx={{ mb: 2 }}
-        >
+        <Button startIcon={<ArrowBack />} onClick={handleCancel} sx={{ mb: 2 }}>
           กลับไปรายการผู้ใช้
         </Button>
         <Typography variant="h4" component="h1">

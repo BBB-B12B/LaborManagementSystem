@@ -134,10 +134,7 @@ class OvertimeService {
    * Creates edit history entry automatically
    */
   async update(id: string, data: Partial<OvertimeFormData>): Promise<OvertimeRecord> {
-    const { data: response } = await apiClient.put<OvertimeRecord>(
-      `/overtime/${id}`,
-      data
-    );
+    const { data: response } = await apiClient.put<OvertimeRecord>(`/overtime/${id}`, data);
 
     return {
       ...response,
@@ -160,9 +157,7 @@ class OvertimeService {
    * Returns all changes made to this record
    */
   async getHistory(id: string): Promise<EditHistory[]> {
-    const { data } = await apiClient.get<EditHistory[]>(
-      `/overtime/${id}/history`
-    );
+    const { data } = await apiClient.get<EditHistory[]>(`/overtime/${id}/history`);
 
     return data.map((entry) => ({
       ...entry,

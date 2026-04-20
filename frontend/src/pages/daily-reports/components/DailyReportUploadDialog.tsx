@@ -25,7 +25,10 @@ import {
 import { CloudUpload, CheckCircle, Error as ErrorIcon, Description } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { useMutation } from '@tanstack/react-query';
-import { dailyReportService, type DailyReportImportResult } from '../../../services/dailyReportService';
+import {
+  dailyReportService,
+  type DailyReportImportResult,
+} from '../../../services/dailyReportService';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
 import { apiClient } from '../../../services/api/client';
 
@@ -118,7 +121,7 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
       const response = await apiClient.get('/daily-reports/template', {
         responseType: 'blob',
       });
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -135,7 +138,14 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <DialogTitle
+        sx={{
+          fontWeight: 600,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
         Upload ข้อมูลรายงานประจำวัน
         <Button
           size="small"
@@ -165,11 +175,11 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
                   component="span"
                   startIcon={<CloudUpload />}
                   fullWidth
-                  sx={{ 
-                    py: 2, 
-                    borderStyle: 'dashed', 
+                  sx={{
+                    py: 2,
+                    borderStyle: 'dashed',
                     borderWidth: 2,
-                    '&:hover': { borderStyle: 'dashed', borderWidth: 2 }
+                    '&:hover': { borderStyle: 'dashed', borderWidth: 2 },
                   }}
                 >
                   เลือกไฟล์ (.dat, .xlsx, .xls)
@@ -229,13 +239,16 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
                 รูปแบบไฟล์ที่รองรับ (Hours-only v3):
               </Typography>
               <Typography variant="caption" component="div">
-                • <strong>Excel (.xlsx / .xls)</strong> เท่านั้น (รหัสพนักงาน, วันที่, และจำนวนชั่วโมง)
+                • <strong>Excel (.xlsx / .xls)</strong> เท่านั้น (รหัสพนักงาน, วันที่,
+                และจำนวนชั่วโมง)
               </Typography>
               <Typography variant="caption" component="div">
-                • <strong>คอลัมน์สำคัญ:</strong> วันที่, รหัสพนักงาน, ชื่อพนักงาน, และจำนวนชั่วโมง (ปกติ/โอที)
+                • <strong>คอลัมน์สำคัญ:</strong> วันที่, รหัสพนักงาน, ชื่อพนักงาน, และจำนวนชั่วโมง
+                (ปกติ/โอที)
               </Typography>
               <Typography variant="caption" component="div" sx={{ mt: 1 }}>
-                * ระบบจะค้นหาหัวตารางอัตโนมัติ กรุณาใช้ไฟล์ตาม <strong>Template</strong> เพื่อความแม่นยำ
+                * ระบบจะค้นหาหัวตารางอัตโนมัติ กรุณาใช้ไฟล์ตาม <strong>Template</strong>{' '}
+                เพื่อความแม่นยำ
               </Typography>
               <Typography variant="caption" component="div">
                 รองรับสูงสุด <strong>100,000 รายการ</strong> ขนาดไฟล์ไม่เกิน <strong>100MB</strong>
@@ -286,10 +299,7 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
                       color="success"
                     />
                     {uploadResult.failedRecords > 0 && (
-                      <Chip
-                        label={`ล้มเหลว: ${uploadResult.failedRecords} รายการ`}
-                        color="error"
-                      />
+                      <Chip label={`ล้มเหลว: ${uploadResult.failedRecords} รายการ`} color="error" />
                     )}
                   </Box>
                 </Box>
@@ -299,7 +309,10 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
                     <Typography variant="body2" color="error" gutterBottom sx={{ fontWeight: 500 }}>
                       รายการที่ล้มเหลว (ไม่พบข้อมูลโครงการหรือพนักงาน):
                     </Typography>
-                    <List dense sx={{ maxHeight: 200, overflow: 'auto', bgcolor: '#fff5f5', borderRadius: 1 }}>
+                    <List
+                      dense
+                      sx={{ maxHeight: 200, overflow: 'auto', bgcolor: '#fff5f5', borderRadius: 1 }}
+                    >
                       {uploadResult.errors.map((error, index) => (
                         <ListItem key={index}>
                           <ErrorIcon color="error" sx={{ mr: 1, fontSize: '1rem' }} />
@@ -337,10 +350,7 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
                     label={`สำเร็จ: ${uploadResult.successfulRecords} รายการ`}
                     color="success"
                   />
-                  <Chip
-                    label={`ล้มเหลว: ${uploadResult.failedRecords} รายการ`}
-                    color="error"
-                  />
+                  <Chip label={`ล้มเหลว: ${uploadResult.failedRecords} รายการ`} color="error" />
                 </Box>
 
                 {uploadResult.errors.length > 0 && (
@@ -348,7 +358,10 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
                     <Typography variant="body2" color="error" gutterBottom sx={{ fontWeight: 500 }}>
                       รายการที่ล้มเหลว:
                     </Typography>
-                    <List dense sx={{ maxHeight: 200, overflow: 'auto', bgcolor: '#fff5f5', borderRadius: 1 }}>
+                    <List
+                      dense
+                      sx={{ maxHeight: 200, overflow: 'auto', bgcolor: '#fff5f5', borderRadius: 1 }}
+                    >
                       {uploadResult.errors.map((error, index) => (
                         <ListItem key={index}>
                           <ErrorIcon color="error" sx={{ mr: 1, fontSize: '1rem' }} />
@@ -385,7 +398,9 @@ const DailyReportUploadDialog: React.FC<DailyReportUploadDialogProps> = ({
               variant="contained"
               color="primary"
               disabled={uploadMutation.isPending || !selectedFile}
-              startIcon={uploadMutation.isPending ? <CircularProgress size={20} /> : <CloudUpload />}
+              startIcon={
+                uploadMutation.isPending ? <CircularProgress size={20} /> : <CloudUpload />
+              }
               sx={{
                 borderRadius: '10px',
                 px: 4,

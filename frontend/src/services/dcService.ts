@@ -17,7 +17,7 @@ export interface DailyContractor {
   employeeId: string;
   name: string;
   skillId: string;
-  projectLocationIds: string[];
+  projectLocationId?: string;
   phoneNumber?: string;
   idCardNumber?: string;
   address?: string;
@@ -38,22 +38,25 @@ export interface DailyContractor {
 }
 
 export interface DCCompensationIncome {
-  hourlyRate: number;
-  otHourlyRate: number;
-  professionalRate: number;
-  phoneAllowancePerPeriod: number;
+  dailyWageRate?: number;
+  otHourlyRate?: number;
+  professionalRate?: number;
+  phoneAllowancePerPeriod?: number;
+  mouDeductionRate?: number;
+  otherIncome?: number;
   effectiveDate?: string | Date | null;
 }
 
 export interface DCCompensationExpense {
-  accommodationCostPerPeriod: number;
-  followerCount: number;
-  followerAccommodationPerPeriod: number;
-  refrigeratorCostPerPeriod: number;
-  soundSystemCostPerPeriod: number;
-  tvCostPerPeriod: number;
-  washingMachineCostPerPeriod: number;
-  portableAcCostPerPeriod: number;
+  accommodationCostPerPeriod?: number;
+  followerCount?: number;
+  followerAccommodationPerPeriod?: number;
+  refrigeratorCostPerPeriod?: number;
+  soundSystemCostPerPeriod?: number;
+  tvCostPerPeriod?: number;
+  washingMachineCostPerPeriod?: number;
+  portableAcCostPerPeriod?: number;
+  otherDeduction?: number;
   effectiveDate?: string | Date | null;
 }
 
