@@ -809,7 +809,7 @@ export default function ScanDataMonitoringPage() {
           >
             <Tab icon={<WarningIcon />} iconPosition="start" label="ความผิดปกติ" />
             <Tab icon={<List />} iconPosition="start" label="ข้อมูลสแกนทั้งหมด" />
-            <Tab icon={<History />} iconPosition="start" label="ประวัติการลบ" />
+            <Tab icon={<History />} iconPosition="start" label="ประวัติการแก้ไข" />
           </Tabs>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
