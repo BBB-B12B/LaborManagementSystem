@@ -34,11 +34,15 @@ export const Navbar: React.FC = () => {
   const router = useRouter();
   const { user } = useAuthStore();
   const { sidebarOpen } = useUIStore();
+  const [isHovered, setIsHovered] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Use effectiveOpen for visual states that should expand on hover
+  const effectiveOpen = sidebarOpen || isHovered;
 
   const menuItems: NavMenuItem[] = [
     {
@@ -97,8 +101,10 @@ export const Navbar: React.FC = () => {
   return (
     <Box
       component="aside"
+      onMouseEnter={() => !sidebarOpen && setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       sx={{
-        width: sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH,
+        width: effectiveOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH,
         flexShrink: 0,
         position: 'fixed',
         left: 0,
@@ -108,11 +114,12 @@ export const Navbar: React.FC = () => {
         flexDirection: 'column',
         background: GRADIENT_BG,
         color: NAV_TEXT,
-        px: sidebarOpen ? 2 : 1.5,
+        px: effectiveOpen ? 2 : 1.5,
         py: 3,
-        zIndex: 1200,
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        zIndex: 1500, // Ensure it floats above everything when expanded
+        transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
         overflowX: 'hidden',
+        boxShadow: isHovered && !sidebarOpen ? '10px 0 30px rgba(0,0,0,0.3)' : 'none',
       }}
     >
       {/* Brand */}
@@ -120,9 +127,9 @@ export const Navbar: React.FC = () => {
         display: 'flex', 
         alignItems: 'center', 
         gap: 1.5, 
-        px: sidebarOpen ? 1 : 0.5, 
+        px: effectiveOpen ? 1 : 0.5, 
         mb: 4,
-        justifyContent: sidebarOpen ? 'flex-start' : 'center'
+        justifyContent: effectiveOpen ? 'flex-start' : 'center'
       }}>
         <Box
           sx={{
@@ -142,7 +149,7 @@ export const Navbar: React.FC = () => {
         >
           LM
         </Box>
-        {sidebarOpen && (
+        {effectiveOpen && (
           <Box sx={{ opacity: 1, transition: 'opacity 0.3s' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: 0.2, lineHeight: 1.2 }}>
               Labor Manager
@@ -170,19 +177,19 @@ export const Navbar: React.FC = () => {
                 border: isActive ? `1px solid ${accent}` : '1px solid transparent',
                 boxShadow: isActive ? '0 10px 30px rgba(0,0,0,0.15)' : 'none',
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                px: sidebarOpen ? 2 : 0,
-                justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                px: effectiveOpen ? 2 : 0,
+                justifyContent: effectiveOpen ? 'flex-start' : 'center',
                 '&:hover': {
                   bgcolor: 'rgba(255,255,255,0.06)',
-                  transform: sidebarOpen ? 'none' : 'scale(1.05)',
+                  transform: effectiveOpen ? 'none' : 'scale(1.05)',
                 },
               }}
             >
-              <Tooltip title={!sidebarOpen ? item.label : ""} placement="right">
+              <Tooltip title={!effectiveOpen ? item.label : ""} placement="right">
                 <ListItemIcon
                   sx={{
                     color: NAV_TEXT,
-                    minWidth: sidebarOpen ? 38 : 0,
+                    minWidth: effectiveOpen ? 38 : 0,
                     justifyContent: 'center',
                     '& svg': { fontSize: 22 },
                     transition: 'margin 0.3s',
@@ -191,7 +198,7 @@ export const Navbar: React.FC = () => {
                   {item.icon}
                 </ListItemIcon>
               </Tooltip>
-              {sidebarOpen && (
+              {effectiveOpen && (
                 <ListItemText
                   primary={
                     <Typography variant="body1" sx={{ 

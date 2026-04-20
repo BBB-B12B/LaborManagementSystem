@@ -243,29 +243,42 @@ export class ScanDataAggregator {
     if (scans.length <= 1) return scans;
 
     const windowMs = windowMinutes * 60 * 1000;
-    const result: Date[] = [];
-    
-    // Sort just in case
+    // Sort scans by time
     const sorted = [...scans].sort((a, b) => a.getTime() - b.getTime());
     
-    let currentClusterEnd = sorted[0];
+    // Group into clusters (scans within window of each other)
+    const clusters: Date[][] = [];
+    let currentCluster: Date[] = [sorted[0]];
 
     for (let i = 1; i < sorted.length; i++) {
       const nextScan = sorted[i];
-      const diff = nextScan.getTime() - currentClusterEnd.getTime();
+      const prevScanInCluster = currentCluster[currentCluster.length - 1];
+      const diff = nextScan.getTime() - prevScanInCluster.getTime();
 
       if (diff <= windowMs) {
-        // Within window, update the "latest" for this cluster
-        currentClusterEnd = nextScan;
+        currentCluster.push(nextScan);
       } else {
-        // Outside window, push the finished cluster's latest scan and start new cluster
-        result.push(currentClusterEnd);
-        currentClusterEnd = nextScan;
+        clusters.push(currentCluster);
+        currentCluster = [nextScan];
       }
     }
-    
-    // Don't forget the last one
-    result.push(currentClusterEnd);
+    clusters.push(currentCluster);
+
+    const result: Date[] = [];
+    for (let i = 0; i < clusters.length; i++) {
+      const cluster = clusters[i];
+      const isLastCluster = i === clusters.length - 1;
+      const isOnlyCluster = clusters.length === 1;
+
+      if (isLastCluster && !isOnlyCluster) {
+        // For the last cluster (usually Out-scan), pick the LATEST time
+        result.push(cluster[cluster.length - 1]);
+      } else {
+        // For the first cluster (usually In-scan) or middle clusters, pick the EARLIEST time
+        // If there's only one cluster, we also pick the earliest.
+        result.push(cluster[0]);
+      }
+    }
     
     return result;
   }
