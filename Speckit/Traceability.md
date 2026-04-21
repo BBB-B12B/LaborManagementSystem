@@ -24,6 +24,7 @@ Mapping ระหว่าง Feature หลักและไฟล์ Code ท
 | **F-007, F-008** | - | `seedWageTestData.ts` | - | Mock Data for Wage Testing |
 | **F-010** (Integrated Wage) | - | `wagePeriods.routes.ts` | `WagePeriod.ts`, `ScanData.ts`, `LateRecord.ts` | Integrated Wage Calculation |
 | **F-012** (SS Rules) | - | `socialSecurityRules.routes.ts` | `SocialSecurityRule.ts` | Social Security Rules Config |
+| **F-014** (Sales Sync) | **T-801** to **T-804** | Firebase Client/API | `Task.ts`, `DailyReport.ts` | Two-way sync with Sales System |
 
 ## 2. Data & Component Traceability
 Mapping ระหว่าง Entity และความหมายในระบบ
@@ -65,3 +66,7 @@ Mapping ระหว่าง System Config และตัวแปรที่
 | **T-302** | Workspace Kanban UI | Mock rendering of Task Board with Gradient borders based on UX Audit | `workspace/index.tsx`, `Navbar.tsx` |
 | **T-303** | Workspace API Integration | Real data integration, Task creation logic with running number, Modal UI | `TaskService.ts`, `Task.ts`, `TaskCreateModal.tsx`, `workspace/index.tsx` |
 | **T-304** | UserForm DatePicker Fix | Fix LocalizationProvider crash by using custom DatePicker component | `UserForm.tsx` |
+| **T-801 - T-804** | Firebase Sales System Integration | Read/Write Sync for Tasks and Daily Reports to Firebase Sales System | Firebase SDK, `TaskService`, `DailyReportService` |
+| **T-805** | Hierarchical Task ID | Auto-run ID per Project/WorkOrder (STR/ARC) | `TaskService.ts` |
+| **T-806** | UI Flow Reorder | Reorder form fields to match hierarchy (Location -> WO -> Cat -> Task) | `TaskCreateModal.tsx` |
+| **T-807** | UX Style Audit | Fix background color inconsistency on TextFields | `TaskCreateModal.tsx` |

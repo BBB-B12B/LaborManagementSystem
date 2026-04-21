@@ -205,3 +205,20 @@
 #### 2. Architecture
 * **Endpoints**: `POST /api/daily-reports/import-excel`, `GET /api/daily-reports/template`
 * **Logic**: Split Row into aggregated Multiple Entries inside DailyReport document.
+
+---
+
+### Feature ID: F-014
+**Name**: การเชื่อมต่อระบบหลังการขาย (Sales System Firebase Integration for Task & Daily Report)
+**Status**: 🔄 In Progress
+#### 1. User Flow
+1. ผู้ใช้เข้าหน้า Workspace เพื่อดูงานจากระบบหลังการขาย (Read)
+2. ผู้ใช้สร้าง Task ใหม่ ข้อมูลวิ่งไปเก็บที่ Firebase หลังการขาย (Write)
+3. ผู้ใช้ทำรายงาน Daily Report ภายใต้ Task ข้อมูลถูกเขียนลง Firebase เป็น Sub-collection ของ Task (Write)
+#### 2. Architecture
+* **Firebase Path**: `workOrders/{workOrderId}/categories/{categoryId}/tasks/{taskId}/dailyreport`
+* **ID Generation Logic**:
+    * **WorkOrder**: `[Project]-[Year]-[RunNo]-[WO_Code]` (e.g., `WH-2026-0001-STR`)
+    * **Category**: `CAT-xxxx` (Auto-increment globally)
+    * **Task**: `TASK-xxxxxxx` (Auto-increment per Project + WorkOrder)
+* **Logic**: Two-way Integration (Read/Write)

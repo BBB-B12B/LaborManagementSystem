@@ -35,16 +35,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/tasks
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { title, projectId, assignees, dueDate, status } = req.body;
+    const { taskName, projectId, workOrderId, workOrderCode, categoryId, categoryName, assignees, dueDate, status } = req.body;
     
-    if (!title || !projectId || !assignees || !assignees.length || !dueDate) {
-      throw new AppError('ข้อมูลไม่ครบถ้วน (Title, ProjectId, Assignees, DueDate are required)', 400);
+    if (!taskName || !projectId || !workOrderCode || !categoryName || !assignees || !assignees.length || !dueDate) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Assignees, DueDate are required)', 400);
     }
 
     const validatedData = {
-      title,
+      taskName,
       description: req.body.description,
       projectId,
+      workOrderId,
+      workOrderCode,
+      categoryId,
+      categoryName,
       assignees,
       dueDate: new Date(dueDate),
       status,

@@ -12,8 +12,8 @@ import { AttachFile as AttachFileIcon } from '@mui/icons-material';
 
 export interface Task {
   id: string;
-  taskCode: string;
-  title: string;
+  taskId: string;
+  taskName: string;
   description?: string;
   dueDate: string;
   assignees: { name: string; avatarUrl?: string }[];
@@ -61,7 +61,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
           variant="caption"
           sx={{ fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}
         >
-          {task.taskCode}
+          {task.taskId}
         </Typography>
       </Box>
 
@@ -70,7 +70,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
         variant="subtitle1"
         sx={{ fontWeight: 800, color: '#111827', mb: 1, lineHeight: 1.3 }}
       >
-        {task.title}
+        {task.taskName}
       </Typography>
 
       {/* Description */}

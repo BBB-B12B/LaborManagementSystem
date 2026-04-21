@@ -23,23 +23,28 @@ import { z } from 'zod';
 import { projectService, type Project } from '@/services/projectService';
 import { memberService, type User } from '@/services/memberService';
 import { taskService } from '@/services/taskService';
+import { categoryService, type WorkOrderCategory } from '@/services/categoryService';
 import { useSnackbar } from 'notistack';
 import { useAuthStore } from '@/store/authStore';
 
 // Form validation schema
 const taskSchema = z.object({
-  title: z.string().min(2, 'กรุณาระบุชื่องาน'),
+  taskName: z.string().min(2, 'กรุณาระบุชื่องาน'),
+  description: z.string().optional(),
   projectId: z.string().min(1, 'กรุณาเลือกโครงการ'),
   assignees: z.array(
     z.object({
-      id: z.string(),
+      employeeId: z.string(),
       name: z.string(),
+      roleId: z.string(),
     })
   ).min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน'),
   dueDate: z.date({
     required_error: 'กรุณาเลือกวันที่ครบกำหนด',
     invalid_type_error: 'รูปแบบวันที่ไม่ถูกต้อง',
   }),
+  workOrderCode: z.string().min(1, 'กรุณาเลือกหมวดหมู่งานหลัก'),
+  categoryName: z.string().min(2, 'กรุณาระบุหมวดหมู่งานย่อย'),
 });
 
 type TaskFormData = z.infer<typeof taskSchema>;
@@ -52,6 +57,7 @@ interface TaskCreateModalProps {
 
 export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose, onSuccess }) => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [categories, setCategories] = useState<WorkOrderCategory[]>([]);
   const [fmUsers, setFmUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -65,8 +71,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     resolver: zodResolver(taskSchema),
     mode: 'onChange',
     defaultValues: {
-      title: '',
+      taskName: '',
+      description: '',
       projectId: '',
+      workOrderCode: '',
+      categoryName: '',
       assignees: [],
       dueDate: null as any,
     },
@@ -78,12 +87,14 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       const fetchData = async () => {
         setLoading(true);
         try {
-          const [projectsData, usersData] = await Promise.all([
+          const [projectsData, usersData, categoriesData] = await Promise.all([
             projectService.getActive(),
             memberService.getAllUsers({ roleId: 'FM' }),
+            categoryService.getActiveCategories(),
           ]);
           setProjects(projectsData);
           setFmUsers(usersData.users || []);
+          setCategories(categoriesData);
         } catch (error) {
           console.error('Failed to fetch modal data', error);
         } finally {
@@ -102,8 +113,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     try {
       setSubmitError('');
       await taskService.createTask({
-        title: data.title,
+        taskName: data.taskName,
+        description: data.description,
         projectId: data.projectId,
+        workOrderCode: data.workOrderCode,
+        categoryName: data.categoryName,
         assignees: data.assignees,
         dueDate: data.dueDate.toISOString(),
         status: 'upcoming',
@@ -118,9 +132,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   const inputStyles = { 
     '& .MuiFilledInput-root': {
       borderRadius: 2, 
-      bgcolor: '#F4F6F8',
-      '&:hover': { bgcolor: '#EAECEF' }, 
-      '&.Mui-focused': { bgcolor: '#ffffff', boxShadow: 'inset 0 0 0 1px #1c1e2b' }
+      backgroundColor: '#F4F6F8 !important',
+      '&:hover': { backgroundColor: '#EAECEF !important' }, 
+      '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' }
     },
     '& .MuiInputBase-input': {
       color: '#1c1e2b',
@@ -209,26 +223,6 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
               
               <Grid item xs={12}>
                 <Controller
-                  name="title"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="ชื่องาน *"
-                      fullWidth
-                      variant="filled"
-                      InputProps={{ disableUnderline: true }}
-                      error={!!errors.title}
-                      helperText={errors.title?.message}
-                      disabled={isSubmitting}
-                      sx={inputStyles}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Controller
                   name="projectId"
                   control={control}
                   render={({ field }) => (
@@ -256,6 +250,88 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
 
               <Grid item xs={12}>
                 <Controller
+                  name="workOrderCode"
+                  control={control}
+                  render={({ field }) => (
+                    <Autocomplete
+                      options={categories}
+                      getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                      onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
+                      value={categories.find((c) => c.code === field.value) || null}
+                      disabled={isSubmitting || categories.length === 0}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="หมวดหมู่งานหลัก (Work Order) *"
+                          variant="filled"
+                          error={!!errors.workOrderCode}
+                          helperText={errors.workOrderCode?.message}
+                          InputProps={{ ...params.InputProps, disableUnderline: true }}
+                          sx={inputStyles}
+                        />
+                      )}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Controller
+                  name="categoryName"
+                  control={control}
+                  render={({ field }) => (
+                    <Autocomplete
+                      freeSolo
+                      options={[]}
+                      onInputChange={(_, newValue) => field.onChange(newValue)}
+                      value={field.value}
+                      disabled={isSubmitting}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="หมวดหมู่งานย่อย (Category) *"
+                          variant="filled"
+                          placeholder="เช่น โครงสร้างเสา, โครงสร้างพื้น ชั้น 1"
+                          InputProps={{ ...params.InputProps, disableUnderline: true }}
+                          error={!!errors.categoryName}
+                          helperText={errors.categoryName?.message}
+                          sx={inputStyles}
+                        />
+                      )}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Controller
+                  name="taskName"
+                  control={control}
+                  render={({ field }) => (
+                    <Autocomplete
+                      freeSolo
+                      options={[]}
+                      onInputChange={(_, newValue) => field.onChange(newValue)}
+                      value={field.value}
+                      disabled={isSubmitting}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="ชื่องาน *"
+                          variant="filled"
+                          InputProps={{ ...params.InputProps, disableUnderline: true }}
+                          error={!!errors.taskName}
+                          helperText={errors.taskName?.message}
+                          sx={inputStyles}
+                        />
+                      )}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Controller
                   name="assignees"
                   control={control}
                   render={({ field }) => (
@@ -263,13 +339,13 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                       multiple
                       options={filteredFms}
                       getOptionLabel={(option) => option.name}
-                      isOptionEqualToValue={(option, value) => option.id === value.id}
+                      isOptionEqualToValue={(option, value) => option.id === value.employeeId}
                       onChange={(_, newValue) => {
                         field.onChange(
-                          newValue.map((v) => ({ id: v.id, name: v.name }))
+                          newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
                         );
                       }}
-                      value={filteredFms.filter((u) => field.value?.some((val) => val.id === u.id))}
+                      value={filteredFms.filter((u) => field.value?.some((val) => val.employeeId === u.id))}
                       disabled={isSubmitting}
                       renderOption={(props, option) => {
                         const { key, ...otherProps } = props as any;

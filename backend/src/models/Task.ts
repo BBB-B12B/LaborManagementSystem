@@ -1,20 +1,26 @@
 export type TaskStatus = 'upcoming' | 'in-progress' | 'completed';
 
 export interface TaskAssignee {
-  id: string;
+  employeeId: string;
   name: string;
+  roleId: string;
 }
 
 export interface Task {
   id: string;
-  taskCode: string; // e.g., WH-2026-0001
-  title: string;
+  taskId: string; // e.g., TASK-0000001
+  taskName: string;
   description?: string;
   projectId: string;
   projectCode: string;
+  workOrderId?: string;
+  workOrderCode?: string;
+  categoryId?: string;
+  categoryName?: string;
   assignees: TaskAssignee[];
   dueDate: Date;
   status: TaskStatus;
+  dailyProgress: number;
   attachmentsCount: number;
   isActive: boolean;
   createdAt: Date;
@@ -24,21 +30,30 @@ export interface Task {
 }
 
 export interface CreateTaskInput {
-  title: string;
+  taskName: string;
   description?: string;
   projectId: string;
+  workOrderId?: string;
+  workOrderCode: string;
+  categoryId?: string;
+  categoryName: string;
   assignees: TaskAssignee[];
   dueDate: Date;
   status?: TaskStatus;
 }
 
 export interface UpdateTaskInput {
-  title?: string;
+  taskName?: string;
   description?: string;
   projectId?: string;
+  workOrderId?: string;
+  workOrderCode?: string;
+  categoryId?: string;
+  categoryName?: string;
   assignees?: TaskAssignee[];
   dueDate?: Date;
   status?: TaskStatus;
+  dailyProgress?: number;
   attachmentsCount?: number;
   isActive?: boolean;
 }
@@ -46,14 +61,19 @@ export interface UpdateTaskInput {
 export const taskConverter = {
   toFirestore: (task: any): any => {
     return {
-      taskCode: task.taskCode,
-      title: task.title,
+      taskId: task.taskId,
+      taskName: task.taskName,
       description: task.description || null,
       projectId: task.projectId,
       projectCode: task.projectCode,
+      workOrderId: task.workOrderId || null,
+      workOrderCode: task.workOrderCode || null,
+      categoryId: task.categoryId || null,
+      categoryName: task.categoryName || null,
       assignees: task.assignees || [],
       dueDate: task.dueDate,
       status: task.status,
+      dailyProgress: task.dailyProgress || 0,
       attachmentsCount: task.attachmentsCount || 0,
       isActive: task.isActive,
       createdAt: task.createdAt,
@@ -73,15 +93,20 @@ export const taskConverter = {
     };
 
     return {
-      id: snapshot.id,
-      taskCode: data.taskCode || '',
-      title: data.title || '',
+      id: `${data.workOrderId || 'N-A'}__${data.categoryId || 'N-A'}__${snapshot.id}`,
+      taskId: data.taskId || '',
+      taskName: data.taskName || '',
       description: data.description || '',
       projectId: data.projectId || '',
       projectCode: data.projectCode || '',
+      workOrderId: data.workOrderId || '',
+      workOrderCode: data.workOrderCode || '',
+      categoryId: data.categoryId || '',
+      categoryName: data.categoryName || '',
       assignees: data.assignees || [],
       dueDate: safeDate(data.dueDate),
       status: data.status || 'upcoming',
+      dailyProgress: data.dailyProgress || 0,
       attachmentsCount: data.attachmentsCount || 0,
       isActive: data.isActive !== false,
       createdAt: safeDate(data.createdAt),

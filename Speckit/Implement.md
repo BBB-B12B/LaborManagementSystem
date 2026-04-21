@@ -220,3 +220,36 @@ markdown
 ### 🎯 B. Expected Outcome (สิ่งที่มุ่งหวัง)
 - **Zero-Friction UX:** UI ทำงานลื่นไหล ไม่รู้สึกถึงความแตกต่างของการนำโค้ดจากโปรเจกต์อื่นมาต่อ
 - **Data Integrity:** ข้อมูลวิ่งเข้า Database ของ Production ได้แบบไร้รอยต่อ ไม่มี Error หรือ Data Loss อันเกิดจากความไม่ตรงกันของ Schema (Type/Variables)
+
+---
+
+## 6. Sales System Firebase Integration (ระบบหลังการขาย)
+> **สถานะ:** 🔄 กำลังดำเนินการพัฒนาระบบ Sync (Phase 2.0)
+
+**เป้าหมายหลัก (Core Objective):** 
+เชื่อมต่อข้อมูลระหว่าง Labor System (ของเรา) และ Sales System (ของระบบหลังการขาย) แบบ 2-way (Read & Write) เพื่อให้ โฟร์แมนจัดการ Task และทำ Daily Report ผ่าน UI ของเรา แต่ข้อมูลสะท้อนกลับไปที่ระบบหลัก
+
+---
+
+## 7. E2E Flow Documentation (Logic Flow)
+
+### 🛣️ [F-014] Sales System Sync — E2E Flow & Schema Structure
+
+| มิติการทำงาน | รายละเอียด (Labor System -> Sales System) |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Project/Category -> `Submit` |
+| **API/SDK Contract** | ยิงตรงสู่ Firebase Collection: <br> `workOrders/{workOrderId}/categories/{catId}/tasks/{taskId}` |
+| **Database Schema** | **โครงสร้างแบบลำดับขั้น (Hierarchy):** <br> 1. `workOrders` (Collection) -> Document: `VH-2026-0001-STR` <br> 2. `categories` (Subcol) -> Document: `CAT-0001` (Fields: `catId`, `catName`) <br> 3. `tasks` (Subcol) -> Document: `TASK-0000001` <br> 4. `dailyreport` (Subcol) -> Document: `day-0000001` |
+| **Data Fields (Task)** | ข้อมูลที่จะบันทึกเมื่อ User กดสร้าง Task: <br> - `taskId`: "TASK-0000001" (Auto-gen) <br> - `taskName`: "งานผูกเหล็ก" (User กรอก) <br> - `assignees`: `[{ employeeId, name, roleId }]` (User เลือก) <br> - `dailyProgress`: 0 (Default) <br> - `description`: ข้อความเพิ่มเติม (User กรอก) <br> - `dueDate`, `status`, `createdAt` (System/User) |
+| **Backend/Client Logic** | 1. อ่านข้อมูล (Read): `getDocs()` จาก Sales Firebase ตาม Hierarchy <br> 2. เขียนข้อมูล (Write): `setDoc()` หรือ `addDoc()` เข้า Sales Firebase พร้อมรหัส `CAT-xxxx` และ `TASK-xxxxxxx` |
+
+### 🛣️ [F-014] Hierarchical Task Creation — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Location (Project) -> เลือก Work Order -> พิมพ์ Category -> พิมพ์ Task Name -> `Submit` |
+| **API Contract** | `POST /api/tasks` <br> **Payload**: `{ taskName, projectId, workOrderCode, categoryName, assignees, dueDate }` |
+| **Backend Logic** | **TaskService.createTask**: <br> 1. Read Project & Counters (wo, cat, task) <br> 2. Generate IDs (per scope) <br> 3. Write Transaction (Counter update & Doc set) |
+| **Database Structure** | `workOrders/{woId}/categories/{catId}/tasks/{taskId}` <br> (Note: Task IDs are scoped per `task_{projectCode}_{workOrderCode}`) |
+| **Global Uniqueness** | **Composite ID Strategy**: เพื่อป้องกัน Key ชนกันใน UI และการอัปเดตผิดใบใน Backend -> ให้ใช้รหัส `workOrderId` + `categoryId` + `taskId` เชื่อมกันด้วย `__` เป็นรหัส `id` หลักสำหรับ API และ React Key |
+| **UI/UX Audit (T-807)** | **Consistency Check**: All input fields (Autocomplete & TextField) ต้องใช้ชุด Style เดียวกันผ่าน `sx` ที่ตัว Root ของ `TextField` โดยเจาะจงไปที่คลาส `.MuiFilledInput-root` เพื่อป้องกันการถูก Override จากสี Default ของ Browser หรือ MUI Theme |

@@ -1,8 +1,9 @@
 import { api } from './api/client';
 
 export interface TaskAssignee {
-  id: string;
+  employeeId: string;
   name: string;
+  roleId: string;
   avatarUrl?: string;
 }
 
@@ -10,14 +11,19 @@ export type TaskStatus = 'upcoming' | 'in-progress' | 'completed';
 
 export interface Task {
   id: string;
-  taskCode: string;
-  title: string;
+  taskId: string;
+  taskName: string;
   description?: string;
   projectId: string;
   projectCode: string;
+  workOrderId?: string;
+  workOrderCode?: string;
+  categoryId?: string;
+  categoryName?: string;
   assignees: TaskAssignee[];
   dueDate: string; // ISO string
   status: TaskStatus;
+  dailyProgress: number;
   attachmentsCount: number;
   isActive: boolean;
   createdAt: string;
@@ -25,9 +31,13 @@ export interface Task {
 }
 
 export interface CreateTaskInput {
-  title: string;
+  taskName: string;
   description?: string;
   projectId: string;
+  workOrderId?: string;
+  workOrderCode: string;
+  categoryId?: string;
+  categoryName: string;
   assignees: TaskAssignee[];
   dueDate: string; // ISO string
   status?: TaskStatus;
