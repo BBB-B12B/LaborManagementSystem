@@ -20,7 +20,7 @@ export default function Home() {
 
     // Redirect based on authentication status
     if (isAuthenticated) {
-      router.push('/dashboard');
+      router.push('/work-hour-monitoring');
     } else {
       router.push('/login');
     }

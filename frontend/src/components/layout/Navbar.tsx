@@ -46,8 +46,8 @@ export const Navbar: React.FC = () => {
 
   const menuItems: NavMenuItem[] = [
     {
-      label: t('nav.dashboard'),
-      path: '/dashboard',
+      label: t('nav.workHourMonitoring'),
+      path: '/work-hour-monitoring',
       icon: <DashboardIcon />,
       roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },

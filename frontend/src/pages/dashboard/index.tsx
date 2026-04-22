@@ -8,7 +8,8 @@
  * - Navigation menu (FR-D-002, FR-D-003, FR-D-004)
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/router';
 import {
   Box,
   Grid,
@@ -83,7 +84,12 @@ const StatCard: React.FC<StatCardProps> = ({
  * Dashboard page component
  */
 function Dashboard() {
+  const router = useRouter();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    router.replace('/work-hour-monitoring');
+  }, [router]);
 
   // TODO: Replace with actual API calls
   const { data: dashboardStats } = useQuery({

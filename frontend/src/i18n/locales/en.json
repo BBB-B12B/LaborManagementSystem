@@ -51,6 +51,7 @@
     "sessionExpired": "Session expired. Please login again"
   },
   "nav": {
+    "workHourMonitoring": "Work Hour Monitoring",
     "dashboard": "Dashboard",
     "dailyReport": "Daily Report",
     "overtime": "Overtime",
@@ -193,5 +194,39 @@
     "created": "Created successfully",
     "imported": "Imported successfully",
     "exported": "Exported successfully"
+  },
+  "workHourMonitoring": {
+    "title": "Work Hour Monitoring",
+    "table": {
+      "no": "#",
+      "date": "Date",
+      "employee": "ID / Name",
+      "project": "Project",
+      "comparison": "Work Hour Comparison (Daily & Scan)",
+      "regularHours": "Regular Work Hours",
+      "otHours": "OT Work Hours",
+      "daily": "Daily",
+      "scan": "Scan",
+      "otMorning": "OT Morning",
+      "otNoon": "OT Noon",
+      "otEvening": "OT Evening",
+      "lateMinutes": "Late Minutes",
+      "responsible": "Responsible",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "normal": "Normal",
+      "workHourConflict": "Work Hours Conflict",
+      "otConflict": "OT Hours Conflict",
+      "missingScan": "Missing Scan Data",
+      "missingDaily": "Missing Daily Report",
+      "absent": "Absent"
+    },
+    "actions": {
+      "view": "View Data",
+      "check": "Check",
+      "pending": "Pending Check"
+    }
   }
 }
