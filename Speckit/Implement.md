@@ -284,3 +284,12 @@ markdown
 | **Component** | `TaskCreateModal.tsx` (Reuse) |
 | **Edit Mode** | เมื่อเปิดในโหมด Edit: <br> 1. รับ `task` object ผ่าน props <br> 2. ล็อคฟิลด์ `Project` และ `Work Order` ให้เป็น Read-only <br> 3. เปลี่ยนปุ่ม Submit เป็น "บันทึกการแก้ไข" |
 | **Confirmation** | เมื่อกด Delete: <br> - แสดง Dialog ยืนยัน "คุณแน่ใจหรือไม่ว่าต้องการลบงานนี้?" |
+
+### 🛣️ [F-015] Daily Report Form & Labor Management — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Daily Report Page` -> `Select Task` -> `Select Date` -> `Add DC Labor (Popup)` -> `Adjust Individual Hours` -> `Fill Progress & Upload Photos` -> `Submit` |
+| **Business Logic: Retroactive & Lock** | **1. การลงเวลาย้อนหลัง (Retroactive):**<br>- ย้อนหลัง <= 3 วัน: แก้ไขได้ทุกฟิลด์ รวม Progress<br>- ย้อนหลัง > 3 วัน: ล็อคฟิลด์ `Progress` (Read-only) แต่แก้ไข `แรงงาน DC` และ `ชั่วโมงทำงาน` ได้<br>**2. การล็อคตามงวดค่าแรง (Wage Period Lock):**<br>- ถ้าระยะเวลาของวันนั้น อยู่ในงวดค่าแรงที่ถูก `อนุมัติ` หรือ `นำจ่ายแล้ว` -> ล็อคไม่ให้แก้ไขหรือบันทึกข้อมูลใดๆ ทั้งสิ้น (Logic เชื่อมต่อกับระบบคำนวณค่าแรง) |
+| **UI/UX: Labor Selection Popup** | - กดปุ่ม `+ เลือกแรงงาน DC` แสดง Popup รายชื่อแรงงาน<br>- **รายชื่อพนักงาน:** แสดงในรูปแบบ `employeeId : name` และกรองเฉพาะพนักงานที่อยู่ใน `projectLocationIds` เดียวกับ Task<br>- **กำหนดเวลา:** เลือกระบุเวลาทำงานส่วนกลาง (Day, OT เช้า/เที่ยง/เย็น) ไว้ใน Popup<br>- เมื่อกดยืนยัน ข้อมูลรายชื่อพร้อมเวลาจะไปแสดงที่ตารางหลัก และผู้ใช้สามารถ Edit เวลาของ "แต่ละบุคคล" แยกกันในหน้าหลักได้ |
+| **Media Requirements** | บังคับอัปโหลดรูปภาพ 4 รูป (รูปถ่ายหน้างาน 2 รูป, รูปถ่ายแรงงาน 2 รูป) |

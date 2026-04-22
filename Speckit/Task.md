@@ -96,3 +96,13 @@
 ### 🚀 Phase 2.7: Task UI Refinement (User Request)
 *   **Status**: ✅ Completed
 *   [x] **T-819**: [Frontend] Add "Description" (หมายเหตุ) field to TaskCreateModal UI.
+
+### 🔄 Phase 3.0: Daily Report Form & Labor Management (F-015)
+*   **Status**: ✅ Completed
+*   [x] **T-901**: [Frontend] Implement Date Selection Logic (3-day retroactive rule & Progress field locking).
+*   [x] **T-902**: [Frontend] Implement Wage Period Lock (Disable form if date is within approved/paid period).
+*   [x] **T-903**: [Frontend] Create Labor Selection Popup (Bulk selection + Central time config).
+*   [x] **T-904**: [Frontend] Update WorkerRow to allow individual time adjustments on main screen.
+*   [x] **T-905**: [Frontend] Implement Media Validation (Force 2 site photos + 2 labor photos).
+*   [x] **T-906**: [Frontend] Filter Labor list by `projectLocationIds` (Same site only).
+*   [x] **T-907**: [Frontend] Format Labor list as `employeeId : name`.

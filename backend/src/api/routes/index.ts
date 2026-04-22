@@ -17,6 +17,7 @@ import wagePeriodRoutes from './wagePeriods.routes';
 import scanDataRoutes from './scanData.routes';
 import socialSecurityRulesRoutes from './socialSecurityRules.routes';
 import taskRoutes from './tasks.routes';
+import mediaRoutes from './media.routes';
 
 const router = Router();
 
@@ -52,5 +53,8 @@ router.use('/social-security-rules', socialSecurityRulesRoutes);
 
 // Task routes
 router.use('/tasks', taskRoutes);
+
+// Media routes
+router.use('/media', mediaRoutes);
 
 export default router;

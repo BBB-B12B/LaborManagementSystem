@@ -395,6 +395,42 @@ class DailyReportService {
 
     return items;
   }
+
+  /**
+   * Submit Daily Report for a specific Task (Task-Centric)
+   * [F-015] workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}
+   */
+  async submitTaskReport(taskId: string, data: any): Promise<any> {
+    const { data: response } = await apiClient.post(`/tasks/${taskId}/reports`, data);
+    return response;
+  }
+
+  /**
+   * Fetch Daily Report for a specific Task and Date
+   */
+  async getTaskReport(taskId: string, dateStr: string): Promise<any> {
+    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports/${dateStr}`);
+    return response.data;
+  }
+
+  /**
+   * Upload multiple photos
+   */
+  async uploadPhotos(files: File[], folder: string = 'daily-reports'): Promise<string[]> {
+    if (files.length === 0) return [];
+    
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    formData.append('folder', folder);
+
+    const { data: response } = await apiClient.post('/media/upload-multiple', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    if (!response.success) throw new Error(response.error || 'Failed to upload photos');
+    
+    return response.data.map((item: any) => item.url);
+  }
 }
 
 

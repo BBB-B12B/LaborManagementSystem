@@ -148,4 +148,38 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+// POST /api/tasks/:id/reports
+router.post('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const reportData = req.body;
+    await taskService.submitDailyReport(id, reportData, userId);
+
+    res.status(201).json({
+      success: true,
+      message: 'Daily report submitted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/:id/reports/:date
+router.get('/:id/reports/:date', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id, date } = req.params;
+    const report = await taskService.getDailyReport(id, date);
+
+    res.status(200).json({
+      success: true,
+      data: report,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

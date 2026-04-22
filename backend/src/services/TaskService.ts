@@ -346,6 +346,86 @@ export class TaskService {
       updatedBy,
     });
   }
+
+  /**
+   * บันทึกรายงานการทำงานรายวันลงในตัว Task โดยตรง (Task-Centric)
+   * Path: workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}
+   */
+  async submitDailyReport(id: string, reportData: any, updatedBy: string): Promise<void> {
+    console.log(`[TaskService] Submitting daily report for task: ${id}`, reportData);
+    
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Task not found', 404);
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    const reportDate = new Date(reportData.reportDate);
+    const year = reportDate.getFullYear();
+    const month = String(reportDate.getMonth() + 1).padStart(2, '0');
+    const day = String(reportDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const dailyReportRef = taskRef.collection('dailyReports').doc(dateStr);
+
+    await db.runTransaction(async (transaction) => {
+      // 1. ALL READS
+      const taskDoc = await transaction.get(taskRef);
+      if (!taskDoc.exists) throw new AppError('Task not found', 404);
+
+      // 2. ALL WRITES
+      const now = new Date();
+      
+      // บันทึกลง Sub-collection
+      transaction.set(dailyReportRef, {
+        ...reportData,
+        reportDate: reportDate,
+        createdAt: now,
+        createdBy: updatedBy,
+        updatedAt: now,
+        updatedBy: updatedBy
+      });
+
+      // อัปเดต Task หลัก
+      transaction.update(taskRef, {
+        dailyProgress: reportData.progress || 0,
+        status: reportData.progress >= 100 ? 'completed' : 'in-progress',
+        updatedAt: now,
+        updatedBy: updatedBy
+      });
+
+      // บันทึก History
+      const oldData = taskDoc.data();
+      await this.recordHistory(taskRef, 'daily_report_submit', oldData, {
+        dailyProgress: reportData.progress,
+        updatedAt: now
+      }, updatedBy);
+    });
+  }
+
+  /**
+   * ดึงข้อมูลรายงานประจำวันของ Task ตามวันที่ระบุ
+   */
+  async getDailyReport(id: string, dateStr: string): Promise<any> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) return null;
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    const reportDoc = await taskRef.collection('dailyReports').doc(dateStr).get();
+    if (!reportDoc.exists) return null;
+
+    return reportDoc.data();
+  }
 }
 
 export const taskService = new TaskService();
