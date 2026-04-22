@@ -70,3 +70,15 @@ Mapping ระหว่าง System Config และตัวแปรที่
 | **T-805** | Hierarchical Task ID | Auto-run ID per Project/WorkOrder (STR/ARC) | `TaskService.ts` |
 | **T-806** | UI Flow Reorder | Reorder form fields to match hierarchy (Location -> WO -> Cat -> Task) | `TaskCreateModal.tsx` |
 | **T-807** | UX Style Audit | Fix background color inconsistency on TextFields | `TaskCreateModal.tsx` |
+| **T-810** | Fix Task Fetching Perf | Change to `.where()` for performance and stability | `TaskService.ts` |
+| **T-811** | Remove 'system' Fallback | Add strict auth check | `tasks.routes.ts` |
+| **T-812** | Dead Tabs Fix | Implement date-based filtering for Workspace Tabs | `workspace/index.tsx` |
+| **T-813** | TaskCard Actions | Add Edit and Delete menu | `TaskCard.tsx` |
+| **T-814** | Quick Filters | [Frontend] Fix Quick Filters button (Add functionality or hide it) | `workspace/index.tsx` |
+| **T-815** | Localized Category ID | [Backend] Localized running number for Categories per WorkOrder | `TaskService.ts` |
+| **T-816** | [Backend] Update/Delete API | PATCH/DELETE endpoints for Tasks with Soft Delete | `tasks.routes.ts`, `TaskService.ts` |
+| **T-817** | [Frontend] Edit UI | Edit Modal and Confirmation Dialog | `TaskCreateModal.tsx`, `WorkspacePage` |
+| **T-818** | [Backend] Task Audit Trail | Record Old/New values for task edits | `TaskService.ts`, `EditHistory.ts` |
+| **T-819** | [Frontend] Description UI | Add 'หมายเหตุ' field to Task modal | `TaskCreateModal.tsx` |
+| **T-820** | [Frontend] Summary Button | Button to link Reporting view to Summary table | `daily-reports/index.tsx` |
+| **T-821** | [Backend/FE] Progress Sync | Sync Task progress from Daily Report | `DailyReportService.ts`, `TaskService.ts` |

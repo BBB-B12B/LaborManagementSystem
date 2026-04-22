@@ -53,9 +53,12 @@ interface TaskCreateModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  task?: any; // ถ้ามี task แสดงว่าเป็นโหมดแก้ไข
 }
 
-export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose, onSuccess }) => {
+export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose, onSuccess, task }) => {
+  const { user } = useAuthStore();
+  const isEdit = !!task;
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<WorkOrderCategory[]>([]);
   const [fmUsers, setFmUsers] = useState<User[]>([]);
@@ -80,6 +83,21 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       dueDate: null as any,
     },
   });
+
+  // Set default values when in Edit mode
+  useEffect(() => {
+    if (open && task) {
+      reset({
+        taskName: task.taskName,
+        description: task.description || '',
+        projectId: task.projectId,
+        workOrderCode: task.workOrderCode,
+        categoryName: task.categoryName,
+        assignees: task.assignees,
+        dueDate: new Date(task.dueDate),
+      });
+    }
+  }, [open, task, reset]);
 
   // Fetch initial data
   useEffect(() => {
@@ -112,20 +130,41 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   const onSubmit = async (data: TaskFormData) => {
     try {
       setSubmitError('');
-      await taskService.createTask({
-        taskName: data.taskName,
-        description: data.description,
-        projectId: data.projectId,
-        workOrderCode: data.workOrderCode,
-        categoryName: data.categoryName,
-        assignees: data.assignees,
-        dueDate: data.dueDate.toISOString(),
-        status: 'upcoming',
-      });
+      if (isEdit) {
+        await taskService.updateTask(task.id, {
+          taskName: data.taskName,
+          description: data.description,
+          categoryName: data.categoryName,
+          assignees: data.assignees,
+          dueDate: data.dueDate.toISOString(),
+        }, user?.id || 'system');
+      } else {
+        const selectedProject = projects.find(p => p.id === data.projectId);
+        await taskService.createTask({
+          taskName: data.taskName,
+          description: data.description,
+          projectId: data.projectId,
+          projectName: selectedProject?.projectName || 'Unknown Project',
+          workOrderCode: data.workOrderCode,
+          categoryName: data.categoryName,
+          assignees: data.assignees,
+          dueDate: data.dueDate.toISOString(),
+          status: 'upcoming',
+        });
+      }
       onSuccess();
     } catch (error: any) {
-      console.error('Failed to create task', error);
-      setSubmitError(error.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างงาน');
+      console.error('Failed to save task', error);
+      const serverData = error.response?.data;
+      let errorMsg = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
+      
+      if (serverData) {
+        errorMsg = typeof serverData === 'string' ? serverData : (serverData.error || serverData.message || JSON.stringify(serverData));
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
+      setSubmitError(errorMsg);
     }
   };
 
@@ -197,7 +236,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         }}>
           <AssignmentIcon />
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>สร้างงานใหม่</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          {isEdit ? 'แก้ไขงาน' : 'สร้างงานใหม่'}
+        </Typography>
         <IconButton 
           onClick={onClose}
           sx={{ ml: 'auto', color: 'text.secondary', '&:hover': { bgcolor: 'grey.100' } }}
@@ -231,7 +272,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                       getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
                       onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
                       value={projects.find((p) => p.id === field.value) || null}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isEdit}
                       renderInput={(params) => (
                         <TextField
                           {...params}
@@ -258,7 +299,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                       getOptionLabel={(option) => `${option.code} - ${option.name}`}
                       onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
                       value={categories.find((c) => c.code === field.value) || null}
-                      disabled={isSubmitting || categories.length === 0}
+                      disabled={isSubmitting || categories.length === 0 || isEdit}
                       renderInput={(params) => (
                         <TextField
                           {...params}
@@ -395,6 +436,27 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                   )}
                 />
               </Grid>
+
+              <Grid item xs={12}>
+                <Controller
+                  name="description"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="หมายเหตุ"
+                      variant="filled"
+                      multiline
+                      rows={3}
+                      fullWidth
+                      disabled={isSubmitting}
+                      placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)"
+                      InputProps={{ disableUnderline: true }}
+                      sx={inputStyles}
+                    />
+                  )}
+                />
+              </Grid>
             </Grid>
           )}
         </DialogContent>
@@ -422,7 +484,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                 <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
                 กำลังบันทึก...
               </>
-            ) : 'สร้างงาน'}
+            ) : isEdit ? 'บันทึกการแก้ไข' : 'สร้างงาน'}
           </Button>
         </DialogActions>
       </Box>

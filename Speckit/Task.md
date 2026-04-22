@@ -47,7 +47,9 @@
 *   [x] **T-801**: [Setup] Initialize Firebase Client/SDK connection to Sales System.
 *   [x] **T-802**: [Frontend] Read: Update Workspace Kanban to fetch tasks from `workOrders/{id}/categories/{id}/tasks`.
 *   [x] **T-803**: [Frontend] Write: Update Create Task flow to save to Firebase.
-*   [/] **T-804**: [Frontend] Read/Write: Update Daily Report to sync with `workOrders/.../tasks/{id}/dailyreport`.
+*   [/] **T-804**: [Frontend] Task-based Reporting UI (Sidebar + Form) in Daily Report Page.
+*   [ ] **T-820**: [Frontend] Add "View Summary Table" button and redirect logic.
+*   [ ] **T-821**: [Frontend] Sync Task Progress (dailyProgress & status) after report submission.
 *   [x] **T-805**: [Backend] Hierarchical Schema & ID Generation (STR/ARC per WorkOrder)
 *   [x] **T-806**: [Frontend] UI Flow Reorder (Location -> WO -> Category -> Task)
 *   [/] **T-807**: [Frontend] UX Audit - Fix Grey Background Issue (Consistency & Standards)
@@ -65,3 +67,32 @@
         2. **Action**: Implement Composite ID (WO_ID|CAT_ID|TASK_ID) in Backend to ensure global uniqueness.
         3. **Status**: In Progress
 *   [ ] **T-809**: [Backend] Composite ID Implementation (models/converter & services/update).
+
+### 🚀 Phase 2.5: Workspace UX & Performance Audit
+*   **Status**: ✅ Completed
+*   [x] **T-810**: [Backend] Fix `TaskService.getTasks` performance issue (Remove full table scan, use `.where` instead).
+    - **Error Logs**:
+      - **[T-810-E1-1]**: 500 Internal Server Error (FAILED_PRECONDITION)
+        1. **Root Cause**: `collectionGroup().where()` query requires manual index creation in Firebase Console.
+        2. **Action**: Revert to memory filtering temporarily to restore service.
+        3. **Status**: Fixed
+*   [x] **T-811**: [Backend] Remove fallback to 'system' user in `tasks.routes.ts` (Throw 401 instead).
+    - **Error Logs**:
+      - **[T-811-E1-1]**: Automatic Redirect to Login on Task Submission
+        1. **Root Cause**: `tasks.routes.ts` is missing `authenticate` middleware, leading to `req.user` being undefined and throwing 401.
+        2. **Action**: Apply `authenticate` middleware to task routes.
+        3. **Status**: Fixed
+*   [x] **T-812**: [Frontend] Fix Dead Tabs in Workspace (`activeTab` filtering logic based on date).
+*   [x] **T-813**: [Frontend] Add Edit/Delete actions in `TaskCard`.
+*   [x] **T-814**: [Frontend] Fix Quick Filters button (Add functionality or hide it).
+*   [x] **T-815**: [Backend] Localized Category ID Implementation (Change from global to per-WorkOrder counter).
+
+### 🛠️ Phase 2.6: Task Management (Edit/Delete & Audit Trail)
+*   **Status**: ✅ Completed
+*   [x] **T-816**: [Backend] Implement Update & Soft Delete API with Audit Trail (EditHistory).
+*   [x] **T-817**: [Frontend] Implement Edit Task Modal & Confirmation Dialog.
+*   [x] **T-818**: [Backend] Category Migration Logic (Handle task movement between categories).
+
+### 🚀 Phase 2.7: Task UI Refinement (User Request)
+*   **Status**: ✅ Completed
+*   [x] **T-819**: [Frontend] Add "Description" (หมายเหตุ) field to TaskCreateModal UI.

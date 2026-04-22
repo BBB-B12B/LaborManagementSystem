@@ -21,6 +21,7 @@ export class TaskService {
       }
       const projectData = projectDoc.data();
       const projectCode = projectData?.projectCode || projectData?.code || 'XX';
+      const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
       const currentYear = new Date().getFullYear().toString();
 
       // 2. อ่าน Task Counter (แยกตาม Project และ WorkOrder)
@@ -40,6 +41,16 @@ export class TaskService {
          woCounterDoc = await transaction.get(woCounterRef);
       }
 
+      // --- [T-815] LOCALIZED CALCULATION PRE-READ ---
+      // เราต้องคำนวณ WorkOrderId ล่วงหน้าเพื่อให้รู้ว่าจะไปอ่าน Category Counter ของงานไหน
+      if (!generatedWorkOrderId && input.workOrderCode && woCounterDoc) {
+        if (woCounterDoc.exists) {
+          woNextRun = (woCounterDoc.data()?.count || 0) + 1;
+        }
+        const woRunningNo = woNextRun.toString().padStart(4, '0');
+        generatedWorkOrderId = `${projectCode}-${currentYear}-${woRunningNo}-${input.workOrderCode}`;
+      }
+
       // 3.5 อ่าน Category Counter (เพื่อ Gen CAT-xxxx)
       let generatedCategoryId = input.categoryId || '';
       let catCounterRef: FirebaseFirestore.DocumentReference | null = null;
@@ -47,7 +58,9 @@ export class TaskService {
       let catNextRun = 1;
 
       if (!generatedCategoryId && input.categoryName) {
-         catCounterRef = db.collection('system_counters').doc('global_categories');
+         // [T-815: Localized Category ID]
+         const catCounterId = `cat_counter_${generatedWorkOrderId}`;
+         catCounterRef = db.collection('system_counters').doc(catCounterId);
          catCounterDoc = await transaction.get(catCounterRef);
       }
 
@@ -61,13 +74,7 @@ export class TaskService {
       const newTaskCode = `TASK-${taskRunningStr}`;
 
       // 5. คำนวณ Running Number สำหรับ WorkOrder
-      if (!generatedWorkOrderId && input.workOrderCode && woCounterRef && woCounterDoc) {
-         if (woCounterDoc.exists) {
-           woNextRun = (woCounterDoc.data()?.count || 0) + 1;
-         }
-         const woRunningNo = woNextRun.toString().padStart(4, '0');
-         generatedWorkOrderId = `${projectCode}-${currentYear}-${woRunningNo}-${input.workOrderCode}`;
-      }
+      // (ข้ามขั้นตอนนี้เพราะคำนวณไปแล้วในขั้นตอน PRE-READ ด้านบน)
 
       // 5.5 คำนวณ Running Number สำหรับ Category
       if (!generatedCategoryId && input.categoryName && catCounterRef && catCounterDoc) {
@@ -105,6 +112,7 @@ export class TaskService {
         description: input.description,
         projectId: input.projectId,
         projectCode: projectCode,
+        projectName: projectName,
         workOrderId: generatedWorkOrderId,
         workOrderCode: input.workOrderCode,
         categoryId: generatedCategoryId,
@@ -134,23 +142,24 @@ export class TaskService {
    * ดึงรายการ Tasks ทั้งหมด (กรองตาม Role)
    */
   async getTasks(filters?: { projectId?: string; assigneeId?: string }): Promise<Task[]> {
-    // ใช้ get() ตรงๆ โดยไม่มี where() เพื่อหลีกเลี่ยงการติด Error: FAILED_PRECONDITION (Collection Group Index)
-    // สำหรับระบบที่มีข้อมูลเยอะ ควรไปสร้าง Index ใน Firebase Console ก่อนเปิดใช้งานจริง
+    // [TEMPORARY REVERT - Phase 1: Performance Fix] 
+    // ใช้การกรองใน Memory ชั่วคราวเพื่อเลี่ยง Error 500 (FAILED_PRECONDITION) เนื่องจากยังไม่ได้สร้าง Index ใน Firebase Console
+    // สำหรับระบบที่มีข้อมูลเยอะ ควรไปสร้าง Index ใน Firebase Console แล้วเปลี่ยนกลับไปใช้ .where()
     const snapshot = await db.collectionGroup('tasks').withConverter(taskConverter).get();
     let tasks = snapshot.docs.map(doc => doc.data() as Task);
     
-    // กรอง isActive
+    // กรอง isActive ใน Memory
     tasks = tasks.filter(task => task.isActive === true);
 
-    // กรอง projectId
+    // กรอง projectId ใน Memory
     if (filters?.projectId) {
       tasks = tasks.filter(task => task.projectId === filters.projectId);
     }
     
-    // Sort by createdAt desc in memory to avoid Firestore composite index requirement
+    // Sort by createdAt desc in memory
     tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-    // ถ้ามีการกรอง assigneeId ให้ทำการกรองใน Memory เนื่องจาก Firestore ไม่รองรับ array-contains object
+    // กรอง assigneeId ใน Memory
     if (filters?.assigneeId) {
       tasks = tasks.filter(task => 
         task.assignees.some(assignee => assignee.employeeId === filters.assigneeId)
@@ -161,40 +170,156 @@ export class TaskService {
   }
 
   /**
-   * อัปเดต Task
+   * อัปเดต Task พร้อมระบบ Audit Trail และ Category Migration
    */
   async updateTask(id: string, input: UpdateTaskInput, updatedBy: string): Promise<void> {
-    let taskRef;
+    console.log(`[TaskService] Updating task: ${id}`, input);
+    try {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    let oldWoId: string = '', oldCatId: string = '', oldTaskId: string = '';
 
-    // ตรวจสอบว่าเป็น Composite ID (WO__CAT__TASK) หรือไม่
     if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      [oldWoId, oldCatId, oldTaskId] = id.split('__');
+      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories').doc(oldCatId).collection('tasks').doc(oldTaskId);
     } else {
-      // Legacy: ใช้ collectionGroup ค้นหา taskId (ไม่แนะนำเพราะอาจซ้ำกันได้ในระบบใหม่)
       const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      
-      if (querySnapshot.empty) {
-        throw new AppError('Task not found', 404);
-      }
-      
+      if (querySnapshot.empty) throw new AppError('Task not found', 404);
       taskRef = querySnapshot.docs[0].ref;
     }
     
     const doc = await taskRef.get();
+    console.log(`[TaskService] Document fetched: ${doc.exists}`);
+    if (!doc.exists) throw new AppError('ไม่พบข้อมูลงานที่ต้องการแก้ไข (Task not found)', 404);
     
-    if (!doc.exists) {
-      throw new AppError('Task not found', 404);
+    const oldData = doc.data() as any;
+    console.log(`[TaskService] Old data:`, { taskName: oldData.taskName, categoryName: oldData.categoryName });
+    const now = new Date();
+
+    // Sanitize input: Remove undefined values
+    const sanitizedInput = Object.keys(input).reduce((obj: any, key) => {
+      const val = (input as any)[key];
+      if (val !== undefined) obj[key] = val;
+      return obj;
+    }, {});
+
+    // 1. ตรวจสอบการเปลี่ยน Category (Category Migration)
+    if (input.categoryName && input.categoryName !== oldData.categoryName) {
+      // ดึงหรือสร้าง Category ID ใหม่ (ใช้ Logic คล้าย CreateTask)
+      // เพื่อความง่ายในจุดนี้ เราจะ Re-create task ใน Path ใหม่
+      const newCatId = `cat_counter_${oldWoId}`; // ใช้ counter เดิม
+      // หมายเหตุ: ในระบบจริงควรมี logic ตรวจสอบหมวดหมู่ที่มีอยู่แล้วด้วย
+      // แต่ในที่นี้เราจะรัน Task ภายใต้ Category Name ใหม่ไปเลย
+      
+      // เราจะทำการ Re-set ข้อมูลใน Path ใหม่ และลบอันเก่า (หรือ Mark isActive: false ในที่เก่า)
+      // แต่เพื่อรักษา Hierarchy เราจะย้าย Document ครับ
+      const newCategoryRef = db.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
+      
+      // ค้นหาว่ามีหมวดหมู่นี้อยู่แล้วหรือยัง
+      const catQuery = await newCategoryRef.where('catName', '==', input.categoryName).limit(1).get();
+      let targetCatId = '';
+      
+      if (!catQuery.empty) {
+        targetCatId = catQuery.docs[0].id;
+      } else {
+        // สร้างหมวดหมู่ใหม่
+        const catCounterRef = db.collection('system_counters').doc(newCatId);
+        const catCounterDoc = await catCounterRef.get();
+        const nextCatRun = (catCounterDoc.data()?.count || 0) + 1;
+        targetCatId = `CAT-${nextCatRun.toString().padStart(4, '0')}`;
+        
+        await catCounterRef.set({ count: nextCatRun, updatedAt: now }, { merge: true });
+        await newCategoryRef.doc(targetCatId).set({ catId: targetCatId, catName: input.categoryName }, { merge: true });
+      }
+
+      const newTaskRef = newCategoryRef.doc(targetCatId).collection('tasks').doc(oldTaskId);
+      const newData = { ...oldData, ...sanitizedInput, categoryId: targetCatId, updatedAt: now, updatedBy };
+      
+      await newTaskRef.set(newData);
+      console.log(`[TaskService] New task document created (Migration)`);
+      await taskRef.delete();
+      console.log(`[TaskService] Old task document deleted (Migration)`);
+      
+      await this.recordHistory(newTaskRef, 'update', oldData, newData, updatedBy);
+      console.log(`[TaskService] History recorded (Migration)`);
+    } else {
+      const updates = { ...sanitizedInput, updatedAt: now, updatedBy };
+      await taskRef.update(updates);
+      console.log(`[TaskService] Task document updated (Regular)`);
+      await this.recordHistory(taskRef, 'update', oldData, updates, updatedBy);
+      console.log(`[TaskService] History recorded (Regular)`);
+    }
+    console.log(`[TaskService] updateTask completed successfully`);
+    } catch (error: any) {
+      console.error(`[TaskService] CRITICAL ERROR in updateTask:`, error);
+      throw new AppError(`Backend Error: ${error.message}`, 500);
+    }
+  }
+
+  /**
+   * Soft Delete Task
+   */
+  async softDeleteTask(id: string, userId: string): Promise<void> {
+    let taskRef;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Task not found', 404);
+      taskRef = querySnapshot.docs[0].ref;
     }
 
-    const updates: any = {
-      ...input,
-      updatedAt: new Date(),
-      updatedBy,
-    };
+    const doc = await taskRef.get();
+    if (!doc.exists) throw new AppError('Task not found', 404);
 
+    const oldData = doc.data();
+    const updates = { isActive: false, updatedAt: new Date(), updatedBy: userId };
+    
     await taskRef.update(updates);
+    await this.recordHistory(taskRef, 'delete', oldData, updates, userId);
   }
+
+  /**
+   * บันทึกประวัติการแก้ไข (Audit Trail)
+   */
+  private recordHistory = async (taskRef: FirebaseFirestore.DocumentReference, type: string, oldData: any, newData: any, userId: string) => {
+    try {
+    const historyRef = taskRef.collection('editHistory').doc();
+    
+    // กรองเฉพาะฟิลด์ที่เปลี่ยนจริง (ใช้การเทียบค่าที่ปลอดภัยขึ้น)
+    const changedFields = Object.keys(newData).filter(key => {
+      if (key === 'updatedAt' || key === 'updatedBy') return false;
+      
+      const oldVal = oldData[key];
+      const newVal = newData[key];
+
+      // เทียบ Date
+      if (oldVal instanceof Date && newVal instanceof Date) {
+        return oldVal.getTime() !== newVal.getTime();
+      }
+
+      // เทียบ Firestore Timestamp กับ Date
+      if (oldVal && typeof oldVal.toDate === 'function' && newVal instanceof Date) {
+        return oldVal.toDate().getTime() !== newVal.getTime();
+      }
+
+      return JSON.stringify(oldVal) !== JSON.stringify(newVal);
+    });
+
+    if (changedFields.length === 0 && type === 'update') return;
+
+    await historyRef.set({
+      changeType: type,
+      changedFields,
+      oldValues: changedFields.reduce((obj: any, key) => ({ ...obj, [key]: oldData[key] ?? null }), {}),
+      newValues: changedFields.reduce((obj: any, key) => ({ ...obj, [key]: newData[key] ?? null }), {}),
+      createdAt: new Date(),
+      createdBy: userId,
+    });
+    } catch (err: any) {
+      console.error('[TaskService] Failed to record history:', err);
+    }
+  };
 
   /**
    * อัปเดตสถานะ (Status) แบบด่วน (เช่น Drag & Drop)

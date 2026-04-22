@@ -1,8 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { taskService } from '../../services/TaskService';
 import { AppError } from '../middleware/errorHandler';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+// Apply authentication to all routes
+router.use(authenticate);
 
 // GET /api/tasks
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -54,7 +58,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       status,
     };
 
-    const userId = req.user?.uid || 'system';
+    const userId = req.user?.uid;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
 
     const newTask = await taskService.createTask(validatedData, userId);
     
@@ -72,7 +79,10 @@ router.patch('/:id/status', async (req: Request, res: Response, next: NextFuncti
   try {
     const { id } = req.params;
     const { status } = req.body;
-    const userId = req.user?.uid || 'system';
+    const userId = req.user?.uid;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
 
     if (!['upcoming', 'in-progress', 'completed'].includes(status)) {
       throw new AppError('Invalid status', 400);
@@ -83,6 +93,55 @@ router.patch('/:id/status', async (req: Request, res: Response, next: NextFuncti
     res.status(200).json({
       success: true,
       message: 'Task status updated successfully',
+      data: { id, status },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/tasks/:id
+router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const input = { ...req.body };
+    if (input.dueDate) {
+      const date = new Date(input.dueDate);
+      if (isNaN(date.getTime())) {
+        throw new AppError('รูปแบบวันที่ไม่ถูกต้อง', 400);
+      }
+      input.dueDate = date;
+    }
+
+    await taskService.updateTask(id, input, userId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Task updated successfully',
+      data: { id }, // ส่ง data กลับไปเพื่อให้ API Client ไม่ Error
+    });
+  } catch (error: any) {
+    console.error('[Route Error] PATCH /tasks/:id failed:', error);
+    next(error);
+  }
+});
+
+// DELETE /api/tasks/:id
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    await taskService.softDeleteTask(id, userId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Task deleted successfully (Soft Delete)',
+      data: { id }, // ส่ง data กลับไปเพื่อให้ API Client ไม่ Error
     });
   } catch (error) {
     next(error);

@@ -6,6 +6,11 @@ import {
   Button,
   Chip,
   Skeleton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,6 +33,9 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -47,7 +55,30 @@ export default function WorkspacePage() {
 
   const handleModalSuccess = () => {
     setIsModalOpen(false);
+    setEditingTask(null);
     fetchTasks();
+  };
+
+  const handleEdit = (task: Task) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = (task: Task) => {
+    setTaskToDelete(task);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!taskToDelete) return;
+    try {
+      await taskService.deleteTask(taskToDelete.id);
+      setIsDeleteDialogOpen(false);
+      setTaskToDelete(null);
+      fetchTasks();
+    } catch (error) {
+      console.error('Failed to delete task', error);
+    }
   };
 
   return (
@@ -125,26 +156,15 @@ export default function WorkspacePage() {
                 Add New
               </Button>
 
+              {/* Quick Filters - Hidden for now (T-814)
               <Button
                 variant="outlined"
                 startIcon={<TuneIcon />}
-                sx={{
-                  bgcolor: '#f1f3f6',
-                  color: '#1c1e2b',
-                  borderColor: 'transparent',
-                  borderRadius: '999px',
-                  px: 2,
-                  py: 1,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  '&:hover': {
-                    bgcolor: '#e5e7eb',
-                    borderColor: 'transparent',
-                  },
-                }}
+                ...
               >
                 Quick Filters
               </Button>
+              */}
             </Stack>
           </Stack>
         </Box>
@@ -162,7 +182,42 @@ export default function WorkspacePage() {
           }}
         >
           {COLUMNS.map((column) => {
-            const columnTasks = tasks.filter((t) => t.status === column.id);
+            // [Phase 2: Fix Dead Tabs]
+            const getFilteredTasks = () => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+
+              const startOfWeek = new Date(today);
+              startOfWeek.setDate(today.getDate() - today.getDay());
+
+              const endOfWeek = new Date(startOfWeek);
+              endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+              return tasks.filter((task) => {
+                if (activeTab === 'All Tasks') return true;
+
+                const dueDate = new Date(task.dueDate);
+                dueDate.setHours(0, 0, 0, 0);
+
+                if (activeTab === 'Today') {
+                  return dueDate.getTime() === today.getTime();
+                }
+
+                if (activeTab === 'This Week') {
+                  return dueDate >= startOfWeek && dueDate <= endOfWeek;
+                }
+
+                if (activeTab === 'Backlog') {
+                  // Backlog: ไม่มีคนรับผิดชอบ หรือ เลยกำหนดแล้วแต่ยังไม่เสร็จ
+                  return task.assignees.length === 0 || (dueDate < today && task.status !== 'completed');
+                }
+
+                return true;
+              });
+            };
+
+            const filteredTasks = getFilteredTasks();
+            const columnTasks = filteredTasks.filter((t) => t.status === column.id);
 
             return (
               <Box
@@ -228,7 +283,14 @@ export default function WorkspacePage() {
                     ))
                   ) : columnTasks.length > 0 ? (
                     // Task Cards
-                    columnTasks.map((task) => <TaskCard key={task.id} task={task} />)
+                    columnTasks.map((task) => (
+                      <TaskCard 
+                        key={task.id} 
+                        task={task} 
+                        onEdit={handleEdit} 
+                        onDelete={handleDeleteClick}
+                      />
+                    ))
                   ) : (
                     // Empty State
                     <Box
@@ -255,9 +317,45 @@ export default function WorkspacePage() {
 
       <TaskCreateModal 
         open={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTask(null);
+        }} 
         onSuccess={handleModalSuccess} 
+        task={editingTask}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงาน</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            คุณแน่ใจหรือไม่ว่าต้องการลบงาน "{taskToDelete?.taskName}"? 
+            <br />
+            การลบนี้จะเป็นการซ่อนงานออกจากระบบ (Soft Delete)
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button 
+            onClick={() => setIsDeleteDialogOpen(false)} 
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button 
+            onClick={confirmDelete} 
+            variant="contained" 
+            color="error" 
+            sx={{ fontWeight: 700, borderRadius: 2, px: 3 }}
+          >
+            ยืนยันการลบ
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Layout>
   );
 }

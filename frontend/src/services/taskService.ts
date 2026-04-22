@@ -16,6 +16,7 @@ export interface Task {
   description?: string;
   projectId: string;
   projectCode: string;
+  projectName: string;
   workOrderId?: string;
   workOrderCode?: string;
   categoryId?: string;
@@ -34,6 +35,7 @@ export interface CreateTaskInput {
   taskName: string;
   description?: string;
   projectId: string;
+  projectName: string;
   workOrderId?: string;
   workOrderCode: string;
   categoryId?: string;
@@ -43,12 +45,16 @@ export interface CreateTaskInput {
   status?: TaskStatus;
 }
 
+export interface UpdateTaskInput extends Partial<CreateTaskInput> {
+  dailyProgress?: number;
+}
+
 export const taskService = {
   /**
    * Fetch tasks with optional filters
    */
   getTasks: async (filters?: { projectId?: string }): Promise<Task[]> => {
-    return await api.get<Task[]>('/tasks', { params: filters });
+    return await api.get<Task[]>('/tasks', filters);
   },
 
   /**
@@ -63,5 +69,19 @@ export const taskService = {
    */
   updateTaskStatus: async (id: string, status: TaskStatus): Promise<void> => {
     await api.patch(`/tasks/${id}/status`, { status });
+  },
+  
+  /**
+   * Update task details (including progress)
+   */
+  updateTask: async (id: string, data: UpdateTaskInput, userId: string): Promise<void> => {
+    await api.patch(`/tasks/${id}`, { ...data, userId });
+  },
+
+  /**
+   * Delete a task (Soft Delete)
+   */
+  deleteTask: async (id: string): Promise<void> => {
+    await api.delete(`/tasks/${id}`);
   },
 };

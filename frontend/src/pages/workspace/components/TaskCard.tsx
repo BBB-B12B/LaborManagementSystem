@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -7,8 +7,17 @@ import {
   Paper,
   Stack,
   useTheme,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
 } from '@mui/material';
-import { AttachFile as AttachFileIcon } from '@mui/icons-material';
+import { 
+  AttachFile as AttachFileIcon,
+  MoreVert as MoreVertIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+} from '@mui/icons-material';
 
 export interface Task {
   id: string;
@@ -23,10 +32,37 @@ export interface Task {
 
 interface TaskCardProps {
   task: Task;
+  onEdit?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
   const theme = useTheme();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleEdit = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    if (onEdit) onEdit(task);
+    else console.log('Edit task:', task.id);
+  };
+
+  const handleDelete = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    if (onDelete) onDelete(task);
+    else console.log('Delete task:', task.id);
+  };
 
   return (
     <Paper
@@ -46,24 +82,60 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
         cursor: 'grab',
       }}
     >
-      {/* Task Code Badge */}
-      <Box
-        sx={{
-          display: 'inline-flex',
-          px: 1.5,
-          py: 0.5,
-          borderRadius: 2,
-          backgroundColor: '#f1f3f6',
-          mb: 1.5,
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>
+        {/* Task Code Badge */}
+        <Box
+          sx={{
+            display: 'inline-flex',
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 2,
+            backgroundColor: '#f1f3f6',
+          }}
         >
-          {task.taskId}
-        </Typography>
-      </Box>
+          <Typography
+            variant="caption"
+            sx={{ fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}
+          >
+            {task.taskId}
+          </Typography>
+        </Box>
+
+        <IconButton size="small" onClick={handleMenuClick} sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}>
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+        <Menu
+          anchorEl={anchorEl}
+          open={open}
+          onClose={handleMenuClose}
+          onClick={(e) => e.stopPropagation()}
+          PaperProps={{
+            elevation: 0,
+            sx: {
+              overflow: 'visible',
+              filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.1))',
+              mt: 1.5,
+              borderRadius: 2,
+              minWidth: 140,
+            },
+          }}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        >
+          <MenuItem onClick={handleEdit}>
+            <ListItemIcon>
+              <EditIcon fontSize="small" />
+            </ListItemIcon>
+            <Typography variant="body2">Edit</Typography>
+          </MenuItem>
+          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" color="error" />
+            </ListItemIcon>
+            <Typography variant="body2" color="error">Delete</Typography>
+          </MenuItem>
+        </Menu>
+      </Stack>
 
       {/* Title */}
       <Typography

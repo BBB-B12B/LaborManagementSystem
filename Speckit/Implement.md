@@ -240,7 +240,7 @@ markdown
 | **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Project/Category -> `Submit` |
 | **API/SDK Contract** | ยิงตรงสู่ Firebase Collection: <br> `workOrders/{workOrderId}/categories/{catId}/tasks/{taskId}` |
 | **Database Schema** | **โครงสร้างแบบลำดับขั้น (Hierarchy):** <br> 1. `workOrders` (Collection) -> Document: `VH-2026-0001-STR` <br> 2. `categories` (Subcol) -> Document: `CAT-0001` (Fields: `catId`, `catName`) <br> 3. `tasks` (Subcol) -> Document: `TASK-0000001` <br> 4. `dailyreport` (Subcol) -> Document: `day-0000001` |
-| **Data Fields (Task)** | ข้อมูลที่จะบันทึกเมื่อ User กดสร้าง Task: <br> - `taskId`: "TASK-0000001" (Auto-gen) <br> - `taskName`: "งานผูกเหล็ก" (User กรอก) <br> - `assignees`: `[{ employeeId, name, roleId }]` (User เลือก) <br> - `dailyProgress`: 0 (Default) <br> - `description`: ข้อความเพิ่มเติม (User กรอก) <br> - `dueDate`, `status`, `createdAt` (System/User) |
+| **Data Fields (Task)** | ข้อมูลที่จะบันทึกและแก้ไขผ่าน UI: <br> - `taskId`: "TASK-0000001" (Auto-gen) <br> - `taskName`: "งานผูกเหล็ก" (User กรอก) <br> - `assignees`: `[{ employeeId, name, roleId }]` (User เลือก) <br> - `dailyProgress`: 0 (Default) <br> - **`description`**: "หมายเหตุ" (User กรอกผ่าน TextArea ลำดับสุดท้าย) <br> - `dueDate`, `status`, `createdAt` (System/User) |
 | **Backend/Client Logic** | 1. อ่านข้อมูล (Read): `getDocs()` จาก Sales Firebase ตาม Hierarchy <br> 2. เขียนข้อมูล (Write): `setDoc()` หรือ `addDoc()` เข้า Sales Firebase พร้อมรหัส `CAT-xxxx` และ `TASK-xxxxxxx` |
 
 ### 🛣️ [F-014] Hierarchical Task Creation — E2E Flow
@@ -249,7 +249,38 @@ markdown
 | :--- | :--- |
 | **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Location (Project) -> เลือก Work Order -> พิมพ์ Category -> พิมพ์ Task Name -> `Submit` |
 | **API Contract** | `POST /api/tasks` <br> **Payload**: `{ taskName, projectId, workOrderCode, categoryName, assignees, dueDate }` |
-| **Backend Logic** | **TaskService.createTask**: <br> 1. Read Project & Counters (wo, cat, task) <br> 2. Generate IDs (per scope) <br> 3. Write Transaction (Counter update & Doc set) |
-| **Database Structure** | `workOrders/{woId}/categories/{catId}/tasks/{taskId}` <br> (Note: Task IDs are scoped per `task_{projectCode}_{workOrderCode}`) |
+| **Backend Logic (T-815)** | **TaskService.createTask**: <br> 1. Read Project & Counters (wo, cat, task) <br> 2. Generate IDs (per scope): <br> &nbsp;&nbsp; - **Task ID**: `task_{projectCode}_{workOrderCode}` <br> &nbsp;&nbsp; - **Category ID (T-815)**: `cat_counter_{workOrderId}` (Localized per Work Order) <br> 3. Write Transaction (Counter update & Doc set) |
+| **Database Structure** | `workOrders/{woId}/categories/{catId}/tasks/{taskId}` <br> (Note: IDs are scoped to ensure sequential numbers per WorkOrder) |
 | **Global Uniqueness** | **Composite ID Strategy**: เพื่อป้องกัน Key ชนกันใน UI และการอัปเดตผิดใบใน Backend -> ให้ใช้รหัส `workOrderId` + `categoryId` + `taskId` เชื่อมกันด้วย `__` เป็นรหัส `id` หลักสำหรับ API และ React Key |
 | **UI/UX Audit (T-807)** | **Consistency Check**: All input fields (Autocomplete & TextField) ต้องใช้ชุด Style เดียวกันผ่าน `sx` ที่ตัว Root ของ `TextField` โดยเจาะจงไปที่คลาส `.MuiFilledInput-root` เพื่อป้องกันการถูก Override จากสี Default ของ Browser หรือ MUI Theme |
+
+### 🛣️ [T-810 & T-812] Workspace Dashboard (Fetch & Filter) — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Page` -> เปิดหน้าจอ / เปลี่ยน Tab (`All Tasks`, `This Week`, `Today`, `Backlog`) |
+| **API Contract** | `GET /api/tasks?projectId={id}` <br> Response: Array ของ Task |
+| **Security (T-811)** | **Authentication Mandatory**: ต้องใช้ `authenticate` middleware เพื่อยืนยันตัวตนก่อนเข้าถึงข้อมูล (ห้ามใช้ fallback 'system') |
+| **Backend Logic (T-810)** | **TaskService.getTasks**: <br> 1. กรอง `isActive` และ `projectId` ใน Memory ชั่วคราว (เพื่อเลี่ยง Error: FAILED_PRECONDITION กรณีที่ยังไม่ได้สร้าง Index) <br> 2. กรองข้อมูลตามผู้ที่ได้รับมอบหมาย (Assignee) |
+| **Client Logic (T-812)** | **Active Tab Filter**: <br> เมื่อได้รับ tasks มาแล้ว จะนำมาเข้ากระบวนการกรองอีกชั้นตาม `activeTab` ก่อนแสดงผลใน Column: <br> - **Today**: กรอง `dueDate` ที่ตรงกับวันปัจจุบัน <br> - **This Week**: กรอง `dueDate` ที่อยู่ในสัปดาห์นี้ <br> - **Backlog**: กรองงานที่ไม่มี Assignee หรือผ่าน due date มาแล้ว <br> - **All Tasks**: ข้ามการกรองวันที่ |
+
+---
+
+## 8. 🛠️ Task Management (Edit/Delete & Audit Trail)
+
+### 🛣️ [T-816 & T-818] Backend Update & Soft Delete — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **API Contract** | `PATCH /api/tasks/:id` (Update) <br> `DELETE /api/tasks/:id` (Soft Delete) |
+| **Soft Delete Logic** | ปรับ `isActive: false` เพื่อซ่อนข้อมูลจากการดึงผลลัพธ์ปกติ (Omit from memory filter in `getTasks`) |
+| **Audit Trail (T-818)** | บันทึกประวัติลงใน `TaskEditHistory` (Subcollection): <br> - `oldValues`: ข้อมูลก่อนแก้ไข <br> - `newValues`: ข้อมูลหลังแก้ไข <br> - `changedBy`: userId ของผู้แก้ไข |
+| **Category Migration (T-818)** | หากมีการเปลี่ยน `categoryName`: <br> 1. คำนวณ `categoryId` ใหม่ (หรือใช้ที่มีอยู่) <br> 2. ย้าย Document ไปยัง Path ใหม่ (Delete old, Create new) เพื่อรักษาโครงสร้าง Hierarchy |
+
+### 🎨 [T-817] Frontend Edit Task UI
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **Component** | `TaskCreateModal.tsx` (Reuse) |
+| **Edit Mode** | เมื่อเปิดในโหมด Edit: <br> 1. รับ `task` object ผ่าน props <br> 2. ล็อคฟิลด์ `Project` และ `Work Order` ให้เป็น Read-only <br> 3. เปลี่ยนปุ่ม Submit เป็น "บันทึกการแก้ไข" |
+| **Confirmation** | เมื่อกด Delete: <br> - แสดง Dialog ยืนยัน "คุณแน่ใจหรือไม่ว่าต้องการลบงานนี้?" |

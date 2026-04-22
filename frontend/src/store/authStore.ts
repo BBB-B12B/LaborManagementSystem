@@ -8,6 +8,7 @@ import { persist } from 'zustand/middleware';
 
 export interface User {
   id: string;
+  employeeId?: string;
   username: string;
   name: string;
   fullNameEn?: string;

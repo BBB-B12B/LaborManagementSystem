@@ -13,6 +13,7 @@ export interface Task {
   description?: string;
   projectId: string;
   projectCode: string;
+  projectName: string;
   workOrderId?: string;
   workOrderCode?: string;
   categoryId?: string;
@@ -33,6 +34,7 @@ export interface CreateTaskInput {
   taskName: string;
   description?: string;
   projectId: string;
+  projectName: string;
   workOrderId?: string;
   workOrderCode: string;
   categoryId?: string;
@@ -46,6 +48,7 @@ export interface UpdateTaskInput {
   taskName?: string;
   description?: string;
   projectId?: string;
+  projectName?: string;
   workOrderId?: string;
   workOrderCode?: string;
   categoryId?: string;
@@ -66,6 +69,7 @@ export const taskConverter = {
       description: task.description || null,
       projectId: task.projectId,
       projectCode: task.projectCode,
+      projectName: task.projectName || '',
       workOrderId: task.workOrderId || null,
       workOrderCode: task.workOrderCode || null,
       categoryId: task.categoryId || null,
@@ -99,6 +103,7 @@ export const taskConverter = {
       description: data.description || '',
       projectId: data.projectId || '',
       projectCode: data.projectCode || '',
+      projectName: data.projectName || '',
       workOrderId: data.workOrderId || '',
       workOrderCode: data.workOrderCode || '',
       categoryId: data.categoryId || '',
