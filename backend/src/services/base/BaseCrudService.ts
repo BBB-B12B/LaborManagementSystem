@@ -164,6 +164,13 @@ export class BaseCrudService<T extends { id: string }> {
             query = query.orderBy(options.orderBy, options.orderDirection || 'asc');
         }
 
+        if (options?.page && options?.pageSize) {
+            const offset = (options.page - 1) * options.pageSize;
+            if (offset > 0) {
+                query = query.offset(offset) as any;
+            }
+        }
+
         if (options?.pageSize) {
             query = query.limit(options.pageSize);
         }
@@ -252,7 +259,9 @@ export class BaseCrudService<T extends { id: string }> {
 
                 // Apply simple pagination slice
                 if (options?.pageSize) {
-                    results = results.slice(0, options.pageSize);
+                    const page = options.page || 1;
+                    const offset = (page - 1) * options.pageSize;
+                    results = results.slice(offset, offset + options.pageSize);
                 }
 
                 return results;

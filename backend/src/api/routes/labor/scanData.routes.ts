@@ -18,6 +18,7 @@ import {
 } from '../../../services/scanData/ScanDataImportUtils';
 
 const router = Router();
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -279,6 +280,7 @@ router.post(
         importedBy,
         importNote: req.body.importNote,
         source: fileType,
+        dryRun: req.query.dryRun === 'true',
       });
 
       const totalRecords = importSummary.totalRecords + parseErrors.length;

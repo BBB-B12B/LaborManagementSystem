@@ -54,7 +54,7 @@ const Topbar: React.FC = () => {
         left: { xs: 0, md: SIDEBAR_WIDTH },
         width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
         height: TOPBAR_HEIGHT,
-        zIndex: (theme) => Math.max(theme.zIndex.appBar, 1500),
+        zIndex: (theme) => theme.zIndex.appBar,
         backgroundColor: '#f7f7f9',
         color: '#1c1e2b',
         borderBottom: '1px solid #e5e7ed',

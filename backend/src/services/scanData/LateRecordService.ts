@@ -25,7 +25,7 @@ class LateRecordService extends BaseCrudService<LateRecord> {
         try {
             const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
             const compensation = await dailyContractorService.getCompensationDetails(input.dailyContractorId);
-            const hourlyRate = (compensation.income?.dailyWageRate || 0) / 8;
+            const hourlyRate = compensation.income?.hourlyRate || 0;
 
             // Import logic from model
             const { calculateLateDeduction } = await import('../../models/LateRecord');

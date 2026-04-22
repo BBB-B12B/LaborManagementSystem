@@ -78,6 +78,7 @@ export interface CreateScanDataInput {
   dailyContractorId?: string; // Deprecated but might be needed for lookup
   employeeId: string;
   projectLocationId: string;
+  projectCode?: string; // Used by generateScanDocKey to build a consistent document ID
   scanDateTime: Date; // Used to derive workDate and punch time
   importNote?: string;
 }
