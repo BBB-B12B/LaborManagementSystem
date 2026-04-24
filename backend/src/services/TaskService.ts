@@ -11,9 +11,8 @@ export class TaskService {
    */
   async createTask(input: CreateTaskInput, createdBy: string): Promise<Task> {
     const projectRef = db.collection(PROJECTS_COLLECTION).doc(input.projectId);
-    
+
     return await db.runTransaction(async (transaction) => {
-      // --- READ PHASE: ทำการอ่าน (get) ข้อมูลทั้งหมดก่อนเพื่อหลีกเลี่ยง Read-after-Write ---
       // 1. ตรวจสอบ Project
       const projectDoc = await transaction.get(projectRef);
       if (!projectDoc.exists) {
@@ -22,117 +21,123 @@ export class TaskService {
       const projectData = projectDoc.data();
       const projectCode = projectData?.projectCode || projectData?.code || 'XX';
       const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
-      const currentYear = new Date().getFullYear().toString();
 
-      // 2. อ่าน Task Counter (แยกตาม Project และ WorkOrder)
-      const taskCounterId = `task_${projectCode}_${input.workOrderCode || 'GEN'}`;
-      const taskCounterRef = db.collection('system_counters').doc(taskCounterId);
-      const taskCounterDoc = await transaction.get(taskCounterRef);
+      // 2. ระดับ WorkOrder: Query หาซ้ำ
+      const woQuery = await transaction.get(
+        db.collection(WORK_ORDERS_COLLECTION)
+          .where('projectId', '==', input.projectId)
+          .where('workOrderCode', '==', input.workOrderCode || 'GEN')
+          .limit(1)
+      );
 
-      // 3. อ่าน WorkOrder Counter (ถ้าจำเป็นต้อง Gen รหัสใหม่)
-      let generatedWorkOrderId = input.workOrderId || '';
-      let woCounterRef: FirebaseFirestore.DocumentReference | null = null;
-      let woCounterDoc: FirebaseFirestore.DocumentSnapshot | null = null;
-      let woNextRun = 1;
-
-      if (!generatedWorkOrderId && input.workOrderCode) {
-         const woCounterId = `wo_${projectCode}_${currentYear}_${input.workOrderCode}`;
-         woCounterRef = db.collection('system_counters').doc(woCounterId);
-         woCounterDoc = await transaction.get(woCounterRef);
+      let woId = '';
+      if (!woQuery.empty) {
+        woId = woQuery.docs[0].id;
+      } else {
+        woId = `${input.projectId}-${input.workOrderCode || 'GEN'}`;
       }
+      const workOrderRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId);
 
-      // --- [T-815] LOCALIZED CALCULATION PRE-READ ---
-      // เราต้องคำนวณ WorkOrderId ล่วงหน้าเพื่อให้รู้ว่าจะไปอ่าน Category Counter ของงานไหน
-      if (!generatedWorkOrderId && input.workOrderCode && woCounterDoc) {
-        if (woCounterDoc.exists) {
-          woNextRun = (woCounterDoc.data()?.count || 0) + 1;
+      // 3. ระดับ Category: Query หาซ้ำตามชื่อ
+      const catQuery = await transaction.get(
+        workOrderRef.collection('categories')
+          .where('catName', '==', input.categoryName || 'General')
+          .limit(1)
+      );
+
+      let catId = '';
+      if (!catQuery.empty) {
+        catId = catQuery.docs[0].id;
+      } else {
+        // อ่าน Counter
+        const catCounterId = `cat_counter_${woId}`;
+        const catCounterRef = db.collection('system_counters').doc(catCounterId);
+        const catCounterDoc = await transaction.get(catCounterRef);
+        let catNextRun = 1;
+        if (catCounterDoc.exists) {
+          catNextRun = (catCounterDoc.data()?.count || 0) + 1;
         }
-        const woRunningNo = woNextRun.toString().padStart(4, '0');
-        generatedWorkOrderId = `${projectCode}-${currentYear}-${woRunningNo}-${input.workOrderCode}`;
+        transaction.set(catCounterRef, { count: catNextRun, updatedAt: new Date() }, { merge: true });
+        catId = `CAT-${catNextRun.toString().padStart(4, '0')}`;
       }
+      const categoryRef = workOrderRef.collection('categories').doc(catId);
 
-      // 3.5 อ่าน Category Counter (เพื่อ Gen CAT-xxxx)
-      let generatedCategoryId = input.categoryId || '';
-      let catCounterRef: FirebaseFirestore.DocumentReference | null = null;
-      let catCounterDoc: FirebaseFirestore.DocumentSnapshot | null = null;
-      let catNextRun = 1;
+      // 4. ระดับ Task: Query หาซ้ำตามชื่อ
+      const taskQuery = await transaction.get(
+        categoryRef.collection('tasks')
+          .where('taskName', '==', input.taskName)
+          .limit(1)
+      );
 
-      if (!generatedCategoryId && input.categoryName) {
-         // [T-815: Localized Category ID]
-         const catCounterId = `cat_counter_${generatedWorkOrderId}`;
-         catCounterRef = db.collection('system_counters').doc(catCounterId);
-         catCounterDoc = await transaction.get(catCounterRef);
+      let taskId = '';
+      let isNewTask = false;
+      let existingTaskData: any = null;
+
+      if (!taskQuery.empty) {
+        taskId = taskQuery.docs[0].id;
+        existingTaskData = taskQuery.docs[0].data();
+      } else {
+        isNewTask = true;
+        // อ่าน Counter
+        const taskCounterId = `task_${projectCode}_${input.workOrderCode || 'GEN'}`;
+        const taskCounterRef = db.collection('system_counters').doc(taskCounterId);
+        const taskCounterDoc = await transaction.get(taskCounterRef);
+        let taskNextRun = 1;
+        if (taskCounterDoc.exists) {
+          taskNextRun = (taskCounterDoc.data()?.count || 0) + 1;
+        }
+        transaction.set(taskCounterRef, { count: taskNextRun, updatedAt: new Date() }, { merge: true });
+        taskId = `TASK-${taskNextRun.toString().padStart(7, '0')}`;
       }
+      const taskRef = categoryRef.collection('tasks').doc(taskId);
 
-      // --- WRITE PHASE: ประมวลผลและเขียน (set/update) ข้อมูล ---
-      // 4. คำนวณ Running Number สำหรับ Task (รันแยกตาม Project และ WorkOrder)
-      let nextTaskRunningNo = 1;
-      if (taskCounterDoc.exists) {
-        nextTaskRunningNo = (taskCounterDoc.data()?.count || 0) + 1;
-      }
-      const taskRunningStr = nextTaskRunningNo.toString().padStart(7, '0');
-      const newTaskCode = `TASK-${taskRunningStr}`;
-
-      // 5. คำนวณ Running Number สำหรับ WorkOrder
-      // (ข้ามขั้นตอนนี้เพราะคำนวณไปแล้วในขั้นตอน PRE-READ ด้านบน)
-
-      // 5.5 คำนวณ Running Number สำหรับ Category
-      if (!generatedCategoryId && input.categoryName && catCounterRef && catCounterDoc) {
-         if (catCounterDoc.exists) {
-           catNextRun = (catCounterDoc.data()?.count || 0) + 1;
-         }
-         const catRunningNo = catNextRun.toString().padStart(4, '0');
-         generatedCategoryId = `CAT-${catRunningNo}`;
-      }
-
-      // 6. ดำเนินการอัปเดต Counter ลง Database
-      transaction.set(taskCounterRef, { count: nextTaskRunningNo, updatedAt: new Date() }, { merge: true });
-      if (woCounterRef) {
-         transaction.set(woCounterRef, { count: woNextRun, updatedAt: new Date() }, { merge: true });
-      }
-      if (catCounterRef) {
-         transaction.set(catCounterRef, { count: catNextRun, updatedAt: new Date() }, { merge: true });
-      }
-
+      // 5. เขียนข้อมูลทั้งหมดแบบ Upsert
       const now = new Date();
+      let createdAtDate = now;
+      if (!isNewTask && existingTaskData?.createdAt) {
+         createdAtDate = existingTaskData.createdAt.toDate ? existingTaskData.createdAt.toDate() : existingTaskData.createdAt;
+      }
 
-      // 7. กำหนด Path ใหม่: workOrders/{woId}/categories/{catId}/tasks/{taskId}
-      const workOrderRef = db.collection(WORK_ORDERS_COLLECTION).doc(generatedWorkOrderId);
-      const categoryRef = workOrderRef.collection('categories').doc(generatedCategoryId);
-      const taskRef = categoryRef.collection('tasks').doc(newTaskCode);
+      transaction.set(workOrderRef, {
+        id: woId,
+        projectId: input.projectId,
+        workOrderCode: input.workOrderCode || 'GEN',
+        updatedAt: now
+      }, { merge: true });
 
-      // (Optional) อาจจะต้อง set Doc ของ workOrder และ categories ด้วยเพื่อให้มัน query ได้ง่ายขึ้น 
-      // แต่ Firestore รองรับ Subcollection โดยไม่ต้องมี Parent Doc
-      transaction.set(workOrderRef, { id: generatedWorkOrderId, projectId: input.projectId, workOrderCode: input.workOrderCode }, { merge: true });
-      transaction.set(categoryRef, { catId: generatedCategoryId, catName: input.categoryName }, { merge: true });
+      transaction.set(categoryRef, {
+        catId,
+        catName: input.categoryName || 'General',
+        updatedAt: now
+      }, { merge: true });
 
       const newTaskData: Omit<Task, 'id'> = {
-        taskId: newTaskCode,
+        taskId: taskId,
         taskName: input.taskName,
         description: input.description,
         projectId: input.projectId,
         projectCode: projectCode,
         projectName: projectName,
-        workOrderId: generatedWorkOrderId,
-        workOrderCode: input.workOrderCode,
-        categoryId: generatedCategoryId,
-        categoryName: input.categoryName,
+        workOrderId: woId,
+        workOrderCode: input.workOrderCode || 'GEN',
+        categoryId: catId,
+        categoryName: input.categoryName || 'General',
         assignees: input.assignees,
         dueDate: input.dueDate,
         status: input.status || 'upcoming',
-        dailyProgress: 0,
-        attachmentsCount: 0,
+        dailyProgress: isNewTask ? 0 : (existingTaskData?.dailyProgress || 0),
+        attachmentsCount: isNewTask ? 0 : (existingTaskData?.attachmentsCount || 0),
         isActive: true,
-        createdAt: now,
+        createdAt: createdAtDate,
         updatedAt: now,
-        createdBy,
+        createdBy: isNewTask ? createdBy : (existingTaskData?.createdBy || createdBy),
         updatedBy: createdBy,
       };
 
-      transaction.set(taskRef.withConverter(taskConverter), newTaskData as any);
+      transaction.set(taskRef.withConverter(taskConverter), newTaskData as any, { merge: true });
 
       return {
-        id: `${generatedWorkOrderId}__${generatedCategoryId}__${taskRef.id}`,
+        id: `${woId}__${catId}__${taskId}`,
         ...newTaskData,
       };
     });

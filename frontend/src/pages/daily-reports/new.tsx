@@ -290,24 +290,24 @@ const DailyReport = () => {
         allTasks.forEach(t => {
             if (t.status === 'completed') return;
 
-            const isAssigned = user?.role === 'GOD' ||
-                user?.role === 'Admin' ||
-                user?.role === 'Manager' ||
-                t.assignees?.some(a => a.id === foremanId);
+            const isAssigned = user?.roleCode === 'GOD' ||
+                user?.roleId === 'Admin' ||
+                user?.roleId === 'Manager' ||
+                t.assignees?.some(a => a.employeeId === foremanId);
 
             if (isAssigned) {
                 // Map to legacy MasterTask shape for UI compatibility
                 const mappedTask = {
                     id: t.id,
-                    name: t.title,
+                    name: t.taskName,
                     dailyProgress: t.status === 'in-progress' ? 50 : 0,
                     status: t.status === 'in-progress' ? 'In Progress' : 'Approved',
-                    responsibleStaffIds: t.assignees?.map(a => a.id) || [],
+                    responsibleStaffIds: t.assignees?.map(a => a.employeeId) || [],
                     history: []
                 };
                 
                 const mappedWo = {
-                    id: t.taskCode || t.id,
+                    id: t.workOrderId || t.id,
                     locationName: t.projectCode || 'Unknown Project',
                     projectId: t.projectId
                 };
@@ -325,7 +325,7 @@ const DailyReport = () => {
         });
 
         return { newTasks: _newTasks, inProgressTasks: _inProgressTasks };
-    }, [allTasks, searchTerm, foremanId, user?.role]);
+    }, [allTasks, searchTerm, foremanId, user?.roleCode, user?.roleId]);
 
     // ✅ Deep Link: Open Work Order if ID is in URL
     useEffect(() => {

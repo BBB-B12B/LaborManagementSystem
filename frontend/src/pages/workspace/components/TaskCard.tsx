@@ -18,6 +18,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
+import { LinearProgress } from '@mui/material';
 
 export interface Task {
   id: string;
@@ -28,6 +29,7 @@ export interface Task {
   assignees: { name: string; avatarUrl?: string }[];
   attachmentsCount: number;
   status: 'upcoming' | 'in-progress' | 'completed';
+  dailyProgress: number;
 }
 
 interface TaskCardProps {
@@ -161,6 +163,33 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) =>
       >
         {task.description}
       </Typography>
+      
+      {/* Progress Section */}
+      <Box sx={{ mb: 3 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563' }}>
+            Progress
+          </Typography>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: task.dailyProgress >= 100 ? '#059669' : '#1c1e2b' }}>
+            {task.dailyProgress || 0}%
+          </Typography>
+        </Stack>
+        <LinearProgress 
+          variant="determinate" 
+          value={Math.min(100, Math.max(0, task.dailyProgress || 0))} 
+          sx={{
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: '#f1f3f6',
+            '& .MuiLinearProgress-bar': {
+              borderRadius: 3,
+              background: task.dailyProgress >= 100 
+                ? 'linear-gradient(90deg, #059669, #10b981)' 
+                : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+            }
+          }}
+        />
+      </Box>
 
       {/* Due Date with Gradient Border */}
       <Box sx={{ mb: 3 }}>

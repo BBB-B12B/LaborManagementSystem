@@ -68,6 +68,20 @@
         3. **Status**: In Progress
 *   [ ] **T-809**: [Backend] Composite ID Implementation (models/converter & services/update).
 
+### 🔄 Phase 2.1: Data Synchronization Implementation (Sales System)
+*   **Status**: 📝 Planned
+*   [ ] **T-830**: [Setup] ขอรับ Firebase Credentials (Config/Service Account) ของฝั่ง Sales System และตั้งค่า `salesDb` Instance ให้แยกจาก DB หลัก
+*   [ ] **T-831**: [Service] พัฒนา `salesSyncService.ts` โดยลบ Mock Data ออก และเชื่อมต่อ API `addDoc/setDoc` เข้ากับ `salesDb`
+*   [ ] **T-832**: [Backend] ผูก Trigger การทำงาน (Double Write) ใน `TaskService.ts` ให้ยิงข้อมูลข้ามระบบเมื่อมีการ Create Task หรือ Submit Daily Report
+*   [ ] **T-833**: [Architecture] ออกแบบระบบป้องกันความผิดพลาด (Retry Mechanism/Error Handling) กรณีที่ Sales System ไม่สามารถเชื่อมต่อได้
+
+### 🔄 Phase 2.2: ID Generation Revert (Counter-based Upsert)
+*   **Status**: 🔄 In Progress
+*   [x] **T-840**: [Backend] Refactor `TaskService.ts` (createTask) to use `db.runTransaction`
+*   [x] **T-841**: [Backend] Query existing Category/Task by name before using Counter
+*   [x] **T-842**: [Backend] Implement atomic system_counters increments for new IDs
+*   [ ] **T-843**: [Documentation] Update `Implement.md` with the new Counter + Upsert E2E flow
+
 ### 🚀 Phase 2.5: Workspace UX & Performance Audit
 *   **Status**: ✅ Completed
 *   [x] **T-810**: [Backend] Fix `TaskService.getTasks` performance issue (Remove full table scan, use `.where` instead).
@@ -96,6 +110,11 @@
 ### 🚀 Phase 2.7: Task UI Refinement (User Request)
 *   **Status**: ✅ Completed
 *   [x] **T-819**: [Frontend] Add "Description" (หมายเหตุ) field to TaskCreateModal UI.
+
+### 🚀 Phase 2.8: Task UI Refinement (Progress Indicator)
+*   **Status**: ✅ Completed
+*   [x] **T-822**: [Frontend] Implement Progress Bar in `TaskCard.tsx` (using `dailyProgress`).
+*   [x] **T-823**: [Frontend] Style Progress Bar with premium aesthetics and percentage label.
 
 ### 🔄 Phase 3.0: Daily Report Form & Labor Management (F-015)
 *   **Status**: ✅ Completed

@@ -229,6 +229,13 @@ markdown
 **เป้าหมายหลัก (Core Objective):** 
 เชื่อมต่อข้อมูลระหว่าง Labor System (ของเรา) และ Sales System (ของระบบหลังการขาย) แบบ 2-way (Read & Write) เพื่อให้ โฟร์แมนจัดการ Task และทำ Daily Report ผ่าน UI ของเรา แต่ข้อมูลสะท้อนกลับไปที่ระบบหลัก
 
+### 🗺️ Implementation Roadmap (Phase 2.1)
+การพัฒนาระบบเชื่อมต่อข้อมูล (Data Sync) จะถูกแบ่งออกเป็น 4 ขั้นตอนหลักดังนี้:
+1. **Initialize Firebase SDK (`salesDb`)**: ขอรับ Credentials ของฝั่ง Sales System และตั้งค่า Instance แยก
+2. **Implement `salesSyncService.ts`**: ลบ Mock Data ทิ้งและเชื่อมต่อคำสั่ง `addDoc/setDoc` เข้ากับ Database ปลายทาง
+3. **Hook up the Sync Trigger**: ฝัง Logic การเรียก Service (Double Write) เข้าไปใน Action หลัก เช่น `createTask` หรือ `submitDailyReport`
+4. **Resilience & Error Handling**: ออกแบบระบบรองรับความผิดพลาด (Retry Queue หรือ Fallback) เมื่อเชื่อมต่อ Database ปลายทางไม่ได้
+
 ---
 
 ## 7. E2E Flow Documentation (Logic Flow)
@@ -249,8 +256,8 @@ markdown
 | :--- | :--- |
 | **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Location (Project) -> เลือก Work Order -> พิมพ์ Category -> พิมพ์ Task Name -> `Submit` |
 | **API Contract** | `POST /api/tasks` <br> **Payload**: `{ taskName, projectId, workOrderCode, categoryName, assignees, dueDate }` |
-| **Backend Logic (T-815)** | **TaskService.createTask**: <br> 1. Read Project & Counters (wo, cat, task) <br> 2. Generate IDs (per scope): <br> &nbsp;&nbsp; - **Task ID**: `task_{projectCode}_{workOrderCode}` <br> &nbsp;&nbsp; - **Category ID (T-815)**: `cat_counter_{workOrderId}` (Localized per Work Order) <br> 3. Write Transaction (Counter update & Doc set) |
-| **Database Structure** | `workOrders/{woId}/categories/{catId}/tasks/{taskId}` <br> (Note: IDs are scoped to ensure sequential numbers per WorkOrder) |
+| **Backend Logic (T-840)** | **TaskService.createTask (Counter + Upsert Logic)**: <br> ดำเนินการผ่าน `db.runTransaction()` เพื่อความปลอดภัย: <br> 1. **WorkOrder**: Query `projectId` + `woCode` ถ้าไม่พบ สร้าง ID `${projectId}-${workOrderCode}` <br> 2. **Category**: Query ชื่อ `catName` ในหมวดนี้ ถ้าไม่พบ ให้อ่านและอัปเดต Counter เพื่อสร้าง `CAT-XXXX` <br> 3. **Task**: Query ชื่อ `taskName` ในหมวดนี้ ถ้าไม่พบ ให้อ่านและอัปเดต Counter เพื่อสร้าง `TASK-XXXXXXX` <br> 4. ใช้คำสั่ง `transaction.set({ merge: true })` กับทุกระดับชั้นเพื่ออัปเดตข้อมูลและหลีกเลี่ยงการสร้างซ้ำซ้อน |
+| **Database Structure** | `workOrders/{woId}/categories/{catId}/tasks/{taskId}` <br> (Note: ข้อมูลที่ใช้ชื่อเดียวกันจะเข้าไปแก้ไข Document เดิม และหากสร้างใหม่จะรันเลข Running Number ได้อย่างถูกต้อง) |
 | **Global Uniqueness** | **Composite ID Strategy**: เพื่อป้องกัน Key ชนกันใน UI และการอัปเดตผิดใบใน Backend -> ให้ใช้รหัส `workOrderId` + `categoryId` + `taskId` เชื่อมกันด้วย `__` เป็นรหัส `id` หลักสำหรับ API และ React Key |
 | **UI/UX Audit (T-807)** | **Consistency Check**: All input fields (Autocomplete & TextField) ต้องใช้ชุด Style เดียวกันผ่าน `sx` ที่ตัว Root ของ `TextField` โดยเจาะจงไปที่คลาส `.MuiFilledInput-root` เพื่อป้องกันการถูก Override จากสี Default ของ Browser หรือ MUI Theme |
 
@@ -292,4 +299,13 @@ markdown
 | **User Action Path** | `Daily Report Page` -> `Select Task` -> `Select Date` -> `Add DC Labor (Popup)` -> `Adjust Individual Hours` -> `Fill Progress & Upload Photos` -> `Submit` |
 | **Business Logic: Retroactive & Lock** | **1. การลงเวลาย้อนหลัง (Retroactive):**<br>- ย้อนหลัง <= 3 วัน: แก้ไขได้ทุกฟิลด์ รวม Progress<br>- ย้อนหลัง > 3 วัน: ล็อคฟิลด์ `Progress` (Read-only) แต่แก้ไข `แรงงาน DC` และ `ชั่วโมงทำงาน` ได้<br>**2. การล็อคตามงวดค่าแรง (Wage Period Lock):**<br>- ถ้าระยะเวลาของวันนั้น อยู่ในงวดค่าแรงที่ถูก `อนุมัติ` หรือ `นำจ่ายแล้ว` -> ล็อคไม่ให้แก้ไขหรือบันทึกข้อมูลใดๆ ทั้งสิ้น (Logic เชื่อมต่อกับระบบคำนวณค่าแรง) |
 | **UI/UX: Labor Selection Popup** | - กดปุ่ม `+ เลือกแรงงาน DC` แสดง Popup รายชื่อแรงงาน<br>- **รายชื่อพนักงาน:** แสดงในรูปแบบ `employeeId : name` และกรองเฉพาะพนักงานที่อยู่ใน `projectLocationIds` เดียวกับ Task<br>- **กำหนดเวลา:** เลือกระบุเวลาทำงานส่วนกลาง (Day, OT เช้า/เที่ยง/เย็น) ไว้ใน Popup<br>- เมื่อกดยืนยัน ข้อมูลรายชื่อพร้อมเวลาจะไปแสดงที่ตารางหลัก และผู้ใช้สามารถ Edit เวลาของ "แต่ละบุคคล" แยกกันในหน้าหลักได้ |
-| **Media Requirements** | บังคับอัปโหลดรูปภาพ 4 รูป (รูปถ่ายหน้างาน 2 รูป, รูปถ่ายแรงงาน 2 รูป) |
+| **Media Requirements** | บังคับอัปโหลดรูปภาพ 4 รูป (รูปถ่ายหน้างาน 2 รูป, รูปถ่ายแรงงาน 2 รูป) |
+
+### 🎨 [T-822] Task Card Progress UI — Logic Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **Data Field** | `dailyProgress` (number: 0 - 100) |
+| **UI Component** | MUI `LinearProgress` + `Typography` (Percentage) |
+| **Visual Logic** | 1. แสดงอยู่ระหว่าง Description และ Due Date <br> 2. ความสูง 6px, ขอบมน (borderRadius: 3) <br> 3. สี: ตาม Theme (Primary) หรือเปลี่ยนตามช่วง (เช่น <30% ส้ม, >70% เขียว) |
+| **Fallback** | หากค่าเป็น undefined หรือ null ให้แสดงเป็น 0% |

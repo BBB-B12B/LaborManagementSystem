@@ -221,4 +221,5 @@
     * **WorkOrder**: `[Project]-[Year]-[RunNo]-[WO_Code]` (e.g., `WH-2026-0001-STR`)
     * **Category**: `CAT-xxxx` (Auto-increment globally)
     * **Task**: `TASK-xxxxxxx` (Auto-increment per Project + WorkOrder)
+* **Progress Tracking**: แสดงผล `dailyProgress` (0-100%) บน Task Card เพื่อให้หัวหน้างานติดตามความคืบหน้าได้ทันที
 * **Logic**: Two-way Integration (Read/Write)
