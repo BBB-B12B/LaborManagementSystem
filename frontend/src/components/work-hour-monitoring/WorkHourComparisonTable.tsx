@@ -12,15 +12,17 @@ import {
   Chip,
   Button,
   Stack,
+  TablePagination,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 
 // --- Styled Components to match Image 1 ---
 
 const StyledTableContainer = styled(TableContainer)({
-  maxHeight: 'calc(100vh - 350px)', // Adjust height based on other elements
+  flex: 1,
   overflow: 'auto',
+  position: 'relative',
   '&::-webkit-scrollbar': {
     width: '8px',
     height: '8px',
@@ -38,11 +40,11 @@ const StyledTableContainer = styled(TableContainer)({
   '& .MuiTableBody-root .MuiTableCell-root': {
     color: '#1e293b',
     fontWeight: 500,
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
   },
   '& .MuiTableCell-root': {
     borderRight: '1px solid #f1f5f9',
-    padding: '12px 8px',
+    padding: '6px 8px',
     textAlign: 'center',
     transition: 'all 0.2s ease',
   },
@@ -62,18 +64,18 @@ const StyledTableContainer = styled(TableContainer)({
   },
   '& .MuiTableHead-root .MuiTableRow-root:first-of-type .MuiTableCell-root': {
     backgroundColor: '#201b2b', // Match Navbar bottom color
-    py: 1.5,
+    padding: '8px 8px',
     position: 'sticky',
     top: 0,
     zIndex: 11,
   },
   // We need to adjust top for subsequent header rows
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(2) .MuiTableCell-root': {
-    top: '48px', // Approx height of first row
+    top: '34px', // Row 1 height (8+8+18)
     zIndex: 10,
   },
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root': {
-    top: '84px', // Approx height of first + second row
+    top: '64px', // Row 1 + Row 2 height
     zIndex: 10,
   },
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(2) .MuiTableCell-root:nth-of-type(2)': {
@@ -103,15 +105,16 @@ const ValueCapsule = styled(Box, {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  minWidth: '42px',
-  height: '34px',
-  borderRadius: '10px',
+  minWidth: '36px',
+  height: '26px',
+  borderRadius: '8px',
   border: '1px solid',
   backgroundColor: highlight ? '#fff7ed' : (isOT ? '#f0f9ff' : '#fff'),
   borderColor: highlight ? '#f97316' : (isOT ? '#a1c1db' : '#e2e8f0'),
   color: highlight ? '#c2410c' : (isOT ? '#01497c' : '#1e293b'),
   fontWeight: (highlight || isOT) ? 800 : 600,
-  padding: '0 10px',
+  padding: '0 6px',
+  fontSize: '0.85rem',
   boxShadow: highlight ? '0 2px 4px rgba(249, 115, 22, 0.1)' : '0 1px 2px rgba(0,0,0,0.02)',
   transition: 'all 0.2s ease',
 }));
@@ -123,11 +126,11 @@ const StatusCapsule = styled(Box, {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: '160px',
-    height: '34px',
-    borderRadius: '12px',
+    minWidth: '140px',
+    height: '26px',
+    borderRadius: '10px',
     fontWeight: 800,
-    fontSize: '0.8rem',
+    fontSize: '0.75rem',
     border: '1px solid #e2e8f0',
     transition: 'all 0.2s ease',
   };
@@ -172,10 +175,12 @@ const ActionButton = styled(Button, {
   shouldForwardProp: (prop) => prop !== 'actionType',
 })<{ actionType: string }>(({ actionType }) => {
   let styles = {
-    borderRadius: '10px',
+    borderRadius: '8px',
     textTransform: 'none' as const,
     fontWeight: 800,
-    minWidth: '100px',
+    minWidth: '80px',
+    height: '26px',
+    fontSize: '0.75rem',
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       transform: 'scale(1.05)',
@@ -210,34 +215,106 @@ const ActionButton = styled(Button, {
 
 // --- Mock Data ---
 
-const mockData = [
-  { id: 1, date: '2025-05-25', employeeId: '200059', employeeName: 'นายสมชาย ใจกล้า', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 2, lateMinutes: 0, responsible: 'นายสมพงษ์', status: 'normal', action: 'view' },
-  { id: 2, date: '2025-05-25', employeeId: '201490', employeeName: 'นายสมจ่าย ใจกล้า', project: 'WH', regularDaily: 8, regularScan: 6, otMorning: 0, otNoon: 0, otEvening: 2, lateMinutes: 0, responsible: '', status: 'workHourConflict', action: 'check' },
-  { id: 3, date: '2025-05-25', employeeId: '300067', employeeName: 'นายวิชัย มานะ', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: { daily: 2, scan: 1.5 }, lateMinutes: 0, responsible: '', status: 'otConflict', action: 'check' },
-  { id: 4, date: '2025-05-25', employeeId: '400156', employeeName: 'นายสมศักดิ์ ขยันยิ่ง', project: 'WH', regularDaily: 8, regularScan: 0, otMorning: 0, otNoon: 0, otEvening: 0, lateMinutes: 0, responsible: '', status: 'missingScan', action: 'check' },
-  { id: 5, date: '2025-05-25', employeeId: '400156', employeeName: 'นายสมศักดิ์ ขยันยิ่ง', project: 'WH', regularDaily: 0, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 0, lateMinutes: 0, responsible: '', status: 'missingDaily', action: 'pending' },
-  { id: 6, date: '2025-05-25', employeeId: '500789', employeeName: 'ว่างงาน', project: 'WH', regularDaily: 0, regularScan: 0, otMorning: 0, otNoon: 0, otEvening: 0, lateMinutes: 0, responsible: '', status: 'absent', action: '' },
-  { id: 7, date: '2025-05-25', employeeId: '200101', employeeName: 'นายทดสอบ ระบบ', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 1, lateMinutes: 10, responsible: 'ไซต์โฟร์แมน', status: 'normal', action: 'view' },
-  { id: 8, date: '2025-05-25', employeeId: '200102', employeeName: 'นางสาว สมหญิง', project: 'WH', regularDaily: 8, regularScan: 7, otMorning: 0, otNoon: 0, otEvening: 2, lateMinutes: 0, responsible: '', status: 'workHourConflict', action: 'check' },
-  { id: 9, date: '2025-05-25', employeeId: '200103', employeeName: 'นายใจดี มีสุข', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 0, lateMinutes: 5, responsible: '', status: 'normal', action: 'view' },
-  { id: 10, date: '2025-05-25', employeeId: '200104', employeeName: 'นายหาญ กล้า', project: 'WH', regularDaily: 8, regularScan: 0, otMorning: 0, otNoon: 0, otEvening: 3, lateMinutes: 0, responsible: '', status: 'missingScan', action: 'check' },
-  { id: 11, date: '2025-05-25', employeeId: '200105', employeeName: 'นายมานะ อดทน', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 1, otNoon: 0, otEvening: 2, lateMinutes: 0, responsible: '', status: 'normal', action: 'view' },
-  { id: 12, date: '2025-05-25', employeeId: '200106', employeeName: 'นายขยัน เรียนรู็', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 1, lateMinutes: 0, responsible: 'ธุรการไซต์', status: 'normal', action: 'view' },
-  { id: 13, date: '2025-05-25', employeeId: '200107', employeeName: 'นายตั้งใจ ทำงาน', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 2, lateMinutes: 0, responsible: '', status: 'normal', action: 'view' },
-  { id: 14, date: '2025-05-25', employeeId: '200108', employeeName: 'นายประหยัด พลังงาน', project: 'WH', regularDaily: 8, regularScan: 6, otMorning: 0, otNoon: 0, otEvening: 0, lateMinutes: 15, responsible: '', status: 'workHourConflict', action: 'check' },
-  { id: 15, date: '2025-05-25', employeeId: '200109', employeeName: 'นายซื่อสัตย์ ยุติธรรม', project: 'WH', regularDaily: 8, regularScan: 8, otMorning: 0, otNoon: 0, otEvening: 2, lateMinutes: 0, responsible: '', status: 'normal', action: 'view' },
-];
+const generateMockData = (count: number) => {
+  const statuses = ['normal', 'workHourConflict', 'otConflict', 'missingScan', 'missingDaily'];
+  const responsibles = ['นายสมพงษ์', 'ไซต์โฟร์แมน', 'ธุรการไซต์', ''];
+  const data = [];
+  
+  for (let i = 1; i <= count; i++) {
+    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    const employeeId = (200000 + i).toString();
+    const action = status === 'normal' ? 'view' : (status === 'missingDaily' ? 'pending' : 'check');
+    
+    data.push({
+      id: i,
+      date: '2026-04-23',
+      employeeId,
+      employeeName: `พนักงาน ทดสอบหมายเลข ${i}`,
+      project: 'WH',
+      regularDaily: 8,
+      regularScan: status === 'workHourConflict' || status === 'missingScan' ? (status === 'missingScan' ? 0 : 6) : 8,
+      otMorning: 0,
+      otNoon: 0,
+      otEvening: status === 'otConflict' ? { daily: 2, scan: 1.5 } : 2,
+      lateMinutes: Math.floor(Math.random() * 15),
+      responsible: responsibles[Math.floor(Math.random() * responsibles.length)],
+      status,
+      action
+    });
+  }
+  return data;
+};
+
+const mockData = generateMockData(150); // Generate 150 rows for testing pagination
 
 interface Props {
   selectedDate: Date;
+  filterStatus: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  project: string;
 }
 
-const WorkHourComparisonTable: React.FC<Props> = ({ selectedDate }) => {
+const WorkHourComparisonTable: React.FC<Props> = ({ 
+  selectedDate, 
+  filterStatus, 
+  startDate, 
+  endDate, 
+  project 
+}) => {
   const { t } = useTranslation();
+  const [page, setPage] = React.useState(0);
+  const [rowsPerPage, setRowsPerPage] = React.useState(100);
+
+  const handleChangePage = (event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+
+  // Filtering logic for mock data
+  const filteredData = React.useMemo(() => {
+    return mockData.filter(row => {
+      // Filter by Status
+      if (filterStatus === 'all_abnormal') {
+        if (row.status === 'normal') return false;
+      } else if (filterStatus === 'abnormal_pending') {
+        if (row.action !== 'pending' || row.status === 'normal') return false;
+      } else if (filterStatus === 'abnormal_fixed') {
+        // In mock data, let's assume non-pending non-normal items are 'checking' or 'fixed'
+        // For simplicity, we'll filter by action 'check' as 'needs check' vs 'pending'
+        if (row.action !== 'check' || row.status === 'normal') return false;
+      } else if (filterStatus !== 'all' && row.status !== filterStatus) {
+        return false;
+      }
+      
+      // Filter by Project
+      if (project !== 'all' && row.project !== project) return false;
+      
+      // Filter by Date Range
+      if (startDate && endDate) {
+        const rowDate = new Date(row.date);
+        // Set hours to 0 to compare dates only
+        const s = new Date(startDate); s.setHours(0,0,0,0);
+        const e = new Date(endDate); e.setHours(23,59,59,999);
+        if (rowDate < s || rowDate > e) return false;
+      }
+      
+      return true;
+    });
+  }, [filterStatus, project, startDate, endDate]);
+
+  // Pagination logic for filtered data
+  const visibleRows = filteredData.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
 
   return (
-    <StyledTableContainer component={Box}>
-      <Table sx={{ minWidth: 1200 }} aria-label="work hour comparison table" stickyHeader>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <StyledTableContainer component={Box}>
+        <Table sx={{ minWidth: 1200 }} aria-label="work hour comparison table" stickyHeader>
         <TableHead>
           {/* Row 1 */}
           <TableRow>
@@ -268,17 +345,18 @@ const WorkHourComparisonTable: React.FC<Props> = ({ selectedDate }) => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {mockData.map((row, index) => {
+          {visibleRows.map((row, index) => {
+            const rowNumber = page * rowsPerPage + index + 1;
             const hasRegularConflict = row.regularDaily !== row.regularScan;
             const hasOTConflict = typeof row.otEvening === 'object';
 
             return (
               <TableRow key={row.id} hover>
-                <TableCell>{index + 1}</TableCell>
+                <TableCell>{rowNumber}</TableCell>
                 <TableCell>{row.date}</TableCell>
                 <TableCell sx={{ textAlign: 'left !important', pl: 2 }}>
-                  <Typography variant="body2" fontWeight={700}>{row.employeeId}</Typography>
-                  <Typography variant="caption" color="text.secondary">{row.employeeName}</Typography>
+                  <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.85rem', lineHeight: 1.1 }}>{row.employeeId}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{row.employeeName}</Typography>
                 </TableCell>
                 <TableCell>{row.project}</TableCell>
                 
@@ -344,6 +422,35 @@ const WorkHourComparisonTable: React.FC<Props> = ({ selectedDate }) => {
         </TableBody>
       </Table>
     </StyledTableContainer>
+    <TablePagination
+      rowsPerPageOptions={[25, 50, 100]}
+      component="div"
+      count={filteredData.length} // Using filtered data length
+      rowsPerPage={rowsPerPage}
+      page={page}
+      onPageChange={handleChangePage}
+      onRowsPerPageChange={handleChangeRowsPerPage}
+      labelRowsPerPage="จำนวนแถวต่อหน้า:"
+      labelDisplayedRows={({ from, to, count }) => `${from}-${to} จาก ${count !== -1 ? count : `มากกว่า ${to}`}`}
+      sx={{
+        borderTop: '1px solid #e2e8f0',
+        backgroundColor: '#fff',
+        flexShrink: 0,
+        zIndex: 2,
+        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          color: '#64748b',
+        },
+        '& .MuiTablePagination-select': {
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0',
+          padding: '4px 8px',
+          marginRight: '16px',
+        }
+      }}
+    />
+    </Box>
   );
 };
 

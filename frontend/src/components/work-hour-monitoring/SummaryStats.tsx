@@ -23,9 +23,9 @@ const BLUE = {
 // --- Compact Styled Components ---
 
 const StatCard = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2),
-  borderRadius: '16px',
-  height: '100%',
+  padding: theme.spacing(1.5, 2),
+  borderRadius: '12px',
+  height: '145px', // Fixed height to ensure symmetry across all cards
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'center',
@@ -79,72 +79,95 @@ const BannerHeader = styled(Paper)(({ theme }) => ({
 
 // --- Main Component ---
 
-const SummaryStats: React.FC = () => {
+
+interface Props {
+  onStatusClick?: (status: string) => void;
+  activeStatus?: string;
+}
+
+const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
   return (
     <Box sx={{ mb: 2 }}>
-      {/* Cards Row - Blue Theme Palette */}
       <Grid container spacing={2}>
         {/* Card 1: Total Employees (Navy) */}
         <Grid item xs={12} md={4}>
           <StatCard 
             elevation={0} 
+            onClick={() => onStatusClick?.('all')}
             sx={{ 
               background: `linear-gradient(135deg, ${BLUE.NAVY} 0%, ${BLUE.ROYAL} 100%)`, 
               color: '#fff', 
-              borderColor: BLUE.NAVY 
+              borderColor: activeStatus === 'all' ? BLUE.CERULEAN : BLUE.NAVY,
+              borderWidth: activeStatus === 'all' ? '3px' : '1px',
+              cursor: 'pointer'
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="caption" fontWeight="700" sx={{ opacity: 0.7, textTransform: 'uppercase', letterSpacing: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
+              {/* Left: Main Stats */}
+              <Box sx={{ flex: 1.2 }}>
+                <Typography variant="caption" fontWeight="700" sx={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>
                   พนักงานทั้งหมด
                 </Typography>
                 <Stack direction="row" alignItems="baseline" spacing={1}>
-                  <Typography variant="h3" fontWeight="900" sx={{ fontSize: '2.5rem', textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                  <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', textShadow: '0 2px 10px rgba(0,0,0,0.3)', lineHeight: 1 }}>
                     506
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.6, fontWeight: 700 }}>คน</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.7, fontWeight: 800 }}>คน</Typography>
                 </Stack>
               </Box>
-              <PeopleIcon sx={{ fontSize: 45, opacity: 0.25 }} />
+
+              {/* Right: Sub Data & Icon */}
+              <Stack direction="column" alignItems="center" spacing={1} sx={{ flex: 1 }}>
+                <Box
+                  sx={{
+                    width: '100%',
+                    p: 1,
+                    borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.12)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    textAlign: 'center',
+                    backdropFilter: 'blur(4px)'
+                  }}
+                >
+                  <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 700, fontSize: '0.6rem', display: 'block' }}>แถวข้อมูลสะสม</Typography>
+                  <Typography variant="subtitle1" fontWeight="900" sx={{ lineHeight: 1.1 }}>4,034</Typography>
+                </Box>
+                <PeopleIcon sx={{ fontSize: 32, opacity: 0.3 }} />
+              </Stack>
             </Stack>
-            
-            <Box
-              sx={{
-                mt: 1,
-                p: 1,
-                borderRadius: '8px',
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}
-            >
-              <Typography variant="caption" sx={{ opacity: 0.7, fontWeight: 700 }}>แถวข้อมูลสะสม</Typography>
-              <Typography variant="subtitle1" fontWeight="900">4,034</Typography>
-            </Box>
           </StatCard>
         </Grid>
 
         {/* Card 2: Normal Status (Pearl/Cerulean) */}
         <Grid item xs={12} md={4}>
-          <StatCard elevation={0} sx={{ background: '#ffffff', borderColor: '#e2e8f0' }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.TEXT_LIGHT, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <StatCard 
+            elevation={0} 
+            onClick={() => onStatusClick?.('normal')}
+            sx={{ 
+              background: '#ffffff', 
+              borderColor: activeStatus === 'normal' ? BLUE.CERULEAN : '#e2e8f0',
+              borderWidth: activeStatus === 'normal' ? '3px' : '1px',
+              cursor: 'pointer'
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
+              {/* Left: Main Stats */}
+              <Box sx={{ flex: 1.2 }}>
+                <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.TEXT_LIGHT, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.65rem' }}>
                   สถานะปกติ
                 </Typography>
                 <Stack direction="row" alignItems="baseline" spacing={1}>
-                  <Typography variant="h3" fontWeight="900" sx={{ color: BLUE.NAVY, fontSize: '2.5rem' }}>
+                  <Typography variant="h2" fontWeight="900" sx={{ color: BLUE.NAVY, fontSize: '3rem', lineHeight: 1 }}>
                     450
                   </Typography>
                   <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.LIGHT }}>รายการ</Typography>
                 </Stack>
               </Box>
-              <Box sx={{ position: 'relative' }}>
-                <Box sx={{ position: 'absolute', top: -5, right: -5, bottom: -5, left: -5, borderRadius: '50%', background: `${BLUE.CERULEAN}15`, zIndex: 0 }} />
-                <CheckCircleIcon sx={{ fontSize: 45, color: BLUE.CERULEAN, position: 'relative', zIndex: 1 }} />
+
+              {/* Right: Icon */}
+              <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+                <Box sx={{ position: 'absolute', width: 60, height: 60, borderRadius: '50%', background: `${BLUE.CERULEAN}10`, zIndex: 0 }} />
+                <CheckCircleIcon sx={{ fontSize: 60, color: BLUE.CERULEAN, position: 'relative', zIndex: 1 }} />
               </Box>
             </Stack>
           </StatCard>
@@ -154,11 +177,13 @@ const SummaryStats: React.FC = () => {
         <Grid item xs={12} md={4}>
           <StatCard 
             elevation={0} 
+            onClick={() => onStatusClick?.('abnormal')}
             sx={{ 
               background: '#fff', 
-              borderColor: '#fca5a5', // Light red border
-              borderWidth: '2px',
+              borderColor: activeStatus?.startsWith('abnormal') ? '#ef4444' : '#fca5a5', 
+              borderWidth: activeStatus?.startsWith('abnormal') ? '3px' : '2px',
               color: '#1c1e2b',
+              cursor: 'pointer',
               boxShadow: '0 4px 15px rgba(220, 38, 38, 0.05)',
               '&:hover': {
                 transform: 'translateY(-4px)',
@@ -167,13 +192,14 @@ const SummaryStats: React.FC = () => {
               }
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>
-              <Box>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ height: '100%' }}>
+              {/* Left Side: Status & Count */}
+              <Box sx={{ flex: 1 }}>
+                <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.5 }}>
                   <Box 
                     sx={{ 
-                      width: 10, 
-                      height: 10, 
+                      width: 8, 
+                      height: 8, 
                       borderRadius: '50%', 
                       backgroundColor: '#ef4444',
                       animation: 'pulse 1.5s infinite',
@@ -184,59 +210,70 @@ const SummaryStats: React.FC = () => {
                       }
                     }} 
                   />
-                  <Typography variant="caption" fontWeight="900" sx={{ textTransform: 'uppercase', letterSpacing: 1.5, color: '#ef4444' }}>
+                  <Typography variant="caption" fontWeight="900" sx={{ textTransform: 'uppercase', color: '#ef4444', fontSize: '0.65rem' }}>
                     สถานะผิดปกติ
                   </Typography>
                 </Stack>
-                <Stack direction="row" alignItems="baseline" spacing={1}>
-                  <Typography variant="h3" fontWeight="900" sx={{ fontSize: '3rem', color: '#dc2626' }}>
+                
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', color: '#dc2626', lineHeight: 1 }}>
                     44
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 800 }}>รายการ</Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <InfoIcon sx={{ fontSize: 20, color: '#ef4444', mb: -0.5 }} />
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 800, fontSize: '0.65rem' }}>รายการ</Typography>
+                  </Box>
                 </Stack>
-              </Box>
-              
-              <Box sx={{ p: 1, borderRadius: '12px', background: '#fef2f2' }}>
-                <InfoIcon sx={{ fontSize: 32, color: '#ef4444' }} />
-              </Box>
-            </Stack>
-
-            <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }}>
-              {/* Waiting Fix: Orange-Yellow Gradient */}
-              <Box sx={{ 
-                flex: 1, 
-                p: 1.2, 
-                borderRadius: '12px', 
-                background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-                border: '1px solid #fde68a',
-                textAlign: 'center',
-                transition: 'all 0.2s ease',
-                '&:hover': { transform: 'scale(1.03)', boxShadow: '0 4px 10px rgba(251, 191, 36, 0.15)' }
-              }}>
-                <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center" sx={{ mb: 0.2 }}>
-                  <RocketIcon sx={{ fontSize: 13, color: '#d97706' }} />
-                  <Typography variant="caption" fontWeight="900" sx={{ color: '#b45309', fontSize: '0.7rem' }}>รอแก้ไข</Typography>
-                </Stack>
-                <Typography variant="h5" fontWeight="900" sx={{ color: '#92400e' }}>34</Typography>
               </Box>
 
-              {/* Fixed: Blue-White Gradient */}
-              <Box sx={{ 
-                flex: 1, 
-                p: 1.2, 
-                borderRadius: '12px', 
-                background: 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
-                border: '1px solid #bae6fd',
-                textAlign: 'center',
-                transition: 'all 0.2s ease',
-                '&:hover': { transform: 'scale(1.03)', boxShadow: '0 4px 10px rgba(14, 165, 233, 0.1)' }
-              }}>
-                <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center" sx={{ mb: 0.2 }}>
-                  <SendIcon sx={{ fontSize: 13, color: '#0284c7', transform: 'rotate(-45deg)' }} />
-                  <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.7rem' }}>แก้ไขแล้ว</Typography>
-                </Stack>
-                <Typography variant="h5" fontWeight="900" sx={{ color: '#075985' }}>10</Typography>
-              </Box>
+              {/* Right Side: Stacked Status Boxes */}
+              <Stack spacing={0.75} sx={{ flex: 1.3 }}>
+                <Box 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusClick?.('abnormal_pending');
+                  }}
+                  sx={{ 
+                    p: 0.75, 
+                    borderRadius: '10px', 
+                    background: activeStatus === 'abnormal_pending' ? '#fef3c7' : 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                    border: '1px solid',
+                    borderColor: activeStatus === 'abnormal_pending' ? '#d97706' : '#fde68a',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 10px rgba(251, 191, 36, 0.15)' }
+                  }}
+                >
+                  <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+                    <RocketIcon sx={{ fontSize: 10, color: '#d97706' }} />
+                    <Typography variant="caption" fontWeight="900" sx={{ color: '#b45309', fontSize: '0.65rem' }}>รอแก้ไข</Typography>
+                  </Stack>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: '#92400e', lineHeight: 1 }}>34</Typography>
+                </Box>
+
+                <Box 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStatusClick?.('abnormal_fixed');
+                  }}
+                  sx={{ 
+                    p: 0.75, 
+                    borderRadius: '10px', 
+                    background: activeStatus === 'abnormal_fixed' ? '#e0f2fe' : 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
+                    border: '1px solid',
+                    borderColor: activeStatus === 'abnormal_fixed' ? '#0284c7' : '#bae6fd',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 10px rgba(14, 165, 233, 0.1)' }
+                  }}
+                >
+                  <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+                    <SendIcon sx={{ fontSize: 10, color: '#0284c7', transform: 'rotate(-45deg)' }} />
+                    <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.65rem' }}>แก้ไขแล้ว</Typography>
+                  </Stack>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: '#075985', lineHeight: 1 }}>10</Typography>
+                </Box>
+              </Stack>
             </Stack>
           </StatCard>
         </Grid>
