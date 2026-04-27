@@ -39,3 +39,4 @@ export * from './FileAttachment';
 
 // Dynamic Rules
 export * from './SocialSecurityRule';
+export * from './CompanyHoliday';

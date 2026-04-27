@@ -129,6 +129,16 @@ export class Permissions {
   }
 
   /**
+   * Check if user can access Company Holiday management
+   * Allowed: Admin, MD, PM, PD
+   */
+  static canAccessHolidayManagement(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
+    if (!role) return false;
+    return ['AM', 'MD', 'PM', 'PD'].includes(role);
+  }
+
+  /**
    * Check if user can access scan data monitoring
    * Allowed: Admin, PM, PD, MD
    */
@@ -288,6 +298,7 @@ export function usePermissions(user: User | null | undefined) {
     canUploadScanData: Permissions.canUploadScanData(role),
     canAccessScanDataMonitoring: Permissions.canAccessScanDataMonitoring(role),
     canAccessSSOManagement: Permissions.canAccessSSOManagement(role),
+    canAccessHolidayManagement: Permissions.canAccessHolidayManagement(role),
     canAccessAllProjects: Permissions.canAccessAllProjects(role),
     isDepartmentRestricted: Permissions.isDepartmentRestricted(role),
     canAccessProject: (projectId: string) => Permissions.canAccessProject(user, projectId),

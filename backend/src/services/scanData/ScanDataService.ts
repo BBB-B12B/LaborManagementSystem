@@ -26,6 +26,7 @@ import { dailyReportService } from '../dailyReport/DailyReportService';
 import { DailyReport } from '../../models/DailyReport';
 import { ScanDataAggregator } from './ScanDataAggregator';
 import { projectLocationService } from '../project/ProjectLocationService';
+import { projectBDailyReportService } from '../external/ProjectBDailyReportService';
 
 export interface BulkImportRecord {
   rowNumber: number;
@@ -1170,21 +1171,30 @@ class ScanDataService extends BaseCrudService<ScanData> {
         }
       });
 
-      // ── Step 3: Fetch DailyReports for the date range (for Type3 detection) ─
-      const reportsSnapshot = await collections.dailyReports
-        .where('projectLocationId', '==', projectLocationId)
-        .get();
-
-      const reportMap = new Map<string, DailyReport[]>();
-      reportsSnapshot.docs.forEach(doc => {
-        const data = doc.data() as DailyReport;
-        const workDate = data.date instanceof Date ? data.date : (data.date as any)?.toDate?.() ?? new Date();
-        if (workDate < start || workDate > end) return;
+      // ── Step 3: Fetch Timesheets from Project B (for Type3 detection) ─────
+      const projectBMap = new Map<string, any>(); // key: `${employeeNumber}_${YYYY-MM-DD}`
+      const dateToEmployees = new Map<string, Set<string>>();
+      
+      for (const scan of scansToAnalyse) {
+        const workDate = scan.workDate instanceof Date ? scan.workDate : (scan.workDate as any).toDate();
         const dateStr = workDate.toISOString().split('T')[0];
-        const key = `${(data as any).employeeId}_${dateStr}`;
-        const existing = reportMap.get(key) || [];
-        reportMap.set(key, [...existing, { ...data, id: doc.id }]);
-      });
+        if (!dateToEmployees.has(dateStr)) {
+          dateToEmployees.set(dateStr, new Set());
+        }
+        if (scan.employeeNumber) {
+          dateToEmployees.get(dateStr)!.add(scan.employeeNumber);
+        }
+      }
+
+      // IMPORTANT: Need to import projectBDailyReportService at the top of this file if not already imported.
+      // Assuming it's imported or we will add it.
+      for (const [dateStr, empSet] of dateToEmployees.entries()) {
+        const empArray = Array.from(empSet);
+        const timesheets = await projectBDailyReportService.getBulkDailyTimesheets(empArray, dateStr);
+        for (const [emp, ts] of Object.entries(timesheets)) {
+          projectBMap.set(`${emp}_${dateStr}`, ts);
+        }
+      }
 
       // ── Step 4: Detect discrepancies ───────────────────────────────────────
       const discrepanciesToCreate: Omit<ScanDataDiscrepancy, 'id'>[] = [];
@@ -1197,10 +1207,12 @@ class ScanDataService extends BaseCrudService<ScanData> {
         // ✅ Insert-only: skip if a discrepancy already exists for this employee+date
         if (existingDiscKeys.has(discKey)) continue;
 
-        const reports = reportMap.get(`${scan.employeeId || scan.employeeNumber}_${dateStr}`) || [];
-        const reportedRegularHours = reports.filter((r: any) => r.workType === 'regular').reduce((sum: number, r: any) => sum + (r.netHours || 0), 0);
-        const reportedMorningOT = reports.filter((r: any) => r.workType === 'ot_morning').reduce((sum: number, r: any) => sum + (r.netHours || 0), 0);
-        const reportedEveningOT = reports.filter((r: any) => r.workType === 'ot_evening').reduce((sum: number, r: any) => sum + (r.netHours || 0), 0);
+        const timesheet = projectBMap.get(`${scan.employeeNumber}_${dateStr}`);
+        
+        const reportedRegularHours = timesheet?.expectedHours?.normal || 0;
+        const reportedMorningOT = timesheet?.expectedHours?.otMorning || 0;
+        const reportedEveningOT = timesheet?.expectedHours?.otEvening || 0;
+        
         const scannedHours = scan.regularHours || 0;
         const scanNormalStatus = scan.normalStatus || 0;
 
@@ -1212,12 +1224,12 @@ class ScanDataService extends BaseCrudService<ScanData> {
           type = 'Type2';
           detectionReason = 'สแกนไม่ครบ (ไม่มีเวลาสแกนเข้า หรือ สแกนออก)';
         }
-        // Case C: Hours mismatch with DailyReport (Type 3)
-        else if (reports.length > 0) {
+        // Case C: Hours mismatch with Project B (Type 3)
+        else if (timesheet && timesheet.expectedShifts?.normal) {
           const hoursDiff = Math.abs(scannedHours - reportedRegularHours);
           if (hoursDiff > 0.01) {
             type = 'Type3';
-            detectionReason = `ชั่วโมงงานไม่ตรงกัน (สแกนนิ้ว: ${scannedHours} ชม., รายงาน: ${reportedRegularHours} ชม.)`;
+            detectionReason = `ชั่วโมงงานปกติไม่ตรงกัน (สแกนนิ้ว: ${scannedHours} ชม., อนุมัติในตาราง: ${reportedRegularHours} ชม.)`;
           }
         }
 
@@ -1225,7 +1237,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
         const hoursDifference = reportedRegularHours - scannedHours;
         discrepanciesToCreate.push({
-          dailyReportId: reports[0]?.id || 'NONE',
+          dailyReportId: timesheet?.id || 'PROJECT_B', // Project B doesn't have local report IDs
           dailyContractorId: (scan as any).dailyContractorId || '',
           projectLocationId,
           workDate,
@@ -1351,21 +1363,21 @@ class ScanDataService extends BaseCrudService<ScanData> {
       let department = '#N/A', hasReport = false;
 
       if (contractor) {
-        const d = new Date(group.workDate);
+        const dateStr = group.workDate;
         try {
-          const reports = await dailyReportService.getByContractorAndDate(contractor.id, d, d);
-          if (reports && reports.length > 0) {
+          const timesheet = await projectBDailyReportService.getDailyTimesheet(group.employeeNumber, dateStr);
+          if (timesheet) {
              hasReport = true;
-             for (const rep of reports) {
-               if (rep.workType === 'regular') reportNormalStatus = 1;
-               else if (rep.workType === 'ot_morning') reportMorningOT += rep.netHours;
-               else if (rep.workType === 'ot_noon') reportLunchOT += rep.netHours;
-               else if (rep.workType === 'ot_evening') reportEveningOT += rep.netHours;
-             }
+             if (timesheet.expectedShifts?.normal) reportNormalStatus = 1;
+             reportMorningOT = timesheet.expectedHours?.otMorning || 0;
+             reportLunchOT = timesheet.expectedHours?.otNoon || 0;
+             reportEveningOT = timesheet.expectedHours?.otEvening || 0;
           }
           const loc = await projectLocationService.getById(params.projectLocationId || (scans[0] as any).projectLocationId);
           if (loc?.department) department = loc.department;
-        } catch (e) {}
+        } catch (e) {
+          console.error('Error fetching Project B timesheet:', e);
+        }
       }
 
       const diffLunch = !hasReport ? '-' : (group.lunchStatus - reportLunchOT);

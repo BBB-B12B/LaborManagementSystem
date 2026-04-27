@@ -17,6 +17,7 @@ import wagePeriodRoutes from './wagePeriods.routes';
 import scanDataRoutes from './scanData.routes';
 import socialSecurityRulesRoutes from './socialSecurityRules.routes';
 import importedWageSystemRoutes from './labor/importedWageSystem.routes';
+import companyHolidaysRoutes from './companyHolidays.routes';
 
 const router = Router();
 
@@ -50,5 +51,8 @@ router.use('/social-security-rules', socialSecurityRulesRoutes);
 
 // Imported Wage System routes (CSV based)
 router.use('/imported-wage-system', importedWageSystemRoutes);
+
+// Company Holidays routes
+router.use('/company-holidays', companyHolidaysRoutes);
 
 export default router;

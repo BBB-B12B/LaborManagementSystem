@@ -18,6 +18,7 @@ import {
 import FolderIcon from '@mui/icons-material/Folder';
 import GroupsIcon from '@mui/icons-material/Groups';
 import EngineeringIcon from '@mui/icons-material/Engineering';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { Layout, ProtectedRoute } from '@/components/layout';
 
 import { useAuthStore } from '@/store/authStore';
@@ -59,6 +60,15 @@ const MANAGEMENT_SECTIONS = [
     href: '/management/social-security-rules',
     permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
       permissions.canAccessSSOManagement,
+  },
+  {
+    key: 'company-holidays',
+    label: 'จัดการวันหยุดบริษัท',
+    description: 'กำหนดวันหยุดประจำปีของบริษัท ใช้อ้างอิงในการคำนวณค่าแรง',
+    icon: <CalendarMonthIcon fontSize="large" color="primary" />,
+    href: '/management/company-holidays',
+    permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
+      permissions.canAccessHolidayManagement,
   },
 ] as const;
 
