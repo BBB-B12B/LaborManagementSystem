@@ -40,7 +40,10 @@ import {
   FilterList,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { getDiscrepancySummary, type ScanDataDiscrepancy } from '../../services/scanDataService';
+import {
+  getDiscrepancySummary,
+  type ScanDataDiscrepancy,
+} from '../../services/scanDataService';
 import {
   getDiscrepancyTypeLabel,
   getDiscrepancyTypeColor,
@@ -92,7 +95,9 @@ const ScanDataMonitoringWidget: React.FC<ScanDataMonitoringWidgetProps> = ({
       <Card>
         <CardHeader title="ScanData Monitoring" />
         <CardContent>
-          <Alert severity="error">เกิดข้อผิดพลาด: {(error as Error).message}</Alert>
+          <Alert severity="error">
+            เกิดข้อผิดพลาด: {(error as Error).message}
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -244,13 +249,13 @@ const ScanDataMonitoringWidget: React.FC<ScanDataMonitoringWidgetProps> = ({
               <Typography variant="subtitle2" gutterBottom>
                 ความผิดปกติล่าสุด:
               </Typography>
-              {!summary.recentDiscrepancies || summary.recentDiscrepancies.length === 0 ? (
+              {(summary.recentDiscrepancies || []).length === 0 ? (
                 <Alert severity="success" sx={{ mt: 1 }}>
                   ไม่พบความผิดปกติ ✓
                 </Alert>
               ) : (
                 <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
-                  {summary.recentDiscrepancies.map((discrepancy) => (
+                  {(summary.recentDiscrepancies || []).map((discrepancy) => (
                     <ListItemButton
                       key={discrepancy.id}
                       onClick={() => handleViewDiscrepancy(discrepancy.id)}
@@ -304,8 +309,8 @@ const ScanDataMonitoringWidget: React.FC<ScanDataMonitoringWidgetProps> = ({
             {summary.totalDiscrepancies > 0 && (
               <Alert severity="info" sx={{ mt: 2 }}>
                 <Typography variant="caption">
-                  💡 ระบบตรวจจับความผิดปกติระหว่าง Daily Report และ ScanData โดยอัตโนมัติ
-                  กรุณาตรวจสอบและแก้ไขก่อนคำนวณค่าแรง
+                  💡 ระบบตรวจจับความผิดปกติระหว่าง Daily Report และ ScanData
+                  โดยอัตโนมัติ กรุณาตรวจสอบและแก้ไขก่อนคำนวณค่าแรง
                 </Typography>
               </Alert>
             )}

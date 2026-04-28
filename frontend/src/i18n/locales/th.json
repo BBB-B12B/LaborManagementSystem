@@ -193,5 +193,47 @@
     "created": "สร้างสำเร็จ",
     "imported": "นำเข้าสำเร็จ",
     "exported": "ส่งออกสำเร็จ"
+  },
+  "workHourMonitoring": {
+    "title": "ระบบติดตามและจัดการชั่วโมงทำงาน",
+    "table": {
+      "no": "ลำดับ",
+      "date": "วันที่",
+      "employee": "รหัส/ชื่อ-นามสกุล",
+      "project": "สังกัด",
+      "comparison": "เปรียบเทียบชั่วโมง (Daily & สแกนนิ้ว)",
+      "regularHours": "เวลาทำงานปกติ",
+      "otHours": "เวลาทำงาน OT",
+      "daily": "Daily",
+      "scan": "สแกนนิ้ว",
+      "otMorning": "OT เช้า",
+      "otNoon": "ผ่าเที่ยง",
+      "otEvening": "OT เย็น",
+      "lateMinutes": "นาทีที่มาสาย",
+      "responsible": "ผู้รับผิดชอบ",
+      "status": "สถานะ",
+      "actions": "จัดการ"
+    },
+    "status": {
+      "normal": "ปกติ",
+      "workHourConflict": "ชั่วโมงทำงานขัดแย้งกัน",
+      "otConflict": "ชั่วโมง OT ขัดแย้งกัน",
+      "missingScan": "ขาดข้อมูลสแกนนิ้ว",
+      "missingDaily": "ขาดข้อมูล Daily Report",
+      "absent": "ขาดงาน"
+    },
+    "actions": {
+      "view": "ดูข้อมูล",
+      "check": "ตรวจสอบ",
+      "pending": "รอดำเนินการ",
+      "approve": "อนุมัติ",
+      "correct": "แจ้งแก้ไข"
+    },
+    "summary": {
+      "total": "ทั้งหมด",
+      "normal": "ปกติ",
+      "abnormal": "ผิดปกติ",
+      "pending": "รอแก้ไข"
+    }
   }
 }

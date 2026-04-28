@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import {
+  AccessTime as AccessTimeIcon,
   Calculate as CalculateIcon,
   Dashboard as DashboardIcon,
   Description as DescriptionIcon,
@@ -65,6 +66,12 @@ export const Navbar: React.FC = () => {
       label: t('nav.scanData'),
       path: '/scan-data-monitoring',
       icon: <FingerprintIcon />,
+      roles: ['AM', 'PM', 'PD', 'MD'],
+    },
+    {
+      label: 'ติดตามชั่วโมงงาน',
+      path: '/work-hour-monitoring',
+      icon: <AccessTimeIcon />,
       roles: ['AM', 'PM', 'PD', 'MD'],
     },
     {

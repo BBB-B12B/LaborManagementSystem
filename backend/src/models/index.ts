@@ -40,3 +40,7 @@ export * from './FileAttachment';
 // Dynamic Rules
 export * from './SocialSecurityRule';
 export * from './CompanyHoliday';
+
+// Reconciliation & Approved Timesheets
+export * from './ReconciliationRecord';
+export * from './ApprovedTimesheet';

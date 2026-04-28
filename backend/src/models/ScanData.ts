@@ -7,6 +7,32 @@
  * Document ID Format: SCAN_[employeeId]_[workDate] (e.g., SCAN_200247_2025-10-21)
  */
 
+// ---------------------------------------------------------------------------
+// Audit Trail Types (mirrors Daily Report editHistory pattern)
+// ---------------------------------------------------------------------------
+
+export type ScanEditAction =
+  | 'manual_fill'    // Admin เติม scan times ที่ขาดหายไป
+  | 'manual_create'  // Admin สร้าง document ใหม่ทั้งหมด (ไม่มี scan เดิมเลย)
+  | 'delete_ghost'   // Admin ลบ Ghost Scan (สแกนนิ้วที่ไม่ได้ทำงานจริง)
+  | 'modify';        // Admin แก้ไข scan times อื่นๆ
+
+export interface ScanEditEntry {
+  editedAt: Date;
+  editedBy: string;                // Admin userId
+  action: ScanEditAction;
+  reason: string;                  // เหตุผลที่แก้ไข (บังคับกรอก)
+  reconciliationRecordId?: string; // ref กลับไปที่ ReconciliationRecord
+  snapshot: {                      // state ก่อนแก้ไข
+    punches: string[];             // ['08:01', '12:00', '13:00', '17:02']
+    firstIn?: string | null;
+    lastOut?: string | null;
+    regularHours?: number;
+    otMorningHours?: number;
+    otEveningHours?: number;
+  };
+}
+
 export type ScanBehavior =
   | 'ot_morning_in' // 03:00-07:30
   | 'ot_morning_out'
@@ -59,6 +85,11 @@ export interface ScanData {
   isDeleted?: boolean;
   deletedAt?: Date;
   deletedBy?: string;
+
+  // Audit Trail (mirrors Daily Report editHistory pattern)
+  isManualEntry?: boolean;     // true = Admin สร้าง document ทั้งหมดด้วยตัวเอง
+  isManuallyEdited?: boolean;  // true = มีการแก้ไขโดย Admin อย่างน้อย 1 ครั้ง
+  editHistory?: ScanEditEntry[]; // ประวัติการแก้ไขทั้งหมด
 
   // Metadata
   createdAt: Date;
@@ -191,6 +222,9 @@ export const scanDataConverter = {
       isDeleted: scan.isDeleted,
       deletedAt: scan.deletedAt,
       deletedBy: scan.deletedBy,
+      isManualEntry: scan.isManualEntry,
+      isManuallyEdited: scan.isManuallyEdited,
+      editHistory: scan.editHistory,
     };
 
     // Strip undefined out so {merge: true} works correctly without overwriting fields
@@ -250,7 +284,16 @@ export const scanDataConverter = {
       isDeleted: data.isDeleted || false,
       deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : (data.deletedAt instanceof Date ? data.deletedAt : undefined),
       deletedBy: data.deletedBy,
+      isManualEntry: data.isManualEntry || false,
+      isManuallyEdited: data.isManuallyEdited || false,
+      editHistory: (data.editHistory || []).map((entry: any) => ({
+        editedAt: entry.editedAt?.toDate ? entry.editedAt.toDate() : new Date(entry.editedAt),
+        editedBy: entry.editedBy,
+        action: entry.action,
+        reason: entry.reason,
+        reconciliationRecordId: entry.reconciliationRecordId,
+        snapshot: entry.snapshot || { punches: [] },
+      })),
     };
   },
 };
-

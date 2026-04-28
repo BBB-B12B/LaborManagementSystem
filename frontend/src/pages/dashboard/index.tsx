@@ -8,8 +8,17 @@
  * - Navigation menu (FR-D-002, FR-D-003, FR-D-004)
  */
 
-import React from 'react';
-import { Box, Grid, Card, CardContent, Typography, Avatar, Chip } from '@mui/material';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/router';
+import {
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  Avatar,
+  Chip,
+} from '@mui/material';
 import {
   Engineering as EngineeringIcon,
   Folder as FolderIcon,
@@ -31,7 +40,13 @@ interface StatCardProps {
   subtitle?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color = 'primary', subtitle }) => {
+const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  icon,
+  color = 'primary',
+  subtitle,
+}) => {
   return (
     <Card elevation={2}>
       <CardContent>
@@ -69,7 +84,12 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color = 'primar
  * Dashboard page component
  */
 function Dashboard() {
+  const router = useRouter();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    router.replace('/work-hour-monitoring');
+  }, [router]);
 
   // TODO: Replace with actual API calls
   const { data: dashboardStats } = useQuery({
