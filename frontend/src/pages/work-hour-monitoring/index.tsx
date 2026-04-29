@@ -5,14 +5,18 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   KeyboardArrowDown as ArrowDownIcon,
+  Fullscreen as FullscreenIcon,
+  FullscreenExit as FullscreenExitIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import WorkHourComparisonTable from '@/components/work-hour-monitoring/WorkHourComparisonTable';
+import WorkHourComparisonTable, { mockData } from '@/components/work-hour-monitoring/WorkHourComparisonTable';
 import SummaryStats from '@/components/work-hour-monitoring/SummaryStats';
 import AbnormalBreakdown from '@/components/work-hour-monitoring/AbnormalBreakdown';
 import DatePicker from '@/components/forms/DatePicker';
 import { GlobalStyles } from '@mui/material';
+import { useUIStore } from '@/store/uiStore';
+import { SIDEBAR_WIDTH, COLLAPSED_WIDTH } from '@/components/layout/Navbar';
 
 /**
  * Work Hour Monitoring Page
@@ -22,6 +26,18 @@ export default function WorkHourMonitoringPage() {
   const { t } = useTranslation();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { sidebarOpen, setSidebarOpen } = useUIStore();
+  
+  const handleToggleFullscreen = () => {
+    const nextState = !isFullscreen;
+    setIsFullscreen(nextState);
+    if (nextState) {
+      setSidebarOpen(false);
+    } else {
+      setSidebarOpen(true);
+    }
+  };
   
   // Advanced Filter States
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLDivElement | null>(null);
@@ -97,32 +113,76 @@ export default function WorkHourMonitoringPage() {
     }
   };
 
-  const handleExportAbnormal = (id: string) => {
-    if (id === 'pending') {
-      console.log(`Exporting Excel for: รอแก้ไข`);
-      console.log(`Columns: ลำดับ, วันที่, รหัส, ชื่อ-นามสกุล, สังกัด, หมายเหตุ`);
-      // logic to trigger Excel generation for Pending Items
-      return;
-    }
+  const handleExport = (exportStatus: string = filterStatus) => {
+    // Filter data based on exportStatus, project, startDate, endDate
+    const dataToExport = mockData.filter(row => {
+      if (exportStatus === 'all_abnormal') {
+        if (row.status === 'normal') return false;
+      } else if (exportStatus === 'abnormal_pending') {
+        if (row.action === 'fixed' || row.status === 'normal') return false;
+      } else if (exportStatus === 'abnormal_fixed') {
+        if (row.action !== 'fixed' || row.status === 'normal') return false;
+      } else if (exportStatus !== 'all') {
+        if (row.status !== exportStatus) return false;
+        if (exportStatus !== 'normal' && row.action === 'fixed') return false;
+      }
+      
+      if (project !== 'all' && row.project !== project) return false;
+      
+      if (startDate && endDate) {
+        const rowDate = new Date(row.date);
+        const s = new Date(startDate); s.setHours(0,0,0,0);
+        const e = new Date(endDate); e.setHours(23,59,59,999);
+        if (rowDate < s || rowDate > e) return false;
+      }
+      return true;
+    });
 
-    if (id === 'fixed') {
-      console.log(`Exporting Excel for: แก้ไขแล้ว`);
-      console.log(`Columns: ลำดับ, รหัส, ชื่อ-นามสกุล, สังกัด, ผู้รับผิดชอบ, วันที่แก้ไข, หมายเหตุ`);
-      // logic to trigger Excel generation for Fixed Items
-      return;
-    }
-
-    const activeItem = [
-      { id: 'missingDaily', title: 'ขาดข้อมูล Daily Report' },
-      { id: 'workHourConflict', title: 'ข้อมูลขัดแย้งกัน' },
-      { id: 'missingScan', title: 'ขาดข้อมูลสแกนนิ้ว' },
-      { id: 'otConflict', title: 'ข้อมูล OT ขัดแย้งกัน' }
-    ].find(item => item.id === id);
-
-    console.log(`Exporting Excel for: ${activeItem?.title}`);
-    console.log(`Columns: ลำดับ, รหัส, ชื่อ-นามสกุล, สังกัด, ประเภทความผิดปกติ (${activeItem?.title}), ผู้รับผิดชอบ, หมายเหตุ`);
+    // Generate CSV
+    const headers = ['ลำดับ', 'วันที่', 'รหัส/ชื่อ-นามสกุล', 'สังกัด', 'เวลาทำงานปกติ(DAILY)', 'เวลาทำงานปกติ(สแกนนิ้ว)', 'OT เช้า', 'OT ผ่าเที่ยง', 'OT เย็น(DAILY)', 'OT เย็น(สแกนนิ้ว)', 'นาทีที่มาสาย', 'ผู้รับผิดชอบ', 'สถานะ', 'วันที่แก้ไข'];
+    const csvRows = [headers.join(',')];
     
-    // logic to trigger Excel generation with these columns
+    dataToExport.forEach((row, index) => {
+      const otEveningDaily = typeof row.otEvening === 'object' ? row.otEvening.daily : row.otEvening;
+      const otEveningScan = typeof row.otEvening === 'object' ? row.otEvening.scan : row.otEvening;
+      
+      const values = [
+        index + 1,
+        row.date,
+        `"${row.employeeId} - ${row.employeeName}"`,
+        row.project,
+        row.regularDaily,
+        row.regularScan,
+        row.otMorning,
+        row.otNoon,
+        otEveningDaily,
+        otEveningScan,
+        row.lateMinutes,
+        `"${row.responsible || ''}"`,
+        `"${t(`workHourMonitoring.status.${row.status}`)}"`,
+        `"${row.resolvedDate || '-'}"`
+      ];
+      csvRows.push(values.join(','));
+    });
+    
+    const csvString = '\uFEFF' + csvRows.join('\n'); // BOM for Excel Thai
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `work_hour_export_${exportStatus}_${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportAbnormal = (id: string) => {
+    let exportStatus = id;
+    if (id === 'pending') exportStatus = 'abnormal_pending';
+    if (id === 'fixed') exportStatus = 'abnormal_fixed';
+    
+    handleExport(exportStatus);
   };
 
   return (
@@ -135,60 +195,72 @@ export default function WorkHourMonitoringPage() {
           }
         }} />
         <Box sx={{ 
-          height: 'calc(100vh - 76px)', // Compacted for Topbar (64px) + small gap
+          height: isFullscreen ? '100vh' : 'calc(100vh - 76px)', // Compacted for Topbar (64px) + small gap
           display: 'flex', 
           flexDirection: 'column',
           backgroundColor: '#f8fafc',
-          overflow: 'hidden' // Back to hidden but with better height management
+          overflow: 'hidden', // Back to hidden but with better height management
+          position: isFullscreen ? 'fixed' : 'relative',
+          top: isFullscreen ? 0 : 'auto',
+          left: isFullscreen ? { xs: 0, md: sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH } : 'auto',
+          width: isFullscreen ? { xs: '100%', md: `calc(100% - ${sidebarOpen ? SIDEBAR_WIDTH : COLLAPSED_WIDTH}px)` } : '100%',
+          right: isFullscreen ? 0 : 'auto',
+          bottom: isFullscreen ? 0 : 'auto',
+          zIndex: isFullscreen ? 1250 : 1,
+          transition: 'all 0.3s ease',
         }}>
-          {/* Header Section (Static height) */}
+          {/* Header Section (Flexible depending on fullscreen) */}
           <Box sx={{ p: 1, pb: 0.5, flexShrink: 0 }}>
-            <Stack 
-              direction="row" 
-              justifyContent="space-between" 
-              alignItems="center" 
-              sx={{ mb: 0.5 }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Box 
-                  sx={{ 
-                    width: 4, 
-                    height: 18, 
-                    backgroundColor: '#01497c', 
-                    borderRadius: '3px',
-                    boxShadow: '0 1px 3px rgba(1, 73, 124, 0.3)'
-                  }} 
-                />
-                <Typography 
-                  variant="subtitle1" 
-                  fontWeight="900" 
-                  sx={{ 
-                    color: '#001b48',
-                    letterSpacing: '-0.5px',
-                    fontSize: '1.2rem'
-                  }}
+            {!isFullscreen && (
+              <>
+                <Stack 
+                  direction="row" 
+                  justifyContent="space-between" 
+                  alignItems="center" 
+                  sx={{ mb: 0.5 }}
                 >
-                  ระบบติดตามและจัดการชั่วโมงทำงาน
-                </Typography>
-              </Stack>
-            </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box 
+                      sx={{ 
+                        width: 4, 
+                        height: 18, 
+                        backgroundColor: '#01497c', 
+                        borderRadius: '3px',
+                        boxShadow: '0 1px 3px rgba(1, 73, 124, 0.3)'
+                      }} 
+                    />
+                    <Typography 
+                      variant="subtitle1" 
+                      fontWeight="900" 
+                      sx={{ 
+                        color: '#001b48',
+                        letterSpacing: '-0.5px',
+                        fontSize: '1.2rem'
+                      }}
+                    >
+                      ระบบติดตามและจัดการชั่วโมงทำงาน
+                    </Typography>
+                  </Stack>
+                </Stack>
 
-            <Box sx={{ mb: 0.5 }}>
-              <SummaryStats 
-                onStatusClick={handleStatusClick} 
-                activeStatus={showAbnormalBreakdown ? 'abnormal' : filterStatus} 
-              />
-            </Box>
+                <Box sx={{ mb: 0.5 }}>
+                  <SummaryStats 
+                    onStatusClick={handleStatusClick} 
+                    activeStatus={showAbnormalBreakdown ? 'abnormal' : filterStatus} 
+                  />
+                </Box>
 
-            {showAbnormalBreakdown && (
-              <Box sx={{ mb: 0.5, animation: 'fadeIn 0.3s ease-out' }}>
-                <AbnormalBreakdown 
-                  activeId={activeAbnormalId}
-                  viewMode={breakdownViewMode}
-                  onCardClick={handleAbnormalCardClick}
-                  onExport={handleExportAbnormal}
-                />
-              </Box>
+                {showAbnormalBreakdown && (
+                  <Box sx={{ mb: 0.5, animation: 'fadeIn 0.3s ease-out' }}>
+                    <AbnormalBreakdown 
+                      activeId={activeAbnormalId}
+                      viewMode={breakdownViewMode}
+                      onCardClick={handleAbnormalCardClick}
+                      onExport={handleExportAbnormal}
+                    />
+                  </Box>
+                )}
+              </>
             )}
 
             <Stack 
@@ -202,6 +274,7 @@ export default function WorkHourMonitoringPage() {
                 variant="outlined"
                 size="small"
                 startIcon={<FileDownloadIcon />}
+                onClick={() => handleExport(filterStatus)}
                 sx={{ 
                   borderRadius: '6px', 
                   textTransform: 'none', 
@@ -239,6 +312,26 @@ export default function WorkHourMonitoringPage() {
                 </Typography>
                 <ArrowDownIcon sx={{ color: '#01497c', fontSize: 16, opacity: 0.5 }} />
               </Box>
+              
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                onClick={handleToggleFullscreen}
+                sx={{ 
+                  borderRadius: '16px', 
+                  textTransform: 'none', 
+                  fontWeight: 700,
+                  borderColor: '#1e293b',
+                  color: '#1e293b',
+                  height: 28,
+                  fontSize: '0.75rem',
+                  px: 1.5,
+                  '&:hover': { backgroundColor: '#f8fafc', borderColor: '#0f172a' }
+                }}
+              >
+                {isFullscreen ? 'ย่อตาราง' : 'ขยายตาราง'}
+              </Button>
             </Stack>
           </Box>
 
@@ -318,7 +411,10 @@ export default function WorkHourMonitoringPage() {
               >
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="normal">ปกติ</MenuItem>
-                <MenuItem value="abnormal">ผิดปกติ</MenuItem>
+                <MenuItem value="missingScan">ขาดข้อมูลสแกนนิ้ว</MenuItem>
+                <MenuItem value="missingDaily">ขาดข้อมูล Daily Report</MenuItem>
+                <MenuItem value="workHourConflict">ข้อมูลเวลาทำงานปกติขัดแย้ง</MenuItem>
+                <MenuItem value="otConflict">ข้อมูล OT ขัดแย้ง</MenuItem>
               </Select>
             </FormControl>
 

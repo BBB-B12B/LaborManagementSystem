@@ -13,7 +13,11 @@ import {
   Button,
   Stack,
   TablePagination,
+  Dialog,
+  DialogContent,
+  Grid,
 } from '@mui/material';
+import { Info as InfoIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { styled, alpha } from '@mui/material/styles';
 
@@ -119,6 +123,62 @@ const ValueCapsule = styled(Box, {
   transition: 'all 0.2s ease',
 }));
 
+const ComparisonBox = styled(Box)(({ theme }) => ({
+  backgroundColor: '#f8fafc',
+  borderRadius: '8px',
+  padding: theme.spacing(2),
+  border: '1px solid #e2e8f0',
+  flex: 1,
+}));
+
+const ProofImagePlaceholder = styled(Box)(({ theme }) => ({
+  width: '100%',
+  height: '120px',
+  backgroundColor: '#fff',
+  border: '1px solid #cbd5e1',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: theme.spacing(2),
+  color: '#94a3b8',
+  fontSize: '0.85rem',
+  fontWeight: 700,
+}));
+
+const TimeTable = styled('table')(({ theme }) => ({
+  width: '100%',
+  borderCollapse: 'collapse',
+  '& th, & td': {
+    border: '1px solid #cbd5e1',
+    padding: '6px',
+    textAlign: 'center',
+    fontSize: '0.7rem',
+    height: '36px',
+  },
+  '& th': {
+    backgroundColor: '#f8fafc',
+    fontWeight: 800,
+    color: '#64748b',
+  },
+  '& td.label': {
+    backgroundColor: '#fff',
+    fontWeight: 900,
+    textAlign: 'left',
+    paddingLeft: '12px',
+    width: '120px',
+    fontSize: '0.85rem',
+    color: '#1e293b',
+  },
+  '& td.time-cell': {
+    minWidth: '50px',
+    fontWeight: 700,
+  },
+  '& td.empty-scan': {
+    backgroundColor: '#ffedd5',
+    color: '#ea580c',
+  }
+}));
+
 const StatusCapsule = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'statusType',
 })<{ statusType: string }>(({ statusType }) => {
@@ -220,14 +280,25 @@ const generateMockData = (count: number) => {
   const responsibles = ['นายสมพงษ์', 'ไซต์โฟร์แมน', 'ธุรการไซต์', ''];
   const data = [];
   
+  // Use today's date for mock data to ensure it passes the default date filter
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
   for (let i = 1; i <= count; i++) {
     const status = statuses[Math.floor(Math.random() * statuses.length)];
     const employeeId = (200000 + i).toString();
-    const action = status === 'normal' ? 'view' : (status === 'missingDaily' ? 'pending' : 'check');
+    let action = status === 'normal' ? 'view' : (status === 'missingDaily' ? 'pending' : 'check');
+    let resolvedDate = undefined;
+    
+    // Simulate some items being already 'fixed', but missingDaily is read-only so it can't be fixed here
+    if (status !== 'normal' && status !== 'missingDaily' && Math.random() > 0.8) {
+      action = 'fixed';
+      resolvedDate = todayStr;
+    }
     
     data.push({
       id: i,
-      date: '2026-04-23',
+      date: todayStr,
       employeeId,
       employeeName: `พนักงาน ทดสอบหมายเลข ${i}`,
       project: 'WH',
@@ -239,13 +310,14 @@ const generateMockData = (count: number) => {
       lateMinutes: Math.floor(Math.random() * 15),
       responsible: responsibles[Math.floor(Math.random() * responsibles.length)],
       status,
-      action
+      action,
+      resolvedDate
     });
   }
   return data;
 };
 
-const mockData = generateMockData(150); // Generate 150 rows for testing pagination
+export const mockData = generateMockData(150); // Generate 150 rows for testing pagination
 
 interface Props {
   selectedDate: Date;
@@ -266,6 +338,19 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(100);
 
+  const [checkDialogOpen, setCheckDialogOpen] = React.useState(false);
+  const [selectedRow, setSelectedRow] = React.useState<any>(null);
+
+  const handleOpenCheckDialog = (row: any) => {
+    setSelectedRow(row);
+    setCheckDialogOpen(true);
+  };
+
+  const handleCloseCheckDialog = () => {
+    setCheckDialogOpen(false);
+    setSelectedRow(null);
+  };
+
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -283,13 +368,15 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       if (filterStatus === 'all_abnormal') {
         if (row.status === 'normal') return false;
       } else if (filterStatus === 'abnormal_pending') {
-        if (row.action !== 'pending' || row.status === 'normal') return false;
+        // Pending means unresolved (not fixed and not normal)
+        if (row.action === 'fixed' || row.status === 'normal') return false;
       } else if (filterStatus === 'abnormal_fixed') {
-        // In mock data, let's assume non-pending non-normal items are 'checking' or 'fixed'
-        // For simplicity, we'll filter by action 'check' as 'needs check' vs 'pending'
-        if (row.action !== 'check' || row.status === 'normal') return false;
-      } else if (filterStatus !== 'all' && row.status !== filterStatus) {
-        return false;
+        // Fixed means resolved
+        if (row.action !== 'fixed' || row.status === 'normal') return false;
+      } else if (filterStatus !== 'all') {
+        if (row.status !== filterStatus) return false;
+        // When clicking a specific abnormal category from breakdown cards, hide 'fixed' items
+        if (filterStatus !== 'normal' && row.action === 'fixed') return false;
       }
       
       // Filter by Project
@@ -406,7 +493,41 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 </TableCell>
 
                 <TableCell>
-                  {row.action && (
+                  {row.action === 'pending' ? (
+                    <Box sx={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '8px', border: '1px solid #ef4444', color: '#ef4444',
+                      fontWeight: 800, minWidth: '80px', height: '26px', fontSize: '0.75rem',
+                      cursor: 'default', backgroundColor: '#fff'
+                    }}>
+                      {t(`workHourMonitoring.actions.${row.action}`)}
+                    </Box>
+                  ) : row.action === 'check' ? (
+                    <ActionButton 
+                      variant="outlined" 
+                      actionType={row.action}
+                      size="small"
+                      onClick={() => handleOpenCheckDialog(row)}
+                    >
+                      {t(`workHourMonitoring.actions.${row.action}`)}
+                    </ActionButton>
+                  ) : row.action === 'fixed' ? (
+                    <Stack spacing={0.2} alignItems="center">
+                      <Box sx={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        borderRadius: '8px', border: '1px solid #cbd5e1', color: '#64748b',
+                        fontWeight: 800, minWidth: '80px', height: '26px', fontSize: '0.75rem',
+                        cursor: 'default', backgroundColor: '#fff'
+                      }}>
+                        {t(`workHourMonitoring.actions.${row.action}`)}
+                      </Box>
+                      {row.resolvedDate && (
+                        <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700 }}>
+                          {row.resolvedDate}
+                        </Typography>
+                      )}
+                    </Stack>
+                  ) : row.action && (
                     <ActionButton 
                       variant="outlined" 
                       actionType={row.action}
@@ -450,6 +571,208 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         }
       }}
     />
+
+      {/* Check Conflict Dialog */}
+      <Dialog 
+        open={checkDialogOpen} 
+        onClose={handleCloseCheckDialog}
+        maxWidth="md"
+        PaperProps={{
+          sx: { borderRadius: '12px', width: '100%', maxWidth: '640px', border: '1px solid #e2e8f0', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }
+        }}
+      >
+        <DialogContent sx={{ p: 4 }}>
+          <Box sx={{ backgroundColor: '#f1f5f9', p: 2, borderRadius: '12px', mb: 4 }}>
+            <Typography variant="h6" fontWeight={900} sx={{ color: '#334155' }}>
+              {selectedRow?.status === 'missingScan' ? 'ขาดข้อมูลสแกนนิ้ว' : 'ตรวจสอบข้อมูลขัดแย้ง'}
+            </Typography>
+          </Box>
+          
+          {selectedRow && (
+            <Box sx={{ mb: 4, ml: 2 }}>
+              <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#475569', mb: 0.5 }}>
+                พนักงาน :  {selectedRow.employeeId} - {selectedRow.employeeName}
+              </Typography>
+              <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#475569' }}>
+                วันที่ :  {selectedRow.date}
+              </Typography>
+            </Box>
+          )}
+
+          {selectedRow?.status === 'missingScan' ? (
+            <>
+              <Grid container spacing={4}>
+                {/* Left: Daily Report Reference */}
+                <Grid item xs={12} sm={6}>
+                  <Stack spacing={2}>
+                    <ComparisonBox sx={{ backgroundColor: '#fff', p: 1.5, display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1, color: '#475569', borderBottom: '1px solid #e2e8f0', pb: 0.5 }}>
+                        ข้อมูลอ้างอิง Daily Report
+                      </Typography>
+                      <ProofImagePlaceholder sx={{ height: '90px', mb: 1 }}>รูปภาพ / Timestamp</ProofImagePlaceholder>
+                      <Stack direction="row" justifyContent="space-between" sx={{ mt: 'auto' }}>
+                        <Typography variant="caption" fontWeight={700} sx={{ color: '#64748b' }}>เวลาเข้างาน</Typography>
+                        <Typography variant="caption" fontWeight={900} sx={{ fontSize: '0.85rem' }}>08.00.05</Typography>
+                      </Stack>
+                    </ComparisonBox>
+                    <ComparisonBox sx={{ backgroundColor: '#fff', p: 1.5, display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1, color: '#475569', borderBottom: '1px solid #e2e8f0', pb: 0.5 }}>
+                        ข้อมูลอ้างอิง Daily Report
+                      </Typography>
+                      <ProofImagePlaceholder sx={{ height: '90px', mb: 1 }}>รูปภาพ / Timestamp</ProofImagePlaceholder>
+                      <Stack direction="row" justifyContent="space-between" sx={{ mt: 'auto' }}>
+                        <Typography variant="caption" fontWeight={700} sx={{ color: '#64748b' }}>เวลาออกงาน</Typography>
+                        <Typography variant="caption" fontWeight={900} sx={{ fontSize: '0.85rem' }}>17.03.05</Typography>
+                      </Stack>
+                    </ComparisonBox>
+                  </Stack>
+                </Grid>
+
+                {/* Right: Scan Data */}
+                <Grid item xs={12} sm={6}>
+                  <ComparisonBox sx={{ borderColor: '#fed7aa', backgroundColor: '#fff7ed', height: '100%', p: 1.5, display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1, color: '#ea580c', borderBottom: '1px solid #fed7aa', pb: 0.5 }}>
+                      ข้อมูลในระบบสแกนนิ้ว
+                    </Typography>
+                    <ProofImagePlaceholder sx={{ border: '1px solid #fed7aa', backgroundColor: '#fff', flexDirection: 'column', color: '#ea580c', height: '100%', flex: 1, mb: 0 }}>
+                      <Box sx={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                        <Typography variant="h5" fontWeight={900} sx={{ fontSize: '1.25rem', lineHeight: 1 }}>!</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={900}>ไม่มีข้อมูลสแกนนิ้ว</Typography>
+                    </ProofImagePlaceholder>
+                  </ComparisonBox>
+                </Grid>
+              </Grid>
+              
+              {/* Time Table */}
+              <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
+                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
+                  ข้อมูลแสดงเวลาทำงาน
+                </Typography>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <TimeTable>
+                    <thead>
+                      <tr>
+                        <th rowSpan={1}></th>
+                        {Array.from({ length: 10 }).map((_, i) => (
+                          <th key={i}>Time {i + 1}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="label">Daily Report :</td>
+                        <td className="time-cell">08.00.05</td>
+                        <td className="time-cell">17.03.05</td>
+                        {Array.from({ length: 8 }).map((_, i) => <td key={i} className="time-cell"></td>)}
+                      </tr>
+                      <tr>
+                        <td className="label">สแกนนิ้ว :</td>
+                        {Array.from({ length: 10 }).map((_, i) => <td key={i} className="time-cell empty-scan">-</td>)}
+                      </tr>
+                    </tbody>
+                  </TimeTable>
+                </Box>
+              </Box>
+            </>
+          ) : (
+            <Grid container spacing={4}>
+              {/* Left: Daily Report Reference */}
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1, display: 'block', color: '#475569', borderBottom: '2px solid #cbd5e1', pb: 0.5 }}>
+                  1. ข้อมูลอ้างอิง Daily Report
+                </Typography>
+                <ComparisonBox>
+                  <ProofImagePlaceholder>รูปภาพ / Timestamp</ProofImagePlaceholder>
+                  <Stack spacing={1}>
+                    {selectedRow?.status !== 'otConflict' && (
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>ชั่วโมงทำงานปกติ</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: '#334155' }}>{selectedRow?.regularDaily || 8} ชม.</Typography>
+                      </Stack>
+                    )}
+                    {selectedRow?.status !== 'workHourConflict' && (
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT (รวม)</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: '#334155' }}>
+                          {typeof selectedRow?.otEvening === 'object' ? selectedRow.otEvening.daily : (selectedRow?.otEvening || 0)} ชม.
+                        </Typography>
+                      </Stack>
+                    )}
+                  </Stack>
+                </ComparisonBox>
+              </Grid>
+
+              {/* Right: Scan Data */}
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1, display: 'block', color: '#ea580c', borderBottom: '2px solid #ea580c', pb: 0.5 }}>
+                  2. ข้อมูลในระบบสแกนนิ้ว
+                </Typography>
+                <ComparisonBox sx={{ backgroundColor: '#fff' }}>
+                  <ProofImagePlaceholder sx={{ border: '1px solid #1e293b', flexDirection: 'column' }}>
+                    <InfoIcon sx={{ color: '#ea580c', mb: 1, fontSize: 24 }} />
+                    <Typography variant="body2" fontWeight={800} sx={{ color: '#ea580c' }}>ข้อมูลขัดแย้งกัน</Typography>
+                  </ProofImagePlaceholder>
+                  <Stack spacing={1}>
+                    {selectedRow?.status !== 'otConflict' && (
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>ชั่วโมงทำงานปกติ</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: '#ef4444' }}>{selectedRow?.regularScan || 0} ชม.</Typography>
+                      </Stack>
+                    )}
+                    {selectedRow?.status !== 'workHourConflict' && (
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT (รวม)</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: '#ef4444' }}>
+                          {typeof selectedRow?.otEvening === 'object' ? selectedRow.otEvening.scan : (selectedRow?.otEvening || 0)} ชม.
+                        </Typography>
+                      </Stack>
+                    )}
+                  </Stack>
+                </ComparisonBox>
+              </Grid>
+            </Grid>
+          )}
+
+          <Stack direction="row" spacing={3} justifyContent="center" sx={{ mt: 5 }}>
+            <Button 
+              variant="outlined" 
+              onClick={handleCloseCheckDialog}
+              sx={{ 
+                textTransform: 'none', 
+                fontWeight: 800, 
+                borderRadius: '8px', 
+                color: '#1e293b', 
+                borderColor: '#1e293b', 
+                px: 5, 
+                py: 1,
+                '&:hover': { backgroundColor: '#f8fafc', borderColor: '#0f172a' }
+              }}
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              variant="contained" 
+              onClick={handleCloseCheckDialog}
+              elevation={0}
+              sx={{ 
+                textTransform: 'none', 
+                fontWeight: 800, 
+                borderRadius: '8px', 
+                backgroundColor: '#93c5fd', 
+                color: '#1e293b', 
+                px: 5, 
+                py: 1, 
+                border: '1px solid #1e293b', 
+                boxShadow: 'none',
+                '&:hover': { backgroundColor: '#bfdbfe', boxShadow: 'none' } 
+              }}
+            >
+              ยืนยันข้อมูลปรับตาม Daily Report
+            </Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
