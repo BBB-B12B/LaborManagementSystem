@@ -13,7 +13,9 @@ export class TaskService {
     const projectRef = db.collection(PROJECTS_COLLECTION).doc(input.projectId);
 
     return await db.runTransaction(async (transaction) => {
-      // 1. ตรวจสอบ Project
+      // --- 1. ALL READS ---
+      
+      // 1.1 ตรวจสอบ Project
       const projectDoc = await transaction.get(projectRef);
       if (!projectDoc.exists) {
         throw new AppError('ไม่พบโครงการที่ระบุ', 404);
@@ -22,7 +24,7 @@ export class TaskService {
       const projectCode = projectData?.projectCode || projectData?.code || 'XX';
       const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
 
-      // 2. ระดับ WorkOrder: Query หาซ้ำ
+      // 1.2 ระดับ WorkOrder: Query หาซ้ำ
       const woQuery = await transaction.get(
         db.collection(WORK_ORDERS_COLLECTION)
           .where('projectId', '==', input.projectId)
@@ -31,14 +33,25 @@ export class TaskService {
       );
 
       let woId = '';
+      let isNewWo = false;
+      let woNextRun = 1;
+      const currentYear = new Date().getFullYear();
+      const woCounterId = `wo_counter_${projectCode}_${currentYear}`;
+      const woCounterRef = db.collection('system_counters').doc(woCounterId);
+
       if (!woQuery.empty) {
         woId = woQuery.docs[0].id;
       } else {
-        woId = `${input.projectId}-${input.workOrderCode || 'GEN'}`;
+        isNewWo = true;
+        const woCounterDoc = await transaction.get(woCounterRef);
+        if (woCounterDoc.exists) {
+          woNextRun = (woCounterDoc.data()?.count || 0) + 1;
+        }
+        woId = `${projectCode}-${currentYear}-${woNextRun.toString().padStart(4, '0')}-${input.workOrderCode || 'GEN'}`;
       }
       const workOrderRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId);
 
-      // 3. ระดับ Category: Query หาซ้ำตามชื่อ
+      // 1.3 ระดับ Category: Query หาซ้ำตามชื่อ
       const catQuery = await transaction.get(
         workOrderRef.collection('categories')
           .where('catName', '==', input.categoryName || 'General')
@@ -46,23 +59,24 @@ export class TaskService {
       );
 
       let catId = '';
+      let isNewCat = false;
+      let catNextRun = 1;
+      const catCounterId = `cat_counter_${woId}`;
+      const catCounterRef = db.collection('system_counters').doc(catCounterId);
+
       if (!catQuery.empty) {
         catId = catQuery.docs[0].id;
       } else {
-        // อ่าน Counter
-        const catCounterId = `cat_counter_${woId}`;
-        const catCounterRef = db.collection('system_counters').doc(catCounterId);
+        isNewCat = true;
         const catCounterDoc = await transaction.get(catCounterRef);
-        let catNextRun = 1;
         if (catCounterDoc.exists) {
           catNextRun = (catCounterDoc.data()?.count || 0) + 1;
         }
-        transaction.set(catCounterRef, { count: catNextRun, updatedAt: new Date() }, { merge: true });
         catId = `CAT-${catNextRun.toString().padStart(4, '0')}`;
       }
       const categoryRef = workOrderRef.collection('categories').doc(catId);
 
-      // 4. ระดับ Task: Query หาซ้ำตามชื่อ
+      // 1.4 ระดับ Task: Query หาซ้ำตามชื่อ
       const taskQuery = await transaction.get(
         categoryRef.collection('tasks')
           .where('taskName', '==', input.taskName)
@@ -72,34 +86,43 @@ export class TaskService {
       let taskId = '';
       let isNewTask = false;
       let existingTaskData: any = null;
+      let taskNextRun = 1;
+      const taskCounterId = `task_${woId}`;
+      const taskCounterRef = db.collection('system_counters').doc(taskCounterId);
 
       if (!taskQuery.empty) {
         taskId = taskQuery.docs[0].id;
         existingTaskData = taskQuery.docs[0].data();
       } else {
         isNewTask = true;
-        // อ่าน Counter
-        const taskCounterId = `task_${projectCode}_${input.workOrderCode || 'GEN'}`;
-        const taskCounterRef = db.collection('system_counters').doc(taskCounterId);
         const taskCounterDoc = await transaction.get(taskCounterRef);
-        let taskNextRun = 1;
         if (taskCounterDoc.exists) {
           taskNextRun = (taskCounterDoc.data()?.count || 0) + 1;
         }
-        transaction.set(taskCounterRef, { count: taskNextRun, updatedAt: new Date() }, { merge: true });
         taskId = `TASK-${taskNextRun.toString().padStart(7, '0')}`;
       }
       const taskRef = categoryRef.collection('tasks').doc(taskId);
 
-      // 5. เขียนข้อมูลทั้งหมดแบบ Upsert
+      // --- 2. ALL WRITES ---
       const now = new Date();
       let createdAtDate = now;
       if (!isNewTask && existingTaskData?.createdAt) {
          createdAtDate = existingTaskData.createdAt.toDate ? existingTaskData.createdAt.toDate() : existingTaskData.createdAt;
       }
 
+      // Write Counters if needed
+      if (isNewWo) {
+        transaction.set(woCounterRef, { count: woNextRun, updatedAt: now }, { merge: true });
+      }
+      if (isNewCat) {
+        transaction.set(catCounterRef, { count: catNextRun, updatedAt: now }, { merge: true });
+      }
+      if (isNewTask) {
+        transaction.set(taskCounterRef, { count: taskNextRun, updatedAt: now }, { merge: true });
+      }
+
       transaction.set(workOrderRef, {
-        id: woId,
+        workOrderId: woId,
         projectId: input.projectId,
         workOrderCode: input.workOrderCode || 'GEN',
         updatedAt: now
@@ -125,6 +148,7 @@ export class TaskService {
         assignees: input.assignees,
         dueDate: input.dueDate,
         status: input.status || 'upcoming',
+        currentRevision: isNewTask ? 'rev00' : (existingTaskData?.currentRevision || 'rev00'),
         dailyProgress: isNewTask ? 0 : (existingTaskData?.dailyProgress || 0),
         attachmentsCount: isNewTask ? 0 : (existingTaskData?.attachmentsCount || 0),
         isActive: true,
@@ -136,10 +160,89 @@ export class TaskService {
 
       transaction.set(taskRef.withConverter(taskConverter), newTaskData as any, { merge: true });
 
+      // [NEW] สร้าง Document `rev00` ใน `revisions` subcollection เฉพาะสำหรับงานใหม่ หรือยังไม่มี rev00
+      if (isNewTask) {
+        const rev00Ref = taskRef.collection('revisions').doc('rev00');
+        transaction.set(rev00Ref, {
+          revisionId: 'rev00',
+          revisionName: input.taskName,
+          taskName: input.taskName,
+          assignees: input.assignees,
+          createdAt: createdAtDate,
+          createdBy: createdBy,
+        });
+      }
+
       return {
         id: `${woId}__${catId}__${taskId}`,
         ...newTaskData,
       };
+    });
+  }
+
+  /**
+   * Reject งานที่เสร็จแล้ว (ตีกลับงาน)
+   * สร้าง Revision ใหม่ รีเซ็ต dailyProgress กลับเป็น 0 และนำ Assignees ใหม่ไปสะสมรวมใน Task หลัก
+   */
+  async rejectTask(id: string, revisionName: string, newAssignees: any[], updatedBy: string): Promise<void> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Task not found', 404);
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    await db.runTransaction(async (transaction) => {
+      // 1. อ่านข้อมูล Task ปัจจุบัน
+      const doc = await transaction.get(taskRef);
+      if (!doc.exists) throw new AppError('Task not found', 404);
+      const taskData = doc.data() as Task;
+
+      // 2. คำนวณ Revision ใหม่
+      const currentRev = taskData.currentRevision || 'rev00';
+      const revNum = parseInt(currentRev.replace('rev', ''), 10);
+      const nextRevId = `rev${String(revNum + 1).padStart(2, '0')}`;
+
+      // 3. สะสม (Union) Assignees
+      // นำ Assignees ใหม่ มาต่อท้าย Assignees เก่า โดยไม่ให้ซ้ำคนเดิม (อิงจาก employeeId)
+      const existingAssignees = taskData.assignees || [];
+      const mergedAssignees = [...existingAssignees];
+      for (const newAssignee of newAssignees) {
+        if (!mergedAssignees.find(a => a.employeeId === newAssignee.employeeId)) {
+          mergedAssignees.push(newAssignee);
+        }
+      }
+
+      const now = new Date();
+
+      // 4. อัปเดต Task หลัก
+      const taskUpdates = {
+        currentRevision: nextRevId,
+        status: 'rework' as any,
+        dailyProgress: 0,
+        assignees: mergedAssignees,
+        updatedAt: now,
+        updatedBy: updatedBy,
+      };
+      transaction.update(taskRef, taskUpdates);
+
+      // 5. สร้างเอกสาร Revision ใหม่
+      const nextRevRef = taskRef.collection('revisions').doc(nextRevId);
+      transaction.set(nextRevRef, {
+        revisionId: nextRevId,
+        revisionName: revisionName,
+        taskName: taskData.taskName,
+        assignees: newAssignees, // เฉพาะคนที่รับผิดชอบในรอบนี้
+        createdAt: now,
+        createdBy: updatedBy,
+      });
+
+      // 6. เก็บ Audit Trail
+      await this.recordHistory(taskRef, 'reject_task', taskData, taskUpdates, updatedBy);
     });
   }
 
@@ -375,25 +478,67 @@ export class TaskService {
     const day = String(reportDate.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
 
-    const dailyReportRef = taskRef.collection('dailyReports').doc(dateStr);
+    // Get current revision first
+    const taskDocForRev = await taskRef.get();
+    if (!taskDocForRev.exists) throw new AppError('Task not found', 404);
+    const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
+
+    // บันทึกรายงานภายใต้ Revision
+    const dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
 
     await db.runTransaction(async (transaction) => {
       // 1. ALL READS
       const taskDoc = await transaction.get(taskRef);
       if (!taskDoc.exists) throw new AppError('Task not found', 404);
 
+      const dailyReportDoc = await transaction.get(dailyReportRef);
+      let editHistory: any[] = [];
+      let isUpdate = false;
+
+      if (dailyReportDoc.exists) {
+        const existingData = dailyReportDoc.data();
+        isUpdate = true;
+        editHistory = existingData?.editHistory || [];
+
+        // สำรองข้อมูล labor และ leave เดิมเก็บไว้ใน editHistory ทุกครั้งที่มีการแก้ไข
+        if (existingData?.labor || existingData?.leave) {
+          editHistory.push({
+            editedAt: new Date(),
+            editedBy: updatedBy,
+            snapshot: { 
+              labor: existingData.labor || [],
+              leave: existingData.leave || [] 
+            }
+          });
+        }
+      }
+
       // 2. ALL WRITES
       const now = new Date();
+
+      // Enforce leaveType logic
+      if (reportData.leave && Array.isArray(reportData.leave)) {
+        reportData.leave = reportData.leave.map((l: any) => ({
+          ...l,
+          leaveType: l.medCertFileUrl ? 'Paid' : 'Unpaid'
+        }));
+      }
       
       // บันทึกลง Sub-collection
-      transaction.set(dailyReportRef, {
+      const payload: any = {
         ...reportData,
         reportDate: reportDate,
-        createdAt: now,
-        createdBy: updatedBy,
         updatedAt: now,
-        updatedBy: updatedBy
-      });
+        updatedBy: updatedBy,
+        editHistory: editHistory
+      };
+
+      if (!isUpdate) {
+        payload.createdAt = now;
+        payload.createdBy = updatedBy;
+      }
+
+      transaction.set(dailyReportRef, payload, { merge: true });
 
       // อัปเดต Task หลัก
       transaction.update(taskRef, {
@@ -426,7 +571,11 @@ export class TaskService {
       taskRef = querySnapshot.docs[0].ref;
     }
 
-    const reportDoc = await taskRef.collection('dailyReports').doc(dateStr).get();
+    const taskDocForRev = await taskRef.get();
+    if (!taskDocForRev.exists) return null;
+    const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
+
+    const reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
     if (!reportDoc.exists) return null;
 
     return reportDoc.data();

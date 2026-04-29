@@ -182,4 +182,30 @@ router.get('/:id/reports/:date', async (req: Request, res: Response, next: NextF
   }
 });
 
+// POST /api/tasks/:id/reject
+router.post('/:id/reject', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { revisionName, assignees } = req.body;
+    
+    if (!revisionName || !assignees || !Array.isArray(assignees) || assignees.length === 0) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (revisionName และ assignees เป็นข้อมูลจำเป็น)', 400);
+    }
+
+    const userId = req.user?.uid;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    await taskService.rejectTask(id, revisionName, assignees, userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'ตีกลับงานสำเร็จ (Task rejected successfully)',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

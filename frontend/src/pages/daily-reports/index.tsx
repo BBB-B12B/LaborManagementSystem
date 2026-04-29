@@ -118,13 +118,50 @@ export default function DailyReportPage() {
           setNote(report.note || '');
           setExistingPhotos(report.photos || { site: [], labor: [] });
           
-          // Map laborEntries back to selectedWorkers
-          if (report.laborEntries) {
+          // Map labor and leave back to selectedWorkers
+          if (report.labor || report.leave) {
+            const laborMap = new Map();
+            if (report.labor) report.labor.forEach((l: any) => laborMap.set(l.workerId, l));
+            const leaveMap = new Map();
+            if (report.leave) report.leave.forEach((l: any) => leaveMap.set(l.workerId, l));
+            
+            const allWorkerIds = Array.from(new Set([...laborMap.keys(), ...leaveMap.keys()]));
+            
+            const mergedWorkers = allWorkerIds.map(wId => {
+               const l = laborMap.get(wId);
+               const lv = leaveMap.get(wId);
+               return {
+                  id: wId,
+                  name: l?.workerName || lv?.workerName || '',
+                  employeeId: l?.employeeId || lv?.employeeId || '',
+                  times: {
+                    regular: l?.shifts?.normal || false,
+                    regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+                    otMorning: l?.shifts?.otMorning || false,
+                    otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+                    otNoon: l?.shifts?.otNoon || false,
+                    otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+                    otEvening: l?.shifts?.otEvening || false,
+                    otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00'
+                  },
+                  leave: {
+                    morning: lv?.leaveShifts?.morning || false,
+                    afternoon: lv?.leaveShifts?.afternoon || false,
+                    medCertFileUrl: lv?.medCertFileUrl || '',
+                    leaveType: lv?.leaveType || 'Unpaid'
+                  }
+               };
+            });
+            setSelectedWorkers(mergedWorkers);
+          }
+          // Fallback for old data
+          else if (report.laborEntries) {
             setSelectedWorkers(report.laborEntries.map((entry: any) => ({
               id: entry.workerId,
               name: entry.workerName,
               employeeId: entry.employeeId,
-              times: entry.times
+              times: entry.times,
+              leave: {}
             })));
           }
         } else {
@@ -277,7 +314,8 @@ export default function DailyReportPage() {
     if (isSelected) {
       setSelectedWorkers(prev => [...prev, {
         ...worker,
-        times: { ...bulkTime } // Apply current bulk time config
+        times: { ...bulkTime }, // Apply current bulk time config
+        leave: { morning: false, afternoon: false, medCertFile: null, medCertFileUrl: '' }
       }]);
     } else {
       setSelectedWorkers(prev => prev.filter(w => w.id !== worker.id));
@@ -302,6 +340,24 @@ export default function DailyReportPage() {
     setSelectedWorkers(prev => prev.map(w => {
       if (w.id === workerId) {
         return { ...w, times: { ...w.times, [field]: value } };
+      }
+      return w;
+    }));
+  };
+
+  const updateWorkerLeave = (workerId: string, field: string, value: any) => {
+    setSelectedWorkers(prev => prev.map(w => {
+      if (w.id === workerId) {
+        return { ...w, leave: { ...w.leave, [field]: value } };
+      }
+      return w;
+    }));
+  };
+
+  const handleCertUpload = (workerId: string, file: File | null) => {
+    setSelectedWorkers(prev => prev.map(w => {
+      if (w.id === workerId) {
+        return { ...w, leave: { ...w.leave, medCertFile: file, medCertFilePreview: file ? URL.createObjectURL(file) : null } };
       }
       return w;
     }));
@@ -474,7 +530,50 @@ export default function DailyReportPage() {
       const newSitePhotoUrls = await dailyReportService.uploadPhotos(sitePhotos, `tasks/${selectedTask.taskId}/site`);
       const newLaborPhotoUrls = await dailyReportService.uploadPhotos(laborPhotos, `tasks/${selectedTask.taskId}/labor`);
 
+      // 2.5 Upload Medical Certificates
+      for (const w of selectedWorkers) {
+        if (w.leave?.medCertFile) {
+          const urls = await dailyReportService.uploadPhotos([w.leave.medCertFile], `tasks/${selectedTask.taskId}/certs`);
+          w.leave.medCertFileUrl = urls[0];
+        }
+      }
+
       // 3. Prepare Payload
+      // Split labor and leave
+      const laborPayload = selectedWorkers.filter(w => w.times.regular || w.times.otMorning || w.times.otNoon || w.times.otEvening).map(w => ({
+        workerId: w.id,
+        workerName: w.name,
+        employeeId: w.employeeId,
+        shiftTimes: {
+          day: w.times.regTime,
+          otEvening: w.times.otEveningTime,
+          otMorning: w.times.otMorningTime,
+          otNoon: w.times.otNoonTime
+        },
+        shifts: {
+          normal: w.times.regular,
+          otEvening: w.times.otEvening,
+          otMorning: w.times.otMorning,
+          otNoon: w.times.otNoon
+        }
+      }));
+
+      const leavePayload = selectedWorkers.filter(w => w.leave?.morning || w.leave?.afternoon).map(w => ({
+        workerId: w.id,
+        workerName: w.name,
+        employeeId: w.employeeId,
+        leaveTimes: {
+           morning: w.leave.morning ? '08:00 - 12:00' : null,
+           afternoon: w.leave.afternoon ? '13:00 - 17:00' : null,
+        },
+        leaveShifts: {
+           morning: w.leave.morning || false,
+           afternoon: w.leave.afternoon || false,
+        },
+        medCertFileUrl: w.leave.medCertFileUrl || '',
+        // leaveType is set in Backend based on medCertFileUrl
+      }));
+
       const payload = {
         reportDate: reportDate,
         progress: progress,
@@ -483,12 +582,8 @@ export default function DailyReportPage() {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
           labor: [...existingPhotos.labor, ...newLaborPhotoUrls]
         },
-        laborEntries: selectedWorkers.map(w => ({
-          workerId: w.id,
-          workerName: w.name,
-          employeeId: w.employeeId,
-          times: w.times
-        }))
+        labor: laborPayload,
+        leave: leavePayload
       };
 
       // 4. Submit to Task Sub-collection
@@ -650,7 +745,15 @@ export default function DailyReportPage() {
                             ) : (
                               <Stack divider={<Divider />}>
                                 {selectedWorkers.map((worker, idx) => (
-                                  <WorkerRow key={worker.id} worker={worker} onUpdate={(f, v) => updateWorkerTime(worker.id, f, v)} onRemove={() => removeWorker(worker.id)} index={idx + 1} />
+                                  <WorkerRow 
+                                    key={worker.id} 
+                                    worker={worker} 
+                                    onUpdate={(f, v) => updateWorkerTime(worker.id, f, v)} 
+                                    onUpdateLeave={(f, v) => updateWorkerLeave(worker.id, f, v)}
+                                    onUploadCert={(f) => handleCertUpload(worker.id, f)}
+                                    onRemove={() => removeWorker(worker.id)} 
+                                    index={idx + 1} 
+                                  />
                                 ))}
                               </Stack>
                             )}
@@ -832,7 +935,7 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
   );
 }
 
-function WorkerRow({ worker, onUpdate, onRemove, index }: { worker: any, onUpdate: (f: string, v: any) => void, onRemove: () => void, index: number }) {
+function WorkerRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index }: any) {
   return (
     <Box sx={{ p: 1.5 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
@@ -840,10 +943,36 @@ function WorkerRow({ worker, onUpdate, onRemove, index }: { worker: any, onUpdat
         <Box><IconButton size="small" sx={{ color: '#3b82f6' }}><Pencil size={14} /></IconButton><IconButton size="small" sx={{ color: '#ef4444' }} onClick={onRemove}><Trash2 size={14} /></IconButton></Box>
       </Box>
       <Grid container spacing={1}>
-        <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.regular} onChange={(e) => onUpdate('regular', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>Day : เวลาปกติ</Typography>} sx={{ m: 0 }} /><Typography variant="caption" sx={{ display: 'block', ml: 3.5, color: '#94a3b8' }}>08:00 - 17:00</Typography></Grid>
+        {/* LABOR SECTION */}
+        <Grid item xs={12} sx={{ mt: 0.5 }}>
+          <Typography variant="caption" fontWeight={800} color="#3b82f6">เวลาทำงาน (Labor)</Typography>
+        </Grid>
+        <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.regular} onChange={(e) => onUpdate('regular', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>Day : เวลาปกติ</Typography>} sx={{ m: 0 }} />{worker.times.regular && <TextField size="small" variant="standard" value={worker.times.regTime || '08:00 - 17:00'} onChange={(e) => onUpdate('regTime', e.target.value)} sx={{ ml: 3.5, mt: -1, '& input': { fontSize: '0.7rem', color: '#3b82f6' } }} />}</Grid>
         <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.otMorning} onChange={(e) => onUpdate('otMorning', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>OT : เช้า</Typography>} sx={{ m: 0 }} />{worker.times.otMorning && <TextField size="small" variant="standard" value={worker.times.otMorningTime} onChange={(e) => onUpdate('otMorningTime', e.target.value)} sx={{ ml: 3.5, mt: -1, '& input': { fontSize: '0.7rem', color: '#3b82f6' } }} />}</Grid>
         <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.otNoon} onChange={(e) => onUpdate('otNoon', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>OT : เที่ยง</Typography>} sx={{ m: 0 }} /><Typography variant="caption" sx={{ display: 'block', ml: 3.5, color: '#94a3b8' }}>12:00 - 13:00</Typography></Grid>
         <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.otEvening} onChange={(e) => onUpdate('otEvening', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>OT : เย็น</Typography>} sx={{ m: 0 }} />{worker.times.otEvening && <TextField size="small" variant="standard" value={worker.times.otEveningTime} onChange={(e) => onUpdate('otEveningTime', e.target.value)} sx={{ ml: 3.5, mt: -1, '& input': { fontSize: '0.7rem', color: '#3b82f6' } }} />}</Grid>
+        
+        {/* LEAVE SECTION */}
+        <Grid item xs={12} sx={{ mt: 1, borderTop: '1px dashed #e2e8f0', pt: 1 }}>
+          <Typography variant="caption" fontWeight={800} color="#ef4444">การลา (Leave)</Typography>
+        </Grid>
+        <Grid item xs={12} display="flex" alignItems="center" gap={2}>
+           <FormControlLabel control={<Checkbox size="small" checked={worker.leave?.morning} onChange={(e) => onUpdateLeave('morning', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>ครึ่งเช้า (08:00 - 12:00)</Typography>} sx={{ m: 0 }} />
+           <FormControlLabel control={<Checkbox size="small" checked={worker.leave?.afternoon} onChange={(e) => onUpdateLeave('afternoon', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>ครึ่งบ่าย (13:00 - 17:00)</Typography>} sx={{ m: 0 }} />
+           
+           {(worker.leave?.morning || worker.leave?.afternoon) && (
+              <Box sx={{ ml: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                 {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
+                    <Chip label="มีใบรับรองแพทย์ (Paid)" color="success" size="small" onDelete={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} />
+                 ) : (
+                    <Button variant="outlined" component="label" size="small" sx={{ fontSize: '0.7rem' }}>
+                       แนบใบรับรองแพทย์
+                       <input type="file" hidden accept="image/*" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
+                    </Button>
+                 )}
+              </Box>
+           )}
+        </Grid>
       </Grid>
     </Box>
   );

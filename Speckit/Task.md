@@ -116,6 +116,14 @@
 *   [x] **T-822**: [Frontend] Implement Progress Bar in `TaskCard.tsx` (using `dailyProgress`).
 *   [x] **T-823**: [Frontend] Style Progress Bar with premium aesthetics and percentage label.
 
+### 🔄 Phase 2.9: Task Revision & Reject Workflow (F-016)
+*   **Status**: 🔄 In Progress
+*   [x] **T-850**: [Documentation] Update Implement.md, spec.md, and traceability.md with Revision logic.
+*   [x] **T-851**: [Backend] Update `Task` model with `currentRevision` and cumulative `assignees`.
+*   [x] **T-852**: [Backend] Modify `createTask` in `TaskService` to generate `revisions/rev00`.
+*   [x] **T-853**: [Backend] Implement `POST /api/tasks/:id/reject` for Supervisor reject workflow.
+*   [x] **T-854**: [Backend] Modify `dailyReportService` to save reports under `revisions/{currentRevision}`.
+
 ### 🔄 Phase 3.0: Daily Report Form & Labor Management (F-015)
 *   **Status**: ✅ Completed
 *   [x] **T-901**: [Frontend] Implement Date Selection Logic (3-day retroactive rule & Progress field locking).
@@ -125,3 +133,11 @@
 *   [x] **T-905**: [Frontend] Implement Media Validation (Force 2 site photos + 2 labor photos).
 *   [x] **T-906**: [Frontend] Filter Labor list by `projectLocationIds` (Same site only).
 *   [x] **T-907**: [Frontend] Format Labor list as `employeeId : name`.
+
+### 🔄 Phase 3.1: Leave Tracking in Daily Report (F-017)
+*   **Status**: ✅ Completed
+*   [x] **T-910**: [Documentation] Update `spec.md`, `Implement.md`, `traceability.md` for Leave Management feature.
+*   [x] **T-911**: [Frontend] Add Leave tab/section to `WorkerRow` (morning/afternoon) and medical certificate upload UI.
+*   [x] **T-912**: [Frontend] Update Daily Report submission payload to separate `labor` and `leave`.
+*   [x] **T-913**: [Backend] Process `leave` array in `TaskService.submitDailyReport` and store medical certificate URLs.
+*   [x] **T-914**: [Backend] Ensure `leave` history is tracked in `editHistory` similar to `labor`.

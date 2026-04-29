@@ -1,4 +1,13 @@
-export type TaskStatus = 'upcoming' | 'in-progress' | 'completed';
+export type TaskStatus = 'upcoming' | 'in-progress' | 'rework' | 'completed';
+
+export interface TaskRevision {
+  revisionId: string; // e.g. "rev00"
+  revisionName: string; // e.g. "งานผูกเหล็ก" or "เก็บรอยร้าวผนัง"
+  taskName: string; // Original task name
+  assignees: TaskAssignee[];
+  createdAt: Date;
+  createdBy: string;
+}
 
 export interface TaskAssignee {
   employeeId: string;
@@ -21,6 +30,7 @@ export interface Task {
   assignees: TaskAssignee[];
   dueDate: Date;
   status: TaskStatus;
+  currentRevision: string; // [NEW] e.g. "rev00"
   dailyProgress: number;
   attachmentsCount: number;
   isActive: boolean;
@@ -77,6 +87,7 @@ export const taskConverter = {
       assignees: task.assignees || [],
       dueDate: task.dueDate,
       status: task.status,
+      currentRevision: task.currentRevision || 'rev00',
       dailyProgress: task.dailyProgress || 0,
       attachmentsCount: task.attachmentsCount || 0,
       isActive: task.isActive,
@@ -111,6 +122,7 @@ export const taskConverter = {
       assignees: data.assignees || [],
       dueDate: safeDate(data.dueDate),
       status: data.status || 'upcoming',
+      currentRevision: data.currentRevision || 'rev00',
       dailyProgress: data.dailyProgress || 0,
       attachmentsCount: data.attachmentsCount || 0,
       isActive: data.isActive !== false,

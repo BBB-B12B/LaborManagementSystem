@@ -309,3 +309,29 @@ markdown
 | **UI Component** | MUI `LinearProgress` + `Typography` (Percentage) |
 | **Visual Logic** | 1. แสดงอยู่ระหว่าง Description และ Due Date <br> 2. ความสูง 6px, ขอบมน (borderRadius: 3) <br> 3. สี: ตาม Theme (Primary) หรือเปลี่ยนตามช่วง (เช่น <30% ส้ม, >70% เขียว) |
 | **Fallback** | หากค่าเป็น undefined หรือ null ให้แสดงเป็น 0% |
+
+### 🛣️ [F-016] Task Revision & Reject Workflow — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> `Reject Button (Supervisor)` -> ใส่ชื่องานที่ให้แก้และระบุ FM -> `Submit` |
+| **API Contract** | `POST /api/tasks/:id/reject` <br> Payload: `{ revisionName, assignees }` |
+| **Database Schema** | **1. Task Document (Container):** ไม่ถูกสร้างใหม่ แต่เก็บ `assignees` สะสมทุกคนจากทุก Rev ไว้เพื่อใช้ Filter และเก็บ `currentRevision: "rev0X"` ชี้ไปยังเวอร์ชั่นล่าสุด <br> **2. Revision Document (Subcollection):** ซ้อนอยู่ใต้ `revisions/{revId}` เก็บประวัติของรอบนั้นๆ (`revisionName`, `assignees` เฉพาะรอบนั้น, `createdAt`) |
+| **Backend Logic (T-852/T-853)** | 1. **Task Model Setup:** `Task` model has `currentRevision` defaulting to `rev00`. <br> 2. **Create Trigger:** In `TaskService.createTask`, `revisions/rev00` is generated atomically. <br> 3. **Reject Action (`POST /api/tasks/:id/reject`):** Increment `currentRevision` (e.g., `rev01`), union `assignees` to main task, reset `dailyProgress = 0`. <br> 4. **Daily Report Dynamic Routing:** Change daily report write/read paths to `revisions/{currentRevision}/dailyReports/{dateStr}`. |
+
+---
+
+## 7.3 Leave Tracking in Daily Report (F-017)
+### Architecture Context
+Leave Tracking separates work hours (`labor`) from leave hours (`leave`) strictly. Medical certificates trigger paid status.
+
+### Step-by-Step Backend
+1. **Schema Update**: `DailyReport` document accepts `leave` array alongside `labor`.
+2. **Submit Logic**: `TaskService.submitDailyReport` processes both arrays. It pushes `leave` data to `editHistory` similar to `labor`.
+3. **Medical Certificate Auto-Trigger**: `leaveType` logic is evaluated: if `medCertFileUrl` exists, it sets `leaveType` to "Paid", else "Unpaid".
+
+### Step-by-Step Frontend
+1. **WorkerRow UI**: Add Tab/Toggle for "Work" vs "Leave".
+2. **Leave Times Selection**: Allow morning/afternoon leave selection.
+3. **Upload UI**: Provide medical certificate upload button per worker on leave.
+4. **Payload Splitting**: On submit, separate mixed worker state into distinct `labor` and `leave` arrays.
