@@ -35,8 +35,7 @@ type ReconciliationStatus =
   | 'ABSENT'
   | 'LEAVE'
   | 'HOLIDAY'
-  | 'UNREGISTERED_EMPLOYEE'
-  | 'APPROVED';
+  | 'UNREGISTERED_EMPLOYEE';
 
 interface LeaveEntry {
   hours: number;
@@ -88,7 +87,18 @@ async function reconcile(
   const recordId = generateReconciliationId(employeeNumber, workDateStr);
   const recordRef = db.collection('reconciliationRecords').doc(recordId);
 
-  // ── 0. ตรวจสอบว่าพนักงานมีในระบบ (dailyContractors) ─────────────────────
+  // ── 0. ตรวจสอบสถานะการล็อกงวดงาน (isLocked) ──────────────────────────────────
+  // ถ้า Admin กด Approve งวดงานแล้ว เอกสารนี้จะมี isLocked: true ห้ามแก้ไขเด็ดขาด
+  const initialDoc = await recordRef.get();
+  if (initialDoc.exists) {
+    const existing = initialDoc.data() as any;
+    if (existing['isLocked'] === true) {
+      console.log(`[reconcile] ${employeeNumber} on ${workDateStr} isLocked (Wage Period Approved) — skip all processing`);
+      return;
+    }
+  }
+
+  // ── 1. ตรวจสอบว่าพนักงานมีในระบบ (dailyContractors) ─────────────────────
   const contractorSnap = await db.collection('dailyContractors')
     .where('employeeId', '==', employeeNumber)
     .limit(1)
@@ -257,14 +267,14 @@ async function reconcile(
     reason: isMultipleProjects ? multipleProjectsReason : 'Automated reconciliation via Cloud Function',
   };
 
-  const existingDoc = await recordRef.get();
+  const finalDoc = await recordRef.get();
 
-  if (existingDoc.exists) {
-    const existing = existingDoc.data() as any;
+  if (finalDoc.exists) {
+    const existing = finalDoc.data() as any;
 
-    // ถ้า APPROVED แล้ว — ไม่แตะต้อง (Admin ตัดสินไปแล้ว)
-    if (existing['status'] === 'APPROVED') {
-      console.log(`[onScanDataChanged] ${employeeNumber} on ${workDateStr} is APPROVED — skip`);
+    // ถ้างวดถูกปิดระหว่างที่กำลังประมวลผล — ให้หยุด
+    if (existing['isLocked'] === true) {
+      console.log(`[reconcile] ${employeeNumber} on ${workDateStr} became locked during processing — skip`);
       return;
     }
 
@@ -517,3 +527,119 @@ export const scheduledAbsenceCheck = (
       console.error(`[scheduledAbsenceCheck] Error for ${workDateStr}:`, err);
     }
   });
+
+// ─── Wage Period Lock Trigger ──────────────────────────────────────────────────
+
+/**
+ * onWagePeriodApproved
+ * เมื่อ admin เปลี่ยนสถานะ wagePeriod เป็น 'approve' (หรือ 'approved')
+ * ให้ไปไล่ล็อก (isLocked: true) reconciliationRecords ทุกตัวในช่วงวันที่นั้น
+ */
+export const onWagePeriodApproved = firestore
+  .onDocumentUpdated('wagePeriods/{periodId}', async (event) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+
+    if (!beforeData || !afterData) return null;
+
+    const beforeStatus = beforeData['status'];
+    const afterStatus = afterData['status'];
+
+    // ทำงานเฉพาะเมื่อ status ถูกเปลี่ยนเป็น approve หรือ approved
+    if (beforeStatus !== afterStatus && (afterStatus === 'approve' || afterStatus === 'approved')) {
+      const startDateRaw = afterData['startDate'];
+      const endDateRaw = afterData['endDate'];
+
+      if (!startDateRaw || !endDateRaw) {
+        console.error(`[onWagePeriodApproved] Missing startDate or endDate for period ${event.params['periodId']}`);
+        return null;
+      }
+
+      const startDate = startDateRaw.toDate ? startDateRaw.toDate() : new Date(startDateRaw);
+      const endDate = endDateRaw.toDate ? endDateRaw.toDate() : new Date(endDateRaw);
+
+      // ปรับให้ครอบคลุมเวลา 00:00:00 ถึง 23:59:59 (เวลาไทย)
+      // แต่เนื่องจาก workDate ใน reconciliationRecords เป็น string YYYY-MM-DD
+      // เราสามารถ query ง่ายๆ ด้วยการเปรียบเทียบ string ได้เลย (YYYY-MM-DD เรียงลำดับได้)
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      console.log(`[onWagePeriodApproved] Locking period ${event.params['periodId']}: ${startDateStr} to ${endDateStr}`);
+
+      // Query reconciliationRecords ระหว่างวันที่
+      const recordsSnap = await db.collection('reconciliationRecords')
+        .where('workDate', '>=', startDateStr)
+        .where('workDate', '<=', endDateStr)
+        .get();
+
+      if (recordsSnap.empty) {
+        console.log(`[onWagePeriodApproved] No reconciliation records found to lock.`);
+        return null;
+      }
+
+      const batches: admin.firestore.WriteBatch[] = [];
+      let currentBatch = db.batch();
+      let count = 0;
+
+      for (const doc of recordsSnap.docs) {
+        // Skip ถ้า lock อยู่แล้ว
+        if (doc.data()['isLocked'] === true) continue;
+
+        currentBatch.update(doc.ref, { 
+          isLocked: true,
+          updatedAt: admin.firestore.Timestamp.now()
+        });
+        count++;
+
+        if (count >= 500) {
+          batches.push(currentBatch);
+          currentBatch = db.batch();
+          count = 0;
+        }
+      }
+
+      if (count > 0) {
+        batches.push(currentBatch);
+      }
+
+      await Promise.all(batches.map(b => b.commit()));
+      console.log(`[onWagePeriodApproved] Successfully locked ${recordsSnap.size} records.`);
+    }
+
+    return null;
+  });
+
+// ─── HTTP Webhook for Timesheet Changes ───────────────────────────────────────
+
+/**
+ * webhookTimesheetChanged
+ * รับ HTTP Post Request จากโปรเจกต์ After-Sale เมื่อมีการแก้ไข Daily Report
+ * Body คาดหวัง: { employeeNumber: 'xxx', workDate: 'YYYY-MM-DD', projectLocationId: 'xxx' }
+ */
+export const webhookTimesheetChanged = (
+  require('firebase-functions') as typeof import('firebase-functions')
+).https.onRequest(async (req, res) => {
+  // รองรับเฉพาะ POST request
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  const { employeeNumber, workDate, projectLocationId } = req.body;
+
+  if (!employeeNumber || !workDate) {
+    res.status(400).send('Missing required fields: employeeNumber, workDate');
+    return;
+  }
+
+  console.log(`[webhookTimesheetChanged] Received update for ${employeeNumber} on ${workDate}`);
+
+  try {
+    // รันกระบวนการ reconcile ใหม่ทันที
+    await reconcile(String(employeeNumber), String(workDate), String(projectLocationId || ''));
+    res.status(200).send({ success: true, message: 'Reconciliation triggered successfully' });
+  } catch (error: any) {
+    console.error(`[webhookTimesheetChanged] Error:`, error);
+    res.status(500).send({ success: false, error: error.message });
+  }
+});

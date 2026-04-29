@@ -407,6 +407,30 @@ class ScanDataService extends BaseCrudService<ScanData> {
       logger.info(`[bulkImport] Pre-fetch: ${existingIds.size} existing docs found out of ${allDocRefs.length} total`);
     }
 
+    // ── Step 3.5: Fetch approved Wage Periods to block locked dates ────────
+    let lockedRanges: { start: Date, end: Date }[] = [];
+    try {
+      const approvedPeriodsSnap = await db.collection('wagePeriods')
+        .where('status', 'in', ['approve', 'approved'])
+        .get();
+        
+      lockedRanges = approvedPeriodsSnap.docs.map(doc => {
+        const data = doc.data();
+        const start = data.startDate?.toDate ? data.startDate.toDate() : new Date(data.startDate);
+        const end = data.endDate?.toDate ? data.endDate.toDate() : new Date(data.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      });
+    } catch (e) {
+      logger.warn('[bulkImport] Failed to fetch wagePeriods for lock validation', e);
+    }
+
+    const isLockedDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return lockedRanges.some(range => date >= range.start && date <= range.end);
+    };
+
     // ── Step 4: Write only NEW records using BulkWriter ───────────────────
     const newlyInsertedIds = new Set<string>(); // track what was actually inserted
     const writer = db.bulkWriter();
@@ -431,6 +455,21 @@ class ScanDataService extends BaseCrudService<ScanData> {
           continue;
         }
         workDate.setHours(0, 0, 0, 0);
+
+        // ✅ Check if date is locked by an approved wage period
+        if (isLockedDate(group.workDate)) {
+          failedRecords++;
+          const errorMsg = `วันที่ ${group.workDate} อยู่ในงวดงานที่ถูก Approve และปิดไปแล้ว`;
+          importErrors.push({
+            row: group.sourceRowNumbers[0] || 0,
+            employeeNumber: group.employeeNumber,
+            error: errorMsg
+          });
+          if (!warnings.includes(errorMsg)) {
+            warnings.push(errorMsg);
+          }
+          continue;
+        }
 
         // ✅ Insert-only: skip records that already exist in the database
         if (existingIds.has(uniqueKey)) {
@@ -518,7 +557,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
       
       rowSummaries.push({
         row: group.sourceRowNumbers[0] || 0,
-        status: existingIds.has(uniqueKey) ? 'duplicate' : 'success',
+        status: isLockedDate(group.workDate) ? 'failed' : (existingIds.has(uniqueKey) ? 'duplicate' : 'success'),
         employeeNumber: group.employeeNumber,
         data: {
           EmployeeNumber: group.employeeNumber,
