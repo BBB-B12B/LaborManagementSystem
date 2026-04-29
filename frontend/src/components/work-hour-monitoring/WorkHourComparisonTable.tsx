@@ -400,7 +400,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <StyledTableContainer component={Box}>
+      <StyledTableContainer>
         <Table sx={{ minWidth: 1200 }} aria-label="work hour comparison table" stickyHeader>
         <TableHead>
           {/* Row 1 */}
@@ -754,7 +754,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             <Button 
               variant="contained" 
               onClick={handleCloseCheckDialog}
-              elevation={0}
+              disableElevation
               sx={{ 
                 textTransform: 'none', 
                 fontWeight: 800, 
