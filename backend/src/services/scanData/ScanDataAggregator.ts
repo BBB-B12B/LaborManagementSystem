@@ -18,6 +18,7 @@ export interface DailyAggregatedRow {
   firstIn: string | null;
   lastOut: string | null;
   timeScans: Date[]; // raw times for advanced calculations
+  allScans: string[];
   
   // Computed metrics
   normalStatus: 0 | 1;

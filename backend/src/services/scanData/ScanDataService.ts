@@ -6,24 +6,20 @@
  */
 
 import { randomUUID } from 'crypto';
-import { BaseCrudService, PaginatedResult, PaginationOptions } from '../base/BaseCrudService';
+import { BaseCrudService, PaginatedResult } from '../base/BaseCrudService';
 import {
   ScanData,
   CreateScanDataInput,
   classifyScanBehavior,
-  checkLate,
 } from '../../models/ScanData';
-import { 
-  ScanDataDiscrepancy, 
-  calculateSeverity 
-} from '../../models/ScanDataDiscrepancy';
-import { COLLECTIONS, collections } from '../../config/collections';
+// Legacy ScanDataDiscrepancy has been removed in favor of ReconciliationRecord
+import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { db } from '../../config/firebase';
 import { dailyContractorService } from '../dailyContractor/DailyContractorService';
 import { dailyReportService } from '../dailyReport/DailyReportService';
-import { DailyReport } from '../../models/DailyReport';
+
 import { ScanDataAggregator } from './ScanDataAggregator';
 import { projectLocationService } from '../project/ProjectLocationService';
 import { projectBDailyReportService } from '../external/ProjectBDailyReportService';
@@ -90,7 +86,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     importedBy: string
   ): Promise<ScanData> {
     try {
-      const contractor = await dailyContractorService.getById(input.dailyContractorId);
+      const contractor = await dailyContractorService.getById(input.dailyContractorId!);
       if (!contractor) {
         throw new AppError('ไม่พบข้อมูลพนักงาน', 404);
       }
@@ -133,14 +129,13 @@ class ScanDataService extends BaseCrudService<ScanData> {
         name: contractor.name,
         position: contractor.skillId,
         projectLocationId: input.projectLocationId,
-        projectLocationIds: contractor.projectLocationIds || [input.projectLocationId],
         scanDateTime: input.scanDateTime,
         scanDate,
         scanBehavior: classifyScanBehavior(input.scanDateTime),
         workDate: input.scanDateTime,
         roundedTime: input.scanDateTime,
-        isLate: checkLate(input.scanDateTime).isLate,
-        lateMinutes: checkLate(input.scanDateTime).lateMinutes,
+        isLate: false,
+        lateMinutes: 0,
         hasDiscrepancy: false,
         createdAt: existingDoc.exists ? (existingData as any).createdAt : new Date(),
         importedAt: new Date(),
@@ -348,7 +343,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     const importBatchId = options.batchId || `batch-${randomUUID()}`;
     const importedAt = new Date();
-    const errors: ImportErrorEntry[] = [];
+    const importErrors: ImportErrorEntry[] = [];
     const warnings: string[] = [];
     let minDate: Date | null = null;
     let maxDate: Date | null = null;
@@ -514,23 +509,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     logger.info(`[bulkImport] Done: ${successfulRecords} success, ${skippedRecords} skipped, ${failedRecords} failed`);
 
-    // ── Step 5: Detect discrepancies ONLY for newly inserted records ───────
-    if (!options.dryRun && newlyInsertedIds.size > 0 && minDate && maxDate) {
-      try {
-        await this.detectDiscrepancies(
-          options.projectLocationId,
-          minDate,
-          maxDate,
-          options.importedBy,
-          projectName,
-          projectCode,
-          newlyInsertedIds,
-        );
-      } catch (detectErr) {
-        warnings.push('Auto-discrepancy detection failed.');
-        logger.error('[bulkImport] detectDiscrepancies error:', detectErr);
-      }
-    }
+    // ── Step 5: Reconciliation is triggered automatically via Firebase Cloud Functions ──
 
     // ── Step 6: Build row summaries for response ───────────────────────────
     for (const group of aggregatedDailyRows) {
@@ -572,7 +551,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
       successfulRecords,
       failedRecords,
       duplicateRecords: skippedRecords,
-      errors: [],
+      errors: importErrors,
       warnings,
       records: rowSummaries,
     };
@@ -734,126 +713,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-  /**
-   * Re-open a resolved discrepancy
-   */
-  async reopenDiscrepancy(discrepancyId: string, reopenedBy: string): Promise<any> {
-    try {
-      const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discrepancyId);
-      await discRef.update({
-        status: 'pending',
-        reopenedAt: new Date(),
-        reopenedBy,
-        resolutionNote: `Re-opened by ${reopenedBy}`
-      });
-      const updated = await discRef.get();
-      return { id: updated.id, ...updated.data() };
-    } catch (error: any) {
-      throw error;
-    }
-  }
 
-  /**
-   * Delete a discrepancy record
-   */
-  async deleteDiscrepancy(discrepancyId: string, deletedBy: string): Promise<boolean> {
-    try {
-      const docRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discrepancyId);
-      const doc = await docRef.get();
-      if (!doc.exists) return false;
-
-      await docRef.update({
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy
-      });
-      return true;
-    } catch (error) {
-      logger.error('Error deleting discrepancy:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get summary of discrepancies for Dashboard
-   */
-  async getDiscrepancySummary(projectId?: string): Promise<any> {
-    try {
-      let queryRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
-        .where('status', '==', 'pending');
-      if (projectId) queryRef = queryRef.where('projectLocationId', '==', projectId);
-      const snapshot = await queryRef.get();
-      const discrepancies = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((d: any) => d.isDeleted !== true);
-      return {
-        totalDiscrepancies: discrepancies.length,
-        pendingCount: discrepancies.length,
-        type1Count: discrepancies.filter((d: any) => d.discrepancyType === 'Type1').length,
-        type2Count: discrepancies.filter((d: any) => d.discrepancyType === 'Type2').length,
-        type3Count: discrepancies.filter((d: any) => d.discrepancyType === 'Type3').length,
-      };
-    } catch (error: any) {
-      throw error;
-    }
-  }
-
-  /**
-   * Get paginated discrepancies
-   */
-  async getDiscrepancies(options: {
-    page: number;
-    pageSize: number;
-    projectId?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<{ items: any[]; total: number; page: number; pageSize: number; totalPages: number }> {
-    try {
-      const projectLocationId = options.projectId;
-      let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES);
-      if (projectLocationId) query = query.where('projectLocationId', '==', projectLocationId);
-      if (options.startDate) query = query.where('workDate', '>=', options.startDate);
-      if (options.endDate) query = query.where('workDate', '<=', options.endDate);
-
-      const snapshot = await query.get();
-      const items = snapshot.docs
-        .map(doc => {
-          const data = doc.data() as any;
-          if (data.workDate && data.workDate.toDate) data.workDate = data.workDate.toDate();
-          return { 
-            id: doc.id, 
-            ...data, 
-            detailedView: { 
-              ...data, 
-              date: data.workDate,
-              isManuallyEdited: data.isManuallyEdited || false
-            } 
-          };
-        })
-        .filter(item => item.isDeleted !== true);
-
-      // Sort by workDate ascending (oldest first)
-      items.sort((a, b) => {
-        const dateA = a.workDate instanceof Date ? a.workDate.getTime() : (a.workDate as any).toDate().getTime();
-        const dateB = b.workDate instanceof Date ? b.workDate.getTime() : (b.workDate as any).toDate().getTime();
-        return dateA - dateB;
-      });
-
-      const total = items.length;
-      const start = (options.page - 1) * options.pageSize;
-      const pagedData = items.slice(start, start + options.pageSize);
-
-      return {
-        items: pagedData,
-        total,
-        page: options.page,
-        pageSize: options.pageSize,
-        totalPages: Math.ceil(total / options.pageSize)
-      };
-    } catch (error: any) {
-      throw error;
-    }
-  }
 
   /**
    * Delete by batch
@@ -960,36 +820,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const updatedScan = await docRef.get();
       const updatedScanData = updatedScan.data() as ScanData;
       
-      // Update discrepancy record if it exists
-      try {
-        const startOfDay = new Date(date);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(date);
-        endOfDay.setHours(23, 59, 59, 999);
-
-        // Use the actual employeeNumber from the record, not the contractor UUID
-        const empCode = updatedScanData.employeeNumber || updatedScanData.employeeId;
-        
-        if (empCode) {
-          const discQuery = await db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
-            .where('employeeNumber', '==', empCode)
-            .where('workDate', '>=', startOfDay)
-            .where('workDate', '<=', endOfDay)
-            .limit(1)
-            .get();
-          
-          if (!discQuery.empty) {
-            await discQuery.docs[0].ref.update({ 
-              isManuallyEdited: true,
-              updatedAt: new Date()
-            });
-            logger.info(`Updated discrepancy highlight for ${empCode} on ${scanDate}`);
-          }
-        }
-      } catch (discErr) {
-        logger.warn('Could not update discrepancy highlight flag:', discErr);
-      }
-
       return { ...updatedScanData, id: updatedScan.id } as ScanData;
     } catch (error: any) {
       logger.error('Error updating daily punches:', error);
@@ -1082,213 +912,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-  /**
-   * Resolve discrepancy
-   */
-  async resolveDiscrepancy(discrepancyId: string, resolutionData: any, resolvedBy: string): Promise<any> {
-    const discRef = db.collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES).doc(discrepancyId);
-    await discRef.update({ ...resolutionData, status: 'resolved', resolvedAt: new Date(), resolvedBy });
-    const updated = await discRef.get();
-    return { id: updated.id, ...updated.data() };
-  }
 
-  /**
-   * Detect discrepancies for newly imported scan records.
-   *
-   * Strategy:
-   * - Only evaluates records in `newlyInsertedIds` (if provided), avoiding
-   *   redundant re-processing of existing records (Insert-only pattern).
-   * - Never deletes existing discrepancy records. Uses insert-only for
-   *   discrepancy creation — skips if a record already exists (any status).
-   * - When called without `newlyInsertedIds` (e.g., manual trigger), falls
-   *   back to scanning all records in the date range.
-   */
-  async detectDiscrepancies(
-    projectLocationId: string,
-    startDate: Date,
-    endDate: Date,
-    detectedBy: string,
-    projectName?: string,
-    projectCode?: string,
-    newlyInsertedIds?: Set<string>,
-  ): Promise<{ detected: number; discrepanciesCreated: number }> {
-    try {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-
-      // ── Step 1: Fetch scan records to analyse ─────────────────────────────
-      // If newlyInsertedIds is provided, fetch only those specific docs (fast).
-      // Otherwise fall back to querying the full date range (manual trigger).
-      let scansToAnalyse: ScanData[] = [];
-
-      if (newlyInsertedIds && newlyInsertedIds.size > 0) {
-        // Point-lookup for newly inserted docs only — O(n) where n = new records
-        const CHUNK_SIZE = 500;
-        const refs = Array.from(newlyInsertedIds).map(id => collections.scanData.doc(id));
-        const chunks: FirebaseFirestore.DocumentReference[][] = [];
-        for (let i = 0; i < refs.length; i += CHUNK_SIZE) {
-          chunks.push(refs.slice(i, i + CHUNK_SIZE));
-        }
-        const snapshots = await Promise.all(chunks.map(chunk => db.getAll(...chunk)));
-        snapshots.flat().forEach(doc => {
-          if (doc.exists) {
-            const data = doc.data() as ScanData;
-            if (!data.isDeleted) scansToAnalyse.push({ ...data, id: doc.id });
-          }
-        });
-      } else {
-        // Fallback: query full date range (used when called manually)
-        const scansSnapshot = await collections.scanData
-          .where('projectLocationId', '==', projectLocationId)
-          .where('workDate', '>=', start)
-          .where('workDate', '<=', end)
-          .get();
-        scansSnapshot.docs.forEach(doc => {
-          const data = doc.data() as ScanData;
-          if (!data.isDeleted) scansToAnalyse.push({ ...data, id: doc.id });
-        });
-      }
-
-      if (scansToAnalyse.length === 0) {
-        return { detected: 0, discrepanciesCreated: 0 };
-      }
-
-      // ── Step 2: Fetch existing discrepancies for this project + range ──────
-      // Used to implement insert-only: skip if a discrepancy already exists.
-      const existingDiscSnapshot = await collections.scanDataDiscrepancies
-        .where('projectLocationId', '==', projectLocationId)
-        .get();
-
-      const existingDiscKeys = new Set<string>(); // key: `${employeeNumber}_${YYYY-MM-DD}`
-      existingDiscSnapshot.docs.forEach(doc => {
-        const d = doc.data() as ScanDataDiscrepancy;
-        const workDate = d.workDate instanceof Date ? d.workDate : (d.workDate as any).toDate();
-        if (workDate >= start && workDate <= end) {
-          const dateStr = workDate.toISOString().split('T')[0];
-          existingDiscKeys.add(`${d.employeeNumber}_${dateStr}`);
-        }
-      });
-
-      // ── Step 3: Fetch Timesheets from Project B (for Type3 detection) ─────
-      const projectBMap = new Map<string, any>(); // key: `${employeeNumber}_${YYYY-MM-DD}`
-      const dateToEmployees = new Map<string, Set<string>>();
-      
-      for (const scan of scansToAnalyse) {
-        const workDate = scan.workDate instanceof Date ? scan.workDate : (scan.workDate as any).toDate();
-        const dateStr = workDate.toISOString().split('T')[0];
-        if (!dateToEmployees.has(dateStr)) {
-          dateToEmployees.set(dateStr, new Set());
-        }
-        if (scan.employeeNumber) {
-          dateToEmployees.get(dateStr)!.add(scan.employeeNumber);
-        }
-      }
-
-      // IMPORTANT: Need to import projectBDailyReportService at the top of this file if not already imported.
-      // Assuming it's imported or we will add it.
-      for (const [dateStr, empSet] of dateToEmployees.entries()) {
-        const empArray = Array.from(empSet);
-        const timesheets = await projectBDailyReportService.getBulkDailyTimesheets(empArray, dateStr);
-        for (const [emp, ts] of Object.entries(timesheets)) {
-          projectBMap.set(`${emp}_${dateStr}`, ts);
-        }
-      }
-
-      // ── Step 4: Detect discrepancies ───────────────────────────────────────
-      const discrepanciesToCreate: Omit<ScanDataDiscrepancy, 'id'>[] = [];
-
-      for (const scan of scansToAnalyse) {
-        const workDate = scan.workDate instanceof Date ? scan.workDate : (scan.workDate as any).toDate();
-        const dateStr = workDate.toISOString().split('T')[0];
-        const discKey = `${scan.employeeNumber}_${dateStr}`;
-
-        // ✅ Insert-only: skip if a discrepancy already exists for this employee+date
-        if (existingDiscKeys.has(discKey)) continue;
-
-        const timesheet = projectBMap.get(`${scan.employeeNumber}_${dateStr}`);
-        
-        const reportedRegularHours = timesheet?.expectedHours?.normal || 0;
-        const reportedMorningOT = timesheet?.expectedHours?.otMorning || 0;
-        const reportedEveningOT = timesheet?.expectedHours?.otEvening || 0;
-        
-        const scannedHours = scan.regularHours || 0;
-        const scanNormalStatus = scan.normalStatus || 0;
-
-        let detectionReason = '';
-        let type: 'Type1' | 'Type2' | 'Type3' = 'Type2';
-
-        // Case B: Abnormal Scan (Type 2 — missing in/out)
-        if (scan.normalStatus === 0) {
-          type = 'Type2';
-          detectionReason = 'สแกนไม่ครบ (ไม่มีเวลาสแกนเข้า หรือ สแกนออก)';
-        }
-        // Case C: Hours mismatch with Project B (Type 3)
-        else if (timesheet && timesheet.expectedShifts?.normal) {
-          const hoursDiff = Math.abs(scannedHours - reportedRegularHours);
-          if (hoursDiff > 0.01) {
-            type = 'Type3';
-            detectionReason = `ชั่วโมงงานปกติไม่ตรงกัน (สแกนนิ้ว: ${scannedHours} ชม., อนุมัติในตาราง: ${reportedRegularHours} ชม.)`;
-          }
-        }
-
-        if (!detectionReason) continue;
-
-        const hoursDifference = reportedRegularHours - scannedHours;
-        discrepanciesToCreate.push({
-          dailyReportId: timesheet?.id || 'PROJECT_B', // Project B doesn't have local report IDs
-          dailyContractorId: (scan as any).dailyContractorId || '',
-          projectLocationId,
-          workDate,
-          discrepancyType: type,
-          reportedHours: reportedRegularHours,
-          scannedHours,
-          scanNormalStatus,
-          scanStatusLabel: scanNormalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
-          hoursDifference,
-          severity: calculateSeverity(hoursDifference),
-          status: 'pending',
-          detectionReason,
-          detectedBy,
-          projectName: projectName || scan.projectName,
-          projectCode: projectCode || scan.projectCode,
-          employeeNumber: scan.employeeNumber,
-          createdAt: new Date(),
-          time1: scan.Time1,
-          time2: scan.Time2,
-          time3: scan.Time3,
-          time4: scan.Time4,
-          time5: scan.Time5,
-          time6: scan.Time6,
-          lateMinutes: scan.lateMinutes || 0,
-          reportNormalStatus: reportedRegularHours > 0 ? 1 : 0,
-          reportOTMorning: reportedMorningOT,
-          reportOTEvening: reportedEveningOT,
-          scanOTMorning: scan.otMorningHours || 0,
-          scanOTEvening: scan.otEveningHours || 0,
-        });
-      }
-
-      // ── Step 5: Save new discrepancies with BulkWriter ────────────────────
-      if (discrepanciesToCreate.length > 0) {
-        const discWriter = db.bulkWriter();
-        for (const disc of discrepanciesToCreate) {
-          discWriter.set(collections.scanDataDiscrepancies.doc(), disc);
-        }
-        await discWriter.close();
-      }
-
-      logger.info(`[detectDiscrepancies] Scanned ${scansToAnalyse.length} records, created ${discrepanciesToCreate.length} new discrepancies`);
-      return {
-        detected: scansToAnalyse.length,
-        discrepanciesCreated: discrepanciesToCreate.length,
-      };
-    } catch (error: any) {
-      logger.error('Error in detectDiscrepancies:', error);
-      throw error;
-    }
-  }
 
   /**
    * Get aggregated data for export

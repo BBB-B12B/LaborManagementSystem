@@ -69,17 +69,16 @@ import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Controller, useForm } from 'react-hook-form';
 import {
-  getAllDiscrepancies,
-  type ScanDataDiscrepancy,
   deleteScanDataBulk,
   deleteScanDataById,
-  deleteDiscrepancyById,
   getAllScanData,
   addManualScan,
   type ScanData,
   exportScanData,
   restoreScanDataById,
 } from '../../services/scanDataService';
+import { reconciliationService } from '../../services/reconciliationService';
+import WorkHourComparisonTable from '../../components/work-hour-monitoring/WorkHourComparisonTable';
 
 
 
@@ -175,17 +174,9 @@ export default function ScanDataMonitoringPage() {
 
   const filter = watch();
 
-  // Fetch discrepancies
-  const { 
-    data: discrepancyData, 
-    isLoading: isDiscrepancyLoading, 
-    error: discrepancyError, 
-    refetch: refetchDiscrepancies 
-  } = useQuery({
-    queryKey: ['discrepancies', filter, page, pageSize],
-    queryFn: () => getAllDiscrepancies(filter, page + 1, pageSize),
-    enabled: currentTab === 0,
-  });
+  // Discrepancy is now handled by WorkHourComparisonTable
+  // We no longer fetch discrepancies here since the component fetches its own data
+  const isDiscrepancyLoading = false;
 
   // Fetch all scan data
   const {
@@ -237,9 +228,8 @@ export default function ScanDataMonitoringPage() {
   };
 
   const handleRefresh = () => {
-    if (currentTab === 0) refetchDiscrepancies();
-    else if (currentTab === 1) refetchAllScans();
-    else refetchDeleted();
+    if (currentTab === 1) refetchAllScans();
+    else if (currentTab === 2) refetchDeleted();
   };
 
 
@@ -310,7 +300,7 @@ export default function ScanDataMonitoringPage() {
       async () => {
         try {
           if (currentTab === 0) {
-            await deleteDiscrepancyById(row.id);
+            alert('ไม่สามารถลบข้อมูล Reconciliation ได้จากหน้านี้');
           } else {
             await deleteScanDataById(row.id);
           }
@@ -908,14 +898,26 @@ export default function ScanDataMonitoringPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                   {(currentTab === 0 
-                     ? (discrepancyData?.data || []) 
-                     : currentTab === 1 
+                 {currentTab === 0 ? (
+                   <TableRow>
+                     <TableCell colSpan={tableHeaders.length} sx={{ p: 0 }}>
+                       <Box sx={{ minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
+                         <WorkHourComparisonTable 
+                           selectedDate={filter.startDate || new Date()} 
+                           startDate={filter.startDate || null}
+                           endDate={filter.endDate || null}
+                           filterStatus={filter.status || 'pending'}
+                           project={filter.projectLocationId || ''}
+                         />
+                       </Box>
+                     </TableCell>
+                   </TableRow>
+                 ) : (currentTab === 1 
                        ? (allScanData?.data || []) 
                        : (deletedScanData?.data || [])
                    ).map((row: any, rowIndex: number) => {
 
-                      // Map discrepancy fields vs raw scan fields to the same UI structure
+                      // Map raw scan fields to the same UI structure
                       const baseRow = row.detailedView || row;
                       const raw = baseRow.rawData || baseRow.data || baseRow;
 
@@ -1065,7 +1067,7 @@ export default function ScanDataMonitoringPage() {
               <TablePagination
                 rowsPerPageOptions={[25, 50, 100]}
                 component="div"
-                count={(currentTab === 0 ? discrepancyData?.total : currentTab === 1 ? allScanData?.total : deletedScanData?.total) || 0}
+                count={(currentTab === 1 ? allScanData?.total : deletedScanData?.total) || 0}
 
                 rowsPerPage={pageSize}
                 page={page}
@@ -1095,20 +1097,6 @@ export default function ScanDataMonitoringPage() {
 
     </Container>
   );
-
-  if (discrepancyError) {
-    return (
-      <ProtectedRoute>
-        <Layout maxWidth={false} disablePadding>
-          <Container maxWidth="lg" sx={{ mt: 4 }}>
-            <Typography color="error">
-              เกิดข้อผิดพลาด: {(discrepancyError as Error).message}
-            </Typography>
-          </Container>
-        </Layout>
-      </ProtectedRoute>
-    );
-  }
 
   return (
     <ProtectedRoute>

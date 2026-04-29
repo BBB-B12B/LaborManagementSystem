@@ -197,7 +197,7 @@ const baseThemeOptions: ThemeOptions = {
         },
       },
     },
-    // @ts-ignore
+    // @ts-expect-error - MuiDataGrid is not in standard theme typings
     MuiDataGrid: {
       styleOverrides: {
         root: {

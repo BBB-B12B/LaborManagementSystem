@@ -490,7 +490,7 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
                             พนักงาน : {record.empId} - {record.name}
                           </Typography>
                           <Typography variant="caption" sx={{ color: BLUE.TEXT_LIGHT, fontWeight: 700, display: 'block', fontSize: '0.65rem' }}>
-                            {viewMode === 'fixed' ? `วันที่แก้ไข : ${record.fixedDate}` : `วันที่ : ${record.date}`}
+                            {viewMode === 'fixed' ? `วันที่แก้ไข : ${(record as any).fixedDate}` : `วันที่ : ${record.date}`}
                           </Typography>
                         </Box>
                       </Stack>

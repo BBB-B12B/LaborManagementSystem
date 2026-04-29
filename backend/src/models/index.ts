@@ -31,7 +31,6 @@ export * from './ImportedWageSystem';
 
 // Scan Data Models
 export * from './ScanData';
-export * from './ScanDataDiscrepancy';
 export * from './LateRecord';
 
 // File Models

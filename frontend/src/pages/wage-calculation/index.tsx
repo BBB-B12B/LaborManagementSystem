@@ -52,7 +52,7 @@ import {
   validate15DayPeriod,
 } from '../../validation/wageSchema';
 
-import ScanDataUploadDialog from '../scan-data-monitoring/components/ScanDataUploadDialog';
+import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
 import type { ImportResult } from '../../services/scanDataService';
 
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';

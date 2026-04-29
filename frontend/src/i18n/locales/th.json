@@ -215,19 +215,24 @@
       "actions": "จัดการ"
     },
     "status": {
-      "normal": "ปกติ",
-      "workHourConflict": "ชั่วโมงทำงานขัดแย้งกัน",
-      "otConflict": "ชั่วโมง OT ขัดแย้งกัน",
-      "missingScan": "ขาดข้อมูลสแกนนิ้ว",
-      "missingDaily": "ขาดข้อมูล Daily Report",
-      "absent": "ขาดงาน"
+      "matched": "ข้อมูลตรงกัน",
+      "conflicted": "ข้อมูลขัดแย้ง",
+      "missing_scan": "ขาดสแกนนิ้ว",
+      "missing_daily": "ขาดข้อมูล Daily",
+      "absent": "ขาดงาน",
+      "leave": "ลางาน",
+      "holiday": "วันหยุด",
+      "approved": "อนุมัติแล้ว",
+      "pending": "รอตรวจสอบ",
+      "unregistered_employee": "ไม่มีในระบบ"
     },
     "actions": {
       "view": "ดูข้อมูล",
       "check": "ตรวจสอบ",
       "pending": "รอดำเนินการ",
       "approve": "อนุมัติ",
-      "correct": "แจ้งแก้ไข"
+      "correct": "แจ้งแก้ไข",
+      "register": "เพิ่มพนักงาน"
     },
     "summary": {
       "total": "ทั้งหมด",

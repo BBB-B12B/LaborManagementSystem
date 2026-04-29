@@ -15,7 +15,7 @@ import {
   parseExcelFile,
   detectFileType,
 } from '../../services/scanData/ScanDataImportUtils';
-import { collections } from '../../config/collections';
+
 import * as XLSX from 'xlsx';
 
 const router = Router();
@@ -134,150 +134,13 @@ router.get(
   }
 );
 
-/**
- * GET /api/scan-data/discrepancies
- * Detect and return discrepancies between Daily Reports and Scan Data
- */
-router.get('/discrepancies', async (req: Request, res: Response) => {
-  try {
-    const page = parseInt((req.query.page as string) || '1', 10);
-    const pageSize = parseInt((req.query.pageSize as string) || '50', 10);
-    const projectId = req.query.projectId as string | undefined;
-    const startDateStr = req.query.startDate as string | undefined;
-    const endDateStr = req.query.endDate as string | undefined;
 
-    let startDate: Date | undefined;
-    if (startDateStr) {
-      startDate = new Date(startDateStr);
-      startDate.setHours(0, 0, 0, 0);
-    }
-    let endDate: Date | undefined;
-    if (endDateStr) {
-      endDate = new Date(endDateStr);
-      endDate.setHours(23, 59, 59, 999);
-    }
 
-    const discrepancies = await scanDataService.getDiscrepancies({
-      page,
-      pageSize,
-      projectId,
-      startDate,
-      endDate
-    });
 
-    res.json({
-      success: true,
-      data: discrepancies.items,
-      pagination: {
-        page: discrepancies.page,
-        pageSize: discrepancies.pageSize,
-        total: discrepancies.total,
-        totalPages: discrepancies.totalPages
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-/**
- * GET /api/scan-data/discrepancies/summary
- */
-router.get('/discrepancies/summary', async (req: Request, res: Response) => {
-  try {
-    const { projectLocationId } = req.query;
-    const summary = await scanDataService.getDiscrepancySummary(projectLocationId as string | undefined);
 
-    res.json({
-      success: true,
-      data: summary,
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-/**
- * GET /api/scan-data/discrepancies/:id
- */
-router.get('/discrepancies/:id', async (req: Request, res: Response) => {
-  try {
-    const doc = await collections.scanDataDiscrepancies.doc(req.params.id).get();
-    if (!doc.exists) {
-      throw new AppError('Discrepancy not found', 404);
-    }
 
-    // Use raw data first but properly extract workDate for query
-    const data = doc.data() as any;
-    const workDate = data.workDate?.toDate ? data.workDate.toDate() : new Date(data.workDate);
-    
-    const discrepancy = { 
-        id: doc.id, 
-        ...data,
-        workDate: workDate // Ensure it's a JS Date for the response
-    };
-
-    if (discrepancy.dailyContractorId && workDate && !isNaN(workDate.getTime())) {
-      try {
-        const scans = await scanDataService.getByContractorAndDate(
-          discrepancy.dailyContractorId,
-          workDate,
-          workDate
-        );
-
-        discrepancy.scanDataRecords = scans.map(scan => ({
-          id: scan.id,
-          scanTime: scan.scanDateTime,
-          scanType: scan.scanBehavior,
-          roundedTime: scan.roundedTime instanceof Date ? scan.roundedTime.toISOString() : scan.roundedTime,
-        }));
-        discrepancy.scanDataIds = scans.map(s => s.id);
-      } catch (err) {
-        console.warn('Could not fetch scan records for discrepancy detail:', err);
-        discrepancy.scanDataRecords = [];
-      }
-    }
-
-    res.json({ success: true, data: discrepancy });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * POST /api/scan-data/discrepancies/:id/resolve
- */
-router.post(
-  '/discrepancies/:id/resolve',
-  authorize(['AM', 'MD']),
-  [
-    body('resolutionMethod').isIn(['update_dr', 'create_dr', 'verify', 'ignore']),
-    body('resolutionNote').notEmpty().withMessage('กรุณาระบุหมายเหตุ'),
-    body('updatedHours').optional().isFloat({ min: 0 })
-  ],
-  async (req: Request, res: Response) => {
-    const authReq = req as AuthRequest;
-    try {
-      const errors = validationResult(req as Request);
-      if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
-
-      const resolvedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
-      const result = await scanDataService.resolveDiscrepancy(
-        req.params.id,
-        {
-          resolutionMethod: req.body.resolutionMethod,
-          resolutionNote: req.body.resolutionNote,
-          updatedHours: req.body.updatedHours ? parseFloat(req.body.updatedHours) : undefined
-        },
-        resolvedBy
-      );
-
-      res.json({ success: true, data: result });
-    } catch (error: any) {
-      res.status(error.statusCode || 500).json({ success: false, error: error.message });
-    }
-  }
-);
 
 /**
  * GET /api/scan-data/late
@@ -578,39 +441,7 @@ router.post(
   }
 );
 
-/**
- * POST /api/scan-data/detect-discrepancies
- */
-router.post(
-  '/detect-discrepancies',
-  authorize(['AM', 'MD']),
-  [
-    body('projectLocationId').notEmpty(),
-    body('startDate').isISO8601(),
-    body('endDate').isISO8601(),
-  ],
-  async (req: Request, res: Response) => {
-    const authReq = req as AuthRequest;
-    try {
-      const errors = validationResult(req as Request);
-      if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
 
-      const { projectLocationId, startDate, endDate } = req.body;
-      const detectedBy = authReq.user?.id || 'system';
-
-      const result = await scanDataService.detectDiscrepancies(
-        projectLocationId,
-        new Date(startDate),
-        new Date(endDate),
-        detectedBy
-      );
-
-      res.json({ success: true, data: result });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  }
-);
 
 /**
  * POST /api/scan-data
@@ -645,24 +476,7 @@ router.post(
   }
 );
 
-/**
- * DELETE /api/scan-data/discrepancies/:id
- */
-router.delete('/discrepancies/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
-  const authReq = req as AuthRequest;
-  try {
-    const deletedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
-    const success = await scanDataService.deleteDiscrepancy(req.params.id, deletedBy);
-    if (!success) {
-      return res.status(404).json({ success: false, error: 'Discrepancy not found' });
-    }
-    res.json({ success: true, message: 'Discrepancy deleted successfully' });
-    return;
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-    return;
-  }
-});
+
 
 /**
  * DELETE /api/scan-data/:id
@@ -745,21 +559,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * Re-open a resolved discrepancy
- */
-router.post('/discrepancies/:id/reopen', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const result = await scanDataService.reopenDiscrepancy(
-      id,
-      (req as any).user?.id || 'admin'
-    );
-    res.json({ success: true, data: result });
-  } catch (error: any) {
-    res.status(error.statusCode || 500).json({ success: false, error: error.message });
-  }
-});
+
 
 
 /**

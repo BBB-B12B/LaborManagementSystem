@@ -12,9 +12,9 @@ import WorkHourComparisonTable from '@/components/work-hour-monitoring/WorkHourC
 import SummaryStats from '@/components/work-hour-monitoring/SummaryStats';
 import AbnormalBreakdown from '@/components/work-hour-monitoring/AbnormalBreakdown';
 import DatePicker from '@/components/forms/DatePicker';
-import { GlobalStyles, Snackbar, Alert, CircularProgress } from '@mui/material';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { reconciliationService } from '@/services/reconciliationService';
+import { GlobalStyles } from '@mui/material';
+import { useQueryClient } from '@tanstack/react-query';
+
 
 /**
  * Work Hour Monitoring Page
@@ -28,60 +28,12 @@ export default function WorkHourMonitoringPage() {
   // Advanced Filter States
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLDivElement | null>(null);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [startDate, setStartDate] = useState<Date | null>(new Date());
-  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
   const [project, setProject] = useState('all');
   
   const queryClient = useQueryClient();
 
-  // Notification state
-  const [notification, setNotification] = useState<{ open: boolean, message: string, severity: 'success' | 'error' | 'info' }>({
-    open: false, message: '', severity: 'info'
-  });
-
-  const generateMutation = useMutation({
-    mutationFn: () => {
-      // Validate dates
-      if (!startDate || !endDate) throw new Error('กรุณาระบุช่วงวันที่ให้ครบถ้วน');
-      if (project === 'all') throw new Error('กรุณาเลือกโครงการ (Project Location ID) ก่อนทำการ Generate');
-      
-      return reconciliationService.generateForProjectAuto({
-        projectLocationId: project,
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
-      });
-    },
-    onSuccess: (data) => {
-      setNotification({
-        open: true,
-        message: `สร้างรายการเปรียบเทียบสำเร็จ ${data.succeeded} รายการ (ล้มเหลว ${data.failed})`,
-        severity: 'success'
-      });
-      // Invalidate queries to refresh the table
-      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
-    },
-    onError: (error: any) => {
-      setNotification({
-        open: true,
-        message: `เกิดข้อผิดพลาด: ${error.message || 'ไม่สามารถสร้างรายการได้'}`,
-        severity: 'error'
-      });
-    }
-  });
-
-  const handleGenerate = () => {
-    if (project === 'all') {
-      setNotification({
-        open: true,
-        message: 'กรุณาเลือกโครงการก่อนทำการ Generate ข้อมูล',
-        severity: 'info'
-      });
-      // Automatically open filter so user can select project
-      setFilterAnchorEl(document.getElementById('filter-btn-container'));
-      return;
-    }
-    generateMutation.mutate();
-  };
 
   const handleOpenFilter = (event: React.MouseEvent<HTMLDivElement>) => {
     setFilterAnchorEl(event.currentTarget);
@@ -270,28 +222,8 @@ export default function WorkHourMonitoringPage() {
                 Export
               </Button>
               
-              <Button
-                variant="contained"
-                size="small"
-                onClick={handleGenerate}
-                disabled={generateMutation.isPending}
-                sx={{ 
-                  borderRadius: '6px', 
-                  textTransform: 'none', 
-                  fontWeight: 700,
-                  backgroundColor: '#01497c',
-                  color: '#fff',
-                  height: 28,
-                  fontSize: '0.75rem',
-                  px: 1.5,
-                  '&:hover': { backgroundColor: '#001b48' }
-                }}
-              >
-                {generateMutation.isPending ? <CircularProgress size={16} sx={{ color: '#fff', mr: 1 }} /> : null}
-                ดึงข้อมูล Project B (Auto Generate)
-              </Button>
-              
               <Box
+
                 id="filter-btn-container"
                 onClick={handleOpenFilter}
                 sx={{ 
@@ -402,10 +334,12 @@ export default function WorkHourMonitoringPage() {
               <Typography variant="caption" fontWeight={800} sx={{ mb: 0.5, color: '#64748b', display: 'block' }}>ช่วงวันที่ (Date Range)</Typography>
               <Stack direction="row" spacing={1}>
                 <DatePicker 
+                  label="ตั้งแต่วันที่"
                   value={startDate} 
                   onChange={(date) => setStartDate(date)} 
                 />
                 <DatePicker 
+                  label="ถึงวันที่"
                   value={endDate} 
                   onChange={(date) => setEndDate(date)} 
                 />
@@ -440,22 +374,8 @@ export default function WorkHourMonitoringPage() {
           </Stack>
         </Popover>
 
-        {/* Notification Snackbar */}
-        <Snackbar 
-          open={notification.open} 
-          autoHideDuration={6000} 
-          onClose={() => setNotification(prev => ({ ...prev, open: false }))}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert 
-            onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
-            severity={notification.severity} 
-            sx={{ width: '100%', borderRadius: '8px', fontWeight: 700 }}
-          >
-            {notification.message}
-          </Alert>
-        </Snackbar>
       </Layout>
+
     </ProtectedRoute>
   );
 }

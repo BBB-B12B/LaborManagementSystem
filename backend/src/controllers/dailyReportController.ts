@@ -11,6 +11,7 @@
 
 import { Request, Response } from 'express';
 import { dailyReportService } from '../services/dailyReport/DailyReportService';
+import { matcherService } from '../services/reconciliation/MatcherService';
 import * as XLSX from 'xlsx';
 import { DAILY_REPORT_COLUMNS } from '../utils/dailyReportExcel';
 import { storage } from '../config/storage';
@@ -202,5 +203,31 @@ export async function downloadTemplate(_req: Request, res: Response): Promise<vo
   } catch (error) {
     console.error('Error downloading template:', error);
     res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+/**
+ * POST /api/daily-reports/sync
+ * Sync Daily Report from external systems (e.g. After-Sale, Construction)
+ * and trigger Reconciliation logic.
+ */
+export async function syncDailyReport(req: Request, res: Response): Promise<Response> {
+  try {
+    const { employeeId, workDate, projectLocationId } = req.body;
+
+    if (!employeeId || !workDate || !projectLocationId) {
+      return res.status(400).json({ error: 'Missing required fields: employeeId, workDate, projectLocationId' });
+    }
+    
+    // In a real implementation, we would save the DailyReport to Firestore here.
+    logger.info(`Received sync payload for ${employeeId} on ${workDate}`);
+    
+    // Trigger reconciliation
+    const record = await matcherService.reconcile(employeeId, workDate, projectLocationId);
+    
+    return res.status(200).json({ success: true, record });
+  } catch (error) {
+    logger.error('Error syncing daily report:', error);
+    return res.status(500).json({ error: (error as Error).message });
   }
 }

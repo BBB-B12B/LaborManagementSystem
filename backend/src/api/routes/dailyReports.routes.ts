@@ -11,7 +11,8 @@ import {
   getByProjectAndMonth,
   importExcel,
   bulkCreate,
-  downloadTemplate
+  downloadTemplate,
+  syncDailyReport
 } from '../../controllers/dailyReportController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
@@ -68,6 +69,13 @@ router.post(
   '/bulk-create',
   authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
   bulkCreate
+);
+
+/** Sync Daily Report from external system */
+router.post(
+  '/sync',
+  // authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'ADMIN']), // Add appropriate roles later
+  syncDailyReport
 );
 
 export default router;

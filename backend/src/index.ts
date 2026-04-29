@@ -119,30 +119,38 @@ app.use(errorHandler);
 
 // ============================================
 // Start Server
+// Only runs when NOT loaded by Firebase CLI for function deployment.
+// Firebase sets FUNCTION_TARGET or K_SERVICE env vars when loading for analysis.
 // ============================================
+const isRunningAsCloudFunction = !!(process.env.FUNCTION_TARGET || process.env.K_SERVICE);
 
-app.listen(PORT, () => {
-  logger.info(`🚀 Server running on port ${PORT}`);
-  logger.info(`Environment: ${config.nodeEnv}`);
-  logger.info(`CORS Origin: ${config.corsOrigin}`);
+if (!isRunningAsCloudFunction) {
+  app.listen(PORT, () => {
+    logger.info(`🚀 Server running on port ${PORT}`);
+    logger.info(`Environment: ${config.nodeEnv}`);
+    logger.info(`CORS Origin: ${config.corsOrigin}`);
 
-  if (config.nodeEnv === 'development') {
-    logger.info('🔥 Firebase Emulators:');
-    logger.info(`   - Firestore: ${config.firebase.firestoreEmulatorHost}`);
-    logger.info(`   - Auth: ${config.firebase.authEmulatorHost}`);
-  }
-});
+    if (config.nodeEnv === 'development') {
+      logger.info('🔥 Firebase Emulators:');
+      logger.info(`   - Firestore: ${config.firebase.firestoreEmulatorHost}`);
+      logger.info(`   - Auth: ${config.firebase.authEmulatorHost}`);
+    }
+  });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  process.exit(0);
-});
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM signal received: closing HTTP server');
+    process.exit(0);
+  });
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
-  process.exit(0);
-});
+  process.on('SIGINT', () => {
+    logger.info('SIGINT signal received: closing HTTP server');
+    process.exit(0);
+  });
+}
 
 export default app;
 
+// ============================================
+// Firebase Cloud Functions
+// ============================================
+export * from './functions/onScanDataChanged';

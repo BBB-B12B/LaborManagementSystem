@@ -17,11 +17,12 @@ export type ReconciliationStatus =
   | 'MATCHED'              // ข้อมูลทั้ง 2 แหล่งตรงกัน รออนุมัติ
   | 'CONFLICTED'           // ข้อมูลขัดแย้ง (มีทั้งคู่ แต่ชม. ไม่ตรง)
   | 'MISSING_SCAN'         // มี Daily Report แต่ไม่มี Scan Data
-  | 'MISSING_DAILY'        // มี Scan Data แต่ไม่มี Daily Report
+  | 'MISSING_DAILY'        // มีพนักงานในระบบ มี Scan Data แต่ไม่มี Daily Report
   | 'ABSENT'               // ไม่มีข้อมูลทั้งคู่
   | 'LEAVE'                // พนักงานลา (ยืนยันจาก Leave Request)
   | 'HOLIDAY'              // วันหยุดบริษัท
   | 'AWAITING_CORRECTION'  // Admin แจ้งให้แก้ไข รอผลลัพธ์
+  | 'UNREGISTERED_EMPLOYEE' // มี Scan Data แต่รหัสพนักงานไม่มีในระบบ — Admin ต้องไปเพิ่มข้อมูล
   | 'APPROVED';            // อนุมัติแล้ว พร้อมส่งคำนวณค่าจ้าง
 
 export type ApprovalSource =
@@ -53,9 +54,19 @@ export interface ReconciliationRecord {
   projectLocationId: string;
   projectName?: string;              // Cache สำหรับ UI
 
-  // --- ข้อมูลดิบจากทั้ง 2 แหล่ง ---
-  dailyReportHours?: number;         // ชม. รวมจาก Daily Report (regularHours + otHours)
-  scanDataHours?: number;            // ชม. รวมจาก Scan Data (regularHours + otHours)
+  // --- สหรับข้อมูลดิบจากทั้ง 2 แหล่ง ---
+  // Timesheet (After-Sale DailyEmployeeTimesheets)
+  dailyReportHours?: number;         // ยอดรวม (normal + OT)
+  timesheetNormalHours?: number;     // ชม. ปกติ (08:00-17:00)
+  timesheetOtMorning?: number;       // OT เช้า (05:00-08:00)
+  timesheetOtNoon?: number;          // OT ผ่าเที่ยง (12:00-13:00)
+  timesheetOtEvening?: number;       // OT เย็น (17:00-22:00)
+  // Scan Data
+  scanDataHours?: number;            // ยอดรวม (normal + OT)
+  scanNormalHours?: number;          // ชม. ปกติ
+  scanOtMorningHours?: number;       // OT เช้า
+  scanOtNoonHours?: number;          // OT ผ่าเที่ยง
+  scanOtEveningHours?: number;       // OT เย็น
   dailyReportId?: string;            // ref → DailyWorkerReport doc id
   scanDataId?: string;               // ref → scanData doc id
   suggestedHours?: number;           // min(dailyReportHours, scanDataHours) — UI hint เท่านั้น
@@ -199,8 +210,17 @@ export const reconciliationRecordConverter = {
       workDate: data.workDate,
       projectLocationId: data.projectLocationId,
       projectName: data.projectName,
-      dailyReportHours: data.dailyReportHours,
-      scanDataHours: data.scanDataHours,
+      // Cloud Function เขียนเป็น timesheetHours, backend model ใช้ dailyReportHours
+      dailyReportHours:      data.timesheetHours ?? data.dailyReportHours,
+      timesheetNormalHours:  data.timesheetNormalHours,
+      timesheetOtMorning:    data.timesheetOtMorning,
+      timesheetOtNoon:       data.timesheetOtNoon,
+      timesheetOtEvening:    data.timesheetOtEvening,
+      scanDataHours:         data.scanDataHours,
+      scanNormalHours:       data.scanNormalHours,
+      scanOtMorningHours:    data.scanOtMorningHours,
+      scanOtNoonHours:       data.scanOtNoonHours,
+      scanOtEveningHours:    data.scanOtEveningHours,
       dailyReportId: data.dailyReportId,
       scanDataId: data.scanDataId,
       suggestedHours: data.suggestedHours,

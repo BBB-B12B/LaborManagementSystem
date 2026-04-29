@@ -215,6 +215,20 @@
       ]
     },
     {
+      "collectionGroup": "scanData",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employeeNumber",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "workDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "scanDataDiscrepancies",
       "queryScope": "COLLECTION",
       "fields": [

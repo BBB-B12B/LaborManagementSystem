@@ -9,7 +9,8 @@ export type ReconciliationStatus =
   | 'APPROVED'
   | 'ABSENT'
   | 'LEAVE'
-  | 'HOLIDAY';
+  | 'HOLIDAY'
+  | 'UNREGISTERED_EMPLOYEE';
 
 export type ApprovalSource = 'DAILY_REPORT' | 'SCAN_DATA' | 'MANUAL';
 
@@ -28,8 +29,17 @@ export interface ReconciliationRecord {
   workDate: string;
   projectLocationId: string;
   projectName?: string;
-  dailyReportHours?: number;
-  scanDataHours?: number;
+  dailyReportHours?: number;   // ยอดรวม (alias ใช้ใน UI)
+  timesheetHours?: number;      // field จริงที่ Cloud Function เขียนลง Firestore
+  timesheetNormalHours?: number;
+  timesheetOtMorning?: number;
+  timesheetOtNoon?: number;
+  timesheetOtEvening?: number;
+  scanDataHours?: number;       // ยอดรวม scan
+  scanNormalHours?: number;
+  scanOtMorningHours?: number;
+  scanOtNoonHours?: number;
+  scanOtEveningHours?: number;
   suggestedHours?: number;
   status: ReconciliationStatus;
   statusHistory: StatusHistoryEntry[];

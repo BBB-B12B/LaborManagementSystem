@@ -19,11 +19,11 @@ import {
   additionalExpenseConverter,
   socialSecurityCalculationConverter,
   scanDataConverter,
-  scanDataDiscrepancyConverter,
   lateRecordConverter,
   fileAttachmentConverter,
   socialSecurityRuleConverter,
   importedWageSystemConverter,
+  reconciliationRecordConverter,
 } from '../models';
 
 /**
@@ -44,7 +44,7 @@ export const COLLECTIONS = {
   ADDITIONAL_EXPENSE: 'additionalExpense',
   SOCIAL_SECURITY_CALCULATIONS: 'socialSecurityCalculations',
   SCAN_DATA: 'scanData',
-  SCAN_DATA_DISCREPANCIES: 'scanDataDiscrepancies',
+  RECONCILIATION_RECORDS: 'reconciliationRecords',
   LATE_RECORDS: 'lateRecords',
   FILE_ATTACHMENTS: 'fileAttachments',
   SOCIAL_SECURITY_RULES: 'socialSecurityRules',
@@ -84,9 +84,9 @@ export const collections = {
     .collection(COLLECTIONS.SOCIAL_SECURITY_CALCULATIONS)
     .withConverter(socialSecurityCalculationConverter),
   scanData: db.collection(COLLECTIONS.SCAN_DATA).withConverter(scanDataConverter),
-  scanDataDiscrepancies: db
-    .collection(COLLECTIONS.SCAN_DATA_DISCREPANCIES)
-    .withConverter(scanDataDiscrepancyConverter),
+  reconciliationRecords: db
+    .collection(COLLECTIONS.RECONCILIATION_RECORDS)
+    .withConverter(reconciliationRecordConverter),
   lateRecords: db.collection(COLLECTIONS.LATE_RECORDS).withConverter(lateRecordConverter),
   fileAttachments: db
     .collection(COLLECTIONS.FILE_ATTACHMENTS)

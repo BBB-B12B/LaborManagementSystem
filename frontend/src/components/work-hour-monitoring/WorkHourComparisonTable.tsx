@@ -153,6 +153,13 @@ const StatusCapsule = styled(Box, {
         color: '#ea580c',
         borderColor: '#fed7aa',
       };
+    case 'UNREGISTERED_EMPLOYEE':
+      return {
+        ...styles,
+        backgroundColor: '#fff1f2',
+        color: '#be123c',
+        borderColor: '#fecdd3',
+      };
     case 'ABSENT':
       return {
         ...styles,
@@ -265,7 +272,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       if (filterStatus === 'all_abnormal') {
         if (row.status === 'MATCHED' || row.status === 'APPROVED' || row.status === 'HOLIDAY' || row.status === 'LEAVE') return false;
       } else if (filterStatus === 'abnormal_pending') {
-        if (row.status !== 'MISSING_DAILY') return false; // example mapping
+        if (row.status !== 'MISSING_DAILY' && row.status !== 'UNREGISTERED_EMPLOYEE') return false;
       } else if (filterStatus === 'abnormal_fixed') {
         if (row.status !== 'AWAITING_CORRECTION') return false; // example mapping
       } else if (filterStatus !== 'all' && row.status !== filterStatus.toUpperCase()) {
@@ -289,7 +296,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <StyledTableContainer component={Box}>
+      <StyledTableContainer>
         <Table sx={{ minWidth: 1200 }} aria-label="work hour comparison table" stickyHeader>
         <TableHead>
           {/* Row 1 */}
@@ -336,11 +343,23 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           ) : (
           visibleRows.map((row, index) => {
             const rowNumber = page * rowsPerPage + index + 1;
-            const hasRegularConflict = row.dailyReportHours !== row.scanDataHours;
+            // ชั่วโมงปกติ (Daily = timesheetNormalHours, Scan = scanNormalHours)
+            const tsNormal   = row.timesheetNormalHours  ?? row.dailyReportHours ?? row.timesheetHours;
+            const scanNormal = row.scanNormalHours        ?? row.scanDataHours;
+            // OT hours
+            const tsOtMorn   = row.timesheetOtMorning   ?? null;
+            const tsOtNoon   = row.timesheetOtNoon       ?? null;
+            const tsOtEve    = row.timesheetOtEvening    ?? null;
+            const scanOtMorn = row.scanOtMorningHours    ?? null;
+            const scanOtNoon = row.scanOtNoonHours       ?? null;
+            const scanOtEve  = row.scanOtEveningHours    ?? null;
+            // highlight ถ้าชั่วโมงปกติไม่ตรงกัน
+            const hasRegularConflict = tsNormal !== scanNormal && tsNormal != null && scanNormal != null;
             
             // Map status to action label
             let actionStr = 'view';
-            if (row.status === 'MISSING_DAILY') actionStr = 'pending';
+            if (row.status === 'UNREGISTERED_EMPLOYEE') actionStr = 'register'; // ไปเพิ่มพนักงานก่อน
+            else if (row.status === 'MISSING_DAILY') actionStr = 'pending';
             else if (row.status !== 'MATCHED' && row.status !== 'APPROVED') actionStr = 'check';
 
             return (
@@ -355,23 +374,37 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 
                 {/* Regular Hours Comparison */}
                 <TableCell>
-                  <ValueCapsule>{row.dailyReportHours ?? '-'}</ValueCapsule>
+                  <ValueCapsule>{tsNormal ?? '-'}</ValueCapsule>
                 </TableCell>
                 <TableCell>
                   <ValueCapsule highlight={hasRegularConflict}>
-                    {row.scanDataHours ?? '-'}
+                    {scanNormal ?? '-'}
                   </ValueCapsule>
                 </TableCell>
 
-                {/* OT Hours (Assuming 0 for now as backend model doesn't break it down) */}
+                {/* OT Morning */}
                 <TableCell>
-                  <ValueCapsule isOT>0</ValueCapsule>
+                  <Stack direction="row" spacing={0.5} justifyContent="center">
+                    <ValueCapsule isOT sx={{ minWidth: '28px', fontSize: '0.78rem' }}>{tsOtMorn ?? '-'}</ValueCapsule>
+                    <ValueCapsule isOT highlight={tsOtMorn !== scanOtMorn && tsOtMorn != null && scanOtMorn != null}
+                      sx={{ minWidth: '28px', fontSize: '0.78rem' }}>{scanOtMorn ?? '-'}</ValueCapsule>
+                  </Stack>
                 </TableCell>
+                {/* OT Noon */}
                 <TableCell>
-                  <ValueCapsule isOT>0</ValueCapsule>
+                  <Stack direction="row" spacing={0.5} justifyContent="center">
+                    <ValueCapsule isOT sx={{ minWidth: '28px', fontSize: '0.78rem' }}>{tsOtNoon ?? '-'}</ValueCapsule>
+                    <ValueCapsule isOT highlight={tsOtNoon !== scanOtNoon && tsOtNoon != null && scanOtNoon != null}
+                      sx={{ minWidth: '28px', fontSize: '0.78rem' }}>{scanOtNoon ?? '-'}</ValueCapsule>
+                  </Stack>
                 </TableCell>
+                {/* OT Evening */}
                 <TableCell>
-                  <ValueCapsule isOT>0</ValueCapsule>
+                  <Stack direction="row" spacing={0.5} justifyContent="center">
+                    <ValueCapsule isOT sx={{ minWidth: '28px', fontSize: '0.78rem' }}>{tsOtEve ?? '-'}</ValueCapsule>
+                    <ValueCapsule isOT highlight={tsOtEve !== scanOtEve && tsOtEve != null && scanOtEve != null}
+                      sx={{ minWidth: '28px', fontSize: '0.78rem' }}>{scanOtEve ?? '-'}</ValueCapsule>
+                  </Stack>
                 </TableCell>
 
                 <TableCell>
