@@ -167,6 +167,21 @@ router.post('/:id/reports', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// GET /api/tasks/:id/reports
+router.get('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const reports = await taskService.getAllDailyReports(id);
+
+    res.status(200).json({
+      success: true,
+      data: reports,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/tasks/:id/reports/:date
 router.get('/:id/reports/:date', async (req: Request, res: Response, next: NextFunction) => {
   try {

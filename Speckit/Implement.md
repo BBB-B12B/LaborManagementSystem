@@ -265,11 +265,11 @@ markdown
 
 | มิติการทำงาน | รายละเอียด |
 | :--- | :--- |
-| **User Action Path** | `Workspace Page` -> เปิดหน้าจอ / เปลี่ยน Tab (`All Tasks`, `This Week`, `Today`, `Backlog`) |
+| **User Action Path** | `Workspace Page` -> เปิดหน้าจอ / เปลี่ยน Tab (`All Tasks`, `This Month`, `This Week`, `Today`) |
 | **API Contract** | `GET /api/tasks?projectId={id}` <br> Response: Array ของ Task |
 | **Security (T-811)** | **Authentication Mandatory**: ต้องใช้ `authenticate` middleware เพื่อยืนยันตัวตนก่อนเข้าถึงข้อมูล (ห้ามใช้ fallback 'system') |
 | **Backend Logic (T-810)** | **TaskService.getTasks**: <br> 1. กรอง `isActive` และ `projectId` ใน Memory ชั่วคราว (เพื่อเลี่ยง Error: FAILED_PRECONDITION กรณีที่ยังไม่ได้สร้าง Index) <br> 2. กรองข้อมูลตามผู้ที่ได้รับมอบหมาย (Assignee) |
-| **Client Logic (T-812)** | **Active Tab Filter**: <br> เมื่อได้รับ tasks มาแล้ว จะนำมาเข้ากระบวนการกรองอีกชั้นตาม `activeTab` ก่อนแสดงผลใน Column: <br> - **Today**: กรอง `dueDate` ที่ตรงกับวันปัจจุบัน <br> - **This Week**: กรอง `dueDate` ที่อยู่ในสัปดาห์นี้ <br> - **Backlog**: กรองงานที่ไม่มี Assignee หรือผ่าน due date มาแล้ว <br> - **All Tasks**: ข้ามการกรองวันที่ |
+| **Client Logic (T-812)** | **Active Tab Filter**: <br> เมื่อได้รับ tasks มาแล้ว จะนำมาเข้ากระบวนการกรองอีกชั้นตาม `activeTab` ก่อนแสดงผลใน Column: <br> - **Today**: กรอง `dueDate` ที่ตรงกับวันปัจจุบัน <br> - **This Week**: กรอง `dueDate` ที่อยู่ในสัปดาห์นี้ <br> - **This Month**: กรอง `dueDate` ที่อยู่ในเดือนนี้ <br> - **All Tasks**: ข้ามการกรองวันที่ |
 
 ---
 
@@ -318,6 +318,15 @@ markdown
 | **API Contract** | `POST /api/tasks/:id/reject` <br> Payload: `{ revisionName, assignees }` |
 | **Database Schema** | **1. Task Document (Container):** ไม่ถูกสร้างใหม่ แต่เก็บ `assignees` สะสมทุกคนจากทุก Rev ไว้เพื่อใช้ Filter และเก็บ `currentRevision: "rev0X"` ชี้ไปยังเวอร์ชั่นล่าสุด <br> **2. Revision Document (Subcollection):** ซ้อนอยู่ใต้ `revisions/{revId}` เก็บประวัติของรอบนั้นๆ (`revisionName`, `assignees` เฉพาะรอบนั้น, `createdAt`) |
 | **Backend Logic (T-852/T-853)** | 1. **Task Model Setup:** `Task` model has `currentRevision` defaulting to `rev00`. <br> 2. **Create Trigger:** In `TaskService.createTask`, `revisions/rev00` is generated atomically. <br> 3. **Reject Action (`POST /api/tasks/:id/reject`):** Increment `currentRevision` (e.g., `rev01`), union `assignees` to main task, reset `dailyProgress = 0`. <br> 4. **Daily Report Dynamic Routing:** Change daily report write/read paths to `revisions/{currentRevision}/dailyReports/{dateStr}`. |
+
+### 🛣️ [F-018] Task Daily Report Calendar & Unlock Access — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> คลิกที่แผ่นการ์ดงาน (Task Card) -> แสดงหน้าจอ `TaskDailyReportModal` (ปฏิทิน) -> เลือกวันที่ย้อนหลัง (จุดสีแดง) -> กดปุ่ม `ปลดล็อคสิทธิ์` -> เลือก `1 วัน` หรือ `7 วัน` |
+| **UI/UX Component** | ใช้ `@mui/x-date-pickers/DateCalendar` โดย Customize วันที่ไม่มีข้อมูล (และเป็นอดีต) ด้วยจุดสีแดง (`Badge` error) |
+| **Lock Logic** | - **Lock 3 วัน:** ถ้าย้อนหลังเกิน 3 วันและยังไม่มีข้อมูล จะไม่สามารถลง Daily Report ได้ (ต้องกดปลดล็อคก่อน) <br> - **Wage Period Lock:** หากเลือกวันที่ซึ่งตรงกับรอบปิดงวดค่าแรง (อิงตาม Mock Logic) ปุ่มปลดล็อคจะถูก Disable และมี Tooltip/Message แจ้งว่ารอบบิลถูกปิดแล้ว เพื่อป้องกันความขัดแย้งของข้อมูลค่าแรง |
+| **Unlock Mechanism** | ปัจจุบันเป็น Mock State ใน UI `isUnlocked`: <br> - การปลดล็อคเป็นการขยายขอบเขตเวลา (เช่น +1 วัน หรือ +7 วัน) ชั่วคราวให้ผู้ใช้สามารถย้อนกลับไปทำ Daily Report ของวันนั้นๆ ได้ |
 
 ---
 

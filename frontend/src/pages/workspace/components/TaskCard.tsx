@@ -19,26 +19,16 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { LinearProgress } from '@mui/material';
-
-export interface Task {
-  id: string;
-  taskId: string;
-  taskName: string;
-  description?: string;
-  dueDate: string;
-  assignees: { name: string; avatarUrl?: string }[];
-  attachmentsCount: number;
-  status: 'upcoming' | 'in-progress' | 'completed';
-  dailyProgress: number;
-}
+import type { Task } from '@/services/taskService';
 
 interface TaskCardProps {
   task: Task;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
+  onClick?: (task: Task) => void;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick }) => {
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -69,6 +59,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) =>
   return (
     <Paper
       elevation={0}
+      onClick={() => onClick && onClick(task)}
       sx={{
         p: 2.5,
         mb: 2,
@@ -81,7 +72,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) =>
           transform: 'translateY(-2px)',
           boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
         },
-        cursor: 'grab',
+        cursor: onClick ? 'pointer' : 'grab',
       }}
     >
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>

@@ -77,6 +77,7 @@ export interface DailyReportImportResult {
 }
 
 class DailyReportService {
+  private reportsCache: Record<string, any[]> = {};
 
   /**
    * Get Report by Project & Date
@@ -411,6 +412,18 @@ class DailyReportService {
   async getTaskReport(taskId: string, dateStr: string): Promise<any> {
     const { data: response } = await apiClient.get(`/tasks/${taskId}/reports/${dateStr}`);
     return response.data;
+  }
+
+  /**
+   * Fetch all Daily Reports for a specific Task (with cache support)
+   */
+  async getAllTaskReports(taskId: string, forceRefresh: boolean = false): Promise<any[]> {
+    if (!forceRefresh && this.reportsCache[taskId]) {
+      return this.reportsCache[taskId];
+    }
+    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports`);
+    this.reportsCache[taskId] = response.data || [];
+    return this.reportsCache[taskId];
   }
 
   /**

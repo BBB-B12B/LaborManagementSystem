@@ -84,4 +84,11 @@ export const taskService = {
   deleteTask: async (id: string): Promise<void> => {
     await api.delete(`/tasks/${id}`);
   },
+
+  /**
+   * Reject a task (creates a new revision and assigns back)
+   */
+  rejectTask: async (id: string, revisionName: string, assignees: TaskAssignee[]): Promise<void> => {
+    await api.post(`/tasks/${id}/reject`, { revisionName, assignees });
+  },
 };

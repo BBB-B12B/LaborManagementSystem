@@ -20,6 +20,7 @@ import Head from 'next/head';
 import Layout from '@/components/layout/Layout';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
+import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { taskService, type Task } from '@/services/taskService';
 
 const COLUMNS = [
@@ -36,6 +37,8 @@ export default function WorkspacePage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -81,6 +84,11 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleTaskClick = (task: Task) => {
+    setSelectedTaskForReport(task);
+    setIsReportModalOpen(true);
+  };
+
   return (
     <Layout disablePadding>
       <Head>
@@ -110,7 +118,7 @@ export default function WorkspacePage() {
                 borderRadius: '999px',
               }}
             >
-              {['All Tasks', 'This Week', 'Today', 'Backlog'].map((tab) => (
+              {['All Tasks', 'This Month', 'This Week', 'Today'].map((tab) => (
                 <Button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -193,6 +201,10 @@ export default function WorkspacePage() {
               const endOfWeek = new Date(startOfWeek);
               endOfWeek.setDate(startOfWeek.getDate() + 6);
 
+              const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+              const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+              endOfMonth.setHours(23, 59, 59, 999);
+
               return tasks.filter((task) => {
                 if (activeTab === 'All Tasks') return true;
 
@@ -207,9 +219,8 @@ export default function WorkspacePage() {
                   return dueDate >= startOfWeek && dueDate <= endOfWeek;
                 }
 
-                if (activeTab === 'Backlog') {
-                  // Backlog: ไม่มีคนรับผิดชอบ หรือ เลยกำหนดแล้วแต่ยังไม่เสร็จ
-                  return task.assignees.length === 0 || (dueDate < today && task.status !== 'completed');
+                if (activeTab === 'This Month') {
+                  return dueDate >= startOfMonth && dueDate <= endOfMonth;
                 }
 
                 return true;
@@ -289,6 +300,7 @@ export default function WorkspacePage() {
                         task={task} 
                         onEdit={handleEdit} 
                         onDelete={handleDeleteClick}
+                        onClick={handleTaskClick}
                       />
                     ))
                   ) : (
@@ -323,6 +335,12 @@ export default function WorkspacePage() {
         }} 
         onSuccess={handleModalSuccess} 
         task={editingTask}
+      />
+
+      <TaskDailyReportModal 
+        open={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        task={selectedTaskForReport}
       />
 
       {/* Delete Confirmation Dialog */}

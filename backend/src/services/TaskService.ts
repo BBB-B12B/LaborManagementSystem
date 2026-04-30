@@ -1,6 +1,8 @@
 import { db } from '../config/firebase';
+import { afterSaleDb } from '../config/firebaseProjectB';
 import { Task, CreateTaskInput, UpdateTaskInput, taskConverter } from '../models/Task';
 import { AppError } from '../api/middleware/errorHandler';
+import axios from 'axios';
 
 const WORK_ORDERS_COLLECTION = 'workOrders';
 const PROJECTS_COLLECTION = 'Project';
@@ -12,21 +14,22 @@ export class TaskService {
   async createTask(input: CreateTaskInput, createdBy: string): Promise<Task> {
     const projectRef = db.collection(PROJECTS_COLLECTION).doc(input.projectId);
 
-    return await db.runTransaction(async (transaction) => {
-      // --- 1. ALL READS ---
-      
-      // 1.1 ตรวจสอบ Project
-      const projectDoc = await transaction.get(projectRef);
-      if (!projectDoc.exists) {
-        throw new AppError('ไม่พบโครงการที่ระบุ', 404);
-      }
-      const projectData = projectDoc.data();
-      const projectCode = projectData?.projectCode || projectData?.code || 'XX';
-      const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
+    // --- 1. READ Project OUTSIDE TRANSACTION ---
+    // (Because Project is in Labor DB, and we cannot run cross-project transactions)
+    const projectDoc = await projectRef.get();
+    if (!projectDoc.exists) {
+      throw new AppError('ไม่พบโครงการที่ระบุ', 404);
+    }
+    const projectData = projectDoc.data();
+    const projectCode = projectData?.projectCode || projectData?.code || 'XX';
+    const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
 
-      // 1.2 ระดับ WorkOrder: Query หาซ้ำ
+    return await afterSaleDb.runTransaction(async (transaction) => {
+      // --- 2. ALL READS IN AFTER-SALE DB ---
+      
+      // 2.1 ระดับ WorkOrder: Query หาซ้ำ
       const woQuery = await transaction.get(
-        db.collection(WORK_ORDERS_COLLECTION)
+        afterSaleDb.collection(WORK_ORDERS_COLLECTION)
           .where('projectId', '==', input.projectId)
           .where('workOrderCode', '==', input.workOrderCode || 'GEN')
           .limit(1)
@@ -37,7 +40,7 @@ export class TaskService {
       let woNextRun = 1;
       const currentYear = new Date().getFullYear();
       const woCounterId = `wo_counter_${projectCode}_${currentYear}`;
-      const woCounterRef = db.collection('system_counters').doc(woCounterId);
+      const woCounterRef = afterSaleDb.collection('system_counters').doc(woCounterId);
 
       if (!woQuery.empty) {
         woId = woQuery.docs[0].id;
@@ -49,7 +52,7 @@ export class TaskService {
         }
         woId = `${projectCode}-${currentYear}-${woNextRun.toString().padStart(4, '0')}-${input.workOrderCode || 'GEN'}`;
       }
-      const workOrderRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId);
+      const workOrderRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId);
 
       // 1.3 ระดับ Category: Query หาซ้ำตามชื่อ
       const catQuery = await transaction.get(
@@ -62,7 +65,7 @@ export class TaskService {
       let isNewCat = false;
       let catNextRun = 1;
       const catCounterId = `cat_counter_${woId}`;
-      const catCounterRef = db.collection('system_counters').doc(catCounterId);
+      const catCounterRef = afterSaleDb.collection('system_counters').doc(catCounterId);
 
       if (!catQuery.empty) {
         catId = catQuery.docs[0].id;
@@ -88,7 +91,7 @@ export class TaskService {
       let existingTaskData: any = null;
       let taskNextRun = 1;
       const taskCounterId = `task_${woId}`;
-      const taskCounterRef = db.collection('system_counters').doc(taskCounterId);
+      const taskCounterRef = afterSaleDb.collection('system_counters').doc(taskCounterId);
 
       if (!taskQuery.empty) {
         taskId = taskQuery.docs[0].id;
@@ -189,14 +192,14 @@ export class TaskService {
 
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
     } else {
-      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) throw new AppError('Task not found', 404);
       taskRef = querySnapshot.docs[0].ref;
     }
 
-    await db.runTransaction(async (transaction) => {
+    await afterSaleDb.runTransaction(async (transaction) => {
       // 1. อ่านข้อมูล Task ปัจจุบัน
       const doc = await transaction.get(taskRef);
       if (!doc.exists) throw new AppError('Task not found', 404);
@@ -253,7 +256,7 @@ export class TaskService {
     // [TEMPORARY REVERT - Phase 1: Performance Fix] 
     // ใช้การกรองใน Memory ชั่วคราวเพื่อเลี่ยง Error 500 (FAILED_PRECONDITION) เนื่องจากยังไม่ได้สร้าง Index ใน Firebase Console
     // สำหรับระบบที่มีข้อมูลเยอะ ควรไปสร้าง Index ใน Firebase Console แล้วเปลี่ยนกลับไปใช้ .where()
-    const snapshot = await db.collectionGroup('tasks').withConverter(taskConverter).get();
+    const snapshot = await afterSaleDb.collectionGroup('tasks').withConverter(taskConverter).get();
     let tasks = snapshot.docs.map(doc => doc.data() as Task);
     
     // กรอง isActive ใน Memory
@@ -288,9 +291,9 @@ export class TaskService {
 
     if (id.includes('__')) {
       [oldWoId, oldCatId, oldTaskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories').doc(oldCatId).collection('tasks').doc(oldTaskId);
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories').doc(oldCatId).collection('tasks').doc(oldTaskId);
     } else {
-      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) throw new AppError('Task not found', 404);
       taskRef = querySnapshot.docs[0].ref;
     }
@@ -320,7 +323,7 @@ export class TaskService {
       
       // เราจะทำการ Re-set ข้อมูลใน Path ใหม่ และลบอันเก่า (หรือ Mark isActive: false ในที่เก่า)
       // แต่เพื่อรักษา Hierarchy เราจะย้าย Document ครับ
-      const newCategoryRef = db.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
+      const newCategoryRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
       
       // ค้นหาว่ามีหมวดหมู่นี้อยู่แล้วหรือยัง
       const catQuery = await newCategoryRef.where('catName', '==', input.categoryName).limit(1).get();
@@ -330,7 +333,7 @@ export class TaskService {
         targetCatId = catQuery.docs[0].id;
       } else {
         // สร้างหมวดหมู่ใหม่
-        const catCounterRef = db.collection('system_counters').doc(newCatId);
+        const catCounterRef = afterSaleDb.collection('system_counters').doc(newCatId);
         const catCounterDoc = await catCounterRef.get();
         const nextCatRun = (catCounterDoc.data()?.count || 0) + 1;
         targetCatId = `CAT-${nextCatRun.toString().padStart(4, '0')}`;
@@ -370,9 +373,9 @@ export class TaskService {
     let taskRef;
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
     } else {
-      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) throw new AppError('Task not found', 404);
       taskRef = querySnapshot.docs[0].ref;
     }
@@ -389,44 +392,10 @@ export class TaskService {
 
   /**
    * บันทึกประวัติการแก้ไข (Audit Trail)
+   * ปิดการใช้งานชั่วคราว: ปัจจุบันระบบให้ใช้ editHistory เฉพาะใน DailyReport เท่านั้น
    */
-  private recordHistory = async (taskRef: FirebaseFirestore.DocumentReference, type: string, oldData: any, newData: any, userId: string) => {
-    try {
-    const historyRef = taskRef.collection('editHistory').doc();
-    
-    // กรองเฉพาะฟิลด์ที่เปลี่ยนจริง (ใช้การเทียบค่าที่ปลอดภัยขึ้น)
-    const changedFields = Object.keys(newData).filter(key => {
-      if (key === 'updatedAt' || key === 'updatedBy') return false;
-      
-      const oldVal = oldData[key];
-      const newVal = newData[key];
-
-      // เทียบ Date
-      if (oldVal instanceof Date && newVal instanceof Date) {
-        return oldVal.getTime() !== newVal.getTime();
-      }
-
-      // เทียบ Firestore Timestamp กับ Date
-      if (oldVal && typeof oldVal.toDate === 'function' && newVal instanceof Date) {
-        return oldVal.toDate().getTime() !== newVal.getTime();
-      }
-
-      return JSON.stringify(oldVal) !== JSON.stringify(newVal);
-    });
-
-    if (changedFields.length === 0 && type === 'update') return;
-
-    await historyRef.set({
-      changeType: type,
-      changedFields,
-      oldValues: changedFields.reduce((obj: any, key) => ({ ...obj, [key]: oldData[key] ?? null }), {}),
-      newValues: changedFields.reduce((obj: any, key) => ({ ...obj, [key]: newData[key] ?? null }), {}),
-      createdAt: new Date(),
-      createdBy: userId,
-    });
-    } catch (err: any) {
-      console.error('[TaskService] Failed to record history:', err);
-    }
+  private recordHistory = async (_taskRef: FirebaseFirestore.DocumentReference, _type: string, _oldData: any, _newData: any, _userId: string) => {
+    // No-op
   };
 
   /**
@@ -437,9 +406,9 @@ export class TaskService {
 
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
     } else {
-      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       
       if (querySnapshot.empty) {
         throw new AppError('Task not found', 404);
@@ -465,9 +434,9 @@ export class TaskService {
     let taskRef: FirebaseFirestore.DocumentReference;
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
     } else {
-      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) throw new AppError('Task not found', 404);
       taskRef = querySnapshot.docs[0].ref;
     }
@@ -486,7 +455,7 @@ export class TaskService {
     // บันทึกรายงานภายใต้ Revision
     const dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
 
-    await db.runTransaction(async (transaction) => {
+    await afterSaleDb.runTransaction(async (transaction) => {
       // 1. ALL READS
       const taskDoc = await transaction.get(taskRef);
       if (!taskDoc.exists) throw new AppError('Task not found', 404);
@@ -555,6 +524,27 @@ export class TaskService {
         updatedAt: now
       }, updatedBy);
     });
+
+    // -------------------------------------------------------------
+    // Trigger After-Sale System Webhook (F-014 Sync)
+    // -------------------------------------------------------------
+    try {
+      const pathSegments = taskRef.path.split('/');
+      const woId = pathSegments[1];
+      const catId = pathSegments[3];
+      const tId = pathSegments[5];
+
+      await axios.post('https://asia-southeast1-after-sale-system.cloudfunctions.net/syncDailyReport', {
+        workOrderId: woId,
+        categoryId: catId,
+        taskId: tId,
+        revisionId: currentRev, // ส่ง Revision ให้ฝั่งโน้นด้วย เพราะ Path เปลี่ยนไปแล้ว
+        reportDate: dateStr
+      });
+      console.log(`[TaskService] Triggered After-Sale Sync Successfully for ${dateStr} (Rev: ${currentRev})!`);
+    } catch (error: any) {
+      console.error("[TaskService] Failed to trigger After-Sale sync:", error.message);
+    }
   }
 
   /**
@@ -564,9 +554,9 @@ export class TaskService {
     let taskRef: FirebaseFirestore.DocumentReference;
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
-      taskRef = db.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
     } else {
-      const querySnapshot = await db.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) return null;
       taskRef = querySnapshot.docs[0].ref;
     }
@@ -579,6 +569,29 @@ export class TaskService {
     if (!reportDoc.exists) return null;
 
     return reportDoc.data();
+  }
+  /**
+   * ดึงข้อมูลรายงานประจำวันทั้งหมดของ Task
+   */
+  async getAllDailyReports(id: string): Promise<any[]> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) return [];
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    const taskDocForRev = await taskRef.get();
+    if (!taskDocForRev.exists) return [];
+    const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
+
+    const reportsSnapshot = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').get();
+    if (reportsSnapshot.empty) return [];
+
+    return reportsSnapshot.docs.map(doc => doc.data());
   }
 }
 
