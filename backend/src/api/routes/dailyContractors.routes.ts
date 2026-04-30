@@ -15,6 +15,7 @@ import { logger } from '../../utils/logger';
 import { authenticate, type AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
 import * as XLSX from 'xlsx';
+import { getAllProjects } from '../../services/projectService';
 
 const router = Router();
 router.use(authenticate);
@@ -24,7 +25,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-const normalizeKey = (value: string): string => value.trim().toLowerCase();
+const normalizeKey = (value: string): string => value.replace(/\s+/g, '').toLowerCase();
 
 function parseCsv(content: string): string[][] {
   const rows: string[][] = [];
@@ -194,10 +195,10 @@ router.get(
           page,
           pageSize,
         });
-        contractors = result.map((dc) => dailyContractorService.toDTO(dc));
-        total = contractors.length;
-        page = 1;
-        pageSize = contractors.length;
+        contractors = result.items.map((dc) => dailyContractorService.toDTO(dc));
+        total = result.total;
+        page = result.page;
+        pageSize = result.pageSize;
       } else {
         const result = await dailyContractorService.getAll({
           page,
@@ -313,7 +314,7 @@ router.post(
 
         // 2. Validate Headers (Check for key Thai field)
         headers = rows.length > 0 ? rows[0] : [];
-        const isHeaderValid = (h: string[]) => h.some(col => col.includes('รหัสพนักงาน') || col.includes('ชื่อ'));
+        const isHeaderValid = (h: string[]) => h.some(col => normalizeKey(col).includes('รหัสพนักงาน') || normalizeKey(col).includes('employeename') || normalizeKey(col).includes('ชื่อ'));
 
         if (!isHeaderValid(headers)) {
           console.warn('[CSV Import] UTF-8 headers invalid, trying TIS-620/Windows-874...');
@@ -357,103 +358,178 @@ router.post(
         errors: [] as Array<{ row: number; employeeId?: string; message: string }>,
       };
 
-      for (let index = 0; index < dataRows.length; index += 1) {
-        const row = dataRows[index];
-        const rowNumber = index + 2; // header row is line 1
-        console.log(`[CSV Import] Processing row ${rowNumber}/${dataRows.length + 1}`);
-
-        const employeeId = getValue(row, 'รหัสพนักงาน');
-        const name = getValue(row, 'ชื่อ-นามสกุล');
-        const positionName = getValue(row, 'ตำแหน่ง');
-
-        if (!employeeId || !name || !positionName) {
-          console.warn(`[CSV Import] Row ${rowNumber} missing required fields`);
-          summary.skipped += 1;
-          summary.errors.push({
-            row: rowNumber,
-            employeeId: employeeId || undefined,
-            message: 'ข้อมูลไม่ครบถ้วน (ต้องระบุ รหัสพนักงาน, ชื่อ-นามสกุล, ตำแหน่ง)',
-          });
-          continue;
-        }
-
-        const skillId = positionName;
-
-        const dateOfBirth = toDate(getValue(row, 'วันเกิด (ปปปป-ดด-วว)'));
-        const projectIdsRaw = getValue(row, 'รหัสโครงการ (คั่นด้วยคอมมา)');
-        const startDate = toDate(getValue(row, 'วันเริ่มงาน (ปปปป-ดด-วว)'));
-        const isActive = toBoolean(getValue(row, 'สถานะใช้งาน (TRUE/FALSE)'));
-
-        const dailyWageRate = toNumber(getValue(row, 'ค่าแรงต่อวัน (บาท)'));
-        const professionalRate = toNumber(getValue(row, 'ค่าช่าง/ค่าฝีมือต่อวัน (บาท)'));
-        const phoneAllowance = toNumber(getValue(row, 'ค่าโทรศัพท์ต่องวด (บาท)'));
-        const mouDeductionRate = toNumber(getValue(row, 'เปอร์เซ็นต์หัก MOU (%)'));
-        const otherIncome = toNumber(getValue(row, 'รายได้อื่นๆ ต่องวด (บาท)'));
+      // --- Fetch Projects for Mapping ---
+      const allProjects = await getAllProjects();
+      // Create lookup function
+      const resolveProjectLocationId = (rawName: string): string | null => {
+        if (!rawName) return null;
+        const trimmed = rawName.trim().toLowerCase();
         
-        const accommodationCost = toNumber(getValue(row, 'ค่าที่พักต่องวด (บาท)'));
-        const followerCount = toInteger(getValue(row, 'จำนวนผู้ติดตาม'));
-        const refrigeratorCost = toNumber(getValue(row, 'ค่าตู้เย็นต่องวด (บาท)'));
-        const soundSystemCost = toNumber(getValue(row, 'ค่าเครื่องเสียงต่องวด (บาท)'));
-        const tvCost = toNumber(getValue(row, 'ค่าทีวีต่องวด (บาท)'));
-        const washingMachineCost = toNumber(getValue(row, 'ค่าเครื่องซักผ้าต่องวด (บาท)'));
-        const portableAcCost = toNumber(getValue(row, 'ค่าแอร์เคลื่อนที่ต่องวด (บาท)'));
-        const otherDeduction = toNumber(getValue(row, 'รายหักอื่นๆ ต่องวด (บาท)'));
-
-        try {
-          console.time(`[CSV Import] Row ${rowNumber} DB Ops`);
-          const contractor = await dailyContractorService.createDC(
-            {
-              employeeId,
-              name,
-              skillId,
-              dateOfBirth,
-              projectLocationId: toProjectId(projectIdsRaw),
-              isActive,
-              startDate,
-            },
-            'import-csv'
+        // Try to find exact match first
+        let found = allProjects.find(p => 
+          (p.department || '').toLowerCase() === trimmed ||
+          (p.projectName || '').toLowerCase() === trimmed ||
+          (p.code || '').toLowerCase() === trimmed ||
+          (p.projectCode || '').toLowerCase() === trimmed
+        );
+        
+        // Try partial match if exact match fails
+        if (!found) {
+           found = allProjects.find(p => 
+            (p.department || '').toLowerCase().includes(trimmed) ||
+            (p.projectName || '').toLowerCase().includes(trimmed)
           );
-
-          await dailyContractorService.upsertCompensationDetails(
-            contractor.id,
-            {
-              income: {
-                dailyWageRate,
-                professionalRate,
-                phoneAllowancePerPeriod: phoneAllowance,
-                mouDeductionRate,
-                otherIncome,
-              },
-              expense: {
-                accommodationCostPerPeriod: accommodationCost,
-                followerCount,
-                refrigeratorCostPerPeriod: refrigeratorCost,
-                soundSystemCostPerPeriod: soundSystemCost,
-                tvCostPerPeriod: tvCost,
-                washingMachineCostPerPeriod: washingMachineCost,
-                portableAcCostPerPeriod: portableAcCost,
-                otherDeduction,
-              },
-            },
-            'import-csv'
-          );
-          console.timeEnd(`[CSV Import] Row ${rowNumber} DB Ops`);
-
-          summary.imported += 1;
-        } catch (error: any) {
-          console.error(`[CSV Import] Row ${rowNumber} Error:`, error);
-          summary.skipped += 1;
-          summary.errors.push({
-            row: rowNumber,
-            employeeId,
-            message: error.message || 'บันทึกข้อมูลไม่สำเร็จ',
-          });
-          logger.error('Failed to import daily contractor row', {
-            rowNumber,
-            employeeId,
-            error: error?.message,
-          });
         }
+        
+        return found ? found.id : null;
+      };
+
+      const BATCH_SIZE = 15;
+      for (let i = 0; i < dataRows.length; i += BATCH_SIZE) {
+        const batch = dataRows.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (row, idx) => {
+          const rowNumber = i + idx + 2; // header row is line 1
+          console.log(`[CSV Import] Processing row ${rowNumber}/${dataRows.length + 1}`);
+
+          const employeeId = getValue(row, 'รหัสพนักงาน');
+          const name = getValue(row, 'EmployeeName') || getValue(row, 'ชื่อ-นามสกุล');
+          const positionName = getValue(row, 'ตำแหน่ง');
+
+          if (!employeeId || !name || !positionName) {
+            console.warn(`[CSV Import] Row ${rowNumber} missing required fields`);
+            summary.skipped += 1;
+            summary.errors.push({
+              row: rowNumber,
+              employeeId: employeeId || undefined,
+              message: 'ข้อมูลไม่ครบถ้วน (ต้องระบุ รหัสพนักงาน, EmployeeName/ชื่อ-นามสกุล, ตำแหน่ง)',
+            });
+            return; // equivalent to continue in map
+          }
+
+          const skillId = positionName;
+
+          const dateOfBirth = toDate(getValue(row, 'วันเกิด(ปปปป-ดด-วว)'));
+          const projectIdsRaw = getValue(row, 'หน่วยงาน') || getValue(row, 'รหัสโครงการ(คั่นด้วยคอมมา)');
+          let mappedProjectLocationId = '';
+          if (projectIdsRaw) {
+            const rawId = toProjectId(projectIdsRaw);
+            const resolvedId = resolveProjectLocationId(rawId);
+            if (resolvedId) {
+              mappedProjectLocationId = resolvedId;
+            } else {
+               console.warn(`[CSV Import] Row ${rowNumber} project not found: ${rawId}`);
+               summary.skipped += 1;
+               summary.errors.push({
+                 row: rowNumber,
+                 employeeId: employeeId || undefined,
+                 message: `ไม่พบชื่อโครงการ/หน่วยงาน "${rawId}" ในระบบ กรุณาตรวจสอบและแก้ไขให้ถูกต้อง`,
+               });
+               return; // equivalent to continue
+            }
+          }
+          
+          const startDate = toDate(getValue(row, 'วันเริ่มงาน(ปปปป-ดด-วว)'));
+          const isActive = toBoolean(getValue(row, 'สถานะใช้งาน(TRUE/FALSE)'));
+
+          const dailyWageRate = toNumber(getValue(row, 'ค่าแรง/วัน') || getValue(row, 'ค่าแรงต่อวัน(บาท)'));
+          const professionalRate = toNumber(getValue(row, 'ค่าวิชาชีพ/วัน') || getValue(row, 'ค่าช่าง/ค่าฝีมือต่อวัน(บาท)'));
+          const phoneAllowance = toNumber(getValue(row, 'ค่าโทรศัพท์DC') || getValue(row, 'ค่าโทรศัพท์ต่องวด(บาท)'));
+          const mouDeductionRate = toNumber(getValue(row, 'เปอร์เซ็นต์หักMOU(%)'));
+          const allowance = toNumber(getValue(row, 'เบี้ยเลี้ยง'));
+          const otherIncome = toNumber(getValue(row, 'รายได้อื่นๆต่องวด(บาท)'));
+          
+          const accommodationCost = toNumber(getValue(row, 'ค่าห้องพัก175บาท/งวด/คน') || getValue(row, 'ค่าที่พักต่องวด(บาท)'));
+          const followerCount = toInteger(getValue(row, 'จำนวนคนผู้ติดตาม') || getValue(row, 'จำนวนผู้ติดตาม'));
+          const refrigeratorCost = toNumber(getValue(row, 'หักค่าตู้เย็น125บาท/งวด') || getValue(row, 'ค่าตู้เย็นต่องวด(บาท)'));
+          const soundSystemCost = toNumber(getValue(row, 'หักค่าเครื่องเสียง250บาท/งวด') || getValue(row, 'ค่าเครื่องเสียงต่องวด(บาท)'));
+          const tvCost = toNumber(getValue(row, 'หักโทรทัศน์(TV)100บาท/งวด') || getValue(row, 'ค่าทีวีต่องวด(บาท)'));
+          const washingMachineCost = toNumber(getValue(row, 'หักเครื่องซักผ้า250บาท/งวด') || getValue(row, 'ค่าเครื่องซักผ้าต่องวด(บาท)'));
+          const portableAcCost = toNumber(getValue(row, 'หักค่าเครื่องปรับอากาศเคลื่อนที่200บาท/งวด') || getValue(row, 'ค่าแอร์เคลื่อนที่ต่องวด(บาท)'));
+          const otherDeduction = toNumber(getValue(row, 'รายหักอื่นๆต่องวด(บาท)') || getValue(row, 'รายหักอื่นๆ'));
+
+          try {
+            console.time(`[CSV Import] Row ${rowNumber} DB Ops`);
+            let contractorId = '';
+            
+            // Check if DC exists
+            const existingDC = await dailyContractorService.findByEmployeeId(employeeId);
+            
+            if (existingDC) {
+              // Update existing DC
+              await dailyContractorService.updateDC(
+                existingDC.id,
+                {
+                  employeeId,
+                  name,
+                  skillId,
+                  dateOfBirth,
+                  projectLocationId: mappedProjectLocationId,
+                  isActive,
+                  startDate,
+                },
+                'import-csv'
+              );
+              contractorId = existingDC.id;
+            } else {
+              // Create new DC
+              const contractor = await dailyContractorService.createDC(
+                {
+                  employeeId,
+                  name,
+                  skillId,
+                  dateOfBirth,
+                  projectLocationId: mappedProjectLocationId,
+                  isActive,
+                  startDate,
+                },
+                'import-csv'
+              );
+              contractorId = contractor.id;
+            }
+
+            // Upsert compensation details for both cases
+            await dailyContractorService.upsertCompensationDetails(
+              contractorId,
+              {
+                income: {
+                  dailyWageRate,
+                  professionalRate,
+                  phoneAllowancePerPeriod: phoneAllowance,
+                  allowance,
+                  mouDeductionRate,
+                  otherIncome,
+                },
+                expense: {
+                  accommodationCostPerPeriod: accommodationCost,
+                  followerCount,
+                  refrigeratorCostPerPeriod: refrigeratorCost,
+                  soundSystemCostPerPeriod: soundSystemCost,
+                  tvCostPerPeriod: tvCost,
+                  washingMachineCostPerPeriod: washingMachineCost,
+                  portableAcCostPerPeriod: portableAcCost,
+                  otherDeduction,
+                },
+              },
+              'import-csv'
+            );
+            console.timeEnd(`[CSV Import] Row ${rowNumber} DB Ops`);
+
+            summary.imported += 1;
+          } catch (error: any) {
+            console.error(`[CSV Import] Row ${rowNumber} Error:`, error);
+            summary.skipped += 1;
+            summary.errors.push({
+              row: rowNumber,
+              employeeId,
+              message: error.message || 'บันทึกข้อมูลไม่สำเร็จ',
+            });
+            logger.error('Failed to import daily contractor row', {
+              rowNumber,
+              employeeId,
+              error: error?.message,
+            });
+          }
+        }));
       }
 
       res.json({
@@ -513,6 +589,7 @@ router.get('/:id/compensation', async (req: Request, res: Response) => {
             otHourlyRate: parseFloat(((income.dailyWageRate / 8) * 1.5).toFixed(2)),
             professionalRate: income.professionalRate,
             phoneAllowancePerPeriod: income.phoneAllowance,
+            allowance: income.allowance,
             mouDeductionRate: income.mouDeductionRate,
             otherIncome: income.otherIncome,
             effectiveDate: income.effectiveDate,
@@ -551,6 +628,7 @@ router.put(
     body('income.hourlyRate').optional().isFloat({ min: 0 }),
     body('income.professionalRate').optional().isFloat({ min: 0 }),
     body('income.phoneAllowancePerPeriod').optional().isFloat({ min: 0 }),
+    body('income.allowance').optional().isFloat({ min: 0 }),
     body('expense.accommodationCostPerPeriod').optional().isFloat({ min: 0 }),
     body('expense.followerCount').optional().isInt({ min: 0 }),
     body('expense.refrigeratorCostPerPeriod').optional().isFloat({ min: 0 }),
@@ -572,6 +650,7 @@ router.put(
           dailyWageRate: Number(req.body.income.dailyWageRate ?? 0),
           professionalRate: Number(req.body.income.professionalRate ?? 0),
           phoneAllowancePerPeriod: Number(req.body.income.phoneAllowancePerPeriod ?? 0),
+          allowance: Number(req.body.income.allowance ?? 0),
           mouDeductionRate: Number(req.body.income.mouDeductionRate ?? 0),
           otherIncome: Number(req.body.income.otherIncome ?? 0),
         }
@@ -596,6 +675,7 @@ router.put(
           portableAcCostPerPeriod: Number(
             req.body.expense.portableAcCostPerPeriod ?? 0
           ),
+          otherDeduction: Number(req.body.expense.otherDeduction ?? 0),
         }
         : undefined;
 
@@ -617,6 +697,7 @@ router.put(
               otHourlyRate: parseFloat(((income.dailyWageRate / 8) * 1.5).toFixed(2)),
               professionalRate: income.professionalRate,
               phoneAllowancePerPeriod: income.phoneAllowance,
+              allowance: income.allowance,
               mouDeductionRate: income.mouDeductionRate,
               otherIncome: income.otherIncome,
               effectiveDate: income.effectiveDate,
@@ -680,6 +761,7 @@ router.post(
     body('dailyWageRate').optional().isFloat({ min: 0 }),
     body('professionalRate').optional().isFloat({ min: 0 }),
     body('phoneAllowance').optional().isFloat({ min: 0 }),
+    body('allowance').optional().isFloat({ min: 0 }),
     body('housingFee').optional().isFloat({ min: 0 }),
     body('followerCount').optional().isInt({ min: 0 }),
     body('refrigeratorFee').optional().isFloat({ min: 0 }),
@@ -726,6 +808,7 @@ router.post(
             dailyWageRate: dailyWageRate,
             professionalRate: Number(req.body.professionalRate ?? 0),
             phoneAllowancePerPeriod: Number(req.body.phoneAllowance ?? 0),
+            allowance: Number(req.body.allowance ?? 0),
             mouDeductionRate: Number(req.body.mouDeductionRate ?? 0),
             otherIncome: Number(req.body.otherIncome ?? 0),
           },
@@ -737,6 +820,7 @@ router.post(
             tvCostPerPeriod: Number(req.body.tvFee ?? 0),
             washingMachineCostPerPeriod: Number(req.body.laundryFee ?? 0),
             portableAcCostPerPeriod: Number(req.body.airConFee ?? 0),
+            otherDeduction: Number(req.body.otherDeduction ?? 0),
           },
         },
         createdBy
@@ -794,6 +878,7 @@ router.put(
     body('dailyWageRate').optional().isFloat({ min: 0 }),
     body('professionalRate').optional().isFloat({ min: 0 }),
     body('phoneAllowance').optional().isFloat({ min: 0 }),
+    body('allowance').optional().isFloat({ min: 0 }),
     body('housingFee').optional().isFloat({ min: 0 }),
     body('followerCount').optional().isInt({ min: 0 }),
     body('refrigeratorFee').optional().isFloat({ min: 0 }),
@@ -859,6 +944,7 @@ router.put(
         if (req.body.dailyWageRate !== undefined) incomePayload.dailyWageRate = Number(req.body.dailyWageRate);
         if (req.body.professionalRate !== undefined) incomePayload.professionalRate = Number(req.body.professionalRate);
         if (req.body.phoneAllowance !== undefined) incomePayload.phoneAllowancePerPeriod = Number(req.body.phoneAllowance);
+        if (req.body.allowance !== undefined) incomePayload.allowance = Number(req.body.allowance);
         if (req.body.mouDeductionRate !== undefined) incomePayload.mouDeductionRate = Number(req.body.mouDeductionRate);
         if (req.body.otherIncome !== undefined) incomePayload.otherIncome = Number(req.body.otherIncome);
 

@@ -206,6 +206,7 @@ export const api = {
   upload: async <T = any>(url: string, formData: FormData): Promise<T> => {
     const response = await apiClient.post<APIResponse<T>>(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 minutes timeout for large file uploads
     });
     if (response.data.success && response.data.data !== undefined) {
       return response.data.data;

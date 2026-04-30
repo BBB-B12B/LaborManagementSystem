@@ -43,7 +43,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webhookTimesheetChanged = exports.onWagePeriodApproved = exports.scheduledAbsenceCheck = exports.onScanDataChanged = void 0;
+exports.webhookTimesheetChanged = exports.onWagePeriodApproved = exports.scheduledAbsenceCheck = exports.onEmployeeChanged = exports.onScanDataChanged = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firebase_functions_1 = require("firebase-functions");
 // ─── Initialize Firebase Admin — Labor Management (default) ─────────────────
@@ -184,8 +184,35 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         tsOtNoon = (timesheet.expectedHours?.otNoon || 0);
         tsOtEvening = (timesheet.expectedHours?.otEvening || 0);
         totalTimesheetHours = tsNormalHours + tsOtMorning + tsOtNoon + tsOtEvening;
-        leaveEntries = timesheet.leave || [];
-        totalLeaveHours = leaveEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+        // Handle legacy 'leave' array if present
+        if (timesheet.leave && Array.isArray(timesheet.leave)) {
+            leaveEntries = timesheet.leave;
+            totalLeaveHours = leaveEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+        }
+        // Handle new leave structure (leaveType / leaveStatus / leaveShifts)
+        else if (timesheet.leaveStatus || timesheet.leaveType) {
+            const isFullDay = timesheet.leaveStatus?.isFullDay;
+            const morningShift = timesheet.leaveShifts?.morning;
+            const afternoonShift = timesheet.leaveShifts?.afternoon;
+            let calculatedHours = 0;
+            if (isFullDay) {
+                calculatedHours = 8;
+            }
+            else {
+                if (morningShift)
+                    calculatedHours += 4;
+                if (afternoonShift)
+                    calculatedHours += 4;
+            }
+            if (calculatedHours > 0) {
+                totalLeaveHours = calculatedHours;
+                leaveEntries.push({
+                    hours: calculatedHours,
+                    attachment: timesheet.medCertFileUrl || '',
+                    type: timesheet.leaveType || 'Unknown'
+                });
+            }
+        }
     }
     const hasTimesheet = timesheetDoc.exists;
     const isLeave = leaveEntries.length > 0 && totalLeaveHours > 0;
@@ -320,8 +347,8 @@ exports.onScanDataChanged = firebase_functions_1.firestore
         console.log(`[onScanDataChanged] ${docId} marked deleted — skip`);
         return null;
     }
-    const employeeNumber = String(data['employeeNumber'] || data['employeeId'] || '');
-    const projectLocationId = String(data['projectLocationId'] || '');
+    const employeeNumber = String(data['employeeNumber'] || data['employeeId'] || '').trim();
+    const projectLocationId = String(data['projectLocationId'] || '').trim();
     // แปลง workDate → YYYY-MM-DD
     let workDateStr = '';
     if (data['scanDate'] && typeof data['scanDate'] === 'string') {
@@ -342,6 +369,52 @@ exports.onScanDataChanged = firebase_functions_1.firestore
     }
     catch (err) {
         console.error(`[onScanDataChanged] Error for ${employeeNumber} on ${workDateStr}:`, err);
+    }
+    return null;
+});
+// ─── onEmployeeChanged ────────────────────────────────────────────────────────
+/**
+ * onEmployeeChanged
+ * Trigger เมื่อมีการเพิ่ม/แก้ไขพนักงาน (dailyContractors)
+ * - ดึง employeeId ที่เปลี่ยนแปลง
+ * - ค้นหา reconciliationRecords ของพนักงานคนที่สถานะ = 'UNREGISTERED_EMPLOYEE'
+ * - สั่งประมวลผลใหม่โดยใช้ข้อมูลจากอดีต (snapshot)
+ */
+exports.onEmployeeChanged = firebase_functions_1.firestore
+    .onDocumentWritten('dailyContractors/{docId}', async (event) => {
+    if (!event.data?.after.exists)
+        return null;
+    const afterData = event.data.after.data();
+    if (!afterData)
+        return null;
+    const employeeId = String(afterData['employeeId'] || event.params['docId'] || '').trim();
+    if (!employeeId)
+        return null;
+    // ค้นหาเรคคอร์ดที่ค้างอยู่ที่สถานะ UNREGISTERED_EMPLOYEE 
+    // ใช้ 'in' query เพื่อเผื่อเคสที่ข้อมูลเก่ามี space ต่อท้ายหลุดเข้ามา
+    const possibleIds = [employeeId, `${employeeId} `];
+    const recordsSnap = await db.collection('reconciliationRecords')
+        .where('employeeId', 'in', possibleIds)
+        .where('status', '==', 'UNREGISTERED_EMPLOYEE')
+        .get();
+    if (recordsSnap.empty)
+        return null;
+    console.log(`[onEmployeeChanged] Found ${recordsSnap.size} UNREGISTERED_EMPLOYEE records for ${employeeId}. Reconciling...`);
+    // วนลูปสั่งประมวลผลใหม่
+    for (const doc of recordsSnap.docs) {
+        const recordData = doc.data();
+        const workDateStr = String(recordData['workDate'] || '');
+        // ดึง projectLocationId จากอดีตที่ติดมากับ record ไม่ดึงจาก profile ปัจจุบัน
+        const projectLocationId = String(recordData['projectLocationId'] || '');
+        if (!workDateStr)
+            continue;
+        try {
+            console.log(`[onEmployeeChanged] Reconciling past record: ${employeeId} on ${workDateStr} (Project: ${projectLocationId})`);
+            await reconcile(employeeId, workDateStr, projectLocationId);
+        }
+        catch (err) {
+            console.error(`[onEmployeeChanged] Failed to reconcile ${employeeId} on ${workDateStr}:`, err);
+        }
     }
     return null;
 });

@@ -15,17 +15,9 @@ import {
   ReconciliationStatus,
   StatusHistoryEntry,
   CreateReconciliationRecordInput,
-  ApproveReconciliationInput,
   generateReconciliationId,
   reconciliationRecordConverter,
-  hadPreviousCorrection,
 } from '../../models/ReconciliationRecord';
-import {
-  ApprovedTimesheet,
-  CreateApprovedTimesheetInput,
-  generateApprovedTimesheetId,
-  approvedTimesheetConverter,
-} from '../../models/ApprovedTimesheet';
 import { ScanEditEntry, generateScanDocId, scanDataConverter } from '../../models/ScanData';
 import {
   projectBDailyReportService,
@@ -37,7 +29,6 @@ import { scanDataService } from '../scanData/ScanDataService';
 // ---------------------------------------------------------------------------
 
 const COLLECTION = 'reconciliationRecords';
-const APPROVED_COLLECTION = 'approvedTimesheets';
 const SCAN_COLLECTION = 'scanData';
 
 // Hour tolerance — ถ้าต่างกันไม่เกินนี้ ถือว่า "ตรงกัน"
@@ -70,10 +61,6 @@ export class ReconciliationService {
 
   private get collection() {
     return this.db.collection(COLLECTION);
-  }
-
-  private get approvedCollection() {
-    return this.db.collection(APPROVED_COLLECTION);
   }
 
   // =========================================================================
@@ -153,11 +140,12 @@ export class ReconciliationService {
     const snap = await ref.get();
     const now = new Date();
 
+    const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
     const classified = this.classify(
       input.dailyReportHours,
       input.scanDataHours,
-      isHoliday,
-      isLeave,
+      input.isHoliday ?? isHoliday,
+      isLeaveCalculated ?? isLeave,
     );
 
     if (!snap.exists) {
@@ -183,11 +171,11 @@ export class ReconciliationService {
       return { id, ...record };
     }
 
-    // อัปเดต — re-classify ถ้าสถานะยังไม่ถูก Approve
+    // อัปเดต — re-classify ถ้างวดงานยังไม่ถูกล็อก
     const existing = reconciliationRecordConverter.fromFirestore(snap);
 
-    // ถ้า Approved แล้ว ไม่ต้อง re-classify
-    if (existing.status === 'APPROVED') {
+    // ถ้างวดงานถูกล็อกแล้ว (isLocked: true) ไม่ต้อง re-classify
+    if (existing.isLocked === true) {
       return existing;
     }
 
@@ -204,21 +192,19 @@ export class ReconciliationService {
       updatedAt: now,
     };
 
-    if (statusChanged) {
-      // ป้องกัน Loop: ถ้าเปลี่ยนเป็น MISSING_SCAN และเคย AWAITING_CORRECTION → เพิ่ม note
-      let loopNote: string | undefined;
-      if (newStatus === 'MISSING_SCAN' && hadPreviousCorrection(existing)) {
-        loopNote =
-          'ระบบ detect การเปลี่ยนสถานะนี้หลังจากมีการแจ้งแก้ไขไปแล้ว ' +
-          'กรุณาตรวจสอบ statusHistory ก่อนดำเนินการ';
-      }
+    if (input.isHoliday !== undefined) updates.isHoliday = input.isHoliday;
+    else if (isHoliday !== undefined) updates.isHoliday = isHoliday;
 
+    if (input.leaveHours !== undefined) updates.leaveHours = input.leaveHours;
+    if (input.leaveEntries !== undefined) updates.leaveEntries = input.leaveEntries;
+
+    if (statusChanged) {
       const newEntry: StatusHistoryEntry = {
         status: newStatus,
         changedAt: now,
         changedBy: 'system',
         reason: 'Re-classify อัตโนมัติหลังได้รับข้อมูลใหม่',
-        note: loopNote || classified.note,
+        note: classified.note,
       };
 
       (updates as any).statusHistory = FieldValue.arrayUnion(
@@ -289,7 +275,8 @@ export class ReconciliationService {
           dailyReportId: `${summary.employeeNumber}_${summary.date}`, // Project B doc id
           scanDataHours: scanEntry?.hours,
           scanDataId: scanEntry?.id,
-        });
+          leaveHours: summary.leaveHours,
+        }, false, summary.isLeave);
       }),
     );
 
@@ -381,100 +368,8 @@ export class ReconciliationService {
   // Admin Actions
   // =========================================================================
 
-  /**
-   * Admin Approve Record → เขียนลง ApprovedTimesheets
-   * ทุกการ Approve ต้องผ่านฟังก์ชันนี้เสมอ
-   */
-  async approveRecord(
-    recordId: string,
-    adminId: string,
-    input: ApproveReconciliationInput,
-  ): Promise<ApprovedTimesheet> {
-    const ref = this.collection.doc(recordId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new Error(`ReconciliationRecord ${recordId} not found`);
-
-    const record = reconciliationRecordConverter.fromFirestore(snap);
-    if (record.status === 'APPROVED') {
-      throw new Error(`Record ${recordId} is already approved`);
-    }
-
-    const now = new Date();
-
-    // เขียน ApprovedTimesheet
-    const atsId = generateApprovedTimesheetId(record.employeeId, record.workDate);
-    const atsInput: CreateApprovedTimesheetInput = {
-      employeeId: record.employeeId,
-      employeeName: record.employeeName,
-      workDate: record.workDate,
-      projectLocationId: record.projectLocationId,
-      projectName: record.projectName,
-      approvedHours: input.approvedHours,
-      approvalSource: input.approvalSource,
-      reconciliationRecordId: recordId,
-      approvedBy: adminId,
-      note: input.approvalNote,
-    };
-
-    const atsRef = this.approvedCollection.doc(atsId);
-    const atsData: Omit<ApprovedTimesheet, 'id'> = {
-      ...atsInput,
-      approvedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await atsRef.set(approvedTimesheetConverter.toFirestore(atsData));
-
-    // อัปเดต ReconciliationRecord → APPROVED
-    const historyEntry: StatusHistoryEntry = {
-      status: 'APPROVED',
-      changedAt: now,
-      changedBy: adminId,
-      reason: `Admin Approve: ${input.approvedHours} ชม. (${input.approvalSource})`,
-      note: input.approvalNote,
-    };
-
-    await ref.update({
-      status: 'APPROVED',
-      approvedHours: input.approvedHours,
-      approvalSource: input.approvalSource,
-      approvedBy: adminId,
-      approvedAt: Timestamp.fromDate(now),
-      approvalNote: input.approvalNote,
-      updatedAt: Timestamp.fromDate(now),
-      statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
-    });
-
-    return { id: atsId, ...atsData };
-  }
-
-  /**
-   * Admin ส่งแจ้งให้แก้ไข → สถานะ AWAITING_CORRECTION
-   * บันทึก trail เพื่อป้องกัน Loop
-   */
-  async sendCorrection(recordId: string, adminId: string, note: string): Promise<void> {
-    const ref = this.collection.doc(recordId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new Error(`ReconciliationRecord ${recordId} not found`);
-
-    const now = new Date();
-    const historyEntry: StatusHistoryEntry = {
-      status: 'AWAITING_CORRECTION',
-      changedAt: now,
-      changedBy: adminId,
-      reason: note,
-      note: 'Admin แจ้งให้แก้ไข — รอผลลัพธ์',
-    };
-
-    await ref.update({
-      status: 'AWAITING_CORRECTION',
-      correctionSentAt: Timestamp.fromDate(now),
-      correctionSentBy: adminId,
-      correctionNote: note,
-      updatedAt: Timestamp.fromDate(now),
-      statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
-    });
-  }
+  // ลบ approveRecord ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป การล็อกข้อมูลทำผ่านงวดงาน (onWagePeriodApproved)
+  // ลบ sendCorrection ออกแล้ว — Admin แจ้งนอกระบบเอง
 
   /**
    * Admin ยืนยันตาม Daily Report → เติม Scan Data พร้อม editHistory
@@ -642,20 +537,7 @@ export class ReconciliationService {
     });
   }
 
-  /**
-   * Mark ว่า Export ออกไปแจ้งนอกระบบแล้ว
-   */
-  async markAsExported(recordIds: string[], _adminId: string): Promise<void> {
-    const now = new Date();
-    const batch = this.db.batch();
-    for (const id of recordIds) {
-      batch.update(this.collection.doc(id), {
-        correctionExportedAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now),
-      });
-    }
-    await batch.commit();
-  }
+  // ลบ markAsExported ออกแล้ว — Admin Export ใช้ getAnomaliesForExport แล้ว Export เอง
 
   // =========================================================================
   // Export Anomalies
@@ -663,6 +545,7 @@ export class ReconciliationService {
 
   /**
    * ดึงข้อมูลรายการผิดปกติเพื่อ Export CSV
+   * Admin นำไปแจ้งโฟรแมนนอกระบบเอง
    */
   async getAnomaliesForExport(filter: ReconciliationFilter): Promise<
     Array<{
@@ -674,8 +557,6 @@ export class ReconciliationService {
       dailyReportHours?: number;
       scanDataHours?: number;
       suggestedHours?: number;
-      correctionSentAt?: string;
-      correctionNote?: string;
     }>
   > {
     const anomalyStatuses: ReconciliationStatus[] = [
@@ -683,7 +564,6 @@ export class ReconciliationService {
       'MISSING_SCAN',
       'MISSING_DAILY',
       'ABSENT',
-      'AWAITING_CORRECTION',
     ];
 
     const records = await this.getRecords({
@@ -700,8 +580,6 @@ export class ReconciliationService {
       dailyReportHours: r.dailyReportHours,
       scanDataHours: r.scanDataHours,
       suggestedHours: r.suggestedHours,
-      correctionSentAt: r.correctionSentAt?.toISOString(),
-      correctionNote: r.correctionNote,
     }));
   }
 

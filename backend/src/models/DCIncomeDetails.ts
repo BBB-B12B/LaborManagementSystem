@@ -14,6 +14,7 @@ export interface DCIncomeDetails {
   dailyWageRate: number;   // ค่าแรงต่อวัน (hourlyRate = dailyWageRate / 8)
   professionalRate: number; // ค่าช่าง/ค่าฝีมือต่อวัน
   phoneAllowance: number;   // ค่าโทรศัพท์ต่องวด
+  allowance: number;        // เบี้ยเลี้ยงต่องวด
   otherIncome: number;      // รายได้อื่นๆ ต่องวด
   mouDeductionRate: number; // อัตราหัก MOU (%)
   isActive: boolean;
@@ -29,6 +30,7 @@ export interface CreateDCIncomeDetailsInput {
   dailyWageRate: number;
   professionalRate: number;
   phoneAllowance: number;
+  allowance?: number;
   otherIncome?: number;
   mouDeductionRate?: number;
   effectiveDate: Date;
@@ -38,6 +40,7 @@ export interface UpdateDCIncomeDetailsInput {
   dailyWageRate?: number;
   professionalRate?: number;
   phoneAllowance?: number;
+  allowance?: number;
   otherIncome?: number;
   mouDeductionRate?: number;
   effectiveDate?: Date;
@@ -54,6 +57,7 @@ export const dcIncomeDetailsConverter = {
       dailyWageRate: details.dailyWageRate,
       professionalRate: details.professionalRate,
       phoneAllowance: details.phoneAllowance,
+      allowance: details.allowance || 0,
       otherIncome: details.otherIncome || 0,
       mouDeductionRate: details.mouDeductionRate || 0,
       isActive: details.isActive,
@@ -73,6 +77,7 @@ export const dcIncomeDetailsConverter = {
       dailyWageRate: data.dailyWageRate || (data.hourlyRate ? data.hourlyRate * 8 : 0),
       professionalRate: data.professionalRate || 0,
       phoneAllowance: data.phoneAllowance || 0,
+      allowance: data.allowance || 0,
       otherIncome: data.otherIncome || 0,
       mouDeductionRate: data.mouDeductionRate || 0,
       isActive: data.isActive !== undefined ? data.isActive : true,

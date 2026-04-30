@@ -42,6 +42,7 @@ export interface DCCompensationIncome {
   otHourlyRate?: number;
   professionalRate?: number;
   phoneAllowancePerPeriod?: number;
+  allowance?: number;
   mouDeductionRate?: number;
   otherIncome?: number;
   effectiveDate?: string | Date | null;
@@ -283,6 +284,7 @@ export async function upsertDCCompensation(
       hourlyRate: number;
       professionalRate: number;
       phoneAllowancePerPeriod: number;
+      allowance?: number;
     };
     expense?: {
       accommodationCostPerPeriod: number;
@@ -292,6 +294,7 @@ export async function upsertDCCompensation(
       tvCostPerPeriod: number;
       washingMachineCostPerPeriod: number;
       portableAcCostPerPeriod: number;
+      otherDeduction?: number;
     };
   }
 ): Promise<DCCompensationDetails> {

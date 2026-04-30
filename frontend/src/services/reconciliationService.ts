@@ -5,12 +5,13 @@ export type ReconciliationStatus =
   | 'CONFLICTED'
   | 'MISSING_SCAN'
   | 'MISSING_DAILY'
-  | 'AWAITING_CORRECTION'
-  | 'APPROVED'
   | 'ABSENT'
   | 'LEAVE'
   | 'HOLIDAY'
   | 'UNREGISTERED_EMPLOYEE';
+
+// ลบ AWAITING_CORRECTION — Admin แจ้งนอกระบบเอง
+// ลบ APPROVED — การล็อกข้อมูลทำผ่านงวดงาน (isLocked)
 
 export type ApprovalSource = 'DAILY_REPORT' | 'SCAN_DATA' | 'MANUAL';
 
@@ -42,18 +43,10 @@ export interface ReconciliationRecord {
   scanOtEveningHours?: number;
   suggestedHours?: number;
   status: ReconciliationStatus;
+  isLocked?: boolean;           // ถูกล็อกโดยงวดงาน (onWagePeriodApproved)
   statusHistory: StatusHistoryEntry[];
   dailyReportId?: string;
   scanDataId?: string;
-  correctionSentAt?: string;
-  correctionSentBy?: string;
-  correctionNote?: string;
-  correctionExportedAt?: string;
-  approvedHours?: number;
-  approvalSource?: ApprovalSource;
-  approvedBy?: string;
-  approvedAt?: string;
-  approvalNote?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,27 +106,6 @@ export const reconciliationService = {
   },
 
   /**
-   * Admin Approve → ลง ApprovedTimesheets
-   */
-  approveRecord: async (
-    id: string,
-    data: { approvedHours: number; approvalSource: ApprovalSource; approvalNote?: string }
-  ): Promise<ApprovedTimesheet> => {
-    const response = await apiClient.post<{ success: boolean; data: ApprovedTimesheet }>(
-      `/reconciliation/${id}/approve`,
-      data
-    );
-    return response.data.data;
-  },
-
-  /**
-   * Admin แจ้งแก้ไข
-   */
-  sendCorrection: async (id: string, note: string): Promise<void> => {
-    await apiClient.post(`/reconciliation/${id}/correct`, { note });
-  },
-
-  /**
    * Admin ยืนยันตาม Daily Report (เติม Scan Data)
    */
   confirmByDailyReport: async (id: string, reason: string): Promise<void> => {
@@ -163,9 +135,15 @@ export const reconciliationService = {
   },
 
   /**
-   * Mark รายการว่า Export แจ้งนอกระบบแล้ว
+   * สร้าง/อัปเดตข้อมูลอัตโนมัติ สำหรับโปรเจกต์และช่วงวันที่
    */
-  markAsExported: async (recordIds: string[]): Promise<void> => {
-    await apiClient.post('/reconciliation/mark-exported', { recordIds });
+  generateForProjectAuto: async (data: {
+    projectLocationId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ success: boolean; summary?: any }> => {
+    const response = await apiClient.post('/reconciliation/generate-auto', data);
+    return response.data;
   },
 };
+

@@ -54,6 +54,7 @@ import { Layout, ProtectedRoute } from '@/components/layout';
 import { DCModal } from './components/DCModal';
 import { DCImportDialog } from './components/DCImportDialog';
 import type { DCCreateInput, DCEditInput } from '@/validation/dcSchema';
+import { useAuthStore } from '@/store/authStore';
 
 const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: T): T => {
   const toStringOrEmpty = (value?: string | null) => {
@@ -97,6 +98,7 @@ export default function DCManagementPage() {
     confirmDelete: showDeleteConfirm,
     ConfirmDialog: DeleteConfirmDialog,
   } = useDeleteConfirmDialog();
+  const { user } = useAuthStore();
 
   // Filters
   const [filters, setFilters] = useState<DCFilterOptions>({
@@ -128,6 +130,16 @@ export default function DCManagementPage() {
     (projects as Project[]).forEach((proj) => {
       if (proj.department) {
         map.set(proj.id, proj.department);
+      }
+    });
+    return map;
+  }, [projects]);
+
+  const projectNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (projects as Project[]).forEach((proj) => {
+      if (proj.projectName) {
+        map.set(proj.id, proj.projectName);
       }
     });
     return map;
@@ -227,6 +239,58 @@ export default function DCManagementPage() {
     },
   });
 
+  const handleDownloadTemplate = () => {
+    // 1. Get user's first accessible project (if any)
+    let userProjectName = '';
+    if (user?.projectLocationIds && user.projectLocationIds.length > 0) {
+      const firstProjectId = user.projectLocationIds[0];
+      const project = projects.find(p => p.id === firstProjectId);
+      if (project) {
+        userProjectName = project.department || project.projectName || '';
+      }
+    }
+
+    // 2. Define headers (Must match exactly what backend expects)
+    const headers = [
+      'EmployeeName', 'รหัสพนักงาน', 'ตำแหน่ง', 'หน่วยงาน', 'ค่าแรง/วัน', 
+      'ค่าโทรศัพท์ DC', 'เบี้ยเลี้ยง', 'รายได้อื่นๆ ต่องวด (บาท)', 'ค่าวิชาชีพ/วัน', 
+      'จำนวนคนผู้ติดตาม', 'หักค่าตู้เย็น 125 บาท/งวด', 'หักค่าเครื่องเสียง 250 บาท/งวด', 
+      'หักค่าเครื่องปรับอากาศเคลื่อนที่ 200 บาท/งวด', 'หักโทรทัศน์ (TV) 100 บาท/งวด', 
+      'หักเครื่องซักผ้า 250 บาท/งวด', 'ค่าห้องพัก 175 บาท/งวด/คน', 
+      'วันเกิด (ปปปป-ดด-วว)', 'วันเริ่มงาน (ปปปป-ดด-วว)', 'สถานะใช้งาน (TRUE/FALSE)', 
+      'เปอร์เซ็นต์หัก MOU (%)', 'รายหักอื่นๆ'
+    ];
+
+    // 3. Define example row with pre-filled project
+    const exampleRow = [
+      'นายสมหมาย ใจดี', 'EMP001', 'กรรมกร', userProjectName, '450',
+      '0', '0', '0', '0',
+      '0', '125', '0', 
+      '0', '0', 
+      '0', '175', 
+      '1990-01-01', '2024-01-01', 'TRUE',
+      '0', '0'
+    ];
+
+    // 4. Construct CSV string (with BOM for Excel Thai support)
+    const bom = '\uFEFF';
+    const csvContent = [
+      headers.join(','),
+      exampleRow.join(',')
+    ].join('\n');
+
+    // 5. Trigger download
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'dc-labor-data-template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleCreateDC = () => {
     setDrawerMode('create');
     setEditingId(null);
@@ -256,6 +320,7 @@ export default function DCManagementPage() {
         dailyWageRate: income?.dailyWageRate ?? '',
         professionalRate: income?.professionalRate ?? '',
         phoneAllowance: income?.phoneAllowancePerPeriod ?? '',
+        allowance: income?.allowance ?? '',
         otherIncome: income?.otherIncome ?? '',
         mouDeductionRate: income?.mouDeductionRate ?? '',
         housingFee: expense?.accommodationCostPerPeriod ?? '',
@@ -328,27 +393,41 @@ export default function DCManagementPage() {
     {
       field: 'skillId',
       headerName: 'ตำแหน่ง',
-      width: 150,
+      width: 220,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2">{params.value || 'ไม่ระบุ'}</Typography>
       ),
     },
     {
       field: 'department',
-      headerName: 'ส่วนงาน/หน่วยงาน',
-      width: 250,
+      headerName: 'สังกัด',
+      width: 120,
       valueGetter: (params) => params.row.projectLocationId,
       renderCell: (params: GridRenderCellParams) => {
         const id = params.value as string;
         const department = id ? projectDepartmentMap.get(id) : null;
 
-        if (!department) return <Typography variant="caption" color="text.secondary">ไม่ระบุ</Typography>;
+        if (!department) return <Typography variant="caption" color="text.secondary">-</Typography>;
 
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
             <Chip label={department} size="small" color="primary" variant="outlined" />
           </Box>
         );
+      },
+    },
+    {
+      field: 'project',
+      headerName: 'หน่วยงาน',
+      width: 250,
+      valueGetter: (params) => params.row.projectLocationId,
+      renderCell: (params: GridRenderCellParams) => {
+        const id = params.value as string;
+        const projectName = id ? projectNameMap.get(id) : null;
+
+        if (!projectName) return <Typography variant="caption" color="text.secondary">ไม่ระบุ</Typography>;
+
+        return <Typography variant="body2" sx={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{projectName}</Typography>;
       },
     },
 
@@ -421,9 +500,7 @@ export default function DCManagementPage() {
             variant="outlined"
             color="primary"
             startIcon={<FileDownload />}
-            component="a"
-            href="/dc-labor-data-template.csv"
-            download
+            onClick={handleDownloadTemplate}
           >
             ดาวน์โหลดเทมเพลต
           </Button>

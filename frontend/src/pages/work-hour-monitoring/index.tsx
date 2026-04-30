@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Typography, Stack, Paper, Button, Grid, Divider, Popover, MenuItem, Select, FormControl } from '@mui/material';
+import projectService from '@/services/projectService';
 import {
   FileDownload as FileDownloadIcon,
   Search as SearchIcon,
@@ -13,8 +14,6 @@ import SummaryStats from '@/components/work-hour-monitoring/SummaryStats';
 import AbnormalBreakdown from '@/components/work-hour-monitoring/AbnormalBreakdown';
 import DatePicker from '@/components/forms/DatePicker';
 import { GlobalStyles } from '@mui/material';
-import { useQueryClient } from '@tanstack/react-query';
-
 
 /**
  * Work Hour Monitoring Page
@@ -31,8 +30,25 @@ export default function WorkHourMonitoringPage() {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [project, setProject] = useState('all');
-  
-  const queryClient = useQueryClient();
+  const [projectsList, setProjectsList] = useState<{id: string, code: string, name: string}[]>([]);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const projectsData = await projectService.getAll();
+        setProjectsList(
+          projectsData.map((p) => ({
+            id: p.id,
+            code: p.projectCode || p.code || p.id,
+            name: p.projectName || p.code || p.id
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching projects via API:", error);
+      }
+    };
+    fetchProjects();
+  }, []);
 
 
   const handleOpenFilter = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -223,8 +239,6 @@ export default function WorkHourMonitoringPage() {
               </Button>
               
               <Box
-
-                id="filter-btn-container"
                 onClick={handleOpenFilter}
                 sx={{ 
                   width: 180,
@@ -311,9 +325,9 @@ export default function WorkHourMonitoringPage() {
                 sx={{ borderRadius: '8px' }}
               >
                 <MenuItem value="all">ทั้งหมด (All Projects)</MenuItem>
-                <MenuItem value="WH1 : คลังสินค้า MOTORWAY">WH1 : คลังสินค้า MOTORWAY</MenuItem>
-                <MenuItem value="P001">Project 1</MenuItem>
-                <MenuItem value="P002">Project 2</MenuItem>
+                {projectsList.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                ))}
               </Select>
             </FormControl>
 
@@ -375,7 +389,6 @@ export default function WorkHourMonitoringPage() {
         </Popover>
 
       </Layout>
-
     </ProtectedRoute>
   );
 }

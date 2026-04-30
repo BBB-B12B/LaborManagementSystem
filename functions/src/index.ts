@@ -40,6 +40,7 @@ type ReconciliationStatus =
 interface LeaveEntry {
   hours: number;
   attachment?: string; // ชื่อไฟล์หลักฐานการลา (optional)
+  type?: string;
 }
 
 interface DailyEmployeeTimesheet {
@@ -62,6 +63,12 @@ interface DailyEmployeeTimesheet {
   lastUpdated: string;
   workLogs?: any[];
   leave?: LeaveEntry[];   // ถ้ามี entries → สถานะ LEAVE
+  // New Leave Structure
+  leaveStatus?: { isFullDay?: boolean };
+  leaveShifts?: { morning?: boolean; afternoon?: boolean };
+  leaveTimes?: { morning?: string; afternoon?: string };
+  leaveType?: string;
+  medCertFileUrl?: string;
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -104,6 +111,10 @@ async function reconcile(
     .limit(1)
     .get();
 
+  let employeeName = '';
+  if (!contractorSnap.empty) {
+    employeeName = contractorSnap.docs[0].data()['name'] || '';
+  }
   const isRegistered = !contractorSnap.empty;
 
   // ── 1. ดึง Scan Data ────────────────────────────────────────────────────────
@@ -220,8 +231,34 @@ async function reconcile(
     tsOtEvening   = (timesheet.expectedHours?.otEvening || 0);
     totalTimesheetHours = tsNormalHours + tsOtMorning + tsOtNoon + tsOtEvening;
 
-    leaveEntries = timesheet.leave || [];
-    totalLeaveHours = leaveEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+    // Handle legacy 'leave' array if present
+    if (timesheet.leave && Array.isArray(timesheet.leave)) {
+      leaveEntries = timesheet.leave;
+      totalLeaveHours = leaveEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+    }
+    // Handle new leave structure (leaveType / leaveStatus / leaveShifts)
+    else if (timesheet.leaveStatus || timesheet.leaveType) {
+      const isFullDay = timesheet.leaveStatus?.isFullDay;
+      const morningShift = timesheet.leaveShifts?.morning;
+      const afternoonShift = timesheet.leaveShifts?.afternoon;
+      
+      let calculatedHours = 0;
+      if (isFullDay) {
+        calculatedHours = 8;
+      } else {
+        if (morningShift) calculatedHours += 4;
+        if (afternoonShift) calculatedHours += 4;
+      }
+      
+      if (calculatedHours > 0) {
+        totalLeaveHours = calculatedHours;
+        leaveEntries.push({
+          hours: calculatedHours,
+          attachment: timesheet.medCertFileUrl || '',
+          type: timesheet.leaveType || 'Unknown'
+        });
+      }
+    }
   }
 
   const hasTimesheet = timesheetDoc.exists;
@@ -279,6 +316,8 @@ async function reconcile(
     }
 
     const updates: Record<string, any> = {
+      // ── Employee Name ────────────────────────────────────────────────────
+      employeeName:         employeeName || null,
       // ── Scan hours (แยก field) ────────────────────────────────────────────
       scanDataHours:        hasScan      ? totalScanHours  : null,  // ยอดรวม
       scanNormalHours:      hasScan      ? scanNormalHours : null,
@@ -316,6 +355,7 @@ async function reconcile(
       employeeNumber,
       workDate:             workDateStr,
       projectLocationId,
+      employeeName:         employeeName || null,
       // ── Scan hours ───────────────────────────────────────────────────────
       scanDataHours:        hasScan      ? totalScanHours  : null,
       scanNormalHours:      hasScan      ? scanNormalHours : null,
@@ -365,8 +405,8 @@ export const onScanDataChanged = firestore
       return null;
     }
 
-    const employeeNumber: string = String(data['employeeNumber'] || data['employeeId'] || '');
-    const projectLocationId: string = String(data['projectLocationId'] || '');
+    const employeeNumber: string = String(data['employeeNumber'] || data['employeeId'] || '').trim();
+    const projectLocationId: string = String(data['projectLocationId'] || '').trim();
 
     // แปลง workDate → YYYY-MM-DD
     let workDateStr = '';
@@ -388,6 +428,57 @@ export const onScanDataChanged = firestore
       await reconcile(employeeNumber, workDateStr, projectLocationId, docId, data);
     } catch (err) {
       console.error(`[onScanDataChanged] Error for ${employeeNumber} on ${workDateStr}:`, err);
+    }
+
+    return null;
+  });
+
+// ─── onEmployeeChanged ────────────────────────────────────────────────────────
+
+/**
+ * onEmployeeChanged
+ * Trigger เมื่อมีการเพิ่ม/แก้ไขพนักงาน (dailyContractors)
+ * - ดึง employeeId ที่เปลี่ยนแปลง
+ * - ค้นหา reconciliationRecords ของพนักงานคนที่สถานะ = 'UNREGISTERED_EMPLOYEE'
+ * - สั่งประมวลผลใหม่โดยใช้ข้อมูลจากอดีต (snapshot)
+ */
+export const onEmployeeChanged = firestore
+  .onDocumentWritten('dailyContractors/{docId}', async (event) => {
+    if (!event.data?.after.exists) return null;
+
+    const afterData = event.data.after.data();
+    if (!afterData) return null;
+
+    const employeeId = String(afterData['employeeId'] || event.params['docId'] || '').trim();
+    if (!employeeId) return null;
+
+    // ค้นหาเรคคอร์ดที่ค้างอยู่ที่สถานะ UNREGISTERED_EMPLOYEE 
+    // ใช้ 'in' query เพื่อเผื่อเคสที่ข้อมูลเก่ามี space ต่อท้ายหลุดเข้ามา
+    const possibleIds = [employeeId, `${employeeId} `];
+    const recordsSnap = await db.collection('reconciliationRecords')
+      .where('employeeId', 'in', possibleIds)
+      .where('status', '==', 'UNREGISTERED_EMPLOYEE')
+      .get();
+
+    if (recordsSnap.empty) return null;
+
+    console.log(`[onEmployeeChanged] Found ${recordsSnap.size} UNREGISTERED_EMPLOYEE records for ${employeeId}. Reconciling...`);
+
+    // วนลูปสั่งประมวลผลใหม่
+    for (const doc of recordsSnap.docs) {
+      const recordData = doc.data();
+      const workDateStr = String(recordData['workDate'] || '');
+      // ดึง projectLocationId จากอดีตที่ติดมากับ record ไม่ดึงจาก profile ปัจจุบัน
+      const projectLocationId = String(recordData['projectLocationId'] || '');
+
+      if (!workDateStr) continue;
+
+      try {
+        console.log(`[onEmployeeChanged] Reconciling past record: ${employeeId} on ${workDateStr} (Project: ${projectLocationId})`);
+        await reconcile(employeeId, workDateStr, projectLocationId);
+      } catch (err) {
+        console.error(`[onEmployeeChanged] Failed to reconcile ${employeeId} on ${workDateStr}:`, err);
+      }
     }
 
     return null;

@@ -93,6 +93,7 @@ export function DCForm({
       dailyWageRate: ('' as any),
       professionalRate: ('' as any),
       phoneAllowance: ('' as any),
+      allowance: ('' as any),
       otherIncome: ('' as any),
       housingFee: ('' as any),
       followerCount: ('' as any),
@@ -322,17 +323,22 @@ export function DCForm({
             </Grid>
 
             <Grid item xs={6}>
-              <TextField
-                label="2. ค่าแรง OT (Auto)"
-                value={otHourlyRate.toFixed(2)}
-                fullWidth
-                size="small"
-                variant="outlined" // Use outlined for consistency
-                InputProps={{
-                  endAdornment: <InputAdornment position="end">฿/ชม.</InputAdornment>,
-                  readOnly: true
-                }}
-                sx={{ bgcolor: '#F5F5F5', '& .MuiInputBase-input': { cursor: 'not-allowed' } }}
+              <Controller
+                name="allowance"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="2. เบี้ยเลี้ยง"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
+                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    value={field.value ?? ''}
+                    disabled={isLoading || isSubmitting}
+                  />
+                )}
               />
             </Grid>
 
@@ -434,7 +440,7 @@ export function DCForm({
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="2. ผู้ติดตาม (คน)"
+                    label="2. จำนวนคนผู้ติดตาม"
                     type="number"
                     fullWidth
                     size="small"

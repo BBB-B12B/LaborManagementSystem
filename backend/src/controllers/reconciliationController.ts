@@ -17,7 +17,6 @@
 import { Request, Response } from 'express';
 import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 import type { ReconciliationStatus } from '../models/ReconciliationRecord';
-import type { ApprovalSource } from '../models/ReconciliationRecord';
 
 // ---------------------------------------------------------------------------
 // GET /api/reconciliation
@@ -197,83 +196,8 @@ export async function generateReconciliationRecords(req: Request, res: Response)
   }
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/reconciliation/:id/approve
-// ---------------------------------------------------------------------------
-
-/**
- * Admin Approve → เขียนลง ApprovedTimesheets
- * Body: { approvedHours, approvalSource, approvalNote? }
- */
-export async function approveRecord(req: Request, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
-    const adminId = (req as any).user?.uid;
-
-    if (!adminId) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
-
-    const { approvedHours, approvalSource, approvalNote } = req.body as {
-      approvedHours: number;
-      approvalSource: ApprovalSource;
-      approvalNote?: string;
-    };
-
-    if (approvedHours === undefined || !approvalSource) {
-      res.status(400).json({ success: false, error: 'approvedHours and approvalSource are required' });
-      return;
-    }
-
-    const approvedTimesheet = await reconciliationService.approveRecord(id, adminId, {
-      approvedHours,
-      approvalSource,
-      approvalNote,
-    });
-
-    res.json({ success: true, data: approvedTimesheet });
-  } catch (error: any) {
-    console.error('[reconciliation] approve error:', error);
-    if (error.message?.includes('already approved')) {
-      res.status(409).json({ success: false, error: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, error: 'Failed to approve record' });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// POST /api/reconciliation/:id/correct
-// ---------------------------------------------------------------------------
-
-/**
- * Admin แจ้งแก้ไข → AWAITING_CORRECTION + บันทึก trail
- * Body: { note }
- */
-export async function sendCorrection(req: Request, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
-    const adminId = (req as any).user?.uid;
-
-    if (!adminId) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
-
-    const { note } = req.body as { note: string };
-    if (!note) {
-      res.status(400).json({ success: false, error: 'note is required' });
-      return;
-    }
-
-    await reconciliationService.sendCorrection(id, adminId, note);
-    res.json({ success: true, message: 'Correction sent successfully' });
-  } catch (error) {
-    console.error('[reconciliation] sendCorrection error:', error);
-    res.status(500).json({ success: false, error: 'Failed to send correction' });
-  }
-}
+// approveRecord ถูกลบออกแล้ว — ไม่มีการ approve รายวัน การล็อกข้อมูลทำผ่านงวดงาน (onWagePeriodApproved)
+// sendCorrection ถูกลบออกแล้ว — Admin แจ้งนอกระบบเอง
 
 // ---------------------------------------------------------------------------
 // POST /api/reconciliation/:id/confirm-daily
@@ -339,33 +263,4 @@ export async function deleteGhostScan(req: Request, res: Response): Promise<void
   }
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/reconciliation/mark-exported
-// ---------------------------------------------------------------------------
-
-/**
- * Mark รายการที่ Export ออกไปแจ้งนอกระบบแล้ว
- * Body: { recordIds: string[] }
- */
-export async function markAsExported(req: Request, res: Response): Promise<void> {
-  try {
-    const adminId = (req as any).user?.uid;
-
-    if (!adminId) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
-
-    const { recordIds } = req.body as { recordIds: string[] };
-    if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
-      res.status(400).json({ success: false, error: 'recordIds array is required' });
-      return;
-    }
-
-    await reconciliationService.markAsExported(recordIds, adminId);
-    res.json({ success: true, message: `Marked ${recordIds.length} records as exported` });
-  } catch (error) {
-    console.error('[reconciliation] markAsExported error:', error);
-    res.status(500).json({ success: false, error: 'Failed to mark records as exported' });
-  }
-}
+// markAsExported ถูกลบออกแล้ว — Admin ดึงข้อมูลผ่าน getAnomaliesForExport แล้ว Export เอง

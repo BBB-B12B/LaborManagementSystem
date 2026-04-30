@@ -88,10 +88,11 @@ export const dcCreateSchema = z
     // Status
     isActive: baseBoolean.default(true),
 
-    // T-230: New Wage Fields
-    dailyWageRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแรงรายวัน').default(0)),
+    // T-230:  // Income Details
+    dailyWageRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแรงต่อวัน').default(0)),
     professionalRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าวิชาชีพ').default(0)),
     phoneAllowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าโทรศัพท์').default(0)),
+    allowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('เบี้ยเลี้ยง').default(0)),
     mouDeductionRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าหัก MOU').default(0)),
 
     // T-240: Detailed Financial Fields
@@ -149,10 +150,11 @@ export const dcEditSchema = z
     // Status
     isActive: baseBoolean.optional(),
 
-    // T-230: New Wage Fields
-    dailyWageRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแรงรายวัน').optional()),
+    // T-230:  // Income Details
+    dailyWageRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าแรงต่อวัน').optional()),
     professionalRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าวิชาชีพ').optional()),
     phoneAllowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าโทรศัพท์').optional()),
+    allowance: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('เบี้ยเลี้ยง').optional()),
     mouDeductionRate: z.preprocess((val) => (val === '' ? undefined : Number(val)), nonNegativeNumber('ค่าหัก MOU').optional()),
 
     // T-240: Detailed Financial Fields

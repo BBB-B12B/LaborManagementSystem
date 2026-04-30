@@ -1,6 +1,10 @@
 /**
  * Reconciliation Routes
  * เส้นทาง API สำหรับระบบ Reconcile Daily Report ↔ Scan Data
+ *
+ * หมายเหตุ: ลบ /approve และ /correct ออกแล้ว
+ * - การล็อกข้อมูล: ทำผ่านงวดงาน (onWagePeriodApproved)
+ * - การแจ้งแก้ไข: Admin แจ้งนอกระบบเอง
  */
 
 import { Router } from 'express';
@@ -10,11 +14,8 @@ import {
   getReconciliationById,
   generateReconciliationRecords,
   generateForProjectAuto,
-  approveRecord,
-  sendCorrection,
   confirmByDailyReport,
   deleteGhostScan,
-  markAsExported,
   exportAnomalies,
 } from '../../controllers/reconciliationController';
 
@@ -38,16 +39,7 @@ router.post('/generate', generateReconciliationRecords);
 // POST /api/reconciliation/generate-auto  — auto-fetch from Project B + local scan
 router.post('/generate-auto', generateForProjectAuto);
 
-// POST /api/reconciliation/mark-exported — Mark ว่า Export แล้ว
-router.post('/mark-exported', markAsExported);
-
-// POST /api/reconciliation/:id/approve        — Admin Approve
-router.post('/:id/approve', approveRecord);
-
-// POST /api/reconciliation/:id/correct        — Admin แจ้งแก้ไข
-router.post('/:id/correct', sendCorrection);
-
-// POST /api/reconciliation/:id/confirm-daily  — ยืนยันตาม Daily Report
+// POST /api/reconciliation/:id/confirm-daily  — ยืนยันตาม Daily Report (กรณีลืม scan)
 router.post('/:id/confirm-daily', confirmByDailyReport);
 
 // POST /api/reconciliation/:id/delete-scan    — ลบ Ghost Scan

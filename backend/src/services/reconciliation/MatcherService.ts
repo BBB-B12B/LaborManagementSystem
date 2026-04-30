@@ -95,8 +95,8 @@ export class MatcherService {
       if (existingRecordDoc.exists) {
         const existingData = existingRecordDoc.data() as ReconciliationRecord;
         
-        // Don't update if it's already approved
-        if (existingData.status === 'APPROVED') {
+        // ไม่ update ถ้างวดงานถูกล็อกแล้ว (isLocked: true)
+        if (existingData.isLocked === true) {
           return existingData;
         }
 

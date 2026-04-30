@@ -14,16 +14,14 @@
 
 export type ReconciliationStatus =
   | 'PENDING'              // รอระบบ classify
-  | 'MATCHED'              // ข้อมูลทั้ง 2 แหล่งตรงกัน รออนุมัติ
+  | 'MATCHED'              // ข้อมูลทั้ง 2 แหล่งตรงกัน
   | 'CONFLICTED'           // ข้อมูลขัดแย้ง (มีทั้งคู่ แต่ชม. ไม่ตรง)
   | 'MISSING_SCAN'         // มี Daily Report แต่ไม่มี Scan Data
   | 'MISSING_DAILY'        // มีพนักงานในระบบ มี Scan Data แต่ไม่มี Daily Report
   | 'ABSENT'               // ไม่มีข้อมูลทั้งคู่
   | 'LEAVE'                // พนักงานลา (ยืนยันจาก Leave Request)
   | 'HOLIDAY'              // วันหยุดบริษัท
-  | 'AWAITING_CORRECTION'  // Admin แจ้งให้แก้ไข รอผลลัพธ์
-  | 'UNREGISTERED_EMPLOYEE' // มี Scan Data แต่รหัสพนักงานไม่มีในระบบ — Admin ต้องไปเพิ่มข้อมูล
-  | 'APPROVED';            // อนุมัติแล้ว พร้อมส่งคำนวณค่าจ้าง
+  | 'UNREGISTERED_EMPLOYEE'; // มี Scan Data แต่รหัสพนักงานไม่มีในระบบ
 
 export type ApprovalSource =
   | 'daily_report'  // ยึดตาม Daily Report
@@ -73,22 +71,16 @@ export interface ReconciliationRecord {
 
   // --- สถานะ ---
   status: ReconciliationStatus;
+  isHoliday?: boolean;               // วันหยุดบริษัท
+  leaveHours?: number;               // จำนวนชั่วโมงที่ลา
+  leaveEntries?: any[];              // ข้อมูลการลาเพิ่มเติม
 
-  // --- Correction tracking ---
-  correctionSentAt?: Date;           // วันที่ Admin ส่งแจ้ง
-  correctionSentBy?: string;         // Admin userId ที่ส่งแจ้ง
-  correctionNote?: string;           // ข้อความที่ Admin แจ้ง
-  correctionExportedAt?: Date;       // วันที่ Export ออกไปแจ้งนอกระบบ
+  // --- Locking (ผูกกับงวดงาน — ไม่ใช่ approve รายวัน) ---
+  // เมื่อ Admin Approve งวดงาน onWagePeriodApproved จะตั้ง isLocked: true อัตโนมัติ
+  isLocked?: boolean;
 
-  // --- ป้องกัน Loop (Key Feature) ---
+  // --- Audit Trail ---
   statusHistory: StatusHistoryEntry[];
-
-  // --- Approval (Admin เท่านั้น — ไม่มี Auto/Force Approve) ---
-  approvedHours?: number;
-  approvalSource?: ApprovalSource;
-  approvedBy?: string;               // Admin userId
-  approvedAt?: Date;
-  approvalNote?: string;
 
   // --- Metadata ---
   createdAt: Date;
@@ -109,17 +101,13 @@ export interface CreateReconciliationRecordInput {
   scanDataHours?: number;
   dailyReportId?: string;
   scanDataId?: string;
+  isHoliday?: boolean;
+  leaveHours?: number;
+  leaveEntries?: { hours: number; attachment?: string; type?: string }[];
 }
 
-export interface ApproveReconciliationInput {
-  approvedHours: number;
-  approvalSource: ApprovalSource;
-  approvalNote?: string;
-}
-
-export interface SendCorrectionInput {
-  note: string;
-}
+// ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
+// ลบ SendCorrectionInput ออกแล้ว — Admin แจ้งนอกระบบเอง
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -129,25 +117,8 @@ export function generateReconciliationId(employeeId: string, workDate: string): 
   return `REC_${employeeId}_${workDate}`;
 }
 
-/**
- * ตรวจสอบว่า Record นี้เคยมี AWAITING_CORRECTION มาก่อนหรือไม่
- * ใช้สำหรับแสดง Warning Banner ใน UI
- */
-export function hadPreviousCorrection(record: ReconciliationRecord): boolean {
-  return record.statusHistory.some((h) => h.status === 'AWAITING_CORRECTION');
-}
-
-/**
- * ดึง AWAITING_CORRECTION entries ล่าสุดจาก statusHistory
- * เพื่อแสดงรายละเอียดใน Warning Banner
- */
-export function getLastCorrectionEntry(
-  record: ReconciliationRecord,
-): StatusHistoryEntry | undefined {
-  return [...record.statusHistory]
-    .reverse()
-    .find((h) => h.status === 'AWAITING_CORRECTION');
-}
+// Note: AWAITING_CORRECTION ถูกลบออกจากระบบแล้ว — Admin แจ้งนอกระบบเอง
+// Note: APPROVED ถูกลบออกจากระบบแล้ว — การ Approve ผูกกับงวดงาน (isLocked) ผ่าน onWagePeriodApproved
 
 // ---------------------------------------------------------------------------
 // Firestore Converter
@@ -168,19 +139,15 @@ export const reconciliationRecordConverter = {
     if (record.scanDataId !== undefined) data.scanDataId = record.scanDataId;
     if (record.suggestedHours !== undefined) data.suggestedHours = record.suggestedHours;
     if (record.status !== undefined) data.status = record.status;
-    if (record.correctionSentAt !== undefined) data.correctionSentAt = record.correctionSentAt;
-    if (record.correctionSentBy !== undefined) data.correctionSentBy = record.correctionSentBy;
-    if (record.correctionNote !== undefined) data.correctionNote = record.correctionNote;
-    if (record.correctionExportedAt !== undefined)
-      data.correctionExportedAt = record.correctionExportedAt;
+    if (record.isLocked !== undefined) data.isLocked = record.isLocked;
     if (record.statusHistory !== undefined) data.statusHistory = record.statusHistory;
-    if (record.approvedHours !== undefined) data.approvedHours = record.approvedHours;
-    if (record.approvalSource !== undefined) data.approvalSource = record.approvalSource;
-    if (record.approvedBy !== undefined) data.approvedBy = record.approvedBy;
-    if (record.approvedAt !== undefined) data.approvedAt = record.approvedAt;
-    if (record.approvalNote !== undefined) data.approvalNote = record.approvalNote;
     if (record.createdAt !== undefined) data.createdAt = record.createdAt;
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
+    
+    // Additional properties
+    if ('isHoliday' in record) data.isHoliday = record.isHoliday;
+    if ('leaveHours' in record) data.leaveHours = record.leaveHours;
+    if ('leaveEntries' in record) data.leaveEntries = record.leaveEntries;
 
     return data;
   },
@@ -190,9 +157,6 @@ export const reconciliationRecordConverter = {
 
     const toDate = (val: any): Date =>
       val?.toDate ? val.toDate() : val instanceof Date ? val : new Date();
-
-    const toOptionalDate = (val: any): Date | undefined =>
-      val ? (val?.toDate ? val.toDate() : val instanceof Date ? val : undefined) : undefined;
 
     const parseHistory = (arr: any[]): StatusHistoryEntry[] =>
       (arr || []).map((h) => ({
@@ -225,18 +189,14 @@ export const reconciliationRecordConverter = {
       scanDataId: data.scanDataId,
       suggestedHours: data.suggestedHours,
       status: data.status || 'PENDING',
-      correctionSentAt: toOptionalDate(data.correctionSentAt),
-      correctionSentBy: data.correctionSentBy,
-      correctionNote: data.correctionNote,
-      correctionExportedAt: toOptionalDate(data.correctionExportedAt),
+      isLocked: data.isLocked ?? false,
       statusHistory: parseHistory(data.statusHistory),
-      approvedHours: data.approvedHours,
-      approvalSource: data.approvalSource,
-      approvedBy: data.approvedBy,
-      approvedAt: toOptionalDate(data.approvedAt),
-      approvalNote: data.approvalNote,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
+      // Leave & Holiday
+      ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
+      ...(data.leaveHours !== undefined && { leaveHours: data.leaveHours }),
+      ...(data.leaveEntries !== undefined && { leaveEntries: data.leaveEntries }),
     };
   },
 };

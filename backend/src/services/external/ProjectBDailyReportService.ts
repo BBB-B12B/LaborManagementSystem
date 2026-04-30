@@ -58,6 +58,12 @@ export interface DailyEmployeeTimesheet {
   shiftTimes?: ProjectBShiftTimes;
   workLogs?: ProjectBWorkLog[];
   isActive: boolean;
+  // Leave Data
+  leave?: { hours: number; attachment?: string }[];
+  leaveStatus?: { isFullDay?: boolean };
+  leaveShifts?: { morning?: boolean; afternoon?: boolean };
+  leaveType?: string;
+  medCertFileUrl?: string;
   lastUpdated?: string;            // ISO string
 }
 
@@ -74,6 +80,8 @@ export interface DailyTimesheetSummary {
   otEveningHours: number;
   totalHours: number;              // sum ทั้งหมด = regularHours + otMorning + otNoon + otEvening
   isActive: boolean;
+  isLeave: boolean;
+  leaveHours: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +100,18 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
   const otEveningHours = h?.otEvening ?? 0;
   const totalHours = regularHours + otMorningHours + otNoonHours + otEveningHours;
 
+  let leaveHours = 0;
+  if (doc.leave && Array.isArray(doc.leave)) {
+    leaveHours = doc.leave.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+  } else if (doc.leaveStatus || doc.leaveType) {
+    if (doc.leaveStatus?.isFullDay) leaveHours = 8;
+    else {
+      if (doc.leaveShifts?.morning) leaveHours += 4;
+      if (doc.leaveShifts?.afternoon) leaveHours += 4;
+    }
+  }
+  const isLeave = leaveHours > 0;
+
   return {
     employeeNumber: doc.employeeNumber,
     date: doc.date,
@@ -102,6 +122,8 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     otEveningHours,
     totalHours,
     isActive: doc.isActive ?? true,
+    isLeave,
+    leaveHours,
   };
 }
 

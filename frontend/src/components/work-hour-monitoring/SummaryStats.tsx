@@ -8,6 +8,8 @@ import {
   NearMe as SendIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import { useQuery } from '@tanstack/react-query';
+import { reconciliationService } from '../../services/reconciliationService';
 
 // --- Blue Theme Palette (from Image 5) ---
 const BLUE = {
@@ -86,6 +88,23 @@ interface Props {
 }
 
 const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
+  const { data: allRecords = [] } = useQuery({
+    queryKey: ['reconciliation-stats'],
+    queryFn: () => reconciliationService.getRecords({}),
+    staleTime: 60000,
+  });
+
+  const stats = React.useMemo(() => {
+    const totalRows = allRecords.length;
+    const uniqueEmployees = new Set(allRecords.map(r => r.employeeId)).size;
+    const normalCount = allRecords.filter(r => r.status === 'MATCHED').length;
+    const abnormalStatuses = ['CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE'];
+    const abnormalCount = allRecords.filter(r => abnormalStatuses.includes(r.status)).length;
+    const pendingCount = allRecords.filter(r => abnormalStatuses.includes(r.status)).length;
+    const lockedCount = allRecords.filter(r => r.isLocked === true).length;
+    return { totalRows, uniqueEmployees, normalCount, abnormalCount, pendingCount, lockedCount };
+  }, [allRecords]);
+
   return (
     <Box sx={{ mb: 2 }}>
       <Grid container spacing={2}>
@@ -130,7 +149,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                   }}
                 >
                   <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 700, fontSize: '0.6rem', display: 'block' }}>แถวข้อมูลสะสม</Typography>
-                  <Typography variant="subtitle1" fontWeight="900" sx={{ lineHeight: 1.1 }}>4,034</Typography>
+                  <Typography variant="subtitle1" fontWeight="900" sx={{ lineHeight: 1.1 }}>{stats.totalRows.toLocaleString()}</Typography>
                 </Box>
                 <PeopleIcon sx={{ fontSize: 32, opacity: 0.3 }} />
               </Stack>
@@ -158,7 +177,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                 </Typography>
                 <Stack direction="row" alignItems="baseline" spacing={1}>
                   <Typography variant="h2" fontWeight="900" sx={{ color: BLUE.NAVY, fontSize: '3rem', lineHeight: 1 }}>
-                    450
+                    {stats.normalCount.toLocaleString()}
                   </Typography>
                   <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.LIGHT }}>รายการ</Typography>
                 </Stack>
@@ -217,7 +236,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                 
                 <Stack direction="row" alignItems="center" spacing={0.5}>
                   <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', color: '#dc2626', lineHeight: 1 }}>
-                    44
+                    {stats.abnormalCount}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <InfoIcon sx={{ fontSize: 20, color: '#ef4444', mb: -0.5 }} />
@@ -248,20 +267,20 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                     <RocketIcon sx={{ fontSize: 10, color: '#d97706' }} />
                     <Typography variant="caption" fontWeight="900" sx={{ color: '#b45309', fontSize: '0.65rem' }}>รอแก้ไข</Typography>
                   </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: '#92400e', lineHeight: 1 }}>34</Typography>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: '#92400e', lineHeight: 1 }}>{stats.pendingCount}</Typography>
                 </Box>
 
                 <Box 
                   onClick={(e) => {
                     e.stopPropagation();
-                    onStatusClick?.('abnormal_fixed');
+                    onStatusClick?.('locked');
                   }}
                   sx={{ 
                     p: 0.75, 
                     borderRadius: '10px', 
-                    background: activeStatus === 'abnormal_fixed' ? '#e0f2fe' : 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
+                    background: activeStatus === 'locked' ? '#e0f2fe' : 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
                     border: '1px solid',
-                    borderColor: activeStatus === 'abnormal_fixed' ? '#0284c7' : '#bae6fd',
+                    borderColor: activeStatus === 'locked' ? '#0284c7' : '#bae6fd',
                     textAlign: 'center',
                     cursor: 'pointer',
                     '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 10px rgba(14, 165, 233, 0.1)' }
@@ -269,9 +288,9 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                 >
                   <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
                     <SendIcon sx={{ fontSize: 10, color: '#0284c7', transform: 'rotate(-45deg)' }} />
-                    <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.65rem' }}>แก้ไขแล้ว</Typography>
+                    <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.65rem' }}>ล็อกแล้ว</Typography>
                   </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: '#075985', lineHeight: 1 }}>10</Typography>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: '#075985', lineHeight: 1 }}>{stats.lockedCount}</Typography>
                 </Box>
               </Stack>
             </Stack>

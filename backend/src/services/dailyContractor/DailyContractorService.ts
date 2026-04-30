@@ -313,29 +313,38 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     }
   }
 
-  /**
-   * Search DCs by keyword (employeeId or name)
-   */
   async searchByKeyword(
     keyword: string,
     options?: PaginationOptions
-  ): Promise<DailyContractor[]> {
+  ): Promise<{ items: DailyContractor[]; total: number; page: number; pageSize: number; totalPages: number }> {
     const trimmed = keyword.trim().toLowerCase();
 
     const result = await this.getAll({
-      page: options?.page || 1,
-      pageSize: options?.pageSize || 200,
+      page: 1,
+      pageSize: 5000,
     });
 
-    if (!trimmed) {
-      return result.items;
+    let filtered = result.items;
+
+    if (trimmed) {
+      filtered = result.items.filter((dc) => {
+        const idMatch = dc.employeeId?.toLowerCase().includes(trimmed);
+        const nameMatch = dc.name?.toLowerCase().includes(trimmed);
+        return Boolean(idMatch || nameMatch);
+      });
     }
 
-    return result.items.filter((dc) => {
-      const idMatch = dc.employeeId?.toLowerCase().includes(trimmed);
-      const nameMatch = dc.name?.toLowerCase().includes(trimmed);
-      return Boolean(idMatch || nameMatch);
-    });
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 200;
+    const offset = (page - 1) * pageSize;
+
+    return {
+      items: filtered.slice(offset, offset + pageSize),
+      total: filtered.length,
+      page,
+      pageSize,
+      totalPages: Math.ceil(filtered.length / pageSize),
+    };
   }
 
   private sortByEffectiveDate<T extends { effectiveDate: Date; updatedAt: Date }>(
@@ -406,6 +415,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         dailyWageRate: number;
         professionalRate: number;
         phoneAllowancePerPeriod: number;
+        allowance?: number;
         otherIncome?: number;
         mouDeductionRate?: number;
       };
@@ -434,6 +444,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         dailyWageRate: data.income.dailyWageRate,
         professionalRate: data.income.professionalRate,
         phoneAllowance: data.income.phoneAllowancePerPeriod,
+        allowance: data.income.allowance ?? 0,
         otherIncome: data.income.otherIncome ?? 0,
         mouDeductionRate: data.income.mouDeductionRate ?? 0,
         effectiveDate: now,
@@ -454,6 +465,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
           dailyWageRate: payload.dailyWageRate,
           professionalRate: payload.professionalRate,
           phoneAllowance: payload.phoneAllowance,
+          allowance: payload.allowance,
           otherIncome: payload.otherIncome,
           mouDeductionRate: payload.mouDeductionRate,
           isActive: true,
