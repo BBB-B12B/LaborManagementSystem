@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   Box,
   Typography,
   IconButton,
@@ -41,6 +42,7 @@ import th from 'date-fns/locale/th';
 import { dailyReportService } from '@/services/dailyReportService';
 import { taskService, type Task } from '@/services/taskService';
 import { useSnackbar } from 'notistack';
+import TaskRejectModal from './TaskRejectModal';
 
 interface TaskDailyReportModalProps {
   open: boolean;
@@ -62,6 +64,14 @@ interface DailySummary {
 }
 
 const today = startOfDay(new Date());
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+const getImageUrl = (url: string) => {
+  if (url && url.startsWith('/uploads')) {
+    return `${API_URL}${url}`;
+  }
+  return url;
+};
 
 export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdated }: TaskDailyReportModalProps) {
   const { enqueueSnackbar } = useSnackbar();
@@ -74,6 +84,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const [reportData, setReportData] = useState<Record<string, DailySummary>>({});
   const [reportDates, setReportDates] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
   const fetchReports = useCallback(async (forceRefresh = false) => {
     if (!task?.id || !open) return;
@@ -150,6 +162,9 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
   useEffect(() => {
     fetchReports(false);
+    const handleSync = () => fetchReports(true);
+    window.addEventListener('globalSync', handleSync);
+    return () => window.removeEventListener('globalSync', handleSync);
   }, [fetchReports]);
 
   const handleUnlockClick = (event: React.MouseEvent<HTMLElement>) => setUnlockAnchorEl(event.currentTarget);
@@ -177,19 +192,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     }
   };
 
-  const handleReject = async () => {
-    if (!task) return;
-    try {
-      setActionLoading(true);
-      await taskService.rejectTask(task.id, `Rework ${task.taskName}`, task.assignees);
-      enqueueSnackbar('ตีกลับงานเรียบร้อยแล้ว (Task Rejected)', { variant: 'warning' });
-      if (onTaskUpdated) onTaskUpdated();
-      onClose();
-    } catch (error: any) {
-      enqueueSnackbar(error.message || 'Failed to reject task', { variant: 'error' });
-    } finally {
-      setActionLoading(false);
-    }
+  const handleReject = () => {
+    setIsRejectModalOpen(true);
   };
 
   const closedWageDate = startOfDay(subDays(today, 6));
@@ -215,13 +219,19 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     const dateStr = format(day, 'yyyy-MM-dd');
     const hasReport = reportDates.includes(dateStr);
     const isPast = isBefore(day, today) && !isSameDay(day, today);
+    const isLocked = isPast && isBefore(day, subDays(today, 3));
     const isMissingReport = isPast && !hasReport && !outsideCurrentMonth;
+
+    let badgeColor = undefined;
+    if (isMissingReport) {
+      badgeColor = isLocked ? 'error.main' : 'warning.main';
+    }
 
     return (
       <Badge
         key={props.day.toString()}
         overlap="circular"
-        badgeContent={isMissingReport ? <Box sx={{ width: 6, height: 6, bgcolor: 'error.main', borderRadius: '50%' }} /> : undefined}
+        badgeContent={badgeColor ? <Box sx={{ width: 6, height: 6, bgcolor: badgeColor, borderRadius: '50%' }} /> : undefined}
       >
         <PickersDay
           {...other}
@@ -240,7 +250,13 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 4, minHeight: 600 } }}>
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      maxWidth="lg" 
+      fullWidth 
+      PaperProps={{ sx: { borderRadius: 4, minHeight: 600 } }}
+    >
       <DialogTitle sx={{ pb: 1, pt: 3, px: 3, borderBottom: '1px solid #eef0f4' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Box>
@@ -305,23 +321,16 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             <Grid item xs={12} md={5}>
               <Box sx={{ border: '1px solid #eef0f4', borderRadius: 4, p: 2, height: '100%' }}>
                 <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
-                      Daily Report Log
-                    </Typography>
-                    <Tooltip title="ซิงค์ข้อมูล (Refresh)">
-                      <IconButton size="small" onClick={() => fetchReports(true)} disabled={loading}>
-                        <SyncIcon fontSize="small" sx={{ color: '#64748b' }} />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
+                    Daily Report Log
+                  </Typography>
                   <Button
                     variant={isUnlocked ? "outlined" : "contained"}
                     color={isUnlocked ? "primary" : "warning"}
                     size="small"
                     startIcon={isUnlocked ? <LockOpenIcon /> : <LockIcon />}
                     onClick={handleUnlockClick}
-                    disabled={isWagePeriodClosed}
+                    disabled={isWagePeriodClosed || !isSelectedDateLocked}
                     sx={{ borderRadius: '999px', textTransform: 'none', fontWeight: 700, boxShadow: 'none', px: 2 }}
                   >
                     {isUnlocked ? 'ขยายเวลา' : 'ปลดล็อคสิทธิ์'}
@@ -368,11 +377,15 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
                 <Stack direction="row" spacing={3} sx={{ mt: 2, justifyContent: 'center' }}>
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(5, 150, 105, 0.2)', borderRadius: '50%' }} />
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'rgba(5, 150, 105, 0.2)', borderRadius: '50%' }} />
                     <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>มีข้อมูล</Typography>
                   </Stack>
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(239, 68, 68, 0.2)', borderRadius: '50%' }} />
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'warning.main', borderRadius: '50%' }} />
+                    <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ยังไม่ได้ลง</Typography>
+                  </Stack>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'error.main', borderRadius: '50%' }} />
                     <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ไม่มีข้อมูล</Typography>
                   </Stack>
                 </Stack>
@@ -387,34 +400,30 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
                 {selectedSummary ? (
                   <Stack spacing={3} sx={{ flexGrow: 1 }}>
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Box sx={{ p: 2, borderRadius: 3, border: '2px dashed #cbd5e1', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                            <PeopleIcon sx={{ color: '#0ea5e9', fontSize: 20 }} />
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>แรงงาน (DC)</Typography>
-                          </Stack>
-                          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                            {selectedSummary.workerCount} <Typography component="span" variant="body1" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
-                          </Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Box sx={{ p: 2, borderRadius: 3, border: '2px dashed #cbd5e1', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                            <AccessTimeIcon sx={{ color: '#64748b', fontSize: 20 }} />
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>ชั่วโมงการทำงานทั้งหมด</Typography>
-                          </Stack>
-                          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                            {selectedSummary.regularHours + selectedSummary.otMorning + selectedSummary.otNoon + selectedSummary.otEvening} <Typography component="span" variant="body1" sx={{ fontWeight: 600, color: '#64748b' }}>ชั่วโมง</Typography>
-                          </Typography>
-                        </Box>
-                      </Grid>
-                    </Grid>
+                    <Stack direction="row" spacing={2}>
+                      <Box sx={{ flex: 1, p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                          <PeopleIcon sx={{ color: '#0ea5e9', fontSize: 18 }} />
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>แรงงาน (DC)</Typography>
+                        </Stack>
+                        <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                          {selectedSummary.workerCount} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: 1, p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                          <AccessTimeIcon sx={{ color: '#64748b', fontSize: 18 }} />
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>ชั่วโมงการทำงานทั้งหมด</Typography>
+                        </Stack>
+                        <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                          {selectedSummary.regularHours + selectedSummary.otMorning + selectedSummary.otNoon + selectedSummary.otEvening} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>ชั่วโมง</Typography>
+                        </Typography>
+                      </Box>
+                    </Stack>
 
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <Box sx={{ p: 2, borderRadius: 3, border: '2px dotted #94a3b8', height: '100%' }}>
+                        <Box sx={{ p: 2, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', height: '100%' }}>
                           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
                             <AccessTimeIcon sx={{ fontSize: 18, color: '#475569' }} />
                             <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155' }}>
@@ -479,12 +488,12 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                           <Stack direction="row" spacing={1} justifyContent="center">
                             {selectedSummary.sitePhotos.length > 0 ? (
                               selectedSummary.sitePhotos.slice(0, 2).map((url, i) => (
-                                <Box key={i} component="img" src={url} sx={{ width: 60, height: 60, borderRadius: 2, objectFit: 'cover' }} />
+                                <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
                               ))
                             ) : (
                               <>
-                                <Box sx={{ width: 60, height: 60, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
-                                <Box sx={{ width: 60, height: 60, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
+                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
+                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
                               </>
                             )}
                           </Stack>
@@ -494,12 +503,12 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                           <Stack direction="row" spacing={1} justifyContent="center">
                             {selectedSummary.laborPhotos.length > 0 ? (
                               selectedSummary.laborPhotos.slice(0, 2).map((url, i) => (
-                                <Box key={i} component="img" src={url} sx={{ width: 60, height: 60, borderRadius: 2, objectFit: 'cover' }} />
+                                <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
                               ))
                             ) : (
                               <>
-                                <Box sx={{ width: 60, height: 60, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
-                                <Box sx={{ width: 60, height: 60, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
+                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
+                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
                               </>
                             )}
                           </Stack>
@@ -520,6 +529,27 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           </Grid>
         )}
       </DialogContent>
+
+      {/* Approve/Reject Footer removed as requested - already in header */}
+
+      <Dialog open={Boolean(previewImage)} onClose={() => setPreviewImage(null)} maxWidth="md" fullWidth>
+        <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 2 }}>
+          <IconButton onClick={() => setPreviewImage(null)} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}>
+            <CloseIcon />
+          </IconButton>
+          {previewImage && <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />}
+        </Box>
+      </Dialog>
+
+      <TaskRejectModal
+        open={isRejectModalOpen}
+        onClose={() => setIsRejectModalOpen(false)}
+        onSuccess={() => {
+          if (onTaskUpdated) onTaskUpdated();
+          onClose();
+        }}
+        task={task}
+      />
     </Dialog>
   );
 }

@@ -367,10 +367,12 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
 
   /**
    * Get DCs by project
+   * Supports both old format (projectLocationId: string) and new format (projectLocationIds: string[])
    */
   async getByProject(projectLocationId: string): Promise<DailyContractorDTO[]> {
     try {
-      const results = await this.query([
+      // Query new format: projectLocationIds (array)
+      const newFormatResults = await this.query([
         {
           field: 'projectLocationIds',
           operator: 'array-contains',
@@ -378,7 +380,26 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         },
       ]);
 
-      return results.map((dc) => this.toDTO(dc));
+      // Query old format: projectLocationId (string) - for legacy data
+      const oldFormatResults = await this.query([
+        {
+          field: 'projectLocationId',
+          operator: '==',
+          value: projectLocationId,
+        },
+      ]);
+
+      // Deduplicate by id
+      const seen = new Set<string>();
+      const combined: typeof newFormatResults = [];
+      for (const dc of [...newFormatResults, ...oldFormatResults]) {
+        if (!seen.has(dc.id)) {
+          seen.add(dc.id);
+          combined.push(dc);
+        }
+      }
+
+      return combined.map((dc) => this.toDTO(dc));
     } catch (error: any) {
       logger.error('Error getting DCs by project:', error);
       throw error;

@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button } from '@mui/material';
-import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
+import { useSnackbar } from 'notistack';
 import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';
 import { useAuthStore } from '@/store/authStore';
+import { dailyReportService } from '@/services/dailyReportService';
 
 export interface LayoutProps {
   children: React.ReactNode;
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | false;
   disablePadding?: boolean;
+  disableTopGap?: boolean;
 }
 
 const TOPBAR_HEIGHT = 64;
@@ -17,8 +20,14 @@ const TOPBAR_HEIGHT = 64;
 const Topbar: React.FC = () => {
   const router = useRouter();
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
   const { user, logout } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleGlobalSync = () => {
+    dailyReportService.clearCache();
+    window.dispatchEvent(new CustomEvent('globalSync'));
+  };
 
   const englishInitial = useMemo(() => {
     const candidates = [user?.fullNameEn, user?.name, user?.username];
@@ -44,7 +53,7 @@ const Topbar: React.FC = () => {
         left: { xs: 0, md: SIDEBAR_WIDTH },
         width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
         height: TOPBAR_HEIGHT,
-        zIndex: (theme) => Math.max(theme.zIndex.appBar, 1500),
+        zIndex: 900,
         backgroundColor: '#f7f7f9',
         color: '#1c1e2b',
         borderBottom: '1px solid #e5e7ed',
@@ -87,6 +96,19 @@ const Topbar: React.FC = () => {
               {user?.department || user?.roleCode || '—'}
             </Typography>
           </Stack>
+          <IconButton
+            onClick={handleGlobalSync}
+            sx={{
+              width: 38,
+              height: 38,
+              bgcolor: '#ffffff',
+              color: '#1c1e2b',
+              border: '1px solid #e5e7ed',
+              '&:hover': { bgcolor: '#f0f1f5' },
+            }}
+          >
+            <SyncIcon fontSize="small" sx={{ color: '#64748b' }} />
+          </IconButton>
           <IconButton
             onClick={(e) => setAnchorEl(e.currentTarget)}
             sx={{
@@ -137,6 +159,7 @@ export const Layout: React.FC<LayoutProps> = ({
   children,
   maxWidth = 'xl',
   disablePadding = false,
+  disableTopGap = false,
 }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
@@ -150,7 +173,7 @@ export const Layout: React.FC<LayoutProps> = ({
           width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
           display: 'flex',
           flexDirection: 'column',
-          pt: `${TOPBAR_HEIGHT + 12}px`,
+          pt: disableTopGap ? `${TOPBAR_HEIGHT}px` : `${TOPBAR_HEIGHT + 12}px`,
         }}
       >
         <Topbar />

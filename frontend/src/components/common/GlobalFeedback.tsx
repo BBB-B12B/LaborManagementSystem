@@ -63,6 +63,7 @@ export const GlobalFeedback: React.FC = () => {
             p: 2,
             textAlign: 'center',
             boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+            zIndex: (theme) => Math.max(theme.zIndex.modal, 2000),
           },
         }}
       >

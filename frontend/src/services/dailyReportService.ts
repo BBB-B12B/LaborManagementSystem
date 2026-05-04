@@ -427,6 +427,17 @@ class DailyReportService {
   }
 
   /**
+   * Clear reports cache (useful for global sync)
+   */
+  clearCache(taskId?: string) {
+    if (taskId) {
+      delete this.reportsCache[taskId];
+    } else {
+      this.reportsCache = {};
+    }
+  }
+
+  /**
    * Upload multiple photos
    */
   async uploadPhotos(files: File[], folder: string = 'daily-reports'): Promise<string[]> {

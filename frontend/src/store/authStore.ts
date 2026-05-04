@@ -47,13 +47,7 @@ export const useAuthStore = create<AuthState>()(
       // Actions
       setUser: (user) =>
         set({
-          user: user
-            ? {
-                ...user,
-                roleCode: 'GOD',
-                roleId: 'GOD',
-              }
-            : null,
+          user: user ?? null,
           isAuthenticated: !!user,
         }),
 
@@ -61,11 +55,7 @@ export const useAuthStore = create<AuthState>()(
 
       login: (user, token) =>
         set({
-          user: {
-            ...user,
-            roleCode: 'GOD',
-            roleId: 'GOD',
-          },
+          user,
           token,
           isAuthenticated: true,
         }),
@@ -82,18 +72,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage', // localStorage key
-      version: 1,
+      version: 2,           // bumped to force re-login and clear old GOD-mode cache
       migrate: (persistedState: any) => {
-        if (persistedState?.user) {
-          return {
-            ...persistedState,
-            user: {
-              ...persistedState.user,
-              roleCode: 'GOD',
-              roleId: 'GOD',
-            },
-          };
-        }
+        // Clear old persisted state to remove any cached GOD-mode data
         return persistedState;
       },
       onRehydrateStorage: () => (state, error) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -11,10 +11,11 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Tune as TuneIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import Layout from '@/components/layout/Layout';
@@ -22,16 +23,22 @@ import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { taskService, type Task } from '@/services/taskService';
+import { useAuthStore } from '@/store/authStore';
+import { useTaskCacheStore } from '@/store/taskCacheStore';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
   { id: 'in-progress', label: 'In Progress', color: '#5b5ce6' },
+  { id: 'for-checking', label: 'For Checking', color: '#f59e0b' },
   { id: 'completed', label: 'Completed', color: '#00b87c' },
 ] as const;
 
 export default function WorkspacePage() {
+  const { user } = useAuthStore();
+  const taskCache = useTaskCacheStore();
+
   const [activeTab, setActiveTab] = useState('All Tasks');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -40,26 +47,101 @@ export default function WorkspacePage() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
 
-  const fetchTasks = async () => {
-    setLoading(true);
-    try {
-      const data = await taskService.getTasks();
-      setTasks(data || []);
-    } catch (error) {
-      console.error('Failed to fetch tasks', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Track the user ID to detect user-switch and force refetch
+  const prevUserIdRef = useRef<string | null>(null);
 
+  /** à¸à¸£à¸­à¸‡ Task à¸•à¸²à¸¡ Role à¸‚à¸­à¸‡ User */
+  const filterTasksByRole = useCallback(
+    (allTasks: Task[]): Task[] => {
+      const role = String(user?.roleCode || user?.roleId || '').toUpperCase();
+      const isAdmin = ['AM', 'GOD', 'ADMIN'].includes(role);
+      if (isAdmin) return allTasks;
+
+      const userProjectIds = user?.projectLocationIds || [];
+      const employeeId = user?.employeeId;
+
+      return allTasks.filter((t) => {
+        // 1. งานที่อยู่ในโครงการที่เราสังกัด
+        const isMyProject = userProjectIds.length === 0 || userProjectIds.includes(t.projectId);
+        
+        // 2. งานที่เราได้รับมอบหมาย (Assignee)
+        const isAssignedToMe = t.assignees?.some(a => a.employeeId === employeeId);
+
+        return isMyProject || isAssignedToMe;
+      });
+    },
+    [user]
+  );
+
+  /**
+   * Fetch à¸ˆà¸²à¸ API à¸ˆà¸£à¸´à¸‡ â†’ à¸šà¸±à¸™à¸—à¸¶à¸ Cache
+   * @param silent - à¸–à¹‰à¸² true à¸ˆà¸°à¹ƒà¸Šà¹‰ isRefreshing à¹à¸—à¸™ loading (à¸›à¹‰à¸­à¸‡à¸à¸±à¸™ Skeleton à¸à¸£à¸°à¸žà¸£à¸´à¸š)
+   */
+  const fetchFromAPI = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoading(true);
+      }
+      taskCache.setLoading(true);
+      try {
+        const data = await taskService.getTasks();
+        const filtered = filterTasksByRole(data || []);
+        taskCache.setTasks(filtered);
+        setTasks(filtered);
+      } catch (error) {
+        console.error('[WorkspacePage] Failed to fetch tasks', error);
+        taskCache.setError('ไม่สามารถโหลดข้อมูลงานได้');
+      } finally {
+        setLoading(false);
+        taskCache.setLoading(false);
+      }
+    },
+    [filterTasksByRole, taskCache]
+  );
+
+  /**
+   * à¹‚à¸«à¸¥à¸” Task:
+   * - à¸–à¹‰à¸² Cache à¸¢à¸±à¸‡à¹ƒà¸Šà¹‰à¹„à¸”à¹‰ â†’ à¹ƒà¸Šà¹‰à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸ˆà¸²à¸ Cache à¸—à¸±à¸™à¸—à¸µ (à¹„à¸¡à¹ˆà¸¢à¸´à¸‡ API)
+   * - à¸–à¹‰à¸² Cache à¸«à¸¡à¸”à¸­à¸²à¸¢à¸¸ à¸«à¸£à¸·à¸­à¸–à¸¹à¸ invalidate â†’ à¹€à¸£à¸µà¸¢à¸ API
+   */
+  const loadTasks = useCallback(
+    async (forceRefresh = false) => {
+      if (!forceRefresh && taskCache.isCacheValid() && taskCache.tasks.length > 0) {
+        setTasks(taskCache.tasks);
+        setLoading(false);
+        return;
+      }
+      await fetchFromAPI(forceRefresh);
+    },
+    [taskCache, fetchFromAPI]
+  );
+
+  // à¹‚à¸«à¸¥à¸”à¸„à¸£à¸±à¹‰à¸‡à¹à¸£à¸ + à¹€à¸¡à¸·à¹ˆà¸­ user à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™ â†’ invalidate cache
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    const userChanged = prevUserIdRef.current !== (user?.id ?? null);
+    if (userChanged) {
+      taskCache.invalidate();
+      prevUserIdRef.current = user?.id ?? null;
+    }
+    setLoading(true);
+    loadTasks(false);
 
+    const handleSync = () => {
+      taskCache.invalidate();
+      fetchFromAPI(true);
+    };
+    window.addEventListener('globalSync', handleSync);
+    return () => window.removeEventListener('globalSync', handleSync);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+
+  /** à¸«à¸¥à¸±à¸‡ Submit (Create/Edit) â†’ invalidate + silent refresh */
   const handleModalSuccess = () => {
     setIsModalOpen(false);
     setEditingTask(null);
-    fetchTasks();
+    taskCache.invalidate();
+    fetchFromAPI(true);
   };
 
   const handleEdit = (task: Task) => {
@@ -78,7 +160,8 @@ export default function WorkspacePage() {
       await taskService.deleteTask(taskToDelete.id);
       setIsDeleteDialogOpen(false);
       setTaskToDelete(null);
-      fetchTasks();
+      taskCache.invalidate();
+      fetchFromAPI(true);
     } catch (error) {
       console.error('Failed to delete task', error);
     }
@@ -90,7 +173,7 @@ export default function WorkspacePage() {
   };
 
   return (
-    <Layout disablePadding>
+    <Layout disablePadding disableTopGap maxWidth={false}>
       <Head>
         <title>Workspace | Labor Manager</title>
       </Head>
@@ -143,6 +226,7 @@ export default function WorkspacePage() {
 
             {/* Actions */}
             <Stack direction="row" spacing={2} alignItems="center">
+
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -228,7 +312,10 @@ export default function WorkspacePage() {
             };
 
             const filteredTasks = getFilteredTasks();
-            const columnTasks = filteredTasks.filter((t) => t.status === column.id);
+            const columnTasks = filteredTasks.filter((t) => {
+              if (column.id === 'in-progress') return t.status === 'in-progress' || t.status === 'rework';
+              return t.status === column.id;
+            });
 
             return (
               <Box
@@ -349,12 +436,12 @@ export default function WorkspacePage() {
         onClose={() => setIsDeleteDialogOpen(false)}
         PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
-        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงาน</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>à¸¢à¸·à¸™à¸¢à¸±à¸™à¸à¸²à¸£à¸¥à¸šà¸‡à¸²à¸™</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            คุณแน่ใจหรือไม่ว่าต้องการลบงาน "{taskToDelete?.taskName}"? 
+            à¸„à¸¸à¸“à¹à¸™à¹ˆà¹ƒà¸ˆà¸«à¸£à¸·à¸­à¹„à¸¡à¹ˆà¸§à¹ˆà¸²à¸•à¹‰à¸­à¸‡à¸à¸²à¸£à¸¥à¸šà¸‡à¸²à¸™ "{taskToDelete?.taskName}"? 
             <br />
-            การลบนี้จะเป็นการซ่อนงานออกจากระบบ (Soft Delete)
+            à¸à¸²à¸£à¸¥à¸šà¸™à¸µà¹‰à¸ˆà¸°à¹€à¸›à¹‡à¸™à¸à¸²à¸£à¸‹à¹ˆà¸­à¸™à¸‡à¸²à¸™à¸­à¸­à¸à¸ˆà¸²à¸à¸£à¸°à¸šà¸š (Soft Delete)
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ pb: 2, px: 3 }}>
@@ -362,7 +449,7 @@ export default function WorkspacePage() {
             onClick={() => setIsDeleteDialogOpen(false)} 
             sx={{ fontWeight: 700, color: 'text.secondary' }}
           >
-            ยกเลิก
+            à¸¢à¸à¹€à¸¥à¸´à¸
           </Button>
           <Button 
             onClick={confirmDelete} 
@@ -370,7 +457,7 @@ export default function WorkspacePage() {
             color="error" 
             sx={{ fontWeight: 700, borderRadius: 2, px: 3 }}
           >
-            ยืนยันการลบ
+            à¸¢à¸·à¸™à¸¢à¸±à¸™à¸à¸²à¸£à¸¥à¸š
           </Button>
         </DialogActions>
       </Dialog>

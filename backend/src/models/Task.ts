@@ -1,4 +1,4 @@
-export type TaskStatus = 'upcoming' | 'in-progress' | 'rework' | 'completed';
+export type TaskStatus = 'upcoming' | 'in-progress' | 'rework' | 'for-checking' | 'completed';
 
 export interface TaskRevision {
   revisionId: string; // e.g. "rev00"
@@ -30,10 +30,13 @@ export interface Task {
   assignees: TaskAssignee[];
   dueDate: Date;
   status: TaskStatus;
-  currentRevision: string; // [NEW] e.g. "rev00"
+  currentRevision: string; // e.g. "rev00"
+  revisionId?: string; // [NEW] e.g. "rev01"
+  revisionName?: string; // [NEW] e.g. "แก้ไขรอยร้าว"
   dailyProgress: number;
   attachmentsCount: number;
   isActive: boolean;
+  isSupportRequest?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -52,6 +55,7 @@ export interface CreateTaskInput {
   assignees: TaskAssignee[];
   dueDate: Date;
   status?: TaskStatus;
+  isSupportRequest?: boolean;
 }
 
 export interface UpdateTaskInput {
@@ -66,7 +70,8 @@ export interface UpdateTaskInput {
   assignees?: TaskAssignee[];
   dueDate?: Date;
   status?: TaskStatus;
-  dailyProgress?: number;
+  revisionId?: string;
+  revisionName?: string;
   attachmentsCount?: number;
   isActive?: boolean;
 }
@@ -88,9 +93,12 @@ export const taskConverter = {
       dueDate: task.dueDate,
       status: task.status,
       currentRevision: task.currentRevision || 'rev00',
+      revisionId: task.revisionId || task.currentRevision || 'rev00',
+      revisionName: task.revisionName || null,
       dailyProgress: task.dailyProgress || 0,
       attachmentsCount: task.attachmentsCount || 0,
       isActive: task.isActive,
+      isSupportRequest: task.isSupportRequest || false,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       createdBy: task.createdBy,
@@ -123,9 +131,12 @@ export const taskConverter = {
       dueDate: safeDate(data.dueDate),
       status: data.status || 'upcoming',
       currentRevision: data.currentRevision || 'rev00',
+      revisionId: data.revisionId || data.currentRevision || 'rev00',
+      revisionName: data.revisionName || '',
       dailyProgress: data.dailyProgress || 0,
       attachmentsCount: data.attachmentsCount || 0,
       isActive: data.isActive !== false,
+      isSupportRequest: data.isSupportRequest || false,
       createdAt: safeDate(data.createdAt),
       updatedAt: safeDate(data.updatedAt),
       createdBy: data.createdBy || '',

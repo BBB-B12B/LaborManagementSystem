@@ -3,7 +3,7 @@
  * Web app's Firebase configuration
  */
 
-import { initializeApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
@@ -80,7 +80,11 @@ let storage: FirebaseStorage;
 let analytics: Analytics | null = null;
 
 try {
-  app = initializeApp(firebaseConfig);
+  if (getApps().length > 0) {
+    app = getApp();
+  } else {
+    app = initializeApp(firebaseConfig);
+  }
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);

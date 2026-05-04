@@ -13,7 +13,12 @@ import {
   CircularProgress,
   IconButton,
   Avatar,
+  Tooltip,
+  InputAdornment,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import { DatePicker } from '@/components/forms/DatePicker';
@@ -23,9 +28,14 @@ import { z } from 'zod';
 import { projectService, type Project } from '@/services/projectService';
 import { memberService, type User } from '@/services/memberService';
 import { taskService } from '@/services/taskService';
-import { categoryService, type WorkOrderCategory } from '@/services/categoryService';
+import { projectConfigService, WorkOrderConfig, CategoryConfig } from '@/services/projectConfigService';
 import { useSnackbar } from 'notistack';
 import { useAuthStore } from '@/store/authStore';
+import { useToast } from '@/components/common/Toast';
+import { WorkOrderConfigModal } from './WorkOrderConfigModal';
+import { CategoryConfigModal } from './CategoryConfigModal';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 
 // Form validation schema
 const taskSchema = z.object({
@@ -38,13 +48,23 @@ const taskSchema = z.object({
       name: z.string(),
       roleId: z.string(),
     })
-  ).min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน'),
+  ),
   dueDate: z.date({
     required_error: 'กรุณาเลือกวันที่ครบกำหนด',
     invalid_type_error: 'รูปแบบวันที่ไม่ถูกต้อง',
   }),
   workOrderCode: z.string().min(1, 'กรุณาเลือกหมวดหมู่งานหลัก'),
   categoryName: z.string().min(2, 'กรุณาระบุหมวดหมู่งานย่อย'),
+  isSupportRequest: z.boolean().optional().default(false),
+}).superRefine((data, ctx) => {
+  // ถ้าไม่ได้ขอ Support ต้องมีผู้รับผิดชอบอย่างน้อย 1 คน
+  if (!data.isSupportRequest && data.assignees.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน",
+      path: ["assignees"],
+    });
+  }
 });
 
 type TaskFormData = z.infer<typeof taskSchema>;
@@ -57,18 +77,39 @@ interface TaskCreateModalProps {
 }
 
 export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose, onSuccess, task }) => {
+  const toast = useToast();
   const { user } = useAuthStore();
   const isEdit = !!task;
   const [projects, setProjects] = useState<Project[]>([]);
-  const [categories, setCategories] = useState<WorkOrderCategory[]>([]);
   const [fmUsers, setFmUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Dynamic Configs State
+  const [workOrders, setWorkOrders] = useState<WorkOrderConfig[]>([]);
+  const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  
+  // Modal states
+  const [openWOModal, setOpenWOModal] = useState(false);
+  const [openCatModal, setOpenCatModal] = useState(false);
+  const [editWO, setEditWO] = useState<WorkOrderConfig | null>(null);
+  const [editCat, setEditCat] = useState<CategoryConfig | null>(null);
+
+  // --- Helper/Support Team Logic ---
+  /** ตรวจสอบว่าเป็นทีม Support (คลังสินค้า P004 หรือ บริการลูกค้า P002) หรือไม่ โดยเช็คจากชื่อโครงการ */
+  const isHelperUser = projects.some(p => 
+    user?.projectLocationIds?.includes(p.id) && 
+    (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+  );
+  /** รายการงานที่มีอยู่แล้วในโครงการ (สำหรับทีม Support เลือก) */
+  const [existingTasks, setExistingTasks] = useState<any[]>([]);
+  const [isFetchingTasks, setIsFetchingTasks] = useState(false);
 
   const {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting, isValid },
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
@@ -81,6 +122,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       categoryName: '',
       assignees: [],
       dueDate: null as any,
+      isSupportRequest: false,
     },
   });
 
@@ -95,24 +137,45 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         categoryName: task.categoryName,
         assignees: task.assignees,
         dueDate: new Date(task.dueDate),
+        isSupportRequest: task.isSupportRequest || false,
       });
     }
   }, [open, task, reset]);
 
-  // Fetch initial data
+  // Fetch initial projects & users
   useEffect(() => {
     if (open) {
       const fetchData = async () => {
         setLoading(true);
         try {
-          const [projectsData, usersData, categoriesData] = await Promise.all([
+          const [projectsData, usersData] = await Promise.all([
             projectService.getActive(),
             memberService.getAllUsers({ roleId: 'FM' }),
-            categoryService.getActiveCategories(),
           ]);
           setProjects(projectsData);
           setFmUsers(usersData.users || []);
-          setCategories(categoriesData);
+
+          // --- LOGIC: Default Project Selection ---
+          if (!isEdit && user?.projectLocationIds && user.projectLocationIds.length > 0) {
+            // Check if user belongs to "Helper/Support" projects by Project Name
+            const isHelperProject = projectsData.some(p => 
+              user.projectLocationIds.includes(p.id) && 
+              (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+            );
+
+            const userProjectId = user.projectLocationIds[0];
+            // Match by ID or Project Code (to support both legacy and new ID formats)
+            const matchedProject = projectsData.find(p => 
+              p.id === userProjectId || p.projectCode === userProjectId
+            );
+
+            if (matchedProject) {
+              reset((prev) => ({
+                ...prev,
+                projectId: matchedProject.id
+              }));
+            }
+          }
         } catch (error) {
           console.error('Failed to fetch modal data', error);
         } finally {
@@ -121,11 +184,57 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       };
       fetchData();
     } else {
-      // Reset form when closed
       reset();
       setSubmitError('');
+      setWorkOrders([]);
+      setCategories([]);
     }
-  }, [open, reset]);
+  }, [open, reset, isEdit, user]);
+
+  const selectedProjectId = useWatch({ control, name: 'projectId' });
+  const selectedWorkOrderCode = useWatch({ control, name: 'workOrderCode' });
+  const selectedTaskName = useWatch({ control, name: 'taskName' });
+  const isSupportRequest = useWatch({ control, name: 'isSupportRequest' });
+
+  // Fetch Existing Tasks for Support Team when projectId changes
+  useEffect(() => {
+    if (isHelperUser && selectedProjectId && open) {
+      setIsFetchingTasks(true);
+      taskService.getTasks()
+        .then(allTasks => {
+          // กรองเฉพาะงานในโครงการนี้, Progress < 100, ถูกติ๊กเป็น Support Request และ "ยังไม่มีคนรับงาน"
+          const projectTasks = allTasks.filter(t => 
+            t.projectId === selectedProjectId && 
+            (t.dailyProgress || 0) < 100 &&
+            t.isSupportRequest === true &&
+            (!t.assignees || t.assignees.length === 0)
+          );
+          setExistingTasks(projectTasks);
+        })
+        .catch(err => console.error('Failed to fetch existing tasks', err))
+        .finally(() => setIsFetchingTasks(false));
+    } else {
+      setExistingTasks([]);
+    }
+  }, [isHelperUser, selectedProjectId, open]);
+
+  // Fetch Work Orders when projectId changes
+  useEffect(() => {
+    if (selectedProjectId) {
+      projectConfigService.getWorkOrders(selectedProjectId).then(setWorkOrders).catch(console.error);
+    } else {
+      setWorkOrders([]);
+    }
+  }, [selectedProjectId]);
+
+  // Fetch Categories when workOrderCode changes
+  useEffect(() => {
+    if (selectedProjectId && selectedWorkOrderCode) {
+      projectConfigService.getCategories(selectedProjectId, selectedWorkOrderCode).then(setCategories).catch(console.error);
+    } else {
+      setCategories([]);
+    }
+  }, [selectedProjectId, selectedWorkOrderCode]);
 
   const onSubmit = async (data: TaskFormData) => {
     try {
@@ -140,6 +249,12 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         }, user?.id || 'system');
       } else {
         const selectedProject = projects.find(p => p.id === data.projectId);
+        
+        // ตรวจสอบว่าเป็นการหยิบงานมาจาก Support Request หรือไม่
+        const isPickingUpSupport = isHelperUser && 
+                                 selectedProjectId !== user?.projectLocationIds?.[0] && 
+                                 existingTasks.some(t => t.taskName === data.taskName);
+
         await taskService.createTask({
           taskName: data.taskName,
           description: data.description,
@@ -147,11 +262,13 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           projectName: selectedProject?.projectName || 'Unknown Project',
           workOrderCode: data.workOrderCode,
           categoryName: data.categoryName,
-          assignees: data.assignees,
+          assignees: (data.isSupportRequest || isPickingUpSupport) ? data.assignees : data.assignees, // Ensure assignees are sent
           dueDate: data.dueDate.toISOString(),
           status: 'upcoming',
+          isSupportRequest: data.isSupportRequest || isPickingUpSupport || false,
         });
       }
+      toast.success(isEdit ? 'แก้ไขข้อมูลงานเรียบร้อยแล้ว' : 'สร้างรายการงานใหม่สำเร็จแล้ว');
       onSuccess();
     } catch (error: any) {
       console.error('Failed to save task', error);
@@ -202,46 +319,62 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   return (
     <Dialog 
       open={open} 
-      onClose={onClose} 
+      onClose={(event, reason) => {
+        if (reason !== 'backdropClick') {
+          onClose();
+        }
+      }}
       maxWidth="sm" 
       fullWidth 
       PaperProps={{ 
         sx: { 
-          borderRadius: 4,
-          boxShadow: '0 24px 48px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
+          borderRadius: '24px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
+          overflow: 'hidden',
+          backgroundColor: '#ffffff'
         } 
+      }}
+      BackdropProps={{
+        sx: {
+          backdropFilter: 'blur(10px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        },
       }}
     >
       <DialogTitle sx={{ 
-        fontWeight: 700, 
-        color: '#1c1e2b',
+        fontWeight: 800, 
+        color: '#1a1a1a',
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
-        px: 3,
-        pt: 3,
+        gap: 2,
+        px: 4,
+        pt: 4,
         pb: 2,
-        borderBottom: '1px solid #f0f0f0'
       }}>
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          width: 40, 
-          height: 40, 
-          borderRadius: '50%', 
-          bgcolor: 'primary.50',
-          color: 'primary.main'
+          width: 44, 
+          height: 44, 
+          borderRadius: '14px', 
+          bgcolor: '#1c1e2b',
+          color: '#fff',
+          boxShadow: '0 8px 16px rgba(28, 30, 43, 0.25)'
         }}>
-          <AssignmentIcon />
+          <AssignmentIcon fontSize="medium" />
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          {isEdit ? 'แก้ไขงาน' : 'สร้างงานใหม่'}
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          {isEdit ? 'แก้ไขรายละเอียดงาน' : 'สร้างรายการงานใหม่'}
         </Typography>
         <IconButton 
           onClick={onClose}
-          sx={{ ml: 'auto', color: 'text.secondary', '&:hover': { bgcolor: 'grey.100' } }}
+          sx={{ 
+            ml: 'auto', 
+            color: 'text.secondary', 
+            bgcolor: '#f5f7f9',
+            '&:hover': { bgcolor: '#eceff2' } 
+          }}
         >
           <CloseIcon />
         </IconButton>
@@ -266,82 +399,152 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                 <Controller
                   name="projectId"
                   control={control}
-                  render={({ field }) => (
-                    <Autocomplete
-                      options={projects}
-                      getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
-                      onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
-                      value={projects.find((p) => p.id === field.value) || null}
-                      disabled={isSubmitting || isEdit}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Location (โครงการ) *"
-                          variant="filled"
-                          error={!!errors.projectId}
-                          helperText={errors.projectId?.message}
-                          InputProps={{ ...params.InputProps, disableUnderline: true }}
-                          sx={inputStyles}
-                        />
-                      )}
-                    />
-                  )}
+                  render={({ field }) => {
+                    const isHelperProject = user?.projectLocationIds?.some(id => 
+                      id === 'P002' || id === 'P004'
+                    );
+                    const shouldDisableProject = !isHelperProject && user?.projectLocationIds && user.projectLocationIds.length > 0;
+
+                    return (
+                      <Autocomplete
+                        options={projects}
+                        getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
+                        onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
+                        value={projects.find((p) => p.id === field.value) || null}
+                        disabled={isSubmitting || isEdit || shouldDisableProject}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                Location (โครงการ) *
+                                <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
+                                  <HelpOutlineIcon sx={{ fontSize: 16, color: 'text.secondary', cursor: 'help' }} />
+                                </Tooltip>
+                              </Box>
+                            }
+                            variant="filled"
+                            error={!!errors.projectId}
+                            helperText={errors.projectId?.message || (shouldDisableProject ? 'โครงการถูกกำหนดตามสังกัดของคุณ' : '')}
+                            InputProps={{ ...params.InputProps, disableUnderline: true }}
+                            sx={inputStyles}
+                          />
+                        )}
+                      />
+                    );
+                  }}
                 />
               </Grid>
 
               <Grid item xs={12}>
-                <Controller
-                  name="workOrderCode"
-                  control={control}
-                  render={({ field }) => (
-                    <Autocomplete
-                      options={categories}
-                      getOptionLabel={(option) => `${option.code} - ${option.name}`}
-                      onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
-                      value={categories.find((c) => c.code === field.value) || null}
-                      disabled={isSubmitting || categories.length === 0 || isEdit}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="หมวดหมู่งานหลัก (Work Order) *"
-                          variant="filled"
-                          error={!!errors.workOrderCode}
-                          helperText={errors.workOrderCode?.message}
-                          InputProps={{ ...params.InputProps, disableUnderline: true }}
-                          sx={inputStyles}
-                        />
-                      )}
-                    />
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Controller
+                    name="workOrderCode"
+                    control={control}
+                    render={({ field }) => (
+                      <Autocomplete
+                        sx={{ flex: 1 }}
+                        options={workOrders}
+                        getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                        onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
+                        value={workOrders.find((c) => c.code === field.value) || null}
+                        disabled={isSubmitting || !selectedProjectId || isEdit || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="หมวดหมู่งานหลัก (Work Order) *"
+                            variant="filled"
+                            error={!!errors.workOrderCode}
+                            helperText={errors.workOrderCode?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? 'จะถูกเลือกอัตโนมัติเมื่องานถูกเลือก' : (!selectedProjectId ? 'กรุณาเลือกโครงการก่อน' : ''))}
+                            InputProps={{ ...params.InputProps, disableUnderline: true }}
+                            sx={inputStyles}
+                          />
+                        )}
+                        renderOption={(props, option) => (
+                          <li {...props} key={option.code}>
+                            <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
+                            {!isEdit && (
+                              <IconButton 
+                                size="small" 
+                                onClick={(e) => { e.stopPropagation(); setEditWO(option); setOpenWOModal(true); }}
+                              >
+                                <EditOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </li>
+                        )}
+                      />
+                    )}
+                  />
+                  {!isEdit && selectedProjectId && (!(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])) && (
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => { setEditWO(null); setOpenWOModal(true); }}
+                      sx={{ height: 56, minWidth: 140, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
+                      startIcon={<AddCircleOutlineIcon />}
+                    >
+                      สร้างหมวดหมู่หลัก
+                    </Button>
                   )}
-                />
+                </Box>
               </Grid>
 
               <Grid item xs={12}>
-                <Controller
-                  name="categoryName"
-                  control={control}
-                  render={({ field }) => (
-                    <Autocomplete
-                      freeSolo
-                      options={[]}
-                      onInputChange={(_, newValue) => field.onChange(newValue)}
-                      value={field.value}
-                      disabled={isSubmitting}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="หมวดหมู่งานย่อย (Category) *"
-                          variant="filled"
-                          placeholder="เช่น โครงสร้างเสา, โครงสร้างพื้น ชั้น 1"
-                          InputProps={{ ...params.InputProps, disableUnderline: true }}
-                          error={!!errors.categoryName}
-                          helperText={errors.categoryName?.message}
-                          sx={inputStyles}
-                        />
-                      )}
-                    />
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Controller
+                    name="categoryName"
+                    control={control}
+                    render={({ field }) => (
+                      <Autocomplete
+                        sx={{ flex: 1 }}
+                        freeSolo
+                        options={categories.map(c => c.name)}
+                        onChange={(_, newValue) => field.onChange(newValue || '')}
+                        onInputChange={(_, newValue) => field.onChange(newValue)}
+                        value={field.value}
+                        disabled={isSubmitting || !selectedWorkOrderCode || isEdit || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="หมวดหมู่งานย่อย (Category) *"
+                            variant="filled"
+                            placeholder={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "จะถูกเลือกอัตโนมัติ" : "พิมพ์หรือเลือกหมวดหมู่งานย่อย"}
+                            InputProps={{ ...params.InputProps, disableUnderline: true }}
+                            error={!!errors.categoryName}
+                            helperText={errors.categoryName?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? 'จะถูกเลือกอัตโนมัติเมื่องานถูกเลือก' : (!selectedWorkOrderCode ? 'กรุณาเลือกหมวดหมู่งานหลักก่อน' : ''))}
+                            sx={inputStyles}
+                          />
+                        )}
+                        renderOption={(props, option) => {
+                          const catObj = categories.find(c => c.name === option);
+                          return (
+                            <li {...props} key={option}>
+                              <Box sx={{ flex: 1 }}>{option}</Box>
+                              {catObj && !isEdit && (
+                                <IconButton 
+                                  size="small" 
+                                  onClick={(e) => { e.stopPropagation(); setEditCat(catObj); setOpenCatModal(true); }}
+                                >
+                                  <EditOutlinedIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </li>
+                          );
+                        }}
+                      />
+                    )}
+                  />
+                  {!isEdit && selectedWorkOrderCode && (!(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])) && (
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => { setEditCat(null); setOpenCatModal(true); }}
+                      sx={{ height: 56, minWidth: 140, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
+                      startIcon={<AddCircleOutlineIcon />}
+                    >
+                      สร้างหมวดหมู่ย่อย
+                    </Button>
                   )}
-                />
+                </Box>
               </Grid>
 
               <Grid item xs={12}>
@@ -350,19 +553,42 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                   control={control}
                   render={({ field }) => (
                     <Autocomplete
-                      freeSolo
-                      options={[]}
-                      onInputChange={(_, newValue) => field.onChange(newValue)}
-                      value={field.value}
-                      disabled={isSubmitting}
+                      freeSolo={!isHelperUser || selectedProjectId === user?.projectLocationIds?.[0]}
+                      options={(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0]) ? existingTasks : []}
+                      getOptionLabel={(option) => {
+                        if (typeof option === 'string') return option;
+                        return option.taskName || '';
+                      }}
+                      loading={isFetchingTasks}
+                      onInputChange={(_, newValue) => {
+                        if (!isHelperUser || selectedProjectId === user?.projectLocationIds?.[0]) {
+                          field.onChange(newValue);
+                        }
+                      }}
+                      onChange={(_, newValue) => {
+                        if (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] && newValue && typeof newValue !== 'string') {
+                          field.onChange(newValue.taskName);
+                          // Auto-fill Work Order and Category
+                          setValue('workOrderCode', newValue.workOrderCode || '');
+                          setValue('categoryName', newValue.categoryName || '');
+                        } else {
+                          field.onChange(newValue || '');
+                        }
+                      }}
+                      value={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? (existingTasks.find(t => t.taskName === field.value) || null) : field.value}
+                      disabled={isSubmitting || (isHelperUser && !selectedProjectId) || isEdit}
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label="ชื่องาน *"
+                          label={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "เลือกงานที่ไปทำ (ชื่องาน) *" : "ชื่องาน *"}
                           variant="filled"
-                          InputProps={{ ...params.InputProps, disableUnderline: true }}
+                          placeholder={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "ค้นหางานที่ยังไม่เสร็จ..." : "พิมพ์ชื่อรายงานการทำงานของคุณ"}
+                          InputProps={{ 
+                            ...params.InputProps, 
+                            disableUnderline: true,
+                          }}
                           error={!!errors.taskName}
-                          helperText={errors.taskName?.message}
+                          helperText={errors.taskName?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? (isFetchingTasks ? 'กำลังโหลดรายการงาน...' : 'เฉพาะงานที่ยังไม่เสร็จ (Progress < 100%)') : '')}
                           sx={inputStyles}
                         />
                       )}
@@ -372,6 +598,35 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
               </Grid>
 
               <Grid item xs={12}>
+                {!isEdit && !isHelperUser && (
+                  <Controller
+                    name="isSupportRequest"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            {...field} 
+                            checked={field.value}
+                            onChange={(e) => {
+                              field.onChange(e.target.checked);
+                              if (e.target.checked) {
+                                setValue('assignees', []);
+                              }
+                            }}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                            ขอความช่วยเหลือจากทีม Support (คลังสินค้า / บริการลูกค้า)
+                          </Typography>
+                        }
+                        sx={{ mb: 1 }}
+                      />
+                    )}
+                  />
+                )}
+                
                 <Controller
                   name="assignees"
                   control={control}
@@ -386,8 +641,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
                         );
                       }}
-                      value={filteredFms.filter((u) => field.value?.some((val) => val.employeeId === u.id))}
-                      disabled={isSubmitting}
+                      value={isSupportRequest ? [] : filteredFms.filter((u) => field.value?.some((val) => val.employeeId === u.id))}
+                      disabled={isSubmitting || isSupportRequest}
                       renderOption={(props, option) => {
                         const { key, ...otherProps } = props as any;
                         return (
@@ -406,8 +661,13 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           {...params}
                           label="Assign (ผู้รับผิดชอบ) *"
                           variant="filled"
-                          error={!!errors.assignees}
-                          helperText={errors.assignees?.message || 'แสดงเฉพาะ FM ในโครงการของคุณ'}
+                          error={!!errors.assignees && !isSupportRequest}
+                          helperText={
+                            isSupportRequest 
+                              ? 'รอยืนยันผู้รับงานจากทีม Support' 
+                              : (errors.assignees?.message || 'แสดงเฉพาะ FM ในโครงการของคุณ')
+                          }
+                          placeholder={isSupportRequest ? "รอทีม Support รับงาน..." : ""}
                           InputProps={{ ...params.InputProps, disableUnderline: true }}
                           sx={inputStyles}
                         />
@@ -447,7 +707,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                       label="หมายเหตุ"
                       variant="filled"
                       multiline
-                      rows={3}
+                      rows={2}
                       fullWidth
                       disabled={isSubmitting}
                       placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)"
@@ -460,8 +720,25 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             </Grid>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2.5, bgcolor: '#fafafa', borderTop: '1px solid #f0f0f0' }}>
-          <Button onClick={onClose} disabled={isSubmitting} variant="text" sx={{ borderRadius: 2, color: 'text.secondary', fontWeight: 600, px: 3 }}>
+        <DialogActions sx={{ 
+          px: 4, 
+          py: 3, 
+          bgcolor: '#fcfcfc', 
+          borderTop: '1px solid #f0f2f5',
+          gap: 2
+        }}>
+          <Button 
+            onClick={onClose} 
+            disabled={isSubmitting} 
+            sx={{ 
+              borderRadius: '12px', 
+              color: '#637381', 
+              fontWeight: 700, 
+              px: 3,
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#f4f6f8' }
+            }}
+          >
             ยกเลิก
           </Button>
           <Button 
@@ -469,25 +746,68 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             variant="contained" 
             disabled={!isValid || isSubmitting || loading}
             sx={{ 
-              borderRadius: 2, 
+              borderRadius: '12px', 
               bgcolor: '#1c1e2b', 
               color: '#fff',
-              fontWeight: 600,
-              px: 4,
-              boxShadow: '0 4px 12px rgba(28, 30, 43, 0.2)',
-              '&:hover': { bgcolor: '#000000', boxShadow: '0 6px 16px rgba(0, 0, 0, 0.3)' },
+              fontWeight: 700,
+              px: 5,
+              py: 1.5,
+              textTransform: 'none',
+              fontSize: '1rem',
+              boxShadow: '0 10px 20px rgba(28, 30, 43, 0.25)',
+              '&:hover': { 
+                bgcolor: '#000000', 
+                boxShadow: '0 12px 24px rgba(0, 0, 0, 0.35)',
+                transform: 'translateY(-2px)'
+              },
+              '&:active': { transform: 'translateY(0)' },
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' }
             }}
           >
             {isSubmitting ? (
               <>
-                <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+                <CircularProgress size={20} color="inherit" sx={{ mr: 1.5 }} />
                 กำลังบันทึก...
               </>
-            ) : isEdit ? 'บันทึกการแก้ไข' : 'สร้างงาน'}
+            ) : isEdit ? 'บันทึกการแก้ไข' : 'สร้างงานทันที'}
           </Button>
         </DialogActions>
       </Box>
+
+      {/* Config Modals */}
+      {selectedProjectId && (
+        <WorkOrderConfigModal
+          open={openWOModal}
+          onClose={() => setOpenWOModal(false)}
+          projectId={selectedProjectId}
+          editData={editWO}
+          onSuccess={async (newWorkOrder) => {
+            const latest = await projectConfigService.getWorkOrders(selectedProjectId);
+            setWorkOrders(latest);
+            if (newWorkOrder) {
+              setValue('workOrderCode', newWorkOrder.code);
+            }
+            setOpenWOModal(false);
+          }}
+        />
+      )}
+
+      {selectedProjectId && selectedWorkOrderCode && (
+        <CategoryConfigModal
+          open={openCatModal}
+          onClose={() => setOpenCatModal(false)}
+          projectId={selectedProjectId}
+          workOrderCode={selectedWorkOrderCode}
+          editData={editCat}
+          onSuccess={async () => {
+            const latest = await projectConfigService.getCategories(selectedProjectId, selectedWorkOrderCode);
+            setCategories(latest);
+            setOpenCatModal(false);
+          }}
+        />
+      )}
+
     </Dialog>
   );
 };

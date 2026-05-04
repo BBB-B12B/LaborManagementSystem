@@ -75,7 +75,8 @@ export class TaskService {
         if (catCounterDoc.exists) {
           catNextRun = (catCounterDoc.data()?.count || 0) + 1;
         }
-        catId = `CAT-${catNextRun.toString().padStart(4, '0')}`;
+        const woCode = input.workOrderCode || 'GEN';
+        catId = `${woCode}-${catNextRun.toString().padStart(4, '0')}`;
       }
       const categoryRef = workOrderRef.collection('categories').doc(catId);
 
@@ -102,7 +103,7 @@ export class TaskService {
         if (taskCounterDoc.exists) {
           taskNextRun = (taskCounterDoc.data()?.count || 0) + 1;
         }
-        taskId = `TASK-${taskNextRun.toString().padStart(7, '0')}`;
+        taskId = `${catId}-${taskNextRun.toString().padStart(7, '0')}`;
       }
       const taskRef = categoryRef.collection('tasks').doc(taskId);
 
@@ -152,9 +153,12 @@ export class TaskService {
         dueDate: input.dueDate,
         status: input.status || 'upcoming',
         currentRevision: isNewTask ? 'rev00' : (existingTaskData?.currentRevision || 'rev00'),
+        revisionId: isNewTask ? 'rev00' : (existingTaskData?.revisionId || 'rev00'),
+        revisionName: isNewTask ? input.taskName : (existingTaskData?.revisionName || input.taskName),
         dailyProgress: isNewTask ? 0 : (existingTaskData?.dailyProgress || 0),
         attachmentsCount: isNewTask ? 0 : (existingTaskData?.attachmentsCount || 0),
         isActive: true,
+        isSupportRequest: input.isSupportRequest || false,
         createdAt: createdAtDate,
         updatedAt: now,
         createdBy: isNewTask ? createdBy : (existingTaskData?.createdBy || createdBy),
@@ -189,13 +193,20 @@ export class TaskService {
    */
   async rejectTask(id: string, revisionName: string, newAssignees: any[], updatedBy: string): Promise<void> {
     let taskRef: FirebaseFirestore.DocumentReference;
-
     if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      const parts = id.split('__');
+      if (parts.length === 3) {
+        const [woId, catId, docId] = parts;
+        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(docId);
+      } else {
+        // Fallback: search by taskId field if parts are unusual
+        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', parts[parts.length - 1]).limit(1).get();
+        if (querySnapshot.empty) throw new AppError('Task not found by taskId fallback', 404);
+        taskRef = querySnapshot.docs[0].ref;
+      }
     } else {
       const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (querySnapshot.empty) throw new AppError('Task not found', 404);
+      if (querySnapshot.empty) throw new AppError('Task not found by taskId field', 404);
       taskRef = querySnapshot.docs[0].ref;
     }
 
@@ -225,7 +236,9 @@ export class TaskService {
       // 4. อัปเดต Task หลัก
       const taskUpdates = {
         currentRevision: nextRevId,
-        status: 'rework' as any,
+        revisionId: nextRevId,
+        revisionName: revisionName,
+        status: 'upcoming' as any,
         dailyProgress: 0,
         assignees: mergedAssignees,
         updatedAt: now,
@@ -273,7 +286,8 @@ export class TaskService {
     // กรอง assigneeId ใน Memory
     if (filters?.assigneeId) {
       tasks = tasks.filter(task => 
-        task.assignees.some(assignee => assignee.employeeId === filters.assigneeId)
+        task.assignees.some(assignee => assignee.employeeId === filters.assigneeId) ||
+        task.isSupportRequest === true
       );
     }
 
@@ -510,9 +524,14 @@ export class TaskService {
       transaction.set(dailyReportRef, payload, { merge: true });
 
       // อัปเดต Task หลัก
+      let newStatus = 'upcoming';
+      const progress = reportData.progress || 0;
+      if (progress > 0 && progress < 100) newStatus = 'in-progress';
+      if (progress >= 100) newStatus = 'for-checking';
+
       transaction.update(taskRef, {
-        dailyProgress: reportData.progress || 0,
-        status: reportData.progress >= 100 ? 'completed' : 'in-progress',
+        dailyProgress: progress,
+        status: newStatus,
         updatedAt: now,
         updatedBy: updatedBy
       });

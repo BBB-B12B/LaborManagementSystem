@@ -39,9 +39,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/tasks
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { taskName, projectId, workOrderId, workOrderCode, categoryId, categoryName, assignees, dueDate, status } = req.body;
+    const { taskName, projectId, workOrderId, workOrderCode, categoryId, categoryName, assignees, dueDate, status, isSupportRequest } = req.body;
     
-    if (!taskName || !projectId || !workOrderCode || !categoryName || !assignees || !assignees.length || !dueDate) {
+    const isSupport = isSupportRequest === true;
+    const hasAssignees = Array.isArray(assignees) && assignees.length > 0;
+
+    if (!taskName || !projectId || !workOrderCode || !categoryName || !dueDate || (!isSupport && !hasAssignees)) {
       throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Assignees, DueDate are required)', 400);
     }
 
@@ -53,9 +56,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       workOrderCode,
       categoryId,
       categoryName,
-      assignees,
+      assignees: isSupport ? [] : assignees,
       dueDate: new Date(dueDate),
       status,
+      isSupportRequest: isSupport,
     };
 
     const userId = req.user?.uid;

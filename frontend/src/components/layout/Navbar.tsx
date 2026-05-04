@@ -107,7 +107,7 @@ export const Navbar: React.FC = () => {
         color: NAV_TEXT,
         px: 2,
         py: 3,
-        zIndex: (theme) => Math.max(theme.zIndex.appBar, 1200),
+        zIndex: 900,
       }}
     >
       {/* Brand */}

@@ -19,6 +19,7 @@ import {
 } from '../../controllers/projectController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
+import projectConfigsRoutes from './projectConfigs.routes';
 
 const router = Router();
 
@@ -92,5 +93,10 @@ router.delete(
   authorize(['PM', 'AM']),
   deleteProjectHandler
 );
+
+/**
+ * Nested routes for Project Configs (Work Orders & Categories)
+ */
+router.use('/:projectId/configs', projectConfigsRoutes);
 
 export default router;

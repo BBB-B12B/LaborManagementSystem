@@ -76,23 +76,53 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       }}
     >
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>
-        {/* Task Code Badge */}
-        <Box
-          sx={{
-            display: 'inline-flex',
-            px: 1.5,
-            py: 0.5,
-            borderRadius: 2,
-            backgroundColor: '#f1f3f6',
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{ fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {/* Task Code Badge */}
+          <Box
+            sx={{
+              display: 'inline-flex',
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 2,
+              backgroundColor: '#f1f3f6',
+            }}
           >
-            {task.taskId}
-          </Typography>
-        </Box>
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}
+            >
+              {task.taskId}
+            </Typography>
+          </Box>
+
+          {/* Support Label */}
+          {task.isSupportRequest && (
+            <Box
+              sx={{
+                display: 'inline-flex',
+                px: 1.2,
+                py: 0.3,
+                borderRadius: '6px',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
+                boxShadow: '0 2px 4px rgba(251, 191, 36, 0.1)',
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ 
+                  fontWeight: 800, 
+                  color: '#92400e', 
+                  fontSize: '0.65rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                Support
+              </Typography>
+            </Box>
+          )}
+        </Stack>
 
         <IconButton size="small" onClick={handleMenuClick} sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}>
           <MoreVertIcon fontSize="small" />
@@ -133,10 +163,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       {/* Title */}
       <Typography
         variant="subtitle1"
-        sx={{ fontWeight: 800, color: '#111827', mb: 1, lineHeight: 1.3 }}
+        sx={{ fontWeight: 800, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.5 : 1, lineHeight: 1.3 }}
       >
         {task.taskName}
       </Typography>
+
+      {/* Revision Info - Only show if not rev00 */}
+      {task.revisionId && task.revisionId !== 'rev00' && (
+        <Typography
+          variant="caption"
+          sx={{ 
+            display: 'block',
+            fontWeight: 700, 
+            color: '#ef4444', 
+            mb: 1.5,
+            fontSize: '0.7rem',
+            letterSpacing: 0.3
+          }}
+        >
+          {task.revisionId} : "{task.revisionName || 'แก้ไขงาน'}"
+        </Typography>
+      )}
 
       {/* Description */}
       <Typography

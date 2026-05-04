@@ -281,13 +281,19 @@ export default function DailyReportPage() {
   });
 
   const { data: projectWorkers = [], isLoading: workersLoading } = useQuery({
-    queryKey: ['workers', selectedTask?.projectLocationId || user?.projectLocationIds?.[0]],
+    queryKey: ['workers', user?.projectLocationIds?.[0]],
     queryFn: async () => {
-      const locationId = selectedTask?.projectLocationId || user?.projectLocationIds?.[0];
-      if (!locationId) return [];
+      // FM's projectLocationIds contains the site they belong to (e.g. ["P002"])
+      // DC.projectLocationId (old) or DC.projectLocationIds (new) must match this value
+      const locationId = user?.projectLocationIds?.[0];
+      if (!locationId) {
+        console.warn('[DailyReport] No projectLocationId found for user:', user?.name);
+        return [];
+      }
+      console.log('[DailyReport] Fetching DCs for locationId:', locationId);
       return await dcService.getDCsByProject(locationId);
     },
-    enabled: !!user && (!!selectedTask || !!user?.projectLocationIds?.[0])
+    enabled: !!user?.projectLocationIds?.[0]
   });
 
   const filteredTasks = useMemo(() => {

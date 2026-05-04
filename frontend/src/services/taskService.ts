@@ -7,7 +7,7 @@ export interface TaskAssignee {
   avatarUrl?: string;
 }
 
-export type TaskStatus = 'upcoming' | 'in-progress' | 'completed';
+export type TaskStatus = 'upcoming' | 'in-progress' | 'for-checking' | 'rework' | 'completed';
 
 export interface Task {
   id: string;
@@ -24,9 +24,12 @@ export interface Task {
   assignees: TaskAssignee[];
   dueDate: string; // ISO string
   status: TaskStatus;
+  revisionId?: string;
+  revisionName?: string;
   dailyProgress: number;
   attachmentsCount: number;
   isActive: boolean;
+  isSupportRequest?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +46,7 @@ export interface CreateTaskInput {
   assignees: TaskAssignee[];
   dueDate: string; // ISO string
   status?: TaskStatus;
+  isSupportRequest?: boolean;
 }
 
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {

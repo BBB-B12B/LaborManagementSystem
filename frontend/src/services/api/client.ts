@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { useFeedbackStore } from '@/store/feedbackStore';
+import { auth as firebaseAuth } from '../firebase/config';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -98,9 +99,23 @@ const apiClient: AxiosInstance = axios.create({
 
 // Request interceptor
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     // เพิ่ม auth token ถ้ามี
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    let token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+    // Refresh Firebase Token ถ้ามี session ค้างอยู่
+    if (typeof window !== 'undefined' && firebaseAuth.currentUser) {
+      try {
+        const freshToken = await firebaseAuth.currentUser.getIdToken();
+        if (freshToken && freshToken !== token) {
+          token = freshToken;
+          localStorage.setItem('authToken', freshToken);
+        }
+      } catch (e) {
+        console.warn('Failed to refresh Firebase token', e);
+      }
+    }
+
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }

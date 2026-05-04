@@ -8,7 +8,9 @@
 // Export all stores
 export { useAuthStore } from './authStore';
 export { useUIStore } from './uiStore';
+export { useTaskCacheStore } from './taskCacheStore';
 
 // Export types
 export type { AuthState } from './authStore';
 export type { UIState } from './uiStore';
+export type { TaskCacheState } from './taskCacheStore';
