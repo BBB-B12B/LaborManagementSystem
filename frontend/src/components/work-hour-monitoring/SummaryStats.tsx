@@ -88,22 +88,20 @@ interface Props {
 }
 
 const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
-  const { data: allRecords = [] } = useQuery({
+  const { data: statsData, isLoading } = useQuery({
     queryKey: ['reconciliation-stats'],
-    queryFn: () => reconciliationService.getRecords({}),
+    queryFn: () => reconciliationService.getStats({}),
     staleTime: 60000,
   });
 
-  const stats = React.useMemo(() => {
-    const totalRows = allRecords.length;
-    const uniqueEmployees = new Set(allRecords.map(r => r.employeeId)).size;
-    const normalCount = allRecords.filter(r => r.status === 'MATCHED').length;
-    const abnormalStatuses = ['CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE'];
-    const abnormalCount = allRecords.filter(r => abnormalStatuses.includes(r.status)).length;
-    const pendingCount = allRecords.filter(r => abnormalStatuses.includes(r.status)).length;
-    const lockedCount = allRecords.filter(r => r.isLocked === true).length;
-    return { totalRows, uniqueEmployees, normalCount, abnormalCount, pendingCount, lockedCount };
-  }, [allRecords]);
+  const stats = {
+    totalRows:     statsData?.totalRows     ?? 0,
+    normalCount:   statsData?.normalCount   ?? 0,
+    otherCount:    statsData?.otherCount    ?? 0,  // ABSENT + LEAVE + HOLIDAY
+    pendingCount:  statsData?.pendingCount  ?? 0,
+    resolvedCount: statsData?.resolvedCount ?? 0,
+    employeeCount: statsData?.employeeCount ?? 0,
+  };
 
   return (
     <Box sx={{ mb: 2 }}>
@@ -129,7 +127,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                 </Typography>
                 <Stack direction="row" alignItems="baseline" spacing={1}>
                   <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', textShadow: '0 2px 10px rgba(0,0,0,0.3)', lineHeight: 1 }}>
-                    506
+                    {isLoading ? '-' : stats.employeeCount.toLocaleString()}
                   </Typography>
                   <Typography variant="body2" sx={{ opacity: 0.7, fontWeight: 800 }}>คน</Typography>
                 </Stack>
@@ -181,6 +179,12 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                   </Typography>
                   <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.LIGHT }}>รายการ</Typography>
                 </Stack>
+                {/* แสดง LEAVE/HOLIDAY ให้ชัดเจนว่าทำไมรวมกันไม่ได้ totalRows */}
+                {stats.otherCount > 0 && (
+                  <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.6rem', fontWeight: 700, display: 'block', mt: 0.5 }}>
+                    + {stats.otherCount.toLocaleString()} ลา/หยุด (ไม่นับในสถานะปกติ)
+                  </Typography>
+                )}
               </Box>
 
               {/* Right: Icon */}
@@ -236,7 +240,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                 
                 <Stack direction="row" alignItems="center" spacing={0.5}>
                   <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', color: '#dc2626', lineHeight: 1 }}>
-                    {stats.abnormalCount}
+                    {isLoading ? '-' : stats.pendingCount}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <InfoIcon sx={{ fontSize: 20, color: '#ef4444', mb: -0.5 }} />
@@ -267,20 +271,20 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                     <RocketIcon sx={{ fontSize: 10, color: '#d97706' }} />
                     <Typography variant="caption" fontWeight="900" sx={{ color: '#b45309', fontSize: '0.65rem' }}>รอแก้ไข</Typography>
                   </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: '#92400e', lineHeight: 1 }}>{stats.pendingCount}</Typography>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: '#92400e', lineHeight: 1 }}>{isLoading ? '-' : stats.pendingCount}</Typography>
                 </Box>
 
                 <Box 
                   onClick={(e) => {
                     e.stopPropagation();
-                    onStatusClick?.('locked');
+                    onStatusClick?.('abnormal_fixed');
                   }}
                   sx={{ 
                     p: 0.75, 
                     borderRadius: '10px', 
-                    background: activeStatus === 'locked' ? '#e0f2fe' : 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
+                    background: activeStatus === 'abnormal_fixed' ? '#e0f2fe' : 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
                     border: '1px solid',
-                    borderColor: activeStatus === 'locked' ? '#0284c7' : '#bae6fd',
+                    borderColor: activeStatus === 'abnormal_fixed' ? '#0284c7' : '#bae6fd',
                     textAlign: 'center',
                     cursor: 'pointer',
                     '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 10px rgba(14, 165, 233, 0.1)' }
@@ -288,9 +292,10 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                 >
                   <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
                     <SendIcon sx={{ fontSize: 10, color: '#0284c7', transform: 'rotate(-45deg)' }} />
-                    <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.65rem' }}>ล็อกแล้ว</Typography>
+                    <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.65rem' }}>แก้ไขแล้ว</Typography>
                   </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: '#075985', lineHeight: 1 }}>{stats.lockedCount}</Typography>
+                  {/* TODO: เชื่อม resolvedAt จาก backend เมื่อออกแบบ field เสร็จ */}
+                  <Typography variant="h6" fontWeight="900" sx={{ color: '#075985', lineHeight: 1 }}>{isLoading ? '-' : stats.resolvedCount}</Typography>
                 </Box>
               </Stack>
             </Stack>

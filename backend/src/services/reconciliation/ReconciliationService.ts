@@ -19,6 +19,7 @@ import {
   reconciliationRecordConverter,
 } from '../../models/ReconciliationRecord';
 import { ScanEditEntry, generateScanDocId, scanDataConverter } from '../../models/ScanData';
+import { COLLECTIONS } from '../../config/collections';
 import {
   projectBDailyReportService,
 } from '../external/ProjectBDailyReportService';
@@ -40,10 +41,22 @@ const HOURS_MATCH_TOLERANCE = 0.1; // 6 นาที
 
 export interface ReconciliationFilter {
   projectLocationId?: string;
+  allowedProjects?: string[];
   status?: ReconciliationStatus | ReconciliationStatus[];
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string;   // YYYY-MM-DD
+  startDate?: string;
+  endDate?: string;
   employeeId?: string;
+  isLocked?: boolean;
+  isResolved?: boolean;  // true = resolvedAt != null (แก้ไขแล้ว), false = resolvedAt == null
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedReconciliationResult {
+  records: ReconciliationRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface ClassifyResult {
@@ -83,13 +96,13 @@ export class ReconciliationService {
     isHoliday?: boolean,
     isLeave?: boolean,
   ): ClassifyResult {
-    if (isHoliday) return { status: 'HOLIDAY' };
-    if (isLeave) return { status: 'LEAVE' };
-
     const dailyExists = dailyReportHours !== undefined && dailyReportHours > 0;
     const scanExists = scanDataHours !== undefined && scanDataHours > 0;
 
+    // ถ้าไม่มีข้อมูลการทำงานเลย ถึงจะมาเช็คว่าเป็นวันหยุดหรือวันลา
     if (!dailyExists && !scanExists) {
+      if (isHoliday) return { status: 'HOLIDAY' };
+      if (isLeave) return { status: 'LEAVE' };
       return { status: 'ABSENT' };
     }
 
@@ -187,6 +200,7 @@ export class ReconciliationService {
       scanDataHours: input.scanDataHours,
       dailyReportId: input.dailyReportId,
       scanDataId: input.scanDataId,
+      dailyReportPhotos: input.dailyReportPhotos,
       suggestedHours: classified.suggestedHours,
       status: newStatus,
       updatedAt: now,
@@ -210,6 +224,15 @@ export class ReconciliationService {
       (updates as any).statusHistory = FieldValue.arrayUnion(
         this.toFirestoreHistoryEntry(newEntry),
       );
+
+      // ถ้า status กลับมาเป็น abnormal อีกครั้ง → clear resolvedAt
+      const abnormalStatuses: ReconciliationStatus[] = [
+        'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'ABSENT', 'UNREGISTERED_EMPLOYEE',
+      ];
+      if (abnormalStatuses.includes(newStatus)) {
+        (updates as any).resolvedAt = null;
+        (updates as any).resolvedBy = null;
+      }
     }
 
     await ref.update(reconciliationRecordConverter.toFirestore(updates as any));
@@ -275,6 +298,7 @@ export class ReconciliationService {
           dailyReportId: `${summary.employeeNumber}_${summary.date}`, // Project B doc id
           scanDataHours: scanEntry?.hours,
           scanDataId: scanEntry?.id,
+          dailyReportPhotos: summary.dailyReportPhotos,
           leaveHours: summary.leaveHours,
         }, false, summary.isLeave);
       }),
@@ -333,13 +357,16 @@ export class ReconciliationService {
   }
 
   /**
-   * ดึงรายการตาม filter
+   * สร้าง Firestore Query จาก filter (ไม่รวม ordering / offset / limit)
+   * ใช้ร่วมกันระหว่าง getRecords (paginated) และ getAnomaliesForExport (unlimited)
    */
-  async getRecords(filter: ReconciliationFilter): Promise<ReconciliationRecord[]> {
+  private buildBaseQuery(filter: Omit<ReconciliationFilter, 'page' | 'pageSize'>): FirebaseFirestore.Query {
     let query: FirebaseFirestore.Query = this.collection;
 
     if (filter.projectLocationId) {
       query = query.where('projectLocationId', '==', filter.projectLocationId);
+    } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
+      query = query.where('projectLocationId', 'in', filter.allowedProjects);
     }
     if (filter.employeeId) {
       query = query.where('employeeId', '==', filter.employeeId);
@@ -352,16 +379,56 @@ export class ReconciliationService {
     }
     if (filter.status) {
       if (Array.isArray(filter.status)) {
-        query = query.where('status', 'in', filter.status);
+        if (filter.status.length === 1) {
+          query = query.where('status', '==', filter.status[0]);
+        } else {
+          query = query.where('status', 'in', filter.status);
+        }
       } else {
         query = query.where('status', '==', filter.status);
       }
     }
+    if (filter.isLocked !== undefined) {
+      query = query.where('isLocked', '==', filter.isLocked);
+    }
+    // isResolved: true  → resolvedAt != null  (ใช้ > Timestamp(0) trick เพราะ Firestore ไม่ support != null โดยตรง)
+    // isResolved: false → resolvedAt == null
+    if (filter.isResolved === true) {
+      query = query.where('resolvedAt', '>', new Date(0));
+    } else if (filter.isResolved === false) {
+      query = query.where('resolvedAt', '==', null);
+    }
 
-    query = query.orderBy('workDate', 'desc').limit(500);
+    return query;
+  }
 
-    const snap = await query.get();
-    return snap.docs.map((doc) => reconciliationRecordConverter.fromFirestore(doc));
+  /**
+   * ดึงรายการตาม filter พร้อม server-side pagination
+   * ใช้ Firestore Count Aggregate สำหรับ total และ offset+limit สำหรับ paging
+   */
+  async getRecords(filter: ReconciliationFilter): Promise<PaginatedReconciliationResult> {
+    const page = filter.page ?? 0;
+    const pageSize = filter.pageSize ?? 100;
+
+    const baseQuery = this.buildBaseQuery(filter);
+
+    // Count total (Firestore Aggregate Query — ไม่คิดค่า read เต็ม)
+    const countSnap = await baseQuery.count().get();
+    const total = countSnap.data().count;
+
+    // ดึงข้อมูลหน้าปัจจุบัน
+    const dataSnap = await baseQuery
+      .orderBy('workDate', 'desc')
+      .offset(page * pageSize)
+      .limit(pageSize)
+      .get();
+
+    return {
+      records: dataSnap.docs.map((doc) => reconciliationRecordConverter.fromFirestore(doc)),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   // =========================================================================
@@ -467,6 +534,8 @@ export class ReconciliationService {
       status: 'MATCHED',
       scanDataHours: record.dailyReportHours,
       suggestedHours: record.dailyReportHours,
+      resolvedAt: Timestamp.fromDate(now),
+      resolvedBy: adminId,
       updatedAt: Timestamp.fromDate(now),
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
     });
@@ -540,6 +609,106 @@ export class ReconciliationService {
   // ลบ markAsExported ออกแล้ว — Admin Export ใช้ getAnomaliesForExport แล้ว Export เอง
 
   // =========================================================================
+  // Stats (Aggregate Counts — ใช้ Firestore Count เพื่อประหยัด reads)
+  // =========================================================================
+
+  /**
+   * ดึงจำนวนสถิติสำหรับ SummaryStats card
+   * ใช้ Firestore Count Aggregate — ไม่คิดค่า read เต็ม, เร็ว
+   *
+   * @returns totalRows, normalCount, pendingCount, resolvedCount, employeeCount, ...
+   */
+  async getStats(filter: {
+    projectLocationId?: string;
+    allowedProjects?: string[];
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    totalRows: number;
+    normalCount: number;      // MATCHED + LEAVE
+    absentCount: number;      // ABSENT เฉพาะ
+    leaveCount: number;       // LEAVE เฉพาะ
+    pendingCount: number;
+    resolvedCount: number;
+    missingDailyCount: number;
+    missingScanCount: number;
+    conflictedCount: number;
+    unregisteredCount: number;
+    employeeCount: number;
+  }> {
+    const abnormalStatuses: ReconciliationStatus[] = [
+      'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE', 'ABSENT',
+    ];
+
+    // Base project/date filter (ไม่ใส่ status)
+    const buildProjectDateQuery = () => {
+      let q: FirebaseFirestore.Query = this.collection;
+      if (filter.projectLocationId) {
+        q = q.where('projectLocationId', '==', filter.projectLocationId);
+      } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
+        q = q.where('projectLocationId', 'in', filter.allowedProjects);
+      }
+      if (filter.startDate) q = q.where('workDate', '>=', filter.startDate);
+      if (filter.endDate) q = q.where('workDate', '<=', filter.endDate);
+      return q;
+    };
+
+    // Run all queries concurrently
+    const baseQ = buildProjectDateQuery();
+    const [
+      totalSnap,
+      normalSnap,
+      pendingSnap,
+      resolvedSnap,
+      missingDailySnap,
+      missingScanSnap,
+      conflictedSnap,
+      unregisteredSnap,
+      absentSnap,
+      leaveSnap,
+      holidaySnap,
+      employeeCountSnap,
+    ] = await Promise.all([
+      baseQ.count().get(),
+      baseQ.where('status', '==', 'MATCHED').count().get(),
+      baseQ.where('status', 'in', abnormalStatuses).count().get(),
+      baseQ.where('resolvedAt', '>', new Date(0)).count().get(),
+      baseQ.where('status', '==', 'MISSING_DAILY').count().get(),
+      baseQ.where('status', '==', 'MISSING_SCAN').count().get(),
+      baseQ.where('status', '==', 'CONFLICTED').count().get(),
+      baseQ.where('status', '==', 'UNREGISTERED_EMPLOYEE').count().get(),
+      baseQ.where('status', '==', 'ABSENT').count().get(),
+      baseQ.where('status', '==', 'LEAVE').count().get(),
+      baseQ.where('status', '==', 'HOLIDAY').count().get(),
+      // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project
+      (() => {
+        let dcQ: FirebaseFirestore.Query = this.db.collection(COLLECTIONS.DAILY_CONTRACTORS)
+          .where('isActive', '==', true);
+        if (filter.projectLocationId) {
+          dcQ = dcQ.where('projectLocationId', '==', filter.projectLocationId);
+        } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
+          dcQ = dcQ.where('projectLocationId', 'in', filter.allowedProjects);
+        }
+        return dcQ.count().get();
+      })(),
+    ]);
+
+    return {
+      totalRows:          totalSnap.data().count - holidaySnap.data().count,
+      normalCount:        normalSnap.data().count + leaveSnap.data().count,
+      absentCount:        absentSnap.data().count,
+      leaveCount:         leaveSnap.data().count,
+      pendingCount:       pendingSnap.data().count,
+      resolvedCount:      resolvedSnap.data().count,
+      missingDailyCount:  missingDailySnap.data().count,
+      missingScanCount:   missingScanSnap.data().count,
+      conflictedCount:    conflictedSnap.data().count,
+      unregisteredCount:  unregisteredSnap.data().count,
+      employeeCount:      employeeCountSnap.data().count,
+    };
+  }
+
+  // =========================================================================
   // Export Anomalies
   // =========================================================================
 
@@ -566,10 +735,14 @@ export class ReconciliationService {
       'ABSENT',
     ];
 
-    const records = await this.getRecords({
+    // ใช้ buildBaseQuery โดยตรง — ไม่ paginate เพื่อ export ข้อมูลทั้งหมด
+    const query = this.buildBaseQuery({
       ...filter,
       status: anomalyStatuses,
     });
+
+    const snap = await query.orderBy('workDate', 'desc').get();
+    const records = snap.docs.map((doc) => reconciliationRecordConverter.fromFirestore(doc));
 
     return records.map((r) => ({
       employeeId: r.employeeId,

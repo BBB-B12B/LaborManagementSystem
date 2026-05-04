@@ -69,6 +69,10 @@ interface DailyEmployeeTimesheet {
   leaveTimes?: { morning?: string; afternoon?: string };
   leaveType?: string;
   medCertFileUrl?: string;
+  photos?: {
+    labor?: string[];
+    site?: string[];
+  };
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -221,6 +225,7 @@ async function reconcile(
   let totalTimesheetHours = 0;
   let leaveEntries: LeaveEntry[] = [];
   let totalLeaveHours = 0;
+  let dailyReportPhotos: string[] | undefined = undefined;
 
   if (timesheetDoc.exists) {
     timesheet = timesheetDoc.data() as DailyEmployeeTimesheet;
@@ -257,6 +262,19 @@ async function reconcile(
           attachment: timesheet.medCertFileUrl || '',
           type: timesheet.leaveType || 'Unknown'
         });
+      }
+    }
+
+    if (timesheet.photos) {
+      dailyReportPhotos = [];
+      if (Array.isArray(timesheet.photos.labor)) {
+        dailyReportPhotos.push(...timesheet.photos.labor);
+      }
+      if (Array.isArray(timesheet.photos.site)) {
+        dailyReportPhotos.push(...timesheet.photos.site);
+      }
+      if (dailyReportPhotos.length === 0) {
+        dailyReportPhotos = undefined;
       }
     }
   }
@@ -335,6 +353,7 @@ async function reconcile(
       leaveEntries:         isLeave      ? leaveEntries    : null,
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
+      dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
       isHoliday,
       updatedAt: now,
     };
@@ -373,6 +392,7 @@ async function reconcile(
       leaveEntries:         isLeave      ? leaveEntries    : null,
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
+      dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
       isHoliday,
       status,
       statusHistory:        [newStatusEntry],

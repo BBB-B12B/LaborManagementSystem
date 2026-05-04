@@ -44,9 +44,12 @@ router.get(
         throw new AppError('Validation failed', 400);
       }
 
+      const authReq = req as AuthRequest;
+      const userProjects = authReq.user?.projectLocationIds || [];
+
       const { department, status, search } = req.query;
 
-      let projects;
+      let projects: any[];
 
       if (department) {
         projects = await projectLocationService.getByDepartment(department as string);
@@ -67,6 +70,21 @@ router.get(
           pageSize: parseInt(req.query.pageSize as string) || 50,
         });
         projects = result.items;
+      }
+
+      // DEBUG: Log resolved user info for RBAC diagnosis
+      console.log('[RBAC Debug] user:', JSON.stringify(authReq.user?.projectLocationIds), 'role:', authReq.user?.roleCode, 'id:', authReq.user?.id);
+
+      // RBAC: All users see only their assigned projects
+      // userProjects stores values that may match p.id (Firestore docId) OR p.code OR p.projectCode
+      if (userProjects.length > 0) {
+        projects = projects.filter(p =>
+          userProjects.includes(p.id) ||
+          userProjects.includes(p.code) ||
+          userProjects.includes(p.projectCode)
+        );
+      } else {
+        projects = []; // No projects assigned → show nothing
       }
 
       res.json({

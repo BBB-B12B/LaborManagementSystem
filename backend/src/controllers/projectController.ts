@@ -22,6 +22,7 @@ import {
   getDepartments,
   getNextProjectCode,
 } from '../services/projectService';
+import { AuthRequest } from '../api/middleware/auth';
 
 /**
  * GET /api/projects
@@ -40,7 +41,20 @@ export async function getAllProjectsHandler(
       filters.isActive = String(req.query.isActive) === 'true';
     if (req.query.search) filters.search = String(req.query.search);
 
-    const projects = await getAllProjects(filters);
+    let projects = await getAllProjects(filters);
+
+    // RBAC: All users see only their assigned projects (by projectLocationIds)
+    const authReq = req as AuthRequest;
+    const userProjects = authReq.user?.projectLocationIds || [];
+    if (userProjects.length > 0) {
+      projects = projects.filter(p =>
+        userProjects.includes(p.id) ||
+        userProjects.includes((p as any).code) ||
+        userProjects.includes((p as any).projectCode)
+      );
+    } else {
+      projects = [];
+    }
 
     return res.status(200).json({
       success: true,

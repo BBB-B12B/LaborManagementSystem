@@ -64,6 +64,11 @@ export interface DailyEmployeeTimesheet {
   leaveShifts?: { morning?: boolean; afternoon?: boolean };
   leaveType?: string;
   medCertFileUrl?: string;
+  // Photos
+  photos?: {
+    labor?: string[];
+    site?: string[];
+  };
   lastUpdated?: string;            // ISO string
 }
 
@@ -82,6 +87,7 @@ export interface DailyTimesheetSummary {
   isActive: boolean;
   isLeave: boolean;
   leaveHours: number;
+  dailyReportPhotos?: string[];    // ดึงมาจาก photos.labor
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +118,20 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
   }
   const isLeave = leaveHours > 0;
 
+  let dailyReportPhotos: string[] | undefined = undefined;
+    if (doc.photos) {
+      dailyReportPhotos = [];
+      if (Array.isArray(doc.photos.labor)) {
+        dailyReportPhotos.push(...doc.photos.labor);
+      }
+      if (Array.isArray(doc.photos.site)) {
+        dailyReportPhotos.push(...doc.photos.site);
+      }
+      if (dailyReportPhotos.length === 0) {
+        dailyReportPhotos = undefined;
+      }
+    }
+
   return {
     employeeNumber: doc.employeeNumber,
     date: doc.date,
@@ -124,6 +144,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     isActive: doc.isActive ?? true,
     isLeave,
     leaveHours,
+    dailyReportPhotos,
   };
 }
 

@@ -4,11 +4,9 @@ import {
   HighlightOff as CancelIcon,
   Info as InfoIcon,
   SearchOff as SearchOffIcon,
-  QueryBuilder as ClockIcon,
   FileDownload as FileDownloadIcon,
-  AccountCircle as AccountIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
+  PersonOff as PersonOffIcon,
+  PersonRemove as PersonRemoveIcon,
   NearMe as SendIcon,
   RocketLaunch as RocketIcon,
 } from '@mui/icons-material';
@@ -105,36 +103,20 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [referenceType, setReferenceType] = React.useState<'checkIn' | 'checkOut'>('checkIn');
 
-  // ดึงข้อมูลจริงเพื่อนับ count แต่ละประเภท
-  const { data: allRecords = [] } = useQuery({
-    queryKey: ['reconciliation-stats'],
-    queryFn: () => reconciliationService.getRecords({}),
+  // ดึงยอดนับแต่ละประเภทจาก stats endpoint (ไม่โหลด records จำนวนมาก)
+  const { data: stats } = useQuery({
+    queryKey: ['reconciliation-breakdown-stats'],
+    queryFn: () => reconciliationService.getStats({}),
     staleTime: 60000,
   });
 
-  const counts = React.useMemo(() => {
-    const missingDaily = allRecords.filter(r => r.status === 'MISSING_DAILY').length;
-    const missingScan = allRecords.filter(r => r.status === 'MISSING_SCAN').length;
-    const conflicted = allRecords.filter(r => r.status === 'CONFLICTED');
-
-    // ข้อมูลขัดแย้ง: ชั่วโมงปกติไม่ตรง
-    const workHourConflict = conflicted.filter(r => {
-      const tsNormal = r.timesheetNormalHours ?? r.dailyReportHours;
-      const scanNormal = r.scanNormalHours ?? r.scanDataHours;
-      return tsNormal != null && scanNormal != null && Math.abs(tsNormal - scanNormal) > 0.1;
-    }).length;
-
-    // OT ขัดแย้ง: OT ไม่ตรง (รวมทั้งที่ชั่วโมงปกติตรงหรือไม่ตรงก็นับ)
-    const otConflict = conflicted.filter(r => {
-      return (
-        (r.timesheetOtMorning != null && r.scanOtMorningHours != null && r.timesheetOtMorning !== r.scanOtMorningHours) ||
-        (r.timesheetOtNoon != null && r.scanOtNoonHours != null && r.timesheetOtNoon !== r.scanOtNoonHours) ||
-        (r.timesheetOtEvening != null && r.scanOtEveningHours != null && r.timesheetOtEvening !== r.scanOtEveningHours)
-      );
-    }).length;
-
-    return { missingDaily, workHourConflict, missingScan, otConflict };
-  }, [allRecords]);
+  const counts = {
+    missingDaily:   stats?.missingDailyCount   ?? 0,
+    missingScan:    stats?.missingScanCount    ?? 0,
+    conflicted:     stats?.conflictedCount     ?? 0,
+    unregistered:   stats?.unregisteredCount   ?? 0,
+    absent:         stats?.absentCount         ?? 0,
+  };
 
   const items: BreakdownItem[] = [
     {
@@ -147,11 +129,11 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
     },
     {
       id: 'workHourConflict',
-      title: 'ข้อมูลการทำงานขัดแย้งกัน',
-      description: 'ชั่วโมงทำงาน Daily Report และ สแกนนิ้วไม่ตรงกัน',
+      title: 'ข้อมูลขัดแย้งกัน',
+      description: 'ชั่วโมงทำงาน/OT ระหว่าง Daily Report และสแกนนิ้วไม่ตรงกัน',
       icon: <InfoIcon sx={{ fontSize: 28, color: '#ea580c' }} />,
       colorTheme: 'orange',
-      count: counts.workHourConflict,
+      count: counts.conflicted,
     },
     {
       id: 'missingScan',
@@ -162,13 +144,21 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
       count: counts.missingScan,
     },
     {
-      id: 'otConflict',
-      title: 'ข้อมูล OT ขัดแย้งกัน',
-      description: 'ชั่วโมง OT ของ Daily Report และ สแกนนิ้วไม่ตรงกัน',
-      icon: <ClockIcon sx={{ fontSize: 28, color: '#7c3aed' }} />,
+      id: 'unregistered',
+      title: 'ไม่มีข้อมูลในระบบ',
+      description: 'มีสแกนนิ้ว แต่ไม่พบข้อมูลพนักงานในระบบ',
+      icon: <PersonOffIcon sx={{ fontSize: 28, color: '#7c3aed' }} />,
       colorTheme: 'purple',
-      count: counts.otConflict,
-    }
+      count: counts.unregistered,
+    },
+    {
+      id: 'absent',
+      title: 'ขาดงาน',
+      description: 'ไม่มีการลงชั่วโมงและไม่มีการสแกนนิ้ว',
+      icon: <PersonRemoveIcon sx={{ fontSize: 28, color: '#dc2626' }} />,
+      colorTheme: 'red',
+      count: counts.absent,
+    },
   ];
 
   const handleToggleExpand = (recordId: string) => {
@@ -299,7 +289,7 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
           </Grid>
         ) : (
           items.map((item) => (
-            <Grid item xs={12} sm={6} md={3} key={item.id}>
+            <Grid item xs={12} sm={6} md={4} key={item.id}>
               <BreakdownCard 
                 active={activeId === item.id} 
                 colorTheme={item.colorTheme}
@@ -326,17 +316,28 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
                     <Typography variant="caption" sx={{ color: BLUE.TEXT_LIGHT, display: 'block', lineHeight: 1, mb: 0.5, fontSize: '0.6rem' }}>
                       {item.description}
                     </Typography>
-                    <ExportButton 
-                      size="small" 
-                      variant="outlined" 
-                      startIcon={<FileDownloadIcon sx={{ fontSize: '10px !important' }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onExport(item.id);
-                      }}
-                    >
-                      Export
-                    </ExportButton>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-end" sx={{ mt: 0.5 }}>
+                      <ExportButton 
+                        size="small" 
+                        variant="outlined" 
+                        startIcon={<FileDownloadIcon sx={{ fontSize: '10px !important' }} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onExport(item.id);
+                        }}
+                        sx={{ mt: 0 }}
+                      >
+                        Export
+                      </ExportButton>
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography variant="h6" fontWeight={900} sx={{ lineHeight: 0.8, color: '#334155' }}>
+                          {item.count}
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 800, color: '#94a3b8' }}>
+                          รายการ
+                        </Typography>
+                      </Box>
+                    </Stack>
                   </Box>
                 </Stack>
               </BreakdownCard>

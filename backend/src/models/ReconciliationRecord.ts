@@ -68,6 +68,7 @@ export interface ReconciliationRecord {
   dailyReportId?: string;            // ref → DailyWorkerReport doc id
   scanDataId?: string;               // ref → scanData doc id
   suggestedHours?: number;           // min(dailyReportHours, scanDataHours) — UI hint เท่านั้น
+  dailyReportPhotos?: string[];      // รูปถ่ายอ้างอิงจาก Daily Report (Aftersale)
 
   // --- สถานะ ---
   status: ReconciliationStatus;
@@ -78,6 +79,12 @@ export interface ReconciliationRecord {
   // --- Locking (ผูกกับงวดงาน — ไม่ใช่ approve รายวัน) ---
   // เมื่อ Admin Approve งวดงาน onWagePeriodApproved จะตั้ง isLocked: true อัตโนมัติ
   isLocked?: boolean;
+
+  // --- Resolution Tracking ---
+  // set เมื่อ Admin ยืนยันแก้ไข record ที่เคยผิดปกติ (status สำเร็จเป็น MATCHED)
+  // null = ยังไม่เคยแก้ไข (หรือปกติตั้งแต่แรก)
+  resolvedAt?: Date;    // Timestamp ที่แก้ไขสำเร็จ
+  resolvedBy?: string;  // userId ของ Admin ที่แก้ไข
 
   // --- Audit Trail ---
   statusHistory: StatusHistoryEntry[];
@@ -101,6 +108,7 @@ export interface CreateReconciliationRecordInput {
   scanDataHours?: number;
   dailyReportId?: string;
   scanDataId?: string;
+  dailyReportPhotos?: string[];
   isHoliday?: boolean;
   leaveHours?: number;
   leaveEntries?: { hours: number; attachment?: string; type?: string }[];
@@ -137,9 +145,12 @@ export const reconciliationRecordConverter = {
     if (record.scanDataHours !== undefined) data.scanDataHours = record.scanDataHours;
     if (record.dailyReportId !== undefined) data.dailyReportId = record.dailyReportId;
     if (record.scanDataId !== undefined) data.scanDataId = record.scanDataId;
+    if (record.dailyReportPhotos !== undefined) data.dailyReportPhotos = record.dailyReportPhotos;
     if (record.suggestedHours !== undefined) data.suggestedHours = record.suggestedHours;
     if (record.status !== undefined) data.status = record.status;
     if (record.isLocked !== undefined) data.isLocked = record.isLocked;
+    if (record.resolvedAt !== undefined) data.resolvedAt = record.resolvedAt;
+    if (record.resolvedBy !== undefined) data.resolvedBy = record.resolvedBy;
     if (record.statusHistory !== undefined) data.statusHistory = record.statusHistory;
     if (record.createdAt !== undefined) data.createdAt = record.createdAt;
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
@@ -187,9 +198,12 @@ export const reconciliationRecordConverter = {
       scanOtEveningHours:    data.scanOtEveningHours,
       dailyReportId: data.dailyReportId,
       scanDataId: data.scanDataId,
+      dailyReportPhotos: data.dailyReportPhotos,
       suggestedHours: data.suggestedHours,
       status: data.status || 'PENDING',
       isLocked: data.isLocked ?? false,
+      resolvedAt: data.resolvedAt ? toDate(data.resolvedAt) : undefined,
+      resolvedBy: data.resolvedBy,
       statusHistory: parseHistory(data.statusHistory),
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),

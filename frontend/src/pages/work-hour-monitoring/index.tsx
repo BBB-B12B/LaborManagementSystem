@@ -12,6 +12,7 @@ import { Layout, ProtectedRoute } from '@/components/layout';
 import WorkHourComparisonTable from '@/components/work-hour-monitoring/WorkHourComparisonTable';
 import SummaryStats from '@/components/work-hour-monitoring/SummaryStats';
 import AbnormalBreakdown from '@/components/work-hour-monitoring/AbnormalBreakdown';
+import NormalBreakdown from '@/components/work-hour-monitoring/NormalBreakdown';
 import DatePicker from '@/components/forms/DatePicker';
 import { GlobalStyles } from '@mui/material';
 
@@ -64,17 +65,31 @@ export default function WorkHourMonitoringPage() {
 
   // Drill-down State
   const [showAbnormalBreakdown, setShowAbnormalBreakdown] = useState(false);
+  const [showNormalBreakdown, setShowNormalBreakdown] = useState(false);
   const [activeAbnormalId, setActiveAbnormalId] = useState<string | undefined>(undefined);
+  const [activeNormalId, setActiveNormalId] = useState<string | undefined>(undefined);
   const [breakdownViewMode, setBreakdownViewMode] = useState<'breakdown' | 'fixed' | 'pending'>('breakdown');
 
   const handleStatusClick = (status: string) => {
-    if (status === 'abnormal') {
+    if (status === 'normal') {
+      if (showNormalBreakdown) {
+        setShowNormalBreakdown(false);
+        setActiveNormalId(undefined);
+        setFilterStatus('all');
+      } else {
+        setShowNormalBreakdown(true);
+        setShowAbnormalBreakdown(false);
+        setActiveNormalId(undefined);
+        setFilterStatus('all_normal');
+      }
+    } else if (status === 'abnormal') {
       if (showAbnormalBreakdown && breakdownViewMode === 'breakdown') {
         setShowAbnormalBreakdown(false);
         setActiveAbnormalId(undefined);
         setFilterStatus('all');
       } else {
         setShowAbnormalBreakdown(true);
+        setShowNormalBreakdown(false);
         setBreakdownViewMode('breakdown');
         setActiveAbnormalId(undefined);
         setFilterStatus('all_abnormal');
@@ -86,6 +101,7 @@ export default function WorkHourMonitoringPage() {
           setFilterStatus('all');
         } else {
           setShowAbnormalBreakdown(true);
+          setShowNormalBreakdown(false);
           setBreakdownViewMode('pending');
           setActiveAbnormalId(undefined);
           setFilterStatus('abnormal_pending');
@@ -96,6 +112,7 @@ export default function WorkHourMonitoringPage() {
           setFilterStatus('all');
         } else {
           setShowAbnormalBreakdown(true);
+          setShowNormalBreakdown(false);
           setBreakdownViewMode('fixed');
           setActiveAbnormalId(undefined);
           setFilterStatus('abnormal_fixed');
@@ -103,7 +120,9 @@ export default function WorkHourMonitoringPage() {
       }
     } else {
       setShowAbnormalBreakdown(false);
+      setShowNormalBreakdown(false);
       setActiveAbnormalId(undefined);
+      setActiveNormalId(undefined);
       setFilterStatus(status);
     }
   };
@@ -114,6 +133,16 @@ export default function WorkHourMonitoringPage() {
       setFilterStatus('all_abnormal');
     } else {
       setActiveAbnormalId(id);
+      setFilterStatus(id); 
+    }
+  };
+
+  const handleNormalCardClick = (id: string) => {
+    if (activeNormalId === id) {
+      setActiveNormalId(undefined);
+      setFilterStatus('all_normal');
+    } else {
+      setActiveNormalId(id);
       setFilterStatus(id); 
     }
   };
@@ -144,6 +173,10 @@ export default function WorkHourMonitoringPage() {
     console.log(`Columns: ลำดับ, รหัส, ชื่อ-นามสกุล, สังกัด, ประเภทความผิดปกติ (${activeItem?.title}), ผู้รับผิดชอบ, หมายเหตุ`);
     
     // logic to trigger Excel generation with these columns
+  };
+
+  const handleExportNormal = (id: string) => {
+    console.log(`Exporting Excel for Normal: ${id}`);
   };
 
   return (
@@ -197,9 +230,23 @@ export default function WorkHourMonitoringPage() {
             <Box sx={{ mb: 0.5 }}>
               <SummaryStats 
                 onStatusClick={handleStatusClick} 
-                activeStatus={showAbnormalBreakdown ? 'abnormal' : filterStatus} 
+                activeStatus={
+                  showAbnormalBreakdown ? 'abnormal' : 
+                  showNormalBreakdown ? 'normal' : 
+                  filterStatus
+                } 
               />
             </Box>
+
+            {showNormalBreakdown && (
+              <Box sx={{ mb: 0.5, animation: 'fadeIn 0.3s ease-out' }}>
+                <NormalBreakdown 
+                  activeId={activeNormalId}
+                  onCardClick={handleNormalCardClick}
+                  onExport={handleExportNormal}
+                />
+              </Box>
+            )}
 
             {showAbnormalBreakdown && (
               <Box sx={{ mb: 0.5, animation: 'fadeIn 0.3s ease-out' }}>
@@ -212,7 +259,7 @@ export default function WorkHourMonitoringPage() {
               </Box>
             )}
 
-            <Stack 
+            <Stack  
               direction="row" 
               spacing={1} 
               justifyContent="flex-end" 

@@ -46,13 +46,7 @@ export const useAuthStore = create<AuthState>()(
       // Actions
       setUser: (user) =>
         set({
-          user: user
-            ? {
-                ...user,
-                roleCode: 'GOD',
-                roleId: 'GOD',
-              }
-            : null,
+          user: user ? { ...user } : null,
           isAuthenticated: !!user,
         }),
 
@@ -60,11 +54,7 @@ export const useAuthStore = create<AuthState>()(
 
       login: (user, token) =>
         set({
-          user: {
-            ...user,
-            roleCode: 'GOD',
-            roleId: 'GOD',
-          },
+          user: { ...user },
           token,
           isAuthenticated: true,
         }),
@@ -84,14 +74,7 @@ export const useAuthStore = create<AuthState>()(
       version: 1,
       migrate: (persistedState: any) => {
         if (persistedState?.user) {
-          return {
-            ...persistedState,
-            user: {
-              ...persistedState.user,
-              roleCode: 'GOD',
-              roleId: 'GOD',
-            },
-          };
+          return { ...persistedState };
         }
         return persistedState;
       },

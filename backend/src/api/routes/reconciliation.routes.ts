@@ -11,9 +11,8 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import {
   getReconciliationRecords,
+  getReconciliationStats,
   getReconciliationById,
-  generateReconciliationRecords,
-  generateForProjectAuto,
   confirmByDailyReport,
   deleteGhostScan,
   exportAnomalies,
@@ -27,17 +26,14 @@ router.use(authenticate);
 // GET  /api/reconciliation          — ดึงรายการตาม filter
 router.get('/', getReconciliationRecords);
 
+// GET  /api/reconciliation/stats    — aggregate counts สำหรับ SummaryStats (ต้องอยู่ก่อน /:id)
+router.get('/stats', getReconciliationStats);
+
 // GET  /api/reconciliation/export   — Export CSV รายการผิดปกติ (ต้องอยู่ก่อน /:id)
 router.get('/export', exportAnomalies);
 
 // GET  /api/reconciliation/:id      — ดึง record เดียว
 router.get('/:id', getReconciliationById);
-
-// POST /api/reconciliation/generate       — manual (pass records[])
-router.post('/generate', generateReconciliationRecords);
-
-// POST /api/reconciliation/generate-auto  — auto-fetch from Project B + local scan
-router.post('/generate-auto', generateForProjectAuto);
 
 // POST /api/reconciliation/:id/confirm-daily  — ยืนยันตาม Daily Report (กรณีลืม scan)
 router.post('/:id/confirm-daily', confirmByDailyReport);

@@ -7,6 +7,7 @@ import {
   ReconciliationStatus 
 } from '../../models/ReconciliationRecord';
 import { logger } from '../../utils/logger';
+import { projectBDailyReportService, toTimesheetSummary } from '../external/ProjectBDailyReportService';
 
 export class MatcherService {
   /**
@@ -44,29 +45,25 @@ export class MatcherService {
         });
       }
 
-      // 2. Fetch Daily Report Data
-      // For now, assume it's stored in a collection called DailyWorkerReports or Similar
-      // Or we can mock the daily report fetching from Project B for this employee
-      const reportQuery = await db.collection('dailyWorkerReports')
-        .where('employeeId', '==', employeeNumber)
-        .where('workDate', '==', workDateStr)
-        .get();
+      // 2. Fetch Daily Report Data (จาก Project B: Aftersale)
+      const dailyTimesheet = await projectBDailyReportService.getDailyTimesheet(employeeNumber, workDateStr);
 
       let totalReportHours = 0;
       let dailyReportId: string | undefined = undefined;
+      let dailyReportPhotos: string[] | undefined = undefined;
 
-      if (!reportQuery.empty) {
-        reportQuery.docs.forEach(doc => {
-          const data = doc.data() as any;
-          if (!dailyReportId) dailyReportId = doc.id;
-          totalReportHours += (data.regularHours || 0) + (data.otHours || 0);
-        });
+      const hasReport = !!dailyTimesheet && dailyTimesheet.isActive !== false;
+
+      if (hasReport) {
+        const summary = toTimesheetSummary(dailyTimesheet!);
+        dailyReportId = projectBDailyReportService.generateDocId(employeeNumber, workDateStr);
+        totalReportHours = summary.totalHours;
+        dailyReportPhotos = summary.dailyReportPhotos;
       }
 
       // 3. Determine Status
       let status: ReconciliationStatus = 'PENDING';
       const hasScan = !scanQuery.empty;
-      const hasReport = !reportQuery.empty;
 
       if (hasScan && hasReport) {
         if (Math.abs(totalScanHours - totalReportHours) < 0.01) {
@@ -105,6 +102,7 @@ export class MatcherService {
           dailyReportHours: hasReport ? totalReportHours : undefined,
           scanDataId,
           dailyReportId,
+          dailyReportPhotos,
           suggestedHours: Math.min(totalScanHours, totalReportHours),
           updatedAt: new Date()
         };
@@ -112,6 +110,16 @@ export class MatcherService {
         if (existingData.status !== status) {
           updates.status = status;
           updates.statusHistory = [...(existingData.statusHistory || []), newStatusEntry];
+
+          // ถ้า status กลับมาเป็น abnormal อีกครั้ง → clear resolvedAt
+          // (ป้องกัน record ที่เคย "แก้ไขแล้ว" แต่ข้อมูล scan เปลี่ยนใหม่จนผิดปกติอีกครั้ง)
+          const abnormalStatuses: ReconciliationStatus[] = [
+            'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'ABSENT', 'UNREGISTERED_EMPLOYEE',
+          ];
+          if (abnormalStatuses.includes(status)) {
+            (updates as any).resolvedAt = null;
+            (updates as any).resolvedBy = null;
+          }
         }
 
         await recordRef.update(updates);
@@ -127,6 +135,7 @@ export class MatcherService {
           dailyReportHours: hasReport ? totalReportHours : undefined,
           scanDataId,
           dailyReportId,
+          dailyReportPhotos,
           suggestedHours: Math.min(totalScanHours, totalReportHours),
           status,
           statusHistory: [newStatusEntry],

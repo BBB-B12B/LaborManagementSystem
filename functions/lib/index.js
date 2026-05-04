@@ -85,6 +85,10 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         .where('employeeId', '==', employeeNumber)
         .limit(1)
         .get();
+    let employeeName = '';
+    if (!contractorSnap.empty) {
+        employeeName = contractorSnap.docs[0].data()['name'] || '';
+    }
     const isRegistered = !contractorSnap.empty;
     // ── 1. ดึง Scan Data ────────────────────────────────────────────────────────
     // Query 1: workDate เป็น Timestamp — ใช้ Bangkok timezone (+07:00) เพื่อไม่ให้ range ครอบ doc วันผิด
@@ -177,6 +181,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
     let totalTimesheetHours = 0;
     let leaveEntries = [];
     let totalLeaveHours = 0;
+    let dailyReportPhotos = undefined;
     if (timesheetDoc.exists) {
         timesheet = timesheetDoc.data();
         tsNormalHours = (timesheet.expectedHours?.normal || 0);
@@ -212,6 +217,9 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
                     type: timesheet.leaveType || 'Unknown'
                 });
             }
+        }
+        if (timesheet.photos?.labor && Array.isArray(timesheet.photos.labor)) {
+            dailyReportPhotos = timesheet.photos.labor;
         }
     }
     const hasTimesheet = timesheetDoc.exists;
@@ -269,6 +277,8 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             return;
         }
         const updates = {
+            // ── Employee Name ────────────────────────────────────────────────────
+            employeeName: employeeName || null,
             // ── Scan hours (แยก field) ────────────────────────────────────────────
             scanDataHours: hasScan ? totalScanHours : null, // ยอดรวม
             scanNormalHours: hasScan ? scanNormalHours : null,
@@ -286,6 +296,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             leaveEntries: isLeave ? leaveEntries : null,
             scanDataId: scanDataId ?? null,
             timesheetId: hasTimesheet ? timesheetId : null,
+            dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
             isHoliday,
             updatedAt: now,
         };
@@ -304,6 +315,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             employeeNumber,
             workDate: workDateStr,
             projectLocationId,
+            employeeName: employeeName || null,
             // ── Scan hours ───────────────────────────────────────────────────────
             scanDataHours: hasScan ? totalScanHours : null,
             scanNormalHours: hasScan ? scanNormalHours : null,
@@ -321,6 +333,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             leaveEntries: isLeave ? leaveEntries : null,
             scanDataId: scanDataId ?? null,
             timesheetId: hasTimesheet ? timesheetId : null,
+            dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
             isHoliday,
             status,
             statusHistory: [newStatusEntry],

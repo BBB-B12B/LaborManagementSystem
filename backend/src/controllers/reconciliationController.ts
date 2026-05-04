@@ -17,6 +17,40 @@
 import { Request, Response } from 'express';
 import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 import type { ReconciliationStatus } from '../models/ReconciliationRecord';
+import { AuthRequest } from '../api/middleware/auth';
+
+// ---------------------------------------------------------------------------
+// Helper: แปลง frontend filterStatus → backend status array
+// ---------------------------------------------------------------------------
+
+function mapFilterStatusToStatuses(filterStatus: string): ReconciliationStatus[] | undefined {
+  switch (filterStatus) {
+    case 'all_normal':
+      return ['MATCHED', 'LEAVE'];
+    case 'normal':
+      return ['MATCHED'];
+    case 'all_abnormal':
+    case 'abnormal_pending':
+      return ['CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE', 'ABSENT'];
+    case 'missingDaily':
+      return ['MISSING_DAILY'];
+    case 'missingScan':
+      return ['MISSING_SCAN'];
+    case 'workHourConflict':   // card เดียว (รวมทั้ง OT และชั่วโมงปกติ)
+      return ['CONFLICTED'];
+    case 'unregistered':
+      return ['UNREGISTERED_EMPLOYEE'];
+    case 'absent':
+      return ['ABSENT'];
+    case 'leave':
+      return ['LEAVE'];
+    case 'abnormal_fixed':
+      // ใช้ isResolved filter แทน — return undefined แล้ว controller จะ handle isResolved=true
+      return undefined;
+    default:
+      return undefined;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/reconciliation
@@ -26,22 +60,117 @@ import type { ReconciliationStatus } from '../models/ReconciliationRecord';
  * ดึงรายการ ReconciliationRecords ตาม filter
  * Query params: projectLocationId, status, startDate, endDate, employeeId
  */
+
+
 export async function getReconciliationRecords(req: Request, res: Response): Promise<void> {
   try {
-    const { projectLocationId, status, startDate, endDate, employeeId } = req.query;
+    const authReq = req as AuthRequest;
+    const {
+      projectLocationId,
+      status,
+      startDate,
+      endDate,
+      employeeId,
+      filterStatus,
+      page,
+      pageSize,
+    } = req.query;
 
-    const records = await reconciliationService.getRecords({
-      projectLocationId: projectLocationId as string | undefined,
-      status: status as ReconciliationStatus | undefined,
+    const targetProject = projectLocationId as string | undefined;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    // RBAC: All users are restricted to their assigned projectLocationIds
+    if (targetProject) {
+      if (!userProjects.includes(targetProject)) {
+        res.status(403).json({ success: false, error: 'Access denied for this project' });
+        return;
+      }
+    } else {
+      if (userProjects.length === 0) {
+        res.json({ success: true, data: [], total: 0, page: 0, pageSize: 100 });
+        return;
+      }
+    }
+
+    // Map filterStatus (frontend) → status array (backend)
+    const statusFilter: ReconciliationStatus | ReconciliationStatus[] | undefined = status
+      ? (status as ReconciliationStatus)
+      : filterStatus
+        ? mapFilterStatusToStatuses(filterStatus as string)
+        : undefined;
+
+    // 'locked' filter — ใช้ isLocked field แทน status
+    const isLocked = filterStatus === 'locked' ? true : undefined;
+    // 'abnormal_fixed' — ใช้ isResolved=true filter → ดึงเฉพาะ record ที่มี resolvedAt
+    const isResolved = filterStatus === 'abnormal_fixed' ? true : undefined;
+
+    const result = await reconciliationService.getRecords({
+      projectLocationId: targetProject,
+      allowedProjects: targetProject ? undefined : userProjects,
+      status: statusFilter,
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
       employeeId: employeeId as string | undefined,
+      isLocked,
+      isResolved,
+      page: page !== undefined ? parseInt(page as string, 10) : 0,
+      pageSize: pageSize !== undefined ? parseInt(pageSize as string, 10) : 100,
     });
 
-    res.json({ success: true, data: records, count: records.length });
+    res.json({
+      success: true,
+      data: result.records,
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+    });
   } catch (error) {
     console.error('[reconciliation] getRecords error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch reconciliation records' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/reconciliation/stats
+// ---------------------------------------------------------------------------
+
+/**
+ * ดึงสถิติ aggregate counts สำหรับ SummaryStats
+ * ใช้ Firestore Count Aggregate — ไม่โหลดข้อมูลทั้งหมด เร็วและประหยัด reads
+ * Query params: projectLocationId, startDate, endDate
+ */
+export async function getReconciliationStats(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthRequest;
+    const { projectLocationId, startDate, endDate } = req.query;
+
+    const targetProject = projectLocationId as string | undefined;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    // RBAC
+    if (targetProject) {
+      if (!userProjects.includes(targetProject)) {
+        res.status(403).json({ success: false, error: 'Access denied for this project' });
+        return;
+      }
+    } else {
+      if (userProjects.length === 0) {
+        res.json({ success: true, data: { totalRows: 0, normalCount: 0, pendingCount: 0, resolvedCount: 0 } });
+        return;
+      }
+    }
+
+    const stats = await reconciliationService.getStats({
+      projectLocationId: targetProject,
+      allowedProjects: targetProject ? undefined : userProjects,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+    });
+
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('[reconciliation] getStats error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch reconciliation stats' });
   }
 }
 
@@ -55,10 +184,28 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
  */
 export async function exportAnomalies(req: Request, res: Response): Promise<void> {
   try {
+    const authReq = req as AuthRequest;
     const { projectLocationId, startDate, endDate } = req.query;
 
+    const targetProject = projectLocationId as string | undefined;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    // RBAC: All users are restricted to their assigned projectLocationIds
+    if (targetProject) {
+      if (!userProjects.includes(targetProject)) {
+        res.status(403).json({ success: false, error: 'Access denied for this project' });
+        return;
+      }
+    } else {
+      if (userProjects.length === 0) {
+        res.json({ success: true, data: [] });
+        return;
+      }
+    }
+
     const data = await reconciliationService.getAnomaliesForExport({
-      projectLocationId: projectLocationId as string | undefined,
+      projectLocationId: targetProject,
+      allowedProjects: targetProject ? undefined : userProjects,
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
     });

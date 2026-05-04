@@ -43,20 +43,33 @@ export interface ReconciliationRecord {
   scanOtEveningHours?: number;
   suggestedHours?: number;
   status: ReconciliationStatus;
-  isLocked?: boolean;           // ถูกล็อกโดยงวดงาน (onWagePeriodApproved)
+  isLocked?: boolean;
+  resolvedAt?: string;          // Timestamp ISO string — set เมื่อ Admin แก้ไขสำเร็จ
+  resolvedBy?: string;          // userId ของ Admin ที่แก้ไข
   statusHistory: StatusHistoryEntry[];
   dailyReportId?: string;
   scanDataId?: string;
+  dailyReportPhotos?: string[];
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ReconciliationFilter {
   projectLocationId?: string;
-  status?: string; // Comma separated or single status
+  status?: string;
   startDate?: string;
   endDate?: string;
   employeeId?: string;
+  filterStatus?: string; // frontend filter mode — แปลงเป็น status array บน backend
+  page?: number;         // 0-indexed
+  pageSize?: number;
+}
+
+export interface PaginatedReconciliationResponse {
+  records: ReconciliationRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface ApprovedTimesheet {
@@ -68,14 +81,22 @@ export interface ApprovedTimesheet {
 
 export const reconciliationService = {
   /**
-   * ดึงรายการ ReconciliationRecords ตาม filter
+   * ดึงรายการ ReconciliationRecords ตาม filter พร้อม server-side pagination
    */
-  getRecords: async (filter: ReconciliationFilter): Promise<ReconciliationRecord[]> => {
-    const response = await apiClient.get<{ success: boolean; data: ReconciliationRecord[] }>(
-      '/reconciliation',
-      { params: filter }
-    );
-    return response.data.data;
+  getRecords: async (filter: ReconciliationFilter): Promise<PaginatedReconciliationResponse> => {
+    const response = await apiClient.get<{
+      success: boolean;
+      data: ReconciliationRecord[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>('/reconciliation', { params: filter });
+    return {
+      records: response.data.data,
+      total: response.data.total ?? 0,
+      page: response.data.page ?? 0,
+      pageSize: response.data.pageSize ?? 100,
+    };
   },
 
   /**
@@ -135,15 +156,44 @@ export const reconciliationService = {
   },
 
   /**
-   * สร้าง/อัปเดตข้อมูลอัตโนมัติ สำหรับโปรเจกต์และช่วงวันที่
+   * ดึงสถิติ aggregate counts สำหรับ SummaryStats
+   * ใช้ Firestore Count Aggregate — ไม่โหลดข้อมูลทั้งหมด
    */
-  generateForProjectAuto: async (data: {
-    projectLocationId: string;
-    startDate: string;
-    endDate: string;
-  }): Promise<{ success: boolean; summary?: any }> => {
-    const response = await apiClient.post('/reconciliation/generate-auto', data);
-    return response.data;
+  getStats: async (params: {
+    projectLocationId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    totalRows: number;
+    normalCount: number;
+    otherCount: number;
+    absentCount: number;
+    leaveCount: number;
+    pendingCount: number;
+    resolvedCount: number;
+    missingDailyCount: number;
+    missingScanCount: number;
+    conflictedCount: number;
+    unregisteredCount: number;
+    employeeCount: number;
+  }> => {
+    const response = await apiClient.get<{
+      success: boolean;
+      data: {
+        totalRows: number;
+        normalCount: number;
+        otherCount: number;
+        absentCount: number;
+        leaveCount: number;
+        pendingCount: number;
+        resolvedCount: number;
+        missingDailyCount: number;
+        missingScanCount: number;
+        conflictedCount: number;
+        unregisteredCount: number;
+        employeeCount: number;
+      };
+    }>('/reconciliation/stats', { params });
+    return response.data.data;
   },
 };
-
