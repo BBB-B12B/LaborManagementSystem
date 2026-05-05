@@ -251,22 +251,30 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         const selectedProject = projects.find(p => p.id === data.projectId);
         
         // ตรวจสอบว่าเป็นการหยิบงานมาจาก Support Request หรือไม่
+        const existingTask = existingTasks.find(t => t.taskName === data.taskName);
         const isPickingUpSupport = isHelperUser && 
                                  selectedProjectId !== user?.projectLocationIds?.[0] && 
-                                 existingTasks.some(t => t.taskName === data.taskName);
+                                 existingTask;
 
-        await taskService.createTask({
-          taskName: data.taskName,
-          description: data.description,
-          projectId: data.projectId,
-          projectName: selectedProject?.projectName || 'Unknown Project',
-          workOrderCode: data.workOrderCode,
-          categoryName: data.categoryName,
-          assignees: (data.isSupportRequest || isPickingUpSupport) ? data.assignees : data.assignees, // Ensure assignees are sent
-          dueDate: data.dueDate.toISOString(),
-          status: 'upcoming',
-          isSupportRequest: data.isSupportRequest || isPickingUpSupport || false,
-        });
+        if (isPickingUpSupport && existingTask) {
+          // Update the original task with the new assignees
+          await taskService.updateTask(existingTask.id, {
+            assignees: data.assignees
+          }, user?.id || 'system');
+        } else {
+          await taskService.createTask({
+            taskName: data.taskName,
+            description: data.description,
+            projectId: data.projectId,
+            projectName: selectedProject?.projectName || 'Unknown Project',
+            workOrderCode: data.workOrderCode,
+            categoryName: data.categoryName,
+            assignees: data.assignees,
+            dueDate: data.dueDate.toISOString(),
+            status: 'upcoming',
+            isSupportRequest: data.isSupportRequest || false,
+          });
+        }
       }
       toast.success(isEdit ? 'แก้ไขข้อมูลงานเรียบร้อยแล้ว' : 'สร้างรายการงานใหม่สำเร็จแล้ว');
       onSuccess();
@@ -290,7 +298,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       borderRadius: 2, 
       backgroundColor: '#F4F6F8 !important',
       '&:hover': { backgroundColor: '#EAECEF !important' }, 
-      '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' }
+      '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' },
+      '&.Mui-disabled': {
+        backgroundColor: '#f5f7f9 !important',
+        '&::before': { borderBottomStyle: 'none !important' }
+      }
     },
     '& .MuiInputBase-input': {
       color: '#1c1e2b',
@@ -331,7 +343,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           borderRadius: '24px',
           boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
           overflow: 'hidden',
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column'
         } 
       }}
       BackdropProps={{
@@ -347,9 +362,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         display: 'flex',
         alignItems: 'center',
         gap: 2,
-        px: 4,
-        pt: 4,
-        pb: 2,
+        px: 3,
+        pt: 3,
+        pb: 1.5,
       }}>
         <Box sx={{ 
           display: 'flex', 
@@ -379,14 +394,23 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-        <DialogContent dividers>
+      <Box 
+        component="form" 
+        onSubmit={handleSubmit(onSubmit)}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          flex: 1
+        }}
+      >
+        <DialogContent dividers sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
           ) : (
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
               {submitError && (
                 <Grid item xs={12}>
                   <Typography color="error" variant="body2">
@@ -406,31 +430,30 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     const shouldDisableProject = !isHelperProject && user?.projectLocationIds && user.projectLocationIds.length > 0;
 
                     return (
-                      <Autocomplete
-                        options={projects}
-                        getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
-                        onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
-                        value={projects.find((p) => p.id === field.value) || null}
-                        disabled={isSubmitting || isEdit || shouldDisableProject}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                Location (โครงการ) *
-                                <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
-                                  <HelpOutlineIcon sx={{ fontSize: 16, color: 'text.secondary', cursor: 'help' }} />
-                                </Tooltip>
-                              </Box>
-                            }
-                            variant="filled"
-                            error={!!errors.projectId}
-                            helperText={errors.projectId?.message || (shouldDisableProject ? 'โครงการถูกกำหนดตามสังกัดของคุณ' : '')}
-                            InputProps={{ ...params.InputProps, disableUnderline: true }}
-                            sx={inputStyles}
-                          />
-                        )}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Autocomplete
+                          sx={{ flex: 1 }}
+                          options={projects}
+                          getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
+                          onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
+                          value={projects.find((p) => p.id === field.value) || null}
+                          disabled={isSubmitting || isEdit || shouldDisableProject}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Location (โครงการ) *"
+                              variant="filled"
+                              error={!!errors.projectId}
+                              helperText={errors.projectId?.message || (shouldDisableProject ? 'โครงการถูกกำหนดตามสังกัดของคุณ' : '')}
+                              InputProps={{ ...params.InputProps, disableUnderline: true }}
+                              sx={inputStyles}
+                            />
+                          )}
+                        />
+                        <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
+                          <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                        </Tooltip>
+                      </Box>
                     );
                   }}
                 />
@@ -442,45 +465,50 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     name="workOrderCode"
                     control={control}
                     render={({ field }) => (
-                      <Autocomplete
-                        sx={{ flex: 1 }}
-                        options={workOrders}
-                        getOptionLabel={(option) => `${option.code} - ${option.name}`}
-                        onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
-                        value={workOrders.find((c) => c.code === field.value) || null}
-                        disabled={isSubmitting || !selectedProjectId || isEdit || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="หมวดหมู่งานหลัก (Work Order) *"
-                            variant="filled"
-                            error={!!errors.workOrderCode}
-                            helperText={errors.workOrderCode?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? 'จะถูกเลือกอัตโนมัติเมื่องานถูกเลือก' : (!selectedProjectId ? 'กรุณาเลือกโครงการก่อน' : ''))}
-                            InputProps={{ ...params.InputProps, disableUnderline: true }}
-                            sx={inputStyles}
-                          />
-                        )}
-                        renderOption={(props, option) => (
-                          <li {...props} key={option.code}>
-                            <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
-                            {!isEdit && (
-                              <IconButton 
-                                size="small" 
-                                onClick={(e) => { e.stopPropagation(); setEditWO(option); setOpenWOModal(true); }}
-                              >
-                                <EditOutlinedIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                          </li>
-                        )}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                        <Autocomplete
+                          sx={{ flex: 1 }}
+                          options={workOrders}
+                          getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                          onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
+                          value={workOrders.find((c) => c.code === field.value) || null}
+                          disabled={isSubmitting || !selectedProjectId || isEdit || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="หมวดหมู่งานหลัก (Work Order) *"
+                              variant="filled"
+                              error={!!errors.workOrderCode}
+                              helperText={errors.workOrderCode?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? 'จะถูกเลือกอัตโนมัติเมื่องานถูกเลือก' : (!selectedProjectId ? 'กรุณาเลือกโครงการก่อน' : ''))}
+                              InputProps={{ ...params.InputProps, disableUnderline: true }}
+                              sx={inputStyles}
+                            />
+                          )}
+                          renderOption={(props, option) => (
+                            <li {...props} key={option.code}>
+                              <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
+                              {!isEdit && (
+                                <IconButton 
+                                  size="small" 
+                                  onClick={(e) => { e.stopPropagation(); setEditWO(option); setOpenWOModal(true); }}
+                                >
+                                  <EditOutlinedIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </li>
+                          )}
+                        />
+                        <Tooltip title="พวกงานโครงสร้าง งานสถาปัตย์" arrow placement="top">
+                          <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                        </Tooltip>
+                      </Box>
                     )}
                   />
                   {!isEdit && selectedProjectId && (!(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])) && (
                     <Button 
                       variant="outlined" 
                       onClick={() => { setEditWO(null); setOpenWOModal(true); }}
-                      sx={{ height: 56, minWidth: 140, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
+                      sx={{ height: 52, minWidth: 140, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
                       startIcon={<AddCircleOutlineIcon />}
                     >
                       สร้างหมวดหมู่หลัก
@@ -495,50 +523,55 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     name="categoryName"
                     control={control}
                     render={({ field }) => (
-                      <Autocomplete
-                        sx={{ flex: 1 }}
-                        freeSolo
-                        options={categories.map(c => c.name)}
-                        onChange={(_, newValue) => field.onChange(newValue || '')}
-                        onInputChange={(_, newValue) => field.onChange(newValue)}
-                        value={field.value}
-                        disabled={isSubmitting || !selectedWorkOrderCode || isEdit || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="หมวดหมู่งานย่อย (Category) *"
-                            variant="filled"
-                            placeholder={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "จะถูกเลือกอัตโนมัติ" : "พิมพ์หรือเลือกหมวดหมู่งานย่อย"}
-                            InputProps={{ ...params.InputProps, disableUnderline: true }}
-                            error={!!errors.categoryName}
-                            helperText={errors.categoryName?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? 'จะถูกเลือกอัตโนมัติเมื่องานถูกเลือก' : (!selectedWorkOrderCode ? 'กรุณาเลือกหมวดหมู่งานหลักก่อน' : ''))}
-                            sx={inputStyles}
-                          />
-                        )}
-                        renderOption={(props, option) => {
-                          const catObj = categories.find(c => c.name === option);
-                          return (
-                            <li {...props} key={option}>
-                              <Box sx={{ flex: 1 }}>{option}</Box>
-                              {catObj && !isEdit && (
-                                <IconButton 
-                                  size="small" 
-                                  onClick={(e) => { e.stopPropagation(); setEditCat(catObj); setOpenCatModal(true); }}
-                                >
-                                  <EditOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              )}
-                            </li>
-                          );
-                        }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                        <Autocomplete
+                          sx={{ flex: 1 }}
+                          freeSolo
+                          options={categories.map(c => c.name)}
+                          onChange={(_, newValue) => field.onChange(newValue || '')}
+                          onInputChange={(_, newValue) => field.onChange(newValue)}
+                          value={field.value}
+                          disabled={isSubmitting || !selectedWorkOrderCode || isEdit || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="หมวดหมู่งานย่อย (Category) *"
+                              variant="filled"
+                              placeholder={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "จะถูกเลือกอัตโนมัติ" : "พิมพ์หรือเลือกหมวดหมู่งานย่อย"}
+                              InputProps={{ ...params.InputProps, disableUnderline: true }}
+                              error={!!errors.categoryName}
+                              helperText={errors.categoryName?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? 'จะถูกเลือกอัตโนมัติเมื่องานถูกเลือก' : (!selectedWorkOrderCode ? 'กรุณาเลือกหมวดหมู่งานหลักก่อน' : ''))}
+                              sx={inputStyles}
+                            />
+                          )}
+                          renderOption={(props, option) => {
+                            const catObj = categories.find(c => c.name === option);
+                            return (
+                              <li {...props} key={option}>
+                                <Box sx={{ flex: 1 }}>{option}</Box>
+                                {catObj && !isEdit && (
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={(e) => { e.stopPropagation(); setEditCat(catObj); setOpenCatModal(true); }}
+                                  >
+                                    <EditOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                )}
+                              </li>
+                            );
+                          }}
+                        />
+                        <Tooltip title="โครงสร้างเสา งานทาสี งานผนัง งานโครงสร้างพื้น เป็นต้น" arrow placement="top">
+                          <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                        </Tooltip>
+                      </Box>
                     )}
                   />
                   {!isEdit && selectedWorkOrderCode && (!(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0])) && (
                     <Button 
                       variant="outlined" 
                       onClick={() => { setEditCat(null); setOpenCatModal(true); }}
-                      sx={{ height: 56, minWidth: 140, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
+                      sx={{ height: 52, minWidth: 140, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
                       startIcon={<AddCircleOutlineIcon />}
                     >
                       สร้างหมวดหมู่ย่อย
@@ -566,11 +599,21 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         }
                       }}
                       onChange={(_, newValue) => {
-                        if (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] && newValue && typeof newValue !== 'string') {
-                          field.onChange(newValue.taskName);
-                          // Auto-fill Work Order and Category
-                          setValue('workOrderCode', newValue.workOrderCode || '');
-                          setValue('categoryName', newValue.categoryName || '');
+                        if (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0]) {
+                          if (newValue && typeof newValue !== 'string') {
+                            field.onChange(newValue.taskName);
+                            // Auto-fill Work Order, Category, and Due Date
+                            setValue('workOrderCode', newValue.workOrderCode || '', { shouldValidate: true });
+                            setValue('categoryName', newValue.categoryName || '', { shouldValidate: true });
+                            if (newValue.dueDate) {
+                              setValue('dueDate', new Date(newValue.dueDate), { shouldValidate: true });
+                            }
+                          } else {
+                            field.onChange('');
+                            setValue('workOrderCode', '');
+                            setValue('categoryName', '');
+                            setValue('dueDate', null as any);
+                          }
                         } else {
                           field.onChange(newValue || '');
                         }
@@ -641,8 +684,14 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
                         );
                       }}
-                      value={isSupportRequest ? [] : filteredFms.filter((u) => field.value?.some((val) => val.employeeId === u.id))}
-                      disabled={isSubmitting || isSupportRequest}
+                      value={
+                        (isSupportRequest && !isHelperUser && !isEdit)
+                          ? []
+                          : (field.value || []).map(val => 
+                              filteredFms.find(f => f.id === val.employeeId || f.employeeId === val.employeeId) || { id: val.employeeId, employeeId: val.employeeId, name: val.name, roleId: val.roleId }
+                            )
+                      }
+                      disabled={isSubmitting || (isSupportRequest && !isHelperUser)}
                       renderOption={(props, option) => {
                         const { key, ...otherProps } = props as any;
                         return (
@@ -681,19 +730,22 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                 <Controller
                   name="dueDate"
                   control={control}
-                  render={({ field }) => (
-                    <DatePicker
-                      label="Due Date (วันที่ครบกำหนด) *"
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={isSubmitting}
-                      error={!!errors.dueDate}
-                      helperText={errors.dueDate?.message as string}
-                      variant="filled"
-                      InputProps={{ disableUnderline: true }}
-                      sx={inputStyles}
-                    />
-                  )}
+                  render={({ field }) => {
+                    const isCrossProjectSupport = isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0];
+                    return (
+                      <DatePicker
+                        label="Due Date (วันที่ครบกำหนด) *"
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={isSubmitting || isCrossProjectSupport}
+                        error={!!errors.dueDate}
+                        helperText={(errors.dueDate?.message as string) || (isCrossProjectSupport ? 'วันที่กำหนดถูกอ้างอิงจากโครงการต้นทาง' : '')}
+                        variant="filled"
+                        InputProps={{ disableUnderline: true }}
+                        sx={inputStyles}
+                      />
+                    );
+                  }}
                 />
               </Grid>
 
@@ -721,56 +773,56 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           )}
         </DialogContent>
         <DialogActions sx={{ 
-          px: 4, 
-          py: 3, 
-          bgcolor: '#fcfcfc', 
-          borderTop: '1px solid #f0f2f5',
-          gap: 2
+          px: 3, 
+          py: 2, 
+          bgcolor: '#fcfcfc',
+          gap: 2,
+          justifyContent: 'center'
         }}>
           <Button 
-            onClick={onClose} 
-            disabled={isSubmitting} 
-            sx={{ 
-              borderRadius: '12px', 
-              color: '#637381', 
-              fontWeight: 700, 
-              px: 3,
+            onClick={onClose}
+            sx={{
+              flex: 1,
+              maxWidth: 200,
+              bgcolor: '#ef4444',
+              color: '#fff',
+              fontWeight: 600,
+              borderRadius: '8px',
+              py: 1,
               textTransform: 'none',
-              '&:hover': { bgcolor: '#f4f6f8' }
+              boxShadow: '0 4px 6px rgba(239, 68, 68, 0.2)',
+              '&:hover': {
+                bgcolor: '#dc2626',
+                boxShadow: '0 6px 12px rgba(239, 68, 68, 0.3)',
+              }
             }}
           >
             ยกเลิก
           </Button>
           <Button 
-            type="submit" 
-            variant="contained" 
-            disabled={!isValid || isSubmitting || loading}
-            sx={{ 
-              borderRadius: '12px', 
-              bgcolor: '#1c1e2b', 
+            type="submit"
+            disabled={isSubmitting}
+            sx={{
+              flex: 1,
+              maxWidth: 200,
+              bgcolor: '#10b981',
               color: '#fff',
-              fontWeight: 700,
-              px: 5,
-              py: 1.5,
+              fontWeight: 600,
+              borderRadius: '8px',
+              py: 1,
               textTransform: 'none',
-              fontSize: '1rem',
-              boxShadow: '0 10px 20px rgba(28, 30, 43, 0.25)',
-              '&:hover': { 
-                bgcolor: '#000000', 
-                boxShadow: '0 12px 24px rgba(0, 0, 0, 0.35)',
-                transform: 'translateY(-2px)'
+              boxShadow: '0 4px 6px rgba(16, 185, 129, 0.2)',
+              '&:hover': {
+                bgcolor: '#059669',
+                boxShadow: '0 6px 12px rgba(16, 185, 129, 0.3)',
               },
-              '&:active': { transform: 'translateY(0)' },
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' }
+              '&.Mui-disabled': {
+                bgcolor: '#a7f3d0',
+                color: '#fff'
+              }
             }}
           >
-            {isSubmitting ? (
-              <>
-                <CircularProgress size={20} color="inherit" sx={{ mr: 1.5 }} />
-                กำลังบันทึก...
-              </>
-            ) : isEdit ? 'บันทึกการแก้ไข' : 'สร้างงานทันที'}
+            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'บันทึกรายงาน'}
           </Button>
         </DialogActions>
       </Box>

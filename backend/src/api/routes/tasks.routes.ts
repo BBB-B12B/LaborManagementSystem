@@ -39,7 +39,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/tasks
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { taskName, projectId, workOrderId, workOrderCode, categoryId, categoryName, assignees, dueDate, status, isSupportRequest } = req.body;
+    const { taskName, projectId, projectName, workOrderId, workOrderCode, categoryId, categoryName, assignees, dueDate, status, isSupportRequest } = req.body;
     
     const isSupport = isSupportRequest === true;
     const hasAssignees = Array.isArray(assignees) && assignees.length > 0;
@@ -52,11 +52,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       taskName,
       description: req.body.description,
       projectId,
+      projectName: projectName || 'Unknown Project',
       workOrderId,
       workOrderCode,
       categoryId,
       categoryName,
-      assignees: isSupport ? [] : assignees,
+      assignees: assignees || [],
       dueDate: new Date(dueDate),
       status,
       isSupportRequest: isSupport,

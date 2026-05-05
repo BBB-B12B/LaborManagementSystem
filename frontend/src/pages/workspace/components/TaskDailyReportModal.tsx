@@ -42,6 +42,7 @@ import th from 'date-fns/locale/th';
 import { dailyReportService } from '@/services/dailyReportService';
 import { taskService, type Task } from '@/services/taskService';
 import { useSnackbar } from 'notistack';
+import { useAuthStore } from '@/store/authStore';
 import TaskRejectModal from './TaskRejectModal';
 
 interface TaskDailyReportModalProps {
@@ -54,6 +55,7 @@ interface TaskDailyReportModalProps {
 interface DailySummary {
   progressAdded: number;
   totalProgress: number;
+  pastProgress: number;
   workerCount: number;
   regularHours: number;
   otMorning: number;
@@ -75,6 +77,7 @@ const getImageUrl = (url: string) => {
 
 export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdated }: TaskDailyReportModalProps) {
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuthStore();
   
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
   const [unlockAnchorEl, setUnlockAnchorEl] = useState<null | HTMLElement>(null);
@@ -95,7 +98,20 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
       const newData: Record<string, DailySummary> = {};
       const dates: string[] = [];
 
-      reports.forEach((report: any) => {
+      const sortedReports = [...reports].sort((a: any, b: any) => {
+        const getSecs = (d: any) => {
+          if (!d) return 0;
+          if (typeof d === 'object' && ('_seconds' in d || 'seconds' in d)) {
+            return d._seconds || d.seconds;
+          }
+          return new Date(d).getTime() / 1000;
+        };
+        return getSecs(a.reportDate) - getSecs(b.reportDate);
+      });
+
+      let previousProgress = 0;
+
+      sortedReports.forEach((report: any) => {
         if (!report.reportDate) return;
         
         let rDate: Date;
@@ -136,9 +152,13 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           });
         }
 
+        const currentProgress = report.progress || 0;
+        const progressAdded = Math.max(0, currentProgress - previousProgress);
+
         newData[dateStr] = {
-          progressAdded: report.progress || 0,
-          totalProgress: report.progress || 0,
+          progressAdded,
+          totalProgress: currentProgress,
+          pastProgress: previousProgress,
           workerCount,
           regularHours,
           otMorning,
@@ -147,6 +167,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           sitePhotos: report.photos?.site || [],
           laborPhotos: report.photos?.labor || [],
         };
+
+        previousProgress = currentProgress;
       });
 
       setReportData(newData);
@@ -279,7 +301,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             </Stack>
           </Box>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            {task?.dailyProgress === 100 && (
+            {task?.dailyProgress === 100 && !(
+              user?.projectLocationIds?.some(id => id === 'P002' || id === 'P004') && 
+              task?.isSupportRequest && 
+              task?.projectId && user?.projectLocationIds && !user.projectLocationIds.includes(task.projectId)
+            ) && (
               <>
                 <Button
                   variant="outlined"
@@ -457,25 +483,47 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                             ความคืบหน้าของวัน
                           </Typography>
                           <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#059669', textAlign: 'center', mb: 0.5 }}>
-                            +{selectedSummary.progressAdded}%
+                            {selectedSummary.totalProgress}%
                           </Typography>
                           
                           <Box sx={{ position: 'relative', width: '100%', mt: 1 }}>
                             <Box sx={{ width: '100%', height: 24, bgcolor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 1 }} />
-                            <Box 
-                              sx={{ 
-                                position: 'absolute', top: 0, left: 0, height: 24, 
-                                width: `${selectedSummary.totalProgress}%`, 
-                                bgcolor: '#86efac', border: '1px solid #166534', borderRadius: 1,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                              }} 
-                            >
-                              {selectedSummary.totalProgress > 10 && (
-                                <Typography variant="caption" sx={{ fontWeight: 800, color: '#14532d' }}>
-                                  {selectedSummary.totalProgress}%
-                                </Typography>
-                              )}
-                            </Box>
+                            
+                            {selectedSummary.pastProgress > 0 && (
+                              <Box 
+                                sx={{ 
+                                  position: 'absolute', top: 0, left: 0, height: 24, 
+                                  width: `${selectedSummary.pastProgress}%`, 
+                                  bgcolor: '#bbf7d0', 
+                                  border: '1px solid #22c55e', 
+                                  borderRight: 'none',
+                                  borderRadius: 1,
+                                  borderTopRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
+                                  borderBottomRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
+                                }} 
+                              />
+                            )}
+
+                            {selectedSummary.progressAdded > 0 && (
+                              <Box 
+                                sx={{ 
+                                  position: 'absolute', top: 0, left: `${selectedSummary.pastProgress}%`, height: 24, 
+                                  width: `${selectedSummary.progressAdded}%`, 
+                                  bgcolor: '#22c55e', 
+                                  border: '1px solid #16a34a', 
+                                  borderRadius: 1,
+                                  borderTopLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
+                                  borderBottomLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }} 
+                              >
+                                {selectedSummary.progressAdded > 5 && (
+                                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#ffffff', zIndex: 1 }}>
+                                    +{selectedSummary.progressAdded}%
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
                           </Box>
                         </Box>
                       </Grid>

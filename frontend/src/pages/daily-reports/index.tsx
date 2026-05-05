@@ -263,7 +263,11 @@ export default function DailyReportPage() {
           const aEmpId = String(a.employeeId || '').toLowerCase().trim();
           const aId = String(a.id || '').toLowerCase().trim();
           
-          const match = (aEmpId !== '' && aEmpId === uEmpId) || (aId !== '' && aId === uId);
+          const match = 
+            (aEmpId !== '' && aEmpId === uEmpId) || 
+            (aEmpId !== '' && aEmpId === uId) || 
+            (aId !== '' && aId === uId) || 
+            (aId !== '' && aId === uEmpId);
           return match;
         });
 

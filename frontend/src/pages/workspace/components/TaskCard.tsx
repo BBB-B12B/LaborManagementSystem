@@ -65,8 +65,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
         mb: 2,
         borderRadius: 4,
         backgroundColor: '#ffffff',
-        border: '1px solid #eef0f4',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+        border: 'none',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease',
         '&:hover': {
           transform: 'translateY(-2px)',
@@ -251,7 +251,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
             }}
           >
             <Typography variant="caption" sx={{ fontWeight: 700, color: '#374151' }}>
-              Due: {new Date(task.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+              Due: {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
             </Typography>
           </Box>
         </Box>

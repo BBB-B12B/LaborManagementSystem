@@ -65,9 +65,13 @@ export default function WorkspacePage() {
         const isMyProject = userProjectIds.length === 0 || userProjectIds.includes(t.projectId);
         
         // 2. งานที่เราได้รับมอบหมาย (Assignee)
-        const isAssignedToMe = t.assignees?.some(a => a.employeeId === employeeId);
+        const isAssignedToMe = t.assignees?.some((a: any) => a.employeeId === employeeId || a.employeeId === user?.id || a.id === user?.id || a.id === employeeId);
 
-        return isMyProject || isAssignedToMe;
+        // 3. งาน Support ที่ทีม Support รับผิดชอบ
+        const isHelperUser = userProjectIds.some(pid => pid === 'P002' || pid === 'P004');
+        const isSupportForMe = isHelperUser && t.isSupportRequest === true;
+
+        return isMyProject || isAssignedToMe || isSupportForMe;
       });
     },
     [user]
@@ -325,11 +329,10 @@ export default function WorkspacePage() {
                   width: 320,
                   display: 'flex',
                   flexDirection: 'column',
-                  bgcolor: '#ffffff',
+                  bgcolor: '#f4f6f8',
                   borderRadius: 4,
                   p: 2,
-                  border: '1px solid #eef0f4',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                  border: 'none',
                 }}
               >
                 {/* Column Header */}
@@ -364,9 +367,6 @@ export default function WorkspacePage() {
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: 100,
-                    bgcolor: '#f8fafc',
-                    borderRadius: 3,
-                    p: 1.5,
                   }}
                 >
                   {loading ? (

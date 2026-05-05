@@ -47,6 +47,23 @@
 *   [x] **T-801**: [Setup] Initialize Firebase Client/SDK connection to Sales System.
 *   [x] **T-802**: [Frontend] Read: Update Workspace Kanban to fetch tasks from `workOrders/{id}/categories/{id}/tasks`.
 *   [x] **T-803**: [Frontend] Write: Update Create Task flow to save to Firebase.
+    - **Error Logs**:
+      - **[T-803-E1-1]**: Support team can edit Due Date when picking up cross-project tasks
+        1. **Root Cause**: The `onChange` for picking up an existing task did not auto-fill `dueDate` and the field was not disabled for cross-project support tasks.
+        2. **Action**: Added logic to populate `dueDate` and set `disabled={true}` when `isHelperUser` selects a cross-project task.
+        3. **Status**: Fixed
+      - **[T-803-E1-2]**: Support team cannot see assigned cross-project tasks in Workspace and sees Approve/Reject buttons
+        1. **Root Cause**: `WorkspacePage` filtered out tasks not matching `projectId` and not directly assigned. `TaskDailyReportModal` did not hide Approve/Reject for cross-project tasks.
+        2. **Action**: Added `isSupportForMe` condition in `WorkspacePage` and hid Approve/Reject buttons for Support users in `TaskDailyReportModal`.
+        3. **Status**: Fixed
+      - **[T-803-E1-3]**: Support task assignees disabled for Support team and missing from Daily Report
+        1. **Root Cause**: `TaskCreateModal` disabled assignees if `isSupportRequest` was true regardless of user role. Daily Report queries mismatched `uid` stored in `employeeId` field with the local `employeeId`.
+        2. **Action**: Allowed Support users to edit assignees by checking `!isHelperUser`. Updated `DailyReport` and `Workspace` to compare both `id` and `employeeId` fields across `uid` and `employeeId` values to prevent mismatch.
+        3. **Status**: Fixed
+      - **[T-803-E1-4]**: Workspace Task Daily Report Progress Bar UI
+        1. **Root Cause**: The progress bar only showed a single color and didn't clearly separate past accumulated progress from newly added progress on the selected date.
+        2. **Action**: Updated `TaskDailyReportModal` to sort reports chronologically and compute `pastProgress` and `progressAdded`. Styled the bar with 2 distinct green tones (light for past, dark for newly added).
+        3. **Status**: Fixed
 *   [/] **T-804**: [Frontend] Task-based Reporting UI (Sidebar + Form) in Daily Report Page.
 *   [ ] **T-820**: [Frontend] Add "View Summary Table" button and redirect logic.
 *   [ ] **T-821**: [Frontend] Sync Task Progress (dailyProgress & status) after report submission.
