@@ -340,7 +340,7 @@ Leave Tracking separates work hours (`labor`) from leave hours (`leave`) strictl
 3. **Medical Certificate Auto-Trigger**: `leaveType` logic is evaluated: if `medCertFileUrl` exists, it sets `leaveType` to "Paid", else "Unpaid".
 
 ### Step-by-Step Frontend
-1. **WorkerRow UI**: Add Tab/Toggle for "Work" vs "Leave".
-2. **Leave Times Selection**: Allow morning/afternoon leave selection.
+1. **WorkerRow UI**: Add Checkbox for active leave state.
+2. **Leave Times Selection**: Allow specific time range selection (Start - End) using TimePicker, matching standard OT time selection logic.
 3. **Upload UI**: Provide medical certificate upload button per worker on leave.
 4. **Payload Splitting**: On submit, separate mixed worker state into distinct `labor` and `leave` arrays.

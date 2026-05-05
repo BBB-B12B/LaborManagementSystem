@@ -24,7 +24,10 @@ import {
   Home,
   Trash2,
   Pencil,
-  HardHat
+  HardHat,
+  Menu,
+  Eye,
+  Paperclip
 } from 'lucide-react';
 import { 
   Box, 
@@ -47,13 +50,18 @@ import {
   DialogContent,
   DialogActions,
   Divider,
-  FormControlLabel
+  FormControlLabel,
+  Badge,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
+import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
 import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import thLocale from 'date-fns/locale/th';
-import { format, subDays } from 'date-fns';
+import { format, subDays, isBefore, isSameDay } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
 // Helper to map project codes to full names (UX Improvement)
@@ -93,11 +101,85 @@ export default function DailyReportPage() {
   const [progress, setProgress] = useState(0);
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [existingPhotos, setExistingPhotos] = useState<{ site: string[]; labor: string[] }>({
     site: [],
     labor: [],
   });
+
+  // Fetch existing reports for the selected task to show calendar dots
+  const [reportDates, setReportDates] = useState<string[]>([]);
+  const { data: taskReportsData } = useQuery({
+    queryKey: ['task-reports-all', selectedTask?.id],
+    queryFn: () => dailyReportService.getAllTaskReports(selectedTask!.id),
+    enabled: !!selectedTask,
+  });
+
+  useEffect(() => {
+    if (taskReportsData && Array.isArray(taskReportsData)) {
+      const dates = taskReportsData.map(r => {
+        let rDate: Date;
+        if (r.reportDate && typeof r.reportDate === 'object' && ('_seconds' in r.reportDate || 'seconds' in r.reportDate)) {
+          const secs = r.reportDate._seconds || r.reportDate.seconds;
+          rDate = new Date(secs * 1000);
+        } else {
+          rDate = new Date(r.reportDate || new Date());
+        }
+        return format(rDate, 'yyyy-MM-dd');
+      });
+      setReportDates(dates);
+    } else {
+      setReportDates([]);
+    }
+  }, [taskReportsData]);
+
+  const CustomPickersDay = (props: PickersDayProps) => {
+    const { day, outsideCurrentMonth, ...other } = props;
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const hasReport = reportDates.includes(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isPast = isBefore(day, today) && !isSameDay(day, today);
+    const isLocked = isPast && isBefore(day, subDays(today, 3));
+    const isMissingReport = isPast && !hasReport && !outsideCurrentMonth;
+
+    let badgeColor = undefined;
+    if (isMissingReport) {
+      badgeColor = isLocked ? 'error.main' : 'warning.main';
+    } else if (hasReport && !outsideCurrentMonth) {
+      badgeColor = 'rgba(5, 150, 105, 0.4)';
+    }
+
+    return (
+      <Badge
+        key={props.day.toString()}
+        overlap="circular"
+        badgeContent={badgeColor ? <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: badgeColor }} /> : null}
+      >
+        <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />
+      </Badge>
+    );
+  };
+
+  const CustomActionBar = (props: PickersActionBarProps) => {
+    return (
+      <Box className={props.className} sx={{ p: 1.5, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center', borderTop: '1px solid #f1f5f9', bgcolor: '#ffffff' }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Box sx={{ width: 10, height: 10, bgcolor: 'rgba(5, 150, 105, 0.4)', borderRadius: '50%' }} />
+          <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>มีข้อมูล</Typography>
+        </Stack>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Box sx={{ width: 10, height: 10, bgcolor: 'warning.main', borderRadius: '50%' }} />
+          <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ยังไม่ได้ลง</Typography>
+        </Stack>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Box sx={{ width: 10, height: 10, bgcolor: 'error.main', borderRadius: '50%' }} />
+          <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ไม่มีข้อมูล</Typography>
+        </Stack>
+      </Box>
+    );
+  };
 
   // Fetch report data when task or date changes
   useEffect(() => {
@@ -183,6 +265,7 @@ export default function DailyReportPage() {
   
   const [selectedWorkers, setSelectedWorkers] = useState<any[]>([]);
   const [isWorkerModalOpen, setIsWorkerModalOpen] = useState(false);
+  const [workerSearchTerm, setWorkerSearchTerm] = useState('');
   
   const [sitePhotos, setSitePhotos] = useState<File[]>([]);
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
@@ -301,16 +384,18 @@ export default function DailyReportPage() {
   });
 
   const filteredTasks = useMemo(() => {
-    return allTasks.filter(t => 
+    const filtered = allTasks.filter(t => 
       t.taskName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.categoryName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.taskId.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    return filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [allTasks, searchTerm]);
 
   // --- 3. Handlers ---
   const handleSelectTask = (task: any) => {
     setSelectedTask(task);
+    setIsSidebarOpen(false);
     setProgress(task.dailyProgress || 0);
     setNote('');
     setSelectedWorkers([]);
@@ -325,7 +410,7 @@ export default function DailyReportPage() {
       setSelectedWorkers(prev => [...prev, {
         ...worker,
         times: { ...bulkTime }, // Apply current bulk time config
-        leave: { morning: false, afternoon: false, medCertFile: null, medCertFileUrl: '' }
+        leave: { active: false, time: '08:00 - 17:00', medCertFile: null, medCertFileUrl: '', medCertFilePreview: null }
       }]);
     } else {
       setSelectedWorkers(prev => prev.filter(w => w.id !== worker.id));
@@ -568,17 +653,15 @@ export default function DailyReportPage() {
         }
       }));
 
-      const leavePayload = selectedWorkers.filter(w => w.leave?.morning || w.leave?.afternoon).map(w => ({
+      const leavePayload = selectedWorkers.filter(w => w.leave?.active).map(w => ({
         workerId: w.id,
         workerName: w.name,
         employeeId: w.employeeId,
         leaveTimes: {
-           morning: w.leave.morning ? '08:00 - 12:00' : null,
-           afternoon: w.leave.afternoon ? '13:00 - 17:00' : null,
+           custom: w.leave.time || '08:00 - 17:00'
         },
         leaveShifts: {
-           morning: w.leave.morning || false,
-           afternoon: w.leave.afternoon || false,
+           custom: true
         },
         medCertFileUrl: w.leave.medCertFileUrl || '',
         // leaveType is set in Backend based on medCertFileUrl
@@ -620,10 +703,11 @@ export default function DailyReportPage() {
   return (
     <ProtectedRoute>
       <LocalizationProvider dateAdapter={AdapterDateFnsV2} adapterLocale={thLocale}>
-        <Layout>
-          <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc', p: { xs: 2, md: 3 } }}>
+        <Layout disablePadding disableTopGap maxWidth={false}>
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}>
             
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            {/* Header */}
+            <Box sx={{ px: { xs: 2, md: 3 }, pt: 3, pb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h4" fontWeight={900} color="#1e293b">Daily Report</Typography>
               <Button 
                 variant="outlined" 
@@ -635,25 +719,32 @@ export default function DailyReportPage() {
               </Button>
             </Box>
 
-            <Grid container spacing={3} sx={{ height: 'calc(100vh - 140px)' }}>
-              
-              <Grid item xs={12} lg={3.5} sx={{ height: '100%' }}>
-                <Paper sx={{ height: '100%', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
-                  <Box sx={{ p: 3, bgcolor: '#fff', borderBottom: '1px solid #f1f5f9' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                      <Box sx={{ width: 36, height: 36, borderRadius: '10px', bgcolor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e293b' }}>
-                        <HardHat size={20} />
+            {/* Content area */}
+            <Box sx={{ flex: 1, overflow: 'hidden', px: { xs: 2, md: 3 }, pb: 3 }}>
+              <Grid container spacing={3} sx={{ height: '100%' }}>
+                
+                <Grid item xs={12} lg={3.5} sx={{ height: '100%', display: isSidebarOpen ? 'block' : 'none', transition: 'all 0.3s' }}>
+                <Paper sx={{ height: '100%', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: 'none', bgcolor: '#f8fafc' }}>
+                  <Box sx={{ p: 3, borderBottom: '1px solid #f1f5f9' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{ width: 36, height: 36, borderRadius: '10px', bgcolor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e293b', flexShrink: 0 }}>
+                          <HardHat size={20} />
+                        </Box>
+                        <Typography variant="h6" fontWeight={800} color="#1e293b" sx={{ whiteSpace: 'nowrap' }}>
+                          My job <Box component="span" sx={{ color: '#94a3b8', fontSize: '0.85rem', ml: 1 }}>({filteredTasks.length})</Box>
+                        </Typography>
                       </Box>
-                      <Typography variant="h6" fontWeight={800} color="#1e293b">My job</Typography>
+                      <TextField
+                        size="small" placeholder="Search tasks..." value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        sx={{ flex: 1, minWidth: 120, maxWidth: 220 }}
+                        InputProps={{
+                          startAdornment: <Search size={16} style={{ marginRight: 8, color: '#94a3b8', flexShrink: 0 }} />,
+                          sx: { borderRadius: '10px', bgcolor: '#ffffff', '& fieldset': { border: 'none' } }
+                        }}
+                      />
                     </Box>
-                    <TextField
-                      fullWidth size="small" placeholder="Search tasks..." value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      InputProps={{
-                        startAdornment: <Search size={16} style={{ marginRight: 8, color: '#94a3b8' }} />,
-                        sx: { borderRadius: '10px', bgcolor: '#f1f5f9', '& fieldset': { border: 'none' } }
-                      }}
-                    />
                   </Box>
                   <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
                     {tasksLoading ? <Box sx={{ textAlign: 'center', py: 5 }}><CircularProgress size={24} /></Box> : (
@@ -667,7 +758,7 @@ export default function DailyReportPage() {
                 </Paper>
               </Grid>
 
-              <Grid item xs={12} lg={8.5} sx={{ height: '100%' }}>
+              <Grid item xs={12} lg={isSidebarOpen ? 8.5 : 12} sx={{ height: '100%', transition: 'all 0.3s' }}>
                 <Paper sx={{ height: '100%', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   {!selectedTask ? (
                     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
@@ -678,64 +769,80 @@ export default function DailyReportPage() {
                     <>
                       <Box sx={{ p: 3, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)} sx={{ color: '#1e293b', bgcolor: '#f1f5f9', '&:hover': { bgcolor: '#e2e8f0' } }}>
+                            <Menu size={20} />
+                          </IconButton>
                           <Chip label={selectedTask.taskId} sx={{ fontWeight: 900, borderRadius: '6px', bgcolor: '#1e293b', color: 'white' }} />
-                          <Home size={20} color="#64748b" />
-                          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                            {selectedTask.taskName}
-                          </Typography>
+                          <Box>
+                            <Typography variant="body2" fontWeight={800} color="primary" sx={{ mb: 0.5 }}>หมวดงาน : {selectedTask.categoryName}</Typography>
+                            <Typography variant="h6" fontWeight={900} color="#1e293b" sx={{ lineHeight: 1 }}>{selectedTask.taskName}</Typography>
+                          </Box>
                         </Box>
-                        <DatePicker
-                          value={reportDate} onChange={(newValue) => setReportDate(newValue || new Date())}
-                          maxDate={new Date()}
-                          slotProps={{ 
-                            textField: { 
-                              size: 'small', 
-                              sx: { width: 150 },
-                              error: isDateLockedByWagePeriod,
-                              helperText: isDateLockedByWagePeriod ? 'งวดค่าแรงถูกปิดแล้ว' : ''
-                            } 
-                          }}
-                          disabled={isSubmitting}
-                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <Box
+                            sx={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              position: 'relative',
+                              border: '3px solid',
+                              borderColor: selectedTask.dailyProgress > 0 ? '#4caf50' : 'divider',
+                              background: selectedTask.dailyProgress > 0 
+                                ? `conic-gradient(#4caf50 ${selectedTask.dailyProgress * 3.6}deg, transparent 0deg)` 
+                                : 'transparent',
+                              '&::after': {
+                                content: '""',
+                                position: 'absolute',
+                                width: '82%',
+                                height: '82%',
+                                backgroundColor: 'background.paper',
+                                borderRadius: '50%',
+                                zIndex: 1
+                              }
+                            }}
+                          >
+                            <span style={{ zIndex: 2 }}>{selectedTask.dailyProgress}%</span>
+                          </Box>
+                          <DatePicker
+                            value={reportDate} 
+                            onChange={(newValue) => {
+                              if (newValue) {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const isPast = isBefore(newValue, today) && !isSameDay(newValue, today);
+                                const isLocked = isPast && isBefore(newValue, subDays(today, 3));
+                                const dateStr = format(newValue, 'yyyy-MM-dd');
+                                const hasReport = reportDates.includes(dateStr);
+                                const isMissingReport = isPast && !hasReport;
+
+                                if (isMissingReport && isLocked) {
+                                  enqueueSnackbar('ติดต่อหัวหน้างานเพื่อปลดล็อคสิทธิ์', { variant: 'error' });
+                                  return;
+                                }
+                              }
+                              setReportDate(newValue || new Date());
+                            }}
+                            maxDate={new Date()}
+                            slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
+                            slotProps={{ 
+                              textField: { 
+                                size: 'small', 
+                                sx: { width: 150 },
+                                error: isDateLockedByWagePeriod,
+                                helperText: isDateLockedByWagePeriod ? 'งวดค่าแรงถูกปิดแล้ว' : ''
+                              } 
+                            }}
+                            disabled={isSubmitting}
+                          />
+                        </Box>
                       </Box>
 
                       <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                        <Box sx={{ mb: 3 }}>
-                          <Typography variant="body2" fontWeight={700} color="primary" gutterBottom>หมวดงาน : {selectedTask.categoryName}</Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="h5" fontWeight={900} color="#1e293b">{selectedTask.taskName}</Typography>
-                            <Box
-                              sx={{
-                                width: 50,
-                                height: 50,
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                position: 'relative',
-                                border: '3px solid',
-                                borderColor: selectedTask.dailyProgress > 0 ? '#4caf50' : 'divider',
-                                background: selectedTask.dailyProgress > 0 
-                                  ? `conic-gradient(#4caf50 ${selectedTask.dailyProgress * 3.6}deg, transparent 0deg)` 
-                                  : 'transparent',
-                                '&::after': {
-                                  content: '""',
-                                  position: 'absolute',
-                                  width: '85%',
-                                  height: '85%',
-                                  backgroundColor: 'background.paper',
-                                  borderRadius: '50%',
-                                  zIndex: 1
-                                }
-                              }}
-                            >
-                              <span style={{ zIndex: 2 }}>{selectedTask.dailyProgress}%</span>
-                            </Box>
-                          </Box>
-                        </Box>
-
                         <Box sx={{ mb: 4 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Typography variant="h6" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Users size={20} color="#3b82f6" /> การจัดการแรงงาน DC</Typography>
@@ -749,25 +856,39 @@ export default function DailyReportPage() {
                               เลือกแรงงาน DC
                             </Button>
                           </Box>
-                          <Paper variant="outlined" sx={{ borderRadius: '16px', borderStyle: 'dashed' }}>
+                          <TableContainer component={Paper} elevation={0} sx={{ borderRadius: '12px', border: '1px solid #94a3b8', overflowX: 'auto' }}>
                             {selectedWorkers.length === 0 ? (
                               <Box sx={{ p: 3, textAlign: 'center', color: '#94a3b8' }}><Typography variant="body2">ยังไม่มีการเลือกคนงาน</Typography></Box>
                             ) : (
-                              <Stack divider={<Divider />}>
-                                {selectedWorkers.map((worker, idx) => (
-                                  <WorkerRow 
-                                    key={worker.id} 
-                                    worker={worker} 
-                                    onUpdate={(f, v) => updateWorkerTime(worker.id, f, v)} 
-                                    onUpdateLeave={(f, v) => updateWorkerLeave(worker.id, f, v)}
-                                    onUploadCert={(f) => handleCertUpload(worker.id, f)}
-                                    onRemove={() => removeWorker(worker.id)} 
-                                    index={idx + 1} 
-                                  />
-                                ))}
-                              </Stack>
+                              <Table size="small" sx={{ minWidth: 800, '& .MuiTableCell-root': { py: 1, px: 0.5 } }}>
+                                <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                                  <TableRow>
+                                    <TableCell align="center" sx={{ fontWeight: 800, width: 30, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem' }}>No.</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, width: 140, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem' }}>ชื่อแรงงาน</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem', width: 130 }}>เวลาทำงานปกติ</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem', width: 130 }}>OT : เช้า</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem', width: 130 }}>OT : เที่ยง</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem', width: 130 }}>OT : เย็น</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, width: 180, borderRight: '1px solid #f1f5f9', fontSize: '0.75rem' }}>Leave : ลา</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, width: 60, fontSize: '0.75rem' }}>จัดการ</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {selectedWorkers.map((worker, idx) => (
+                                    <WorkerTableRow 
+                                      key={worker.id} 
+                                      worker={worker} 
+                                      onUpdate={(f: string, v: any) => updateWorkerTime(worker.id, f, v)} 
+                                      onUpdateLeave={(f: string, v: any) => updateWorkerLeave(worker.id, f, v)}
+                                      onUploadCert={(f: File | null) => handleCertUpload(worker.id, f)}
+                                      onRemove={() => removeWorker(worker.id)} 
+                                      index={idx + 1} 
+                                    />
+                                  ))}
+                                </TableBody>
+                              </Table>
                             )}
-                          </Paper>
+                          </TableContainer>
                         </Box>
 
                         <Grid container spacing={4} alignItems="flex-start">
@@ -838,14 +959,30 @@ export default function DailyReportPage() {
                 </Paper>
               </Grid>
             </Grid>
+            </Box>
           </Box>
 
-           <Dialog open={isWorkerModalOpen} onClose={() => setIsWorkerModalOpen(false)} fullWidth maxWidth="xs">
-            <DialogTitle sx={{ fontWeight: 800 }}>เลือกรายชื่อพนักงาน</DialogTitle>
+           <Dialog open={isWorkerModalOpen} onClose={() => setIsWorkerModalOpen(false)} fullWidth maxWidth="sm" sx={{ zIndex: 9999 }}>
+            <DialogTitle sx={{ fontWeight: 800 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                <Typography variant="h6" fontWeight={800}>เลือกรายชื่อพนักงาน</Typography>
+                <TextField 
+                  size="small" 
+                  placeholder="ค้นหา..." 
+                  value={workerSearchTerm}
+                  onChange={(e) => setWorkerSearchTerm(e.target.value)}
+                  sx={{ width: 150 }}
+                  InputProps={{
+                    startAdornment: <Search size={16} style={{ marginRight: 8, color: '#94a3b8' }} />,
+                    sx: { borderRadius: '8px', bgcolor: '#f8fafc' }
+                  }}
+                />
+              </Box>
+            </DialogTitle>
             <DialogContent dividers>
               <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}><Users size={16} /> เลือกรายชื่อพนักงาน</Typography>
               <Stack spacing={0.5} sx={{ maxHeight: 250, overflowY: 'auto', mb: 3, p: 1, bgcolor: '#f8fafc', borderRadius: '12px' }}>
-                {projectWorkers.map(worker => (
+                {projectWorkers.filter(w => w.name.toLowerCase().includes(workerSearchTerm.toLowerCase()) || w.employeeId.toLowerCase().includes(workerSearchTerm.toLowerCase())).map(worker => (
                   <FormControlLabel 
                     key={worker.id} 
                     control={
@@ -866,52 +1003,30 @@ export default function DailyReportPage() {
               <Divider sx={{ mb: 2 }} />
               
               <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}><Clock size={16} /> กำหนดเวลาทำงาน</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <FormControlLabel 
-                    control={<Checkbox size="small" checked={bulkTime.regular} onChange={(e) => handleBulkTimeChange('regular', e.target.checked)} />} 
-                    label={<Typography variant="caption" fontWeight={700}>Day : เวลาปกติ</Typography>} 
-                  />
-                  <Typography variant="caption" sx={{ display: 'block', ml: 3.5, color: '#94a3b8' }}>08:00 - 17:00</Typography>
+              <Grid container spacing={1}>
+                <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
+                  <FormControlLabel control={<Checkbox size="small" checked={bulkTime.regular} onChange={(e) => handleBulkTimeChange('regular', e.target.checked)} />} label={<Typography variant="body2" fontWeight={700}>Day : เวลาปกติ</Typography>} sx={{ m: 0 }} />
+                  {bulkTime.regular ? <TimeRangePicker value={bulkTime.regTime || '08:00 - 17:00'} onChange={(val) => handleBulkTimeChange('regTime', val)} /> : <Typography variant="body2" color="#94a3b8" fontWeight={700}>08:00 - 17:00</Typography>}
                 </Grid>
-                <Grid item xs={6}>
-                  <FormControlLabel 
-                    control={<Checkbox size="small" checked={bulkTime.otNoon} onChange={(e) => handleBulkTimeChange('otNoon', e.target.checked)} />} 
-                    label={<Typography variant="caption" fontWeight={700}>OT : เที่ยง</Typography>} 
-                  />
-                  <Typography variant="caption" sx={{ display: 'block', ml: 3.5, color: '#94a3b8' }}>12:00 - 13:00</Typography>
+                <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
+                  <FormControlLabel control={<Checkbox size="small" checked={bulkTime.otMorning} onChange={(e) => handleBulkTimeChange('otMorning', e.target.checked)} />} label={<Typography variant="body2" fontWeight={700}>OT : เช้า</Typography>} sx={{ m: 0 }} />
+                  {bulkTime.otMorning ? <TimeRangePicker value={bulkTime.otMorningTime || '08:00 - 12:00'} onChange={(val) => handleBulkTimeChange('otMorningTime', val)} /> : <Typography variant="body2" color="#94a3b8" fontWeight={700}>--:-- - --:--</Typography>}
                 </Grid>
-                <Grid item xs={12}>
-                  <Stack direction="row" spacing={2} alignItems="center">
-                    <Box sx={{ flex: 1 }}>
-                      <FormControlLabel 
-                        control={<Checkbox size="small" checked={bulkTime.otMorning} onChange={(e) => handleBulkTimeChange('otMorning', e.target.checked)} />} 
-                        label={<Typography variant="caption" fontWeight={700}>OT : เช้า</Typography>} 
-                      />
-                      {bulkTime.otMorning && (
-                        <TextField 
-                          fullWidth size="small" variant="outlined" 
-                          value={bulkTime.otMorningTime} 
-                          onChange={(e) => handleBulkTimeChange('otMorningTime', e.target.value)} 
-                          sx={{ mt: 0.5, '& input': { fontSize: '0.75rem' } }} 
-                        />
-                      )}
+                <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
+                  <FormControlLabel control={<Checkbox size="small" checked={bulkTime.otNoon} onChange={(e) => handleBulkTimeChange('otNoon', e.target.checked)} />} label={<Typography variant="body2" fontWeight={700}>OT : เที่ยง</Typography>} sx={{ m: 0 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#f8fafc' }}>
+                      <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8' }}>12:00</Typography>
                     </Box>
-                    <Box sx={{ flex: 1 }}>
-                      <FormControlLabel 
-                        control={<Checkbox size="small" checked={bulkTime.otEvening} onChange={(e) => handleBulkTimeChange('otEvening', e.target.checked)} />} 
-                        label={<Typography variant="caption" fontWeight={700}>OT : เย็น</Typography>} 
-                      />
-                      {bulkTime.otEvening && (
-                        <TextField 
-                          fullWidth size="small" variant="outlined" 
-                          value={bulkTime.otEveningTime} 
-                          onChange={(e) => handleBulkTimeChange('otEveningTime', e.target.value)} 
-                          sx={{ mt: 0.5, '& input': { fontSize: '0.75rem' } }} 
-                        />
-                      )}
+                    <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800 }}>-</Typography>
+                    <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#f8fafc' }}>
+                      <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8' }}>13:00</Typography>
                     </Box>
-                  </Stack>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} display="flex" alignItems="center" justifyContent="space-between">
+                  <FormControlLabel control={<Checkbox size="small" checked={bulkTime.otEvening} onChange={(e) => handleBulkTimeChange('otEvening', e.target.checked)} />} label={<Typography variant="body2" fontWeight={700}>OT : เย็น</Typography>} sx={{ m: 0 }} />
+                  {bulkTime.otEvening ? <TimeRangePicker value={bulkTime.otEveningTime || '18:00 - 21:00'} onChange={(val) => handleBulkTimeChange('otEveningTime', val)} /> : <Typography variant="body2" color="#94a3b8" fontWeight={700}>--:-- - --:--</Typography>}
                 </Grid>
               </Grid>
             </DialogContent>
@@ -927,7 +1042,30 @@ export default function DailyReportPage() {
 
 function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean, onClick: () => void }) {
   return (
-    <Box onClick={onClick} sx={{ p: 2, borderRadius: '16px', cursor: 'pointer', border: '1px solid', borderColor: active ? '#3b82f6' : '#f1f5f9', bgcolor: active ? '#eff6ff' : '#fff', transition: 'all 0.2s', display: 'flex', gap: 2, '&:hover': { bgcolor: '#f8fafc' } }}>
+    <Box 
+      onClick={onClick} 
+      sx={{ 
+        p: 2, 
+        borderRadius: '16px', 
+        cursor: 'pointer', 
+        border: '1px solid', 
+        borderColor: active ? '#3b82f6' : '#cbd5e1', 
+        bgcolor: active ? '#eff6ff' : '#ffffff', 
+        boxShadow: active 
+          ? '0 4px 14px rgba(59, 130, 246, 0.2)' 
+          : '0 4px 12px rgba(0, 0, 0, 0.04)',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
+        display: 'flex', 
+        gap: 2, 
+        '&:hover': { 
+          transform: 'translateY(-2px)',
+          borderColor: active ? '#3b82f6' : '#94a3b8',
+          boxShadow: active 
+            ? '0 6px 20px rgba(59, 130, 246, 0.25)' 
+            : '0 8px 16px rgba(0, 0, 0, 0.08)'
+        } 
+      }}
+    >
       <Box sx={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
         <svg height="44" width="44" style={{ transform: 'rotate(-90deg)' }}>
           <circle cx="22" cy="22" r="19" stroke="#f1f5f9" strokeWidth="3" fill="none" />
@@ -936,54 +1074,214 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
         <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Typography variant="caption" fontWeight={900} fontSize="0.65rem" color="#10b981">{task.dailyProgress}%</Typography></Box>
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="caption" fontWeight={900} color="primary">{task.taskId}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.2 }}>
+          <Typography variant="caption" fontWeight={900} color="primary">{task.taskId}</Typography>
+          {task.isSupportRequest && (
+            <Chip label="Support" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#fef08a', color: '#854d0e', borderRadius: '4px' }} />
+          )}
+        </Box>
         <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>{task.taskName}</Typography>
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.3, fontWeight: 600 }}>{getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}</Typography>
-        <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>Duedate : {format(new Date(task.dueDate), 'd MMM yyyy')}</Typography>
+        <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>Duedate : {format(new Date(task.dueDate), 'dd/MM/yyyy')}</Typography>
       </Box>
     </Box>
   );
 }
 
-function WorkerRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index }: any) {
+const TimeRangePicker = ({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [startStr, endStr] = (value || '08:00 - 17:00').split(' - ');
+  
+  const [startOpen, setStartOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
+
+  const parseTime = (timeStr: string) => {
+    if (!timeStr || timeStr === '--:--') return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    const d = new Date();
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d;
+  };
+
+  const startTime = parseTime(startStr);
+  const endTime = parseTime(endStr);
+
+  const handleStartChange = (newDate: Date | null) => {
+    if (newDate && !isNaN(newDate.getTime())) {
+      onChange(`${format(newDate, 'HH:mm')} - ${endStr || '00:00'}`);
+    } else {
+      onChange(`--:-- - ${endStr || '00:00'}`);
+    }
+  };
+
+  const handleEndChange = (newDate: Date | null) => {
+    if (newDate && !isNaN(newDate.getTime())) {
+      onChange(`${startStr || '00:00'} - ${format(newDate, 'HH:mm')}`);
+    } else {
+      onChange(`${startStr || '00:00'} - --:--`);
+    }
+  };
+
   return (
-    <Box sx={{ p: 1.5 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-        <Typography variant="body2" fontWeight={800} color="#1e293b">{index}. {worker.employeeId} : {worker.name}</Typography>
-        <Box><IconButton size="small" sx={{ color: '#3b82f6' }}><Pencil size={14} /></IconButton><IconButton size="small" sx={{ color: '#ef4444' }} onClick={onRemove}><Trash2 size={14} /></IconButton></Box>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
+      
+      {/* Visual Start Time Box */}
+      <Box 
+        onClick={() => !disabled && setStartOpen(true)}
+        sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#ffffff', cursor: disabled ? 'default' : 'pointer', '&:hover': { borderColor: disabled ? '#cbd5e1' : '#94a3b8' } }}
+      >
+        <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e293b' }}>{startStr || '--:--'}</Typography>
       </Box>
-      <Grid container spacing={1}>
-        {/* LABOR SECTION */}
-        <Grid item xs={12} sx={{ mt: 0.5 }}>
-          <Typography variant="caption" fontWeight={800} color="#3b82f6">เวลาทำงาน (Labor)</Typography>
-        </Grid>
-        <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.regular} onChange={(e) => onUpdate('regular', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>Day : เวลาปกติ</Typography>} sx={{ m: 0 }} />{worker.times.regular && <TextField size="small" variant="standard" value={worker.times.regTime || '08:00 - 17:00'} onChange={(e) => onUpdate('regTime', e.target.value)} sx={{ ml: 3.5, mt: -1, '& input': { fontSize: '0.7rem', color: '#3b82f6' } }} />}</Grid>
-        <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.otMorning} onChange={(e) => onUpdate('otMorning', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>OT : เช้า</Typography>} sx={{ m: 0 }} />{worker.times.otMorning && <TextField size="small" variant="standard" value={worker.times.otMorningTime} onChange={(e) => onUpdate('otMorningTime', e.target.value)} sx={{ ml: 3.5, mt: -1, '& input': { fontSize: '0.7rem', color: '#3b82f6' } }} />}</Grid>
-        <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.otNoon} onChange={(e) => onUpdate('otNoon', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>OT : เที่ยง</Typography>} sx={{ m: 0 }} /><Typography variant="caption" sx={{ display: 'block', ml: 3.5, color: '#94a3b8' }}>12:00 - 13:00</Typography></Grid>
-        <Grid item xs={3}><FormControlLabel control={<Checkbox size="small" checked={worker.times.otEvening} onChange={(e) => onUpdate('otEvening', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>OT : เย็น</Typography>} sx={{ m: 0 }} />{worker.times.otEvening && <TextField size="small" variant="standard" value={worker.times.otEveningTime} onChange={(e) => onUpdate('otEveningTime', e.target.value)} sx={{ ml: 3.5, mt: -1, '& input': { fontSize: '0.7rem', color: '#3b82f6' } }} />}</Grid>
-        
-        {/* LEAVE SECTION */}
-        <Grid item xs={12} sx={{ mt: 1, borderTop: '1px dashed #e2e8f0', pt: 1 }}>
-          <Typography variant="caption" fontWeight={800} color="#ef4444">การลา (Leave)</Typography>
-        </Grid>
-        <Grid item xs={12} display="flex" alignItems="center" gap={2}>
-           <FormControlLabel control={<Checkbox size="small" checked={worker.leave?.morning} onChange={(e) => onUpdateLeave('morning', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>ครึ่งเช้า (08:00 - 12:00)</Typography>} sx={{ m: 0 }} />
-           <FormControlLabel control={<Checkbox size="small" checked={worker.leave?.afternoon} onChange={(e) => onUpdateLeave('afternoon', e.target.checked)} />} label={<Typography variant="caption" fontWeight={700}>ครึ่งบ่าย (13:00 - 17:00)</Typography>} sx={{ m: 0 }} />
-           
-           {(worker.leave?.morning || worker.leave?.afternoon) && (
-              <Box sx={{ ml: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                 {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
-                    <Chip label="มีใบรับรองแพทย์ (Paid)" color="success" size="small" onDelete={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} />
-                 ) : (
-                    <Button variant="outlined" component="label" size="small" sx={{ fontSize: '0.7rem' }}>
-                       แนบใบรับรองแพทย์
-                       <input type="file" hidden accept="image/*" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
-                    </Button>
-                 )}
-              </Box>
-           )}
-        </Grid>
-      </Grid>
+      
+      {/* Hidden Start Time Picker */}
+      <MobileTimePicker 
+        value={startTime} 
+        onChange={handleStartChange} 
+        disabled={disabled}
+        ampm={false}
+        open={startOpen}
+        onClose={() => setStartOpen(false)}
+        onAccept={() => setStartOpen(false)}
+        slotProps={{ 
+          textField: { sx: { display: 'none' } },
+          dialog: { sx: { zIndex: 10000 } } 
+        }}
+      />
+      
+      <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800 }}>-</Typography>
+      
+      {/* Visual End Time Box */}
+      <Box 
+        onClick={() => !disabled && setEndOpen(true)}
+        sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#ffffff', cursor: disabled ? 'default' : 'pointer', '&:hover': { borderColor: disabled ? '#cbd5e1' : '#94a3b8' } }}
+      >
+        <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e293b' }}>{endStr || '--:--'}</Typography>
+      </Box>
+
+      {/* Hidden End Time Picker */}
+      <MobileTimePicker 
+        value={endTime} 
+        onChange={handleEndChange} 
+        disabled={disabled}
+        ampm={false}
+        open={endOpen}
+        onClose={() => setEndOpen(false)}
+        onAccept={() => setEndOpen(false)}
+        slotProps={{ 
+          textField: { sx: { display: 'none' } },
+          dialog: { sx: { zIndex: 10000 } } 
+        }}
+      />
     </Box>
+  );
+};
+
+function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index }: any) {
+  const renderInactiveTime = () => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
+      <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', bgcolor: '#f8fafc' }}>
+        <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1' }}>-</Typography>
+      </Box>
+      <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 800 }}>-</Typography>
+      <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', bgcolor: '#f8fafc' }}>
+        <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1' }}>-</Typography>
+      </Box>
+    </Box>
+  );
+
+  return (
+    <TableRow hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+      <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>{index}</TableCell>
+      <TableCell sx={{ borderRight: '1px solid #f1f5f9' }}>
+        <Typography variant="body2" fontWeight={700} color="#1e293b" noWrap>
+          {worker.employeeId} : {worker.name}
+        </Typography>
+      </TableCell>
+      
+      {/* Day */}
+      <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.regular} onChange={(e) => onUpdate('regular', e.target.checked)} />
+          {worker.times.regular ? <TimeRangePicker value={worker.times.regTime || '08:00 - 17:00'} onChange={(val) => onUpdate('regTime', val)} /> : renderInactiveTime()}
+        </Box>
+      </TableCell>
+      
+      {/* OT Morning */}
+      <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otMorning} onChange={(e) => onUpdate('otMorning', e.target.checked)} />
+          {worker.times.otMorning ? <TimeRangePicker value={worker.times.otMorningTime || '08:00 - 12:00'} onChange={(val) => onUpdate('otMorningTime', val)} /> : renderInactiveTime()}
+        </Box>
+      </TableCell>
+      
+      {/* OT Noon */}
+      <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otNoon} onChange={(e) => onUpdate('otNoon', e.target.checked)} />
+          {worker.times.otNoon ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#f8fafc' }}>
+                <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8' }}>12:00</Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800 }}>-</Typography>
+              <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#f8fafc' }}>
+                <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8' }}>13:00</Typography>
+              </Box>
+            </Box>
+          ) : renderInactiveTime()}
+        </Box>
+      </TableCell>
+      
+      {/* OT Evening */}
+      <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otEvening} onChange={(e) => onUpdate('otEvening', e.target.checked)} />
+          {worker.times.otEvening ? <TimeRangePicker value={worker.times.otEveningTime || '18:00 - 21:00'} onChange={(val) => onUpdate('otEveningTime', val)} /> : renderInactiveTime()}
+        </Box>
+      </TableCell>
+      
+      {/* Leave */}
+      <TableCell sx={{ borderRight: '1px solid #f1f5f9' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 26, justifyContent: 'center' }}>
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} />
+          {worker.leave?.active ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val) => onUpdateLeave('time', val)} />
+              
+              <Box sx={{ display: 'flex', gap: 0.2, ml: 0.5 }}>
+                {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
+                   <>
+                     <IconButton size="small" onClick={() => window.open(worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl, '_blank')} sx={{ color: '#3b82f6', p: 0.4, bgcolor: '#eff6ff', borderRadius: '6px' }}>
+                        <Eye size={14} />
+                     </IconButton>
+                     <IconButton size="small" onClick={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} sx={{ color: '#ef4444', p: 0.4, bgcolor: '#fef2f2', borderRadius: '6px' }}>
+                        <Trash2 size={14} />
+                     </IconButton>
+                   </>
+                ) : (
+                   <IconButton component="label" size="small" sx={{ color: '#64748b', p: 0.4, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
+                      <Paperclip size={14} />
+                      <input type="file" hidden accept="image/*" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
+                   </IconButton>
+                )}
+              </Box>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+               {renderInactiveTime()}
+               <Box sx={{ width: 22, ml: 0.5 }} /> {/* Spacer for align with attach button */}
+            </Box>
+          )}
+        </Box>
+      </TableCell>
+      
+      {/* Actions */}
+      <TableCell align="center">
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+          <IconButton size="small" sx={{ color: '#3b82f6', p: 0.5 }}><Pencil size={14} /></IconButton>
+          <IconButton size="small" sx={{ color: '#ef4444', p: 0.5 }} onClick={onRemove}><Trash2 size={14} /></IconButton>
+        </Box>
+      </TableCell>
+    </TableRow>
   );
 }
