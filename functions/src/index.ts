@@ -158,6 +158,7 @@ async function reconcile(
   let scanOtNoon        = 0;
   let scanOtEvening     = 0;
   let scanDataId: string | undefined;
+  let scanPunches: string[] = [];
 
   // Anomaly Detection: เช็คว่ามีการสแกนจากหลายโครงการในวันเดียวกันหรือไม่
   let isMultipleProjects = false;
@@ -175,11 +176,61 @@ async function reconcile(
   // วนลูปบวกเวลาทั้งหมด (รองรับเคสทำงาน 2 โครงการในวันเดียว เช่น เช้า 4 ชม. บ่าย 4 ชม.)
   for (const doc of activeScanDocs) {
     const data = doc.data();
-    if (!scanDataId) scanDataId = doc.id; // ใช้ ID ของตัวแรกเป็นตัวแทน
-    scanNormalHours += (data['regularHours']    || 0);
-    scanOtMorning   += (data['otMorningHours']  || 0);
-    scanOtNoon      += (data['otNoonHours']      || 0);
-    scanOtEvening   += (data['otEveningHours']  || 0);
+    if (!scanDataId) {
+      scanDataId = doc.id; // ใช้ ID ของตัวแรกเป็นตัวแทน
+
+      // ── อ่าน punch times ─────────────────────────────────────────────
+      // punches (HH:mm) = primary | allScans (HH:mm:ss) = fallback
+      if (Array.isArray(data['punches']) && data['punches'].length > 0) {
+        scanPunches = data['punches'];
+      } else if (Array.isArray(data['allScans']) && data['allScans'].length > 0) {
+        scanPunches = (data['allScans'] as string[]).map((t: string) => t.slice(0, 5));
+      } else {
+        const slots = ['Time1','Time2','Time3','Time4','Time5','Time6'];
+        scanPunches = slots
+          .map(k => data[k] as string | undefined)
+          .filter((t): t is string => !!t && t !== '-')
+          .map(t => t.slice(0, 5));
+      }
+    }
+
+    // ── คำนวณชั่วโมง ─────────────────────────────────────────────────
+    const storedHours = (data['regularHours'] || 0) + (data['otMorningHours'] || 0)
+      + (data['otNoonHours'] || 0) + (data['otEveningHours'] || 0);
+
+    console.log(`[reconcile][HOURS_DEBUG] doc=${doc.id} storedHours=${storedHours} regularHours=${data['regularHours']} allScans=${JSON.stringify(data['allScans'])}`);
+
+    if (storedHours > 0) {
+      // ใช้ field ที่ import service คำนวณไว้แล้ว (กรณี CSV bulk import)
+      scanNormalHours += (data['regularHours']   || 0);
+      scanOtMorning   += (data['otMorningHours'] || 0);
+      scanOtNoon      += (data['otNoonHours']    || 0);
+      scanOtEvening   += (data['otEveningHours'] || 0);
+    } else {
+      // คำนวณจาก allScans เมื่อ hours fields ไม่มี (กรณี manual entry)
+      const allTimes: string[] = Array.isArray(data['allScans']) && data['allScans'].length > 0
+        ? data['allScans'] as string[]
+        : (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
+            .map(k => data[k] as string | undefined)
+            .filter((t): t is string => !!t && t !== '-');
+
+      console.log(`[reconcile][HOURS_DEBUG] allTimes=${JSON.stringify(allTimes)} length=${allTimes.length}`);
+
+      if (allTimes.length >= 2) {
+        const toMinutes = (t: string) => {
+          const [h, m] = t.split(':').map(Number);
+          return h * 60 + (m || 0);
+        };
+        const sorted = [...allTimes].sort((a, b) => toMinutes(a) - toMinutes(b));
+        const firstInMin  = toMinutes(sorted[0]);
+        const lastOutMin  = toMinutes(sorted[sorted.length - 1]);
+        const hasLunch    = firstInMin < 12 * 60 && lastOutMin > 13 * 60;
+        const rawHours    = (lastOutMin - firstInMin) / 60;
+        const computed    = hasLunch ? rawHours - 1 : rawHours;
+        console.log(`[reconcile][HOURS_DEBUG] firstIn=${firstInMin} lastOut=${lastOutMin} hasLunch=${hasLunch} rawHours=${rawHours} computed=${computed}`);
+        scanNormalHours  += computed;
+      }
+    }
   }
 
   let totalScanHours = scanNormalHours + scanOtMorning + scanOtNoon + scanOtEvening;
@@ -190,13 +241,41 @@ async function reconcile(
 
   if (!hasScan && triggerDocId && triggerDocData && triggerDocData['isDeleted'] !== true) {
     console.warn(`[reconcile] Query ไม่เจอ scan docs สำหรับ ${employeeNumber} วันที่ ${workDateStr} — ใช้ข้อมูลจาก trigger doc แทน`);
-    hasScan       = true;
-    scanDataId    = triggerDocId;
-    scanNormalHours = (triggerDocData['regularHours']   || 0);
-    scanOtMorning   = (triggerDocData['otMorningHours'] || 0);
-    scanOtNoon      = (triggerDocData['otNoonHours']    || 0);
-    scanOtEvening   = (triggerDocData['otEveningHours'] || 0);
-    totalScanHours  = scanNormalHours + scanOtMorning + scanOtNoon + scanOtEvening;
+    hasScan    = true;
+    scanDataId = triggerDocId;
+
+    // อ่าน punch times จาก trigger doc
+    if (Array.isArray(triggerDocData['punches']) && triggerDocData['punches'].length > 0) {
+      scanPunches = triggerDocData['punches'];
+    } else if (Array.isArray(triggerDocData['allScans']) && triggerDocData['allScans'].length > 0) {
+      scanPunches = (triggerDocData['allScans'] as string[]).map((t: string) => t.slice(0, 5));
+    }
+
+    const storedHours = (triggerDocData['regularHours'] || 0) + (triggerDocData['otMorningHours'] || 0)
+      + (triggerDocData['otNoonHours'] || 0) + (triggerDocData['otEveningHours'] || 0);
+
+    if (storedHours > 0) {
+      scanNormalHours = (triggerDocData['regularHours']   || 0);
+      scanOtMorning   = (triggerDocData['otMorningHours'] || 0);
+      scanOtNoon      = (triggerDocData['otNoonHours']    || 0);
+      scanOtEvening   = (triggerDocData['otEveningHours'] || 0);
+    } else {
+      // คำนวณจาก allScans
+      const allTimes: string[] = Array.isArray(triggerDocData['allScans']) && triggerDocData['allScans'].length > 0
+        ? triggerDocData['allScans'] as string[]
+        : (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
+            .map(k => triggerDocData[k] as string | undefined)
+            .filter((t): t is string => !!t && t !== '-');
+
+      if (allTimes.length >= 2) {
+        const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+        const sorted = [...allTimes].sort((a, b) => toMinutes(a) - toMinutes(b));
+        const rawHours = (toMinutes(sorted[sorted.length - 1]) - toMinutes(sorted[0])) / 60;
+        const hasLunch = toMinutes(sorted[0]) < 12 * 60 && toMinutes(sorted[sorted.length - 1]) > 13 * 60;
+        scanNormalHours = hasLunch ? rawHours - 1 : rawHours;
+      }
+    }
+    totalScanHours = scanNormalHours + scanOtMorning + scanOtNoon + scanOtEvening;
   }
 
   // ── 2. เช็ควันหยุดบริษัท (companyHolidays) ────────────────────────────────
@@ -225,7 +304,7 @@ async function reconcile(
   let totalTimesheetHours = 0;
   let leaveEntries: LeaveEntry[] = [];
   let totalLeaveHours = 0;
-  let dailyReportPhotos: string[] | undefined = undefined;
+  let dailyReportPhotos: string[] | null = null;
 
   if (timesheetDoc.exists) {
     timesheet = timesheetDoc.data() as DailyEmployeeTimesheet;
@@ -266,16 +345,16 @@ async function reconcile(
     }
 
     if (timesheet.photos) {
-      dailyReportPhotos = [];
+      const collected: string[] = [];
       if (Array.isArray(timesheet.photos.labor)) {
-        dailyReportPhotos.push(...timesheet.photos.labor);
+        collected.push(...timesheet.photos.labor);
       }
       if (Array.isArray(timesheet.photos.site)) {
-        dailyReportPhotos.push(...timesheet.photos.site);
+        collected.push(...timesheet.photos.site);
       }
-      if (dailyReportPhotos.length === 0) {
-        dailyReportPhotos = undefined;
-      }
+      dailyReportPhotos = collected.length > 0 ? collected : null;
+    } else {
+      dailyReportPhotos = null; // ไม่มี photos field → ใช้ null แทน undefined เพราะ Firestore ไม่รับ undefined
     }
   }
 
@@ -342,6 +421,7 @@ async function reconcile(
       scanOtMorningHours:   hasScan      ? scanOtMorning   : null,
       scanOtNoonHours:      hasScan      ? scanOtNoon      : null,
       scanOtEveningHours:   hasScan      ? scanOtEvening   : null,
+      scanPunches:          hasScan      ? scanPunches     : [],
       // ── Timesheet hours (แยก field) ──────────────────────────────────────
       timesheetHours:       hasTimesheet ? totalTimesheetHours : null,  // ยอดรวม
       timesheetNormalHours: hasTimesheet ? tsNormalHours   : null,
@@ -381,6 +461,7 @@ async function reconcile(
       scanOtMorningHours:   hasScan      ? scanOtMorning   : null,
       scanOtNoonHours:      hasScan      ? scanOtNoon      : null,
       scanOtEveningHours:   hasScan      ? scanOtEvening   : null,
+      scanPunches:          hasScan      ? scanPunches     : [],
       // ── Timesheet hours ──────────────────────────────────────────────────
       timesheetHours:       hasTimesheet ? totalTimesheetHours : null,
       timesheetNormalHours: hasTimesheet ? tsNormalHours   : null,

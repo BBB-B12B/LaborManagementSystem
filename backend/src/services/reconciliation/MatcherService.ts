@@ -35,19 +35,54 @@ export class MatcherService {
       let totalScanHours = 0;
       let scanDataId: string | undefined = undefined;
       let scanPunches: string[] | undefined = undefined;
-      
+
       if (!scanQuery.empty) {
         scanQuery.docs.forEach(doc => {
           const data = doc.data() as ScanData;
           if (!scanDataId) {
-            scanDataId = doc.id; // Store first id for reference
-            scanPunches = data.punches;
+            scanDataId = doc.id;
+
+            // ─── Punch Times ─────────────────────────────────────────────
+            // punches (HH:mm) = primary — ทุก import path เขียนครบแล้ว
+            // allScans (HH:mm:ss) = fallback สำหรับ document เก่าที่อาจยังไม่มี punches
+            if (Array.isArray(data.punches) && data.punches.length > 0) {
+              scanPunches = data.punches;
+            } else {
+              const rawTimes: string[] = Array.isArray(data.allScans) && data.allScans.length > 0
+                ? data.allScans
+                : [data.Time1, data.Time2, data.Time3, data.Time4, data.Time5, data.Time6]
+                    .filter((t): t is string => !!t && t !== '-');
+              scanPunches = rawTimes.map(t => t.slice(0, 5));
+            }
           }
-          
-          // Basic normal + OT calculation
-          totalScanHours += (data.regularHours || 0) + (data.otMorningHours || 0) + (data.otEveningHours || 0);
+
+          // ─── Hours Calculation ────────────────────────────────────────
+          if ((data.regularHours || 0) + (data.otMorningHours || 0) + (data.otEveningHours || 0) > 0) {
+            // ใช้ field ที่ import service คำนวณไว้แล้ว (กรณี CSV bulk import)
+            totalScanHours += (data.regularHours || 0) + (data.otMorningHours || 0) + (data.otEveningHours || 0);
+          } else {
+            // คำนวณจาก allScans เมื่อ hours fields ไม่มี (กรณี manual entry)
+            const allTimes: string[] = Array.isArray(data.allScans) && data.allScans.length > 0
+              ? data.allScans
+              : [data.Time1, data.Time2, data.Time3, data.Time4, data.Time5, data.Time6].filter((t): t is string => !!t && t !== '-');
+
+            if (allTimes.length >= 2) {
+              const toMinutes = (t: string) => {
+                const [h, m] = t.split(':').map(Number);
+                return h * 60 + (m || 0);
+              };
+              const sorted = [...allTimes].sort((a, b) => toMinutes(a) - toMinutes(b));
+              const firstInMin = toMinutes(sorted[0]);
+              const lastOutMin = toMinutes(sorted[sorted.length - 1]);
+              // หักพักเที่ยง 1 ชั่วโมง ถ้าช่วงการทำงานครอบคลุม 12:00-13:00
+              const hasLunch = firstInMin < 12 * 60 && lastOutMin > 13 * 60;
+              const rawHours = (lastOutMin - firstInMin) / 60;
+              totalScanHours += hasLunch ? rawHours - 1 : rawHours;
+            }
+          }
         });
       }
+
 
       // 2. Fetch Daily Report Data (จาก Project B: Aftersale)
       const dailyTimesheet = await projectBDailyReportService.getDailyTimesheet(employeeNumber, workDateStr);

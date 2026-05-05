@@ -841,49 +841,94 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               </Box>
             </>
           ) : (
-            <Grid container spacing={4}>
-              <Grid item xs={12} sm={6}>
-                {dailyReportReferencePanel}
+            <>
+              <Grid container spacing={4}>
+                <Grid item xs={12} sm={6}>
+                  {dailyReportReferencePanel}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1, display: 'block', color: selectedRow?.status === 'MATCHED' ? '#16a34a' : '#ea580c', borderBottom: selectedRow?.status === 'MATCHED' ? '2px solid #16a34a' : '2px solid #ea580c', pb: 0.5 }}>
+                    2. ข้อมูลในระบบสแกนนิ้ว
+                  </Typography>
+                  <ComparisonBox sx={{ backgroundColor: '#fff', p: 2 }}>
+                    <ProofImagePlaceholder sx={{ border: selectedRow?.status === 'MATCHED' ? '1px solid #bbf7d0' : '1px solid #1e293b', flexDirection: 'column', backgroundColor: selectedRow?.status === 'MATCHED' ? '#f0fdf4' : 'transparent' }}>
+                      {selectedRow?.status === 'MATCHED' ? (
+                        <>
+                          <InfoIcon sx={{ color: '#16a34a', mb: 1, fontSize: 24 }} />
+                          <Typography variant="body2" fontWeight={800} sx={{ color: '#16a34a' }}>ข้อมูลตรงกัน</Typography>
+                        </>
+                      ) : (
+                        <>
+                          <InfoIcon sx={{ color: '#ea580c', mb: 1, fontSize: 24 }} />
+                          <Typography variant="body2" fontWeight={800} sx={{ color: '#ea580c' }}>ข้อมูลขัดแย้งกัน</Typography>
+                        </>
+                      )}
+                    </ProofImagePlaceholder>
+                    <Stack spacing={1}>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>ชั่วโมงทำงานปกติ</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanNormalHours ?? selectedRow?.scanDataHours ?? '-'} ชม.</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เช้า</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtMorningHours ?? '-'} ชม.</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtNoonHours ?? '-'} ชม.</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เย็น</Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtEveningHours ?? '-'} ชม.</Typography>
+                      </Stack>
+                    </Stack>
+                  </ComparisonBox>
+                </Grid>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1, display: 'block', color: selectedRow?.status === 'MATCHED' ? '#16a34a' : '#ea580c', borderBottom: selectedRow?.status === 'MATCHED' ? '2px solid #16a34a' : '2px solid #ea580c', pb: 0.5 }}>
-                  2. ข้อมูลในระบบสแกนนิ้ว
+
+              {/* ตาราง punch times — เหมือนกับที่แสดงใน MISSING_SCAN */}
+              <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
+                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
+                  ข้อมูลแสดงเวลาทำงาน
                 </Typography>
-                <ComparisonBox sx={{ backgroundColor: '#fff', p: 2 }}>
-                  <ProofImagePlaceholder sx={{ border: selectedRow?.status === 'MATCHED' ? '1px solid #bbf7d0' : '1px solid #1e293b', flexDirection: 'column', backgroundColor: selectedRow?.status === 'MATCHED' ? '#f0fdf4' : 'transparent' }}>
-                    {selectedRow?.status === 'MATCHED' ? (
-                      <>
-                        <InfoIcon sx={{ color: '#16a34a', mb: 1, fontSize: 24 }} />
-                        <Typography variant="body2" fontWeight={800} sx={{ color: '#16a34a' }}>ข้อมูลตรงกัน</Typography>
-                      </>
-                    ) : (
-                      <>
-                        <InfoIcon sx={{ color: '#ea580c', mb: 1, fontSize: 24 }} />
-                        <Typography variant="body2" fontWeight={800} sx={{ color: '#ea580c' }}>ข้อมูลขัดแย้งกัน</Typography>
-                      </>
-                    )}
-                  </ProofImagePlaceholder>
-                  <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>ชั่วโมงทำงานปกติ</Typography>
-                      <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanNormalHours ?? selectedRow?.scanDataHours ?? '-'} ชม.</Typography>
-                    </Stack>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เช้า</Typography>
-                      <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtMorningHours ?? '-'} ชม.</Typography>
-                    </Stack>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
-                      <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtNoonHours ?? '-'} ชม.</Typography>
-                    </Stack>
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เย็น</Typography>
-                      <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtEveningHours ?? '-'} ชม.</Typography>
-                    </Stack>
-                  </Stack>
-                </ComparisonBox>
-              </Grid>
-            </Grid>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <TimeTable>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                          <th key={i}>Time {i + 1}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="label">Daily Report :</td>
+                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                          <td key={`dr-${i}`} className="time-cell">{selectedRow?.dailyReportPunches?.[i] ?? '-'}</td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="label">สแกนนิ้ว :</td>
+                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                          <td
+                            key={`scan-${i}`}
+                            className={`time-cell ${
+                              selectedRow?.scanPunches?.[i] && selectedRow?.dailyReportPunches?.[i] &&
+                              selectedRow.scanPunches[i] !== selectedRow.dailyReportPunches[i]
+                                ? 'empty-scan'
+                                : ''
+                            }`}
+                          >
+                            {selectedRow?.scanPunches?.[i] ?? '-'}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </TimeTable>
+                </Box>
+              </Box>
+            </>
           )}
 
             <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4, pt: 3, borderTop: '1px solid #e2e8f0' }}>

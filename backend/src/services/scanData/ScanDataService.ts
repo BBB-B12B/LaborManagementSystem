@@ -122,6 +122,10 @@ class ScanDataService extends BaseCrudService<ScanData> {
         timeSlots[`Time${index + 1}`] = time;
       });
 
+      // punches = HH:mm (ตัดวินาทีออก) ใช้ใน Reconciliation เปรียบเทียบกับ dailyReportPunches
+      // allScans = HH:mm:ss (เก็บวินาทีไว้) ใช้คำนวณสาย/OT ได้ละเอียด
+      const punches = allScans.map(t => t.slice(0, 5));
+
       const scanData: Omit<ScanData, 'id'> = {
         ...(existingData as any),
         dailyContractorId: input.dailyContractorId,
@@ -144,7 +148,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
         importBatchId: existingDoc.exists ? (existingData as any).importBatchId : `manual-${Date.now()}`,
         importNote: input.importNote,
         ...timeSlots,
-        allScans
+        allScans,
+        punches,
       };
 
       await docRef.set(scanData, { merge: true });
@@ -513,6 +518,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
           Time9: group.time9 || '',
           Time10: group.time10 || '',
           allScans: group.timeScans.map(t => isNaN(t.getTime()) ? '??:??:??' : this.formatTime(t)),
+          // punches = HH:mm (ตัดวินาทีออก) ใช้ใน Reconciliation เปรียบเทียบกับ dailyReportPunches
+          // allScans = HH:mm:ss (เก็บวินาทีไว้) ใช้คำนวณสาย/OT ได้ละเอียด
+          punches: group.punches, // HH:mm จาก ScanDataAggregator
           normalStatus: isNaN(group.normalStatus) ? 0 : group.normalStatus,
           regularHours: isNaN(group.regularHours) ? 0 : group.regularHours,
           lunchStatus: isNaN(group.lunchStatus) ? 0 : group.lunchStatus,
