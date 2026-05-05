@@ -20,10 +20,12 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { styled, alpha } from '@mui/material/styles';
-import { useQuery } from '@tanstack/react-query';
-import { reconciliationService, ReconciliationRecord } from '../../services/reconciliationService';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { reconciliationService, ReconciliationRecord, PaginatedReconciliationResponse } from '../../services/reconciliationService';
+import { fillFromDailyReport } from '../../services/scanDataService';
 import { format } from 'date-fns';
 import { Info as InfoIcon, Close as CloseIcon } from '@mui/icons-material';
+import { useToast } from '@/components/common';
 
 // --- Styled Components to match Image 1 ---
 
@@ -69,21 +71,22 @@ const StyledTableContainer = styled(TableContainer)({
     position: 'sticky',
     top: 0,
     zIndex: 10,
+    whiteSpace: 'nowrap',
+    height: '36px',
+    padding: '0 8px',
+    boxSizing: 'border-box',
   },
   '& .MuiTableHead-root .MuiTableRow-root:first-of-type .MuiTableCell-root': {
     backgroundColor: '#201b2b', // Match Navbar bottom color
-    padding: '8px 8px',
-    position: 'sticky',
-    top: 0,
     zIndex: 11,
   },
-  // We need to adjust top for subsequent header rows
+  // Adjust top for subsequent header rows based on fixed 36px height
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(2) .MuiTableCell-root': {
-    top: '34px', // Row 1 height (8+8+18)
+    top: '36px',
     zIndex: 10,
   },
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root': {
-    top: '64px', // Row 1 + Row 2 height
+    top: '72px',
     zIndex: 10,
   },
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(2) .MuiTableCell-root:nth-of-type(2)': {
@@ -101,7 +104,6 @@ const StyledTableContainer = styled(TableContainer)({
     transition: 'all 0.2s ease',
     '&:hover': {
       backgroundColor: '#f8fafc !important',
-      transform: 'scale(1.001)',
       boxShadow: 'inset 4px 0 0 #01497c',
     }
   }
@@ -297,6 +299,7 @@ interface Props {
   startDate: Date | null;
   endDate: Date | null;
   project: string;
+  projectsList?: { id: string; code: string; name: string }[];
 }
 
 const WorkHourComparisonTable: React.FC<Props> = ({ 
@@ -304,7 +307,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   filterStatus, 
   startDate, 
   endDate, 
-  project 
+  project,
+  projectsList = []
 }) => {
   const { t } = useTranslation();
   const [page, setPage] = React.useState(0);
@@ -313,6 +317,88 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const [selectedRow, setSelectedRow] = React.useState<any>(null);
   const [viewerOpen, setViewerOpen] = React.useState(false);
   const [viewerImageUrl, setViewerImageUrl] = React.useState('');
+  const [confirmFillOpen, setConfirmFillOpen] = React.useState(false);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  const formattedStartDate = startDate ? format(startDate, 'yyyy-MM-dd') : undefined;
+  const formattedEndDate = endDate ? format(endDate, 'yyyy-MM-dd') : undefined;
+
+  // ─── Optimistic UI via useMutation ──────────────────────────────────────────
+  const makeQueryKey = React.useCallback(
+    (p: number, rpp: number) => [
+      'reconciliation',
+      { project, startDate: formattedStartDate, endDate: formattedEndDate, filterStatus, page: p, rowsPerPage: rpp },
+    ],
+    [project, formattedStartDate, formattedEndDate, filterStatus]
+  );
+
+  const fillMutation = useMutation({
+    mutationFn: (row: any) =>
+      fillFromDailyReport(row.employeeId, row.workDate, row.projectLocationId),
+
+    // Step 1: อัปเดต UI ทันที (ก่อน API ตอบกลับ)
+    onMutate: async (row: any) => {
+      await queryClient.cancelQueries({ queryKey: ['reconciliation'] });
+
+      const queryKey = makeQueryKey(page, rowsPerPage);
+      const previousData = queryClient.getQueryData<PaginatedReconciliationResponse>(queryKey);
+
+      // ลบแถวออกจากตารางทันที
+      queryClient.setQueryData<PaginatedReconciliationResponse>(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          records: old.records.filter((r) => r.id !== row.id),
+          total: Math.max(0, old.total - 1),
+        };
+      });
+
+      // อัปเดต Stats Card ทันที
+      queryClient.setQueriesData<any>({ queryKey: ['reconciliation-stats'] }, (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pendingCount: Math.max(0, (old.pendingCount ?? 1) - 1),
+          normalCount: (old.normalCount ?? 0) + 1,
+        };
+      });
+
+      // ปิด Dialog ก่อนรอ API — UX รู้สึกไว
+      setConfirmFillOpen(false);
+      setCheckDialogOpen(false);
+
+      return { previousData, queryKey };
+    },
+
+    // Step 2: ถ้า API Error → Rollback กลับสู่ข้อมูลเดิม
+    onError: (err: any, _row, context) => {
+      if (context?.previousData && context?.queryKey) {
+        queryClient.setQueryData(context.queryKey, context.previousData);
+      }
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      toast.error(err?.response?.data?.error || 'เกิดข้อผิดพลาดในการปรับข้อมูล');
+    },
+
+    onSuccess: () => {
+      toast.success('ปรับข้อมูลสแกนนิ้วตาม Daily Report สำเร็จ');
+    },
+
+    // Step 3: ไม่ว่าสำเร็จหรือไม่ → Sync ข้อมูลจริงจาก Backend เงียบๆ
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
+    },
+  });
+
+  const handleConfirmFill = () => {
+    if (!selectedRow) return;
+    fillMutation.mutate(selectedRow);
+  };
+
+  const isFilling = fillMutation.isPending;
+  // ────────────────────────────────────────────────────────────────────────────
 
   const getFullImageUrl = (photoUrl: string) => {
     const baseUrl = process.env.NEXT_PUBLIC_AFTER_SALE_API_URL || '';
@@ -351,16 +437,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     setPage(0);
   };
 
-  const formattedStartDate = startDate ? format(startDate, 'yyyy-MM-dd') : undefined;
-  const formattedEndDate = endDate ? format(endDate, 'yyyy-MM-dd') : undefined;
-
   // รีเซ็ตหน้าเมื่อ filter เปลี่ยน
   React.useEffect(() => {
     setPage(0);
   }, [project, formattedStartDate, formattedEndDate, filterStatus]);
 
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ['reconciliation', { project, startDate: formattedStartDate, endDate: formattedEndDate, filterStatus, page, rowsPerPage }],
+    queryKey: makeQueryKey(page, rowsPerPage),
     queryFn: () =>
       reconciliationService.getRecords({
         projectLocationId: project !== 'all' ? project : undefined,
@@ -370,7 +453,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         page,
         pageSize: rowsPerPage,
       }),
-    placeholderData: (prev) => prev, // คงข้อมูลเดิมไว้ระหว่างโหลดหน้าใหม่ (ไม่กระพริบ)
+    placeholderData: (prev) => prev,
   });
 
   const records = paginatedData?.records ?? [];
@@ -446,7 +529,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             <TableCell rowSpan={3}>{t('workHourMonitoring.table.no')}</TableCell>
             <TableCell rowSpan={3}>{t('workHourMonitoring.table.date')}</TableCell>
             <TableCell rowSpan={3}>{t('workHourMonitoring.table.employee')}</TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.project')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 160, maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.2, px: 2 }}>
+              {t('workHourMonitoring.table.project')}
+            </TableCell>
             <TableCell colSpan={5} sx={{ borderBottom: 'none' }}>
               {t('workHourMonitoring.table.comparison')}
             </TableCell>
@@ -457,8 +542,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           </TableRow>
           {/* Row 2 */}
           <TableRow>
-            <TableCell colSpan={2} sx={{ py: 1 }}>{t('workHourMonitoring.table.regularHours')}</TableCell>
-            <TableCell colSpan={3} sx={{ py: 1 }}>{t('workHourMonitoring.table.otHours')}</TableCell>
+            <TableCell colSpan={2}>{t('workHourMonitoring.table.regularHours')}</TableCell>
+            <TableCell colSpan={3}>{t('workHourMonitoring.table.otHours')}</TableCell>
           </TableRow>
           {/* Row 3 */}
           <TableRow>
@@ -512,7 +597,11 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.85rem', lineHeight: 1.1 }}>{row.employeeId}</Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{row.employeeName || '-'}</Typography>
                 </TableCell>
-                <TableCell>{row.projectLocationId}</TableCell>
+                <TableCell sx={{ minWidth: 160, maxWidth: 220, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, textAlign: 'left !important', pl: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#334155' }}>
+                    {projectsList.find(p => p.id === row.projectLocationId || p.code === row.projectLocationId)?.name || row.projectLocationId}
+                  </Typography>
+                </TableCell>
                 
                 {/* Regular Hours Comparison */}
                 <TableCell>
@@ -726,25 +815,25 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     <thead>
                       <tr>
                         <th></th>
-                        <th>ชั่วโมงปกติ (Daily)</th>
-                        <th>OT เช้า (Daily)</th>
-                        <th>OT เที่ยง (Daily)</th>
-                        <th>OT เย็น (Daily)</th>
-                        <th>สแกนนิ้ว</th>
+                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                          <th key={i}>Time {i + 1}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
                         <td className="label">Daily Report :</td>
-                        <td className="time-cell">{selectedRow?.timesheetNormalHours ?? '-'}</td>
-                        <td className="time-cell">{selectedRow?.timesheetOtMorning ?? '-'}</td>
-                        <td className="time-cell">{selectedRow?.timesheetOtNoon ?? '-'}</td>
-                        <td className="time-cell">{selectedRow?.timesheetOtEvening ?? '-'}</td>
-                        <td className="time-cell">-</td>
+                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                          <td key={`dr-${i}`} className="time-cell">{selectedRow?.dailyReportPunches?.[i] ?? '-'}</td>
+                        ))}
                       </tr>
                       <tr>
                         <td className="label">สแกนนิ้ว :</td>
-                        {Array.from({ length: 5 }).map((_, i) => <td key={i} className="time-cell empty-scan">-</td>)}
+                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                          <td key={`scan-${i}`} className={`time-cell ${!selectedRow?.scanPunches?.[i] ? 'empty-scan' : ''}`}>
+                            {selectedRow?.scanPunches?.[i] ?? '-'}
+                          </td>
+                        ))}
                       </tr>
                     </tbody>
                   </TimeTable>
@@ -816,7 +905,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               </Button>
               <Button 
                 variant="contained" 
-                onClick={handleCloseCheckDialog}
+                onClick={() => selectedRow?.status === 'MATCHED' ? handleCloseCheckDialog() : setConfirmFillOpen(true)}
                 disableElevation
                 sx={{ 
                   textTransform: 'none',
@@ -836,6 +925,52 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           </Box>
         </DialogContent>
       </Dialog>
+      
+      {/* Confirm Fill Dialog */}
+      <Dialog
+        open={confirmFillOpen}
+        onClose={() => !isFilling && setConfirmFillOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: '16px', border: '1px solid #e2e8f0' }
+        }}
+      >
+        <DialogContent sx={{ p: 4, textAlign: 'center' }}>
+          <Box sx={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2 }}>
+            <InfoIcon sx={{ fontSize: 32, color: '#ea580c' }} />
+          </Box>
+          <Typography variant="h6" fontWeight={800} sx={{ mb: 1 }}>
+            คุณต้องการยืนยันการปรับข้อมูลสแกนนิ้วตาม Daily Report ใช่หรือไม่?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+            ระบบจะทำการบันทึกเวลาจาก Daily Report ลงในสแกนนิ้วของพนักงาน และจะอัปเดตสถานะเป็น "ปกติ" ทันที
+          </Typography>
+          
+          <Stack direction="row" spacing={2} justifyContent="center">
+            <Button
+              variant="outlined"
+              onClick={() => setConfirmFillOpen(false)}
+              disabled={isFilling}
+              sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4 }}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleConfirmFill}
+              disabled={isFilling}
+              sx={{
+                textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4,
+                backgroundColor: '#ea580c', '&:hover': { backgroundColor: '#c2410c' }
+              }}
+            >
+              {isFilling ? 'กำลังปรับข้อมูล...' : 'ยืนยัน'}
+            </Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
       {/* Image Viewer Lightbox */}
       <Dialog
         open={viewerOpen}

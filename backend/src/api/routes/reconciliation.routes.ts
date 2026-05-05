@@ -16,6 +16,7 @@ import {
   confirmByDailyReport,
   deleteGhostScan,
   exportAnomalies,
+  generateForProjectAuto,
 } from '../../controllers/reconciliationController';
 
 const router = Router();
@@ -31,6 +32,9 @@ router.get('/stats', getReconciliationStats);
 
 // GET  /api/reconciliation/export   — Export CSV รายการผิดปกติ (ต้องอยู่ก่อน /:id)
 router.get('/export', exportAnomalies);
+
+// POST /api/reconciliation/generate-auto — สร้าง/อัปเดต records สำหรับช่วงวันที่
+router.post('/generate-auto', generateForProjectAuto);
 
 // GET  /api/reconciliation/:id      — ดึง record เดียว
 router.get('/:id', getReconciliationById);

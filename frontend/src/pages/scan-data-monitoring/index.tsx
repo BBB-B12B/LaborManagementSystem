@@ -545,8 +545,10 @@ export default function ScanDataMonitoringPage() {
             onClick={() => {
               resetManual({
                 projectLocationId: filter.projectLocationId,
+                employeeNumber: '',
                 date: new Date().toISOString().split('T')[0],
                 time: '08:00',
+                notes: '',
               });
               setManualScanOpen(true);
             }}

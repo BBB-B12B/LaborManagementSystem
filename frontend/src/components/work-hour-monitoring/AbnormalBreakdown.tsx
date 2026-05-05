@@ -97,16 +97,23 @@ interface Props {
   onExport: (id: string) => void;
   activeId?: string;
   viewMode?: 'breakdown' | 'fixed' | 'pending';
+  project?: string;
+  startDate?: Date | null;
+  endDate?: Date | null;
 }
 
-const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, viewMode = 'breakdown' }) => {
+const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, viewMode = 'breakdown', project, startDate, endDate }) => {
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [referenceType, setReferenceType] = React.useState<'checkIn' | 'checkOut'>('checkIn');
 
   // ดึงยอดนับแต่ละประเภทจาก stats endpoint (ไม่โหลด records จำนวนมาก)
   const { data: stats } = useQuery({
-    queryKey: ['reconciliation-breakdown-stats'],
-    queryFn: () => reconciliationService.getStats({}),
+    queryKey: ['reconciliation-breakdown-stats', project, startDate?.toISOString(), endDate?.toISOString()],
+    queryFn: () => reconciliationService.getStats({
+      projectLocationId: project !== 'all' ? project : undefined,
+      startDate: startDate ? startDate.toISOString() : undefined,
+      endDate: endDate ? endDate.toISOString() : undefined,
+    }),
     staleTime: 60000,
   });
 

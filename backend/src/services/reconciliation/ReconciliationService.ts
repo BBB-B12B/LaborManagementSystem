@@ -22,6 +22,7 @@ import { ScanEditEntry, generateScanDocId, scanDataConverter } from '../../model
 import { COLLECTIONS } from '../../config/collections';
 import {
   projectBDailyReportService,
+  toTimesheetSummary,
 } from '../external/ProjectBDailyReportService';
 import { scanDataService } from '../scanData/ScanDataService';
 
@@ -153,16 +154,16 @@ export class ReconciliationService {
     const snap = await ref.get();
     const now = new Date();
 
-    const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
-    const classified = this.classify(
-      input.dailyReportHours,
-      input.scanDataHours,
-      input.isHoliday ?? isHoliday,
-      isLeaveCalculated ?? isLeave,
-    );
-
     if (!snap.exists) {
       // สร้างใหม่
+      const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
+      const classified = this.classify(
+        input.dailyReportHours,
+        input.scanDataHours,
+        input.isHoliday ?? isHoliday,
+        isLeaveCalculated ?? isLeave,
+      );
+
       const historyEntry: StatusHistoryEntry = {
         status: classified.status,
         changedAt: now,
@@ -192,15 +193,42 @@ export class ReconciliationService {
       return existing;
     }
 
+    // ใช้ค่าจาก input ถ้ามี มิฉะนั้นใช้ค่าเดิมจาก existing เป็น fallback
+    // ป้องกันกรณีที่ external API หา daily timesheet ไม่เจอแล้ว incorrectly เปลี่ยนสถานะ
+    const effectiveDailyHours = input.dailyReportHours ?? existing.dailyReportHours;
+    const effectiveScanHours = input.scanDataHours ?? existing.scanDataHours;
+
+    const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
+    const effectiveIsHoliday = input.isHoliday ?? isHoliday ?? existing.isHoliday;
+    const effectiveIsLeave = isLeaveCalculated ?? isLeave ?? (existing.leaveHours !== undefined ? existing.leaveHours > 0 : undefined);
+
+    const classified = this.classify(
+      effectiveDailyHours,
+      effectiveScanHours,
+      effectiveIsHoliday,
+      effectiveIsLeave,
+    );
+
     const newStatus = classified.status;
     const statusChanged = newStatus !== existing.status;
 
     const updates: Partial<ReconciliationRecord> = {
+      projectLocationId: input.projectLocationId,
       dailyReportHours: input.dailyReportHours,
+      timesheetNormalHours: input.timesheetNormalHours,
+      timesheetOtMorning: input.timesheetOtMorning,
+      timesheetOtNoon: input.timesheetOtNoon,
+      timesheetOtEvening: input.timesheetOtEvening,
       scanDataHours: input.scanDataHours,
+      scanNormalHours: input.scanNormalHours,
+      scanOtMorningHours: input.scanOtMorningHours,
+      scanOtNoonHours: input.scanOtNoonHours,
+      scanOtEveningHours: input.scanOtEveningHours,
       dailyReportId: input.dailyReportId,
       scanDataId: input.scanDataId,
       dailyReportPhotos: input.dailyReportPhotos,
+      dailyReportPunches: input.dailyReportPunches,
+      scanPunches: input.scanPunches,
       suggestedHours: classified.suggestedHours,
       status: newStatus,
       updatedAt: now,
@@ -268,7 +296,15 @@ export class ReconciliationService {
     );
 
     // 3. สร้าง Map ของ Scan Data: key = "{employeeId}_{workDate}"
-    const scanMap = new Map<string, { hours: number; id: string }>();
+    const scanMap = new Map<string, { 
+      hours: number; 
+      id: string; 
+      punches: string[];
+      scanNormalHours?: number;
+      scanOtMorningHours?: number;
+      scanOtNoonHours?: number;
+      scanOtEveningHours?: number;
+    }>();
     for (const scan of scanRecords) {
       if (scan.isDeleted) continue;
       const dateKey =
@@ -281,7 +317,15 @@ export class ReconciliationService {
         (scan.regularHours ?? 0) +
         (scan.otMorningHours ?? 0) +
         (scan.otEveningHours ?? 0);
-      scanMap.set(key, { hours: totalScanHours, id: scan.id });
+      scanMap.set(key, { 
+        hours: totalScanHours, 
+        id: scan.id, 
+        punches: scan.punches || [],
+        scanNormalHours: scan.regularHours,
+        scanOtMorningHours: scan.otMorningHours,
+        scanOtNoonHours: scan.otNoonHours,
+        scanOtEveningHours: scan.otEveningHours
+      });
     }
 
     // 4. Upsert ReconciliationRecord สำหรับทุก daily summary
@@ -295,10 +339,20 @@ export class ReconciliationService {
           workDate: summary.date,
           projectLocationId: summary.projectLocationId,
           dailyReportHours: summary.totalHours,
+          timesheetNormalHours: summary.regularHours,
+          timesheetOtMorning: summary.otMorningHours,
+          timesheetOtNoon: summary.otNoonHours,
+          timesheetOtEvening: summary.otEveningHours,
           dailyReportId: `${summary.employeeNumber}_${summary.date}`, // Project B doc id
           scanDataHours: scanEntry?.hours,
+          scanNormalHours: scanEntry?.scanNormalHours,
+          scanOtMorningHours: scanEntry?.scanOtMorningHours,
+          scanOtNoonHours: scanEntry?.scanOtNoonHours,
+          scanOtEveningHours: scanEntry?.scanOtEveningHours,
           scanDataId: scanEntry?.id,
           dailyReportPhotos: summary.dailyReportPhotos,
+          dailyReportPunches: summary.dailyReportPunches,
+          scanPunches: scanEntry?.punches,
           leaveHours: summary.leaveHours,
         }, false, summary.isLeave);
       }),
@@ -335,7 +389,12 @@ export class ReconciliationService {
           projectLocationId: scan.projectLocationId,
           dailyReportHours: undefined,   // ไม่มี daily → MISSING_DAILY
           scanDataHours: totalScanHours,
+          scanNormalHours: scan.regularHours,
+          scanOtMorningHours: scan.otMorningHours,
+          scanOtNoonHours: scan.otNoonHours,
+          scanOtEveningHours: scan.otEveningHours,
           scanDataId: scan.id,
+          scanPunches: scan.punches || [],
         });
       }),
     );
@@ -345,6 +404,60 @@ export class ReconciliationService {
     const failed = allResults.filter((r) => r.status === 'rejected').length;
 
     return { succeeded, failed, total: allResults.length };
+  }
+
+  /**
+   * Generate ReconciliationRecord สำหรับพนักงาน 1 คนในวันที่ระบุ (Optimized)
+   */
+  async generateForEmployee(
+    employeeId: string,
+    workDateStr: string,
+    projectLocationId: string,
+  ): Promise<ReconciliationRecord> {
+    // 1. ดึง Daily Report 1 record
+    const timesheet = await projectBDailyReportService.getDailyTimesheet(employeeId, workDateStr);
+    const summary = timesheet ? toTimesheetSummary(timesheet) : null;
+
+    // 2. ดึง Scan Data 1 record
+    const scanDateStart = new Date(`${workDateStr}T00:00:00.000Z`);
+    const scanDateEnd = new Date(`${workDateStr}T23:59:59.999Z`);
+    const scanQuery = await this.db.collection(SCAN_COLLECTION)
+      .where('employeeId', '==', employeeId)
+      .where('workDate', '>=', scanDateStart)
+      .where('workDate', '<=', scanDateEnd)
+      .get();
+
+    // กรองหาตัวที่ยังไม่ถูกลบ (ใน Firestore อาจเป็น undefined)
+    const activeScanDoc = scanQuery.docs.find(d => {
+      const data = d.data();
+      return !data.isDeleted;
+    });
+
+    const scanData = activeScanDoc ? (activeScanDoc.data() as any) : null;
+    const totalScanHours = scanData ? 
+      (scanData.regularHours ?? 0) + (scanData.otMorningHours ?? 0) + (scanData.otEveningHours ?? 0) : undefined;
+
+    return this.upsertRecord({
+      employeeId,
+      workDate: workDateStr,
+      projectLocationId,
+      dailyReportHours: summary?.totalHours,
+      timesheetNormalHours: summary?.regularHours,
+      timesheetOtMorning: summary?.otMorningHours,
+      timesheetOtNoon: summary?.otNoonHours,
+      timesheetOtEvening: summary?.otEveningHours,
+      dailyReportId: summary ? `${summary.employeeNumber}_${summary.date}` : undefined,
+      scanDataHours: scanData ? totalScanHours : undefined,
+      scanNormalHours: scanData?.regularHours,
+      scanOtMorningHours: scanData?.otMorningHours,
+      scanOtNoonHours: scanData?.otNoonHours,
+      scanOtEveningHours: scanData?.otEveningHours,
+      scanDataId: scanData ? scanQuery.docs[0].id : undefined,
+      dailyReportPhotos: summary?.dailyReportPhotos,
+      dailyReportPunches: summary?.dailyReportPunches,
+      scanPunches: scanData?.punches || [],
+      leaveHours: summary?.leaveHours,
+    }, false, summary?.isLeave);
   }
 
   /**

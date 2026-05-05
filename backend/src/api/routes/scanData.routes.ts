@@ -15,6 +15,7 @@ import {
   parseExcelFile,
   detectFileType,
 } from '../../services/scanData/ScanDataImportUtils';
+import { ReconciliationService } from '../../services/reconciliation/ReconciliationService';
 
 import * as XLSX from 'xlsx';
 
@@ -441,7 +442,52 @@ router.post(
   }
 );
 
+/**
+ * POST /api/scan-data/fill-from-daily-report
+ * Auto-fill scan data using Daily Report times (shiftTimes)
+ */
+router.post(
+  '/fill-from-daily-report',
+  [
+    body('employeeId').notEmpty().withMessage('กรุณาระบุรหัสพนักงาน'),
+    body('workDate').isISO8601().withMessage('รูปแบบวันที่ไม่ถูกต้อง'),
+    body('projectLocationId').notEmpty().withMessage('กรุณาระบุโครงการ'),
+  ],
+  async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        throw new AppError('Validation failed', 400);
+      }
 
+      const { employeeId, workDate, projectLocationId } = req.body;
+      const adminUserId = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+
+      const scan = await scanDataService.fillFromDailyReport(
+        employeeId,
+        workDate,
+        projectLocationId,
+        adminUserId
+      );
+
+      // Optimally reconcile only this specific employee after update
+      const reconciliationService = new ReconciliationService();
+      await reconciliationService.generateForEmployee(employeeId, workDate, projectLocationId);
+
+      res.json({
+        success: true,
+        data: scan,
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
 
 /**
  * POST /api/scan-data

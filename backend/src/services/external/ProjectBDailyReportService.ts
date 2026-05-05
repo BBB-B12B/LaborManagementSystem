@@ -34,6 +34,7 @@ export interface ProjectBShiftTimes {
   day?: string;       // เช่น "08:00 - 17:00"
   otEvening?: string; // เช่น "18:00 - 21:00"
   otMorning?: string;
+  otNoon?: string;    // เช่น "12:00 - 13:00"
 }
 
 export interface ProjectBWorkLog {
@@ -88,6 +89,7 @@ export interface DailyTimesheetSummary {
   isLeave: boolean;
   leaveHours: number;
   dailyReportPhotos?: string[];    // ดึงมาจาก photos.labor
+  dailyReportPunches?: string[];   // ดึงมาจาก shiftTimes
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +134,35 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
       }
     }
 
+  let dailyReportPunches: string[] | undefined = undefined;
+  if (doc.shiftTimes) {
+    const punches: string[] = [];
+    const extractPunches = (timeStr?: string) => {
+      if (!timeStr) return;
+      const parts = timeStr.split('-').map(s => s.trim());
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        punches.push(parts[0], parts[1]);
+      }
+    };
+    if (doc.expectedShifts) {
+      if (doc.expectedShifts.otMorning) extractPunches(doc.shiftTimes.otMorning);
+      if (doc.expectedShifts.normal) extractPunches(doc.shiftTimes.day);
+      if (doc.expectedShifts.otNoon) extractPunches(doc.shiftTimes.otNoon);
+      if (doc.expectedShifts.otEvening) extractPunches(doc.shiftTimes.otEvening);
+    } else {
+      // Fallback if expectedShifts is somehow missing
+      extractPunches(doc.shiftTimes.otMorning);
+      extractPunches(doc.shiftTimes.day);
+      extractPunches(doc.shiftTimes.otNoon);
+      extractPunches(doc.shiftTimes.otEvening);
+    }
+
+    if (punches.length > 0) {
+      punches.sort((a, b) => a.localeCompare(b));
+      dailyReportPunches = punches;
+    }
+  }
+
   return {
     employeeNumber: doc.employeeNumber,
     date: doc.date,
@@ -145,6 +176,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     isLeave,
     leaveHours,
     dailyReportPhotos,
+    dailyReportPunches,
   };
 }
 

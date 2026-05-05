@@ -17,6 +17,7 @@ import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { db } from '../../config/firebase';
+import { FieldValue } from 'firebase-admin/firestore';
 import { dailyContractorService } from '../dailyContractor/DailyContractorService';
 import { dailyReportService } from '../dailyReport/DailyReportService';
 
@@ -935,10 +936,14 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const contractor = await dailyContractorService.findByEmployeeIdOrHistory(payload.employeeNumber);
       if (!contractor) throw new AppError(`ไม่พบข้อมูลพนักงานรหัส ${payload.employeeNumber}`, 404);
 
+      const projectLocation = await projectLocationService.getById(payload.projectLocationId);
+      const projectCode = projectLocation?.projectCode || projectLocation?.code || '';
+
       const input: CreateScanDataInput = {
         dailyContractorId: contractor.id,
         employeeId: contractor.employeeId || payload.employeeNumber,
         projectLocationId: payload.projectLocationId,
+        projectCode,
         scanDateTime: payload.scanDateTime,
         importNote: payload.notes || 'Manual Entry',
       };
@@ -951,6 +956,147 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
+
+
+  /**
+   * Fill scan data from Daily Report (Project B)
+   */
+  async fillFromDailyReport(
+    employeeNumber: string,
+    workDateStr: string,
+    projectLocationId: string,
+    adminUserId: string
+  ): Promise<ScanData> {
+    try {
+      const timesheet = await projectBDailyReportService.getDailyTimesheet(employeeNumber, workDateStr);
+      if (!timesheet) {
+        throw new AppError('ไม่พบข้อมูล Daily Report ใน Aftersale System สำหรับวันนี้', 404);
+      }
+
+      const punches: string[] = [];
+      if (timesheet.shiftTimes) {
+        const extractPunches = (timeStr?: string) => {
+          if (!timeStr) return;
+          const parts = timeStr.split('-').map(s => s.trim());
+          if (parts.length === 2 && parts[0] && parts[1]) {
+            punches.push(parts[0], parts[1]);
+          }
+        };
+        extractPunches(timesheet.shiftTimes.otMorning);
+        extractPunches(timesheet.shiftTimes.day);
+        extractPunches(timesheet.shiftTimes.otNoon);
+        extractPunches(timesheet.shiftTimes.otEvening);
+        punches.sort((a, b) => a.localeCompare(b));
+      }
+
+      if (punches.length === 0) {
+        throw new AppError('ไม่พบช่วงเวลา (shiftTimes) ใน Daily Report', 400);
+      }
+
+      const scanDateStart = new Date(`${workDateStr}T00:00:00.000Z`);
+      const scanDateEnd = new Date(`${workDateStr}T23:59:59.999Z`);
+
+      const scanQuery = await collections.scanData
+        .where('employeeNumber', '==', employeeNumber)
+        .where('workDate', '>=', scanDateStart)
+        .where('workDate', '<=', scanDateEnd)
+        .where('isDeleted', '==', false)
+        .get();
+
+      let docRef: FirebaseFirestore.DocumentReference;
+      let existingData: Partial<ScanData> = {};
+      let action: any = 'manual_fill';
+
+      if (!scanQuery.empty) {
+        docRef = scanQuery.docs[0].ref;
+        existingData = scanQuery.docs[0].data() as ScanData;
+      } else {
+        const project = await projectLocationService.getById(projectLocationId);
+        const projectCode = project?.projectCode || project?.code || '';
+        const uniqueKey = ScanDataService.generateScanDocKey(employeeNumber, projectCode, workDateStr);
+        docRef = collections.scanData.doc(uniqueKey);
+        action = 'manual_create';
+      }
+
+      const regularHours = timesheet.expectedHours?.normal ?? 0;
+      const otMorningHours = timesheet.expectedHours?.otMorning ?? 0;
+      const otNoonHours = timesheet.expectedHours?.otNoon ?? 0;
+      const otEveningHours = timesheet.expectedHours?.otEvening ?? 0;
+
+      const snapshot = {
+        punches: (existingData as any).punches || (existingData as any).allScans || [],
+        firstIn: (existingData as any).firstIn || null,
+        lastOut: (existingData as any).lastOut || null,
+        regularHours: (existingData as any).regularHours || 0,
+        otMorningHours: (existingData as any).otMorningHours || 0,
+        otNoonHours: (existingData as any).otNoonHours || 0,
+        otEveningHours: (existingData as any).otEveningHours || 0,
+      };
+
+      const editEntry: any = {
+        editedAt: new Date(),
+        editedBy: adminUserId,
+        action,
+        reason: 'ยืนยันข้อมูลปรับตาม Daily Report',
+        snapshot,
+        // NOTE: reconciliationRecordId intentionally omitted — avoid undefined in Firestore
+      };
+
+      const timeSlots: any = {};
+      punches.forEach((p, i) => {
+        if (i < 10) timeSlots[`Time${i + 1}`] = p;
+      });
+
+      const workDateObj = new Date(scanDateStart);
+
+      const updateData: any = {
+        employeeId: (existingData as any).employeeId || employeeNumber,
+        employeeNumber,
+        projectLocationId: (existingData as any).projectLocationId || projectLocationId,
+        workDate: (existingData as any).workDate || workDateObj,
+        scanDate: workDateStr,
+        scanDateTime: (existingData as any).scanDateTime || workDateObj,
+        roundedTime: (existingData as any).roundedTime || workDateObj,
+        isManuallyEdited: true,
+        allScans: punches,
+        punches: punches,
+        firstIn: punches[0],
+        lastOut: punches[punches.length - 1],
+        regularHours,
+        otMorningHours,
+        otNoonHours,
+        otEveningHours,
+        ...timeSlots,
+        updatedAt: new Date(),
+        createdAt: (existingData as any).createdAt || new Date(),
+      };
+
+      await docRef.set(updateData, { merge: true });
+      // Append editHistory separately using arrayUnion to avoid re-writing old
+      // entries that may contain undefined values (Firestore rejects undefined)
+      await docRef.update({ editHistory: FieldValue.arrayUnion(editEntry) });
+      const updated = await docRef.get();
+      const savedScan = { id: updated.id, ...updated.data() } as ScanData;
+
+      // Sync ReconciliationRecord ด้วย breakdown hours ใหม่
+      try {
+        const { reconciliationService } = await import('../reconciliation/ReconciliationService');
+        await reconciliationService.generateForEmployee(
+          employeeNumber,
+          workDateStr,
+          projectLocationId,
+        );
+      } catch (recErr: any) {
+        // Non-critical: log but don't fail the fill operation
+        logger.warn('fillFromDailyReport: reconciliation re-sync failed:', recErr?.message);
+      }
+
+      return savedScan;
+    } catch (error: any) {
+      logger.error('Error in fillFromDailyReport:', error);
+      throw error;
+    }
+  }
 
 
   /**

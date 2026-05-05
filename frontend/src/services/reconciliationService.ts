@@ -50,6 +50,8 @@ export interface ReconciliationRecord {
   dailyReportId?: string;
   scanDataId?: string;
   dailyReportPhotos?: string[];
+  dailyReportPunches?: string[];
+  scanPunches?: string[];
   createdAt: string;
   updatedAt: string;
 }

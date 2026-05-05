@@ -4,12 +4,7 @@
  */
 
 import { Router } from 'express';
-/**
- * Daily Report Routes (Aggregated)
- * เส้นทาง API สำหรับรายงานการทำงานรายวัน (แบบรวม)
- */
 
-import { Router } from 'express';
 import {
   addWorkEntry,
   removeWorkEntry,

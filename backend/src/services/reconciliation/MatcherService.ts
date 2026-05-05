@@ -34,11 +34,15 @@ export class MatcherService {
       // Aggregate scan hours if there are multiple, or just take the first
       let totalScanHours = 0;
       let scanDataId: string | undefined = undefined;
+      let scanPunches: string[] | undefined = undefined;
       
       if (!scanQuery.empty) {
         scanQuery.docs.forEach(doc => {
           const data = doc.data() as ScanData;
-          if (!scanDataId) scanDataId = doc.id; // Store first id for reference
+          if (!scanDataId) {
+            scanDataId = doc.id; // Store first id for reference
+            scanPunches = data.punches;
+          }
           
           // Basic normal + OT calculation
           totalScanHours += (data.regularHours || 0) + (data.otMorningHours || 0) + (data.otEveningHours || 0);
@@ -51,6 +55,7 @@ export class MatcherService {
       let totalReportHours = 0;
       let dailyReportId: string | undefined = undefined;
       let dailyReportPhotos: string[] | undefined = undefined;
+      let dailyReportPunches: string[] | undefined = undefined;
 
       const hasReport = !!dailyTimesheet && dailyTimesheet.isActive !== false;
 
@@ -59,6 +64,7 @@ export class MatcherService {
         dailyReportId = projectBDailyReportService.generateDocId(employeeNumber, workDateStr);
         totalReportHours = summary.totalHours;
         dailyReportPhotos = summary.dailyReportPhotos;
+        dailyReportPunches = summary.dailyReportPunches;
       }
 
       // 3. Determine Status
@@ -103,6 +109,8 @@ export class MatcherService {
           scanDataId,
           dailyReportId,
           dailyReportPhotos,
+          dailyReportPunches,
+          scanPunches,
           suggestedHours: Math.min(totalScanHours, totalReportHours),
           updatedAt: new Date()
         };
@@ -136,6 +144,8 @@ export class MatcherService {
           scanDataId,
           dailyReportId,
           dailyReportPhotos,
+          dailyReportPunches,
+          scanPunches,
           suggestedHours: Math.min(totalScanHours, totalReportHours),
           status,
           statusHistory: [newStatusEntry],

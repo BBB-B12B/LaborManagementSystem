@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Stack, Paper, Button, Grid, Divider, Popover, MenuItem, Select, FormControl } from '@mui/material';
+import { Box, Typography, Stack, Paper, Button, Grid, Divider, Popover, MenuItem, Select, FormControl, Drawer, IconButton } from '@mui/material';
 import projectService from '@/services/projectService';
 import {
   FileDownload as FileDownloadIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   KeyboardArrowDown as ArrowDownIcon,
+  Fullscreen as FullscreenIcon,
+  FullscreenExit as FullscreenExitIcon,
+  Sync as SyncIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/components/common';
 import { Layout, ProtectedRoute } from '@/components/layout';
+import { reconciliationService } from '@/services/reconciliationService';
 import WorkHourComparisonTable from '@/components/work-hour-monitoring/WorkHourComparisonTable';
 import SummaryStats from '@/components/work-hour-monitoring/SummaryStats';
 import AbnormalBreakdown from '@/components/work-hour-monitoring/AbnormalBreakdown';
@@ -24,12 +31,22 @@ export default function WorkHourMonitoringPage() {
   const { t } = useTranslation();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const queryClient = useQueryClient();
+  const toast = useToast();
   
   // Advanced Filter States
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLDivElement | null>(null);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState<Date | null>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [endDate, setEndDate] = useState<Date | null>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  });
   const [project, setProject] = useState('all');
   const [projectsList, setProjectsList] = useState<{id: string, code: string, name: string}[]>([]);
 
@@ -57,6 +74,15 @@ export default function WorkHourMonitoringPage() {
   };
 
   const handleCloseFilter = () => {
+    setFilterAnchorEl(null);
+  };
+
+  const handleResetFilter = () => {
+    setProject('all');
+    handleFilterDropdownChange('all');
+    const d = new Date();
+    setStartDate(new Date(d.getFullYear(), d.getMonth(), 1));
+    setEndDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
     setFilterAnchorEl(null);
   };
 
@@ -127,6 +153,37 @@ export default function WorkHourMonitoringPage() {
     }
   };
 
+
+  const handleFilterDropdownChange = (status: string) => {
+    setFilterStatus(status);
+    const abnormalStatuses = ['all_abnormal', 'missingDaily', 'workHourConflict', 'missingScan', 'unregistered', 'absent', 'abnormal_pending', 'abnormal_fixed'];
+    const normalStatuses = ['all_normal', 'normal', 'leave'];
+
+    if (abnormalStatuses.includes(status)) {
+      setShowAbnormalBreakdown(true);
+      setShowNormalBreakdown(false);
+      if (status === 'abnormal_pending') {
+        setBreakdownViewMode('pending');
+        setActiveAbnormalId(undefined);
+      } else if (status === 'abnormal_fixed') {
+        setBreakdownViewMode('fixed');
+        setActiveAbnormalId(undefined);
+      } else {
+        setBreakdownViewMode('breakdown');
+        setActiveAbnormalId(status !== 'all_abnormal' ? status : undefined);
+      }
+    } else if (normalStatuses.includes(status)) {
+      setShowNormalBreakdown(true);
+      setShowAbnormalBreakdown(false);
+      setActiveNormalId(status !== 'all_normal' ? status : undefined);
+    } else {
+      setShowNormalBreakdown(false);
+      setShowAbnormalBreakdown(false);
+      setActiveAbnormalId(undefined);
+      setActiveNormalId(undefined);
+    }
+  };
+
   const handleAbnormalCardClick = (id: string) => {
     if (activeAbnormalId === id) {
       setActiveAbnormalId(undefined);
@@ -179,6 +236,36 @@ export default function WorkHourMonitoringPage() {
     console.log(`Exporting Excel for Normal: ${id}`);
   };
 
+  const handleSync = async () => {
+    if (project === 'all') {
+      toast.warning('กรุณาเลือกโครงการที่ต้องการประมวลผลใหม่จากตัวกรองก่อน');
+      return;
+    }
+    if (!startDate || !endDate) {
+      toast.warning('กรุณาระบุช่วงวันที่ต้องการประมวลผล');
+      return;
+    }
+    
+    setIsSyncing(true);
+    try {
+      const formattedStartDate = startDate.toISOString().split('T')[0];
+      const formattedEndDate = endDate.toISOString().split('T')[0];
+      
+      const result = await reconciliationService.generateForProjectAuto({
+        projectLocationId: project,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate
+      });
+      
+      toast.success(`ประมวลผลเสร็จสิ้น: สำเร็จ ${result.succeeded} รายการ, ล้มเหลว ${result.failed} รายการ`);
+      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+    } catch (error: any) {
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลใหม่');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <ProtectedRoute>
       <Layout disablePadding={true}>
@@ -196,13 +283,14 @@ export default function WorkHourMonitoringPage() {
           overflow: 'hidden' // Back to hidden but with better height management
         }}>
           {/* Header Section (Static height) */}
-          <Box sx={{ p: 1, pb: 0.5, flexShrink: 0 }}>
-            <Stack 
-              direction="row" 
-              justifyContent="space-between" 
-              alignItems="center" 
-              sx={{ mb: 0.5 }}
-            >
+          {!isFullscreen && (
+            <Box sx={{ p: 1, pb: 0.5, flexShrink: 0 }}>
+              <Stack 
+                direction="row" 
+                justifyContent="space-between" 
+                alignItems="center" 
+                sx={{ mb: 0.5 }}
+              >
               <Stack direction="row" spacing={1} alignItems="center">
                 <Box 
                   sx={{ 
@@ -234,7 +322,10 @@ export default function WorkHourMonitoringPage() {
                   showAbnormalBreakdown ? 'abnormal' : 
                   showNormalBreakdown ? 'normal' : 
                   filterStatus
-                } 
+                }
+                project={project}
+                startDate={startDate}
+                endDate={endDate}
               />
             </Box>
 
@@ -244,6 +335,9 @@ export default function WorkHourMonitoringPage() {
                   activeId={activeNormalId}
                   onCardClick={handleNormalCardClick}
                   onExport={handleExportNormal}
+                  project={project}
+                  startDate={startDate}
+                  endDate={endDate}
                 />
               </Box>
             )}
@@ -255,10 +349,18 @@ export default function WorkHourMonitoringPage() {
                   viewMode={breakdownViewMode}
                   onCardClick={handleAbnormalCardClick}
                   onExport={handleExportAbnormal}
+                  project={project}
+                  startDate={startDate}
+                  endDate={endDate}
                 />
               </Box>
             )}
 
+            </Box>
+          )}
+
+          {/* Action Bar (Always visible) */}
+          <Box sx={{ px: 1, pt: isFullscreen ? 1 : 0, pb: 0.5, flexShrink: 0 }}>
             <Stack  
               direction="row" 
               spacing={1} 
@@ -266,6 +368,48 @@ export default function WorkHourMonitoringPage() {
               alignItems="center"
               sx={{ mb: 0.5 }}
             >
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                startIcon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                sx={{ 
+                  borderRadius: '6px', 
+                  textTransform: 'none', 
+                  fontWeight: 700,
+                  borderColor: '#a1c1db',
+                  color: '#01497c',
+                  height: 28,
+                  fontSize: '0.75rem',
+                  px: 1.5,
+                  mr: 'auto',
+                  '&:hover': { backgroundColor: '#f0f9ff', borderColor: '#2a9df4' }
+                }}
+              >
+                {isFullscreen ? "ย่อหน้าจอ (Exit Fullscreen)" : "ขยายเต็มจอ (Fullscreen)"}
+              </Button>
+              
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleSync}
+                disabled={isSyncing}
+                startIcon={<SyncIcon sx={{ animation: isSyncing ? 'spin 2s linear infinite' : 'none', '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }} />}
+                sx={{ 
+                  borderRadius: '6px', 
+                  textTransform: 'none', 
+                  fontWeight: 700,
+                  borderColor: '#a1c1db',
+                  color: '#01497c',
+                  height: 28,
+                  fontSize: '0.75rem',
+                  px: 1.5,
+                  '&:hover': { backgroundColor: '#f0f9ff', borderColor: '#2a9df4' }
+                }}
+              >
+                {isSyncing ? 'กำลังประมวลผล...' : 'ประมวลผลใหม่'}
+              </Button>
+
               <Button
                 variant="outlined"
                 size="small"
@@ -320,7 +464,8 @@ export default function WorkHourMonitoringPage() {
                 flexDirection: 'column',
                 borderRadius: '8px', 
                 overflow: 'hidden',
-                border: '1px solid #e2e8f0'
+                border: '1px solid #e2e8f0',
+                transition: 'all 0.3s ease'
               }}
             >
               <WorkHourComparisonTable 
@@ -329,6 +474,7 @@ export default function WorkHourMonitoringPage() {
                 startDate={startDate}
                 endDate={endDate}
                 project={project}
+                projectsList={projectsList}
               />
             </Paper>
           </Box>
@@ -382,12 +528,20 @@ export default function WorkHourMonitoringPage() {
               <Typography variant="caption" fontWeight={800} sx={{ mb: 0.5, color: '#64748b' }}>สถานะ (Status)</Typography>
               <Select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => handleFilterDropdownChange(e.target.value)}
                 sx={{ borderRadius: '8px' }}
               >
                 <MenuItem value="all">ทั้งหมด</MenuItem>
-                <MenuItem value="normal">ปกติ</MenuItem>
-                <MenuItem value="abnormal">ผิดปกติ</MenuItem>
+                <MenuItem value="all_normal">ปกติทั้งหมด</MenuItem>
+                <MenuItem value="normal">- ข้อมูลตรงกัน</MenuItem>
+                <MenuItem value="leave">- ลา</MenuItem>
+                <MenuItem value="all_abnormal">ผิดปกติทั้งหมด</MenuItem>
+                <MenuItem value="missingDaily">- ขาด Daily Report</MenuItem>
+                <MenuItem value="workHourConflict">- ข้อมูลขัดแย้งกัน</MenuItem>
+                <MenuItem value="missingScan">- ขาดข้อมูลสแกนนิ้ว</MenuItem>
+                <MenuItem value="unregistered">- ไม่มีข้อมูลในระบบ</MenuItem>
+                <MenuItem value="absent">- ขาดงาน</MenuItem>
+                <MenuItem value="abnormal_fixed">แก้ไขแล้ว</MenuItem>
               </Select>
             </FormControl>
 
@@ -410,6 +564,13 @@ export default function WorkHourMonitoringPage() {
             <Divider sx={{ my: 1 }} />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button 
+                onClick={handleResetFilter}
+                size="small"
+                sx={{ textTransform: 'none', fontWeight: 800, color: '#ef4444', mr: 'auto' }}
+              >
+                รีเซ็ต
+              </Button>
               <Button 
                 onClick={handleCloseFilter}
                 size="small"

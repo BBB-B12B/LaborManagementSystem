@@ -69,6 +69,8 @@ export interface ReconciliationRecord {
   scanDataId?: string;               // ref → scanData doc id
   suggestedHours?: number;           // min(dailyReportHours, scanDataHours) — UI hint เท่านั้น
   dailyReportPhotos?: string[];      // รูปถ่ายอ้างอิงจาก Daily Report (Aftersale)
+  dailyReportPunches?: string[];     // Array ของเวลาจาก Daily Report เช่น ["08:00", "17:00"]
+  scanPunches?: string[];            // Array ของเวลาสแกนนิ้ว
 
   // --- สถานะ ---
   status: ReconciliationStatus;
@@ -105,10 +107,20 @@ export interface CreateReconciliationRecordInput {
   projectLocationId: string;
   projectName?: string;
   dailyReportHours?: number;
+  timesheetNormalHours?: number;
+  timesheetOtMorning?: number;
+  timesheetOtNoon?: number;
+  timesheetOtEvening?: number;
   scanDataHours?: number;
+  scanNormalHours?: number;
+  scanOtMorningHours?: number;
+  scanOtNoonHours?: number;
+  scanOtEveningHours?: number;
   dailyReportId?: string;
   scanDataId?: string;
   dailyReportPhotos?: string[];
+  dailyReportPunches?: string[];
+  scanPunches?: string[];
   isHoliday?: boolean;
   leaveHours?: number;
   leaveEntries?: { hours: number; attachment?: string; type?: string }[];
@@ -146,6 +158,8 @@ export const reconciliationRecordConverter = {
     if (record.dailyReportId !== undefined) data.dailyReportId = record.dailyReportId;
     if (record.scanDataId !== undefined) data.scanDataId = record.scanDataId;
     if (record.dailyReportPhotos !== undefined) data.dailyReportPhotos = record.dailyReportPhotos;
+    if (record.dailyReportPunches !== undefined) data.dailyReportPunches = record.dailyReportPunches;
+    if (record.scanPunches !== undefined) data.scanPunches = record.scanPunches;
     if (record.suggestedHours !== undefined) data.suggestedHours = record.suggestedHours;
     if (record.status !== undefined) data.status = record.status;
     if (record.isLocked !== undefined) data.isLocked = record.isLocked;
@@ -199,6 +213,8 @@ export const reconciliationRecordConverter = {
       dailyReportId: data.dailyReportId,
       scanDataId: data.scanDataId,
       dailyReportPhotos: data.dailyReportPhotos,
+      dailyReportPunches: data.dailyReportPunches,
+      scanPunches: data.scanPunches,
       suggestedHours: data.suggestedHours,
       status: data.status || 'PENDING',
       isLocked: data.isLocked ?? false,

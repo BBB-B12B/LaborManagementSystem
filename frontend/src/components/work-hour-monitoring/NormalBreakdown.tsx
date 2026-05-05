@@ -71,6 +71,9 @@ interface Props {
   onCardClick: (statusId: string) => void;
   onExport: (statusId: string) => void;
   activeId?: string;
+  project?: string;
+  startDate?: Date | null;
+  endDate?: Date | null;
 }
 
 interface BreakdownItem {
@@ -82,10 +85,14 @@ interface BreakdownItem {
   count: number;
 }
 
-const NormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId }) => {
+const NormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, project, startDate, endDate }) => {
   const { data: stats } = useQuery({
-    queryKey: ['reconciliation-breakdown-stats'],
-    queryFn: () => reconciliationService.getStats({}),
+    queryKey: ['reconciliation-breakdown-stats', project, startDate?.toISOString(), endDate?.toISOString()],
+    queryFn: () => reconciliationService.getStats({
+      projectLocationId: project !== 'all' ? project : undefined,
+      startDate: startDate ? startDate.toISOString() : undefined,
+      endDate: endDate ? endDate.toISOString() : undefined,
+    }),
     staleTime: 60000,
   });
 

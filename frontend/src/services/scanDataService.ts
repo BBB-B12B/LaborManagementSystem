@@ -317,6 +317,25 @@ export async function updateScanDataRecord(
   return response.data.data;
 }
 
+/**
+ * Auto-fill scan data using Daily Report times (shiftTimes)
+ */
+export async function fillFromDailyReport(
+  employeeId: string,
+  workDate: string,
+  projectLocationId: string
+): Promise<ScanData> {
+  const response = await apiClient.post<{ success: boolean; data: ScanData }>(
+    '/scan-data/fill-from-daily-report',
+    {
+      employeeId,
+      workDate,
+      projectLocationId,
+    }
+  );
+  return response.data.data;
+}
+
 
 /**
  * Update all punches for a specific contractor and date (Manual correction)

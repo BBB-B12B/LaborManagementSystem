@@ -85,19 +85,25 @@ const BannerHeader = styled(Paper)(({ theme }) => ({
 interface Props {
   onStatusClick?: (status: string) => void;
   activeStatus?: string;
+  project?: string;
+  startDate?: Date | null;
+  endDate?: Date | null;
 }
 
-const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
+const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, startDate, endDate }) => {
   const { data: statsData, isLoading } = useQuery({
-    queryKey: ['reconciliation-stats'],
-    queryFn: () => reconciliationService.getStats({}),
+    queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
+    queryFn: () => reconciliationService.getStats({
+      projectLocationId: project !== 'all' ? project : undefined,
+      startDate: startDate ? startDate.toISOString() : undefined,
+      endDate: endDate ? endDate.toISOString() : undefined,
+    }),
     staleTime: 60000,
   });
 
   const stats = {
     totalRows:     statsData?.totalRows     ?? 0,
     normalCount:   statsData?.normalCount   ?? 0,
-    otherCount:    statsData?.otherCount    ?? 0,  // ABSENT + LEAVE + HOLIDAY
     pendingCount:  statsData?.pendingCount  ?? 0,
     resolvedCount: statsData?.resolvedCount ?? 0,
     employeeCount: statsData?.employeeCount ?? 0,
@@ -179,12 +185,6 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus }) => {
                   </Typography>
                   <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.LIGHT }}>รายการ</Typography>
                 </Stack>
-                {/* แสดง LEAVE/HOLIDAY ให้ชัดเจนว่าทำไมรวมกันไม่ได้ totalRows */}
-                {stats.otherCount > 0 && (
-                  <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.6rem', fontWeight: 700, display: 'block', mt: 0.5 }}>
-                    + {stats.otherCount.toLocaleString()} ลา/หยุด (ไม่นับในสถานะปกติ)
-                  </Typography>
-                )}
               </Box>
 
               {/* Right: Icon */}

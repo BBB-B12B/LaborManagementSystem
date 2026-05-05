@@ -80,6 +80,7 @@ export interface ScanData {
   regularHours?: number;
   lunchStatus?: 0 | 1;
   otMorningHours?: number;
+  otNoonHours?: number;
   otEveningHours?: number;
   // Soft Delete
   isDeleted?: boolean;
@@ -218,6 +219,7 @@ export const scanDataConverter = {
       regularHours: scan.regularHours,
       lunchStatus: scan.lunchStatus,
       otMorningHours: scan.otMorningHours,
+      otNoonHours: scan.otNoonHours,
       otEveningHours: scan.otEveningHours,
       isDeleted: scan.isDeleted,
       deletedAt: scan.deletedAt,
@@ -280,6 +282,7 @@ export const scanDataConverter = {
       regularHours: data.regularHours,
       lunchStatus: data.lunchStatus,
       otMorningHours: data.otMorningHours,
+      otNoonHours: data.otNoonHours,
       otEveningHours: data.otEveningHours,
       isDeleted: data.isDeleted || false,
       deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : (data.deletedAt instanceof Date ? data.deletedAt : undefined),
