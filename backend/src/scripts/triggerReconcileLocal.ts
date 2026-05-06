@@ -7,7 +7,7 @@ import { matcherService } from '../services/reconciliation/MatcherService';
 
 async function run() {
   console.log('Triggering local reconcile...');
-  await matcherService.reconcile('200808', '2025-08-30', 'WH2 : คลังสินค้าบางบ่อ');
+  await matcherService.reconcile('200030', '2026-05-02', 'P002');
   console.log('Done!');
 }
 

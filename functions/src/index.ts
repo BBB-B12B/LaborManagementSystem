@@ -198,8 +198,6 @@ async function reconcile(
     const storedHours = (data['regularHours'] || 0) + (data['otMorningHours'] || 0)
       + (data['otNoonHours'] || 0) + (data['otEveningHours'] || 0);
 
-    console.log(`[reconcile][HOURS_DEBUG] doc=${doc.id} storedHours=${storedHours} regularHours=${data['regularHours']} allScans=${JSON.stringify(data['allScans'])}`);
-
     if (storedHours > 0) {
       // ใช้ field ที่ import service คำนวณไว้แล้ว (กรณี CSV bulk import)
       scanNormalHours += (data['regularHours']   || 0);
@@ -207,28 +205,48 @@ async function reconcile(
       scanOtNoon      += (data['otNoonHours']    || 0);
       scanOtEvening   += (data['otEveningHours'] || 0);
     } else {
-      // คำนวณจาก allScans เมื่อ hours fields ไม่มี (กรณี manual entry)
+      // คำนวณจาก allScans โดยใช้ logic เดียวกับ ScanDataAggregator
       const allTimes: string[] = Array.isArray(data['allScans']) && data['allScans'].length > 0
         ? data['allScans'] as string[]
         : (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
             .map(k => data[k] as string | undefined)
             .filter((t): t is string => !!t && t !== '-');
 
-      console.log(`[reconcile][HOURS_DEBUG] allTimes=${JSON.stringify(allTimes)} length=${allTimes.length}`);
-
       if (allTimes.length >= 2) {
-        const toMinutes = (t: string) => {
-          const [h, m] = t.split(':').map(Number);
-          return h * 60 + (m || 0);
+        // แปลง HH:mm หรือ HH:mm:ss → นาทีนับจากเที่ยงคืน (รองรับทศนิยมวินาที)
+        const toMins = (t: string) => {
+          const parts = t.split(':').map(Number);
+          return parts[0] * 60 + (parts[1] || 0) + ((parts[2] || 0) / 60);
         };
-        const sorted = [...allTimes].sort((a, b) => toMinutes(a) - toMinutes(b));
-        const firstInMin  = toMinutes(sorted[0]);
-        const lastOutMin  = toMinutes(sorted[sorted.length - 1]);
-        const hasLunch    = firstInMin < 12 * 60 && lastOutMin > 13 * 60;
-        const rawHours    = (lastOutMin - firstInMin) / 60;
-        const computed    = hasLunch ? rawHours - 1 : rawHours;
-        console.log(`[reconcile][HOURS_DEBUG] firstIn=${firstInMin} lastOut=${lastOutMin} hasLunch=${hasLunch} rawHours=${rawHours} computed=${computed}`);
-        scanNormalHours  += computed;
+        const scanMins = allTimes.map(toMins).sort((a, b) => a - b);
+        const firstScan = scanMins[0];
+        const lastScan  = scanMins[scanMins.length - 1];
+
+        // ── Regular hours (08:00–17:00 หักพักกลางวัน 1 ชม.) ──────────────
+        if (firstScan < 720 && lastScan >= 1020) {
+          const effectiveStart = Math.max(firstScan, 480);  // ไม่นับก่อน 08:00
+          const effectiveEnd   = Math.min(lastScan, 1020);  // ไม่นับหลัง 17:00
+          if (effectiveEnd > effectiveStart) {
+            let workMins = effectiveEnd - effectiveStart;
+            if (effectiveStart < 720 && effectiveEnd > 780) workMins -= 60; // หักพักกลางวัน
+            scanNormalHours += Math.floor(workMins / 30) * 0.5;
+          }
+        }
+
+        // ── OT Morning (ก่อน 08:00) ────────────────────────────────────────
+        const morningMins = scanMins.filter(m => m <= 480);
+        if (morningMins.length >= 2) {
+          const duration = morningMins[morningMins.length - 1] - morningMins[0];
+          scanOtMorning += Math.floor(duration / 30) * 0.5;
+        }
+
+        // ── OT Evening (หลัง 18:00 ต้องอยู่ถึง 18:30 ขึ้นไป) ──────────────
+        if (lastScan >= 1110) { // 18:30
+          const otDuration = lastScan - 1080; // นับจาก 18:00
+          if (otDuration >= 30) {
+            scanOtEvening += Math.floor(otDuration / 30) * 0.5;
+          }
+        }
       }
     }
   }

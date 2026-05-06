@@ -37,6 +37,36 @@ const SCAN_COLLECTION = 'scanData';
 const HOURS_MATCH_TOLERANCE = 0.1; // 6 นาที
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * ดึง punch times (HH:mm) จาก ScanData document
+ * Priority: punches → allScans (trim to HH:mm) → Time1-Time6
+ * เหมือน logic ใน MatcherService — ใช้ร่วมกันทุกที่
+ */
+function extractScanPunches(data: Record<string, any>): string[] {
+  // 1. punches (HH:mm) — primary field ที่ new imports เขียนไว้
+  if (Array.isArray(data.punches) && data.punches.length > 0) {
+    return data.punches as string[];
+  }
+
+  // 2. allScans (HH:mm:ss) — fallback สำหรับ docs เก่าที่ยังไม่มี punches
+  if (Array.isArray(data.allScans) && data.allScans.length > 0) {
+    return (data.allScans as string[]).map((t) => t.slice(0, 5));
+  }
+
+  // 3. Time1-Time6 — legacy fields จาก bulk import เก่า
+  const times = [data.Time1, data.Time2, data.Time3, data.Time4, data.Time5, data.Time6]
+    .filter((t): t is string => !!t && t !== '-' && t !== '');
+  if (times.length > 0) {
+    return times.map((t) => t.slice(0, 5));
+  }
+
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -140,21 +170,16 @@ export class ReconciliationService {
   // =========================================================================
 
   /**
-   * สร้างหรืออัปเดต ReconciliationRecord
-   * ถ้ามีอยู่แล้ว: อัปเดตเฉพาะข้อมูลดิบ + re-classify
-   * ถ้ายังไม่มี: สร้างใหม่ พร้อม statusHistory entry แรก
+   * รวมข้อมูลและหาผลลัพธ์ของ Status ก่อนเขียนลง Database (ไม่ต้องดึงจาก DB เอง)
    */
-  async upsertRecord(
+  private mergeAndClassify(
     input: CreateReconciliationRecordInput,
+    existing: ReconciliationRecord | undefined,
+    now: Date,
     isHoliday?: boolean,
     isLeave?: boolean,
-  ): Promise<ReconciliationRecord> {
-    const id = generateReconciliationId(input.employeeId, input.workDate);
-    const ref = this.collection.doc(id);
-    const snap = await ref.get();
-    const now = new Date();
-
-    if (!snap.exists) {
+  ): Partial<ReconciliationRecord> | null {
+    if (!existing) {
       // สร้างใหม่
       const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
       const classified = this.classify(
@@ -172,7 +197,7 @@ export class ReconciliationService {
         note: classified.note,
       };
 
-      const record: Omit<ReconciliationRecord, 'id'> = {
+      return {
         ...input,
         status: classified.status,
         suggestedHours: classified.suggestedHours,
@@ -180,21 +205,14 @@ export class ReconciliationService {
         createdAt: now,
         updatedAt: now,
       };
-
-      await ref.set(reconciliationRecordConverter.toFirestore(record));
-      return { id, ...record };
     }
-
-    // อัปเดต — re-classify ถ้างวดงานยังไม่ถูกล็อก
-    const existing = reconciliationRecordConverter.fromFirestore(snap);
 
     // ถ้างวดงานถูกล็อกแล้ว (isLocked: true) ไม่ต้อง re-classify
     if (existing.isLocked === true) {
-      return existing;
+      return null; // ข้ามการทำงาน
     }
 
     // ใช้ค่าจาก input ถ้ามี มิฉะนั้นใช้ค่าเดิมจาก existing เป็น fallback
-    // ป้องกันกรณีที่ external API หา daily timesheet ไม่เจอแล้ว incorrectly เปลี่ยนสถานะ
     const effectiveDailyHours = input.dailyReportHours ?? existing.dailyReportHours;
     const effectiveScanHours = input.scanDataHours ?? existing.scanDataHours;
 
@@ -214,24 +232,26 @@ export class ReconciliationService {
 
     const updates: Partial<ReconciliationRecord> = {
       projectLocationId: input.projectLocationId,
-      dailyReportHours: input.dailyReportHours,
-      timesheetNormalHours: input.timesheetNormalHours,
-      timesheetOtMorning: input.timesheetOtMorning,
-      timesheetOtNoon: input.timesheetOtNoon,
-      timesheetOtEvening: input.timesheetOtEvening,
-      scanDataHours: input.scanDataHours,
-      scanNormalHours: input.scanNormalHours,
-      scanOtMorningHours: input.scanOtMorningHours,
-      scanOtNoonHours: input.scanOtNoonHours,
-      scanOtEveningHours: input.scanOtEveningHours,
-      dailyReportId: input.dailyReportId,
-      scanDataId: input.scanDataId,
-      dailyReportPhotos: input.dailyReportPhotos,
-      dailyReportPunches: input.dailyReportPunches,
-      scanPunches: input.scanPunches,
-      suggestedHours: classified.suggestedHours,
-      status: newStatus,
-      updatedAt: now,
+      // Daily-report side
+      dailyReportHours:       input.dailyReportHours      ?? existing.dailyReportHours,
+      timesheetNormalHours:   input.timesheetNormalHours  ?? existing.timesheetNormalHours,
+      timesheetOtMorning:     input.timesheetOtMorning    ?? existing.timesheetOtMorning,
+      timesheetOtNoon:        input.timesheetOtNoon        ?? existing.timesheetOtNoon,
+      timesheetOtEvening:     input.timesheetOtEvening    ?? existing.timesheetOtEvening,
+      dailyReportId:          input.dailyReportId         ?? existing.dailyReportId,
+      dailyReportPhotos:      input.dailyReportPhotos     ?? existing.dailyReportPhotos,
+      dailyReportPunches:     input.dailyReportPunches    ?? existing.dailyReportPunches,
+      // Scan-data side
+      scanDataHours:          input.scanDataHours         ?? existing.scanDataHours,
+      scanNormalHours:        input.scanNormalHours       ?? existing.scanNormalHours,
+      scanOtMorningHours:     input.scanOtMorningHours   ?? existing.scanOtMorningHours,
+      scanOtNoonHours:        input.scanOtNoonHours       ?? existing.scanOtNoonHours,
+      scanOtEveningHours:     input.scanOtEveningHours   ?? existing.scanOtEveningHours,
+      scanDataId:             input.scanDataId            ?? existing.scanDataId,
+      scanPunches:            input.scanPunches           ?? existing.scanPunches,
+      suggestedHours:         classified.suggestedHours,
+      status:                 newStatus,
+      updatedAt:              now,
     };
 
     if (input.isHoliday !== undefined) updates.isHoliday = input.isHoliday;
@@ -249,22 +269,61 @@ export class ReconciliationService {
         note: classified.note,
       };
 
-      (updates as any).statusHistory = FieldValue.arrayUnion(
-        this.toFirestoreHistoryEntry(newEntry),
-      );
+      // สร้าง array ใหม่ต่อท้ายของเดิม สำหรับ return object ให้ไปแปลงเป็น arrayUnion ในตอน set/update ทีหลัง
+      // ในกรณีนี้จะ return เป็น Object array แบบสมบูรณ์ เพื่อให้ใช้กับ bulkWriter หรือ update ได้
+      (updates as any).statusHistory = existing.statusHistory ? [...existing.statusHistory, newEntry] : [newEntry];
+    }
 
-      // ถ้า status กลับมาเป็น abnormal อีกครั้ง → clear resolvedAt
-      const abnormalStatuses: ReconciliationStatus[] = [
-        'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'ABSENT', 'UNREGISTERED_EMPLOYEE',
-      ];
-      if (abnormalStatuses.includes(newStatus)) {
-        (updates as any).resolvedAt = null;
-        (updates as any).resolvedBy = null;
+    const abnormalStatuses: ReconciliationStatus[] = [
+      'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'ABSENT', 'UNREGISTERED_EMPLOYEE',
+    ];
+    const normalStatuses: ReconciliationStatus[] = ['MATCHED', 'LEAVE', 'HOLIDAY'];
+
+    if (abnormalStatuses.includes(newStatus)) {
+      (updates as any).resolvedAt = null;
+      (updates as any).resolvedBy = null;
+    } else if (normalStatuses.includes(newStatus)) {
+      const wasEverAbnormal =
+        abnormalStatuses.includes(existing.status) ||
+        existing.statusHistory.some((h) => abnormalStatuses.includes(h.status));
+
+      if (wasEverAbnormal && !existing.resolvedAt) {
+        (updates as any).resolvedAt = now;
       }
     }
 
-    await ref.update(reconciliationRecordConverter.toFirestore(updates as any));
-    return { ...existing, ...updates };
+    return updates;
+  }
+
+  /**
+   * สร้างหรืออัปเดต ReconciliationRecord (แบบทีละ Record)
+   * ใช้สำหรับการทำงานแบบ Real-time
+   */
+  async upsertRecord(
+    input: CreateReconciliationRecordInput,
+    isHoliday?: boolean,
+    isLeave?: boolean,
+  ): Promise<ReconciliationRecord> {
+    const id = generateReconciliationId(input.employeeId, input.workDate);
+    const ref = this.collection.doc(id);
+    const snap = await ref.get();
+    const now = new Date();
+
+    const existing = snap.exists ? reconciliationRecordConverter.fromFirestore(snap) : undefined;
+    const resultData = this.mergeAndClassify(input, existing, now, isHoliday, isLeave);
+
+    if (!resultData) {
+      return existing!;
+    }
+
+    if (!existing) {
+      await ref.set(reconciliationRecordConverter.toFirestore(resultData as any));
+      return { id, ...resultData } as ReconciliationRecord;
+    } else {
+      // update
+      await ref.update(reconciliationRecordConverter.toFirestore(resultData as any));
+      return { ...existing, ...resultData } as ReconciliationRecord;
+    }
   }
 
   /**
@@ -295,6 +354,18 @@ export class ReconciliationService {
       new Date(endDate),
     );
 
+    // 2.5 ดึง existing Reconciliation Records มาทั้งหมดในช่วงนี้ เพื่อหลีกเลี่ยงการ .get() ทีละตัว
+    const existingRecordsSnap = await this.db.collection(COLLECTION)
+      .where('projectLocationId', '==', projectLocationId)
+      .where('workDate', '>=', startDate)
+      .where('workDate', '<=', endDate)
+      .get();
+    
+    const existingMap = new Map<string, ReconciliationRecord>();
+    existingRecordsSnap.docs.forEach((doc) => {
+      existingMap.set(doc.id, reconciliationRecordConverter.fromFirestore(doc as any));
+    });
+
     // 3. สร้าง Map ของ Scan Data: key = "{employeeId}_{workDate}"
     const scanMap = new Map<string, { 
       hours: number; 
@@ -319,8 +390,9 @@ export class ReconciliationService {
         (scan.otEveningHours ?? 0);
       scanMap.set(key, { 
         hours: totalScanHours, 
-        id: scan.id, 
-        punches: scan.punches || [],
+        id: scan.id,
+        // ใช้ extractScanPunches เพื่อ fallback จาก allScans / Time1-6 ถ้า punches ยังว่าง
+        punches: extractScanPunches(scan as any),
         scanNormalHours: scan.regularHours,
         scanOtMorningHours: scan.otMorningHours,
         scanOtNoonHours: scan.otNoonHours,
@@ -328,35 +400,52 @@ export class ReconciliationService {
       });
     }
 
-    // 4. Upsert ReconciliationRecord สำหรับทุก daily summary
-    const results = await Promise.allSettled(
-      dailySummaries.map((summary) => {
-        const key = `${summary.employeeNumber}_${summary.date}`;
-        const scanEntry = scanMap.get(key);
+    const writer = this.db.bulkWriter();
+    let succeeded = 0;
+    let failed = 0;
+    const now = new Date();
 
-        return this.upsertRecord({
-          employeeId: summary.employeeNumber,
-          workDate: summary.date,
-          projectLocationId: summary.projectLocationId,
-          dailyReportHours: summary.totalHours,
-          timesheetNormalHours: summary.regularHours,
-          timesheetOtMorning: summary.otMorningHours,
-          timesheetOtNoon: summary.otNoonHours,
-          timesheetOtEvening: summary.otEveningHours,
-          dailyReportId: `${summary.employeeNumber}_${summary.date}`, // Project B doc id
-          scanDataHours: scanEntry?.hours,
-          scanNormalHours: scanEntry?.scanNormalHours,
-          scanOtMorningHours: scanEntry?.scanOtMorningHours,
-          scanOtNoonHours: scanEntry?.scanOtNoonHours,
-          scanOtEveningHours: scanEntry?.scanOtEveningHours,
-          scanDataId: scanEntry?.id,
-          dailyReportPhotos: summary.dailyReportPhotos,
-          dailyReportPunches: summary.dailyReportPunches,
-          scanPunches: scanEntry?.punches,
-          leaveHours: summary.leaveHours,
-        }, false, summary.isLeave);
-      }),
-    );
+    // 4. Upsert ReconciliationRecord สำหรับทุก daily summary
+    for (const summary of dailySummaries) {
+      const key = `${summary.employeeNumber}_${summary.date}`;
+      const scanEntry = scanMap.get(key);
+      const id = generateReconciliationId(summary.employeeNumber, summary.date);
+      const existing = existingMap.get(id);
+
+      const input: CreateReconciliationRecordInput = {
+        employeeId: summary.employeeNumber,
+        workDate: summary.date,
+        projectLocationId: summary.projectLocationId,
+        dailyReportHours: summary.totalHours,
+        timesheetNormalHours: summary.regularHours,
+        timesheetOtMorning: summary.otMorningHours,
+        timesheetOtNoon: summary.otNoonHours,
+        timesheetOtEvening: summary.otEveningHours,
+        dailyReportId: `${summary.employeeNumber}_${summary.date}`, // Project B doc id
+        scanDataHours: scanEntry?.hours,
+        scanNormalHours: scanEntry?.scanNormalHours,
+        scanOtMorningHours: scanEntry?.scanOtMorningHours,
+        scanOtNoonHours: scanEntry?.scanOtNoonHours,
+        scanOtEveningHours: scanEntry?.scanOtEveningHours,
+        scanDataId: scanEntry?.id,
+        dailyReportPhotos: summary.dailyReportPhotos,
+        dailyReportPunches: summary.dailyReportPunches,
+        scanPunches: scanEntry?.punches,
+        leaveHours: summary.leaveHours,
+      };
+
+      try {
+        const resultData = this.mergeAndClassify(input, existing, now, false, summary.isLeave);
+        if (resultData) {
+          const ref = this.collection.doc(id);
+          // ใช้ merge: true ตามพฤติกรรมเดิมของ upsertRecord
+          writer.set(ref, reconciliationRecordConverter.toFirestore(resultData as any), { merge: true });
+          succeeded++;
+        }
+      } catch (err) {
+        failed++;
+      }
+    }
 
     // 5. Handle scan records ที่ไม่มี daily report (MISSING_DAILY)
     //    หา scan records ที่ยังไม่ถูก match กับ daily summary
@@ -371,39 +460,54 @@ export class ReconciliationService {
       return !matchedKeys.has(`${scan.employeeId}_${dateKey}`);
     });
 
-    const unmatchedResults = await Promise.allSettled(
-      unmatchedScans.map((scan) => {
-        const dateKey =
-          scan.scanDate ||
-          (scan.workDate instanceof Date
-            ? scan.workDate.toISOString().split('T')[0]
-            : String(scan.workDate).split('T')[0]);
-        const totalScanHours =
-          (scan.regularHours ?? 0) +
-          (scan.otMorningHours ?? 0) +
-          (scan.otEveningHours ?? 0);
+    for (const scan of unmatchedScans) {
+      const dateKey =
+        scan.scanDate ||
+        (scan.workDate instanceof Date
+          ? scan.workDate.toISOString().split('T')[0]
+          : String(scan.workDate).split('T')[0]);
+      const totalScanHours =
+        (scan.regularHours ?? 0) +
+        (scan.otMorningHours ?? 0) +
+        (scan.otEveningHours ?? 0);
 
-        return this.upsertRecord({
-          employeeId: scan.employeeId,
-          workDate: dateKey,
-          projectLocationId: scan.projectLocationId,
-          dailyReportHours: undefined,   // ไม่มี daily → MISSING_DAILY
-          scanDataHours: totalScanHours,
-          scanNormalHours: scan.regularHours,
-          scanOtMorningHours: scan.otMorningHours,
-          scanOtNoonHours: scan.otNoonHours,
-          scanOtEveningHours: scan.otEveningHours,
-          scanDataId: scan.id,
-          scanPunches: scan.punches || [],
-        });
-      }),
-    );
+      const id = generateReconciliationId(scan.employeeId, dateKey);
+      const existing = existingMap.get(id);
 
-    const allResults = [...results, ...unmatchedResults];
-    const succeeded = allResults.filter((r) => r.status === 'fulfilled').length;
-    const failed = allResults.filter((r) => r.status === 'rejected').length;
+      const input: CreateReconciliationRecordInput = {
+        employeeId: scan.employeeId,
+        workDate: dateKey,
+        projectLocationId: scan.projectLocationId,
+        dailyReportHours: undefined,   // ไม่มี daily → MISSING_DAILY
+        scanDataHours: totalScanHours,
+        scanNormalHours: scan.regularHours,
+        scanOtMorningHours: scan.otMorningHours,
+        scanOtNoonHours: scan.otNoonHours,
+        scanOtEveningHours: scan.otEveningHours,
+        scanDataId: scan.id,
+        scanPunches: extractScanPunches(scan as any),
+      };
 
-    return { succeeded, failed, total: allResults.length };
+      try {
+        const resultData = this.mergeAndClassify(input, existing, now);
+        if (resultData) {
+          const ref = this.collection.doc(id);
+          writer.set(ref, reconciliationRecordConverter.toFirestore(resultData as any), { merge: true });
+          succeeded++;
+        }
+      } catch (err) {
+        failed++;
+      }
+    }
+
+    // ปิด writer เพื่อ commit ชุดข้อมูลทั้งหมด
+    await writer.close();
+
+    return {
+      succeeded,
+      failed,
+      total: dailySummaries.length + unmatchedScans.length,
+    };
   }
 
   /**
@@ -452,10 +556,11 @@ export class ReconciliationService {
       scanOtMorningHours: scanData?.otMorningHours,
       scanOtNoonHours: scanData?.otNoonHours,
       scanOtEveningHours: scanData?.otEveningHours,
-      scanDataId: scanData ? scanQuery.docs[0].id : undefined,
+      scanDataId: scanData ? activeScanDoc!.id : undefined,
       dailyReportPhotos: summary?.dailyReportPhotos,
       dailyReportPunches: summary?.dailyReportPunches,
-      scanPunches: scanData?.punches || [],
+      // fallback: allScans (HH:mm:ss) หรือ Time1-6 ถ้า punches ยังว่าง (docs เก่าจาก bulk import)
+      scanPunches: scanData ? extractScanPunches(scanData) : [],
       leaveHours: summary?.leaveHours,
     }, false, summary?.isLeave);
   }

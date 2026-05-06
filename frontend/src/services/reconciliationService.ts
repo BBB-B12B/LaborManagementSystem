@@ -124,7 +124,7 @@ export const reconciliationService = {
       succeeded: number;
       failed: number;
       total: number;
-    }>('/reconciliation/generate-auto', params);
+    }>('/reconciliation/generate-auto', params, { timeout: 60000 });
     return response.data;
   },
 

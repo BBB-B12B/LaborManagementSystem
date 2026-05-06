@@ -990,10 +990,14 @@ class ScanDataService extends BaseCrudService<ScanData> {
             punches.push(parts[0], parts[1]);
           }
         };
-        extractPunches(timesheet.shiftTimes.otMorning);
-        extractPunches(timesheet.shiftTimes.day);
-        extractPunches(timesheet.shiftTimes.otNoon);
-        extractPunches(timesheet.shiftTimes.otEvening);
+        // Guard: ดึงเวลาเฉพาะกะที่ expectedShifts บอกว่าทำจริง
+        // ป้องกันกรณี shiftTimes เก็บ template ไว้ทุกกะ แม้กะนั้นจะไม่ได้ทำ
+        // (!shifts) = fallback สำหรับ document เก่าที่ไม่มี expectedShifts field
+        const shifts = timesheet.expectedShifts;
+        if (!shifts || shifts.otMorning) extractPunches(timesheet.shiftTimes.otMorning);
+        if (!shifts || shifts.normal)    extractPunches(timesheet.shiftTimes.day);
+        if (!shifts || shifts.otNoon)    extractPunches(timesheet.shiftTimes.otNoon);
+        if (!shifts || shifts.otEvening) extractPunches(timesheet.shiftTimes.otEvening);
         punches.sort((a, b) => a.localeCompare(b));
       }
 
@@ -1054,6 +1058,10 @@ class ScanDataService extends BaseCrudService<ScanData> {
       punches.forEach((p, i) => {
         if (i < 10) timeSlots[`Time${i + 1}`] = p;
       });
+      // Clear leftover slots from any previous scan data
+      for (let i = punches.length + 1; i <= 10; i++) {
+        timeSlots[`Time${i}`] = '-';
+      }
 
       const workDateObj = new Date(scanDateStart);
 

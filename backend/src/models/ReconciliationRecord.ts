@@ -165,7 +165,14 @@ export const reconciliationRecordConverter = {
     if (record.isLocked !== undefined) data.isLocked = record.isLocked;
     if (record.resolvedAt !== undefined) data.resolvedAt = record.resolvedAt;
     if (record.resolvedBy !== undefined) data.resolvedBy = record.resolvedBy;
-    if (record.statusHistory !== undefined) data.statusHistory = record.statusHistory;
+    if (record.statusHistory !== undefined) {
+      data.statusHistory = record.statusHistory.map((entry) => {
+        const cleanEntry: any = { ...entry };
+        if (cleanEntry.reason === undefined) delete cleanEntry.reason;
+        if (cleanEntry.note === undefined) delete cleanEntry.note;
+        return cleanEntry;
+      });
+    }
     if (record.createdAt !== undefined) data.createdAt = record.createdAt;
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
     

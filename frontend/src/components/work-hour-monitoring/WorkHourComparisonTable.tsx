@@ -667,14 +667,14 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
                 <TableCell>
                   {row.status === 'MISSING_DAILY' ? (
-                    <Box sx={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: '8px', border: '1px solid #ef4444', color: '#ef4444',
-                      fontWeight: 800, minWidth: '80px', height: '26px', fontSize: '0.75rem',
-                      cursor: 'default', backgroundColor: '#fff'
-                    }}>
+                    <ActionButton
+                      variant="outlined"
+                      actionType="pending"
+                      size="small"
+                      onClick={() => handleOpenCheckDialog(row)}
+                    >
                       {t(`workHourMonitoring.actions.pending`)}
-                    </Box>
+                    </ActionButton>
                   ) : (actionStr === 'check' || actionStr === 'view') ? (
                     <ActionButton 
                       variant="outlined" 
@@ -761,6 +761,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             <Box>
               <Typography variant="h6" fontWeight={900} sx={{ color: '#fff', mb: 0.5 }}>
                 {selectedRow?.status === 'MISSING_SCAN' ? 'ขาดข้อมูลสแกนนิ้ว'
+                 : selectedRow?.status === 'MISSING_DAILY' ? 'ดูข้อมูลสแกนนิ้ว (ไม่มี Daily Report)'
                  : selectedRow?.status === 'MATCHED' ? 'ข้อมูลเวลาทำงาน'
                  : 'ตรวจสอบข้อมูลขัดแย้ง'}
               </Typography>
@@ -772,12 +773,15 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               px: 2, py: 0.75, borderRadius: '20px', fontWeight: 800, fontSize: '0.8rem',
               backgroundColor:
                 selectedRow?.status === 'MATCHED' ? '#dcfce7' :
+                selectedRow?.status === 'MISSING_DAILY' ? '#fff7ed' :
                 selectedRow?.status === 'MISSING_SCAN' ? '#fff7ed' : '#fef2f2',
               color:
                 selectedRow?.status === 'MATCHED' ? '#16a34a' :
+                selectedRow?.status === 'MISSING_DAILY' ? '#ea580c' :
                 selectedRow?.status === 'MISSING_SCAN' ? '#ea580c' : '#dc2626',
             }}>
               {selectedRow?.status === 'MATCHED' ? '✓ ข้อมูลตรงกัน'
+               : selectedRow?.status === 'MISSING_DAILY' ? '⚠ ไม่มีข้อมูล Daily Report'
                : selectedRow?.status === 'MISSING_SCAN' ? '⚠ ขาดข้อมูลสแกนนิ้ว'
                : '✕ ข้อมูลขัดแย้งกัน'}
             </Box>
@@ -785,7 +789,37 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
           <Box sx={{ p: 4 }}>
 
-          {selectedRow?.status === 'MISSING_SCAN' ? (
+          {selectedRow?.status === 'MISSING_DAILY' ? (
+            <>
+              <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
+                <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
+                  ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
+                </Typography>
+              </Box>
+              <Box sx={{ overflowX: 'auto' }}>
+                <TimeTable>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      {Array.from({ length: Math.max(selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                        <th key={i}>Time {i + 1}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="label">สแกนนิ้ว :</td>
+                      {Array.from({ length: Math.max(selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
+                        <td key={`scan-${i}`} className="time-cell">
+                          {selectedRow?.scanPunches?.[i] ?? '-'}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </TimeTable>
+              </Box>
+            </>
+          ) : selectedRow?.status === 'MISSING_SCAN' ? (
             <>
               <Grid container spacing={4}>
                 <Grid item xs={12} sm={6}>
@@ -932,40 +966,63 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           )}
 
             <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4, pt: 3, borderTop: '1px solid #e2e8f0' }}>
-              <Button 
-                variant="outlined" 
-                onClick={handleCloseCheckDialog}
-                sx={{ 
-                  textTransform: 'none', 
-                  fontWeight: 800,
-                  borderRadius: '10px',
-                  borderColor: '#cbd5e1',
-                  color: '#475569',
-                  px: 4,
-                  py: 1,
-                  '&:hover': { backgroundColor: '#f8fafc', borderColor: '#94a3b8' }
-                }}
-              >
-                ยกเลิก
-              </Button>
-              <Button 
-                variant="contained" 
-                onClick={() => selectedRow?.status === 'MATCHED' ? handleCloseCheckDialog() : setConfirmFillOpen(true)}
-                disableElevation
-                sx={{ 
-                  textTransform: 'none',
-                  fontWeight: 800,
-                  borderRadius: '10px',
-                  backgroundColor: '#1e293b',
-                  color: '#fff',
-                  px: 4,
-                  py: 1,
-                  boxShadow: 'none',
-                  '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
-                }}
-              >
-                {selectedRow?.status === 'MATCHED' ? 'ตกลง' : 'ยืนยันข้อมูลปรับตาม Daily Report'}
-              </Button>
+              {selectedRow?.status === 'MISSING_DAILY' ? (
+                <Button
+                  variant="contained"
+                  onClick={handleCloseCheckDialog}
+                  disableElevation
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    borderRadius: '10px',
+                    backgroundColor: '#1e293b',
+                    color: '#fff',
+                    px: 4,
+                    py: 1,
+                    boxShadow: 'none',
+                    '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
+                  }}
+                >
+                  ปิด
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outlined"
+                    onClick={handleCloseCheckDialog}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      borderRadius: '10px',
+                      borderColor: '#cbd5e1',
+                      color: '#475569',
+                      px: 4,
+                      py: 1,
+                      '&:hover': { backgroundColor: '#f8fafc', borderColor: '#94a3b8' }
+                    }}
+                  >
+                    ยกเลิก
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => selectedRow?.status === 'MATCHED' ? handleCloseCheckDialog() : setConfirmFillOpen(true)}
+                    disableElevation
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      borderRadius: '10px',
+                      backgroundColor: '#1e293b',
+                      color: '#fff',
+                      px: 4,
+                      py: 1,
+                      boxShadow: 'none',
+                      '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
+                    }}
+                  >
+                    {selectedRow?.status === 'MATCHED' ? 'ตกลง' : 'ยืนยันข้อมูลปรับตาม Daily Report'}
+                  </Button>
+                </>
+              )}
             </Stack>
           </Box>
         </DialogContent>

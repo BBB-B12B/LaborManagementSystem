@@ -213,7 +213,7 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
                 </Stack>
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Box sx={{ textAlign: 'right', mr: 2 }}>
-                    <Typography variant="h4" fontWeight={900} sx={{ color: '#075985', lineHeight: 1 }}>10</Typography>
+                    <Typography variant="h4" fontWeight={900} sx={{ color: '#075985', lineHeight: 1 }}>{stats?.resolvedCount ?? '-'}</Typography>
                     <Typography variant="caption" fontWeight={800} sx={{ color: '#0369a1' }}>รายการ</Typography>
                   </Box>
                   <Button 
@@ -270,7 +270,7 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, onExport, activeId, v
                 </Stack>
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Box sx={{ textAlign: 'right', mr: 2 }}>
-                    <Typography variant="h4" fontWeight={900} sx={{ color: '#92400e', lineHeight: 1 }}>34</Typography>
+                    <Typography variant="h4" fontWeight={900} sx={{ color: '#92400e', lineHeight: 1 }}>{stats?.pendingCount ?? '-'}</Typography>
                     <Typography variant="caption" fontWeight={800} sx={{ color: '#b45309' }}>รายการ</Typography>
                   </Box>
                   <Button 
