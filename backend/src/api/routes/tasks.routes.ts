@@ -161,7 +161,8 @@ router.post('/:id/reports', async (req: Request, res: Response, next: NextFuncti
     if (!userId) throw new AppError('Unauthorized', 401);
 
     const reportData = req.body;
-    await taskService.submitDailyReport(id, reportData, userId);
+    const isSupportReport = req.body.isSupportReport === true;
+    await taskService.submitDailyReport(id, reportData, userId, isSupportReport);
 
     res.status(201).json({
       success: true,
@@ -176,7 +177,8 @@ router.post('/:id/reports', async (req: Request, res: Response, next: NextFuncti
 router.get('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const reports = await taskService.getAllDailyReports(id);
+    const isSupportReport = req.query.isSupportReport === 'true';
+    const reports = await taskService.getAllDailyReports(id, isSupportReport);
 
     res.status(200).json({
       success: true,
@@ -191,7 +193,8 @@ router.get('/:id/reports', async (req: Request, res: Response, next: NextFunctio
 router.get('/:id/reports/:date', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id, date } = req.params;
-    const report = await taskService.getDailyReport(id, date);
+    const isSupportReport = req.query.isSupportReport === 'true';
+    const report = await taskService.getDailyReport(id, date, isSupportReport);
 
     res.status(200).json({
       success: true,
@@ -222,6 +225,32 @@ router.post('/:id/reject', async (req: Request, res: Response, next: NextFunctio
     res.status(200).json({
       success: true,
       message: 'ตีกลับงานสำเร็จ (Task rejected successfully)',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/support
+router.post('/:id/support', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { supportTaskName, assignees } = req.body;
+    
+    if (!supportTaskName || !assignees || !Array.isArray(assignees) || assignees.length === 0) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (supportTaskName และ assignees เป็นข้อมูลจำเป็น)', 400);
+    }
+
+    const userId = req.user?.uid;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    await taskService.joinSupportTask(id, supportTaskName, assignees, userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'เข้าร่วมงาน Support สำเร็จ (Support task joined successfully)',
     });
   } catch (error) {
     next(error);

@@ -90,11 +90,17 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
+  const isActingAsSupport = useMemo(() => {
+    if (!task || !user) return false;
+    const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+    return isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
+  }, [task, user]);
+
   const fetchReports = useCallback(async (forceRefresh = false) => {
     if (!task?.id || !open) return;
     setLoading(true);
     try {
-      const reports = await dailyReportService.getAllTaskReports(task.id, forceRefresh);
+      const reports = await dailyReportService.getAllTaskReports(task.id, forceRefresh, isActingAsSupport);
       const newData: Record<string, DailySummary> = {};
       const dates: string[] = [];
 
@@ -287,15 +293,19 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             </Typography>
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 0.5 }}>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
-                {task?.taskId} : {task?.taskName}
+                {task?.taskId} : {isActingAsSupport && task?.supportTaskName ? task.supportTaskName : task?.taskName}
               </Typography>
               
               <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '99px' }}>
                 <Avatar sx={{ width: 24, height: 24, bgcolor: '#334155', fontSize: 12, fontWeight: 700, mr: 1 }}>
-                  {task?.assignees?.[0]?.name ? task.assignees[0].name.substring(0, 2) : 'NA'}
+                  {isActingAsSupport 
+                    ? (task?.supportAssignees?.[0]?.name ? task.supportAssignees[0].name.substring(0, 2) : 'NA')
+                    : (task?.assignees?.[0]?.name ? task.assignees[0].name.substring(0, 2) : 'NA')}
                 </Avatar>
                 <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>
-                  {task?.assignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ'}
+                  {isActingAsSupport 
+                    ? (task?.supportAssignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ (Support)')
+                    : (task?.assignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ')}
                 </Typography>
               </Box>
             </Stack>

@@ -18,7 +18,7 @@ type FormData = z.infer<typeof schema>;
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (data?: any) => void;
   projectId: string;
   workOrderCode: string;
   editData?: CategoryConfig | null;
@@ -56,7 +56,7 @@ export const CategoryConfigModal: React.FC<Props> = ({ open, onClose, onSuccess,
         await projectConfigService.createCategory(projectId, { workOrderCode, name: data.name });
         enqueueSnackbar('สร้างหมวดหมู่งานย่อยสำเร็จ', { variant: 'success' });
       }
-      onSuccess();
+      onSuccess(data);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.error || err.message || 'เกิดข้อผิดพลาด';
       enqueueSnackbar(msg, { variant: 'error' });

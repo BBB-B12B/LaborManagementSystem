@@ -21,6 +21,8 @@ import {
 import { LinearProgress } from '@mui/material';
 import type { Task } from '@/services/taskService';
 
+import { useAuthStore } from '@/store/authStore';
+
 interface TaskCardProps {
   task: Task;
   onEdit?: (task: Task) => void;
@@ -30,8 +32,15 @@ interface TaskCardProps {
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick }) => {
   const theme = useTheme();
+  const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+
+  // If the task's projectId is NOT in the user's assigned projects, they are viewing it cross-project
+  const isViewingCrossProject = user && user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+  
+  // A user is acting as support if they are viewing a cross-project task AND it's a support request they picked up
+  const isActingAsSupport = isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -165,7 +174,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
         variant="subtitle1"
         sx={{ fontWeight: 800, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.5 : 1, lineHeight: 1.3 }}
       >
-        {task.taskName}
+        {isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName}
       </Typography>
 
       {/* Revision Info - Only show if not rev00 */}
@@ -208,20 +217,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563' }}>
             Progress
           </Typography>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: task.dailyProgress >= 100 ? '#059669' : '#1c1e2b' }}>
-            {task.dailyProgress || 0}%
+          <Typography variant="caption" sx={{ fontWeight: 800, color: (isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress) >= 100 ? '#059669' : '#1c1e2b' }}>
+            {isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress || 0}%
           </Typography>
         </Stack>
         <LinearProgress 
           variant="determinate" 
-          value={Math.min(100, Math.max(0, task.dailyProgress || 0))} 
+          value={Math.min(100, Math.max(0, isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress || 0))} 
           sx={{
             height: 6,
             borderRadius: 3,
             backgroundColor: '#f1f3f6',
             '& .MuiLinearProgress-bar': {
               borderRadius: 3,
-              background: task.dailyProgress >= 100 
+              background: (isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress) >= 100 
                 ? 'linear-gradient(90deg, #059669, #10b981)' 
                 : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
             }
@@ -260,20 +269,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       {/* Footer: Assignees & Attachments */}
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Stack direction="row" alignItems="center" spacing={1}>
-          {task.assignees.length > 0 && (
+          {(() => {
+            const displayAssignees = isActingAsSupport && task.supportAssignees && task.supportAssignees.length > 0
+              ? task.supportAssignees
+              : task.assignees || [];
+            
+            return displayAssignees && displayAssignees.length > 0 && (
             <>
               <Avatar 
-                alt={task.assignees[0].name} 
-                src={task.assignees[0].avatarUrl} 
+                alt={displayAssignees[0].name} 
+                src={displayAssignees[0].avatarUrl} 
                 sx={{ width: 28, height: 28, fontSize: 12, bgcolor: 'primary.main' }}
               >
-                {task.assignees[0].name.substring(0, 2).toUpperCase()}
+                {displayAssignees[0].name.substring(0, 2).toUpperCase()}
               </Avatar>
               <Typography variant="caption" sx={{ fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center' }}>
-                {task.assignees[0].name}
+                {displayAssignees[0].name}
               </Typography>
               
-              {task.assignees.length > 1 && (
+              {displayAssignees.length > 1 && (
                 <AvatarGroup
                   max={3}
                   sx={{
@@ -287,7 +301,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                     ml: 0.5
                   }}
                 >
-                  {task.assignees.slice(1).map((assignee, idx) => (
+                  {displayAssignees.slice(1).map((assignee, idx) => (
                     <Avatar 
                       key={idx} 
                       alt={assignee.name} 
@@ -299,7 +313,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                 </AvatarGroup>
               )}
             </>
-          )}
+          );
+          })()}
         </Stack>
 
         {task.attachmentsCount > 0 && (

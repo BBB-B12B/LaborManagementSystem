@@ -57,8 +57,8 @@ const taskSchema = z.object({
   categoryName: z.string().min(2, 'กรุณาระบุหมวดหมู่งานย่อย'),
   isSupportRequest: z.boolean().optional().default(false),
 }).superRefine((data, ctx) => {
-  // ถ้าไม่ได้ขอ Support ต้องมีผู้รับผิดชอบอย่างน้อย 1 คน
-  if (!data.isSupportRequest && data.assignees.length === 0) {
+  // บังคับให้ต้องมีผู้รับผิดชอบอย่างน้อย 1 คนเสมอ (แม้จะขอ Support ก็ต้องให้ Site Assign คนของตัวเอง)
+  if (data.assignees.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน",
@@ -104,6 +104,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   /** รายการงานที่มีอยู่แล้วในโครงการ (สำหรับทีม Support เลือก) */
   const [existingTasks, setExistingTasks] = useState<any[]>([]);
   const [isFetchingTasks, setIsFetchingTasks] = useState(false);
+  
+  // State สำหรับให้ Support แก้ไขชื่องาน
+  const [supportOriginalTaskId, setSupportOriginalTaskId] = useState<string | null>(null);
+  const [isEditingTaskName, setIsEditingTaskName] = useState(false);
 
   const {
     control,
@@ -129,15 +133,40 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   // Set default values when in Edit mode
   useEffect(() => {
     if (open && task) {
+      // If a Support User is dealing with a cross-site task
+      const isCrossSiteSupport = isHelperUser && task.projectId !== user?.projectLocationIds?.[0];
+      
+      let initialAssignees = task.assignees;
+      if (isCrossSiteSupport) {
+        if (task.isPickedUpBySupport && task.supportAssignees) {
+          // Editing an already joined task: load support assignees
+          initialAssignees = task.supportAssignees;
+        } else {
+          // Joining a new task: start empty
+          initialAssignees = [];
+        }
+      }
+
       reset({
         taskName: task.taskName,
         description: task.description || '',
         projectId: task.projectId,
         workOrderCode: task.workOrderCode,
         categoryName: task.categoryName,
-        assignees: task.assignees,
+        assignees: initialAssignees,
         dueDate: new Date(task.dueDate),
         isSupportRequest: task.isSupportRequest || false,
+      });
+    } else if (open && !task) {
+      reset({
+        taskName: '',
+        description: '',
+        projectId: '', // จะถูกเซ็ตโดย fetchData ด้านล่าง
+        workOrderCode: '',
+        categoryName: '',
+        assignees: [],
+        dueDate: null as any,
+        isSupportRequest: false,
       });
     }
   }, [open, task, reset]);
@@ -170,10 +199,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             );
 
             if (matchedProject) {
-              reset((prev) => ({
-                ...prev,
-                projectId: matchedProject.id
-              }));
+              setValue('projectId', matchedProject.id, { shouldValidate: true, shouldDirty: true });
             }
           }
         } catch (error) {
@@ -202,12 +228,12 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       setIsFetchingTasks(true);
       taskService.getTasks()
         .then(allTasks => {
-          // กรองเฉพาะงานในโครงการนี้, Progress < 100, ถูกติ๊กเป็น Support Request และ "ยังไม่มีคนรับงาน"
+          // กรองเฉพาะงานในโครงการนี้, Progress < 100, ถูกติ๊กเป็น Support Request และ "ยังไม่มีทีม Support มารับไป"
           const projectTasks = allTasks.filter(t => 
             t.projectId === selectedProjectId && 
             (t.dailyProgress || 0) < 100 &&
             t.isSupportRequest === true &&
-            (!t.assignees || t.assignees.length === 0)
+            !t.isPickedUpBySupport
           );
           setExistingTasks(projectTasks);
         })
@@ -251,16 +277,14 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         const selectedProject = projects.find(p => p.id === data.projectId);
         
         // ตรวจสอบว่าเป็นการหยิบงานมาจาก Support Request หรือไม่
-        const existingTask = existingTasks.find(t => t.taskName === data.taskName);
+        const existingTask = existingTasks.find(t => t.id === supportOriginalTaskId || t.taskName === data.taskName);
         const isPickingUpSupport = isHelperUser && 
                                  selectedProjectId !== user?.projectLocationIds?.[0] && 
                                  existingTask;
 
         if (isPickingUpSupport && existingTask) {
-          // Update the original task with the new assignees
-          await taskService.updateTask(existingTask.id, {
-            assignees: data.assignees
-          }, user?.id || 'system');
+          // เข้าร่วม Task เดิม (สร้าง held00 และรวม assignees ไปยัง Task หลัก)
+          await taskService.joinSupportTask(existingTask.id, data.taskName, data.assignees);
         } else {
           await taskService.createTask({
             taskName: data.taskName,
@@ -585,57 +609,88 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                   name="taskName"
                   control={control}
                   render={({ field }) => (
-                    <Autocomplete
-                      freeSolo={!isHelperUser || selectedProjectId === user?.projectLocationIds?.[0]}
-                      options={(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0]) ? existingTasks : []}
-                      getOptionLabel={(option) => {
-                        if (typeof option === 'string') return option;
-                        return option.taskName || '';
-                      }}
-                      loading={isFetchingTasks}
-                      onInputChange={(_, newValue) => {
-                        if (!isHelperUser || selectedProjectId === user?.projectLocationIds?.[0]) {
-                          field.onChange(newValue);
-                        }
-                      }}
-                      onChange={(_, newValue) => {
-                        if (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0]) {
-                          if (newValue && typeof newValue !== 'string') {
-                            field.onChange(newValue.taskName);
-                            // Auto-fill Work Order, Category, and Due Date
-                            setValue('workOrderCode', newValue.workOrderCode || '', { shouldValidate: true });
-                            setValue('categoryName', newValue.categoryName || '', { shouldValidate: true });
-                            if (newValue.dueDate) {
-                              setValue('dueDate', new Date(newValue.dueDate), { shouldValidate: true });
-                            }
-                          } else {
-                            field.onChange('');
-                            setValue('workOrderCode', '');
-                            setValue('categoryName', '');
-                            setValue('dueDate', null as any);
-                          }
-                        } else {
-                          field.onChange(newValue || '');
-                        }
-                      }}
-                      value={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? (existingTasks.find(t => t.taskName === field.value) || null) : field.value}
-                      disabled={isSubmitting || (isHelperUser && !selectedProjectId) || isEdit}
-                      renderInput={(params) => (
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      {isEditingTaskName ? (
                         <TextField
-                          {...params}
-                          label={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "เลือกงานที่ไปทำ (ชื่องาน) *" : "ชื่องาน *"}
+                          {...field}
+                          fullWidth
+                          label="ชื่องาน (ฝั่ง Support) *"
                           variant="filled"
-                          placeholder={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "ค้นหางานที่ยังไม่เสร็จ..." : "พิมพ์ชื่อรายงานการทำงานของคุณ"}
-                          InputProps={{ 
-                            ...params.InputProps, 
-                            disableUnderline: true,
-                          }}
+                          InputProps={{ disableUnderline: true }}
                           error={!!errors.taskName}
-                          helperText={errors.taskName?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? (isFetchingTasks ? 'กำลังโหลดรายการงาน...' : 'เฉพาะงานที่ยังไม่เสร็จ (Progress < 100%)') : '')}
-                          sx={inputStyles}
+                          helperText={errors.taskName?.message}
+                          sx={{ ...inputStyles, flex: 1 }}
+                        />
+                      ) : (
+                        <Autocomplete
+                          sx={{ flex: 1 }}
+                          freeSolo={!isHelperUser || selectedProjectId === user?.projectLocationIds?.[0]}
+                          options={(isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0]) ? existingTasks : []}
+                          getOptionLabel={(option) => {
+                            if (typeof option === 'string') return option;
+                            return option.taskName || '';
+                          }}
+                          loading={isFetchingTasks}
+                          onInputChange={(_, newValue) => {
+                            if (!isHelperUser || selectedProjectId === user?.projectLocationIds?.[0]) {
+                              field.onChange(newValue);
+                            }
+                          }}
+                          onChange={(_, newValue) => {
+                            if (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0]) {
+                              if (newValue && typeof newValue !== 'string') {
+                                setSupportOriginalTaskId(newValue.id);
+                                field.onChange(newValue.taskName);
+                                // Auto-fill Work Order, Category, and Due Date
+                                setValue('workOrderCode', newValue.workOrderCode || '', { shouldValidate: true });
+                                setValue('categoryName', newValue.categoryName || '', { shouldValidate: true });
+                                if (newValue.dueDate) {
+                                  setValue('dueDate', new Date(newValue.dueDate), { shouldValidate: true });
+                                }
+                              } else {
+                                setSupportOriginalTaskId(null);
+                                field.onChange('');
+                                setValue('workOrderCode', '');
+                                setValue('categoryName', '');
+                                setValue('dueDate', null as any);
+                              }
+                            } else {
+                              field.onChange(newValue || '');
+                            }
+                          }}
+                          value={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? (existingTasks.find(t => t.id === supportOriginalTaskId) || null) : field.value}
+                          disabled={isSubmitting || (isHelperUser && !selectedProjectId) || isEdit}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "เลือกงานที่ไปทำ (ชื่องาน) *" : "ชื่องาน *"}
+                              variant="filled"
+                              placeholder={isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? "ค้นหางานที่ยังไม่เสร็จ..." : "พิมพ์ชื่อรายงานการทำงานของคุณ"}
+                              InputProps={{ 
+                                ...params.InputProps, 
+                                disableUnderline: true,
+                              }}
+                              error={!!errors.taskName}
+                              helperText={errors.taskName?.message || (isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] ? (isFetchingTasks ? 'กำลังโหลดรายการงาน...' : 'เฉพาะงานที่ยังไม่เสร็จ (Progress < 100%)') : '')}
+                              sx={inputStyles}
+                            />
+                          )}
                         />
                       )}
-                    />
+                      
+                      {isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0] && supportOriginalTaskId && !isEdit && (
+                        <Tooltip title={isEditingTaskName ? "ยกเลิกแก้ไขชื่อ" : "แก้ไขชื่องานสำหรับฝั่ง Support"} arrow placement="top">
+                          <Button
+                            variant="outlined"
+                            onClick={() => setIsEditingTaskName(!isEditingTaskName)}
+                            sx={{ height: 52, minWidth: 100, borderRadius: 2, borderColor: '#e0e0e0', color: 'text.secondary' }}
+                            startIcon={isEditingTaskName ? <CloseIcon /> : <EditOutlinedIcon />}
+                          >
+                            {isEditingTaskName ? "ยกเลิก" : "เปลี่ยนชื่อ"}
+                          </Button>
+                        </Tooltip>
+                      )}
+                    </Box>
                   )}
                 />
               </Grid>
@@ -653,9 +708,6 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             checked={field.value}
                             onChange={(e) => {
                               field.onChange(e.target.checked);
-                              if (e.target.checked) {
-                                setValue('assignees', []);
-                              }
                             }}
                           />
                         }
@@ -685,13 +737,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         );
                       }}
                       value={
-                        (isSupportRequest && !isHelperUser && !isEdit)
-                          ? []
-                          : (field.value || []).map(val => 
-                              filteredFms.find(f => f.id === val.employeeId || f.employeeId === val.employeeId) || { id: val.employeeId, employeeId: val.employeeId, name: val.name, roleId: val.roleId }
-                            )
+                        (field.value || []).map(val => 
+                          filteredFms.find(f => f.id === val.employeeId || f.employeeId === val.employeeId) || { id: val.employeeId, employeeId: val.employeeId, name: val.name, roleId: val.roleId }
+                        )
                       }
-                      disabled={isSubmitting || (isSupportRequest && !isHelperUser)}
+                      disabled={isSubmitting}
                       renderOption={(props, option) => {
                         const { key, ...otherProps } = props as any;
                         return (
@@ -710,13 +760,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           {...params}
                           label="Assign (ผู้รับผิดชอบ) *"
                           variant="filled"
-                          error={!!errors.assignees && !isSupportRequest}
-                          helperText={
-                            isSupportRequest 
-                              ? 'รอยืนยันผู้รับงานจากทีม Support' 
-                              : (errors.assignees?.message || 'แสดงเฉพาะ FM ในโครงการของคุณ')
-                          }
-                          placeholder={isSupportRequest ? "รอทีม Support รับงาน..." : ""}
+                          error={!!errors.assignees}
+                          helperText={errors.assignees?.message || 'แสดงเฉพาะ FM ในโครงการของคุณ'}
+                          placeholder={isSupportRequest ? "เลือกผู้รับผิดชอบหลักของฝั่ง Site..." : ""}
                           InputProps={{ ...params.InputProps, disableUnderline: true }}
                           sx={inputStyles}
                         />
@@ -852,9 +898,12 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           projectId={selectedProjectId}
           workOrderCode={selectedWorkOrderCode}
           editData={editCat}
-          onSuccess={async () => {
+          onSuccess={async (newCategory) => {
             const latest = await projectConfigService.getCategories(selectedProjectId, selectedWorkOrderCode);
             setCategories(latest);
+            if (newCategory && newCategory.name) {
+              setValue('categoryName', newCategory.name);
+            }
             setOpenCatModal(false);
           }}
         />

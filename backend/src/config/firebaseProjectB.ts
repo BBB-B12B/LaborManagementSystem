@@ -9,7 +9,8 @@ let afterSaleApp: admin.app.App;
 try {
   const serviceAccount = require(serviceAccountPath);
   afterSaleApp = admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
+    storageBucket: 'after-sale-system.firebasestorage.app'
   }, 'afterSaleDb'); // ตั้งชื่อ App ที่ 2 ป้องกันการชนกับ App หลัก
   console.log('[firebaseProjectB] Initialized After-Sale Firebase connection');
 } catch (error) {
@@ -20,3 +21,4 @@ try {
 }
 
 export const afterSaleDb = afterSaleApp.firestore();
+export { afterSaleApp };

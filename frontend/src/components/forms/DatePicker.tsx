@@ -13,6 +13,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { th } from 'date-fns/locale';
 import { TextField, TextFieldProps } from '@mui/material';
 import { isAfter, isBefore, isValid } from 'date-fns';
+// @ts-ignore - The type definitions incorrectly show v3 functions, but runtime is v1
 import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 
 const BANGKOK_TZ = 'Asia/Bangkok';

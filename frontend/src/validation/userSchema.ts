@@ -24,16 +24,16 @@ const projectArray = z.preprocess(
     }
     return [];
   },
-  nonEmptyArray(z.string(), '�1,�,,�,��,؅,?�,��,�')
+  nonEmptyArray(z.string(), 'โปรดเลือกอย่างน้อย 1 โครงการ')
 );
 
 export const userCreateSchema = z.object({
-  employeeId: requiredString('�,��,��,�,��,z�,T�,�,?�,؅,��,T')
+  employeeId: requiredString('รหัสพนักงาน')
     .min(3, errorMessages.minLength(3))
     .max(20, errorMessages.maxLength(20)),
   username: username.transform((value) => value.toLowerCase()),
   password: strongPassword,
-  name: requiredString('�,S�,��1^�,--�,T�,��,��,��,?�,,�,�')
+  name: requiredString('ชื่อพนักงาน')
     .min(2, errorMessages.minLength(2))
     .max(100, errorMessages.maxLength(100)),
   fullNameEn: optionalString,
@@ -45,12 +45,12 @@ export const userCreateSchema = z.object({
 
 export const userEditSchema = z
   .object({
-    employeeId: requiredString('�,��,��,�,��,z�,T�,�,?�,؅,��,T')
+    employeeId: requiredString('รหัสพนักงาน')
       .min(3, errorMessages.minLength(3))
       .max(20, errorMessages.maxLength(20)),
     username: username.transform((value) => value.toLowerCase()),
     password: optionalString,
-    name: requiredString('�,S�,��1^�,--�,T�,��,��,��,?�,,�,�')
+    name: requiredString('ชื่อพนักงาน')
       .min(2, errorMessages.minLength(2))
       .max(100, errorMessages.maxLength(100)),
     fullNameEn: optionalString,
@@ -67,7 +67,7 @@ export const userEditSchema = z
       return true;
     },
     {
-      message: '�,��,��,�,��,o�1^�,��,T�,�1%�,-�,؅,��,�,-�,��1^�,��,؅,T�1%�,-�,� 6 �,�,�,�,-�,�,?�,c�,�',
+      message: 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร',
       path: ['password'],
     }
   );
@@ -82,16 +82,16 @@ export const userFilterSchema = z.object({
 
 export const changePasswordSchema = z
   .object({
-    currentPassword: requiredString('�,��,��,�,��,o�1^�,��,T�,>�,�,^�,^�,,�,s�,�,T'),
+    currentPassword: requiredString('รหัสผ่านปัจจุบัน'),
     newPassword: strongPassword,
-    confirmNewPassword: requiredString('�,��,��,T�,��,�,T�,��,��,�,��,o�1^�,��,T�1��,��,��1^'),
+    confirmNewPassword: requiredString('ยืนยันรหัสผ่านใหม่'),
   })
   .refine((data) => data.newPassword === data.confirmNewPassword, {
     message: errorMessages.passwordMismatch,
     path: ['confirmNewPassword'],
   })
   .refine((data) => data.currentPassword !== data.newPassword, {
-    message: '�,��,��,�,��,o�1^�,��,T�1��,��,��1^�,�1%�,-�,؅1,�,��1^�,<�1%�,3�,?�,�,s�,��,��,�,��,o�1^�,��,T�1?�,"�,'�,�',
+    message: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านปัจจุบัน',
     path: ['newPassword'],
   });
 
@@ -100,9 +100,11 @@ export type UserEditInput = z.infer<typeof userEditSchema>;
 export type UserFilterInput = z.infer<typeof userFilterSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
-export default {
+const userSchemaExports = {
   userCreateSchema,
   userEditSchema,
   userFilterSchema,
   changePasswordSchema,
 };
+
+export default userSchemaExports;

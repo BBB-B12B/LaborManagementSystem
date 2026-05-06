@@ -401,29 +401,31 @@ class DailyReportService {
    * Submit Daily Report for a specific Task (Task-Centric)
    * [F-015] workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}
    */
-  async submitTaskReport(taskId: string, data: any): Promise<any> {
-    const { data: response } = await apiClient.post(`/tasks/${taskId}/reports`, data);
+  async submitTaskReport(taskId: string, data: any, isSupportReport: boolean = false): Promise<any> {
+    const payload = { ...data, isSupportReport };
+    const { data: response } = await apiClient.post(`/tasks/${taskId}/reports`, payload);
     return response;
   }
 
   /**
    * Fetch Daily Report for a specific Task and Date
    */
-  async getTaskReport(taskId: string, dateStr: string): Promise<any> {
-    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports/${dateStr}`);
+  async getTaskReport(taskId: string, dateStr: string, isSupportReport: boolean = false): Promise<any> {
+    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports/${dateStr}?isSupportReport=${isSupportReport}`);
     return response.data;
   }
 
   /**
    * Fetch all Daily Reports for a specific Task (with cache support)
    */
-  async getAllTaskReports(taskId: string, forceRefresh: boolean = false): Promise<any[]> {
-    if (!forceRefresh && this.reportsCache[taskId]) {
-      return this.reportsCache[taskId];
+  async getAllTaskReports(taskId: string, forceRefresh: boolean = false, isSupportReport: boolean = false): Promise<any[]> {
+    const cacheKey = `${taskId}_${isSupportReport}`;
+    if (!forceRefresh && this.reportsCache[cacheKey]) {
+      return this.reportsCache[cacheKey];
     }
-    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports`);
-    this.reportsCache[taskId] = response.data || [];
-    return this.reportsCache[taskId];
+    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports?isSupportReport=${isSupportReport}`);
+    this.reportsCache[cacheKey] = response.data || [];
+    return this.reportsCache[cacheKey];
   }
 
   /**

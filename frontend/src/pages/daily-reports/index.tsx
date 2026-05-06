@@ -110,9 +110,16 @@ export default function DailyReportPage() {
 
   // Fetch existing reports for the selected task to show calendar dots
   const [reportDates, setReportDates] = useState<string[]>([]);
+  // Determine if the user is acting as support for the selected task
+  const isActingAsSupport = useMemo(() => {
+    if (!selectedTask || !user) return false;
+    const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(selectedTask.projectId) : false;
+    return isViewingCrossProject && selectedTask.isSupportRequest && selectedTask.isPickedUpBySupport;
+  }, [selectedTask, user]);
+
   const { data: taskReportsData } = useQuery({
-    queryKey: ['task-reports-all', selectedTask?.id],
-    queryFn: () => dailyReportService.getAllTaskReports(selectedTask!.id),
+    queryKey: ['task-reports-all', selectedTask?.id, isActingAsSupport],
+    queryFn: () => dailyReportService.getAllTaskReports(selectedTask!.id, false, isActingAsSupport),
     enabled: !!selectedTask,
   });
 
@@ -193,7 +200,7 @@ export default function DailyReportPage() {
         const day = String(reportDate.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
 
-        const report = await dailyReportService.getTaskReport(selectedTask.id, dateStr);
+        const report = await dailyReportService.getTaskReport(selectedTask.id, dateStr, isActingAsSupport);
 
         if (report) {
           setProgress(report.progress || 0);
@@ -340,9 +347,12 @@ export default function DailyReportPage() {
           return isNotCompleted && isActive;
         }
 
-        // 2. กรองตาม Assignees
+        // 2. กรองตาม Assignees และ Support Assignees
         const assignees = Array.isArray(t.assignees) ? t.assignees : [];
-        const isAssigned = assignees.some((a: any) => {
+        const supportAssignees = Array.isArray(t.supportAssignees) ? t.supportAssignees : [];
+        const allAssignees = [...assignees, ...supportAssignees];
+        
+        const isAssigned = allAssignees.some((a: any) => {
           const aEmpId = String(a.employeeId || '').toLowerCase().trim();
           const aId = String(a.id || '').toLowerCase().trim();
           
@@ -396,7 +406,11 @@ export default function DailyReportPage() {
   const handleSelectTask = (task: any) => {
     setSelectedTask(task);
     setIsSidebarOpen(false);
-    setProgress(task.dailyProgress || 0);
+    
+    // Check if acting as support to set correct initial progress
+    const isViewingCrossProject = user?.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+    const isSupport = isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
+    setProgress(isSupport && task.supportDailyProgress !== undefined ? task.supportDailyProgress : (task.dailyProgress || 0));
     setNote('');
     setSelectedWorkers([]);
     setSitePhotos([]);
@@ -681,7 +695,7 @@ export default function DailyReportPage() {
 
       // 4. Submit to Task Sub-collection
       // selectedTask.id contains woId__catId__taskId
-      await dailyReportService.submitTaskReport(selectedTask.id, payload);
+      await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
       
       enqueueSnackbar('บันทึกรายงานประจำวันลงใน Task สำเร็จ', { variant: 'success' });
       
@@ -775,7 +789,7 @@ export default function DailyReportPage() {
                           <Chip label={selectedTask.taskId} sx={{ fontWeight: 900, borderRadius: '6px', bgcolor: '#1e293b', color: 'white' }} />
                           <Box>
                             <Typography variant="body2" fontWeight={800} color="primary" sx={{ mb: 0.5 }}>หมวดงาน : {selectedTask.categoryName}</Typography>
-                            <Typography variant="h6" fontWeight={900} color="#1e293b" sx={{ lineHeight: 1 }}>{selectedTask.taskName}</Typography>
+                            <Typography variant="h6" fontWeight={900} color="#1e293b" sx={{ lineHeight: 1 }}>{isActingAsSupport && selectedTask.supportTaskName ? selectedTask.supportTaskName : selectedTask.taskName}</Typography>
                           </Box>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -791,9 +805,9 @@ export default function DailyReportPage() {
                               fontWeight: 800,
                               position: 'relative',
                               border: '3px solid',
-                              borderColor: selectedTask.dailyProgress > 0 ? '#4caf50' : 'divider',
-                              background: selectedTask.dailyProgress > 0 
-                                ? `conic-gradient(#4caf50 ${selectedTask.dailyProgress * 3.6}deg, transparent 0deg)` 
+                              borderColor: (isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress) > 0 ? '#4caf50' : 'divider',
+                              background: (isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress) > 0 
+                                ? `conic-gradient(#4caf50 ${(isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress) * 3.6}deg, transparent 0deg)` 
                                 : 'transparent',
                               '&::after': {
                                 content: '""',
@@ -806,7 +820,7 @@ export default function DailyReportPage() {
                               }
                             }}
                           >
-                            <span style={{ zIndex: 2 }}>{selectedTask.dailyProgress}%</span>
+                            <span style={{ zIndex: 2 }}>{isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress}%</span>
                           </Box>
                           <DatePicker
                             value={reportDate} 
@@ -1041,6 +1055,17 @@ export default function DailyReportPage() {
 }
 
 function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean, onClick: () => void }) {
+  const { user } = useAuthStore();
+  
+  const isActingAsSupport = useMemo(() => {
+    if (!task || !user) return false;
+    const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+    return isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
+  }, [task, user]);
+
+  const displayTaskName = isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName;
+  const displayProgress = isActingAsSupport && task.supportDailyProgress !== undefined ? task.supportDailyProgress : task.dailyProgress;
+
   return (
     <Box 
       onClick={onClick} 
@@ -1069,9 +1094,9 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
       <Box sx={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
         <svg height="44" width="44" style={{ transform: 'rotate(-90deg)' }}>
           <circle cx="22" cy="22" r="19" stroke="#f1f5f9" strokeWidth="3" fill="none" />
-          <circle cx="22" cy="22" r="19" stroke="#10b981" strokeWidth="3" fill="none" strokeDasharray={2 * Math.PI * 19} strokeDashoffset={(2 * Math.PI * 19) - (task.dailyProgress / 100) * (2 * Math.PI * 19)} strokeLinecap="round" />
+          <circle cx="22" cy="22" r="19" stroke="#10b981" strokeWidth="3" fill="none" strokeDasharray={2 * Math.PI * 19} strokeDashoffset={(2 * Math.PI * 19) - ((displayProgress || 0) / 100) * (2 * Math.PI * 19)} strokeLinecap="round" />
         </svg>
-        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Typography variant="caption" fontWeight={900} fontSize="0.65rem" color="#10b981">{task.dailyProgress}%</Typography></Box>
+        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Typography variant="caption" fontWeight={900} fontSize="0.65rem" color="#10b981">{displayProgress || 0}%</Typography></Box>
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.2 }}>
@@ -1080,7 +1105,7 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
             <Chip label="Support" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#fef08a', color: '#854d0e', borderRadius: '4px' }} />
           )}
         </Box>
-        <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>{task.taskName}</Typography>
+        <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>{displayTaskName}</Typography>
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.3, fontWeight: 600 }}>{getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}</Typography>
         <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>Duedate : {format(new Date(task.dueDate), 'dd/MM/yyyy')}</Typography>
       </Box>

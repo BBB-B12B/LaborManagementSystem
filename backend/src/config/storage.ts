@@ -1,36 +1,6 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
-import path from 'path';
-import { promises as fs } from 'fs';
-import { config } from './index';
 import { logger } from '../utils/logger';
-
-const {
-  endpoint,
-  accessKeyId,
-  secretAccessKey,
-  bucketName,
-  publicUrl,
-} = config.cloudflareR2;
-
-const isS3Configured = Boolean(endpoint && accessKeyId && secretAccessKey && bucketName);
-
-const s3Client = isS3Configured
-  ? new S3Client({
-      region: 'auto',
-      endpoint,
-      credentials: {
-        accessKeyId: accessKeyId as string,
-        secretAccessKey: secretAccessKey as string,
-      },
-    })
-  : null;
-
-if (!isS3Configured) {
-  logger.warn(
-    'Cloudflare R2 credentials are not fully configured. Falling back to local storage for uploads.'
-  );
-}
+import { afterSaleApp } from './firebaseProjectB';
 
 function parseDataUrl(dataUrl: string) {
   const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
@@ -46,37 +16,9 @@ function parseDataUrl(dataUrl: string) {
   return { buffer, mimeType, extension };
 }
 
-function buildPublicUrl(key: string): string {
-  if (publicUrl) {
-    const trimmed = publicUrl.endsWith('/') ? publicUrl.slice(0, -1) : publicUrl;
-    return `${trimmed}/${key}`;
-  }
-
-  if (!endpoint || !bucketName) {
-    return key;
-  }
-
-  try {
-    const endpointUrl = new URL(endpoint);
-    return `${endpointUrl.protocol}//${bucketName}.${endpointUrl.host}/${key}`;
-  } catch (error) {
-    logger.warn('Unable to construct Cloudflare R2 public URL. Returning object key.', { error });
-    return key;
-  }
-}
-
-async function saveLocally(buffer: Buffer, folder: string, extension: string): Promise<string> {
-  const uploadsRoot = path.join(process.cwd(), 'uploads');
-  const safeFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, '-');
-  const targetDir = path.join(uploadsRoot, safeFolder);
-
-  await fs.mkdir(targetDir, { recursive: true });
-
-  const filename = `${Date.now()}-${randomUUID()}.${extension}`;
-  const fullPath = path.join(targetDir, filename);
-  await fs.writeFile(fullPath, buffer);
-
-  return path.join('/uploads', safeFolder, filename).replace(/\\/g, '/');
+function buildPublicUrl(bucketName: string, key: string): string {
+  // Use standard Firebase Storage public URL format
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(key)}?alt=media`;
 }
 
 export const storage = {
@@ -85,27 +27,19 @@ export const storage = {
     const sanitizedFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, '-');
     const key = `${sanitizedFolder.replace(/\/+$/g, '')}/${randomUUID()}.${extension}`;
 
-    if (s3Client && bucketName) {
-      try {
-        await s3Client.send(
-          new PutObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-            Body: buffer,
-            ContentType: mimeType,
-          })
-        );
+    try {
+      const bucket = afterSaleApp.storage().bucket();
+      const file = bucket.file(key);
+      
+      await file.save(buffer, {
+        metadata: { contentType: mimeType }
+      });
 
-        return buildPublicUrl(key);
-      } catch (error) {
-        logger.error(
-          'Failed to upload file to Cloudflare R2. Falling back to local storage.',
-          { error }
-        );
-      }
+      return buildPublicUrl(bucket.name, key);
+    } catch (error) {
+      logger.error('Failed to upload file to After-Sale Firebase Storage', { error });
+      throw error;
     }
-
-    return saveLocally(buffer, sanitizedFolder, extension);
   },
 
   async uploadBuffer(buffer: Buffer, folder: string, filename: string, mimeType: string): Promise<string> {
@@ -113,27 +47,18 @@ export const storage = {
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '-');
     const key = `${sanitizedFolder.replace(/\/+$/g, '')}/${Date.now()}-${sanitizedFilename}`;
 
-    if (s3Client && bucketName) {
-      try {
-        await s3Client.send(
-          new PutObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-            Body: buffer,
-            ContentType: mimeType,
-          })
-        );
+    try {
+      const bucket = afterSaleApp.storage().bucket();
+      const file = bucket.file(key);
 
-        return buildPublicUrl(key);
-      } catch (error) {
-        logger.error(
-          'Failed to upload buffer to Cloudflare R2. Falling back to local storage.',
-          { error }
-        );
-      }
+      await file.save(buffer, {
+        metadata: { contentType: mimeType }
+      });
+
+      return buildPublicUrl(bucket.name, key);
+    } catch (error) {
+      logger.error('Failed to upload buffer to After-Sale Firebase Storage', { error });
+      throw error;
     }
-
-    const extension = path.extname(filename).slice(1) || 'bin';
-    return saveLocally(buffer, sanitizedFolder, extension);
   },
 };

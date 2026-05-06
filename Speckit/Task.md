@@ -131,6 +131,11 @@
 ### 🚀 Phase 2.8: Task UI Refinement (Progress Indicator)
 *   **Status**: ✅ Completed
 *   [x] **T-822**: [Frontend] Implement Progress Bar in `TaskCard.tsx` (using `dailyProgress`).
+    - **Error Logs**:
+      - **[T-822-E1-1]**: Progress Bar shows 0% for Site Team tasks created by Warehouse
+        1. **Root Cause**: `TaskCard.tsx` unconditionally used `task.supportDailyProgress` if the user's role was a Support User (e.g. WH), even for normal non-support tasks they created.
+        2. **Action**: Replaced the direct `isHelperUser` check with `isActingAsSupport` (verifying `task.isSupportRequest` and `isPickedUpBySupport`) before switching to `supportDailyProgress`.
+        3. **Status**: Fixed
 *   [x] **T-823**: [Frontend] Style Progress Bar with premium aesthetics and percentage label.
 
 ### 🔄 Phase 2.9: Task Revision & Reject Workflow (F-016)
@@ -158,3 +163,9 @@
 *   [x] **T-912**: [Frontend] Update Daily Report submission payload to separate `labor` and `leave`.
 *   [x] **T-913**: [Backend] Process `leave` array in `TaskService.submitDailyReport` and store medical certificate URLs.
 *   [x] **T-914**: [Backend] Ensure `leave` history is tracked in `editHistory` similar to `labor`.
+
+### 🚀 Phase 3.2: UX Audit & Cache Flow Improvement
+*   **Status**: ✅ Completed
+*   [x] **T-920**: [Frontend] Fix `TaskCacheStore` invalidate method to retain data for seamless Silent Refresh.
+*   [x] **T-921**: [Frontend] Ensure `TaskCreateModal` properly resets React-Hook-Form state when opening in "Add New" mode.
+*   [x] **T-922**: [Frontend] Auto-refresh WorkOrder and Category dropdowns upon successful child modal creation.

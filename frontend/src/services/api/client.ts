@@ -189,40 +189,40 @@ apiClient.interceptors.response.use(
 export const api = {
   get: async <T = any>(url: string, params?: Record<string, any>): Promise<T> => {
     const response = await apiClient.get<APIResponse<T>>(url, { params });
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   post: async <T = any>(url: string, data?: any): Promise<T> => {
     const response = await apiClient.post<APIResponse<T>>(url, data);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   put: async <T = any>(url: string, data?: any): Promise<T> => {
     const response = await apiClient.put<APIResponse<T>>(url, data);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   delete: async <T = any>(url: string): Promise<T> => {
     const response = await apiClient.delete<APIResponse<T>>(url);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   patch: async <T = any>(url: string, data?: any): Promise<T> => {
     const response = await apiClient.patch<APIResponse<T>>(url, data);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
@@ -231,8 +231,8 @@ export const api = {
     const response = await apiClient.post<APIResponse<T>>(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Upload failed');
   },

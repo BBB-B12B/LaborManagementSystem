@@ -30,6 +30,10 @@ export interface Task {
   attachmentsCount: number;
   isActive: boolean;
   isSupportRequest?: boolean;
+  isPickedUpBySupport?: boolean;
+  supportTaskName?: string;
+  supportDailyProgress?: number;
+  supportAssignees?: TaskAssignee[];
   createdAt: string;
   updatedAt: string;
 }
@@ -94,5 +98,12 @@ export const taskService = {
    */
   rejectTask: async (id: string, revisionName: string, assignees: TaskAssignee[]): Promise<void> => {
     await api.post(`/tasks/${id}/reject`, { revisionName, assignees });
+  },
+
+  /**
+   * Support team joins an existing task
+   */
+  joinSupportTask: async (id: string, supportTaskName: string, assignees: TaskAssignee[]): Promise<void> => {
+    await api.post(`/tasks/${id}/support`, { supportTaskName, assignees });
   },
 };

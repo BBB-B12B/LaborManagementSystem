@@ -37,6 +37,10 @@ export interface Task {
   attachmentsCount: number;
   isActive: boolean;
   isSupportRequest?: boolean;
+  isPickedUpBySupport?: boolean; // [NEW] Flag if support team has joined
+  supportTaskName?: string; // [NEW] Custom task name for Support
+  supportDailyProgress?: number; // [NEW] Separate progress for Support
+  supportAssignees?: TaskAssignee[]; // [NEW] Support team assignees
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -74,6 +78,10 @@ export interface UpdateTaskInput {
   revisionName?: string;
   attachmentsCount?: number;
   isActive?: boolean;
+  isPickedUpBySupport?: boolean;
+  supportTaskName?: string;
+  supportDailyProgress?: number;
+  supportAssignees?: TaskAssignee[];
 }
 
 export const taskConverter = {
@@ -99,6 +107,10 @@ export const taskConverter = {
       attachmentsCount: task.attachmentsCount || 0,
       isActive: task.isActive,
       isSupportRequest: task.isSupportRequest || false,
+      isPickedUpBySupport: task.isPickedUpBySupport || false,
+      supportTaskName: task.supportTaskName || null,
+      supportDailyProgress: task.supportDailyProgress || 0,
+      supportAssignees: task.supportAssignees || [],
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       createdBy: task.createdBy,
@@ -137,6 +149,10 @@ export const taskConverter = {
       attachmentsCount: data.attachmentsCount || 0,
       isActive: data.isActive !== false,
       isSupportRequest: data.isSupportRequest || false,
+      isPickedUpBySupport: data.isPickedUpBySupport || false,
+      supportTaskName: data.supportTaskName || '',
+      supportDailyProgress: data.supportDailyProgress || 0,
+      supportAssignees: data.supportAssignees || [],
       createdAt: safeDate(data.createdAt),
       updatedAt: safeDate(data.updatedAt),
       createdBy: data.createdBy || '',

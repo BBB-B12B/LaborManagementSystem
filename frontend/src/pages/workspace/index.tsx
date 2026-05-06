@@ -50,7 +50,7 @@ export default function WorkspacePage() {
   // Track the user ID to detect user-switch and force refetch
   const prevUserIdRef = useRef<string | null>(null);
 
-  /** à¸à¸£à¸­à¸‡ Task à¸•à¸²à¸¡ Role à¸‚à¸­à¸‡ User */
+  /** กรอง Task ตาม Role ของ User */
   const filterTasksByRole = useCallback(
     (allTasks: Task[]): Task[] => {
       const role = String(user?.roleCode || user?.roleId || '').toUpperCase();
@@ -64,12 +64,13 @@ export default function WorkspacePage() {
         // 1. งานที่อยู่ในโครงการที่เราสังกัด
         const isMyProject = userProjectIds.length === 0 || userProjectIds.includes(t.projectId);
         
-        // 2. งานที่เราได้รับมอบหมาย (Assignee)
-        const isAssignedToMe = t.assignees?.some((a: any) => a.employeeId === employeeId || a.employeeId === user?.id || a.id === user?.id || a.id === employeeId);
+        // 2. งานที่เราได้รับมอบหมาย (Assignee หรือ SupportAssignee)
+        const isAssignedToMe = 
+          t.assignees?.some((a: any) => a.employeeId === employeeId || a.employeeId === user?.id) ||
+          t.supportAssignees?.some((sa: any) => sa.employeeId === employeeId || sa.employeeId === user?.id);
 
-        // 3. งาน Support ที่ทีม Support รับผิดชอบ
-        const isHelperUser = userProjectIds.some(pid => pid === 'P002' || pid === 'P004');
-        const isSupportForMe = isHelperUser && t.isSupportRequest === true;
+        // 3. งาน Support ที่มีคนในทีมมารับไปแล้ว (เราดูในฐานะ Support Team ข้ามโครงการ)
+        const isSupportForMe = !isMyProject && t.isSupportRequest === true && t.isPickedUpBySupport === true;
 
         return isMyProject || isAssignedToMe || isSupportForMe;
       });
@@ -319,7 +320,7 @@ export default function WorkspacePage() {
             const columnTasks = filteredTasks.filter((t) => {
               if (column.id === 'in-progress') return t.status === 'in-progress' || t.status === 'rework';
               return t.status === column.id;
-            });
+            }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
             return (
               <Box

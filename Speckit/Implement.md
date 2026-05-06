@@ -344,3 +344,15 @@ Leave Tracking separates work hours (`labor`) from leave hours (`leave`) strictl
 2. **Leave Times Selection**: Allow specific time range selection (Start - End) using TimePicker, matching standard OT time selection logic.
 3. **Upload UI**: Provide medical certificate upload button per worker on leave.
 4. **Payload Splitting**: On submit, separate mixed worker state into distinct `labor` and `leave` arrays.
+
+---
+
+### 🛣️ [F-020] Cross-Site Collaborative Workflow (Support Request) — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban (Site)` -> สร้างงานใหม่ติ๊ก `isSupportRequest` -> <br> `Workspace Kanban (Support)` -> กด `Add New` -> เลือกรายการจาก Dropdown `existingTasks` -> ระบุชื่อและมอบหมาย -> Submit |
+| **API Contract** | `POST /api/tasks/:id/support` <br> Payload: `{ supportTaskName, assignees }` |
+| **Database Schema** | **1. Task Document (Container):** งานยังคงอิงอ้างอิงกับ `taskId` ฝั่ง Site เสมอ (Composite ID: `woId__catId__taskId`) <br> **2. Support Data Flags:** เพิ่มฟิลด์ `isSupportRequest`, `isPickedUpBySupport`, `supportTaskName`, `supportDailyProgress` และ `supportAssignees` แยกต่างหากจาก `assignees` ปกติ<br> **3. Held Document (Subcollection):** เก็บ `held00` ไว้ใต้ `held/{heldId}` เพื่อแยก Version Control ของฝั่ง Support ออกจาก Rev ของ Site |
+| **Backend Logic** | 1. ค้นหาเอกสารผ่าน `.includes('__')` สำหรับ Composite Path Navigation <br> 2. `runTransaction` ทำงานแบบ Atomic อ่านข้อมูลจาก `revisions/rev00` และคัดลอกมาสร้างเป็น `held/held00` <br> 3. แก้ไข `supportAssignees` กลับไปที่เอกสารหลัก เพื่ออำนวยความสะดวกในการกรองผล |
+| **Frontend UI/UX** | 1. **Data Isolation:** การแสดงผลในการ์ดงานจะแยกชื่อ Assignees อย่างเด็ดขาด (`site` เห็นเฉพาะของตัวเอง, `support` เห็นเฉพาะ `supportAssignees`) <br> 2. **Task Board Rule:** งาน Support จะไม่ปรากฏใน Kanban Board จนกว่า `isPickedUpBySupport` จะเป็น `true` |

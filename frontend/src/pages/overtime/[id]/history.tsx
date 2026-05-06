@@ -23,7 +23,7 @@ import { Layout, ProtectedRoute } from '@/components/layout';
 import { LoadingSpinner } from '@/components/common';
 import { overtimeService } from '@/services/overtimeService';
 import { getOTPeriodLabel } from '@/validation/overtimeSchema';
-import { formatDateTime } from '@/utils/dateUtils';
+import { formatDateThai } from '@/utils/dateUtils';
 
 /**
  * Overtime Edit History Page
@@ -129,7 +129,7 @@ export default function OvertimeHistoryPage() {
             </Typography>
             {record && (
               <Typography variant="body2" color="text.secondary">
-                OT: {record.workDescription} | {formatDateTime(record.reportDate, 'dd/MM/yyyy')} | {getOTPeriodLabel(record.otPeriod)}
+                OT: {record.workDescription} | {formatDateThai(record.reportDate, 'dd/MM/yyyy')} | {getOTPeriodLabel(record.otPeriod)}
               </Typography>
             )}
           </Box>
@@ -168,7 +168,7 @@ export default function OvertimeHistoryPage() {
                             </Typography>
                           </Box>
                           <Chip
-                            label={formatDateTime(entry.editedAt, 'dd/MM/yyyy HH:mm')}
+                            label={formatDateThai(entry.editedAt, 'dd/MM/yyyy HH:mm')}
                             size="small"
                             variant="outlined"
                           />

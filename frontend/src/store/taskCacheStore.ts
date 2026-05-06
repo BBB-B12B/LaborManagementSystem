@@ -9,7 +9,7 @@
 import { create } from 'zustand';
 import { type Task } from '@/services/taskService';
 
-interface TaskCacheState {
+export interface TaskCacheState {
   // ─── Cache Data ───────────────────────────────────────────────
   /** รายการ Task ที่ Cache ไว้ */
   tasks: Task[];
@@ -60,7 +60,6 @@ export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
 
   invalidate: () =>
     set({
-      tasks: [],
       lastFetchedAt: null,
       error: null,
     }),

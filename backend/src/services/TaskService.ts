@@ -263,6 +263,88 @@ export class TaskService {
   }
 
   /**
+   * ทีม Support เข้าร่วม Task เดิมของ Site
+   * - สะสม Assignee ใน Task หลัก
+   * - สร้าง collection `held` และ document `held00`
+   */
+  async joinSupportTask(id: string, supportTaskName: string, supportAssignees: any[], updatedBy: string): Promise<void> {
+    console.log(`[TaskService] joinSupportTask called for id: ${id}`);
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      console.log(`[TaskService] Resolved taskRef using composite ID: ${taskRef.path}`);
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) {
+        console.log(`[TaskService] Task not found by taskId: ${id}`);
+        throw new AppError('Task not found by taskId', 404);
+      }
+      taskRef = querySnapshot.docs[0].ref;
+      console.log(`[TaskService] Resolved taskRef using query: ${taskRef.path}`);
+    }
+
+    try {
+      await afterSaleDb.runTransaction(async (transaction) => {
+        console.log(`[TaskService] Starting transaction for ${taskRef.path}`);
+        // 1. อ่านข้อมูล Task ปัจจุบัน
+        const doc = await transaction.get(taskRef);
+        console.log(`[TaskService] Fetched task doc, exists: ${doc.exists}`);
+        if (!doc.exists) throw new AppError('Task not found', 404);
+      const taskData = doc.data() as Task;
+
+      if (taskData.isPickedUpBySupport) {
+        throw new AppError('Task นี้มีทีม Support รับไปแล้ว', 400);
+      }
+
+      // 2. อ่านข้อมูล rev00 เพื่อคัดลอก Field
+      const rev00Ref = taskRef.collection('revisions').doc('rev00');
+      const rev00Doc = await transaction.get(rev00Ref);
+      const rev00Data = rev00Doc.exists ? rev00Doc.data() : {};
+
+      // 4. อัปเดต Task หลักโดยเก็บ supportAssignees แยกต่างหาก ไม่เอาไปรวมใน assignees ของ Site
+      // Note: We don't have direct access to user's projectLocationIds here easily without querying, 
+      // but we can pass it from the frontend or just use the first assignee's ID if we must.
+      // Wait, let's just let the frontend send it, OR we don't need it if we check employeeId!
+      
+      const now = new Date();
+      
+      const taskUpdates = {
+        supportAssignees: supportAssignees,
+        isPickedUpBySupport: true,
+        supportTaskName: supportTaskName,
+        supportDailyProgress: 0,
+        updatedAt: now,
+        updatedBy: updatedBy,
+      };
+      transaction.update(taskRef, taskUpdates);
+
+      // 5. สร้างเอกสาร helpXX ให้ตรงกับ currentRevision
+      const currentRev = taskData.currentRevision || 'rev00';
+      const revNum = currentRev.replace('rev', '');
+      const helpId = `help${revNum}`;
+      const helpRef = taskRef.collection('help').doc(helpId);
+      transaction.set(helpRef, {
+        ...rev00Data,
+        revisionId: helpId,
+        revisionName: supportTaskName,
+        taskName: supportTaskName, // Override original name for help document
+        assignees: supportAssignees, // เฉพาะ FM ของทีม Support
+        createdAt: now,
+        createdBy: updatedBy,
+      });
+
+      // 6. เก็บ Audit Trail
+      await this.recordHistory(taskRef, 'support_join', taskData, taskUpdates, updatedBy);
+      console.log(`[TaskService] joinSupportTask transaction successfully completed`);
+    });
+    } catch (error: any) {
+      console.error(`[TaskService] Error in joinSupportTask:`, error);
+      throw new AppError(error.message, error.statusCode || 500);
+    }
+  }
+
+  /**
    * ดึงรายการ Tasks ทั้งหมด (กรองตาม Role)
    */
   async getTasks(filters?: { projectId?: string; assigneeId?: string }): Promise<Task[]> {
@@ -285,10 +367,11 @@ export class TaskService {
 
     // กรอง assigneeId ใน Memory
     if (filters?.assigneeId) {
-      tasks = tasks.filter(task => 
-        task.assignees.some(assignee => assignee.employeeId === filters.assigneeId) ||
-        task.isSupportRequest === true
-      );
+      tasks = tasks.filter(task => {
+        const matchAssignee = task.assignees?.some((a: any) => a.employeeId === filters.assigneeId || a.id === filters.assigneeId);
+        const matchSupport = task.supportAssignees?.some((a: any) => a.employeeId === filters.assigneeId || a.id === filters.assigneeId);
+        return matchAssignee || matchSupport || task.isSupportRequest === true;
+      });
     }
 
     return tasks;
@@ -442,7 +525,7 @@ export class TaskService {
    * บันทึกรายงานการทำงานรายวันลงในตัว Task โดยตรง (Task-Centric)
    * Path: workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}
    */
-  async submitDailyReport(id: string, reportData: any, updatedBy: string): Promise<void> {
+  async submitDailyReport(id: string, reportData: any, updatedBy: string, isSupportReport: boolean = false): Promise<void> {
     console.log(`[TaskService] Submitting daily report for task: ${id}`, reportData);
     
     let taskRef: FirebaseFirestore.DocumentReference;
@@ -466,8 +549,14 @@ export class TaskService {
     if (!taskDocForRev.exists) throw new AppError('Task not found', 404);
     const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
 
-    // บันทึกรายงานภายใต้ Revision
-    const dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
+    // บันทึกรายงานภายใต้ Revision หรือ Help
+    let dailyReportRef: FirebaseFirestore.DocumentReference;
+    if (isSupportReport) {
+      const helpId = currentRev.replace('rev', 'help');
+      dailyReportRef = taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr);
+    } else {
+      dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
+    }
 
     await afterSaleDb.runTransaction(async (transaction) => {
       // 1. ALL READS
@@ -529,12 +618,20 @@ export class TaskService {
       if (progress > 0 && progress < 100) newStatus = 'in-progress';
       if (progress >= 100) newStatus = 'for-checking';
 
-      transaction.update(taskRef, {
-        dailyProgress: progress,
-        status: newStatus,
-        updatedAt: now,
-        updatedBy: updatedBy
-      });
+      if (isSupportReport) {
+        transaction.update(taskRef, {
+          supportDailyProgress: progress,
+          updatedAt: now,
+          updatedBy: updatedBy
+        });
+      } else {
+        transaction.update(taskRef, {
+          dailyProgress: progress,
+          status: newStatus,
+          updatedAt: now,
+          updatedBy: updatedBy
+        });
+      }
 
       // บันทึก History
       const oldData = taskDoc.data();
@@ -548,19 +645,15 @@ export class TaskService {
     // Trigger After-Sale System Webhook (F-014 Sync)
     // -------------------------------------------------------------
     try {
-      const pathSegments = taskRef.path.split('/');
-      const woId = pathSegments[1];
-      const catId = pathSegments[3];
-      const tId = pathSegments[5];
+      const reportPath = dailyReportRef.path;
 
       await axios.post('https://asia-southeast1-after-sale-system.cloudfunctions.net/syncDailyReport', {
-        workOrderId: woId,
-        categoryId: catId,
-        taskId: tId,
-        revisionId: currentRev, // ส่ง Revision ให้ฝั่งโน้นด้วย เพราะ Path เปลี่ยนไปแล้ว
+        reportPath: reportPath,
         reportDate: dateStr
+      }, {
+        headers: { 'Content-Type': 'application/json' }
       });
-      console.log(`[TaskService] Triggered After-Sale Sync Successfully for ${dateStr} (Rev: ${currentRev})!`);
+      console.log(`[TaskService] Triggered After-Sale Sync Successfully for ${reportPath}!`);
     } catch (error: any) {
       console.error("[TaskService] Failed to trigger After-Sale sync:", error.message);
     }
@@ -569,7 +662,7 @@ export class TaskService {
   /**
    * ดึงข้อมูลรายงานประจำวันของ Task ตามวันที่ระบุ
    */
-  async getDailyReport(id: string, dateStr: string): Promise<any> {
+  async getDailyReport(id: string, dateStr: string, isSupportReport: boolean = false): Promise<any> {
     let taskRef: FirebaseFirestore.DocumentReference;
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
@@ -584,7 +677,14 @@ export class TaskService {
     if (!taskDocForRev.exists) return null;
     const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
 
-    const reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
+    let reportDoc;
+    if (isSupportReport) {
+      const helpId = currentRev.replace('rev', 'help');
+      reportDoc = await taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr).get();
+    } else {
+      reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
+    }
+    
     if (!reportDoc.exists) return null;
 
     return reportDoc.data();
@@ -592,7 +692,7 @@ export class TaskService {
   /**
    * ดึงข้อมูลรายงานประจำวันทั้งหมดของ Task
    */
-  async getAllDailyReports(id: string): Promise<any[]> {
+  async getAllDailyReports(id: string, isSupportReport: boolean = false): Promise<any[]> {
     let taskRef: FirebaseFirestore.DocumentReference;
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
@@ -607,7 +707,14 @@ export class TaskService {
     if (!taskDocForRev.exists) return [];
     const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
 
-    const reportsSnapshot = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').get();
+    let reportsSnapshot;
+    if (isSupportReport) {
+      const helpId = currentRev.replace('rev', 'help');
+      reportsSnapshot = await taskRef.collection('help').doc(helpId).collection('dailyReports').get();
+    } else {
+      reportsSnapshot = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').get();
+    }
+    
     if (reportsSnapshot.empty) return [];
 
     return reportsSnapshot.docs.map(doc => doc.data());

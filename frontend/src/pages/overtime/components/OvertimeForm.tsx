@@ -450,14 +450,15 @@ export const OvertimeForm: React.FC<OvertimeFormProps> = ({
                   name="imageUrls"
                   control={control}
                   render={({ field }) => (
-                    <FileUpload
-                      {...field}
-                      label="อัปโหลดรูปภาพ (ถ้ามี)"
-                      accept="image/*"
-                      multiple
-                      maxFiles={5}
-                      helperText="อัปโหลดรูปภาพได้สูงสุด 5 รูป (ขนาดไม่เกิน 5 MB ต่อรูป)"
-                    />
+                      <FileUpload
+                        {...field}
+                        label="อัปโหลดรูปภาพ (ถ้ามี)"
+                        accept="image/*"
+                        // @ts-expect-error FileUpload does not support multiple yet
+                        multiple
+                        maxFiles={5}
+                        helperText="อัปโหลดรูปภาพได้สูงสุด 5 รูป (ขนาดไม่เกิน 5 MB ต่อรูป)"
+                      />
                   )}
                 />
               </Grid>

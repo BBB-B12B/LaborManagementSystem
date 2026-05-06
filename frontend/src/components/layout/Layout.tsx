@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button } from '@mui/material';
+import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button, Backdrop, CircularProgress } from '@mui/material';
 import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,8 @@ import { useSnackbar } from 'notistack';
 import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';
 import { useAuthStore } from '@/store/authStore';
 import { dailyReportService } from '@/services/dailyReportService';
+
+import { useTaskCacheStore } from '@/store/taskCacheStore';
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -22,6 +24,7 @@ const Topbar: React.FC = () => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { user, logout } = useAuthStore();
+  const { isLoading } = useTaskCacheStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleGlobalSync = () => {
@@ -98,6 +101,7 @@ const Topbar: React.FC = () => {
           </Stack>
           <IconButton
             onClick={handleGlobalSync}
+            disabled={isLoading}
             sx={{
               width: 38,
               height: 38,
@@ -105,9 +109,20 @@ const Topbar: React.FC = () => {
               color: '#1c1e2b',
               border: '1px solid #e5e7ed',
               '&:hover': { bgcolor: '#f0f1f5' },
+              '&.Mui-disabled': { opacity: 0.7 }
             }}
           >
-            <SyncIcon fontSize="small" sx={{ color: '#64748b' }} />
+            <SyncIcon 
+              fontSize="small" 
+              sx={{ 
+                color: '#64748b',
+                animation: isLoading ? 'spin 1s linear infinite' : 'none',
+                '@keyframes spin': {
+                  '0%': { transform: 'rotate(0deg)' },
+                  '100%': { transform: 'rotate(-360deg)' },
+                }
+              }} 
+            />
           </IconButton>
           <IconButton
             onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -161,8 +176,17 @@ export const Layout: React.FC<LayoutProps> = ({
   disablePadding = false,
   disableTopGap = false,
 }) => {
+  const { isLoading } = useTaskCacheStore();
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
+      <Backdrop
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1000 }}
+        open={isLoading}
+      >
+        <CircularProgress color="inherit" />
+      </Backdrop>
+
       <Navbar />
 
       <Box
