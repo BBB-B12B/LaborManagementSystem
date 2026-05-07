@@ -9,7 +9,7 @@
  * - Conservative Rule (min hours) แสดงเป็น suggestedHours — UI hint เท่านั้น
  */
 
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp, FieldValue, Filter } from 'firebase-admin/firestore';
 import {
   ReconciliationRecord,
   ReconciliationStatus,
@@ -25,6 +25,7 @@ import {
   toTimesheetSummary,
 } from '../external/ProjectBDailyReportService';
 import { scanDataService } from '../scanData/ScanDataService';
+import { dailyContractorService } from '../dailyContractor/DailyContractorService';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -204,6 +205,7 @@ export class ReconciliationService {
         statusHistory: [historyEntry],
         createdAt: now,
         updatedAt: now,
+        hasLeave: (isLeaveCalculated ?? isLeave) === true,
       };
     }
 
@@ -232,6 +234,7 @@ export class ReconciliationService {
 
     const updates: Partial<ReconciliationRecord> = {
       projectLocationId: input.projectLocationId,
+      employeeName: input.employeeName ?? existing.employeeName,
       // Daily-report side
       dailyReportHours:       input.dailyReportHours      ?? existing.dailyReportHours,
       timesheetNormalHours:   input.timesheetNormalHours  ?? existing.timesheetNormalHours,
@@ -252,6 +255,7 @@ export class ReconciliationService {
       suggestedHours:         classified.suggestedHours,
       status:                 newStatus,
       updatedAt:              now,
+      hasLeave:               effectiveIsLeave === true,
     };
 
     if (input.isHoliday !== undefined) updates.isHoliday = input.isHoliday;
@@ -259,6 +263,7 @@ export class ReconciliationService {
 
     if (input.leaveHours !== undefined) updates.leaveHours = input.leaveHours;
     if (input.leaveEntries !== undefined) updates.leaveEntries = input.leaveEntries;
+    if (input.medCertFileUrl !== undefined) updates.medCertFileUrl = input.medCertFileUrl;
 
     if (statusChanged) {
       const newEntry: StatusHistoryEntry = {
@@ -371,6 +376,7 @@ export class ReconciliationService {
       hours: number; 
       id: string; 
       punches: string[];
+      name?: string;
       scanNormalHours?: number;
       scanOtMorningHours?: number;
       scanOtNoonHours?: number;
@@ -393,6 +399,7 @@ export class ReconciliationService {
         id: scan.id,
         // ใช้ extractScanPunches เพื่อ fallback จาก allScans / Time1-6 ถ้า punches ยังว่าง
         punches: extractScanPunches(scan as any),
+        name: scan.name,
         scanNormalHours: scan.regularHours,
         scanOtMorningHours: scan.otMorningHours,
         scanOtNoonHours: scan.otNoonHours,
@@ -405,6 +412,25 @@ export class ReconciliationService {
     let failed = 0;
     const now = new Date();
 
+    // 3.5 ดึงรายชื่อพนักงานทั้งหมดที่เกี่ยวข้อง
+    const employeeIds = new Set<string>();
+    dailySummaries.forEach(s => employeeIds.add(s.employeeNumber));
+    scanRecords.forEach(s => employeeIds.add(s.employeeId));
+
+    const contractorMap = new Map<string, string>();
+    await Promise.all(
+      Array.from(employeeIds).map(async (empId) => {
+        try {
+          const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empId);
+          if (contractor && contractor.name) {
+            contractorMap.set(empId, contractor.name);
+          }
+        } catch (err) {
+          // Ignore if not found
+        }
+      })
+    );
+
     // 4. Upsert ReconciliationRecord สำหรับทุก daily summary
     for (const summary of dailySummaries) {
       const key = `${summary.employeeNumber}_${summary.date}`;
@@ -414,6 +440,7 @@ export class ReconciliationService {
 
       const input: CreateReconciliationRecordInput = {
         employeeId: summary.employeeNumber,
+        employeeName: contractorMap.get(summary.employeeNumber) || scanEntry?.name,
         workDate: summary.date,
         projectLocationId: summary.projectLocationId,
         dailyReportHours: summary.totalHours,
@@ -432,11 +459,21 @@ export class ReconciliationService {
         dailyReportPunches: summary.dailyReportPunches,
         scanPunches: scanEntry?.punches,
         leaveHours: summary.leaveHours,
+        leaveEntries: summary.leaveEntries,
+        medCertFileUrl: summary.medCertFileUrl,
       };
 
       try {
         const resultData = this.mergeAndClassify(input, existing, now, false, summary.isLeave);
         if (resultData) {
+          if (summary.employeeNumber === '200022') {
+             console.log(`[ReconciliationService] Generating for 200022:`, {
+                inputName: input.employeeName,
+                existingName: existing?.employeeName,
+                resultName: resultData.employeeName,
+                contractorMapValue: contractorMap.get('200022')
+             });
+          }
           const ref = this.collection.doc(id);
           // ใช้ merge: true ตามพฤติกรรมเดิมของ upsertRecord
           writer.set(ref, reconciliationRecordConverter.toFirestore(resultData as any), { merge: true });
@@ -469,6 +506,7 @@ export class ReconciliationService {
       const totalScanHours =
         (scan.regularHours ?? 0) +
         (scan.otMorningHours ?? 0) +
+        (scan.otNoonHours ?? 0) +
         (scan.otEveningHours ?? 0);
 
       const id = generateReconciliationId(scan.employeeId, dateKey);
@@ -476,6 +514,7 @@ export class ReconciliationService {
 
       const input: CreateReconciliationRecordInput = {
         employeeId: scan.employeeId,
+        employeeName: scan.name || contractorMap.get(scan.employeeId),
         workDate: dateKey,
         projectLocationId: scan.projectLocationId,
         dailyReportHours: undefined,   // ไม่มี daily → MISSING_DAILY
@@ -539,10 +578,23 @@ export class ReconciliationService {
 
     const scanData = activeScanDoc ? (activeScanDoc.data() as any) : null;
     const totalScanHours = scanData ? 
-      (scanData.regularHours ?? 0) + (scanData.otMorningHours ?? 0) + (scanData.otEveningHours ?? 0) : undefined;
+      (scanData.regularHours ?? 0) + (scanData.otMorningHours ?? 0) + (scanData.otNoonHours ?? 0) + (scanData.otEveningHours ?? 0) : undefined;
+
+    let employeeName = scanData?.name;
+    if (!employeeName) {
+      try {
+        const contractor = await dailyContractorService.findByEmployeeIdOrHistory(employeeId);
+        if (contractor && contractor.name) {
+          employeeName = contractor.name;
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
 
     return this.upsertRecord({
       employeeId,
+      employeeName,
       workDate: workDateStr,
       projectLocationId,
       dailyReportHours: summary?.totalHours,
@@ -562,6 +614,8 @@ export class ReconciliationService {
       // fallback: allScans (HH:mm:ss) หรือ Time1-6 ถ้า punches ยังว่าง (docs เก่าจาก bulk import)
       scanPunches: scanData ? extractScanPunches(scanData) : [],
       leaveHours: summary?.leaveHours,
+      leaveEntries: summary?.leaveEntries,
+      medCertFileUrl: summary?.medCertFileUrl,
     }, false, summary?.isLeave);
   }
 
@@ -598,12 +652,23 @@ export class ReconciliationService {
     if (filter.status) {
       if (Array.isArray(filter.status)) {
         if (filter.status.length === 1) {
-          query = query.where('status', '==', filter.status[0]);
+          if (filter.status[0] === 'LEAVE') {
+            query = query.where(Filter.or(Filter.where('status', '==', 'LEAVE'), Filter.where('hasLeave', '==', true)));
+          } else {
+            query = query.where('status', '==', filter.status[0]);
+          }
         } else {
+          // If LEAVE is in array, we can't easily do a mixed IN + OR in Firestore.
+          // For now, if LEAVE is in the array, we just use IN for statuses. 
+          // (Usually filter.status is either a single status or an array of anomalies without LEAVE).
           query = query.where('status', 'in', filter.status);
         }
       } else {
-        query = query.where('status', '==', filter.status);
+        if (filter.status === 'LEAVE') {
+          query = query.where(Filter.or(Filter.where('status', '==', 'LEAVE'), Filter.where('hasLeave', '==', true)));
+        } else {
+          query = query.where('status', '==', filter.status);
+        }
       }
     }
     if (filter.isLocked !== undefined) {
@@ -883,7 +948,8 @@ export class ReconciliationService {
       conflictedSnap,
       unregisteredSnap,
       absentSnap,
-      leaveSnap,
+      statusLeaveSnap,
+      hasLeaveSnap,
       holidaySnap,
       employeeCountSnap,
     ] = await Promise.all([
@@ -897,6 +963,7 @@ export class ReconciliationService {
       baseQ.where('status', '==', 'UNREGISTERED_EMPLOYEE').count().get(),
       baseQ.where('status', '==', 'ABSENT').count().get(),
       baseQ.where('status', '==', 'LEAVE').count().get(),
+      baseQ.where('hasLeave', '==', true).count().get(),
       baseQ.where('status', '==', 'HOLIDAY').count().get(),
       // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project
       (() => {
@@ -913,9 +980,9 @@ export class ReconciliationService {
 
     return {
       totalRows:          totalSnap.data().count - holidaySnap.data().count,
-      normalCount:        normalSnap.data().count + leaveSnap.data().count,
+      normalCount:        normalSnap.data().count + statusLeaveSnap.data().count, // MATCHED + LEAVE (status)
       absentCount:        absentSnap.data().count,
-      leaveCount:         leaveSnap.data().count,
+      leaveCount:         hasLeaveSnap.data().count, // Include both full leave (status=LEAVE) and partial leave (hasLeave=true)
       pendingCount:       pendingSnap.data().count,
       resolvedCount:      resolvedSnap.data().count,
       missingDailyCount:  missingDailySnap.data().count,

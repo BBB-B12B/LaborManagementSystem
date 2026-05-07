@@ -64,9 +64,9 @@ interface DailyEmployeeTimesheet {
   workLogs?: any[];
   leave?: LeaveEntry[];   // ถ้ามี entries → สถานะ LEAVE
   // New Leave Structure
-  leaveStatus?: { isFullDay?: boolean };
-  leaveShifts?: { morning?: boolean; afternoon?: boolean };
-  leaveTimes?: { morning?: string; afternoon?: string };
+  leaveStatus?: { isFullDay?: boolean; leaveShifts?: any; leaveTimes?: any; leaveType?: string };
+  leaveShifts?: { morning?: boolean; afternoon?: boolean; custom?: boolean };
+  leaveTimes?: { morning?: string; afternoon?: string; custom?: string };
   leaveType?: string;
   medCertFileUrl?: string;
   photos?: {
@@ -341,24 +341,53 @@ async function reconcile(
     // Handle new leave structure (leaveType / leaveStatus / leaveShifts)
     else if (timesheet.leaveStatus || timesheet.leaveType) {
       const isFullDay = timesheet.leaveStatus?.isFullDay;
-      const morningShift = timesheet.leaveShifts?.morning;
-      const afternoonShift = timesheet.leaveShifts?.afternoon;
+      const shifts = timesheet.leaveStatus?.leaveShifts || timesheet.leaveShifts;
+      const times = timesheet.leaveStatus?.leaveTimes || timesheet.leaveTimes;
+      const lType = timesheet.leaveStatus?.leaveType || timesheet.leaveType || 'Leave';
       
       let calculatedHours = 0;
+      let desc = 'Full Day';
+
       if (isFullDay) {
         calculatedHours = 8;
       } else {
-        if (morningShift) calculatedHours += 4;
-        if (afternoonShift) calculatedHours += 4;
+        if (shifts?.morning) {
+          calculatedHours += 4;
+          desc = 'Morning';
+        }
+        else if (shifts?.afternoon) {
+          calculatedHours += 4;
+          desc = 'Afternoon';
+        }
+        else if (shifts?.custom || times?.custom) {
+          if (times?.custom) {
+            desc = times.custom;
+            const parts = times.custom.split('-').map((s: string) => s.trim());
+            if (parts.length === 2) {
+              const [startH, startM] = parts[0].split(':').map(Number);
+              const [endH, endM] = parts[1].split(':').map(Number);
+              if (!isNaN(startH) && !isNaN(endH)) {
+                let diff = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+                if (startH < 12 && endH >= 13) diff -= 1; // หักพักเที่ยง
+                if (diff > 0) calculatedHours += diff;
+              }
+            }
+          } else {
+            calculatedHours += 4;
+            desc = 'Partial';
+          }
+        } else {
+          desc = 'Partial';
+        }
       }
       
       if (calculatedHours > 0) {
         totalLeaveHours = calculatedHours;
         leaveEntries.push({
           hours: calculatedHours,
-          attachment: timesheet.medCertFileUrl || '',
-          type: timesheet.leaveType || 'Unknown'
-        });
+          type: lType,
+          description: desc
+        } as any);
       }
     }
 
@@ -378,6 +407,8 @@ async function reconcile(
 
   const hasTimesheet = timesheetDoc.exists;
   const isLeave      = leaveEntries.length > 0 && totalLeaveHours > 0;
+  const hasTimesheetHours = hasTimesheet && totalTimesheetHours > 0;
+  const hasScanHours = hasScan && totalScanHours > 0;
 
   // ── 4. ตัดสิน Status ──────────────────────────────────────────────────────
   let status: ReconciliationStatus;
@@ -388,25 +419,26 @@ async function reconcile(
   } else if (!isRegistered && hasScan) {
     // ไม่มีในระบบเลย — Admin ต้องไปเพิ่มข้อมูลพนักงานก่อน
     status = 'UNREGISTERED_EMPLOYEE';
-  } else if (isHoliday) {
-    // วันหยุดบริษัท — ถึงแม้จะมีการสแกน ให้ถือว่า HOLIDAY
-    status = 'HOLIDAY';
-  } else if (isLeave) {
-    // foreman mark ว่าลา (leave array มี entries)
-    status = 'LEAVE';
-  } else if (hasScan && hasTimesheet) {
+  } else if (!hasTimesheetHours && !hasScanHours) {
+    // ถ้าไม่มีข้อมูลการทำงานเลย ถึงจะมาเช็คว่าเป็นวันหยุดหรือวันลา
+    if (isHoliday) {
+      status = 'HOLIDAY';
+    } else if (isLeave) {
+      status = 'LEAVE';
+    } else {
+      status = 'ABSENT';
+    }
+  } else if (hasScanHours && hasTimesheetHours) {
     // มีทั้งสองแหล่ง — เปรียบเทียบชั่วโมง (tolerance ±6 นาที = 0.1 ชม.)
     const diff = Math.abs(totalScanHours - totalTimesheetHours);
     status = diff <= 0.1 ? 'MATCHED' : 'CONFLICTED';
-  } else if (hasScan && !hasTimesheet) {
+  } else if (hasScanHours && !hasTimesheetHours) {
     // มี scan แต่ไม่มี timesheet — รอ foreman ลงข้อมูล
     status = 'MISSING_DAILY';
-  } else if (!hasScan && hasTimesheet) {
+  } else if (!hasScanHours && hasTimesheetHours) {
     // มี timesheet แต่ไม่มี scan
     status = 'MISSING_SCAN';
   } else {
-    // ไม่มีทั้งคู่ — ABSENT จะถูก generate โดย Scheduled Function แยกต่างหาก
-    // กรณีนี้ไม่ควรเกิดขึ้นใน onScanDataChanged (เพราะ trigger จาก scan เสมอ)
     status = 'ABSENT';
   }
 
@@ -449,6 +481,7 @@ async function reconcile(
       // ── Leave & Holiday ──────────────────────────────────────────────────
       leaveHours:           isLeave      ? totalLeaveHours : null,
       leaveEntries:         isLeave      ? leaveEntries    : null,
+      medCertFileUrl:       hasTimesheet ? (timesheet?.medCertFileUrl || null) : null,
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
@@ -489,6 +522,7 @@ async function reconcile(
       // ── Leave & Holiday ──────────────────────────────────────────────────
       leaveHours:           isLeave      ? totalLeaveHours : null,
       leaveEntries:         isLeave      ? leaveEntries    : null,
+      medCertFileUrl:       hasTimesheet ? (timesheet?.medCertFileUrl || null) : null,
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,

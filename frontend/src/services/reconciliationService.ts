@@ -54,6 +54,15 @@ export interface ReconciliationRecord {
   scanPunches?: string[];
   createdAt: string;
   updatedAt: string;
+  isHoliday?: boolean;
+  leaveHours?: number;
+  leaveEntries?: {
+    type: string;
+    hours: number;
+    description?: string;
+  }[];
+  medCertFileUrl?: string; // Add medCertFileUrl
+  hasLeave?: boolean;
 }
 
 export interface ReconciliationFilter {

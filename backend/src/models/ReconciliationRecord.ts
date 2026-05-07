@@ -77,6 +77,8 @@ export interface ReconciliationRecord {
   isHoliday?: boolean;               // วันหยุดบริษัท
   leaveHours?: number;               // จำนวนชั่วโมงที่ลา
   leaveEntries?: any[];              // ข้อมูลการลาเพิ่มเติม
+  hasLeave?: boolean;                // Flag ระบุว่ามีการลางาน (ใช้ฟิลเตอร์)
+  medCertFileUrl?: string;           // รูปภาพเอกสารการลา
 
   // --- Locking (ผูกกับงวดงาน — ไม่ใช่ approve รายวัน) ---
   // เมื่อ Admin Approve งวดงาน onWagePeriodApproved จะตั้ง isLocked: true อัตโนมัติ
@@ -123,7 +125,13 @@ export interface CreateReconciliationRecordInput {
   scanPunches?: string[];
   isHoliday?: boolean;
   leaveHours?: number;
-  leaveEntries?: { hours: number; attachment?: string; type?: string }[];
+  leaveEntries?: {
+    type: string;
+    hours: number;
+    description?: string;
+  }[];
+  medCertFileUrl?: string; // Add medCertFileUrl
+  hasLeave?: boolean;
 }
 
 // ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
@@ -154,7 +162,15 @@ export const reconciliationRecordConverter = {
     if (record.projectLocationId !== undefined) data.projectLocationId = record.projectLocationId;
     if (record.projectName !== undefined) data.projectName = record.projectName;
     if (record.dailyReportHours !== undefined) data.dailyReportHours = record.dailyReportHours;
+    if (record.timesheetNormalHours !== undefined) data.timesheetNormalHours = record.timesheetNormalHours;
+    if (record.timesheetOtMorning !== undefined) data.timesheetOtMorning = record.timesheetOtMorning;
+    if (record.timesheetOtNoon !== undefined) data.timesheetOtNoon = record.timesheetOtNoon;
+    if (record.timesheetOtEvening !== undefined) data.timesheetOtEvening = record.timesheetOtEvening;
     if (record.scanDataHours !== undefined) data.scanDataHours = record.scanDataHours;
+    if (record.scanNormalHours !== undefined) data.scanNormalHours = record.scanNormalHours;
+    if (record.scanOtMorningHours !== undefined) data.scanOtMorningHours = record.scanOtMorningHours;
+    if (record.scanOtNoonHours !== undefined) data.scanOtNoonHours = record.scanOtNoonHours;
+    if (record.scanOtEveningHours !== undefined) data.scanOtEveningHours = record.scanOtEveningHours;
     if (record.dailyReportId !== undefined) data.dailyReportId = record.dailyReportId;
     if (record.scanDataId !== undefined) data.scanDataId = record.scanDataId;
     if (record.dailyReportPhotos !== undefined) data.dailyReportPhotos = record.dailyReportPhotos;
@@ -180,6 +196,8 @@ export const reconciliationRecordConverter = {
     if ('isHoliday' in record) data.isHoliday = record.isHoliday;
     if ('leaveHours' in record) data.leaveHours = record.leaveHours;
     if ('leaveEntries' in record) data.leaveEntries = record.leaveEntries;
+    if ('medCertFileUrl' in record) data.medCertFileUrl = record.medCertFileUrl;
+    if ('hasLeave' in record) data.hasLeave = record.hasLeave;
 
     return data;
   },
@@ -234,6 +252,8 @@ export const reconciliationRecordConverter = {
       ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
       ...(data.leaveHours !== undefined && { leaveHours: data.leaveHours }),
       ...(data.leaveEntries !== undefined && { leaveEntries: data.leaveEntries }),
+      ...(data.medCertFileUrl !== undefined && { medCertFileUrl: data.medCertFileUrl }),
+      ...(data.hasLeave !== undefined && { hasLeave: data.hasLeave }),
     };
   },
 };

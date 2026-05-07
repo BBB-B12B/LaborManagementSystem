@@ -61,8 +61,16 @@ export interface DailyEmployeeTimesheet {
   isActive: boolean;
   // Leave Data
   leave?: { hours: number; attachment?: string }[];
-  leaveStatus?: { isFullDay?: boolean };
-  leaveShifts?: { morning?: boolean; afternoon?: boolean };
+  leaveStatus?: {
+    isFullDay?: boolean;
+    leaveType?: string;
+    leaveShifts?: { morning?: boolean; afternoon?: boolean; custom?: boolean };
+    leaveTimes?: { custom?: string };
+    medCertFileUrl?: string;
+  };
+  // Fallbacks if they appear at root
+  leaveShifts?: { morning?: boolean; afternoon?: boolean; custom?: boolean };
+  leaveTimes?: { custom?: string };
   leaveType?: string;
   medCertFileUrl?: string;
   // Photos
@@ -88,6 +96,8 @@ export interface DailyTimesheetSummary {
   isActive: boolean;
   isLeave: boolean;
   leaveHours: number;
+  leaveEntries?: { type: string; hours: number; description?: string }[];
+  medCertFileUrl?: string;
   dailyReportPhotos?: string[];    // ดึงมาจาก photos.labor
   dailyReportPunches?: string[];   // ดึงมาจาก shiftTimes
 }
@@ -114,11 +124,47 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
   } else if (doc.leaveStatus || doc.leaveType) {
     if (doc.leaveStatus?.isFullDay) leaveHours = 8;
     else {
-      if (doc.leaveShifts?.morning) leaveHours += 4;
-      if (doc.leaveShifts?.afternoon) leaveHours += 4;
+      const shifts = doc.leaveStatus?.leaveShifts || doc.leaveShifts;
+      const times = doc.leaveStatus?.leaveTimes || doc.leaveTimes;
+
+      if (shifts?.morning) leaveHours += 4;
+      if (shifts?.afternoon) leaveHours += 4;
+      if (shifts?.custom) {
+        if (times?.custom) {
+          const parts = times.custom.split('-').map(s => s.trim());
+          if (parts.length === 2) {
+            const [startH, startM] = parts[0].split(':').map(Number);
+            const [endH, endM] = parts[1].split(':').map(Number);
+            if (!isNaN(startH) && !isNaN(endH)) {
+              let diff = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+              // หักพักเที่ยง (12:00-13:00) ถ้าระยะเวลาครอบคลุม
+              if (startH < 12 && endH >= 13) {
+                diff -= 1;
+              }
+              if (diff > 0) leaveHours += diff;
+            }
+          }
+        } else {
+          leaveHours += 4; // fallback
+        }
+      }
     }
   }
   const isLeave = leaveHours > 0;
+
+  let leaveEntries: { type: string; hours: number; description?: string }[] | undefined = undefined;
+  if (isLeave) {
+    const lType = doc.leaveStatus?.leaveType || doc.leaveType || 'Leave';
+    let desc = 'Full Day';
+    if (!doc.leaveStatus?.isFullDay) {
+      const times = doc.leaveStatus?.leaveTimes || doc.leaveTimes;
+      if (times?.custom) desc = times.custom;
+      else if (doc.leaveStatus?.leaveShifts?.morning) desc = 'Morning';
+      else if (doc.leaveStatus?.leaveShifts?.afternoon) desc = 'Afternoon';
+      else desc = 'Partial';
+    }
+    leaveEntries = [{ type: lType, hours: leaveHours, description: desc }];
+  }
 
   let dailyReportPhotos: string[] | undefined = undefined;
     if (doc.photos) {
@@ -172,9 +218,11 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     otNoonHours,
     otEveningHours,
     totalHours,
-    isActive: doc.isActive ?? true,
+    isActive: doc.isActive !== false,
     isLeave,
     leaveHours,
+    leaveEntries,
+    medCertFileUrl: doc.leaveStatus?.medCertFileUrl || doc.medCertFileUrl,
     dailyReportPhotos,
     dailyReportPunches,
   };

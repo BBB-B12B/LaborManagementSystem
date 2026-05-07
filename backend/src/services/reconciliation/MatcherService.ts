@@ -57,9 +57,9 @@ export class MatcherService {
           }
 
           // ─── Hours Calculation ────────────────────────────────────────
-          if ((data.regularHours || 0) + (data.otMorningHours || 0) + (data.otEveningHours || 0) > 0) {
+          if ((data.regularHours || 0) + (data.otMorningHours || 0) + (data.otNoonHours || 0) + (data.otEveningHours || 0) > 0) {
             // ใช้ field ที่ import service คำนวณไว้แล้ว (กรณี CSV bulk import)
-            totalScanHours += (data.regularHours || 0) + (data.otMorningHours || 0) + (data.otEveningHours || 0);
+            totalScanHours += (data.regularHours || 0) + (data.otMorningHours || 0) + (data.otNoonHours || 0) + (data.otEveningHours || 0);
           } else {
             // คำนวณจาก allScans เมื่อ hours fields ไม่มี (กรณี manual entry)
             const allTimes: string[] = Array.isArray(data.allScans) && data.allScans.length > 0

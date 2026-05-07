@@ -24,7 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reconciliationService, ReconciliationRecord, PaginatedReconciliationResponse } from '../../services/reconciliationService';
 import { fillFromDailyReport } from '../../services/scanDataService';
 import { format } from 'date-fns';
-import { Info as InfoIcon, Close as CloseIcon } from '@mui/icons-material';
+import { Info as InfoIcon, Close as CloseIcon, ArrowBackIosNew as PrevIcon, ArrowForwardIos as NextIcon } from '@mui/icons-material';
 import { useToast } from '@/components/common';
 
 // --- Styled Components to match Image 1 ---
@@ -316,7 +316,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const [checkDialogOpen, setCheckDialogOpen] = React.useState(false);
   const [selectedRow, setSelectedRow] = React.useState<any>(null);
   const [viewerOpen, setViewerOpen] = React.useState(false);
-  const [viewerImageUrl, setViewerImageUrl] = React.useState('');
+  const [viewerImages, setViewerImages] = React.useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = React.useState(0);
   const [confirmFillOpen, setConfirmFillOpen] = React.useState(false);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -401,6 +402,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   // ────────────────────────────────────────────────────────────────────────────
 
   const getFullImageUrl = (photoUrl: string) => {
+    if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+      return photoUrl;
+    }
     const baseUrl = process.env.NEXT_PUBLIC_AFTER_SALE_API_URL || '';
     if (baseUrl.startsWith('gs://')) {
       const bucketName = baseUrl.replace('gs://', '').replace('/', '');
@@ -413,9 +417,20 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     return `${baseUrl}${photoUrl}`;
   };
 
-  const handleOpenViewer = (url: string) => {
-    setViewerImageUrl(url);
+  const handleOpenViewer = (urls: string[], startIndex: number = 0) => {
+    setViewerImages(urls);
+    setViewerIndex(startIndex);
     setViewerOpen(true);
+  };
+
+  const handleNextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewerIndex((prev) => (prev + 1) % viewerImages.length);
+  };
+
+  const handlePrevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewerIndex((prev) => (prev - 1 + viewerImages.length) % viewerImages.length);
   };
 
   const handleOpenCheckDialog = (row: any) => {
@@ -471,12 +486,21 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               📷 รูปถ่ายอ้างอิง ({selectedRow.dailyReportPhotos.length} รูป) — คลิกเพื่อดูรูปเต็ม
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-              {selectedRow.dailyReportPhotos.map((photoUrl: string, idx: number) => {
-                const fullUrl = getFullImageUrl(photoUrl);
+              {(() => {
+                const allViewerUrls: string[] = [];
+                if (selectedRow?.dailyReportPhotos) {
+                  allViewerUrls.push(...selectedRow.dailyReportPhotos.map((u: string) => getFullImageUrl(u)));
+                }
+                if (selectedRow?.medCertFileUrl) {
+                  allViewerUrls.push(getFullImageUrl(selectedRow.medCertFileUrl));
+                }
+                
+                return selectedRow.dailyReportPhotos.map((photoUrl: string, idx: number) => {
+                  const fullUrl = getFullImageUrl(photoUrl);
                 return (
                   <Box 
                     key={idx}
-                    onClick={() => handleOpenViewer(fullUrl)}
+                    onClick={() => handleOpenViewer(allViewerUrls, idx)}
                     sx={{ 
                       width: 120, 
                       height: 120, 
@@ -494,23 +518,64 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     }}
                   />
                 );
-              })}
+              }); })()}
             </Box>
           </Box>
         ) : (
           <ProofImagePlaceholder sx={{ height: '80px', mb: 2 }}>ไม่มีรูปภาพอ้างอิง</ProofImagePlaceholder>
         )}
+
+        {selectedRow?.hasLeave && selectedRow?.medCertFileUrl && (
+          <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#fdf4ff' }}>
+            <Typography variant="caption" fontWeight={800} color="#c026d3" sx={{ display: 'block', mb: 1.5 }}>
+              📝 เอกสารใบรับรองแพทย์ / ใบลางาน
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+              <Box 
+                onClick={() => {
+                  const allViewerUrls: string[] = [];
+                  if (selectedRow?.dailyReportPhotos) {
+                    allViewerUrls.push(...selectedRow.dailyReportPhotos.map((u: string) => getFullImageUrl(u)));
+                  }
+                  if (selectedRow?.medCertFileUrl) {
+                    allViewerUrls.push(getFullImageUrl(selectedRow.medCertFileUrl));
+                  }
+                  handleOpenViewer(allViewerUrls, selectedRow?.dailyReportPhotos?.length || 0);
+                }}
+                sx={{ 
+                  width: 120, 
+                  height: 120, 
+                  flexShrink: 0, 
+                  borderRadius: '10px', 
+                  cursor: 'pointer',
+                  border: '2px solid #f5d0fe',
+                  '&:hover': { borderColor: '#c026d3', transform: 'scale(1.03)', boxShadow: '0 4px 12px rgba(192,38,211,0.2)' },
+                  transition: 'all 0.2s ease',
+                  backgroundImage: `url(${getFullImageUrl(selectedRow.medCertFileUrl!)})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundColor: '#fdf4ff',
+                  position: 'relative',
+                }}
+              />
+            </Box>
+          </Box>
+        )}
+
         <Stack spacing={1.5}>
-          {[
-            { label: 'ชั่วโมงทำงานปกติ', value: selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours },
-            { label: 'OT เช้า', value: selectedRow?.timesheetOtMorning },
-            { label: 'OT เที่ยง', value: selectedRow?.timesheetOtNoon },
-            { label: 'OT เย็น', value: selectedRow?.timesheetOtEvening },
-          ].map(({ label, value }) => (
+          {(
+            [
+              { label: 'ชั่วโมงทำงานปกติ', value: selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours },
+              ...(selectedRow?.hasLeave ? [{ label: 'ชั่วโมงลางาน', value: selectedRow?.leaveHours, highlight: true }] : []),
+              { label: 'OT เช้า', value: selectedRow?.timesheetOtMorning },
+              { label: 'OT เที่ยง', value: selectedRow?.timesheetOtNoon },
+              { label: 'OT เย็น', value: selectedRow?.timesheetOtEvening },
+            ] as Array<{label: string; value: any; highlight?: boolean}>
+          ).map(({ label, value, highlight }) => (
             <Stack key={label} direction="row" justifyContent="space-between" alignItems="center">
               <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>{label}</Typography>
-              <Box sx={{ px: 1.5, py: 0.25, borderRadius: '6px', backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0' }}>
-                <Typography variant="body2" fontWeight={900} sx={{ color: '#334155' }}>{value ?? '-'} ชม.</Typography>
+              <Box sx={{ px: 1.5, py: 0.25, borderRadius: '6px', backgroundColor: highlight ? '#fff7ed' : '#f1f5f9', border: highlight ? '1px solid #fed7aa' : '1px solid #e2e8f0' }}>
+                <Typography variant="body2" fontWeight={900} sx={{ color: highlight ? '#ea580c' : '#334155' }}>{value ?? '-'} ชม.</Typography>
               </Box>
             </Stack>
           ))}
@@ -518,6 +583,89 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       </ComparisonBox>
     </>
   );
+
+  const renderTimeTable = (hideDailyReport: boolean = false) => {
+    const drPunches = selectedRow?.dailyReportPunches || [];
+    const scanPunches = selectedRow?.scanPunches || [];
+    
+    const leavePunches: string[] = [];
+    if (selectedRow?.leaveEntries?.length > 0) {
+      selectedRow.leaveEntries.forEach((entry: any) => {
+        if (entry.description) {
+           if (entry.description.includes('-')) {
+             leavePunches.push(...entry.description.split('-').map((s: string) => s.trim()));
+           } else {
+             leavePunches.push(entry.description);
+           }
+        }
+      });
+    }
+
+    const maxRegularLength = Math.max(drPunches.length, scanPunches.length, 2);
+    const totalLength = maxRegularLength + leavePunches.length;
+
+    return (
+      <Box sx={{ overflowX: 'auto' }}>
+        <TimeTable>
+          <thead>
+            <tr>
+              <th></th>
+              {Array.from({ length: totalLength }).map((_, i) => (
+                <th key={i}>
+                  Time {i + 1}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {!hideDailyReport && (
+              <>
+                <tr>
+                  <td className="label" rowSpan={leavePunches.length > 0 ? 2 : 1}>Daily Report :</td>
+                  {Array.from({ length: totalLength }).map((_, i) => (
+                    <td 
+                      key={`dr-${i}`} 
+                      className="time-cell" 
+                      rowSpan={i < maxRegularLength && leavePunches.length > 0 ? 2 : 1}
+                      style={i >= maxRegularLength ? { borderBottom: 'none', paddingBottom: '4px' } : {}}
+                    >
+                      {i < maxRegularLength ? (drPunches[i] ?? '-') : (leavePunches[i - maxRegularLength] ?? '-')}
+                    </td>
+                  ))}
+                </tr>
+                {leavePunches.length > 0 && (
+                  <tr>
+                    <td colSpan={leavePunches.length} style={{ borderTop: 'none', borderBottom: '1px solid #cbd5e1', padding: '0 8px 8px 8px' }}>
+                      <Box sx={{ backgroundColor: '#f97316', color: '#fff', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold', py: 0.25, textAlign: 'center' }}>
+                        ลางาน
+                      </Box>
+                    </td>
+                  </tr>
+                )}
+              </>
+            )}
+            <tr>
+              <td className="label">สแกนนิ้ว :</td>
+              {Array.from({ length: totalLength }).map((_, i) => (
+                <td
+                  key={`scan-${i}`}
+                  className={`time-cell ${
+                    !hideDailyReport && i < maxRegularLength && scanPunches[i] && drPunches[i] && scanPunches[i] !== drPunches[i]
+                      ? 'empty-scan'
+                      : (!hideDailyReport && i < maxRegularLength && !scanPunches[i])
+                      ? 'empty-scan'
+                      : ''
+                  }`}
+                >
+                  {i < maxRegularLength ? (scanPunches[i] ?? '-') : '-'}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </TimeTable>
+      </Box>
+    );
+  };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -660,9 +808,16 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 </TableCell>
 
                 <TableCell>
-                  <StatusCapsule statusType={row.status}>
-                    {t(`workHourMonitoring.status.${row.status.toLowerCase()}`, row.status)}
-                  </StatusCapsule>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+                    <StatusCapsule statusType={row.status}>
+                      {t(`workHourMonitoring.status.${row.status.toLowerCase()}`, row.status)}
+                    </StatusCapsule>
+                    {row.hasLeave && (
+                      <Box sx={{ fontSize: '0.65rem', color: '#ea580c', fontWeight: 800, backgroundColor: '#fff7ed', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #fed7aa' }}>
+                        มีลางาน ({row.leaveHours} ชม.)
+                      </Box>
+                    )}
+                  </Box>
                 </TableCell>
 
                 <TableCell>
@@ -796,28 +951,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
                 </Typography>
               </Box>
-              <Box sx={{ overflowX: 'auto' }}>
-                <TimeTable>
-                  <thead>
-                    <tr>
-                      <th></th>
-                      {Array.from({ length: Math.max(selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                        <th key={i}>Time {i + 1}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="label">สแกนนิ้ว :</td>
-                      {Array.from({ length: Math.max(selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                        <td key={`scan-${i}`} className="time-cell">
-                          {selectedRow?.scanPunches?.[i] ?? '-'}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </TimeTable>
-              </Box>
+              {renderTimeTable(true)}
             </>
           ) : selectedRow?.status === 'MISSING_SCAN' ? (
             <>
@@ -844,34 +978,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
                   ข้อมูลแสดงเวลาทำงาน
                 </Typography>
-                <Box sx={{ overflowX: 'auto' }}>
-                  <TimeTable>
-                    <thead>
-                      <tr>
-                        <th></th>
-                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                          <th key={i}>Time {i + 1}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="label">Daily Report :</td>
-                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                          <td key={`dr-${i}`} className="time-cell">{selectedRow?.dailyReportPunches?.[i] ?? '-'}</td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="label">สแกนนิ้ว :</td>
-                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                          <td key={`scan-${i}`} className={`time-cell ${!selectedRow?.scanPunches?.[i] ? 'empty-scan' : ''}`}>
-                            {selectedRow?.scanPunches?.[i] ?? '-'}
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </TimeTable>
-                </Box>
+                {renderTimeTable(false)}
               </Box>
             </>
           ) : (
@@ -925,42 +1032,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
                   ข้อมูลแสดงเวลาทำงาน
                 </Typography>
-                <Box sx={{ overflowX: 'auto' }}>
-                  <TimeTable>
-                    <thead>
-                      <tr>
-                        <th></th>
-                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                          <th key={i}>Time {i + 1}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="label">Daily Report :</td>
-                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                          <td key={`dr-${i}`} className="time-cell">{selectedRow?.dailyReportPunches?.[i] ?? '-'}</td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="label">สแกนนิ้ว :</td>
-                        {Array.from({ length: Math.max(selectedRow?.dailyReportPunches?.length || 0, selectedRow?.scanPunches?.length || 0, 2) }).map((_, i) => (
-                          <td
-                            key={`scan-${i}`}
-                            className={`time-cell ${
-                              selectedRow?.scanPunches?.[i] && selectedRow?.dailyReportPunches?.[i] &&
-                              selectedRow.scanPunches[i] !== selectedRow.dailyReportPunches[i]
-                                ? 'empty-scan'
-                                : ''
-                            }`}
-                          >
-                            {selectedRow?.scanPunches?.[i] ?? '-'}
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </TimeTable>
-                </Box>
+                {renderTimeTable(false)}
               </Box>
             </>
           )}
@@ -1088,9 +1160,33 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         >
           <CloseIcon />
         </IconButton>
-        {viewerImageUrl && (
+        {viewerImages.length > 0 && (
           <Box sx={{ maxWidth: '90vw', maxHeight: '90vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img src={viewerImageUrl} alt="Daily Report Proof" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }} />
+            {viewerImages.length > 1 && (
+              <IconButton 
+                onClick={handlePrevImage}
+                sx={{ position: 'absolute', left: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}
+              >
+                <PrevIcon />
+              </IconButton>
+            )}
+            
+            <img src={viewerImages[viewerIndex]} alt={`Image ${viewerIndex + 1}`} style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }} />
+            
+            {viewerImages.length > 1 && (
+              <IconButton 
+                onClick={handleNextImage}
+                sx={{ position: 'absolute', right: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}
+              >
+                <NextIcon />
+              </IconButton>
+            )}
+
+            {viewerImages.length > 1 && (
+              <Box sx={{ position: 'absolute', bottom: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.6)', px: 2, py: 0.5, borderRadius: 4, fontWeight: 'bold' }}>
+                {viewerIndex + 1} / {viewerImages.length}
+              </Box>
+            )}
           </Box>
         )}
       </Dialog>
