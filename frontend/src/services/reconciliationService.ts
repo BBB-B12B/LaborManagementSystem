@@ -28,7 +28,9 @@ export interface ReconciliationRecord {
   employeeId: string;
   employeeName?: string;
   workDate: string;
-  projectLocationId: string;
+  projectLocationId: string;   // โครงการที่ทำงานวันนั้น (work location)
+  homeProjectId?: string;      // สังกัดถาวรของพนักงาน (ใช้ RBAC filter)
+  workLocationIds?: string[];  // ทุกโครงการที่ทำงานในวันนั้น (แสดงใน UI)
   projectName?: string;
   dailyReportHours?: number;   // ยอดรวม (alias ใช้ใน UI)
   timesheetHours?: number;      // field จริงที่ Cloud Function เขียนลง Firestore
@@ -66,13 +68,14 @@ export interface ReconciliationRecord {
 }
 
 export interface ReconciliationFilter {
-  projectLocationId?: string;
+  projectLocationId?: string;   // กรองตาม work location (fallback)
+  homeProjectId?: string;       // กรองตามสังกัด (RBAC หลัก)
   status?: string;
   startDate?: string;
   endDate?: string;
   employeeId?: string;
-  filterStatus?: string; // frontend filter mode — แปลงเป็น status array บน backend
-  page?: number;         // 0-indexed
+  filterStatus?: string;
+  page?: number;
   pageSize?: number;
 }
 

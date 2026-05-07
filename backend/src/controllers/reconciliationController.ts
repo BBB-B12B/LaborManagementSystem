@@ -66,7 +66,8 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
   try {
     const authReq = req as AuthRequest;
     const {
-      projectLocationId,
+      homeProjectId,        // param ใหม่ที่ frontend ส่งมา
+      projectLocationId,    // backward compat — ถ้า frontend เก่ายังส่ง projectLocationId
       status,
       startDate,
       endDate,
@@ -76,7 +77,8 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
       pageSize,
     } = req.query;
 
-    const targetProject = projectLocationId as string | undefined;
+    // รองรับทั้ง homeProjectId (ใหม่) และ projectLocationId (เก่า)
+    const targetProject = (homeProjectId || projectLocationId) as string | undefined;
     const userProjects = authReq.user?.projectLocationIds || [];
 
     // RBAC: All users are restricted to their assigned projectLocationIds
@@ -105,8 +107,8 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
     const isResolved = filterStatus === 'abnormal_fixed' ? true : undefined;
 
     const result = await reconciliationService.getRecords({
-      projectLocationId: targetProject,
-      allowedProjects: targetProject ? undefined : userProjects,
+      homeProjectId: targetProject,
+      allowedHomeProjects: targetProject ? undefined : userProjects,
       status: statusFilter,
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
@@ -142,9 +144,10 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
 export async function getReconciliationStats(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthRequest;
-    const { projectLocationId, startDate, endDate } = req.query;
+    const { homeProjectId, projectLocationId, startDate, endDate } = req.query;
 
-    const targetProject = projectLocationId as string | undefined;
+    // รองรับทั้ง homeProjectId (ใหม่) และ projectLocationId (เก่า)
+    const targetProject = (homeProjectId || projectLocationId) as string | undefined;
     const userProjects = authReq.user?.projectLocationIds || [];
 
     // RBAC
@@ -161,8 +164,8 @@ export async function getReconciliationStats(req: Request, res: Response): Promi
     }
 
     const stats = await reconciliationService.getStats({
-      projectLocationId: targetProject,
-      allowedProjects: targetProject ? undefined : userProjects,
+      homeProjectId: targetProject,
+      allowedHomeProjects: targetProject ? undefined : userProjects,
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
     });
@@ -185,9 +188,10 @@ export async function getReconciliationStats(req: Request, res: Response): Promi
 export async function exportAnomalies(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthRequest;
-    const { projectLocationId, startDate, endDate } = req.query;
+    const { homeProjectId, projectLocationId, startDate, endDate } = req.query;
 
-    const targetProject = projectLocationId as string | undefined;
+    // รองรับทั้ง homeProjectId (ใหม่) และ projectLocationId (เก่า)
+    const targetProject = (homeProjectId || projectLocationId) as string | undefined;
     const userProjects = authReq.user?.projectLocationIds || [];
 
     // RBAC: All users are restricted to their assigned projectLocationIds
@@ -204,8 +208,8 @@ export async function exportAnomalies(req: Request, res: Response): Promise<void
     }
 
     const data = await reconciliationService.getAnomaliesForExport({
-      projectLocationId: targetProject,
-      allowedProjects: targetProject ? undefined : userProjects,
+      homeProjectId: targetProject,
+      allowedHomeProjects: targetProject ? undefined : userProjects,
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
     });

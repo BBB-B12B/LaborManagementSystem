@@ -461,7 +461,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     queryKey: makeQueryKey(page, rowsPerPage),
     queryFn: () =>
       reconciliationService.getRecords({
-        projectLocationId: project !== 'all' ? project : undefined,
+        homeProjectId: project !== 'all' ? project : undefined,
         startDate: formattedStartDate,
         endDate: formattedEndDate,
         filterStatus,
@@ -672,13 +672,16 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       <StyledTableContainer>
         <Table sx={{ minWidth: 1200 }} aria-label="work hour comparison table" stickyHeader>
         <TableHead>
-          {/* Row 1 */}
+                  {/* Row 1 */}
           <TableRow>
             <TableCell rowSpan={3}>{t('workHourMonitoring.table.no')}</TableCell>
             <TableCell rowSpan={3}>{t('workHourMonitoring.table.date')}</TableCell>
             <TableCell rowSpan={3}>{t('workHourMonitoring.table.employee')}</TableCell>
             <TableCell rowSpan={3} sx={{ minWidth: 160, maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.2, px: 2 }}>
               {t('workHourMonitoring.table.project')}
+            </TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 130, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
+              โครงการที่ทำงาน
             </TableCell>
             <TableCell colSpan={5} sx={{ borderBottom: 'none' }}>
               {t('workHourMonitoring.table.comparison')}
@@ -705,13 +708,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
+              <TableCell colSpan={14} sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body2" color="text.secondary">Loading data...</Typography>
               </TableCell>
             </TableRow>
           ) : records.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
+              <TableCell colSpan={14} sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body2" color="text.secondary">No data found</Typography>
               </TableCell>
             </TableRow>
@@ -747,8 +750,36 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 </TableCell>
                 <TableCell sx={{ minWidth: 160, maxWidth: 220, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, textAlign: 'left !important', pl: 2 }}>
                   <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#334155' }}>
-                    {projectsList.find(p => p.id === row.projectLocationId || p.code === row.projectLocationId)?.name || row.projectLocationId}
+                    {projectsList.find(p => p.id === row.homeProjectId || p.code === row.homeProjectId)?.name || row.homeProjectId || row.projectLocationId}
                   </Typography>
+                </TableCell>
+                {/* โครงการที่ทำงานจริงวันนั้น (workLocationIds) */}
+                <TableCell sx={{ minWidth: 130, textAlign: 'left !important', pl: 1.5 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(row.workLocationIds && row.workLocationIds.length > 0
+                      ? row.workLocationIds
+                      : [row.projectLocationId]
+                    ).map((locId) => {
+                      const projName = projectsList.find(p => p.id === locId || p.code === locId)?.name || locId;
+                      const isHome = locId === row.homeProjectId;
+                      return (
+                        <Chip
+                          key={locId}
+                          label={projName}
+                          size="small"
+                          sx={{
+                            height: '20px',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            backgroundColor: isHome ? '#f0fdf4' : '#fff7ed',
+                            color: isHome ? '#16a34a' : '#ea580c',
+                            border: `1px solid ${isHome ? '#bbf7d0' : '#fed7aa'}`,
+                            '& .MuiChip-label': { px: 0.75 },
+                          }}
+                        />
+                      );
+                    })}
+                  </Box>
                 </TableCell>
                 
                 {/* Regular Hours Comparison */}

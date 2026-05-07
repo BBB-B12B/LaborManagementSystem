@@ -49,7 +49,10 @@ export interface ReconciliationRecord {
   employeeId: string;
   employeeName?: string;             // Cache สำหรับ UI
   workDate: string;                  // YYYY-MM-DD
-  projectLocationId: string;
+  projectLocationId: string;         // โครงการที่ทำงานจริงวันนั้น (work location — จาก dailyReport)
+  homeProjectId?: string;            // สังกัดถาวรของพนักงาน (จาก dailyContractors.projectLocationId)
+                                     // ใช้สำหรับ RBAC filter ในหน้าติดตามชั่วโมงการทำงาน
+  workLocationIds?: string[];        // รายการโครงการที่ทำงานในวันนั้น (อาจมีมากกว่า 1 ถ้าไปช่วยหลายที่)
   projectName?: string;              // Cache สำหรับ UI
 
   // --- สหรับข้อมูลดิบจากทั้ง 2 แหล่ง ---
@@ -106,7 +109,9 @@ export interface CreateReconciliationRecordInput {
   employeeId: string;
   employeeName?: string;
   workDate: string;
-  projectLocationId: string;
+  projectLocationId: string;         // โครงการที่ทำงานจริงวันนั้น
+  homeProjectId?: string;            // สังกัดถาวรของพนักงาน
+  workLocationIds?: string[];        // รายการโครงการที่ทำงานในวันนั้น
   projectName?: string;
   dailyReportHours?: number;
   timesheetNormalHours?: number;
@@ -160,6 +165,8 @@ export const reconciliationRecordConverter = {
     if (record.employeeName !== undefined) data.employeeName = record.employeeName;
     if (record.workDate !== undefined) data.workDate = record.workDate;
     if (record.projectLocationId !== undefined) data.projectLocationId = record.projectLocationId;
+    if (record.homeProjectId !== undefined) data.homeProjectId = record.homeProjectId;
+    if (record.workLocationIds !== undefined) data.workLocationIds = record.workLocationIds;
     if (record.projectName !== undefined) data.projectName = record.projectName;
     if (record.dailyReportHours !== undefined) data.dailyReportHours = record.dailyReportHours;
     if (record.timesheetNormalHours !== undefined) data.timesheetNormalHours = record.timesheetNormalHours;
@@ -223,6 +230,8 @@ export const reconciliationRecordConverter = {
       employeeName: data.employeeName,
       workDate: data.workDate,
       projectLocationId: data.projectLocationId,
+      homeProjectId: data.homeProjectId,
+      workLocationIds: data.workLocationIds,
       projectName: data.projectName,
       // Cloud Function เขียนเป็น timesheetHours, backend model ใช้ dailyReportHours
       dailyReportHours:      data.timesheetHours ?? data.dailyReportHours,

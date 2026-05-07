@@ -24,11 +24,11 @@ import { reconciliationService } from '../services/reconciliation/Reconciliation
 
 async function generate() {
   console.log('Generating for P003, 2026-05-05...');
-  await reconciliationService.generateForProject({
-    projectLocationId: 'P003',
-    startDate: '2026-05-05',
-    endDate: '2026-05-05',
-  }, new Date());
+  await reconciliationService.generateForProject(
+    'P003',
+    '2026-05-05',
+    '2026-05-05',
+  );
   console.log('Generation complete. Checking database...');
 
   const doc = await db.collection('reconciliationRecords').doc('REC_200022_2026-05-05').get();

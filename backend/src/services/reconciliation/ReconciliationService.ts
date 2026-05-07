@@ -72,8 +72,10 @@ function extractScanPunches(data: Record<string, any>): string[] {
 // ---------------------------------------------------------------------------
 
 export interface ReconciliationFilter {
-  projectLocationId?: string;
-  allowedProjects?: string[];
+  projectLocationId?: string;        // กรองตาม work location (โครงการที่ทำงานวันนั้น)
+  allowedProjects?: string[];        // multi work-location filter
+  homeProjectId?: string;            // กรองตามสังกัด — ใช้สำหรับ RBAC หลัก
+  allowedHomeProjects?: string[];    // multi สังกัด — ใช้สำหรับ RBAC หลัก
   status?: ReconciliationStatus | ReconciliationStatus[];
   startDate?: string;
   endDate?: string;
@@ -234,6 +236,8 @@ export class ReconciliationService {
 
     const updates: Partial<ReconciliationRecord> = {
       projectLocationId: input.projectLocationId,
+      homeProjectId: input.homeProjectId ?? existing.homeProjectId,    // snapshot — ใช้ existing เป็น fallback
+      workLocationIds: input.workLocationIds ?? existing.workLocationIds, // สะสม locations
       employeeName: input.employeeName ?? existing.employeeName,
       // Daily-report side
       dailyReportHours:       input.dailyReportHours      ?? existing.dailyReportHours,
@@ -418,12 +422,14 @@ export class ReconciliationService {
     scanRecords.forEach(s => employeeIds.add(s.employeeId));
 
     const contractorMap = new Map<string, string>();
+    const contractorHomeProjectMap = new Map<string, string>(); // empId → homeProjectId
     await Promise.all(
       Array.from(employeeIds).map(async (empId) => {
         try {
           const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empId);
-          if (contractor && contractor.name) {
-            contractorMap.set(empId, contractor.name);
+          if (contractor) {
+            if (contractor.name) contractorMap.set(empId, contractor.name);
+            if (contractor.projectLocationId) contractorHomeProjectMap.set(empId, contractor.projectLocationId);
           }
         } catch (err) {
           // Ignore if not found
@@ -443,6 +449,14 @@ export class ReconciliationService {
         employeeName: contractorMap.get(summary.employeeNumber) || scanEntry?.name,
         workDate: summary.date,
         projectLocationId: summary.projectLocationId,
+        homeProjectId: contractorHomeProjectMap.get(summary.employeeNumber),
+        // workLocationIds: สะสม projectLocationId ทุกโครงการที่พนักงานทำงานในวันนั้น
+        // เริ่มจาก existing แล้ว union กับ projectLocationId ใหม่
+        workLocationIds: (() => {
+          const existingLocs = existing?.workLocationIds ?? [];
+          const newLoc = summary.projectLocationId;
+          return Array.from(new Set([...existingLocs, newLoc]));
+        })(),
         dailyReportHours: summary.totalHours,
         timesheetNormalHours: summary.regularHours,
         timesheetOtMorning: summary.otMorningHours,
@@ -517,6 +531,12 @@ export class ReconciliationService {
         employeeName: scan.name || contractorMap.get(scan.employeeId),
         workDate: dateKey,
         projectLocationId: scan.projectLocationId,
+        homeProjectId: contractorHomeProjectMap.get(scan.employeeId),
+        workLocationIds: (() => {
+          const existingLocs = existing?.workLocationIds ?? [];
+          const newLoc = scan.projectLocationId;
+          return Array.from(new Set([...existingLocs, newLoc]));
+        })(),
         dailyReportHours: undefined,   // ไม่มี daily → MISSING_DAILY
         scanDataHours: totalScanHours,
         scanNormalHours: scan.regularHours,
@@ -635,7 +655,13 @@ export class ReconciliationService {
   private buildBaseQuery(filter: Omit<ReconciliationFilter, 'page' | 'pageSize'>): FirebaseFirestore.Query {
     let query: FirebaseFirestore.Query = this.collection;
 
-    if (filter.projectLocationId) {
+    // กรองตามสังกัด (RBAC หลัก) — homeProjectId มาก่อน projectLocationId
+    if (filter.homeProjectId) {
+      query = query.where('homeProjectId', '==', filter.homeProjectId);
+    } else if (filter.allowedHomeProjects && filter.allowedHomeProjects.length > 0) {
+      query = query.where('homeProjectId', 'in', filter.allowedHomeProjects);
+    } else if (filter.projectLocationId) {
+      // fallback: กรองตาม work location (ใช้เฉพาะกรณีที่ homeProjectId ยังไม่ถูก set)
       query = query.where('projectLocationId', '==', filter.projectLocationId);
     } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
       query = query.where('projectLocationId', 'in', filter.allowedProjects);
@@ -904,6 +930,8 @@ export class ReconciliationService {
   async getStats(filter: {
     projectLocationId?: string;
     allowedProjects?: string[];
+    homeProjectId?: string;            // กรองตามสังกัด (RBAC หลัก)
+    allowedHomeProjects?: string[];    // multi สังกัด
     startDate?: string;
     endDate?: string;
   }): Promise<{
@@ -926,7 +954,12 @@ export class ReconciliationService {
     // Base project/date filter (ไม่ใส่ status)
     const buildProjectDateQuery = () => {
       let q: FirebaseFirestore.Query = this.collection;
-      if (filter.projectLocationId) {
+      // ใช้ homeProjectId ก่อน (RBAC หลัก), fallback เป็น projectLocationId
+      if (filter.homeProjectId) {
+        q = q.where('homeProjectId', '==', filter.homeProjectId);
+      } else if (filter.allowedHomeProjects && filter.allowedHomeProjects.length > 0) {
+        q = q.where('homeProjectId', 'in', filter.allowedHomeProjects);
+      } else if (filter.projectLocationId) {
         q = q.where('projectLocationId', '==', filter.projectLocationId);
       } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
         q = q.where('projectLocationId', 'in', filter.allowedProjects);
@@ -965,18 +998,21 @@ export class ReconciliationService {
       baseQ.where('status', '==', 'LEAVE').count().get(),
       baseQ.where('hasLeave', '==', true).count().get(),
       baseQ.where('status', '==', 'HOLIDAY').count().get(),
-      // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project
+      // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project (สังกัด)
       (() => {
         let dcQ: FirebaseFirestore.Query = this.db.collection(COLLECTIONS.DAILY_CONTRACTORS)
           .where('isActive', '==', true);
-        if (filter.projectLocationId) {
-          dcQ = dcQ.where('projectLocationId', '==', filter.projectLocationId);
-        } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
-          dcQ = dcQ.where('projectLocationId', 'in', filter.allowedProjects);
+        const homeProject = filter.homeProjectId ?? filter.projectLocationId;
+        const homeProjects = filter.allowedHomeProjects ?? filter.allowedProjects;
+        if (homeProject) {
+          dcQ = dcQ.where('projectLocationId', '==', homeProject);
+        } else if (homeProjects && homeProjects.length > 0) {
+          dcQ = dcQ.where('projectLocationId', 'in', homeProjects);
         }
         return dcQ.count().get();
       })(),
     ]);
+
 
     return {
       totalRows:          totalSnap.data().count - holidaySnap.data().count,

@@ -94,7 +94,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
   const { data: statsData, isLoading } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: () => reconciliationService.getStats({
-      projectLocationId: project !== 'all' ? project : undefined,
+      projectLocationId: project !== 'all' ? project : undefined,  // backward compat
       startDate: startDate ? startDate.toISOString() : undefined,
       endDate: endDate ? endDate.toISOString() : undefined,
     }),
