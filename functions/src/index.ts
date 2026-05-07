@@ -73,6 +73,7 @@ interface DailyEmployeeTimesheet {
     labor?: string[];
     site?: string[];
   };
+  AssigneesID?: string;
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -485,9 +486,23 @@ async function reconcile(
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
+      assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
       isHoliday,
       updatedAt: now,
     };
+
+    if (hasTimesheet && timesheet?.AssigneesID) {
+      try {
+        const userSnap = await db.collection('users')
+          .where('Employeeid', '==', timesheet.AssigneesID)
+          .limit(1)
+          .get();
+        if (!userSnap.empty) {
+          const uData = userSnap.docs[0].data();
+          updates['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
+        }
+      } catch { /* ignore */ }
+    }
 
     if (existing['status'] !== status) {
       updates['status'] = status;
@@ -500,7 +515,7 @@ async function reconcile(
     await recordRef.update(updates);
 
   } else {
-    await recordRef.set({
+    const setObj: any = {
       employeeId:           employeeNumber,
       employeeNumber,
       workDate:             workDateStr,
@@ -526,12 +541,29 @@ async function reconcile(
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
+      assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
+      assigneeName:         null, // จะอัปเดตด้านล่าง
       isHoliday,
       status,
       statusHistory:        [newStatusEntry],
       createdAt:            now,
       updatedAt:            now,
-    });
+    };
+
+    if (hasTimesheet && timesheet?.AssigneesID) {
+      try {
+        const userSnap = await db.collection('users')
+          .where('Employeeid', '==', timesheet.AssigneesID)
+          .limit(1)
+          .get();
+        if (!userSnap.empty) {
+          const uData = userSnap.docs[0].data();
+          setObj['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
+        }
+      } catch { /* ignore */ }
+    }
+
+    await recordRef.set(setObj);
   }
 
   console.log(`[onScanDataChanged] Reconciled ${employeeNumber} on ${workDateStr} → ${status} (scan:${totalScanHours}h / timesheet:${totalTimesheetHours}h)`);

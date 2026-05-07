@@ -208,6 +208,8 @@ export class ReconciliationService {
         createdAt: now,
         updatedAt: now,
         hasLeave: (isLeaveCalculated ?? isLeave) === true,
+        assigneeId: input.assigneeId,
+        assigneeName: input.assigneeName,
       };
     }
 
@@ -260,6 +262,8 @@ export class ReconciliationService {
       status:                 newStatus,
       updatedAt:              now,
       hasLeave:               effectiveIsLeave === true,
+      assigneeId:             input.assigneeId    ?? existing.assigneeId,
+      assigneeName:           input.assigneeName  ?? existing.assigneeName,
     };
 
     if (input.isHoliday !== undefined) updates.isHoliday = input.isHoliday;
@@ -397,6 +401,7 @@ export class ReconciliationService {
       const totalScanHours =
         (scan.regularHours ?? 0) +
         (scan.otMorningHours ?? 0) +
+        (scan.otNoonHours ?? 0) +
         (scan.otEveningHours ?? 0);
       scanMap.set(key, { 
         hours: totalScanHours, 
@@ -412,9 +417,22 @@ export class ReconciliationService {
     }
 
     const writer = this.db.bulkWriter();
+    // หยุด retry หลัง 3 ครั้ง และ log error ออกมา เพื่อป้องกัน silent hang
+    writer.onWriteError((error) => {
+      console.error(
+        `[ReconciliationService][BulkWriter] Write FAILED for ${error.documentRef.path}` +
+        ` (attempt ${error.failedAttempts}): ${error.message}`
+      );
+      if (error.failedAttempts >= 3) {
+        failed++;
+        return false; // หยุด retry
+      }
+      return true; // retry ต่อ
+    });
     let succeeded = 0;
     let failed = 0;
     const now = new Date();
+
 
     // 3.5 ดึงรายชื่อพนักงานทั้งหมดที่เกี่ยวข้อง
     const employeeIds = new Set<string>();
@@ -436,8 +454,41 @@ export class ReconciliationService {
         }
       })
     );
+    
+    // 3.6 ดึงข้อมูลโฟร์แมน (Assignees) จาก users collection
+    // ใช้ Employeeid (ตัว E ใหญ่) ตาม schema จริงใน Firestore
+    const assigneeIds = new Set<string>();
+    dailySummaries.forEach(s => { if (s.assigneeId) assigneeIds.add(s.assigneeId); });
+
+    const assigneeMap = new Map<string, string>(); // empId -> fullNameEn
+    if (assigneeIds.size > 0) {
+      console.log(`[ReconciliationService] Looking up ${assigneeIds.size} assignee(s): [${Array.from(assigneeIds).join(', ')}]`);
+      const timeoutMs = 5000; // 5 วินาที ต่อ 1 query หาก hang จะ skip ไปเลย
+      await Promise.all(Array.from(assigneeIds).map(async (empId) => {
+        try {
+          const queryPromise = this.db.collection('users')
+            .where('Employeeid', '==', empId)
+            .limit(1)
+            .get();
+          const timeoutPromise = new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), timeoutMs)
+          );
+          const snap = await Promise.race([queryPromise, timeoutPromise]);
+          if (snap && 'empty' in snap && !snap.empty) {
+            const data = snap.docs[0].data();
+            assigneeMap.set(empId, data.fullNameEn || data.Fullnameen || '');
+          } else if (!snap) {
+            console.warn(`[ReconciliationService] Assignee lookup timed out for empId=${empId} — skipping`);
+          }
+        } catch (e) {
+          console.warn(`[ReconciliationService] Assignee lookup failed for empId=${empId}:`, e);
+        }
+      }));
+      console.log(`[ReconciliationService] Assignee lookup done. Found ${assigneeMap.size} name(s)`);
+    }
 
     // 4. Upsert ReconciliationRecord สำหรับทุก daily summary
+    console.log(`[ReconciliationService] Step 4: Processing ${dailySummaries.length} daily summaries...`);
     for (const summary of dailySummaries) {
       const key = `${summary.employeeNumber}_${summary.date}`;
       const scanEntry = scanMap.get(key);
@@ -450,8 +501,6 @@ export class ReconciliationService {
         workDate: summary.date,
         projectLocationId: summary.projectLocationId,
         homeProjectId: contractorHomeProjectMap.get(summary.employeeNumber),
-        // workLocationIds: สะสม projectLocationId ทุกโครงการที่พนักงานทำงานในวันนั้น
-        // เริ่มจาก existing แล้ว union กับ projectLocationId ใหม่
         workLocationIds: (() => {
           const existingLocs = existing?.workLocationIds ?? [];
           const newLoc = summary.projectLocationId;
@@ -462,7 +511,7 @@ export class ReconciliationService {
         timesheetOtMorning: summary.otMorningHours,
         timesheetOtNoon: summary.otNoonHours,
         timesheetOtEvening: summary.otEveningHours,
-        dailyReportId: `${summary.employeeNumber}_${summary.date}`, // Project B doc id
+        dailyReportId: `${summary.employeeNumber}_${summary.date}`,
         scanDataHours: scanEntry?.hours,
         scanNormalHours: scanEntry?.scanNormalHours,
         scanOtMorningHours: scanEntry?.scanOtMorningHours,
@@ -475,6 +524,8 @@ export class ReconciliationService {
         leaveHours: summary.leaveHours,
         leaveEntries: summary.leaveEntries,
         medCertFileUrl: summary.medCertFileUrl,
+        assigneeId: summary.assigneeId,
+        assigneeName: summary.assigneeId ? assigneeMap.get(summary.assigneeId) : undefined,
       };
 
       try {
@@ -489,14 +540,15 @@ export class ReconciliationService {
              });
           }
           const ref = this.collection.doc(id);
-          // ใช้ merge: true ตามพฤติกรรมเดิมของ upsertRecord
           writer.set(ref, reconciliationRecordConverter.toFirestore(resultData as any), { merge: true });
           succeeded++;
         }
       } catch (err) {
+        console.error(`[ReconciliationService] mergeAndClassify error for ${summary.employeeNumber} ${summary.date}:`, err);
         failed++;
       }
     }
+    console.log(`[ReconciliationService] Step 4 done: ${succeeded} queued, ${failed} failed`);
 
     // 5. Handle scan records ที่ไม่มี daily report (MISSING_DAILY)
     //    หา scan records ที่ยังไม่ถูก match กับ daily summary
@@ -560,7 +612,9 @@ export class ReconciliationService {
     }
 
     // ปิด writer เพื่อ commit ชุดข้อมูลทั้งหมด
+    console.log(`[ReconciliationService] Step 6: writer.close() starting (${succeeded} writes queued)...`);
     await writer.close();
+    console.log(`[ReconciliationService] Step 6: writer.close() DONE`);
 
     return {
       succeeded,
@@ -612,6 +666,29 @@ export class ReconciliationService {
       }
     }
 
+    let assigneeName: string | undefined = undefined;
+    if (summary?.assigneeId) {
+      try {
+        const timeoutMs = 5000;
+        const queryPromise = this.db.collection('users')
+          .where('Employeeid', '==', summary.assigneeId)
+          .limit(1)
+          .get();
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), timeoutMs)
+        );
+        const snap = await Promise.race([queryPromise, timeoutPromise]);
+        if (snap && 'empty' in snap && !snap.empty) {
+          const data = snap.docs[0].data();
+          assigneeName = data.fullNameEn || data.Fullnameen;
+        } else if (!snap) {
+          console.warn(`[ReconciliationService] Assignee lookup timed out for empId=${summary.assigneeId}`);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     return this.upsertRecord({
       employeeId,
       employeeName,
@@ -636,6 +713,8 @@ export class ReconciliationService {
       leaveHours: summary?.leaveHours,
       leaveEntries: summary?.leaveEntries,
       medCertFileUrl: summary?.medCertFileUrl,
+      assigneeId: summary?.assigneeId,
+      assigneeName: assigneeName,
     }, false, summary?.isLeave);
   }
 

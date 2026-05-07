@@ -78,6 +78,7 @@ export interface DailyEmployeeTimesheet {
     labor?: string[];
     site?: string[];
   };
+  AssigneesID?: string;
   lastUpdated?: string;            // ISO string
 }
 
@@ -98,6 +99,7 @@ export interface DailyTimesheetSummary {
   leaveHours: number;
   leaveEntries?: { type: string; hours: number; description?: string }[];
   medCertFileUrl?: string;
+  assigneeId?: string;
   dailyReportPhotos?: string[];    // ดึงมาจาก photos.labor
   dailyReportPunches?: string[];   // ดึงมาจาก shiftTimes
 }
@@ -223,6 +225,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     leaveHours,
     leaveEntries,
     medCertFileUrl: doc.leaveStatus?.medCertFileUrl || doc.medCertFileUrl,
+    assigneeId: doc.AssigneesID,
     dailyReportPhotos,
     dailyReportPunches,
   };
@@ -350,15 +353,17 @@ class ProjectBDailyReportService {
   ): Promise<DailyEmployeeTimesheet[]> {
     const db = this.ensureDb();
 
+    // NOTE: ไม่ใช้ isActive filter ใน Firestore query เพราะต้องการ composite index ที่อาจยังไม่ถูกสร้าง — filter ใน memory แทน
     const snap = await db
       .collection(this.COLLECTION)
       .where('projectLocationId', '==', projectLocationId)
       .where('date', '>=', startDate)
       .where('date', '<=', endDate)
-      .where('isActive', '==', true)
       .get();
 
-    return snap.docs.map((doc) => doc.data() as DailyEmployeeTimesheet);
+    return snap.docs
+      .map((doc) => doc.data() as DailyEmployeeTimesheet)
+      .filter((ts) => ts.isActive !== false); // filter isActive ใน memory
   }
 
   /**
@@ -368,13 +373,15 @@ class ProjectBDailyReportService {
   public async getTimesheetsByDate(dateStr: string): Promise<DailyEmployeeTimesheet[]> {
     const db = this.ensureDb();
 
+    // NOTE: ไม่ใช้ isActive filter ใน Firestore query เพราะต้องการ composite index — filter ใน memory แทน
     const snap = await db
       .collection(this.COLLECTION)
       .where('date', '==', dateStr)
-      .where('isActive', '==', true)
       .get();
 
-    return snap.docs.map((doc) => doc.data() as DailyEmployeeTimesheet);
+    return snap.docs
+      .map((doc) => doc.data() as DailyEmployeeTimesheet)
+      .filter((ts) => ts.isActive !== false);
   }
 
   // =========================================================================

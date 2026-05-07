@@ -194,9 +194,10 @@ const ActionButton = styled(Button, {
     borderRadius: '8px',
     textTransform: 'none' as const,
     fontWeight: 800,
-    minWidth: '80px',
+    minWidth: '76px',
     height: '26px',
     fontSize: '0.75rem',
+    whiteSpace: 'nowrap' as const,
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     '&:hover': {
       transform: 'scale(1.05)',
@@ -674,22 +675,22 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         <TableHead>
                   {/* Row 1 */}
           <TableRow>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.no')}</TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.date')}</TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.employee')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 160, maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.2, px: 2 }}>
+            <TableCell rowSpan={3} sx={{ minWidth: 36, width: 40 }}>{t('workHourMonitoring.table.no')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 90, whiteSpace: 'nowrap' }}>{t('workHourMonitoring.table.date')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 130 }}>{t('workHourMonitoring.table.employee')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
               {t('workHourMonitoring.table.project')}
             </TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 130, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
+            <TableCell rowSpan={3} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
               โครงการที่ทำงาน
             </TableCell>
             <TableCell colSpan={5} sx={{ borderBottom: 'none' }}>
               {t('workHourMonitoring.table.comparison')}
             </TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.lateMinutes')}</TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.responsible')}</TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.status')}</TableCell>
-            <TableCell rowSpan={3}>{t('workHourMonitoring.table.actions')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 52 }}>{t('workHourMonitoring.table.lateMinutes')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 60 }}>{t('workHourMonitoring.table.responsible')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 150 }}>{t('workHourMonitoring.table.status')}</TableCell>
+            <TableCell rowSpan={3} sx={{ minWidth: 90 }}>{t('workHourMonitoring.table.actions')}</TableCell>
           </TableRow>
           {/* Row 2 */}
           <TableRow>
@@ -742,13 +743,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
             return (
               <TableRow key={row.id} hover>
-                <TableCell>{rowNumber}</TableCell>
-                <TableCell>{row.workDate}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', width: 40, textAlign: 'center' }}>{rowNumber}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 90 }}>{row.workDate}</TableCell>
                 <TableCell sx={{ textAlign: 'left !important', pl: 2 }}>
                   <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.85rem', lineHeight: 1.1 }}>{row.employeeId}</Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{row.employeeName || '-'}</Typography>
                 </TableCell>
-                <TableCell sx={{ minWidth: 160, maxWidth: 220, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, textAlign: 'left !important', pl: 2 }}>
+                <TableCell sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, textAlign: 'left !important', pl: 1.5 }}>
                   <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#334155' }}>
                     {projectsList.find(p => p.id === row.homeProjectId || p.code === row.homeProjectId)?.name || row.homeProjectId || row.projectLocationId}
                   </Typography>
@@ -834,11 +835,12 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 </TableCell>
                 
                 <TableCell>
-                   {/* Responsible not tracked in record directly, normally linked from project/daily report */}
-                   <Typography variant="caption" color="text.secondary">-</Typography>
+                   <Typography variant="caption" color="text.secondary">
+                     {row.assigneeName || '-'}
+                   </Typography>
                 </TableCell>
 
-                <TableCell>
+                <TableCell sx={{ minWidth: 150 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
                     <StatusCapsule statusType={row.status}>
                       {t(`workHourMonitoring.status.${row.status.toLowerCase()}`, row.status)}
@@ -851,7 +853,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   </Box>
                 </TableCell>
 
-                <TableCell>
+                <TableCell sx={{ minWidth: 90, textAlign: 'center' }}>
                   {row.status === 'MISSING_DAILY' ? (
                     <ActionButton
                       variant="outlined"

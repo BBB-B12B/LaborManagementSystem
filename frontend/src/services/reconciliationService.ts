@@ -65,6 +65,8 @@ export interface ReconciliationRecord {
   }[];
   medCertFileUrl?: string; // Add medCertFileUrl
   hasLeave?: boolean;
+  assigneeId?: string;
+  assigneeName?: string;
 }
 
 export interface ReconciliationFilter {

@@ -97,6 +97,8 @@ export interface ReconciliationRecord {
   statusHistory: StatusHistoryEntry[];
 
   // --- Metadata ---
+  assigneeId?: string;               // รหัสโฟร์แมนที่รับผิดชอบ (AssigneesID จาก After-Sale)
+  assigneeName?: string;             // ชื่อโฟร์แมน (fullNameEn จาก users collection)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -137,6 +139,8 @@ export interface CreateReconciliationRecordInput {
   }[];
   medCertFileUrl?: string; // Add medCertFileUrl
   hasLeave?: boolean;
+  assigneeId?: string;
+  assigneeName?: string;
 }
 
 // ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
@@ -198,6 +202,8 @@ export const reconciliationRecordConverter = {
     }
     if (record.createdAt !== undefined) data.createdAt = record.createdAt;
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
+    if (record.assigneeId !== undefined) data.assigneeId = record.assigneeId;
+    if (record.assigneeName !== undefined) data.assigneeName = record.assigneeName;
     
     // Additional properties
     if ('isHoliday' in record) data.isHoliday = record.isHoliday;
@@ -257,6 +263,8 @@ export const reconciliationRecordConverter = {
       statusHistory: parseHistory(data.statusHistory),
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
+      assigneeId: data.assigneeId,
+      assigneeName: data.assigneeName,
       // Leave & Holiday
       ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
       ...(data.leaveHours !== undefined && { leaveHours: data.leaveHours }),

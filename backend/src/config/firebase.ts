@@ -34,7 +34,11 @@ if (!admin.apps.length) {
 }
 
 export const db = admin.firestore();
+// ป้องกัน Firestore throw error เมื่อ field มีค่าเป็น undefined (เช่น leaveEntries)
+// แทนที่จะ throw ระบบจะ ignore field นั้นไปเงียบๆ
+db.settings({ ignoreUndefinedProperties: true });
 export const auth = admin.auth();
 export const storage = admin.storage();
+
 
 export default admin;
