@@ -326,7 +326,7 @@ markdown
 | **User Action Path** | `Workspace Kanban` -> คลิกที่แผ่นการ์ดงาน (Task Card) -> แสดงหน้าจอ `TaskDailyReportModal` (ปฏิทิน) -> เลือกวันที่ย้อนหลัง (จุดสีแดง) -> กดปุ่ม `ปลดล็อคสิทธิ์` -> เลือก `1 วัน` หรือ `7 วัน` |
 | **UI/UX Component** | ใช้ `@mui/x-date-pickers/DateCalendar` โดย Customize วันที่ไม่มีข้อมูล (และเป็นอดีต) ด้วยจุดสีแดง (`Badge` error) |
 | **Lock Logic** | - **Lock 3 วัน:** ถ้าย้อนหลังเกิน 3 วันและยังไม่มีข้อมูล จะไม่สามารถลง Daily Report ได้ (ต้องกดปลดล็อคก่อน) <br> - **Wage Period Lock:** หากเลือกวันที่ซึ่งตรงกับรอบปิดงวดค่าแรง (อิงตาม Mock Logic) ปุ่มปลดล็อคจะถูก Disable และมี Tooltip/Message แจ้งว่ารอบบิลถูกปิดแล้ว เพื่อป้องกันความขัดแย้งของข้อมูลค่าแรง |
-| **Unlock Mechanism** | ปัจจุบันเป็น Mock State ใน UI `isUnlocked`: <br> - การปลดล็อคเป็นการขยายขอบเขตเวลา (เช่น +1 วัน หรือ +7 วัน) ชั่วคราวให้ผู้ใช้สามารถย้อนกลับไปทำ Daily Report ของวันนั้นๆ ได้ |
+| **Unlock Mechanism** | - **Backend (TaskService):** มี `POST /api/tasks/:id/unlock-report` เรียกใช้ `unlockDailyReport` อัปเดตฟิลด์ `unlockedDates: Record<string, { unlockedUntil, unlockedBy }>` ลงใน Task Document.<br> - **Validation:** เมื่อ Submit ย้อนหลังเกิน 3 วัน (ใน `submitDailyReport`) จะเช็คว่าวันที่ `reportDate` นี้ถูกปลดล็อคและยังไม่หมดเวลา (`unlockedUntil`) หรือไม่ หากหมดเวลาจะ Reject.<br> - **Frontend (new.tsx):** เพิ่ม `DatePicker` ให้ FM สามารถเลือกวันที่ย้อนหลังเพื่อลงรายงานได้ (จากเดิมที่บังคับใช้เฉพาะวันปัจจุบัน) |
 
 ---
 

@@ -318,8 +318,18 @@ export default function WorkspacePage() {
 
             const filteredTasks = getFilteredTasks();
             const columnTasks = filteredTasks.filter((t) => {
-              if (column.id === 'in-progress') return t.status === 'in-progress' || t.status === 'rework';
-              return t.status === column.id;
+              let effectiveStatus = t.status;
+              const progress = t.dailyProgress || 0;
+              
+              // Force UI column alignment if backend status is out of sync with progress
+              if (progress >= 100 && effectiveStatus !== 'completed') {
+                effectiveStatus = 'for-checking';
+              } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
+                effectiveStatus = 'in-progress';
+              }
+
+              if (column.id === 'in-progress') return effectiveStatus === 'in-progress' || effectiveStatus === 'rework';
+              return effectiveStatus === column.id;
             }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
             return (

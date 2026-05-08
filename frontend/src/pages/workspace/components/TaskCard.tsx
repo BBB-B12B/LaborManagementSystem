@@ -217,20 +217,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563' }}>
             Progress
           </Typography>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: (isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress) >= 100 ? '#059669' : '#1c1e2b' }}>
-            {isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress || 0}%
+          <Typography variant="caption" sx={{ fontWeight: 800, color: task.dailyProgress >= 100 ? '#059669' : '#1c1e2b' }}>
+            {task.dailyProgress || 0}%
           </Typography>
         </Stack>
         <LinearProgress 
           variant="determinate" 
-          value={Math.min(100, Math.max(0, isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress || 0))} 
+          value={Math.min(100, Math.max(0, task.dailyProgress || 0))} 
           sx={{
             height: 6,
             borderRadius: 3,
             backgroundColor: '#f1f3f6',
             '& .MuiLinearProgress-bar': {
               borderRadius: 3,
-              background: (isActingAsSupport ? (task.supportDailyProgress || 0) : task.dailyProgress) >= 100 
+              background: task.dailyProgress >= 100 
                 ? 'linear-gradient(90deg, #059669, #10b981)' 
                 : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
             }
@@ -238,31 +238,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
         />
       </Box>
 
-      {/* Due Date with Gradient Border */}
+      {/* Due Date Badge */}
       <Box sx={{ mb: 3 }}>
         <Box
           sx={{
             display: 'inline-flex',
-            position: 'relative',
+            backgroundColor: '#1c1e2b',
             borderRadius: '999px',
-            padding: '1px', // This acts as the border width
-            background: 'linear-gradient(45deg, #a78bfa, #f472b6, #fb923c, #34d399)',
+            px: 1.5,
+            py: 0.5,
+            alignItems: 'center',
+            boxShadow: '0 2px 6px rgba(28, 30, 43, 0.2)',
           }}
         >
-          <Box
-            sx={{
-              backgroundColor: '#ffffff',
-              borderRadius: '999px',
-              px: 1.5,
-              py: 0.5,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <Typography variant="caption" sx={{ fontWeight: 700, color: '#374151' }}>
-              Due: {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-            </Typography>
-          </Box>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', letterSpacing: 0.5 }}>
+            Due: {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+          </Typography>
         </Box>
       </Box>
 

@@ -15,6 +15,10 @@ import { useAuthStore } from '@/store/authStore';
 import { taskService } from '@/services/taskService';
 import { dailyReportService } from '@/services/dailyReportService';
 import { useQuery } from '@tanstack/react-query';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import th from 'date-fns/locale/th';
 // Helper for SLA Countdown component
 const SLACountdown = ({ startTime, durationHours = 24 }: { startTime: string, durationHours?: number }) => {
     const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, isOverdue: boolean } | null>(null);
@@ -243,6 +247,7 @@ const DailyReport = () => {
 
     const [selectedTaskInfo, setSelectedTaskInfo] = useState<{ task: MasterTask; wo: WorkOrder } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [reportDate, setReportDate] = useState<Date>(new Date());
 
     const [progress, setProgress] = useState(0);
     const [note, setNote] = useState('');
@@ -611,7 +616,7 @@ const DailyReport = () => {
             for (const entry of entriesToCreate) {
                 await dailyReportService.addWorkEntry({
                     projectId: selectedTaskInfo.wo.projectId || 'unknown',
-                    date: new Date(),
+                    date: reportDate,
                     entry: entry as any
                 });
             }
@@ -800,7 +805,27 @@ const DailyReport = () => {
                                             return <SLACountdown startTime={selectedTaskInfo.task.slaStartTime || selectedTaskInfo.task.startDate || new Date().toISOString()} durationHours={slaDuration} />;
                                         })()}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
+                                    <div style={{ marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', marginBottom: '8px' }}>วันที่รายงานผล (Report Date)</div>
+                                        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={th}>
+                                            <DatePicker
+                                                value={reportDate}
+                                                onChange={(newValue) => { if (newValue) setReportDate(newValue); }}
+                                                format="dd/MM/yyyy"
+                                                slotProps={{
+                                                    textField: {
+                                                        size: 'small',
+                                                        fullWidth: true,
+                                                        sx: {
+                                                            backgroundColor: '#fff',
+                                                            '& .MuiOutlinedInput-root': { borderRadius: '8px', fontWeight: 700 }
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </LocalizationProvider>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '20px', marginTop: '16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ background: '#eff6ff', padding: '6px', borderRadius: '8px', color: '#3b82f6' }}><MapPin size={16} /></div><div><div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700 }}>ตำแหน่ง</div><div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{selectedTaskInfo.task.position || '-'}</div></div></div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ background: '#f0fdf4', padding: '6px', borderRadius: '8px', color: '#15803d' }}><Package size={16} /></div><div><div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700 }}>จำนวน</div><div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{selectedTaskInfo.task.amount || 1} {selectedTaskInfo.task.unit || 'จุด'}</div></div></div>
                                     </div>

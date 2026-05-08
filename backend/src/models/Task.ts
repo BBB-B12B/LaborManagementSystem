@@ -25,6 +25,7 @@ export interface Task {
   projectName: string;
   workOrderId?: string;
   workOrderCode?: string;
+  workOrderName?: string;
   categoryId?: string;
   categoryName?: string;
   assignees: TaskAssignee[];
@@ -41,6 +42,7 @@ export interface Task {
   supportTaskName?: string; // [NEW] Custom task name for Support
   supportDailyProgress?: number; // [NEW] Separate progress for Support
   supportAssignees?: TaskAssignee[]; // [NEW] Support team assignees
+  unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>; // [NEW] Track unlocked dates for Daily Reports
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -54,6 +56,7 @@ export interface CreateTaskInput {
   projectName: string;
   workOrderId?: string;
   workOrderCode: string;
+  workOrderName?: string;
   categoryId?: string;
   categoryName: string;
   assignees: TaskAssignee[];
@@ -69,6 +72,7 @@ export interface UpdateTaskInput {
   projectName?: string;
   workOrderId?: string;
   workOrderCode?: string;
+  workOrderName?: string;
   categoryId?: string;
   categoryName?: string;
   assignees?: TaskAssignee[];
@@ -82,6 +86,7 @@ export interface UpdateTaskInput {
   supportTaskName?: string;
   supportDailyProgress?: number;
   supportAssignees?: TaskAssignee[];
+  unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
 }
 
 export const taskConverter = {
@@ -95,6 +100,7 @@ export const taskConverter = {
       projectName: task.projectName || '',
       workOrderId: task.workOrderId || null,
       workOrderCode: task.workOrderCode || null,
+      workOrderName: task.workOrderName || null,
       categoryId: task.categoryId || null,
       categoryName: task.categoryName || null,
       assignees: task.assignees || [],
@@ -111,6 +117,7 @@ export const taskConverter = {
       supportTaskName: task.supportTaskName || null,
       supportDailyProgress: task.supportDailyProgress || 0,
       supportAssignees: task.supportAssignees || [],
+      unlockedDates: task.unlockedDates || {},
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       createdBy: task.createdBy,
@@ -137,6 +144,7 @@ export const taskConverter = {
       projectName: data.projectName || '',
       workOrderId: data.workOrderId || '',
       workOrderCode: data.workOrderCode || '',
+      workOrderName: data.workOrderName || '',
       categoryId: data.categoryId || '',
       categoryName: data.categoryName || '',
       assignees: data.assignees || [],
@@ -153,6 +161,13 @@ export const taskConverter = {
       supportTaskName: data.supportTaskName || '',
       supportDailyProgress: data.supportDailyProgress || 0,
       supportAssignees: data.supportAssignees || [],
+      unlockedDates: data.unlockedDates ? Object.keys(data.unlockedDates).reduce((acc, key) => {
+        acc[key] = {
+          ...data.unlockedDates[key],
+          unlockedUntil: safeDate(data.unlockedDates[key].unlockedUntil),
+        };
+        return acc;
+      }, {} as Record<string, any>) : {},
       createdAt: safeDate(data.createdAt),
       updatedAt: safeDate(data.updatedAt),
       createdBy: data.createdBy || '',

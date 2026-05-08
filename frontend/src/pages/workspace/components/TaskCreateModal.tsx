@@ -292,6 +292,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             projectId: data.projectId,
             projectName: selectedProject?.projectName || 'Unknown Project',
             workOrderCode: data.workOrderCode,
+            workOrderName: workOrders.find((w) => w.code === data.workOrderCode)?.name || 'General',
             categoryName: data.categoryName,
             assignees: data.assignees,
             dueDate: data.dueDate.toISOString(),
@@ -318,14 +319,16 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   };
 
   const inputStyles = { 
-    '& .MuiFilledInput-root': {
+    '& .MuiFilledInput-root, & .MuiInputBase-root': {
       borderRadius: 2, 
       backgroundColor: '#F4F6F8 !important',
+      '&::before': { display: 'none !important' },
+      '&::after': { display: 'none !important' },
       '&:hover': { backgroundColor: '#EAECEF !important' }, 
       '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' },
       '&.Mui-disabled': {
         backgroundColor: '#f5f7f9 !important',
-        '&::before': { borderBottomStyle: 'none !important' }
+        '&::before': { display: 'none !important' }
       }
     },
     '& .MuiInputBase-input': {
@@ -454,7 +457,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     const shouldDisableProject = !isHelperProject && user?.projectLocationIds && user.projectLocationIds.length > 0;
 
                     return (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
                         <Autocomplete
                           sx={{ flex: 1 }}
                           options={projects}
@@ -474,9 +477,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             />
                           )}
                         />
-                        <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
-                          <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
-                        </Tooltip>
+                        <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                          <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
+                            <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                          </Tooltip>
+                        </Box>
                       </Box>
                     );
                   }}
@@ -489,7 +494,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     name="workOrderCode"
                     control={control}
                     render={({ field }) => (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
                         <Autocomplete
                           sx={{ flex: 1 }}
                           options={workOrders}
@@ -522,9 +527,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             </li>
                           )}
                         />
-                        <Tooltip title="พวกงานโครงสร้าง งานสถาปัตย์" arrow placement="top">
-                          <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
-                        </Tooltip>
+                        <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                          <Tooltip title="หมวดงานหลัก ยกตัวอย่างเช่น งานโครงสร้าง งานสถาปัตย์ งานระบบ งานผลิต งานขนส่ง เป็นต้น" arrow placement="top">
+                            <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                          </Tooltip>
+                        </Box>
                       </Box>
                     )}
                   />
@@ -547,7 +554,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     name="categoryName"
                     control={control}
                     render={({ field }) => (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
                         <Autocomplete
                           sx={{ flex: 1 }}
                           freeSolo
@@ -585,9 +592,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             );
                           }}
                         />
-                        <Tooltip title="โครงสร้างเสา งานทาสี งานผนัง งานโครงสร้างพื้น เป็นต้น" arrow placement="top">
-                          <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
-                        </Tooltip>
+                        <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                          <Tooltip title="หมวดงานย่อยให้สอดคล้องกับหมวดงานหลัก เช่น งานโครงสร้างเสา งานฉาบเรียบทาสี งานปูกระเบื้อง งานขนส่งคนงาน งานผนัง Precast เป็นต้น" arrow placement="top">
+                            <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                          </Tooltip>
+                        </Box>
                       </Box>
                     )}
                   />
@@ -779,17 +788,32 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                   render={({ field }) => {
                     const isCrossProjectSupport = isHelperUser && selectedProjectId !== user?.projectLocationIds?.[0];
                     return (
-                      <DatePicker
-                        label="Due Date (วันที่ครบกำหนด) *"
-                        value={field.value}
-                        onChange={field.onChange}
-                        disabled={isSubmitting || isCrossProjectSupport}
-                        error={!!errors.dueDate}
-                        helperText={(errors.dueDate?.message as string) || (isCrossProjectSupport ? 'วันที่กำหนดถูกอ้างอิงจากโครงการต้นทาง' : '')}
-                        variant="filled"
-                        InputProps={{ disableUnderline: true }}
-                        sx={inputStyles}
-                      />
+                      <Box sx={inputStyles}>
+                        <DatePicker
+                          label="Due Date (วันที่ครบกำหนด) *"
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={isSubmitting || isCrossProjectSupport}
+                          error={!!errors.dueDate}
+                          helperText={(errors.dueDate?.message as string) || (isCrossProjectSupport ? 'วันที่กำหนดถูกอ้างอิงจากโครงการต้นทาง' : '')}
+                          variant="filled"
+                          InputProps={{ 
+                            disableUnderline: true,
+                            sx: {
+                              backgroundColor: '#F4F6F8 !important',
+                              borderRadius: 2,
+                              '&::before': { display: 'none !important' },
+                              '&::after': { display: 'none !important' },
+                              '&:hover': { backgroundColor: '#EAECEF !important' },
+                              '&.Mui-disabled': {
+                                backgroundColor: '#f5f7f9 !important',
+                                '&::before': { display: 'none !important' }
+                              }
+                            }
+                          }}
+                          sx={inputStyles}
+                        />
+                      </Box>
                     );
                   }}
                 />

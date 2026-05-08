@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { projectConfigService, WorkOrderConfig } from '@/services/projectConfigService';
 import { useSnackbar } from 'notistack';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
 
 const schema = z.object({
   code: z.string().min(1, 'กรุณาระบุรหัสหมวดหมู่งานหลัก (เช่น STR, ARC)'),
@@ -28,6 +29,7 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
   const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const confirmDialog = useConfirmDialog();
 
   const { control, handleSubmit, reset, formState: { errors, isValid } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -67,7 +69,16 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
 
   const handleDelete = async () => {
     if (!editData || !projectId) return;
-    if (!window.confirm('คุณต้องการลบหมวดหมู่งานหลักนี้ใช่หรือไม่? ข้อมูลงานย่อยที่เกี่ยวข้องจะถูกลบด้วย (ถ้าไม่มีการเริ่มงานไปแล้ว)')) return;
+    
+    const isConfirmed = await confirmDialog.confirm({
+      title: 'ยืนยันการลบ',
+      message: 'คุณต้องการลบหมวดหมู่งานหลักนี้ใช่หรือไม่? ข้อมูลงานย่อยที่เกี่ยวข้องจะถูกลบด้วย (ถ้าไม่มีการเริ่มงานไปแล้ว)',
+      confirmText: 'ลบหมวดหมู่',
+      cancelText: 'ยกเลิก',
+      severity: 'error'
+    });
+
+    if (!isConfirmed) return;
     
     setDeleting(true);
     try {
@@ -100,6 +111,7 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
   };
 
   return (
+    <>
     <Dialog 
       open={open} 
       onClose={(event, reason) => {
@@ -232,5 +244,7 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
         </DialogActions>
       </Box>
     </Dialog>
+    <confirmDialog.ConfirmDialog />
+    </>
   );
 };

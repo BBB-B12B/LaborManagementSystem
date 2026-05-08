@@ -43,6 +43,8 @@ import { dailyReportService } from '@/services/dailyReportService';
 import { taskService, type Task } from '@/services/taskService';
 import { useSnackbar } from 'notistack';
 import { useAuthStore } from '@/store/authStore';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
+import { useQueryClient } from '@tanstack/react-query';
 import TaskRejectModal from './TaskRejectModal';
 
 interface TaskDailyReportModalProps {
@@ -53,14 +55,23 @@ interface TaskDailyReportModalProps {
 }
 
 interface DailySummary {
+  hasSiteReport: boolean;
+  hasSupportReport: boolean;
   progressAdded: number;
   totalProgress: number;
   pastProgress: number;
-  workerCount: number;
-  regularHours: number;
-  otMorning: number;
-  otNoon: number;
-  otEvening: number;
+  siteWorkerCount: number;
+  supportWorkerCount: number;
+  siteTotalHours: number;
+  supportTotalHours: number;
+  siteRegularHours: number;
+  supportRegularHours: number;
+  siteOtMorning: number;
+  supportOtMorning: number;
+  siteOtNoon: number;
+  supportOtNoon: number;
+  siteOtEvening: number;
+  supportOtEvening: number;
   sitePhotos: string[];
   laborPhotos: string[];
 }
@@ -86,6 +97,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<Record<string, DailySummary>>({});
   const [reportDates, setReportDates] = useState<string[]>([]);
+  const [allAvailableDates, setAllAvailableDates] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
@@ -96,89 +108,142 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     return isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
   }, [task, user]);
 
+  const { confirm, ConfirmDialog } = useConfirmDialog();
+  const queryClient = useQueryClient();
+
   const fetchReports = useCallback(async (forceRefresh = false) => {
     if (!task?.id || !open) return;
     setLoading(true);
     try {
-      const reports = await dailyReportService.getAllTaskReports(task.id, forceRefresh, isActingAsSupport);
-      const newData: Record<string, DailySummary> = {};
-      const dates: string[] = [];
+      const isSupportTask = task.isSupportRequest && task.isPickedUpBySupport;
 
-      const sortedReports = [...reports].sort((a: any, b: any) => {
-        const getSecs = (d: any) => {
-          if (!d) return 0;
-          if (typeof d === 'object' && ('_seconds' in d || 'seconds' in d)) {
-            return d._seconds || d.seconds;
-          }
-          return new Date(d).getTime() / 1000;
-        };
-        return getSecs(a.reportDate) - getSecs(b.reportDate);
-      });
+      // Always fetch both if it's a support task
+      let siteReports: any[] = [];
+      let supportReports: any[] = [];
 
-      let previousProgress = 0;
+      if (isSupportTask) {
+        const [siteRes, supportRes] = await Promise.all([
+          dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []),
+          dailyReportService.getAllTaskReports(task.id, forceRefresh, true).catch(() => [])
+        ]);
+        siteReports = siteRes;
+        supportReports = supportRes;
+      } else {
+        siteReports = await dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []);
+      }
 
-      sortedReports.forEach((report: any) => {
+      // The reports to determine the current user's calendar dots
+      const currentUserReports = isActingAsSupport ? supportReports : siteReports;
+      const currentUserDates: string[] = [];
+      const availableDatesSet = new Set<string>();
+
+      // Build a unified map of dates
+      const combinedReportsMap = new Map<string, { site: any, support: any }>();
+
+      const addToMap = (report: any, type: 'site' | 'support') => {
         if (!report.reportDate) return;
-        
         let rDate: Date;
         if (typeof report.reportDate === 'object' && ('_seconds' in report.reportDate || 'seconds' in report.reportDate)) {
-          const secs = report.reportDate._seconds || report.reportDate.seconds;
-          rDate = new Date(secs * 1000);
+          rDate = new Date((report.reportDate._seconds || report.reportDate.seconds) * 1000);
         } else {
           rDate = new Date(report.reportDate);
         }
         const dateStr = format(rDate, 'yyyy-MM-dd');
-        dates.push(dateStr);
+        availableDatesSet.add(dateStr);
+        if (!combinedReportsMap.has(dateStr)) {
+          combinedReportsMap.set(dateStr, { site: null, support: null });
+        }
+        combinedReportsMap.get(dateStr)![type] = report;
+      };
 
-        const parseHours = (timeStr?: string, isRegular: boolean = false): number => {
-          if (!timeStr) return 0;
-          const [start, end] = timeStr.split(' - ');
-          if (!start || !end) return 0;
-          const [sh, sm] = start.split(':').map(Number);
-          const [eh, em] = end.split(':').map(Number);
-          let hours = (eh + em / 60) - (sh + sm / 60);
-          if (hours < 0) hours += 24;
-          if (isRegular && hours >= 5) hours -= 1; // ลบพักเที่ยง
-          return hours;
-        };
+      siteReports.forEach(r => addToMap(r, 'site'));
+      supportReports.forEach(r => addToMap(r, 'support'));
 
-        let workerCount = 0;
-        let regularHours = 0;
-        let otMorning = 0;
-        let otNoon = 0;
-        let otEvening = 0;
+      currentUserReports.forEach((report: any) => {
+        if (!report.reportDate) return;
+        let rDate: Date;
+        if (typeof report.reportDate === 'object' && ('_seconds' in report.reportDate || 'seconds' in report.reportDate)) {
+          rDate = new Date((report.reportDate._seconds || report.reportDate.seconds) * 1000);
+        } else {
+          rDate = new Date(report.reportDate);
+        }
+        currentUserDates.push(format(rDate, 'yyyy-MM-dd'));
+      });
 
-        if (report.labor && Array.isArray(report.labor)) {
-          workerCount = report.labor.length;
+      const newData: Record<string, DailySummary> = {};
+      
+      const parseHours = (timeStr?: string, isRegular: boolean = false): number => {
+        if (!timeStr) return 0;
+        const [start, end] = timeStr.split(' - ');
+        if (!start || !end) return 0;
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        let hours = (eh + em / 60) - (sh + sm / 60);
+        if (hours < 0) hours += 24;
+        if (isRegular && hours >= 5) hours -= 1; // ลบพักเที่ยง
+        return hours;
+      };
+
+      const calculateLaborStats = (report: any) => {
+        let count = 0;
+        let reg = 0;
+        let otM = 0;
+        let otN = 0;
+        let otE = 0;
+        if (report && report.labor && Array.isArray(report.labor)) {
+          count = report.labor.length;
           report.labor.forEach((l: any) => {
-            if (l.shifts?.normal) regularHours += parseHours(l.shiftTimes?.day, true);
-            if (l.shifts?.otMorning) otMorning += parseHours(l.shiftTimes?.otMorning);
-            if (l.shifts?.otNoon) otNoon += parseHours(l.shiftTimes?.otNoon);
-            if (l.shifts?.otEvening) otEvening += parseHours(l.shiftTimes?.otEvening);
+            if (l.shifts?.normal) reg += parseHours(l.shiftTimes?.day, true);
+            if (l.shifts?.otMorning) otM += parseHours(l.shiftTimes?.otMorning);
+            if (l.shifts?.otNoon) otN += parseHours(l.shiftTimes?.otNoon);
+            if (l.shifts?.otEvening) otE += parseHours(l.shiftTimes?.otEvening);
           });
         }
+        return { count, reg, otM, otN, otE, total: reg + otM + otN + otE };
+      };
 
-        const currentProgress = report.progress || 0;
+      // Sort dates chronologically to calculate progress added correctly
+      const sortedDates = Array.from(availableDatesSet).sort();
+      let previousProgress = 0;
+
+      sortedDates.forEach(dateStr => {
+        const entry = combinedReportsMap.get(dateStr)!;
+        const siteStats = calculateLaborStats(entry.site);
+        const supportStats = calculateLaborStats(entry.support);
+
+        const currentProgress = entry.site?.progress || 0;
         const progressAdded = Math.max(0, currentProgress - previousProgress);
 
         newData[dateStr] = {
+          hasSiteReport: !!entry.site,
+          hasSupportReport: !!entry.support,
           progressAdded,
           totalProgress: currentProgress,
           pastProgress: previousProgress,
-          workerCount,
-          regularHours,
-          otMorning,
-          otNoon,
-          otEvening,
-          sitePhotos: report.photos?.site || [],
-          laborPhotos: report.photos?.labor || [],
+          siteWorkerCount: siteStats.count,
+          supportWorkerCount: supportStats.count,
+          siteTotalHours: siteStats.total,
+          supportTotalHours: supportStats.total,
+          siteRegularHours: siteStats.reg,
+          supportRegularHours: supportStats.reg,
+          siteOtMorning: siteStats.otM,
+          supportOtMorning: supportStats.otM,
+          siteOtNoon: siteStats.otN,
+          supportOtNoon: supportStats.otN,
+          siteOtEvening: siteStats.otE,
+          supportOtEvening: supportStats.otE,
+          sitePhotos: entry.site?.photos?.site || [],
+          laborPhotos: entry.site?.photos?.labor || [],
         };
-
-        previousProgress = currentProgress;
+        
+        if (entry.site && entry.site.progress !== undefined) {
+          previousProgress = currentProgress;
+        }
       });
 
       setReportData(newData);
-      setReportDates(dates);
+      setReportDates(currentUserDates);
+      setAllAvailableDates(Array.from(availableDatesSet));
       if (forceRefresh) enqueueSnackbar('อัปเดตข้อมูลล่าสุดแล้ว', { variant: 'success' });
     } catch (error) {
       console.error('Failed to fetch daily reports:', error);
@@ -197,19 +262,42 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
   const handleUnlockClick = (event: React.MouseEvent<HTMLElement>) => setUnlockAnchorEl(event.currentTarget);
   const handleUnlockClose = () => setUnlockAnchorEl(null);
-  const handleUnlock = (days: number) => {
-    setIsUnlocked(true);
-    const until = new Date();
-    until.setDate(until.getDate() + days);
-    setUnlockedUntil(until);
+  const handleUnlock = async (days: number) => {
     handleUnlockClose();
+    if (!task || !selectedDate) return;
+    
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const isConfirmed = await confirm({
+      title: 'ยืนยันการปลดล็อคสิทธิ์',
+      message: `คุณต้องการขยายเวลาให้ผู้คุมงานลงรายงานย้อนหลังสำหรับวันที่ ${format(selectedDate, 'dd/MM/yyyy')} เป็นเวลา ${days} วัน ใช่หรือไม่?`,
+      confirmText: 'ยืนยัน',
+      cancelText: 'ยกเลิก',
+      severity: 'warning'
+    });
+
+    if (isConfirmed) {
+      try {
+        await taskService.unlockTaskReport(task.id, dateStr, days);
+        enqueueSnackbar('ปลดล็อคสิทธิ์เรียบร้อยแล้ว', { variant: 'success' });
+        
+        setIsUnlocked(true);
+        const until = new Date();
+        until.setDate(until.getDate() + days);
+        setUnlockedUntil(until);
+        
+        // Invalidate tasks query to update unlockedDates in other components like index.tsx
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      } catch (error: any) {
+        enqueueSnackbar(error.message || 'ไม่สามารถปลดล็อคได้', { variant: 'error' });
+      }
+    }
   };
 
   const handleApprove = async () => {
     if (!task) return;
     try {
       setActionLoading(true);
-      await taskService.updateTaskStatus(task.id, 'completed');
+      await taskService.approveTask(task.id);
       enqueueSnackbar('อนุมัติงานเรียบร้อยแล้ว (Task Completed)', { variant: 'success' });
       if (onTaskUpdated) onTaskUpdated();
       onClose();
@@ -311,11 +399,14 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             </Stack>
           </Box>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            {task?.dailyProgress === 100 && !(
-              user?.projectLocationIds?.some(id => id === 'P002' || id === 'P004') && 
-              task?.isSupportRequest && 
-              task?.projectId && user?.projectLocationIds && !user.projectLocationIds.includes(task.projectId)
-            ) && (
+            {isActingAsSupport && task?.status === 'for-checking' && (
+              <Box sx={{ bgcolor: '#fef3c7', color: '#d97706', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #fde68a' }}>
+                <InfoIcon sx={{ fontSize: 18, mr: 1 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>กำลังรอดำเนินตรวจสอบ</Typography>
+              </Box>
+            )}
+
+            {!isActingAsSupport && task?.dailyProgress === 100 && (
               <>
                 <Button
                   variant="outlined"
@@ -436,142 +527,238 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
                 {selectedSummary ? (
                   <Stack spacing={3} sx={{ flexGrow: 1 }}>
-                    <Stack direction="row" spacing={2}>
-                      <Box sx={{ flex: 1, p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                          <PeopleIcon sx={{ color: '#0ea5e9', fontSize: 18 }} />
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>แรงงาน (DC)</Typography>
-                        </Stack>
-                        <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                          {selectedSummary.workerCount} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
-                        </Typography>
-                      </Box>
-                      <Box sx={{ flex: 1, p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                          <AccessTimeIcon sx={{ color: '#64748b', fontSize: 18 }} />
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>ชั่วโมงการทำงานทั้งหมด</Typography>
-                        </Stack>
-                        <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                          {selectedSummary.regularHours + selectedSummary.otMorning + selectedSummary.otNoon + selectedSummary.otEvening} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>ชั่วโมง</Typography>
-                        </Typography>
-                      </Box>
-                    </Stack>
-
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <Box sx={{ p: 2, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', height: '100%' }}>
-                          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                            <AccessTimeIcon sx={{ fontSize: 18, color: '#475569' }} />
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155' }}>
-                              รายละเอียดชั่วโมงการทำงาน
-                            </Typography>
-                          </Stack>
-                          <Stack spacing={1}>
-                            <Stack direction="row" justifyContent="space-between">
-                              <Typography variant="body2" sx={{ color: '#64748b' }}>Day : เวลาปกติ</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.regularHours} ชม.</Typography>
+                        <Stack spacing={2} sx={{ height: '100%' }}>
+                          <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                              <PeopleIcon sx={{ color: '#0ea5e9', fontSize: 18 }} />
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>แรงงาน (DC)</Typography>
                             </Stack>
-                            <Stack direction="row" justifyContent="space-between">
-                              <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เช้า</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.otMorning > 0 ? `${selectedSummary.otMorning} ชม.` : '-'}</Typography>
+                            {task?.isSupportRequest ? (
+                              <Stack direction="row" spacing={3} sx={{ mt: 1 }}>
+                                <Box sx={{ textAlign: 'center' }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>SITE</Typography>
+                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                                    {selectedSummary.siteWorkerCount} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ width: '1px', bgcolor: '#e2e8f0' }} />
+                                <Box sx={{ textAlign: 'center' }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>Support</Typography>
+                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                                    {selectedSummary.supportWorkerCount} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                                  </Typography>
+                                </Box>
+                              </Stack>
+                            ) : (
+                              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                {selectedSummary.siteWorkerCount} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                              </Typography>
+                            )}
+                          </Box>
+
+                          <Box sx={{ p: 2, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexGrow: 1 }}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                              <AccessTimeIcon sx={{ fontSize: 18, color: '#475569' }} />
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155' }}>
+                                รายละเอียดชั่วโมงการทำงาน
+                              </Typography>
                             </Stack>
-                            <Stack direction="row" justifyContent="space-between">
-                              <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เที่ยง</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.otNoon > 0 ? `${selectedSummary.otNoon} ชม.` : '-'}</Typography>
-                            </Stack>
-                            <Stack direction="row" justifyContent="space-between">
-                              <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เย็น</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.otEvening > 0 ? `${selectedSummary.otEvening} ชม.` : '-'}</Typography>
-                            </Stack>
-                          </Stack>
-                        </Box>
+                            {task?.isSupportRequest ? (
+                              <Stack direction="row" spacing={2}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, textAlign: 'center' }}>SITE</Typography>
+                                  <Stack spacing={1}>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>Day</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteRegularHours} ชม.</Typography>
+                                    </Stack>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เช้า</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtMorning > 0 ? `${selectedSummary.siteOtMorning} ชม.` : '-'}</Typography>
+                                    </Stack>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtNoon > 0 ? `${selectedSummary.siteOtNoon} ชม.` : '-'}</Typography>
+                                    </Stack>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เย็น</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtEvening > 0 ? `${selectedSummary.siteOtEvening} ชม.` : '-'}</Typography>
+                                    </Stack>
+                                  </Stack>
+                                </Box>
+                                <Box sx={{ width: '1px', bgcolor: '#e2e8f0' }} />
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, textAlign: 'center' }}>Support</Typography>
+                                  <Stack spacing={1}>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>Day</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportRegularHours} ชม.</Typography>
+                                    </Stack>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เช้า</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportOtMorning > 0 ? `${selectedSummary.supportOtMorning} ชม.` : '-'}</Typography>
+                                    </Stack>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportOtNoon > 0 ? `${selectedSummary.supportOtNoon} ชม.` : '-'}</Typography>
+                                    </Stack>
+                                    <Stack direction="row" justifyContent="space-between">
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เย็น</Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportOtEvening > 0 ? `${selectedSummary.supportOtEvening} ชม.` : '-'}</Typography>
+                                    </Stack>
+                                  </Stack>
+                                </Box>
+                              </Stack>
+                            ) : (
+                              <Stack spacing={1}>
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>Day : เวลาปกติ</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteRegularHours} ชม.</Typography>
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เช้า</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtMorning > 0 ? `${selectedSummary.siteOtMorning} ชม.` : '-'}</Typography>
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เที่ยง</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtNoon > 0 ? `${selectedSummary.siteOtNoon} ชม.` : '-'}</Typography>
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เย็น</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtEvening > 0 ? `${selectedSummary.siteOtEvening} ชม.` : '-'}</Typography>
+                                </Stack>
+                              </Stack>
+                            )}
+                          </Box>
+                        </Stack>
                       </Grid>
 
                       <Grid item xs={12} sm={6}>
-                        <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155', mb: 1, textAlign: 'center' }}>
-                            ความคืบหน้าของวัน
-                          </Typography>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#059669', textAlign: 'center', mb: 0.5 }}>
-                            {selectedSummary.totalProgress}%
-                          </Typography>
-                          
-                          <Box sx={{ position: 'relative', width: '100%', mt: 1 }}>
-                            <Box sx={{ width: '100%', height: 24, bgcolor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 1 }} />
-                            
-                            {selectedSummary.pastProgress > 0 && (
-                              <Box 
-                                sx={{ 
-                                  position: 'absolute', top: 0, left: 0, height: 24, 
-                                  width: `${selectedSummary.pastProgress}%`, 
-                                  bgcolor: '#bbf7d0', 
-                                  border: '1px solid #22c55e', 
-                                  borderRight: 'none',
-                                  borderRadius: 1,
-                                  borderTopRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
-                                  borderBottomRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
-                                }} 
-                              />
-                            )}
+                        <Stack spacing={2} sx={{ height: '100%' }}>
+                          <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                              <AccessTimeIcon sx={{ color: '#64748b', fontSize: 18 }} />
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>ชั่วโมงการทำงานทั้งหมด</Typography>
+                            </Stack>
 
-                            {selectedSummary.progressAdded > 0 && (
-                              <Box 
-                                sx={{ 
-                                  position: 'absolute', top: 0, left: `${selectedSummary.pastProgress}%`, height: 24, 
-                                  width: `${selectedSummary.progressAdded}%`, 
-                                  bgcolor: '#22c55e', 
-                                  border: '1px solid #16a34a', 
-                                  borderRadius: 1,
-                                  borderTopLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
-                                  borderBottomLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }} 
-                              >
-                                {selectedSummary.progressAdded > 5 && (
-                                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#ffffff', zIndex: 1 }}>
-                                    +{selectedSummary.progressAdded}%
+                            {task?.isSupportRequest ? (
+                              <Stack direction="row" spacing={3} sx={{ mt: 1 }}>
+                                <Box sx={{ textAlign: 'center' }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>SITE</Typography>
+                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                                    {selectedSummary.siteTotalHours} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>ชม.</Typography>
                                   </Typography>
-                                )}
-                              </Box>
+                                </Box>
+                                <Box sx={{ width: '1px', bgcolor: '#e2e8f0' }} />
+                                <Box sx={{ textAlign: 'center' }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>Support</Typography>
+                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                                    {selectedSummary.supportTotalHours} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>ชม.</Typography>
+                                  </Typography>
+                                </Box>
+                              </Stack>
+                            ) : (
+                              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                {selectedSummary.siteTotalHours} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>ชั่วโมง</Typography>
+                              </Typography>
                             )}
                           </Box>
-                        </Box>
+
+                          <Box sx={{ p: 2, flexGrow: 1, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <Grid container spacing={2}>
+                              <Grid item xs={6}>
+                                <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center' }}>รูปถ่ายหน้างาน (Site)</Typography>
+                                <Stack direction="row" spacing={1} justifyContent="center">
+                                  {selectedSummary.hasSiteReport && selectedSummary.sitePhotos.length > 0 ? (
+                                    selectedSummary.sitePhotos.slice(0, 2).map((url, i) => (
+                                      <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
+                                    ))
+                                  ) : (
+                                    <Box sx={{ width: '100%', py: 2, border: '1px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc' }}>
+                                      <Typography variant="caption" color="text.secondary">ไม่มีรูปหน้างาน</Typography>
+                                    </Box>
+                                  )}
+                                </Stack>
+                              </Grid>
+                              <Grid item xs={6}>
+                                <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center' }}>รูปถ่ายแรงงาน (Labor)</Typography>
+                                <Stack direction="row" spacing={1} justifyContent="center">
+                                  {selectedSummary.hasSiteReport && selectedSummary.laborPhotos.length > 0 ? (
+                                    selectedSummary.laborPhotos.slice(0, 2).map((url, i) => (
+                                      <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
+                                    ))
+                                  ) : (
+                                    <Box sx={{ width: '100%', py: 2, border: '1px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc' }}>
+                                      <Typography variant="caption" color="text.secondary">ไม่มีรูปแรงงาน</Typography>
+                                    </Box>
+                                  )}
+                                </Stack>
+                              </Grid>
+                            </Grid>
+                          </Box>
+                        </Stack>
                       </Grid>
                     </Grid>
 
-                    <Box>
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                          <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center' }}>รูปถ่ายหน้างาน (Site)</Typography>
-                          <Stack direction="row" spacing={1} justifyContent="center">
-                            {selectedSummary.sitePhotos.length > 0 ? (
-                              selectedSummary.sitePhotos.slice(0, 2).map((url, i) => (
-                                <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
-                              ))
-                            ) : (
-                              <>
-                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
-                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
-                              </>
-                            )}
-                          </Stack>
-                        </Grid>
-                        <Grid item xs={6}>
-                          <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center' }}>รูปถ่ายแรงงาน (Labor)</Typography>
-                          <Stack direction="row" spacing={1} justifyContent="center">
-                            {selectedSummary.laborPhotos.length > 0 ? (
-                              selectedSummary.laborPhotos.slice(0, 2).map((url, i) => (
-                                <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
-                              ))
-                            ) : (
-                              <>
-                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
-                                <Box sx={{ width: 80, height: 80, border: '2px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PhotoCameraIcon sx={{ color: '#cbd5e1' }} /></Box>
-                              </>
-                            )}
-                          </Stack>
-                        </Grid>
-                      </Grid>
+                    <Box sx={{ mt: 2 }}>
+                          {selectedSummary.hasSiteReport ? (
+                            <Box sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155', mb: 1, textAlign: 'center' }}>
+                                ความคืบหน้าของวัน
+                              </Typography>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#059669', textAlign: 'center', mb: 0.5 }}>
+                                {selectedSummary.totalProgress}%
+                              </Typography>
+                              
+                              <Box sx={{ position: 'relative', width: '100%', mt: 1 }}>
+                                <Box sx={{ width: '100%', height: 24, bgcolor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 1 }} />
+                                
+                                {selectedSummary.pastProgress > 0 && (
+                                  <Box 
+                                    sx={{ 
+                                      position: 'absolute', top: 0, left: 0, height: 24, 
+                                      width: `${selectedSummary.pastProgress}%`, 
+                                      bgcolor: '#bbf7d0', 
+                                      border: '1px solid #22c55e', 
+                                      borderRight: 'none',
+                                      borderRadius: 1,
+                                      borderTopRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
+                                      borderBottomRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
+                                    }} 
+                                  />
+                                )}
+
+                                {selectedSummary.progressAdded > 0 && (
+                                  <Box 
+                                    sx={{ 
+                                      position: 'absolute', top: 0, left: `${selectedSummary.pastProgress}%`, height: 24, 
+                                      width: `${selectedSummary.progressAdded}%`, 
+                                      bgcolor: '#22c55e', 
+                                      border: '1px solid #16a34a', 
+                                      borderRadius: 1,
+                                      borderTopLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
+                                      borderBottomLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                    }} 
+                                  >
+                                    {selectedSummary.progressAdded > 5 && (
+                                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#ffffff', zIndex: 1 }}>
+                                        +{selectedSummary.progressAdded}%
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Box sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '2px dashed #e2e8f0', borderRadius: 3, bgcolor: '#f8fafc' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#94a3b8', textAlign: 'center' }}>
+                                ทีม Site ยังไม่อัปเดตความคืบหน้า
+                              </Typography>
+                            </Box>
+                          )}
                     </Box>
                   </Stack>
                 ) : (
@@ -608,6 +795,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         }}
         task={task}
       />
+      <ConfirmDialog />
     </Dialog>
   );
 }

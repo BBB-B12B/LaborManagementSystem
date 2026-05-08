@@ -1,4 +1,5 @@
 import { db } from '../config/firebase';
+import admin from 'firebase-admin';
 import { afterSaleDb } from '../config/firebaseProjectB';
 import { Task, CreateTaskInput, UpdateTaskInput, taskConverter } from '../models/Task';
 import { AppError } from '../api/middleware/errorHandler';
@@ -129,6 +130,7 @@ export class TaskService {
         workOrderId: woId,
         projectId: input.projectId,
         workOrderCode: input.workOrderCode || 'GEN',
+        workOrderName: input.workOrderName || 'General',
         updatedAt: now
       }, { merge: true });
 
@@ -147,6 +149,7 @@ export class TaskService {
         projectName: projectName,
         workOrderId: woId,
         workOrderCode: input.workOrderCode || 'GEN',
+        workOrderName: input.workOrderName || 'General',
         categoryId: catId,
         categoryName: input.categoryName || 'General',
         assignees: input.assignees,
@@ -241,6 +244,11 @@ export class TaskService {
         status: 'upcoming' as any,
         dailyProgress: 0,
         assignees: mergedAssignees,
+        isSupportRequest: false,
+        isPickedUpBySupport: false,
+        supportTaskName: null,
+        supportDailyProgress: 0,
+        supportAssignees: [],
         updatedAt: now,
         updatedBy: updatedBy,
       };
@@ -259,6 +267,46 @@ export class TaskService {
 
       // 6. เก็บ Audit Trail
       await this.recordHistory(taskRef, 'reject_task', taskData, taskUpdates, updatedBy);
+    });
+  }
+
+  /**
+   * Approve งานที่ For Checking
+   * เปลี่ยนสถานะเป็น completed
+   */
+  async approveTask(id: string, updatedBy: string): Promise<void> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const parts = id.split('__');
+      if (parts.length === 3) {
+        const [woId, catId, docId] = parts;
+        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(docId);
+      } else {
+        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', parts[parts.length - 1]).limit(1).get();
+        if (querySnapshot.empty) throw new AppError('Task not found by taskId fallback', 404);
+        taskRef = querySnapshot.docs[0].ref;
+      }
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Task not found by taskId field', 404);
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    await afterSaleDb.runTransaction(async (transaction) => {
+      const doc = await transaction.get(taskRef);
+      if (!doc.exists) throw new AppError('Task not found', 404);
+      
+      const now = new Date();
+      const taskUpdates = {
+        status: 'completed' as any,
+        updatedAt: now,
+        updatedBy: updatedBy,
+      };
+      
+      transaction.update(taskRef, taskUpdates);
+      
+      // เก็บ Audit Trail
+      await this.recordHistory(taskRef, 'approve_task', doc.data(), taskUpdates, updatedBy);
     });
   }
 
@@ -547,7 +595,22 @@ export class TaskService {
     // Get current revision first
     const taskDocForRev = await taskRef.get();
     if (!taskDocForRev.exists) throw new AppError('Task not found', 404);
-    const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
+    const taskDataForRev = taskDocForRev.data() || {};
+    const currentRev = taskDataForRev.currentRevision || 'rev00';
+
+    // 3-day retroactive validation
+    const nowForValidation = new Date();
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    threeDaysAgo.setHours(0, 0, 0, 0);
+
+    if (reportDate < threeDaysAgo) {
+      const unlockedDates = taskDataForRev.unlockedDates || {};
+      const unlockInfo = unlockedDates[dateStr];
+      if (!unlockInfo || (unlockInfo.unlockedUntil.toDate ? unlockInfo.unlockedUntil.toDate() : new Date(unlockInfo.unlockedUntil)) < nowForValidation) {
+         throw new AppError(`Cannot submit report for date older than 3 days unless unlocked (date: ${dateStr})`, 403);
+      }
+    }
 
     // บันทึกรายงานภายใต้ Revision หรือ Help
     let dailyReportRef: FirebaseFirestore.DocumentReference;
@@ -588,6 +651,16 @@ export class TaskService {
       // 2. ALL WRITES
       const now = new Date();
 
+      // Check if this is the latest report chronologically
+      const reportsCollectionRef = isSupportReport 
+        ? taskRef.collection('help').doc(currentRev.replace('rev', 'help')).collection('dailyReports')
+        : taskRef.collection('revisions').doc(currentRev).collection('dailyReports');
+        
+      const newerReportsSnapshot = await transaction.get(
+        reportsCollectionRef.where(admin.firestore.FieldPath.documentId(), '>', dateStr).limit(1)
+      );
+      const isLatestDate = newerReportsSnapshot.empty;
+
       // Enforce leaveType logic
       if (reportData.leave && Array.isArray(reportData.leave)) {
         reportData.leave = reportData.leave.map((l: any) => ({
@@ -612,33 +685,41 @@ export class TaskService {
 
       transaction.set(dailyReportRef, payload, { merge: true });
 
-      // อัปเดต Task หลัก
-      let newStatus = 'upcoming';
-      const progress = reportData.progress || 0;
-      if (progress > 0 && progress < 100) newStatus = 'in-progress';
-      if (progress >= 100) newStatus = 'for-checking';
+      let historyUpdateData: any = { updatedAt: now };
+      const oldData = taskDoc.data();
 
-      if (isSupportReport) {
-        transaction.update(taskRef, {
-          supportDailyProgress: progress,
-          updatedAt: now,
-          updatedBy: updatedBy
-        });
+      // อัปเดต Task หลัก เฉพาะเมื่อเป็นรายงานของวันล่าสุดเท่านั้น
+      if (isLatestDate) {
+        if (!isSupportReport) {
+          let newStatus = 'upcoming';
+          const progress = reportData.progress || 0;
+          if (progress > 0 && progress < 100) newStatus = 'in-progress';
+          if (progress >= 100) newStatus = 'for-checking';
+
+          transaction.update(taskRef, {
+            dailyProgress: progress,
+            status: newStatus,
+            updatedAt: now,
+            updatedBy: updatedBy
+          });
+          historyUpdateData.dailyProgress = progress;
+        } else {
+          transaction.update(taskRef, {
+            updatedAt: now,
+            updatedBy: updatedBy
+          });
+        }
       } else {
+        // อัปเดตแค่วันที่แก้ไขล่าสุด
         transaction.update(taskRef, {
-          dailyProgress: progress,
-          status: newStatus,
           updatedAt: now,
           updatedBy: updatedBy
         });
       }
 
       // บันทึก History
-      const oldData = taskDoc.data();
-      await this.recordHistory(taskRef, 'daily_report_submit', oldData, {
-        dailyProgress: reportData.progress,
-        updatedAt: now
-      }, updatedBy);
+      
+      await this.recordHistory(taskRef, 'daily_report_submit', oldData, historyUpdateData, updatedBy);
     });
 
     // -------------------------------------------------------------
@@ -718,6 +799,40 @@ export class TaskService {
     if (reportsSnapshot.empty) return [];
 
     return reportsSnapshot.docs.map(doc => doc.data());
+  }
+
+  /**
+   * Unlock daily report for a specific date
+   */
+  async unlockDailyReport(id: string, dateStr: string, days: number, updatedBy: string): Promise<void> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Task not found', 404);
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    const until = new Date();
+    until.setDate(until.getDate() + days);
+
+    const taskDoc = await taskRef.get();
+    if (!taskDoc.exists) throw new AppError('Task not found', 404);
+    
+    const taskData = taskDoc.data();
+    const unlockedDates = taskData?.unlockedDates || {};
+    unlockedDates[dateStr] = {
+      unlockedUntil: until,
+      unlockedBy: updatedBy
+    };
+
+    await taskRef.update({
+      unlockedDates,
+      updatedAt: new Date(),
+      updatedBy
+    });
   }
 }
 

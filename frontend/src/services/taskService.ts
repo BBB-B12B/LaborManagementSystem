@@ -19,6 +19,7 @@ export interface Task {
   projectName: string;
   workOrderId?: string;
   workOrderCode?: string;
+  workOrderName?: string;
   categoryId?: string;
   categoryName?: string;
   assignees: TaskAssignee[];
@@ -34,6 +35,7 @@ export interface Task {
   supportTaskName?: string;
   supportDailyProgress?: number;
   supportAssignees?: TaskAssignee[];
+  unlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,6 +47,7 @@ export interface CreateTaskInput {
   projectName: string;
   workOrderId?: string;
   workOrderCode: string;
+  workOrderName?: string;
   categoryId?: string;
   categoryName: string;
   assignees: TaskAssignee[];
@@ -101,9 +104,23 @@ export const taskService = {
   },
 
   /**
+   * Approve a task (transitions status to completed)
+   */
+  approveTask: async (id: string): Promise<void> => {
+    await api.post(`/tasks/${id}/approve`);
+  },
+
+  /**
    * Support team joins an existing task
    */
   joinSupportTask: async (id: string, supportTaskName: string, assignees: TaskAssignee[]): Promise<void> => {
     await api.post(`/tasks/${id}/support`, { supportTaskName, assignees });
+  },
+
+  /**
+   * Unlock daily report access for past dates
+   */
+  unlockTaskReport: async (id: string, dateStr: string, daysToUnlock: number): Promise<void> => {
+    await api.post(`/tasks/${id}/unlock-report`, { dateStr, daysToUnlock });
   },
 };

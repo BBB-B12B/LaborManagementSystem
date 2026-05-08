@@ -119,7 +119,10 @@ export default function DailyReportPage() {
 
   const { data: taskReportsData } = useQuery({
     queryKey: ['task-reports-all', selectedTask?.id, isActingAsSupport],
-    queryFn: () => dailyReportService.getAllTaskReports(selectedTask!.id, false, isActingAsSupport),
+    queryFn: async () => {
+      if (!selectedTask) return [];
+      return await dailyReportService.getAllTaskReports(selectedTask.id, false, isActingAsSupport);
+    },
     enabled: !!selectedTask,
   });
 
@@ -140,6 +143,43 @@ export default function DailyReportPage() {
       setReportDates([]);
     }
   }, [taskReportsData]);
+
+  const { data: allSiteReportsData } = useQuery({
+    queryKey: ['task-reports-site', selectedTask?.id],
+    queryFn: async () => {
+      if (!selectedTask) return [];
+      return await dailyReportService.getAllTaskReports(selectedTask.id, false, false);
+    },
+    enabled: !!selectedTask,
+  });
+
+  const completionDateStr = useMemo(() => {
+    if (!selectedTask || (selectedTask.dailyProgress || 0) < 100) return null;
+    if (!allSiteReportsData || allSiteReportsData.length === 0) return null;
+
+    const completedReports = allSiteReportsData.filter((r: any) => r.progress >= 100);
+    if (completedReports.length === 0) return null;
+    
+    const dates = completedReports.map((r: any) => {
+      let rDate: Date;
+      if (r.reportDate && typeof r.reportDate === 'object' && ('_seconds' in r.reportDate || 'seconds' in r.reportDate)) {
+        const secs = r.reportDate._seconds || r.reportDate.seconds;
+        rDate = new Date(secs * 1000);
+      } else {
+        rDate = new Date(r.reportDate || new Date());
+      }
+      return format(rDate, 'yyyy-MM-dd');
+    });
+    
+    dates.sort();
+    return dates[dates.length - 1]; // Latest date where progress was 100
+  }, [selectedTask, allSiteReportsData]);
+
+  const isAfterCompletion = useMemo(() => {
+    if (!completionDateStr || !reportDate) return false;
+    const selectedDateStr = format(reportDate, 'yyyy-MM-dd');
+    return selectedDateStr > completionDateStr;
+  }, [completionDateStr, reportDate]);
 
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
@@ -188,6 +228,9 @@ export default function DailyReportPage() {
     );
   };
 
+  const [siteReportData, setSiteReportData] = useState<any>(null);
+  const [supportReportData, setSupportReportData] = useState<any>(null);
+
   // Fetch report data when task or date changes
   useEffect(() => {
     const fetchReport = async () => {
@@ -201,6 +244,24 @@ export default function DailyReportPage() {
         const dateStr = `${year}-${month}-${day}`;
 
         const report = await dailyReportService.getTaskReport(selectedTask.id, dateStr, isActingAsSupport);
+        
+        let siteReport = null;
+        let supportReport = null;
+        if (isActingAsSupport) {
+          try {
+            siteReport = await dailyReportService.getTaskReport(selectedTask.id, dateStr, false);
+          } catch (e) {
+            console.error('Failed to fetch site report', e);
+          }
+        } else if (selectedTask.isSupportRequest) {
+          try {
+            supportReport = await dailyReportService.getTaskReport(selectedTask.id, dateStr, true);
+          } catch (e) {
+            console.error('Failed to fetch support report', e);
+          }
+        }
+        setSiteReportData(siteReport);
+        setSupportReportData(supportReport);
 
         if (report) {
           setProgress(report.progress || 0);
@@ -271,11 +332,48 @@ export default function DailyReportPage() {
   }, [selectedTask, reportDate]);
   
   const [selectedWorkers, setSelectedWorkers] = useState<any[]>([]);
+
+  const readonlySupportWorkers = useMemo(() => {
+    if (!supportReportData) return [];
+    const laborMap = new Map();
+    if (supportReportData.labor) supportReportData.labor.forEach((l: any) => laborMap.set(l.workerId, l));
+    const leaveMap = new Map();
+    if (supportReportData.leave) supportReportData.leave.forEach((l: any) => leaveMap.set(l.workerId, l));
+    
+    const allWorkerIds = Array.from(new Set([...laborMap.keys(), ...leaveMap.keys()]));
+    
+    return allWorkerIds.map(wId => {
+       const l = laborMap.get(wId);
+       const lv = leaveMap.get(wId);
+       return {
+          id: wId,
+          name: l?.workerName || lv?.workerName || '',
+          employeeId: l?.employeeId || lv?.employeeId || '',
+          times: {
+            regular: l?.shifts?.normal || false,
+            regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+            otMorning: l?.shifts?.otMorning || false,
+            otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+            otNoon: l?.shifts?.otNoon || false,
+            otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+            otEvening: l?.shifts?.otEvening || false,
+            otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00'
+          },
+          leave: {
+            active: lv?.leaveShifts?.custom || false,
+            time: lv?.leaveTimes?.custom || '08:00 - 17:00',
+            medCertFileUrl: lv?.medCertFileUrl || '',
+            leaveType: lv?.leaveType || 'Unpaid'
+          }
+       };
+    });
+  }, [supportReportData]);
   const [isWorkerModalOpen, setIsWorkerModalOpen] = useState(false);
   const [workerSearchTerm, setWorkerSearchTerm] = useState('');
   
   const [sitePhotos, setSitePhotos] = useState<File[]>([]);
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [laborPhotos, setLaborPhotos] = useState<File[]>([]);
   const [laborPhotoPreviews, setLaborPhotoPreviews] = useState<string[]>([]);
 
@@ -288,8 +386,21 @@ export default function DailyReportPage() {
     
     const diffTime = today.getTime() - selected.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 3;
-  }, [reportDate]);
+    
+    if (diffDays <= 3) return false;
+
+    // Check if it's unlocked
+    const dateStr = format(reportDate, 'yyyy-MM-dd');
+    if (selectedTask?.unlockedDates && selectedTask.unlockedDates[dateStr]) {
+      const unlockInfo = selectedTask.unlockedDates[dateStr];
+      const unlockUntil = new Date(unlockInfo.unlockedUntil);
+      if (unlockUntil > new Date()) {
+        return false; // It's unlocked, so it's not locked
+      }
+    }
+
+    return true;
+  }, [reportDate, selectedTask]);
 
   // Simulated Wage Period Lock (T-902)
   // In a real scenario, this would check against an API or a list of approved periods
@@ -305,7 +416,7 @@ export default function DailyReportPage() {
     return false;
   }, [reportDate]);
 
-  const isFormDisabled = isDateLockedByWagePeriod;
+  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion;
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
   // Bulk Time State for Popup (T-903)
@@ -393,24 +504,33 @@ export default function DailyReportPage() {
     enabled: !!user?.projectLocationIds?.[0]
   });
 
+  const [activeTab, setActiveTab] = useState<'pending' | 'finish'>('pending');
+
   const filteredTasks = useMemo(() => {
-    const filtered = allTasks.filter(t => 
+    let filtered = allTasks.filter(t => 
       t.taskName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.categoryName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.taskId.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    if (activeTab === 'pending') {
+      filtered = filtered.filter(t => (t.dailyProgress || 0) < 100);
+    } else if (activeTab === 'finish') {
+      filtered = filtered.filter(t => (t.dailyProgress || 0) >= 100);
+    }
+
     return filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  }, [allTasks, searchTerm]);
+  }, [allTasks, searchTerm, activeTab]);
 
   // --- 3. Handlers ---
   const handleSelectTask = (task: any) => {
     setSelectedTask(task);
     setIsSidebarOpen(false);
     
-    // Check if acting as support to set correct initial progress
+    // Check if acting as support to determine if we should allow progress editing
     const isViewingCrossProject = user?.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
     const isSupport = isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
-    setProgress(isSupport && task.supportDailyProgress !== undefined ? task.supportDailyProgress : (task.dailyProgress || 0));
+    setProgress(task.dailyProgress || 0);
     setNote('');
     setSelectedWorkers([]);
     setSitePhotos([]);
@@ -517,7 +637,8 @@ export default function DailyReportPage() {
             <img 
               src={getImageUrl(url)} 
               alt="Uploaded" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              onClick={() => setPreviewImage(getImageUrl(url))}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
             />
             <IconButton
               size="small"
@@ -546,7 +667,11 @@ export default function DailyReportPage() {
           <Box key={`new-${index}`} sx={{ position: 'relative', width: 140, height: 140, borderRadius: '12px', overflow: 'hidden', border: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
             {previews[index] && (
               <>
-                <img src={previews[index]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img 
+                  src={previews[index]} 
+                  onClick={() => setPreviewImage(previews[index])}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
+                />
                 <IconButton 
                   size="small" 
                   onClick={() => onRemove(index)} 
@@ -618,18 +743,20 @@ export default function DailyReportPage() {
       return;
     }
 
-    if (sitePhotos.length + existingPhotos.site.length < 2) {
-      enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
-      return;
+    if (!isActingAsSupport) {
+      if (sitePhotos.length + existingPhotos.site.length < 2) {
+        enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
+        return;
+      }
+
+      if (laborPhotos.length + existingPhotos.labor.length < 2) {
+        enqueueSnackbar('กรุณาแนบรูปถ่ายแรงงานอย่างน้อย 2 รูป', { variant: 'warning' });
+        return;
+      }
     }
 
-    if (laborPhotos.length + existingPhotos.labor.length < 2) {
-      enqueueSnackbar('กรุณาแนบรูปถ่ายแรงงานอย่างน้อย 2 รูป', { variant: 'warning' });
-      return;
-    }
-
-    if (selectedWorkers.length === 0) {
-      enqueueSnackbar('กรุณาเลือกแรงงาน DC อย่างน้อย 1 คน', { variant: 'warning' });
+    if (selectedWorkers.length === 0 && readonlySupportWorkers.length === 0) {
+      enqueueSnackbar('กรุณาเลือกแรงงาน DC หรือต้องมีแรงงาน Support อย่างน้อย 1 คน', { variant: 'warning' });
       return;
     }
 
@@ -706,6 +833,13 @@ export default function DailyReportPage() {
       setSelectedWorkers([]);
       setProgress(0);
       setNote('');
+      setSitePhotoPreviews([]);
+      setLaborPhotoPreviews([]);
+      setExistingPhotos({ site: [], labor: [] });
+      setReportDate(new Date());
+      dailyReportService.clearCache(selectedTask.id);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-reports-all'] });
     } catch (error) {
       console.error('Failed to submit report', error);
       enqueueSnackbar('เกิดข้อผิดพลาดในการบันทึกรายงาน: ' + (error as any).message, { variant: 'error' });
@@ -722,7 +856,36 @@ export default function DailyReportPage() {
             
             {/* Header */}
             <Box sx={{ px: { xs: 2, md: 3 }, pt: 3, pb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h4" fontWeight={900} color="#1e293b">Daily Report</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Typography variant="h4" fontWeight={900} color="#1e293b">Daily Report</Typography>
+                
+                {/* Tabs */}
+                <Stack direction="row" spacing={1} sx={{ bgcolor: '#f1f3f6', p: 0.5, borderRadius: '999px' }}>
+                  {[
+                    { id: 'pending', label: 'Active Tasks' },
+                    { id: 'finish', label: 'Finish' }
+                  ].map((tab) => (
+                    <Button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id as 'pending' | 'finish');
+                        setSelectedTask(null); // Clear selected task when switching tabs
+                        setIsSidebarOpen(true); // Open the sidebar to show the filtered task list
+                      }}
+                      sx={{
+                        px: 3, py: 1, borderRadius: '999px', textTransform: 'none', fontWeight: 700,
+                        color: activeTab === tab.id ? '#1c1e2b' : '#6b7280',
+                        bgcolor: activeTab === tab.id ? '#ffffff' : 'transparent',
+                        boxShadow: activeTab === tab.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                        '&:hover': { bgcolor: activeTab === tab.id ? '#ffffff' : 'rgba(255,255,255,0.5)' }
+                      }}
+                    >
+                      {tab.label}
+                    </Button>
+                  ))}
+                </Stack>
+              </Box>
+
               <Button 
                 variant="outlined" 
                 startIcon={<History size={18} />}
@@ -805,9 +968,9 @@ export default function DailyReportPage() {
                               fontWeight: 800,
                               position: 'relative',
                               border: '3px solid',
-                              borderColor: (isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress) > 0 ? '#4caf50' : 'divider',
-                              background: (isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress) > 0 
-                                ? `conic-gradient(#4caf50 ${(isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress) * 3.6}deg, transparent 0deg)` 
+                              borderColor: selectedTask.dailyProgress > 0 ? '#4caf50' : 'divider',
+                              background: selectedTask.dailyProgress > 0 
+                                ? `conic-gradient(#4caf50 ${selectedTask.dailyProgress * 3.6}deg, transparent 0deg)` 
                                 : 'transparent',
                               '&::after': {
                                 content: '""',
@@ -820,7 +983,7 @@ export default function DailyReportPage() {
                               }
                             }}
                           >
-                            <span style={{ zIndex: 2 }}>{isActingAsSupport && selectedTask.supportDailyProgress !== undefined ? selectedTask.supportDailyProgress : selectedTask.dailyProgress}%</span>
+                            <span style={{ zIndex: 2 }}>{selectedTask.dailyProgress}%</span>
                           </Box>
                           <DatePicker
                             value={reportDate} 
@@ -834,7 +997,17 @@ export default function DailyReportPage() {
                                 const hasReport = reportDates.includes(dateStr);
                                 const isMissingReport = isPast && !hasReport;
 
-                                if (isMissingReport && isLocked) {
+                                // Check if this date has been unlocked
+                                let hasValidUnlock = false;
+                                if (selectedTask?.unlockedDates && selectedTask.unlockedDates[dateStr]) {
+                                  const unlockInfo = selectedTask.unlockedDates[dateStr];
+                                  const unlockUntil = new Date(unlockInfo.unlockedUntil);
+                                  if (unlockUntil > new Date()) {
+                                    hasValidUnlock = true;
+                                  }
+                                }
+
+                                if (isMissingReport && isLocked && !hasValidUnlock) {
                                   enqueueSnackbar('ติดต่อหัวหน้างานเพื่อปลดล็อคสิทธิ์', { variant: 'error' });
                                   return;
                                 }
@@ -857,7 +1030,15 @@ export default function DailyReportPage() {
                       </Box>
 
                       <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                        <Box sx={{ mb: 4 }}>
+                        {isAfterCompletion ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 400, bgcolor: '#fef2f2', borderRadius: '12px', border: '2px dashed #fca5a5', p: 4 }}>
+                            <Typography variant="h5" fontWeight={900} color="#ef4444" align="center">
+                              ไม่สามารถลงงานในวันนี้ได้เนื่องจาก Progress 100% แล้ว
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <>
+                            <Box sx={{ mb: 4 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Typography variant="h6" fontWeight={800} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Users size={20} color="#3b82f6" /> การจัดการแรงงาน DC</Typography>
                             <Button 
@@ -871,7 +1052,7 @@ export default function DailyReportPage() {
                             </Button>
                           </Box>
                           <TableContainer component={Paper} elevation={0} sx={{ borderRadius: '12px', border: '1px solid #94a3b8', overflowX: 'auto' }}>
-                            {selectedWorkers.length === 0 ? (
+                            {selectedWorkers.length === 0 && readonlySupportWorkers.length === 0 ? (
                               <Box sx={{ p: 3, textAlign: 'center', color: '#94a3b8' }}><Typography variant="body2">ยังไม่มีการเลือกคนงาน</Typography></Box>
                             ) : (
                               <Table size="small" sx={{ minWidth: 800, '& .MuiTableCell-root': { py: 1, px: 0.5 } }}>
@@ -888,6 +1069,18 @@ export default function DailyReportPage() {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
+                                  {readonlySupportWorkers.map((worker, idx) => (
+                                    <WorkerTableRow 
+                                      key={`support-${worker.id}`} 
+                                      worker={worker} 
+                                      onUpdate={() => {}} 
+                                      onUpdateLeave={() => {}}
+                                      onUploadCert={() => {}}
+                                      onRemove={() => {}} 
+                                      index={idx + 1}
+                                      isReadOnly={true}
+                                    />
+                                  ))}
                                   {selectedWorkers.map((worker, idx) => (
                                     <WorkerTableRow 
                                       key={worker.id} 
@@ -896,7 +1089,7 @@ export default function DailyReportPage() {
                                       onUpdateLeave={(f: string, v: any) => updateWorkerLeave(worker.id, f, v)}
                                       onUploadCert={(f: File | null) => handleCertUpload(worker.id, f)}
                                       onRemove={() => removeWorker(worker.id)} 
-                                      index={idx + 1} 
+                                      index={readonlySupportWorkers.length + idx + 1} 
                                     />
                                   ))}
                                 </TableBody>
@@ -905,33 +1098,81 @@ export default function DailyReportPage() {
                           </TableContainer>
                         </Box>
 
-                        <Grid container spacing={4} alignItems="flex-start">
-                          <Grid item xs={12} md={3}>
-                            <Typography variant="h6" fontWeight={800} gutterBottom>Progress</Typography>
-                            <Typography variant="body2" color="text.secondary" gutterBottom>ความคืบหน้า</Typography>
-                             <TextField 
-                              fullWidth placeholder="0-100%" type="number" value={progress}
-                              onChange={(e) => setProgress(Number(e.target.value))}
-                              InputProps={{ endAdornment: '%' }}
-                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
-                              disabled={isProgressLocked}
-                              helperText={isRetroactiveOver3Days ? "ไม่สามารถแก้ไขความคืบหน้าย้อนหลังเกิน 3 วัน" : ""}
-                            />
-                          </Grid>
-
-                          <Grid item xs={12} md={9}>
-                            <Grid container spacing={3}>
-                              <Grid item xs={6}>
-                                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน</Typography>
-                                {renderPhotoGrid(sitePhotos, existingPhotos.site, sitePhotoPreviews, (f) => handlePhotoUpload(f, 'site'), (i) => removePhoto(i, 'site'), 'site')}
+                        {isActingAsSupport ? (
+                          siteReportData ? (
+                            <Grid container spacing={4} alignItems="flex-start">
+                              <Grid item xs={12} md={3}>
+                                <Typography variant="h6" fontWeight={800} gutterBottom>Progress</Typography>
+                                <Typography variant="body2" color="text.secondary" gutterBottom>ความคืบหน้า (จาก Site)</Typography>
+                                <TextField 
+                                  fullWidth value={siteReportData.progress || 0}
+                                  InputProps={{ endAdornment: '%', readOnly: true }}
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#f8fafc' } }}
+                                />
                               </Grid>
-                              <Grid item xs={6}>
-                                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายแรงงาน</Typography>
-                                {renderPhotoGrid(laborPhotos, existingPhotos.labor, laborPhotoPreviews, (f) => handlePhotoUpload(f, 'labor'), (i) => removePhoto(i, 'labor'), 'labor')}
+                              <Grid item xs={12} md={9}>
+                                <Grid container spacing={3}>
+                                  <Grid item xs={6}>
+                                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน (จาก Site)</Typography>
+                                    <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
+                                      {siteReportData.photos?.site?.length > 0 ? (
+                                        siteReportData.photos.site.map((url: string, i: number) => (
+                                          <Box key={i} component="img" src={url} onClick={() => setPreviewImage(url)} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', flexShrink: 0, border: '1px solid #e2e8f0' }} />
+                                        ))
+                                      ) : (
+                                        <Typography variant="caption" color="text.secondary">ไม่มีรูป</Typography>
+                                      )}
+                                    </Stack>
+                                  </Grid>
+                                  <Grid item xs={6}>
+                                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายแรงงาน (จาก Site)</Typography>
+                                    <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
+                                      {siteReportData.photos?.labor?.length > 0 ? (
+                                        siteReportData.photos.labor.map((url: string, i: number) => (
+                                          <Box key={i} component="img" src={url} onClick={() => setPreviewImage(url)} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', flexShrink: 0, border: '1px solid #e2e8f0' }} />
+                                        ))
+                                      ) : (
+                                        <Typography variant="caption" color="text.secondary">ไม่มีรูป</Typography>
+                                      )}
+                                    </Stack>
+                                  </Grid>
+                                </Grid>
+                              </Grid>
+                            </Grid>
+                          ) : (
+                            <Box sx={{ width: '100%', py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '12px' }}>
+                              <Typography variant="body2" fontWeight={700} color="#94a3b8">ยังไม่มีข้อมูลความคืบหน้าและรูปถ่ายจากทีม Site</Typography>
+                            </Box>
+                          )
+                        ) : (
+                          <Grid container spacing={4} alignItems="flex-start">
+                            <Grid item xs={12} md={3}>
+                              <Typography variant="h6" fontWeight={800} gutterBottom>Progress</Typography>
+                              <Typography variant="body2" color="text.secondary" gutterBottom>ความคืบหน้า</Typography>
+                               <TextField 
+                                fullWidth placeholder="0-100%" type="number" value={progress}
+                                onChange={(e) => setProgress(Number(e.target.value))}
+                                InputProps={{ endAdornment: '%' }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                disabled={isProgressLocked}
+                                helperText={isRetroactiveOver3Days ? "ไม่สามารถแก้ไขความคืบหน้าย้อนหลังเกิน 3 วัน" : ""}
+                              />
+                            </Grid>
+
+                            <Grid item xs={12} md={9}>
+                              <Grid container spacing={3}>
+                                <Grid item xs={6}>
+                                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน</Typography>
+                                  {renderPhotoGrid(sitePhotos, existingPhotos.site, sitePhotoPreviews, (f) => handlePhotoUpload(f, 'site'), (i) => removePhoto(i, 'site'), 'site')}
+                                </Grid>
+                                <Grid item xs={6}>
+                                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายแรงงาน</Typography>
+                                  {renderPhotoGrid(laborPhotos, existingPhotos.labor, laborPhotoPreviews, (f) => handlePhotoUpload(f, 'labor'), (i) => removePhoto(i, 'labor'), 'labor')}
+                                </Grid>
                               </Grid>
                             </Grid>
                           </Grid>
-                        </Grid>
+                        )}
 
                         <Box sx={{ mt: 3 }}>
                           <Typography variant="h6" fontWeight={800} gutterBottom>หมายเหตุ</Typography>
@@ -941,9 +1182,11 @@ export default function DailyReportPage() {
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                           />
                         </Box>
-                      </Box>
+                      </>
+                    )}
+                  </Box>
 
-                       <Box sx={{ p: 3, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', gap: 2 }}>
+                  <Box sx={{ p: 3, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', gap: 2 }}>
                         <Button 
                           variant="contained" 
                           sx={{ bgcolor: '#ef4444', borderRadius: '10px', px: 6, fontWeight: 800, '&:hover': { bgcolor: '#dc2626' } }} 
@@ -1048,6 +1291,15 @@ export default function DailyReportPage() {
               <Button onClick={() => setIsWorkerModalOpen(false)} variant="contained" fullWidth sx={{ borderRadius: '10px', bgcolor: '#3b82f6', fontWeight: 800, py: 1.5 }}>ยืนยันรายการ</Button>
             </DialogActions>
           </Dialog>
+
+          <Dialog open={Boolean(previewImage)} onClose={() => setPreviewImage(null)} maxWidth="md" fullWidth>
+            <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 2 }}>
+              <IconButton onClick={() => setPreviewImage(null)} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}>
+                <X />
+              </IconButton>
+              {previewImage && <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />}
+            </Box>
+          </Dialog>
         </Layout>
       </LocalizationProvider>
     </ProtectedRoute>
@@ -1064,7 +1316,7 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
   }, [task, user]);
 
   const displayTaskName = isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName;
-  const displayProgress = isActingAsSupport && task.supportDailyProgress !== undefined ? task.supportDailyProgress : task.dailyProgress;
+  const displayProgress = task.dailyProgress || 0;
 
   return (
     <Box 
@@ -1201,7 +1453,7 @@ const TimeRangePicker = ({ value, onChange, disabled }: { value: string, onChang
   );
 };
 
-function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index }: any) {
+function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index, isReadOnly }: any) {
   const renderInactiveTime = () => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
       <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', bgcolor: '#f8fafc' }}>
@@ -1226,23 +1478,23 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
       {/* Day */}
       <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
-          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.regular} onChange={(e) => onUpdate('regular', e.target.checked)} />
-          {worker.times.regular ? <TimeRangePicker value={worker.times.regTime || '08:00 - 17:00'} onChange={(val) => onUpdate('regTime', val)} /> : renderInactiveTime()}
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.regular} onChange={(e) => onUpdate('regular', e.target.checked)} disabled={isReadOnly} />
+          {worker.times.regular ? <TimeRangePicker value={worker.times.regTime || '08:00 - 17:00'} onChange={(val) => onUpdate('regTime', val)} disabled={isReadOnly} /> : renderInactiveTime()}
         </Box>
       </TableCell>
       
       {/* OT Morning */}
       <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
-          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otMorning} onChange={(e) => onUpdate('otMorning', e.target.checked)} />
-          {worker.times.otMorning ? <TimeRangePicker value={worker.times.otMorningTime || '08:00 - 12:00'} onChange={(val) => onUpdate('otMorningTime', val)} /> : renderInactiveTime()}
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otMorning} onChange={(e) => onUpdate('otMorning', e.target.checked)} disabled={isReadOnly} />
+          {worker.times.otMorning ? <TimeRangePicker value={worker.times.otMorningTime || '08:00 - 12:00'} onChange={(val) => onUpdate('otMorningTime', val)} disabled={isReadOnly} /> : renderInactiveTime()}
         </Box>
       </TableCell>
       
       {/* OT Noon */}
       <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
-          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otNoon} onChange={(e) => onUpdate('otNoon', e.target.checked)} />
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otNoon} onChange={(e) => onUpdate('otNoon', e.target.checked)} disabled={isReadOnly} />
           {worker.times.otNoon ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Box sx={{ width: 60, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', bgcolor: '#f8fafc' }}>
@@ -1260,18 +1512,18 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
       {/* OT Evening */}
       <TableCell align="center" sx={{ borderRight: '1px solid #f1f5f9' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
-          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otEvening} onChange={(e) => onUpdate('otEvening', e.target.checked)} />
-          {worker.times.otEvening ? <TimeRangePicker value={worker.times.otEveningTime || '18:00 - 21:00'} onChange={(val) => onUpdate('otEveningTime', val)} /> : renderInactiveTime()}
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.times.otEvening} onChange={(e) => onUpdate('otEvening', e.target.checked)} disabled={isReadOnly} />
+          {worker.times.otEvening ? <TimeRangePicker value={worker.times.otEveningTime || '18:00 - 21:00'} onChange={(val) => onUpdate('otEveningTime', val)} disabled={isReadOnly} /> : renderInactiveTime()}
         </Box>
       </TableCell>
       
       {/* Leave */}
       <TableCell sx={{ borderRight: '1px solid #f1f5f9' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 26, justifyContent: 'center' }}>
-          <Checkbox size="small" sx={{ p: 0 }} checked={worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} />
+          <Checkbox size="small" sx={{ p: 0 }} checked={worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} disabled={isReadOnly} />
           {worker.leave?.active ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val) => onUpdateLeave('time', val)} />
+              <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val) => onUpdateLeave('time', val)} disabled={isReadOnly} />
               
               <Box sx={{ display: 'flex', gap: 0.2, ml: 0.5 }}>
                 {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
@@ -1279,15 +1531,21 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
                      <IconButton size="small" onClick={() => window.open(worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl, '_blank')} sx={{ color: '#3b82f6', p: 0.4, bgcolor: '#eff6ff', borderRadius: '6px' }}>
                         <Eye size={14} />
                      </IconButton>
-                     <IconButton size="small" onClick={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} sx={{ color: '#ef4444', p: 0.4, bgcolor: '#fef2f2', borderRadius: '6px' }}>
-                        <Trash2 size={14} />
-                     </IconButton>
+                     {!isReadOnly && (
+                       <IconButton size="small" onClick={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} sx={{ color: '#ef4444', p: 0.4, bgcolor: '#fef2f2', borderRadius: '6px' }}>
+                          <Trash2 size={14} />
+                       </IconButton>
+                     )}
                    </>
                 ) : (
-                   <IconButton component="label" size="small" sx={{ color: '#64748b', p: 0.4, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
-                      <Paperclip size={14} />
-                      <input type="file" hidden accept="image/*" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
-                   </IconButton>
+                   !isReadOnly ? (
+                     <IconButton component="label" size="small" sx={{ color: '#64748b', p: 0.4, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
+                        <Paperclip size={14} />
+                        <input type="file" hidden accept="image/*" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
+                     </IconButton>
+                   ) : (
+                     <Box sx={{ width: 22 }} />
+                   )
                 )}
               </Box>
             </Box>
@@ -1303,8 +1561,14 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
       {/* Actions */}
       <TableCell align="center">
         <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
-          <IconButton size="small" sx={{ color: '#3b82f6', p: 0.5 }}><Pencil size={14} /></IconButton>
-          <IconButton size="small" sx={{ color: '#ef4444', p: 0.5 }} onClick={onRemove}><Trash2 size={14} /></IconButton>
+          {isReadOnly ? (
+            <Chip label="Support" size="small" sx={{ fontSize: '0.65rem', height: 20, bgcolor: '#fef08a', color: '#854d0e', fontWeight: 800 }} />
+          ) : (
+            <>
+              <IconButton size="small" sx={{ color: '#3b82f6', p: 0.5 }}><Pencil size={14} /></IconButton>
+              <IconButton size="small" sx={{ color: '#ef4444', p: 0.5 }} onClick={onRemove}><Trash2 size={14} /></IconButton>
+            </>
+          )}
         </Box>
       </TableCell>
     </TableRow>

@@ -433,7 +433,8 @@ class DailyReportService {
    */
   clearCache(taskId?: string) {
     if (taskId) {
-      delete this.reportsCache[taskId];
+      delete this.reportsCache[`${taskId}_false`];
+      delete this.reportsCache[`${taskId}_true`];
     } else {
       this.reportsCache = {};
     }

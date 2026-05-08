@@ -39,7 +39,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/tasks
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { taskName, projectId, projectName, workOrderId, workOrderCode, categoryId, categoryName, assignees, dueDate, status, isSupportRequest } = req.body;
+    const { taskName, projectId, projectName, workOrderId, workOrderCode, workOrderName, categoryId, categoryName, assignees, dueDate, status, isSupportRequest } = req.body;
     
     const isSupport = isSupportRequest === true;
     const hasAssignees = Array.isArray(assignees) && assignees.length > 0;
@@ -55,6 +55,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       projectName: projectName || 'Unknown Project',
       workOrderId,
       workOrderCode,
+      workOrderName,
       categoryId,
       categoryName,
       assignees: assignees || [],
@@ -173,6 +174,29 @@ router.post('/:id/reports', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// POST /api/tasks/:id/unlock-report
+router.post('/:id/unlock-report', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const { dateStr, daysToUnlock } = req.body;
+    if (!dateStr || !daysToUnlock) {
+      throw new AppError('dateStr and daysToUnlock are required', 400);
+    }
+
+    await taskService.unlockDailyReport(id, dateStr, daysToUnlock, userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Daily report unlocked successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/tasks/:id/reports
 router.get('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -225,6 +249,27 @@ router.post('/:id/reject', async (req: Request, res: Response, next: NextFunctio
     res.status(200).json({
       success: true,
       message: 'ตีกลับงานสำเร็จ (Task rejected successfully)',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/approve
+router.post('/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    await taskService.approveTask(id, userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'อนุมัติงานสำเร็จ (Task approved successfully)',
     });
   } catch (error) {
     next(error);
