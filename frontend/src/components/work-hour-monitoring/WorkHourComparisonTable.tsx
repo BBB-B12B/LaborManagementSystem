@@ -1258,34 +1258,59 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     </Button>
                   </Stack>
                 </Box>
-              ) : (
-                <>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setEditingScanPunches(selectedRow?.scanPunches || []);
-                      setScanEditReason('');
-                      setIsEditingScan(true);
-                    }}
-                    sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 3, borderColor: '#64748b', color: '#64748b' }}
-                  >
-                    แก้ไขเวลาสแกนนิ้ว
-                  </Button>
-                  
-                  <Button
-                    variant="contained"
-                    onClick={handleCloseCheckDialog}
-                    disableElevation
-                    sx={{
-                      textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1,
-                      backgroundColor: '#1e293b', color: '#fff', boxShadow: 'none',
-                      '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
-                    }}
-                  >
-                    ปิดหน้าต่าง
-                  </Button>
-                </>
-              )}
+              ) : (() => {
+                const status = selectedRow?.status;
+                const hasSomeScan = (selectedRow?.scanPunches?.length ?? 0) > 0;
+                const canEditScan = status === 'CONFLICTED' || (status === 'MISSING_SCAN' && hasSomeScan);
+                const canFillFromDaily = status === 'MISSING_SCAN' && !hasSomeScan;
+
+                return (
+                  <>
+                    {/* กรณี CONFLICTED หรือ MISSING_SCAN ที่มีสแกนบางส่วน → แก้ไขสแกนนิ้ว */}
+                    {canEditScan && (
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          setEditingScanPunches(selectedRow?.scanPunches || []);
+                          setScanEditReason('');
+                          setIsEditingScan(true);
+                        }}
+                        sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 3, borderColor: '#475569', color: '#475569' }}
+                      >
+                        แก้ไขเวลาสแกนนิ้ว
+                      </Button>
+                    )}
+
+                    {/* กรณี MISSING_SCAN ที่ไม่มีสแกนเลย → ยืนยันตาม Daily Report */}
+                    {canFillFromDaily && (
+                      <Button
+                        variant="outlined"
+                        onClick={() => setConfirmFillOpen(true)}
+                        sx={{
+                          textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 3,
+                          borderColor: '#ea580c', color: '#ea580c',
+                          '&:hover': { backgroundColor: '#fff7ed', borderColor: '#c2410c' }
+                        }}
+                      >
+                        ยืนยันตาม Daily Report
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="contained"
+                      onClick={handleCloseCheckDialog}
+                      disableElevation
+                      sx={{
+                        textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1,
+                        backgroundColor: '#1e293b', color: '#fff', boxShadow: 'none',
+                        '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
+                      }}
+                    >
+                      ปิดหน้าต่าง
+                    </Button>
+                  </>
+                );
+              })()}
             </Stack>
           </Box>
         </DialogContent>

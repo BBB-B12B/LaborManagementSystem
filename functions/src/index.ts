@@ -177,6 +177,44 @@ function classifyByPunchCoverage(params: {
   };
 }
 
+// ─── Fallback Assignee Helper ──────────────────────────────────────────────────
+async function getFallbackAssignee(employeeId: string): Promise<{ id: string; name: string } | null> {
+  try {
+    let targetDoc = await db.collection('dailyContractors').doc(`DC-${employeeId}`).get();
+    if (!targetDoc.exists) {
+      targetDoc = await db.collection('dailyContractors').doc(employeeId).get();
+      if (!targetDoc.exists) {
+        const qSnap = await db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+        if (qSnap.empty) return null;
+        targetDoc = qSnap.docs[0];
+      }
+    }
+
+    const data = targetDoc.data();
+    if (!data?.foremanUsage) return null;
+
+    let maxCount = -1;
+    let maxAssigneeId: string | null = null;
+    let maxAssigneeName: string | null = null;
+
+    for (const [foremanId, usage] of Object.entries(data.foremanUsage)) {
+      const u = usage as { count: number; name: string };
+      if (u.count > maxCount) {
+        maxCount = u.count;
+        maxAssigneeId = foremanId;
+        maxAssigneeName = u.name;
+      }
+    }
+
+    if (maxAssigneeId && maxCount > 0) {
+      return { id: maxAssigneeId, name: maxAssigneeName || 'Unknown' };
+    }
+  } catch (err) {
+    console.error(`[getFallbackAssignee] Error for ${employeeId}:`, err);
+  }
+  return null;
+}
+
 // ─── Core Reconcile Function ──────────────────────────────────────────────────
 
 /**
@@ -220,8 +258,11 @@ async function reconcile(
     .get();
 
   let employeeName = '';
+  let homeProjectId = '';
   if (!contractorSnap.empty) {
-    employeeName = contractorSnap.docs[0].data()['name'] || '';
+    const data = contractorSnap.docs[0].data();
+    employeeName = data['name'] || '';
+    homeProjectId = data['projectLocationId'] || '';
   }
   const isRegistered = !contractorSnap.empty;
 
@@ -652,6 +693,7 @@ async function reconcile(
     const updates: Record<string, any> = {
       // ── Employee Name ────────────────────────────────────────────────────
       employeeName:         employeeName || null,
+      homeProjectId:        homeProjectId || null,
       // ── Scan hours (แยก field) ────────────────────────────────────────────
       scanDataHours:        hasScan      ? totalScanHours  : null,  // ยอดรวม
       scanNormalHours:      hasScan      ? scanNormalHours : null,
@@ -696,6 +738,14 @@ async function reconcile(
           updates['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
         }
       } catch { /* ignore */ }
+    } else if (!hasTimesheet) {
+      // ใช้ Fallback Assignee กรณีไม่มี Daily Report
+      const fallback = await getFallbackAssignee(employeeNumber);
+      if (fallback) {
+        updates['assigneeId'] = fallback.id;
+        updates['assigneeName'] = fallback.name;
+        updates['isFallbackAssignee'] = true;
+      }
     }
 
     if (existing['status'] !== status) {
@@ -714,6 +764,7 @@ async function reconcile(
       employeeNumber,
       workDate:             workDateStr,
       projectLocationId,
+      homeProjectId:        homeProjectId || null,
       employeeName:         employeeName || null,
       // ── Scan hours ───────────────────────────────────────────────────────
       scanDataHours:        hasScan      ? totalScanHours  : null,
@@ -744,6 +795,7 @@ async function reconcile(
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
       assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
       assigneeName:         null, // จะอัปเดตด้านล่าง
+      isFallbackAssignee:   false, // จะอัปเดตด้านล่าง
       isHoliday,
       status,
       statusHistory:        [newStatusEntry],
@@ -763,6 +815,14 @@ async function reconcile(
           setObj['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
         }
       } catch { /* ignore */ }
+    } else if (!hasTimesheet) {
+      // ใช้ Fallback Assignee กรณีไม่มี Daily Report
+      const fallback = await getFallbackAssignee(employeeNumber);
+      if (fallback) {
+        setObj['assigneeId'] = fallback.id;
+        setObj['assigneeName'] = fallback.name;
+        setObj['isFallbackAssignee'] = true;
+      }
     }
 
     await recordRef.set(setObj);
@@ -1124,3 +1184,75 @@ export const webhookTimesheetChanged = (
     res.status(500).send({ success: false, error: error.message });
   }
 });
+
+// ─── Reconciliation Records Trigger (Foreman Usage Tracking) ───────────────────
+
+/**
+ * onReconciliationChanged
+ * เมื่อมีการสร้าง แก้ไข หรือลบ reconciliationRecords จะทำการอัปเดตสถิติการถูกใช้งานโดย Foreman (foremanUsage)
+ * ใน collection dailyContractors แบบอัตโนมัติ
+ */
+export const onReconciliationChanged = firestore
+  .onDocumentWritten('reconciliationRecords/{docId}', async (event) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+
+    const employeeId = afterData?.employeeId || beforeData?.employeeId;
+    if (!employeeId) return null;
+
+    const beforeAssigneeId = beforeData?.assigneeId;
+    const afterAssigneeId = afterData?.assigneeId;
+    const afterAssigneeName = afterData?.assigneeName;
+
+    // ถ้าไม่มีการเปลี่ยนแปลงของ assigneeId ให้ข้าม
+    if (beforeAssigneeId === afterAssigneeId) {
+      return null;
+    }
+
+    const dcRef = db.collection('dailyContractors').doc(`DC-${employeeId}`);
+    
+    // หา Document Reference ของ DailyContractor
+    let targetRef = dcRef;
+    const dcDoc = await dcRef.get();
+    if (!dcDoc.exists) {
+      const altDoc = await db.collection('dailyContractors').doc(employeeId).get();
+      if (altDoc.exists) {
+        targetRef = db.collection('dailyContractors').doc(employeeId);
+      } else {
+         const qSnap = await db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+         if (!qSnap.empty) {
+            targetRef = qSnap.docs[0].ref;
+         } else {
+            console.warn(`[onReconciliationChanged] DailyContractor not found for employeeId=${employeeId}`);
+            return null; // ข้ามการทำงานถ้าไม่เจอพนักงาน
+         }
+      }
+    }
+
+    const updates: Record<string, any> = {};
+
+    // 1. Decrement old assignee if exists
+    if (beforeAssigneeId) {
+      updates[`foremanUsage.${beforeAssigneeId}.count`] = admin.firestore.FieldValue.increment(-1);
+    }
+
+    // 2. Increment new assignee if exists
+    if (afterAssigneeId) {
+      updates[`foremanUsage.${afterAssigneeId}.count`] = admin.firestore.FieldValue.increment(1);
+      if (afterAssigneeName) {
+        updates[`foremanUsage.${afterAssigneeId}.name`] = afterAssigneeName;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      try {
+        await targetRef.update(updates);
+        console.log(`[onReconciliationChanged] Updated foremanUsage for ${employeeId}. Old: ${beforeAssigneeId}, New: ${afterAssigneeId}`);
+      } catch (err) {
+        console.error(`[onReconciliationChanged] Error updating foremanUsage for ${employeeId}:`, err);
+      }
+    }
+
+    return null;
+  });
+

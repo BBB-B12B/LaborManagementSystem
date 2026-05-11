@@ -230,6 +230,10 @@ export default function ScanDataMonitoringPage() {
   const handleRefresh = () => {
     if (currentTab === 1) refetchAllScans();
     else if (currentTab === 2) refetchDeleted();
+    
+    // Invalidate stats to ensure the Breakdown UI gets the latest counts
+    queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
   };
 
 
@@ -463,6 +467,8 @@ export default function ScanDataMonitoringPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['discrepancies'] });
       queryClient.invalidateQueries({ queryKey: ['allScanData'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
       setManualScanOpen(false);
       alert('เพิ่มข้อมูลสำเร็จแล้ว');
     },

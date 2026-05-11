@@ -28,6 +28,10 @@ export interface DailyContractor {
   createdBy: string;
   updatedBy: string;
   idHistory?: string[]; // History of previous employeeIds
+  foremanUsage?: Record<string, {
+    count: number;
+    name: string;
+  }>;
 }
 
 export interface DailyContractorDTO {
@@ -42,6 +46,10 @@ export interface DailyContractorDTO {
   endDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  foremanUsage?: Record<string, {
+    count: number;
+    name: string;
+  }>;
 }
 
 export interface CreateDailyContractorInput {
@@ -101,6 +109,7 @@ export const dailyContractorConverter = {
       updatedAt: dc.updatedAt,
       createdBy: dc.createdBy,
       updatedBy: dc.updatedBy,
+      foremanUsage: dc.foremanUsage || null,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
@@ -128,6 +137,7 @@ export const dailyContractorConverter = {
       updatedAt: parseDate(data.updatedAt) || new Date(),
       createdBy: data.createdBy,
       updatedBy: data.updatedBy,
+      foremanUsage: data.foremanUsage,
     };
   },
 };

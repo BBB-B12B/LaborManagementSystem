@@ -801,6 +801,9 @@ export class ReconciliationService {
     }
 
     let assigneeName: string | undefined = undefined;
+    let assigneeId: string | undefined = summary?.assigneeId;
+    let isFallbackAssignee = false;
+
     if (summary?.assigneeId) {
       try {
         const timeoutMs = 5000;
@@ -820,6 +823,43 @@ export class ReconciliationService {
         }
       } catch {
         // ignore
+      }
+    } else if (!summary) {
+      // ใช้ Fallback Assignee กรณีไม่มี Daily Report
+      try {
+        let targetDoc = await this.db.collection('dailyContractors').doc(`DC-${employeeId}`).get();
+        if (!targetDoc.exists) {
+          targetDoc = await this.db.collection('dailyContractors').doc(employeeId).get();
+          if (!targetDoc.exists) {
+            const qSnap = await this.db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+            if (!qSnap.empty) {
+              targetDoc = qSnap.docs[0];
+            }
+          }
+        }
+        
+        if (targetDoc.exists) {
+          const data = targetDoc.data();
+          if (data?.foremanUsage) {
+            let maxCount = -1;
+            for (const [foremanId, usage] of Object.entries(data.foremanUsage)) {
+              const u = usage as { count: number; name: string };
+              if (u.count > maxCount) {
+                maxCount = u.count;
+                assigneeId = foremanId;
+                assigneeName = u.name;
+              }
+            }
+            if (assigneeId && maxCount > 0) {
+              isFallbackAssignee = true;
+            } else {
+              assigneeId = undefined;
+              assigneeName = undefined;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[ReconciliationService] Fallback Assignee lookup failed for empId=${employeeId}`, err);
       }
     }
 
@@ -847,8 +887,9 @@ export class ReconciliationService {
       leaveHours: summary?.leaveHours,
       leaveEntries: summary?.leaveEntries,
       medCertFileUrl: summary?.medCertFileUrl,
-      assigneeId: summary?.assigneeId,
+      assigneeId: assigneeId,
       assigneeName: assigneeName,
+      isFallbackAssignee: isFallbackAssignee,
     }, false, summary?.isLeave);
   }
 
@@ -868,13 +909,17 @@ export class ReconciliationService {
   private buildBaseQuery(filter: Omit<ReconciliationFilter, 'page' | 'pageSize'>): FirebaseFirestore.Query {
     let query: FirebaseFirestore.Query = this.collection;
 
-    // กรองตามสังกัด (RBAC หลัก) — homeProjectId มาก่อน projectLocationId
+    // กรองตามสังกัด (RBAC หลัก) — ใช้ Filter.or เฉพาะกรณีโครงการเดียว
+    // เพื่อรองรับ record เก่าที่ Cloud Function สร้างโดยไม่มี homeProjectId
     if (filter.homeProjectId) {
-      query = query.where('homeProjectId', '==', filter.homeProjectId);
+      query = query.where(Filter.or(
+        Filter.where('homeProjectId', '==', filter.homeProjectId),
+        Filter.where('projectLocationId', '==', filter.homeProjectId),
+      ));
     } else if (filter.allowedHomeProjects && filter.allowedHomeProjects.length > 0) {
+      // กรณี "ทั้งหมด" ใช้ homeProjectId IN เหมือนเดิม (Firestore Count ไม่รองรับ Filter.or กับ in)
       query = query.where('homeProjectId', 'in', filter.allowedHomeProjects);
     } else if (filter.projectLocationId) {
-      // fallback: กรองตาม work location (ใช้เฉพาะกรณีที่ homeProjectId ยังไม่ถูก set)
       query = query.where('projectLocationId', '==', filter.projectLocationId);
     } else if (filter.allowedProjects && filter.allowedProjects.length > 0) {
       query = query.where('projectLocationId', 'in', filter.allowedProjects);
@@ -1330,10 +1375,15 @@ export class ReconciliationService {
     // Base project/date filter (ไม่ใส่ status)
     const buildProjectDateQuery = () => {
       let q: FirebaseFirestore.Query = this.collection;
-      // ใช้ homeProjectId ก่อน (RBAC หลัก), fallback เป็น projectLocationId
+      // ใช้ Filter.or เฉพาะกรณีโครงการเดียว เพื่อรองรับ record เก่าที่ไม่มี homeProjectId
+      // Firestore Count Aggregate ไม่รองรับ Filter.or ร่วมกับ in operator (จะ error silently)
       if (filter.homeProjectId) {
-        q = q.where('homeProjectId', '==', filter.homeProjectId);
+        q = q.where(Filter.or(
+          Filter.where('homeProjectId', '==', filter.homeProjectId),
+          Filter.where('projectLocationId', '==', filter.homeProjectId),
+        ));
       } else if (filter.allowedHomeProjects && filter.allowedHomeProjects.length > 0) {
+        // กรณี "ทั้งหมด" ใช้ homeProjectId IN เหมือนเดิม ป้องกัน query พัง
         q = q.where('homeProjectId', 'in', filter.allowedHomeProjects);
       } else if (filter.projectLocationId) {
         q = q.where('projectLocationId', '==', filter.projectLocationId);

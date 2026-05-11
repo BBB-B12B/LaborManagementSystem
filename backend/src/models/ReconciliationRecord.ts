@@ -123,6 +123,7 @@ export interface ReconciliationRecord {
   // --- Metadata ---
   assigneeId?: string;               // รหัสโฟร์แมนที่รับผิดชอบ (AssigneesID จาก After-Sale)
   assigneeName?: string;             // ชื่อโฟร์แมน (fullNameEn จาก users collection)
+  isFallbackAssignee?: boolean;      // ถูกดึงมาจาก foremanUsage (สถิติ) แทนที่จะเป็นข้อมูลจริงหรือไม่
   createdAt: Date;
   updatedAt: Date;
 }
@@ -172,6 +173,7 @@ export interface CreateReconciliationRecordInput {
   hasLeave?: boolean;
   assigneeId?: string;
   assigneeName?: string;
+  isFallbackAssignee?: boolean;
 }
 
 // ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
@@ -241,6 +243,7 @@ export const reconciliationRecordConverter = {
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
     if (record.assigneeId !== undefined) data.assigneeId = record.assigneeId;
     if (record.assigneeName !== undefined) data.assigneeName = record.assigneeName;
+    if (record.isFallbackAssignee !== undefined) data.isFallbackAssignee = record.isFallbackAssignee;
     
     // Approved Hours
     if (record.approvedNormalHours !== undefined) data.approvedNormalHours = record.approvedNormalHours;
@@ -316,6 +319,7 @@ export const reconciliationRecordConverter = {
       updatedAt: toDate(data.updatedAt),
       assigneeId: data.assigneeId,
       assigneeName: data.assigneeName,
+      isFallbackAssignee: data.isFallbackAssignee,
       // Approved Hours
       approvedNormalHours:   data.approvedNormalHours,
       approvedOtMorning:     data.approvedOtMorning,

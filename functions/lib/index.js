@@ -43,7 +43,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webhookTimesheetChanged = exports.onWagePeriodApproved = exports.scheduledAbsenceCheck = exports.onEmployeeChanged = exports.onScanDataChanged = void 0;
+exports.onReconciliationChanged = exports.webhookTimesheetChanged = exports.onWagePeriodApproved = exports.scheduledAbsenceCheck = exports.onEmployeeChanged = exports.onScanDataChanged = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firebase_functions_1 = require("firebase-functions");
 // ─── Initialize Firebase Admin — Labor Management (default) ─────────────────
@@ -114,6 +114,42 @@ function classifyByPunchCoverage(params) {
         note: autoNote || null,
     };
 }
+// ─── Fallback Assignee Helper ──────────────────────────────────────────────────
+async function getFallbackAssignee(employeeId) {
+    try {
+        let targetDoc = await db.collection('dailyContractors').doc(`DC-${employeeId}`).get();
+        if (!targetDoc.exists) {
+            targetDoc = await db.collection('dailyContractors').doc(employeeId).get();
+            if (!targetDoc.exists) {
+                const qSnap = await db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+                if (qSnap.empty)
+                    return null;
+                targetDoc = qSnap.docs[0];
+            }
+        }
+        const data = targetDoc.data();
+        if (!data?.foremanUsage)
+            return null;
+        let maxCount = -1;
+        let maxAssigneeId = null;
+        let maxAssigneeName = null;
+        for (const [foremanId, usage] of Object.entries(data.foremanUsage)) {
+            const u = usage;
+            if (u.count > maxCount) {
+                maxCount = u.count;
+                maxAssigneeId = foremanId;
+                maxAssigneeName = u.name;
+            }
+        }
+        if (maxAssigneeId && maxCount > 0) {
+            return { id: maxAssigneeId, name: maxAssigneeName || 'Unknown' };
+        }
+    }
+    catch (err) {
+        console.error(`[getFallbackAssignee] Error for ${employeeId}:`, err);
+    }
+    return null;
+}
 // ─── Core Reconcile Function ──────────────────────────────────────────────────
 /**
  * reconcile()
@@ -126,14 +162,19 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
     let updatesObj = {};
     const recordId = generateReconciliationId(employeeNumber, workDateStr);
     const recordRef = db.collection('reconciliationRecords').doc(recordId);
-    // ── 0. ตรวจสอบสถานะการล็อกงวดงาน (isLocked) ──────────────────────────────────
-    // ถ้า Admin กด Approve งวดงานแล้ว เอกสารนี้จะมี isLocked: true ห้ามแก้ไขเด็ดขาด
+    let preserveManualScan = false;
+    let existingRecord = null;
     const initialDoc = await recordRef.get();
     if (initialDoc.exists) {
-        const existing = initialDoc.data();
-        if (existing['isLocked'] === true) {
+        existingRecord = initialDoc.data();
+        if (existingRecord['isLocked'] === true) {
             console.log(`[reconcile] ${employeeNumber} on ${workDateStr} isLocked (Wage Period Approved) — skip all processing`);
             return;
+        }
+        // หาก Admin เคยแก้ไขเวลาสแกนนิ้วด้วยตนเอง หรือกดยืนยันข้อมูลไปแล้ว จะต้องสงวนข้อมูลชุดนั้นไว้ ไม่ให้ถูกทับด้วยข้อมูลดิบ
+        if (existingRecord['approvalSource'] === 'manual' || existingRecord['resolvedAt'] != null) {
+            preserveManualScan = true;
+            console.log(`[reconcile] ${employeeNumber} on ${workDateStr} was manually resolved. Preserving manual scan data.`);
         }
     }
     // ── 1. ตรวจสอบว่าพนักงานมีในระบบ (dailyContractors) ─────────────────────
@@ -142,8 +183,11 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         .limit(1)
         .get();
     let employeeName = '';
+    let homeProjectId = '';
     if (!contractorSnap.empty) {
-        employeeName = contractorSnap.docs[0].data()['name'] || '';
+        const data = contractorSnap.docs[0].data();
+        employeeName = data['name'] || '';
+        homeProjectId = data['projectLocationId'] || '';
     }
     const isRegistered = !contractorSnap.empty;
     // ── 1. ดึง Scan Data ────────────────────────────────────────────────────────
@@ -319,6 +363,18 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             }
         }
         totalScanHours = scanNormalHours + scanOtMorning + scanOtNoon + scanOtEvening;
+    }
+    // ── Restore Manual Scan Data ─────────────────────────────────────────────
+    // หาก Admin เคยแก้ไขข้อมูลสแกนนิ้วด้วยตนเองแล้ว เราจะยึดข้อมูลนั้นเป็นหลัก ไม่เอาข้อมูลดิบมาเขียนทับ
+    if (preserveManualScan && existingRecord) {
+        hasScan = Array.isArray(existingRecord['scanPunches']) && existingRecord['scanPunches'].length > 0;
+        scanPunches = existingRecord['scanPunches'] || [];
+        scanNormalHours = existingRecord['scanNormalHours'] || 0;
+        scanOtMorning = existingRecord['scanOtMorningHours'] || 0;
+        scanOtNoon = existingRecord['scanOtNoonHours'] || 0;
+        scanOtEvening = existingRecord['scanOtEveningHours'] || 0;
+        totalScanHours = existingRecord['scanDataHours'] || 0;
+        scanDataId = existingRecord['scanDataId'] || scanDataId;
     }
     // ── 2. เช็ควันหยุดบริษัท (companyHolidays) ────────────────────────────────
     // Document ID = YYYY-MM-DD หรือ query by date field
@@ -548,6 +604,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         const updates = {
             // ── Employee Name ────────────────────────────────────────────────────
             employeeName: employeeName || null,
+            homeProjectId: homeProjectId || null,
             // ── Scan hours (แยก field) ────────────────────────────────────────────
             scanDataHours: hasScan ? totalScanHours : null, // ยอดรวม
             scanNormalHours: hasScan ? scanNormalHours : null,
@@ -593,6 +650,15 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             }
             catch { /* ignore */ }
         }
+        else if (!hasTimesheet) {
+            // ใช้ Fallback Assignee กรณีไม่มี Daily Report
+            const fallback = await getFallbackAssignee(employeeNumber);
+            if (fallback) {
+                updates['assigneeId'] = fallback.id;
+                updates['assigneeName'] = fallback.name;
+                updates['isFallbackAssignee'] = true;
+            }
+        }
         if (existing['status'] !== status) {
             updates['status'] = status;
             updates['statusHistory'] = [
@@ -608,6 +674,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             employeeNumber,
             workDate: workDateStr,
             projectLocationId,
+            homeProjectId: homeProjectId || null,
             employeeName: employeeName || null,
             // ── Scan hours ───────────────────────────────────────────────────────
             scanDataHours: hasScan ? totalScanHours : null,
@@ -638,6 +705,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
             assigneeId: hasTimesheet ? (timesheet?.AssigneesID || null) : null,
             assigneeName: null, // จะอัปเดตด้านล่าง
+            isFallbackAssignee: false, // จะอัปเดตด้านล่าง
             isHoliday,
             status,
             statusHistory: [newStatusEntry],
@@ -657,6 +725,15 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
                 }
             }
             catch { /* ignore */ }
+        }
+        else if (!hasTimesheet) {
+            // ใช้ Fallback Assignee กรณีไม่มี Daily Report
+            const fallback = await getFallbackAssignee(employeeNumber);
+            if (fallback) {
+                setObj['assigneeId'] = fallback.id;
+                setObj['assigneeName'] = fallback.name;
+                setObj['isFallbackAssignee'] = true;
+            }
         }
         await recordRef.set(setObj);
     }
@@ -957,5 +1034,68 @@ exports.webhookTimesheetChanged = require('firebase-functions').https.onRequest(
         console.error(`[webhookTimesheetChanged] Error:`, error);
         res.status(500).send({ success: false, error: error.message });
     }
+});
+// ─── Reconciliation Records Trigger (Foreman Usage Tracking) ───────────────────
+/**
+ * onReconciliationChanged
+ * เมื่อมีการสร้าง แก้ไข หรือลบ reconciliationRecords จะทำการอัปเดตสถิติการถูกใช้งานโดย Foreman (foremanUsage)
+ * ใน collection dailyContractors แบบอัตโนมัติ
+ */
+exports.onReconciliationChanged = firebase_functions_1.firestore
+    .onDocumentWritten('reconciliationRecords/{docId}', async (event) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+    const employeeId = afterData?.employeeId || beforeData?.employeeId;
+    if (!employeeId)
+        return null;
+    const beforeAssigneeId = beforeData?.assigneeId;
+    const afterAssigneeId = afterData?.assigneeId;
+    const afterAssigneeName = afterData?.assigneeName;
+    // ถ้าไม่มีการเปลี่ยนแปลงของ assigneeId ให้ข้าม
+    if (beforeAssigneeId === afterAssigneeId) {
+        return null;
+    }
+    const dcRef = db.collection('dailyContractors').doc(`DC-${employeeId}`);
+    // หา Document Reference ของ DailyContractor
+    let targetRef = dcRef;
+    const dcDoc = await dcRef.get();
+    if (!dcDoc.exists) {
+        const altDoc = await db.collection('dailyContractors').doc(employeeId).get();
+        if (altDoc.exists) {
+            targetRef = db.collection('dailyContractors').doc(employeeId);
+        }
+        else {
+            const qSnap = await db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+            if (!qSnap.empty) {
+                targetRef = qSnap.docs[0].ref;
+            }
+            else {
+                console.warn(`[onReconciliationChanged] DailyContractor not found for employeeId=${employeeId}`);
+                return null; // ข้ามการทำงานถ้าไม่เจอพนักงาน
+            }
+        }
+    }
+    const updates = {};
+    // 1. Decrement old assignee if exists
+    if (beforeAssigneeId) {
+        updates[`foremanUsage.${beforeAssigneeId}.count`] = admin.firestore.FieldValue.increment(-1);
+    }
+    // 2. Increment new assignee if exists
+    if (afterAssigneeId) {
+        updates[`foremanUsage.${afterAssigneeId}.count`] = admin.firestore.FieldValue.increment(1);
+        if (afterAssigneeName) {
+            updates[`foremanUsage.${afterAssigneeId}.name`] = afterAssigneeName;
+        }
+    }
+    if (Object.keys(updates).length > 0) {
+        try {
+            await targetRef.update(updates);
+            console.log(`[onReconciliationChanged] Updated foremanUsage for ${employeeId}. Old: ${beforeAssigneeId}, New: ${afterAssigneeId}`);
+        }
+        catch (err) {
+            console.error(`[onReconciliationChanged] Error updating foremanUsage for ${employeeId}:`, err);
+        }
+    }
+    return null;
 });
 //# sourceMappingURL=index.js.map

@@ -259,6 +259,8 @@ export default function WorkHourMonitoringPage() {
       
       toast.success(`ประมวลผลเสร็จสิ้น: สำเร็จ ${result.succeeded} รายการ, ล้มเหลว ${result.failed} รายการ`);
       queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
     } catch (error: any) {
       toast.error(error.message || 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลใหม่');
     } finally {
