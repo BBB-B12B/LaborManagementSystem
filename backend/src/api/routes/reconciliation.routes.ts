@@ -14,9 +14,11 @@ import {
   getReconciliationStats,
   getReconciliationById,
   confirmByDailyReport,
+  resolveManual,
   deleteGhostScan,
   exportAnomalies,
   generateForProjectAuto,
+  updateScanPunches,
 } from '../../controllers/reconciliationController';
 
 const router = Router();
@@ -42,7 +44,13 @@ router.get('/:id', getReconciliationById);
 // POST /api/reconciliation/:id/confirm-daily  — ยืนยันตาม Daily Report (กรณีลืม scan)
 router.post('/:id/confirm-daily', confirmByDailyReport);
 
+// POST /api/reconciliation/:id/resolve-manual — Admin แก้ไขชั่วโมงเอง
+router.post('/:id/resolve-manual', resolveManual);
+
 // POST /api/reconciliation/:id/delete-scan    — ลบ Ghost Scan
 router.post('/:id/delete-scan', deleteGhostScan);
+
+// POST /api/reconciliation/:id/update-scan    — แก้ไขเวลาสแกนนิ้ว
+router.post('/:id/update-scan', updateScanPunches);
 
 export default router;

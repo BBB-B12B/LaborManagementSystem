@@ -13,6 +13,7 @@ import { getFirestore, Timestamp, FieldValue, Filter } from 'firebase-admin/fire
 import {
   ReconciliationRecord,
   ReconciliationStatus,
+  ApprovalSource,
   StatusHistoryEntry,
   CreateReconciliationRecordInput,
   generateReconciliationId,
@@ -34,8 +35,7 @@ import { dailyContractorService } from '../dailyContractor/DailyContractorServic
 const COLLECTION = 'reconciliationRecords';
 const SCAN_COLLECTION = 'scanData';
 
-// Hour tolerance — ถ้าต่างกันไม่เกินนี้ ถือว่า "ตรงกัน"
-const HOURS_MATCH_TOLERANCE = 0.1; // 6 นาที
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -96,7 +96,17 @@ export interface PaginatedReconciliationResult {
 export interface ClassifyResult {
   status: ReconciliationStatus;
   suggestedHours?: number;
-  note?: string;
+  note?: string | null;
+  lateMinutes?: number;
+  earlyLeaveMinutes?: number;
+  isLate?: boolean;
+  isEarlyLeave?: boolean;
+  approvedNormalHours?: number;
+  approvedOtMorning?: number;
+  approvedOtNoon?: number;
+  approvedOtEvening?: number;
+  totalApprovedHours?: number;
+  approvalSource?: ApprovalSource;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,56 +125,140 @@ export class ReconciliationService {
   // =========================================================================
 
   /**
-   * กำหนดสถานะเริ่มต้นจากข้อมูลที่มี
-   * Logic:
-   *   dailyExists  scanExists  hoursMatch → Status
-   *   ✅           ✅           ✅          → MATCHED
-   *   ✅           ✅           ❌          → CONFLICTED
-   *   ✅           ❌            -          → MISSING_SCAN
-   *   ❌           ✅            -          → MISSING_DAILY
-   *   ❌           ❌            -          → ABSENT
+   * แปลง HH:mm เป็นจำนวนนาทีจากเที่ยงคืน
    */
-  classify(
-    dailyReportHours?: number,
-    scanDataHours?: number,
-    isHoliday?: boolean,
-    isLeave?: boolean,
-  ): ClassifyResult {
-    const dailyExists = dailyReportHours !== undefined && dailyReportHours > 0;
-    const scanExists = scanDataHours !== undefined && scanDataHours > 0;
+  private punchToMinutes(punch: string): number {
+    const [h, m] = punch.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  }
 
-    // ถ้าไม่มีข้อมูลการทำงานเลย ถึงจะมาเช็คว่าเป็นวันหยุดหรือวันลา
-    if (!dailyExists && !scanExists) {
+  /**
+   * ปรับ scanPunches ให้มีจำนวนคู่ (even count)
+   * ถ้า odd → ตัด punch สุดท้ายออก เพราะไม่มีคู่ out
+   * ตัวอย่าง: ["07:56", "12:02", "12:58"] → ["07:56", "12:02"]
+   */
+  private makeEvenScanPunches(punches: string[]): string[] {
+    if (!punches || punches.length === 0) return [];
+    const sorted = [...punches].sort();
+    // ถ้าจำนวนคี่ → ตัด punch สุดท้ายออก
+    if (sorted.length % 2 !== 0) sorted.pop();
+    return sorted;
+  }
+
+  /**
+   * [PRIMARY] กำหนดสถานะโดยเปรียบ punch coverage
+   * เอา dailyReportPunches เป็น source of truth
+   * เช็คว่า scan ครอบช่วงเวลาทำงานทั้งหมดไหม (รวม OT)
+   *
+   * CONFLICTED: มี OT (เช้า/เย็น) แต่ scan ไม่ครอบ boundary ของ OT
+   * MATCHED:    ทุกกรณีอื่น + เก็บ lateMinutes / earlyLeaveMinutes
+   */
+  classifyByPunchCoverage(params: {
+    dailyReportPunches: string[];
+    scanPunches: string[];
+    timesheetNormalHours?: number;
+    timesheetOtMorning?: number;
+    timesheetOtNoon?: number;
+    timesheetOtEvening?: number;
+    dailyReportHours?: number;   // ใช้เป็น suggestedHours
+    isHoliday?: boolean;
+    isLeave?: boolean;
+  }): ClassifyResult {
+    const {
+      dailyReportPunches,
+      scanPunches,
+      timesheetNormalHours,
+      timesheetOtMorning,
+      timesheetOtNoon,
+      timesheetOtEvening,
+      dailyReportHours,
+      isHoliday,
+      isLeave,
+    } = params;
+
+    const dailyPunchesValid = Array.isArray(dailyReportPunches) && dailyReportPunches.length >= 2;
+    const effectiveScanPunches = this.makeEvenScanPunches(scanPunches || []);
+    const scanValid = effectiveScanPunches.length >= 2;
+    const dailyExists = dailyPunchesValid || (dailyReportHours !== undefined && dailyReportHours > 0);
+
+    // --- Base cases ---
+    if (!dailyExists && !scanValid) {
       if (isHoliday) return { status: 'HOLIDAY' };
       if (isLeave) return { status: 'LEAVE' };
       return { status: 'ABSENT' };
     }
-
-    if (!dailyExists && scanExists) {
-      return { status: 'MISSING_DAILY' };
-    }
-
-    if (dailyExists && !scanExists) {
-      return {
-        status: 'MISSING_SCAN',
-        suggestedHours: 0, // ถ้าไม่มี scan เลย suggested = 0
+    if (!dailyExists && scanValid) return { status: 'MISSING_DAILY' };
+    if (dailyExists && !scanValid) {
+      return { 
+        status: 'MISSING_SCAN', 
+        suggestedHours: 0,
+        note: scanPunches && scanPunches.length === 1 
+          ? `พบการสแกนเพียงครั้งเดียว (${scanPunches[0]}) ไม่สามารถคำนวณเวลาได้`
+          : 'ไม่พบข้อมูลการสแกนนิ้ว'
       };
     }
 
-    // ทั้งคู่มีข้อมูล — เช็คว่าตรงกันไหม
-    const diff = Math.abs(dailyReportHours! - scanDataHours!);
-    if (diff <= HOURS_MATCH_TOLERANCE) {
-      return {
-        status: 'MATCHED',
-        suggestedHours: dailyReportHours,
-      };
+    // --- Punch Coverage Check ---
+    // ถ้าไม่มี dailyReportPunches (ข้อมูล Daily Report ไม่สมบูรณ์) -> ให้เป็น MISSING_DAILY (ขาดข้อมูลช่วงเวลา)
+    if (!dailyPunchesValid) {
+      return { status: 'MISSING_DAILY', note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)' };
     }
 
-    // ขัดแย้ง — เสนอค่าที่น้อยกว่า
+    // reportStart = punch แรกของวัน (รวม OT เช้า ถ้ามี)
+    // reportEnd   = punch สุดท้ายของวัน (รวม OT เย็น ถ้ามี)
+    const sortedReportPunches = [...dailyReportPunches].sort();
+    const reportStart = this.punchToMinutes(sortedReportPunches[0]);
+    const reportEnd   = this.punchToMinutes(sortedReportPunches[sortedReportPunches.length - 1]);
+
+    // สำหรับการตรวจสอบ Range (Coverage) ให้ใช้ scanPunches ดั้งเดิมที่เรียงลำดับแล้ว
+    // เพื่อให้ได้จุดเริ่มต้นและจุดสุดท้ายที่แท้จริง แม้จำนวนสแกนจะเป็นเลขคี่
+    const sortedScan = [...(scanPunches || [])].sort();
+    const scanFirstIn  = sortedScan.length > 0 ? this.punchToMinutes(sortedScan[0]) : 0;
+    const scanLastOut  = sortedScan.length > 0 ? this.punchToMinutes(sortedScan[sortedScan.length - 1]) : 0;
+
+    const lateMinutes      = Math.max(0, scanFirstIn - reportStart);
+    const earlyLeaveMinutes = Math.max(0, reportEnd - scanLastOut);
+
+    // --- Auto-Penalty Logic (กฎ 30 นาที สำหรับ OT) ---
+    // กฎ: ถ้าสาย/ออกก่อนในช่วง OT ให้ปัดเศษออกทีละ 30 นาที (Penalty)
+    // แล้วปรับสถานะเป็น MATCHED อัตโนมัติโดยใช้ยอดที่หักแล้ว (Approved Hours)
+    let approvedNormalHours = timesheetNormalHours ?? dailyReportHours ?? 0;
+    let approvedOtMorning = timesheetOtMorning ?? 0;
+    let approvedOtNoon = timesheetOtNoon ?? 0;
+    let approvedOtEvening = timesheetOtEvening ?? 0;
+    let autoNote = '';
+
+    const isLateForOT = lateMinutes > 0 && (timesheetOtMorning ?? 0) > 0;
+    const isEarlyLeaveFromOT = earlyLeaveMinutes > 0 && (timesheetOtEvening ?? 0) > 0;
+
+    if (isLateForOT) {
+      const penaltyMins = Math.ceil(lateMinutes / 30) * 30;
+      approvedOtMorning = Math.max(0, (timesheetOtMorning ?? 0) - (penaltyMins / 60));
+      autoNote += `สายช่วง OT เช้า ${lateMinutes} นาที (หัก ${penaltyMins} นาที) `;
+    }
+
+    if (isEarlyLeaveFromOT) {
+      const penaltyMins = Math.ceil(earlyLeaveMinutes / 30) * 30;
+      approvedOtEvening = Math.max(0, (timesheetOtEvening ?? 0) - (penaltyMins / 60));
+      autoNote += `ออกก่อนช่วง OT เย็น ${earlyLeaveMinutes} นาที (หัก ${penaltyMins} นาที) `;
+    }
+
+    const totalApproved = approvedNormalHours + approvedOtMorning + approvedOtNoon + approvedOtEvening;
+
     return {
-      status: 'CONFLICTED',
-      suggestedHours: Math.min(dailyReportHours!, scanDataHours!),
-      note: `ต่างกัน ${diff.toFixed(2)} ชม. (Daily: ${dailyReportHours}, Scan: ${scanDataHours})`,
+      status: 'MATCHED',
+      suggestedHours: dailyReportHours,
+      approvedNormalHours,
+      approvedOtMorning,
+      approvedOtNoon,
+      approvedOtEvening,
+      totalApprovedHours: totalApproved,
+      approvalSource: (isLateForOT || isEarlyLeaveFromOT) ? 'manual' : 'daily_report', // manual if auto-adjusted
+      lateMinutes,
+      earlyLeaveMinutes,
+      isLate: lateMinutes > 0,
+      isEarlyLeave: earlyLeaveMinutes > 0,
+      note: autoNote || null, // ถ้ามี penalty ให้ใส่ note อธิบาย ล้างค่าออกถ้าไม่มี penalty
     };
   }
 
@@ -185,12 +279,17 @@ export class ReconciliationService {
     if (!existing) {
       // สร้างใหม่
       const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
-      const classified = this.classify(
-        input.dailyReportHours,
-        input.scanDataHours,
-        input.isHoliday ?? isHoliday,
-        isLeaveCalculated ?? isLeave,
-      );
+      const classified = this.classifyByPunchCoverage({
+        dailyReportPunches: input.dailyReportPunches ?? [],
+        scanPunches: input.scanPunches ?? [],
+        timesheetNormalHours: input.timesheetNormalHours,
+        timesheetOtMorning: input.timesheetOtMorning,
+        timesheetOtNoon: input.timesheetOtNoon,
+        timesheetOtEvening: input.timesheetOtEvening,
+        dailyReportHours: input.dailyReportHours,
+        isHoliday: input.isHoliday ?? isHoliday,
+        isLeave: isLeaveCalculated ?? isLeave,
+      });
 
       const historyEntry: StatusHistoryEntry = {
         status: classified.status,
@@ -204,6 +303,17 @@ export class ReconciliationService {
         ...input,
         status: classified.status,
         suggestedHours: classified.suggestedHours,
+        approvedNormalHours: classified.approvedNormalHours,
+        approvedOtMorning: classified.approvedOtMorning,
+        approvedOtNoon: classified.approvedOtNoon,
+        approvedOtEvening: classified.approvedOtEvening,
+        totalApprovedHours: classified.totalApprovedHours,
+        approvalSource: classified.approvalSource,
+        lateMinutes: classified.lateMinutes,
+        earlyLeaveMinutes: classified.earlyLeaveMinutes,
+        isLate: classified.isLate,
+        isEarlyLeave: classified.isEarlyLeave,
+        note: classified.note,
         statusHistory: [historyEntry],
         createdAt: now,
         updatedAt: now,
@@ -218,28 +328,39 @@ export class ReconciliationService {
       return null; // ข้ามการทำงาน
     }
 
-    // ใช้ค่าจาก input ถ้ามี มิฉะนั้นใช้ค่าเดิมจาก existing เป็น fallback
-    const effectiveDailyHours = input.dailyReportHours ?? existing.dailyReportHours;
-    const effectiveScanHours = input.scanDataHours ?? existing.scanDataHours;
+
 
     const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
     const effectiveIsHoliday = input.isHoliday ?? isHoliday ?? existing.isHoliday;
     const effectiveIsLeave = isLeaveCalculated ?? isLeave ?? (existing.leaveHours !== undefined ? existing.leaveHours > 0 : undefined);
 
-    const classified = this.classify(
-      effectiveDailyHours,
-      effectiveScanHours,
-      effectiveIsHoliday,
-      effectiveIsLeave,
-    );
+    // เลือก punch data ที่ดีที่สุด — ใช้ input ถ้ามี มิฉะนั้น fallback existing
+    const effectiveDailyPunches = (input.dailyReportPunches?.length ?? 0) > 0
+      ? input.dailyReportPunches!
+      : (existing.dailyReportPunches ?? []);
+    const effectiveScanPunches = (input.scanPunches?.length ?? 0) > 0
+      ? input.scanPunches!
+      : (existing.scanPunches ?? []);
+
+    const classified = this.classifyByPunchCoverage({
+      dailyReportPunches: effectiveDailyPunches,
+      scanPunches: effectiveScanPunches,
+      timesheetNormalHours: input.timesheetNormalHours ?? existing.timesheetNormalHours,
+      timesheetOtMorning: input.timesheetOtMorning ?? existing.timesheetOtMorning,
+      timesheetOtNoon: input.timesheetOtNoon ?? existing.timesheetOtNoon,
+      timesheetOtEvening: input.timesheetOtEvening ?? existing.timesheetOtEvening,
+      dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
+      isHoliday: effectiveIsHoliday,
+      isLeave: effectiveIsLeave,
+    });
 
     const newStatus = classified.status;
     const statusChanged = newStatus !== existing.status;
 
     const updates: Partial<ReconciliationRecord> = {
       projectLocationId: input.projectLocationId,
-      homeProjectId: input.homeProjectId ?? existing.homeProjectId,    // snapshot — ใช้ existing เป็น fallback
-      workLocationIds: input.workLocationIds ?? existing.workLocationIds, // สะสม locations
+      homeProjectId: input.homeProjectId ?? existing.homeProjectId,
+      workLocationIds: input.workLocationIds ?? existing.workLocationIds,
       employeeName: input.employeeName ?? existing.employeeName,
       // Daily-report side
       dailyReportHours:       input.dailyReportHours      ?? existing.dailyReportHours,
@@ -258,8 +379,20 @@ export class ReconciliationService {
       scanOtEveningHours:     input.scanOtEveningHours   ?? existing.scanOtEveningHours,
       scanDataId:             input.scanDataId            ?? existing.scanDataId,
       scanPunches:            input.scanPunches           ?? existing.scanPunches,
+      // Classify result
       suggestedHours:         classified.suggestedHours,
       status:                 newStatus,
+      approvedNormalHours:    classified.approvedNormalHours,
+      approvedOtMorning:      classified.approvedOtMorning,
+      approvedOtNoon:         classified.approvedOtNoon,
+      approvedOtEvening:      classified.approvedOtEvening,
+      totalApprovedHours:     classified.totalApprovedHours,
+      approvalSource:         classified.approvalSource,
+      lateMinutes:            classified.lateMinutes,
+      earlyLeaveMinutes:      classified.earlyLeaveMinutes,
+      isLate:                 classified.isLate,
+      isEarlyLeave:           classified.isEarlyLeave,
+      note:                   classified.note,
       updatedAt:              now,
       hasLeave:               effectiveIsLeave === true,
       assigneeId:             input.assigneeId    ?? existing.assigneeId,
@@ -520,6 +653,7 @@ export class ReconciliationService {
         scanDataId: scanEntry?.id,
         dailyReportPhotos: summary.dailyReportPhotos,
         dailyReportPunches: summary.dailyReportPunches,
+        shiftTimes: summary.shiftTimes,
         scanPunches: scanEntry?.punches,
         leaveHours: summary.leaveHours,
         leaveEntries: summary.leaveEntries,
@@ -915,13 +1049,64 @@ export class ReconciliationService {
       changedAt: now,
       changedBy: adminId,
       reason: `Admin ยืนยันตาม Daily Report: ${reason}`,
-      note: `Scan Data ถูกเติมอัตโนมัติ ${record.dailyReportHours} ชม.`,
+      note: `ยึดตามข้อมูล Daily Report ต้นทาง (${record.dailyReportHours} ชม.)`,
     };
 
     await ref.update({
       status: 'MATCHED',
-      scanDataHours: record.dailyReportHours,
+      approvalSource: 'daily_report',
+      approvedNormalHours: record.timesheetNormalHours,
+      approvedOtMorning: record.timesheetOtMorning,
+      approvedOtNoon: record.timesheetOtNoon,
+      approvedOtEvening: record.timesheetOtEvening,
+      totalApprovedHours: record.dailyReportHours,
+      scanDataHours: record.dailyReportHours, // เติม scanDataHours ให้เท่ากับ daily เพื่อให้ summary ตรงกัน
       suggestedHours: record.dailyReportHours,
+      resolvedAt: Timestamp.fromDate(now),
+      resolvedBy: adminId,
+      updatedAt: Timestamp.fromDate(now),
+      statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
+    });
+  }
+
+  /**
+   * Admin แก้ไขชั่วโมงทำงานด้วยตนเอง (Manual Resolve)
+   * ใช้ในกรณีที่ Daily และ Scan ไม่ตรงกัน และ Admin ต้องการระบุยอดที่ถูกต้องเอง (เช่น หักเวลาสาย OT)
+   */
+  async resolveManual(
+    recordId: string,
+    adminId: string,
+    payload: {
+      normalHours?: number;
+      otMorning?: number;
+      otNoon?: number;
+      otEvening?: number;
+      reason?: string;
+    }
+  ): Promise<void> {
+    const ref = this.collection.doc(recordId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error(`ReconciliationRecord ${recordId} not found`);
+
+    const now = new Date();
+    const total = (payload.normalHours ?? 0) + (payload.otMorning ?? 0) + (payload.otNoon ?? 0) + (payload.otEvening ?? 0);
+
+    const historyEntry: StatusHistoryEntry = {
+      status: 'MATCHED',
+      changedAt: now,
+      changedBy: adminId,
+      reason: `Admin แก้ไขชั่วโมงด้วยตนเอง: ${payload.reason || 'ปรับปรุงข้อมูลให้ถูกต้อง'}`,
+      note: `ปรับยอดรวมเป็น ${total} ชม. (เดิม Daily: ${snap.data()?.dailyReportHours || 0} ชม.)`,
+    };
+
+    await ref.update({
+      status: 'MATCHED',
+      approvalSource: 'manual',
+      approvedNormalHours: payload.normalHours,
+      approvedOtMorning: payload.otMorning,
+      approvedOtNoon: payload.otNoon,
+      approvedOtEvening: payload.otEvening,
+      totalApprovedHours: total,
       resolvedAt: Timestamp.fromDate(now),
       resolvedBy: adminId,
       updatedAt: Timestamp.fromDate(now),
@@ -989,6 +1174,118 @@ export class ReconciliationService {
       scanDataHours: 0,
       scanDataId: null,
       suggestedHours: 0,
+      updatedAt: Timestamp.fromDate(now),
+      statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
+    });
+  }
+
+  /**
+   * Admin แก้ไขรายการสแกนนิ้ว (เพิ่ม/ลบ/แก้ไข Punch)
+   */
+  async updateScanPunches(
+    recordId: string,
+    adminId: string,
+    punches: string[],
+    reason: string
+  ): Promise<void> {
+    const ref = this.collection.doc(recordId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error(`ReconciliationRecord ${recordId} not found`);
+
+    const record = reconciliationRecordConverter.fromFirestore(snap);
+    const now = new Date();
+
+    // 1. คำนวณชั่วโมงสแกนใหม่จาก punches
+    const workDate = new Date(record.workDate);
+    const timeScans = punches.map(p => {
+      const [h, m] = p.split(':').map(Number);
+      const d = new Date(workDate);
+      d.setHours(h, m, 0, 0);
+      return d;
+    });
+
+    const scanMins = timeScans.map(s => s.getHours() * 60 + s.getMinutes());
+    let scanNormal = 0;
+    let scanOtMorning = 0;
+    let scanOtNoon = 0;
+    let scanOtEvening = 0;
+
+    if (scanMins.length >= 2) {
+      const first = scanMins[0];
+      const last = scanMins[scanMins.length - 1];
+      const start = Math.max(first, 480);
+      const end = Math.min(last, 1020);
+      if (end > start) {
+        let mins = end - start;
+        if (start < 720 && end > 780) mins -= 60;
+        scanNormal = Math.floor(mins / 30) * 0.5;
+      }
+      const morning = scanMins.filter(m => m <= 480);
+      if (morning.length >= 2) scanOtMorning = Math.floor((morning[morning.length - 1] - morning[0]) / 30) * 0.5;
+      const hasLunchScan = scanMins.some(m => m >= 690 && m <= 810);
+      if (first < 720 && last > 780 && !hasLunchScan) scanOtNoon = 1.0;
+      if (last >= 1110) scanOtEvening = Math.floor((last - 1080) / 30) * 0.5;
+    }
+    const totalScanHours = scanNormal + scanOtMorning + scanOtNoon + scanOtEvening;
+
+    // 2. อัปเดต ScanData document (ถ้ามี)
+    if (record.scanDataId) {
+      const scanRef = this.db.collection(SCAN_COLLECTION).doc(record.scanDataId);
+      await scanRef.update({
+        punches,
+        allScans: timeScans.map(s => s.toTimeString().split(' ')[0]),
+        regularHours: scanNormal,
+        otMorningHours: scanOtMorning,
+        otEveningHours: scanOtEvening,
+        otNoonHours: scanOtNoon,
+        isManuallyEdited: true,
+        updatedAt: Timestamp.fromDate(now),
+      });
+    }
+
+    // 3. Re-classify record
+    const classified = this.classifyByPunchCoverage({
+      dailyReportPunches: record.dailyReportPunches || [],
+      scanPunches: punches,
+      timesheetNormalHours: record.timesheetNormalHours,
+      timesheetOtMorning: record.timesheetOtMorning,
+      timesheetOtNoon: record.timesheetOtNoon,
+      timesheetOtEvening: record.timesheetOtEvening,
+      dailyReportHours: record.dailyReportHours,
+      isHoliday: record.isHoliday,
+      isLeave: record.hasLeave,
+    });
+
+    const historyEntry: StatusHistoryEntry = {
+      status: classified.status,
+      changedAt: now,
+      changedBy: adminId,
+      reason: `Admin ปรับปรุงรายการสแกนนิ้ว: ${reason}`,
+      note: `Punches ใหม่: [${punches.join(', ')}] -> ${classified.status}`,
+    };
+
+    // 4. บันทึก ReconciliationRecord
+    await ref.update({
+      scanPunches: punches,
+      scanDataHours: totalScanHours,
+      scanNormalHours: scanNormal,
+      scanOtMorningHours: scanOtMorning,
+      scanOtNoonHours: scanOtNoon,
+      scanOtEveningHours: scanOtEvening,
+      status: classified.status,
+      approvedNormalHours: classified.approvedNormalHours,
+      approvedOtMorning: classified.approvedOtMorning,
+      approvedOtNoon: classified.approvedOtNoon,
+      approvedOtEvening: classified.approvedOtEvening,
+      totalApprovedHours: classified.totalApprovedHours,
+      approvalSource: classified.approvalSource,
+      note: classified.note,
+      lateMinutes: classified.lateMinutes,
+      earlyLeaveMinutes: classified.earlyLeaveMinutes,
+      isLate: classified.isLate,
+      isEarlyLeave: classified.isEarlyLeave,
+      resolvedAt: Timestamp.fromDate(now),
+      resolvedBy: adminId,
       updatedAt: Timestamp.fromDate(now),
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
     });

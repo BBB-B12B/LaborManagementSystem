@@ -13,7 +13,7 @@ export type ReconciliationStatus =
 // ลบ AWAITING_CORRECTION — Admin แจ้งนอกระบบเอง
 // ลบ APPROVED — การล็อกข้อมูลทำผ่านงวดงาน (isLocked)
 
-export type ApprovalSource = 'DAILY_REPORT' | 'SCAN_DATA' | 'MANUAL';
+export type ApprovalSource = 'daily_report' | 'scan_data' | 'manual';
 
 export interface StatusHistoryEntry {
   status: ReconciliationStatus;
@@ -43,6 +43,12 @@ export interface ReconciliationRecord {
   scanOtMorningHours?: number;
   scanOtNoonHours?: number;
   scanOtEveningHours?: number;
+  shiftTimes?: {
+    day?: string;
+    otEvening?: string;
+    otMorning?: string;
+    otNoon?: string;
+  };
   suggestedHours?: number;
   status: ReconciliationStatus;
   isLocked?: boolean;
@@ -67,6 +73,19 @@ export interface ReconciliationRecord {
   hasLeave?: boolean;
   assigneeId?: string;
   assigneeName?: string;
+  lateMinutes?: number;
+  earlyLeaveMinutes?: number;
+  isLate?: boolean;
+  isEarlyLeave?: boolean;
+  note?: string;
+
+  // --- Approved Hours (ยอดที่ใช้คิดเงินจริง หลังจากการ Resolve) ---
+  approvedNormalHours?: number;
+  approvedOtMorning?: number;
+  approvedOtNoon?: number;
+  approvedOtEvening?: number;
+  totalApprovedHours?: number;
+  approvalSource?: ApprovalSource;
 }
 
 export interface ReconciliationFilter {
@@ -150,10 +169,33 @@ export const reconciliationService = {
   },
 
   /**
+   * Admin แก้ไขชั่วโมงทำงานด้วยตนเอง (Manual Resolve)
+   */
+  resolveManual: async (
+    id: string,
+    payload: {
+      normalHours?: number;
+      otMorning?: number;
+      otNoon?: number;
+      otEvening?: number;
+      reason?: string;
+    }
+  ): Promise<void> => {
+    await apiClient.post(`/reconciliation/${id}/resolve-manual`, payload);
+  },
+
+  /**
    * Admin ลบ Ghost Scan
    */
   deleteGhostScan: async (id: string, reason: string): Promise<void> => {
     await apiClient.post(`/reconciliation/${id}/delete-scan`, { reason });
+  },
+  
+  /**
+   * Admin แก้ไขเวลาสแกนนิ้ว
+   */
+  updateScanPunches: async (id: string, punches: string[], reason: string): Promise<void> => {
+    await apiClient.post(`/reconciliation/${id}/update-scan`, { punches, reason });
   },
 
   /**

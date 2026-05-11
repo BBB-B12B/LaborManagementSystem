@@ -102,6 +102,12 @@ export interface DailyTimesheetSummary {
   assigneeId?: string;
   dailyReportPhotos?: string[];    // ดึงมาจาก photos.labor
   dailyReportPunches?: string[];   // ดึงมาจาก shiftTimes
+  shiftTimes?: {
+    day?: string;
+    otEvening?: string;
+    otMorning?: string;
+    otNoon?: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +234,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     assigneeId: doc.AssigneesID,
     dailyReportPhotos,
     dailyReportPunches,
+    shiftTimes: doc.shiftTimes,
   };
 }
 

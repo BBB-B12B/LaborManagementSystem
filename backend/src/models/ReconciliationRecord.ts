@@ -37,7 +37,7 @@ export interface StatusHistoryEntry {
   changedAt: Date;
   changedBy: string;    // 'system' | userId (Admin)
   reason?: string;      // เหตุผลการเปลี่ยน
-  note?: string;        // โน้ตเพิ่มเติม (เช่น "daily report ถูกเพิ่มโดย user_05")
+  note?: string | null;        // โน้ตเพิ่มเติม (เช่น "daily report ถูกเพิ่มโดย user_05")
 }
 
 // ---------------------------------------------------------------------------
@@ -68,12 +68,27 @@ export interface ReconciliationRecord {
   scanOtMorningHours?: number;       // OT เช้า
   scanOtNoonHours?: number;          // OT ผ่าเที่ยง
   scanOtEveningHours?: number;       // OT เย็น
+  
+  shiftTimes?: {
+    day?: string;
+    otEvening?: string;
+    otMorning?: string;
+    otNoon?: string;
+  };
+
   dailyReportId?: string;            // ref → DailyWorkerReport doc id
   scanDataId?: string;               // ref → scanData doc id
   suggestedHours?: number;           // min(dailyReportHours, scanDataHours) — UI hint เท่านั้น
   dailyReportPhotos?: string[];      // รูปถ่ายอ้างอิงจาก Daily Report (Aftersale)
   dailyReportPunches?: string[];     // Array ของเวลาจาก Daily Report เช่น ["08:00", "17:00"]
   scanPunches?: string[];            // Array ของเวลาสแกนนิ้ว
+
+  // --- Punch Coverage Analysis (logic ใหม่ แทน hours comparison) ---
+  lateMinutes?: number;              // สายกี่นาที (scanFirstIn > reportStart)
+  earlyLeaveMinutes?: number;        // ออกก่อนกี่นาที (scanLastOut < reportEnd)
+  isLate?: boolean;                  // flag สำหรับ filter/query
+  isEarlyLeave?: boolean;            // flag สำหรับ filter/query
+  note?: string | null;                     // หมายเหตุจากระบบ (เช่น สาเหตุที่ขัดแย้ง)
 
   // --- สถานะ ---
   status: ReconciliationStatus;
@@ -82,6 +97,15 @@ export interface ReconciliationRecord {
   leaveEntries?: any[];              // ข้อมูลการลาเพิ่มเติม
   hasLeave?: boolean;                // Flag ระบุว่ามีการลางาน (ใช้ฟิลเตอร์)
   medCertFileUrl?: string;           // รูปภาพเอกสารการลา
+  
+  // --- Approved Hours (ยอดที่ใช้คิดเงินจริง หลังจากการ Resolve) ---
+  // ถ้า Admin แก้ไขเอง จะใช้ค่าเหล่านี้แทนค่าจาก Daily/Scan
+  approvedNormalHours?: number;
+  approvedOtMorning?: number;
+  approvedOtNoon?: number;
+  approvedOtEvening?: number;
+  totalApprovedHours?: number;       // ยอดรวมทั้งหมดที่อนุมัติ
+  approvalSource?: ApprovalSource;   // 'daily_report' | 'scan_data' | 'manual'
 
   // --- Locking (ผูกกับงวดงาน — ไม่ใช่ approve รายวัน) ---
   // เมื่อ Admin Approve งวดงาน onWagePeriodApproved จะตั้ง isLocked: true อัตโนมัติ
@@ -125,11 +149,18 @@ export interface CreateReconciliationRecordInput {
   scanOtMorningHours?: number;
   scanOtNoonHours?: number;
   scanOtEveningHours?: number;
+  shiftTimes?: {
+    day?: string;
+    otEvening?: string;
+    otMorning?: string;
+    otNoon?: string;
+  };
   dailyReportId?: string;
   scanDataId?: string;
   dailyReportPhotos?: string[];
   dailyReportPunches?: string[];
   scanPunches?: string[];
+  note?: string | null;
   isHoliday?: boolean;
   leaveHours?: number;
   leaveEntries?: {
@@ -182,12 +213,18 @@ export const reconciliationRecordConverter = {
     if (record.scanOtMorningHours !== undefined) data.scanOtMorningHours = record.scanOtMorningHours;
     if (record.scanOtNoonHours !== undefined) data.scanOtNoonHours = record.scanOtNoonHours;
     if (record.scanOtEveningHours !== undefined) data.scanOtEveningHours = record.scanOtEveningHours;
+    if (record.shiftTimes !== undefined) data.shiftTimes = record.shiftTimes;
     if (record.dailyReportId !== undefined) data.dailyReportId = record.dailyReportId;
     if (record.scanDataId !== undefined) data.scanDataId = record.scanDataId;
     if (record.dailyReportPhotos !== undefined) data.dailyReportPhotos = record.dailyReportPhotos;
     if (record.dailyReportPunches !== undefined) data.dailyReportPunches = record.dailyReportPunches;
     if (record.scanPunches !== undefined) data.scanPunches = record.scanPunches;
     if (record.suggestedHours !== undefined) data.suggestedHours = record.suggestedHours;
+    if (record.lateMinutes !== undefined) data.lateMinutes = record.lateMinutes;
+    if (record.earlyLeaveMinutes !== undefined) data.earlyLeaveMinutes = record.earlyLeaveMinutes;
+    if (record.isLate !== undefined) data.isLate = record.isLate;
+    if (record.isEarlyLeave !== undefined) data.isEarlyLeave = record.isEarlyLeave;
+    if (record.note !== undefined) data.note = record.note;
     if (record.status !== undefined) data.status = record.status;
     if (record.isLocked !== undefined) data.isLocked = record.isLocked;
     if (record.resolvedAt !== undefined) data.resolvedAt = record.resolvedAt;
@@ -204,6 +241,14 @@ export const reconciliationRecordConverter = {
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
     if (record.assigneeId !== undefined) data.assigneeId = record.assigneeId;
     if (record.assigneeName !== undefined) data.assigneeName = record.assigneeName;
+    
+    // Approved Hours
+    if (record.approvedNormalHours !== undefined) data.approvedNormalHours = record.approvedNormalHours;
+    if (record.approvedOtMorning !== undefined) data.approvedOtMorning = record.approvedOtMorning;
+    if (record.approvedOtNoon !== undefined) data.approvedOtNoon = record.approvedOtNoon;
+    if (record.approvedOtEvening !== undefined) data.approvedOtEvening = record.approvedOtEvening;
+    if (record.totalApprovedHours !== undefined) data.totalApprovedHours = record.totalApprovedHours;
+    if (record.approvalSource !== undefined) data.approvalSource = record.approvalSource;
     
     // Additional properties
     if ('isHoliday' in record) data.isHoliday = record.isHoliday;
@@ -250,12 +295,18 @@ export const reconciliationRecordConverter = {
       scanOtMorningHours:    data.scanOtMorningHours,
       scanOtNoonHours:       data.scanOtNoonHours,
       scanOtEveningHours:    data.scanOtEveningHours,
+      shiftTimes:            data.shiftTimes,
       dailyReportId: data.dailyReportId,
       scanDataId: data.scanDataId,
       dailyReportPhotos: data.dailyReportPhotos,
       dailyReportPunches: data.dailyReportPunches,
       scanPunches: data.scanPunches,
       suggestedHours: data.suggestedHours,
+      lateMinutes: data.lateMinutes,
+      earlyLeaveMinutes: data.earlyLeaveMinutes,
+      isLate: data.isLate,
+      isEarlyLeave: data.isEarlyLeave,
+      note: data.note,
       status: data.status || 'PENDING',
       isLocked: data.isLocked ?? false,
       resolvedAt: data.resolvedAt ? toDate(data.resolvedAt) : undefined,
@@ -265,6 +316,13 @@ export const reconciliationRecordConverter = {
       updatedAt: toDate(data.updatedAt),
       assigneeId: data.assigneeId,
       assigneeName: data.assigneeName,
+      // Approved Hours
+      approvedNormalHours:   data.approvedNormalHours,
+      approvedOtMorning:     data.approvedOtMorning,
+      approvedOtNoon:        data.approvedOtNoon,
+      approvedOtEvening:     data.approvedOtEvening,
+      totalApprovedHours:    data.totalApprovedHours,
+      approvalSource:        data.approvalSource,
       // Leave & Holiday
       ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
       ...(data.leaveHours !== undefined && { leaveHours: data.leaveHours }),

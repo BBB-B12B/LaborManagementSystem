@@ -7,7 +7,7 @@
  */
 
 import { firestore } from 'firebase-functions';
-import { matcherService } from '../services/reconciliation/MatcherService';
+import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 import { logger } from '../utils/logger';
 
 export const onScanDataChanged = firestore
@@ -53,7 +53,7 @@ export const onScanDataChanged = firestore
     logger.info(`[onScanDataChanged] Triggered for ${employeeNumber} on ${workDateStr} (project: ${projectLocationId})`);
 
     try {
-      await matcherService.reconcile(employeeNumber, workDateStr, projectLocationId);
+      await reconciliationService.generateForEmployee(employeeNumber, workDateStr, projectLocationId);
       logger.info(`[onScanDataChanged] Reconciliation complete for ${employeeNumber} on ${workDateStr}`);
     } catch (err) {
       logger.error(`[onScanDataChanged] Reconciliation failed for ${employeeNumber} on ${workDateStr}:`, err);

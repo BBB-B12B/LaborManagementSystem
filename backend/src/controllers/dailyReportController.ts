@@ -11,7 +11,7 @@
 
 import { Request, Response } from 'express';
 import { dailyReportService } from '../services/dailyReport/DailyReportService';
-import { matcherService } from '../services/reconciliation/MatcherService';
+import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 import * as XLSX from 'xlsx';
 import { DAILY_REPORT_COLUMNS } from '../utils/dailyReportExcel';
 import { storage } from '../config/storage';
@@ -222,8 +222,9 @@ export async function syncDailyReport(req: Request, res: Response): Promise<Resp
     // In a real implementation, we would save the DailyReport to Firestore here.
     logger.info(`Received sync payload for ${employeeId} on ${workDate}`);
     
-    // Trigger reconciliation
-    const record = await matcherService.reconcile(employeeId, workDate, projectLocationId);
+    // Trigger reconciliation — ใช้ generateForEmployee (engine ใหม่) แทน matcherService.reconcile (engine เก่า)
+    // generateForEmployee มี logic ครบ: isLocked, homeProjectId, HOLIDAY, LEAVE, employeeName lookup
+    const record = await reconciliationService.generateForEmployee(employeeId, workDate, projectLocationId);
     
     return res.status(200).json({ success: true, record });
   } catch (error) {

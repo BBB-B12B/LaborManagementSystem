@@ -17,6 +17,8 @@ import {
   DialogContent,
   Grid,
   IconButton,
+  TextField,
+  Collapse,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { styled, alpha } from '@mui/material/styles';
@@ -26,6 +28,7 @@ import { fillFromDailyReport } from '../../services/scanDataService';
 import { format } from 'date-fns';
 import { Info as InfoIcon, Close as CloseIcon, ArrowBackIosNew as PrevIcon, ArrowForwardIos as NextIcon } from '@mui/icons-material';
 import { useToast } from '@/components/common';
+import { TimePicker } from '../../components/forms/TimePicker';
 
 // --- Styled Components to match Image 1 ---
 
@@ -316,10 +319,25 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const [rowsPerPage, setRowsPerPage] = React.useState(100);
   const [checkDialogOpen, setCheckDialogOpen] = React.useState(false);
   const [selectedRow, setSelectedRow] = React.useState<any>(null);
+
+  // --- Manual Resolve States ---
+  const [isManualMode, setIsManualMode] = React.useState(false);
+  const [manualHours, setManualHours] = React.useState({
+    normal: 0,
+    otMorning: 0,
+    otNoon: 0,
+    otEvening: 0,
+  });
+  const [resolveReason, setResolveReason] = React.useState('');
   const [viewerOpen, setViewerOpen] = React.useState(false);
   const [viewerImages, setViewerImages] = React.useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = React.useState(0);
   const [confirmFillOpen, setConfirmFillOpen] = React.useState(false);
+
+  // --- Scan Edit States ---
+  const [isEditingScan, setIsEditingScan] = React.useState(false);
+  const [editingScanPunches, setEditingScanPunches] = React.useState<string[]>([]);
+  const [scanEditReason, setScanEditReason] = React.useState('');
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -394,6 +412,19 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     },
   });
 
+  const resolveMutation = useMutation({
+    mutationFn: (data: any) => reconciliationService.resolveManual(selectedRow!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      toast.success('แก้ไขข้อมูลด้วยตนเองสำเร็จ');
+      handleCloseCheckDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูล');
+    },
+  });
+
   const handleConfirmFill = () => {
     if (!selectedRow) return;
     fillMutation.mutate(selectedRow);
@@ -401,6 +432,21 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   const isFilling = fillMutation.isPending;
   // ────────────────────────────────────────────────────────────────────────────
+
+  const updateScanMutation = useMutation({
+    mutationFn: (vars: { id: string; punches: string[]; reason: string }) =>
+      reconciliationService.updateScanPunches(vars.id, vars.punches, vars.reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      toast.success('อัปเดตเวลาสแกนนิ้วเรียบร้อยแล้ว');
+      setIsEditingScan(false);
+      setCheckDialogOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(`เกิดข้อผิดพลาด: ${err.message || 'ไม่สามารถอัปเดตข้อมูลได้'}`);
+    },
+  });
 
   const getFullImageUrl = (photoUrl: string) => {
     if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
@@ -436,12 +482,22 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   const handleOpenCheckDialog = (row: any) => {
     setSelectedRow(row);
+    setManualHours({
+      normal: row.timesheetNormalHours ?? row.dailyReportHours ?? 0,
+      otMorning: row.timesheetOtMorning ?? 0,
+      otNoon: row.timesheetOtNoon ?? 0,
+      otEvening: row.timesheetOtEvening ?? 0,
+    });
+    setIsManualMode(false);
+    setResolveReason('');
     setCheckDialogOpen(true);
   };
 
   const handleCloseCheckDialog = () => {
     setCheckDialogOpen(false);
     setSelectedRow(null);
+    setIsManualMode(false);
+    setIsEditingScan(false);
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -477,6 +533,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   const dailyReportReferencePanel = selectedRow && (
     <>
+      {selectedRow?.note && (
+        <Box sx={{ mb: 2, p: 2, borderRadius: '8px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Typography variant="body2" sx={{ color: '#9a3412', fontWeight: 700 }}>
+            💡 หมายเหตุจากระบบ: {selectedRow.note}
+          </Typography>
+        </Box>
+      )}
       <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5, display: 'block', color: '#475569', borderBottom: '2px solid #cbd5e1', pb: 0.75 }}>
         1. ข้อมูลอ้างอิง Daily Report
       </Typography>
@@ -498,28 +561,29 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 
                 return selectedRow.dailyReportPhotos.map((photoUrl: string, idx: number) => {
                   const fullUrl = getFullImageUrl(photoUrl);
-                return (
-                  <Box 
-                    key={idx}
-                    onClick={() => handleOpenViewer(allViewerUrls, idx)}
-                    sx={{ 
-                      width: 120, 
-                      height: 120, 
-                      flexShrink: 0, 
-                      borderRadius: '10px', 
-                      cursor: 'pointer',
-                      border: '2px solid #e2e8f0',
-                      '&:hover': { borderColor: '#3b82f6', transform: 'scale(1.03)', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' },
-                      transition: 'all 0.2s ease',
-                      backgroundImage: `url(${fullUrl})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                      backgroundColor: '#e2e8f0',
-                      position: 'relative',
-                    }}
-                  />
-                );
-              }); })()}
+                  return (
+                    <Box 
+                      key={idx}
+                      onClick={() => handleOpenViewer(allViewerUrls, idx)}
+                      sx={{ 
+                        width: 120, 
+                        height: 120, 
+                        flexShrink: 0, 
+                        borderRadius: '10px', 
+                        cursor: 'pointer',
+                        border: '2px solid #e2e8f0',
+                        '&:hover': { borderColor: '#3b82f6', transform: 'scale(1.03)', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' },
+                        transition: 'all 0.2s ease',
+                        backgroundImage: `url(${fullUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        backgroundColor: '#e2e8f0',
+                        position: 'relative',
+                      }}
+                    />
+                  );
+                });
+              })()}
             </Box>
           </Box>
         ) : (
@@ -563,47 +627,130 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           </Box>
         )}
 
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+          <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block' }}>
+            📅 รายละเอียดเวลาทำงานตาม Daily Report (คำนวณจ่ายจริง)
+          </Typography>
+        </Box>
+
         <Stack spacing={1.5}>
           {(
             [
-              { label: 'ชั่วโมงทำงานปกติ', value: selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours },
+              { label: 'ชั่วโมงทำงานปกติ', value: selectedRow?.approvedNormalHours ?? selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours, range: selectedRow?.shiftTimes?.day },
               ...(selectedRow?.hasLeave ? [{ label: 'ชั่วโมงลางาน', value: selectedRow?.leaveHours, highlight: true }] : []),
-              { label: 'OT เช้า', value: selectedRow?.timesheetOtMorning },
-              { label: 'OT เที่ยง', value: selectedRow?.timesheetOtNoon },
-              { label: 'OT เย็น', value: selectedRow?.timesheetOtEvening },
-            ] as Array<{label: string; value: any; highlight?: boolean}>
-          ).map(({ label, value, highlight }) => (
+              { label: 'OT เช้า', value: selectedRow?.approvedOtMorning ?? selectedRow?.timesheetOtMorning, range: selectedRow?.shiftTimes?.otMorning },
+              { label: 'OT เที่ยง', value: selectedRow?.approvedOtNoon ?? selectedRow?.timesheetOtNoon, range: selectedRow?.shiftTimes?.otNoon },
+              { label: 'OT เย็น', value: selectedRow?.approvedOtEvening ?? selectedRow?.timesheetOtEvening, range: selectedRow?.shiftTimes?.otEvening },
+            ] as Array<{label: string; value: any; highlight?: boolean; range?: string}>
+          ).map(({ label, value, highlight, range }) => (
             <Stack key={label} direction="row" justifyContent="space-between" alignItems="center">
               <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>{label}</Typography>
-              <Box sx={{ px: 1.5, py: 0.25, borderRadius: '6px', backgroundColor: highlight ? '#fff7ed' : '#f1f5f9', border: highlight ? '1px solid #fed7aa' : '1px solid #e2e8f0' }}>
-                <Typography variant="body2" fontWeight={900} sx={{ color: highlight ? '#ea580c' : '#334155' }}>{value ?? '-'} ชม.</Typography>
+              
+              <Box sx={{ 
+                px: 1.5, py: 0.25, borderRadius: '6px', 
+                backgroundColor: highlight ? '#fff7ed' : '#f1f5f9', 
+                border: highlight ? '1px solid #fed7aa' : '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}>
+                <Typography variant="body2" fontWeight={900} sx={{ color: highlight ? '#ea580c' : '#334155' }}>
+                  {value ?? '-'} ชม.
+                </Typography>
+                {range && (
+                  <Typography variant="caption" sx={{ color: highlight ? '#f97316' : '#64748b', fontWeight: 600 }}>
+                    ({range})
+                  </Typography>
+                )}
               </Box>
             </Stack>
           ))}
         </Stack>
+
+        {selectedRow?.note && (
+          <Box sx={{ mt: 2, p: 1.5, borderRadius: '8px', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1' }}>
+            <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block', mb: 0.5 }}>
+              💡 หมายเหตุจากระบบ
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#475569', fontSize: '0.8rem', fontWeight: 600 }}>
+              {selectedRow.note}
+            </Typography>
+          </Box>
+        )}
       </ComparisonBox>
     </>
   );
 
   const renderTimeTable = (hideDailyReport: boolean = false) => {
-    const drPunches = selectedRow?.dailyReportPunches || [];
-    const scanPunches = selectedRow?.scanPunches || [];
-    
+    const drPunches: string[] = selectedRow?.dailyReportPunches || [];
+    const scanPunches: string[] = selectedRow?.scanPunches || [];
+
     const leavePunches: string[] = [];
     if (selectedRow?.leaveEntries?.length > 0) {
       selectedRow.leaveEntries.forEach((entry: any) => {
         if (entry.description) {
-           if (entry.description.includes('-')) {
-             leavePunches.push(...entry.description.split('-').map((s: string) => s.trim()));
-           } else {
-             leavePunches.push(entry.description);
-           }
+          if (entry.description.includes('-')) {
+            leavePunches.push(...entry.description.split('-').map((s: string) => s.trim()));
+          } else {
+            leavePunches.push(entry.description);
+          }
         }
       });
     }
 
-    const maxRegularLength = Math.max(drPunches.length, scanPunches.length, 2);
-    const totalLength = maxRegularLength + leavePunches.length;
+    // ── helper: แปลง "HH:MM" → นาที เพื่อใช้เรียงลำดับ ──────────────────────
+    const toMinutes = (t: string): number => {
+      const parts = t.split(':');
+      if (parts.length < 2) return Infinity;
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    };
+
+    // ── Merge logic ────────────────────────────────────────────────────────────
+    // แต่ละ slot รู้ drIndex ของตัวเอง (null = pure-leave column ที่ไม่มี drPunch)
+    // และรู้ว่าเป็น leave boundary หรือไม่
+    type Slot = { time: string; drIndex: number | null; isLeaveBoundary: boolean };
+
+    // เริ่มจาก drPunches ทุกตัวเป็น slot
+    const slots: Slot[] = drPunches.map((time, idx) => ({
+      time,
+      drIndex: idx,
+      isLeaveBoundary: false,
+    }));
+
+    // track drPunch ที่ถูก match แล้ว (ป้องกัน match ซ้ำ)
+    const matchedDrIndices = new Set<number>();
+
+    // สำหรับ leavePunch แต่ละตัว: ถ้าตรงกับ drPunch ที่ยังไม่ถูก match → merge
+    // ถ้าไม่ตรง → สร้าง slot ใหม่
+    leavePunches.forEach((lp) => {
+      const matchIdx = slots.findIndex(
+        (s) => s.drIndex !== null && !matchedDrIndices.has(s.drIndex) && s.time === lp
+      );
+      if (matchIdx !== -1) {
+        // merge: ใช้คอลัมน์เดิม แค่ mark เป็น leave boundary
+        slots[matchIdx].isLeaveBoundary = true;
+        matchedDrIndices.add(slots[matchIdx].drIndex!);
+      } else {
+        // ไม่มี drPunch ตรงกัน → สร้าง pure-leave column ใหม่
+        slots.push({ time: lp, drIndex: null, isLeaveBoundary: true });
+      }
+    });
+
+    // เติม empty slots ให้ครบ min 2 ถ้ายังไม่พอ
+    while (slots.filter((s) => s.drIndex !== null).length < Math.max(scanPunches.length, 2)) {
+      const nextIdx = slots.filter((s) => s.drIndex !== null).length;
+      slots.push({ time: '-', drIndex: nextIdx, isLeaveBoundary: false });
+    }
+
+    // เรียงตามเวลา (ช่อง '-' ลอยไปท้าย)
+    slots.sort((a, b) => {
+      if (a.time === '-' && b.time === '-') return 0;
+      if (a.time === '-') return 1;
+      if (b.time === '-') return -1;
+      return toMinutes(a.time) - toMinutes(b.time);
+    });
+
+    const hasLeave = leavePunches.length > 0;
 
     return (
       <Box sx={{ overflowX: 'auto' }}>
@@ -611,10 +758,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           <thead>
             <tr>
               <th></th>
-              {Array.from({ length: totalLength }).map((_, i) => (
-                <th key={i}>
-                  Time {i + 1}
-                </th>
+              {slots.map((_, i) => (
+                <th key={i}>Time {i + 1}</th>
               ))}
             </tr>
           </thead>
@@ -622,45 +767,103 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             {!hideDailyReport && (
               <>
                 <tr>
-                  <td className="label" rowSpan={leavePunches.length > 0 ? 2 : 1}>Daily Report :</td>
-                  {Array.from({ length: totalLength }).map((_, i) => (
-                    <td 
-                      key={`dr-${i}`} 
-                      className="time-cell" 
-                      rowSpan={i < maxRegularLength && leavePunches.length > 0 ? 2 : 1}
-                      style={i >= maxRegularLength ? { borderBottom: 'none', paddingBottom: '4px' } : {}}
+                  <td className="label" rowSpan={hasLeave ? 2 : 1}>Daily Report :</td>
+                  {slots.map((slot, i) => (
+                    <td
+                      key={`dr-${i}`}
+                      className="time-cell"
+                      rowSpan={!slot.isLeaveBoundary && hasLeave ? 2 : 1}
+                      style={slot.isLeaveBoundary ? { borderBottom: 'none', paddingBottom: '4px' } : {}}
                     >
-                      {i < maxRegularLength ? (drPunches[i] ?? '-') : (leavePunches[i - maxRegularLength] ?? '-')}
+                      {slot.time}
                     </td>
                   ))}
                 </tr>
-                {leavePunches.length > 0 && (
+                {hasLeave && (
                   <tr>
-                    <td colSpan={leavePunches.length} style={{ borderTop: 'none', borderBottom: '1px solid #cbd5e1', padding: '0 8px 8px 8px' }}>
-                      <Box sx={{ backgroundColor: '#f97316', color: '#fff', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold', py: 0.25, textAlign: 'center' }}>
-                        ลางาน
-                      </Box>
-                    </td>
+                    {slots.map((slot, i) =>
+                      slot.isLeaveBoundary ? (
+                        <td
+                          key={`leave-label-${i}`}
+                          style={{ borderTop: 'none', borderBottom: '1px solid #cbd5e1', padding: '0 8px 8px 8px' }}
+                        >
+                          <Box
+                            sx={{
+                              backgroundColor: '#f97316',
+                              color: '#fff',
+                              borderRadius: '12px',
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold',
+                              py: 0.25,
+                              textAlign: 'center',
+                            }}
+                          >
+                            ลางาน
+                          </Box>
+                        </td>
+                      ) : null
+                    )}
                   </tr>
                 )}
               </>
             )}
             <tr>
               <td className="label">สแกนนิ้ว :</td>
-              {Array.from({ length: totalLength }).map((_, i) => (
-                <td
-                  key={`scan-${i}`}
-                  className={`time-cell ${
-                    !hideDailyReport && i < maxRegularLength && scanPunches[i] && drPunches[i] && scanPunches[i] !== drPunches[i]
-                      ? 'empty-scan'
-                      : (!hideDailyReport && i < maxRegularLength && !scanPunches[i])
-                      ? 'empty-scan'
-                      : ''
-                  }`}
-                >
-                  {i < maxRegularLength ? (scanPunches[i] ?? '-') : '-'}
+              {isEditingScan ? (
+                <td colSpan={slots.length} style={{ padding: '8px' }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                    {editingScanPunches.map((p, idx) => (
+                      <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <TimePicker
+                          label=""
+                          size="small"
+                          fullWidth={false}
+                          value={p}
+                          onChange={(newVal) => {
+                            const next = [...editingScanPunches];
+                            next[idx] = newVal || '';
+                            setEditingScanPunches(next);
+                          }}
+                        />
+                        <IconButton 
+                          size="small" 
+                          onClick={() => {
+                            const next = [...editingScanPunches];
+                            next.splice(idx, 1);
+                            setEditingScanPunches(next);
+                          }}
+                          sx={{ color: '#ef4444', p: 0 }}
+                        >
+                          <CloseIcon sx={{ fontSize: '1rem' }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button 
+                      variant="outlined" 
+                      size="small" 
+                      onClick={() => setEditingScanPunches([...editingScanPunches, ''])}
+                      sx={{ textTransform: 'none', fontSize: '0.7rem', fontWeight: 800, py: 0.25 }}
+                    >
+                      + เพิ่มเวลา
+                    </Button>
+                  </Box>
                 </td>
-              ))}
+              ) : (
+                slots.map((slot, i) => {
+                  const scanVal = slot.drIndex !== null ? (scanPunches[slot.drIndex] ?? '-') : '-';
+                  const drVal = slot.time;
+                  const hasConflict = !hideDailyReport && slot.drIndex !== null && scanVal !== '-' && drVal !== '-' && scanVal !== drVal;
+                  const isEmpty = !hideDailyReport && slot.drIndex !== null && (scanVal === '-' || !scanVal);
+                  return (
+                    <td
+                      key={`scan-${i}`}
+                      className={`time-cell ${hasConflict ? 'empty-scan' : isEmpty ? 'empty-scan' : ''}`}
+                    >
+                      {scanVal}
+                    </td>
+                  );
+                })
+              )}
             </tr>
           </tbody>
         </TimeTable>
@@ -675,47 +878,40 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         <TableHead>
                   {/* Row 1 */}
           <TableRow>
-            <TableCell rowSpan={3} sx={{ minWidth: 36, width: 40 }}>{t('workHourMonitoring.table.no')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 90, whiteSpace: 'nowrap' }}>{t('workHourMonitoring.table.date')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 130 }}>{t('workHourMonitoring.table.employee')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
+            <TableCell rowSpan={2} sx={{ minWidth: 36, width: 40 }}>{t('workHourMonitoring.table.no')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 90, whiteSpace: 'nowrap' }}>{t('workHourMonitoring.table.date')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 130 }}>{t('workHourMonitoring.table.employee')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
               {t('workHourMonitoring.table.project')}
             </TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
+            <TableCell rowSpan={2} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
               โครงการที่ทำงาน
             </TableCell>
-            <TableCell colSpan={5} sx={{ borderBottom: 'none' }}>
-              {t('workHourMonitoring.table.comparison')}
+            <TableCell colSpan={3} sx={{ borderBottom: 'none', textAlign: 'center' }}>
+              เปรียบเทียบช่วงเวลา (Daily & สแกนนิ้ว)
             </TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 52 }}>{t('workHourMonitoring.table.lateMinutes')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 60 }}>{t('workHourMonitoring.table.responsible')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 150 }}>{t('workHourMonitoring.table.status')}</TableCell>
-            <TableCell rowSpan={3} sx={{ minWidth: 90 }}>{t('workHourMonitoring.table.actions')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 52 }}>{t('workHourMonitoring.table.lateMinutes')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 52 }}>ออกก่อน</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 60 }}>{t('workHourMonitoring.table.responsible')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 150 }}>{t('workHourMonitoring.table.status')}</TableCell>
+            <TableCell rowSpan={2} sx={{ minWidth: 90 }}>{t('workHourMonitoring.table.actions')}</TableCell>
           </TableRow>
-          {/* Row 2 */}
           <TableRow>
-            <TableCell colSpan={2}>{t('workHourMonitoring.table.regularHours')}</TableCell>
-            <TableCell colSpan={3}>{t('workHourMonitoring.table.otHours')}</TableCell>
-          </TableRow>
-          {/* Row 3 */}
-          <TableRow>
-            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem' }}>{t('workHourMonitoring.table.daily')}</TableCell>
-            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem' }}>{t('workHourMonitoring.table.scan')}</TableCell>
-            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem' }}>{t('workHourMonitoring.table.otMorning')}</TableCell>
-            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem' }}>{t('workHourMonitoring.table.otNoon')}</TableCell>
-            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem' }}>{t('workHourMonitoring.table.otEvening')}</TableCell>
+            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>เวลาปกติ (Daily)</TableCell>
+            <TableCell sx={{ minWidth: 100, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>OT ตาม Daily</TableCell>
+            <TableCell sx={{ minWidth: 120, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>ช่วงเวลาสแกนจริง</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={14} sx={{ textAlign: 'center', py: 4 }}>
+              <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body2" color="text.secondary">Loading data...</Typography>
               </TableCell>
             </TableRow>
           ) : records.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={14} sx={{ textAlign: 'center', py: 4 }}>
+              <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body2" color="text.secondary">No data found</Typography>
               </TableCell>
             </TableRow>
@@ -732,7 +928,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             const scanOtMorn = row.scanOtMorningHours    ?? null;
             const scanOtNoon = row.scanOtNoonHours       ?? null;
             const scanOtEve  = row.scanOtEveningHours    ?? null;
-            // highlight ถ้าชั่วโมงปกติไม่ตรงกัน
+            const scanRange = row.scanPunches && row.scanPunches.length >= 2
+              ? `${row.scanPunches[0]} - ${row.scanPunches[row.scanPunches.length - 1]}`
+              : row.scanPunches && row.scanPunches.length === 1
+                ? `${row.scanPunches[0]} (1 ครั้ง)`
+                : '-';
+
+            // highlight ถ้าชั่วโมงปกติไม่ตรงกัน (รักษา logic เดิมไว้เบื้องหลังแต่เน้นการโชว์ช่วงเวลา)
             const hasRegularConflict = tsNormal !== scanNormal && tsNormal != null && scanNormal != null;
             
             // Map status to action label
@@ -783,58 +985,53 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   </Box>
                 </TableCell>
                 
-                {/* Regular Hours Comparison */}
-                <TableCell>
+                {/* เวลาปกติ (Daily) */}
+                <TableCell sx={{ textAlign: 'center' }}>
                   <ValueCapsule>{tsNormal ?? '-'}</ValueCapsule>
                 </TableCell>
-                <TableCell>
-                  <ValueCapsule highlight={hasRegularConflict}>
-                    {scanNormal ?? '-'}
+
+                {/* OT ตาม Daily (Condensed) */}
+                <TableCell sx={{ textAlign: 'center' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, alignItems: 'center' }}>
+                    {tsOtMorn ? (
+                      <Chip label={`เช้า: ${tsOtMorn} ชม.`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, backgroundColor: '#eff6ff', color: '#1e40af' }} />
+                    ) : null}
+                    {tsOtNoon ? (
+                      <Chip label={`เที่ยง: ${tsOtNoon} ชม.`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, backgroundColor: '#fef2f2', color: '#991b1b' }} />
+                    ) : null}
+                    {tsOtEve ? (
+                      <Chip label={`เย็น: ${tsOtEve} ชม.`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, backgroundColor: '#f0fdf4', color: '#166534' }} />
+                    ) : null}
+                    {!tsOtMorn && !tsOtNoon && !tsOtEve && <Typography variant="caption" color="text.disabled">-</Typography>}
+                  </Box>
+                </TableCell>
+
+                {/* ช่วงเวลาสแกนจริง */}
+                <TableCell sx={{ textAlign: 'center' }}>
+                  <ValueCapsule highlight={row.status === 'CONFLICTED' || row.status === 'MISSING_SCAN'}>
+                    {scanRange}
                   </ValueCapsule>
                 </TableCell>
 
-                  {/* OT Morning */}
-                <TableCell>
-                  {tsOtMorn !== scanOtMorn && tsOtMorn != null && scanOtMorn != null ? (
-                    <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-                      <ValueCapsule isOT>{tsOtMorn}</ValueCapsule>
-                      <Typography variant="caption" fontWeight="bold">&</Typography>
-                      <ValueCapsule isOT highlight>{scanOtMorn}</ValueCapsule>
-                    </Stack>
+                <TableCell sx={{ textAlign: 'center' }}>
+                  {row.lateMinutes ? (
+                    <ValueCapsule highlight>{row.lateMinutes}</ValueCapsule>
                   ) : (
-                    <ValueCapsule isOT>{tsOtMorn ?? scanOtMorn ?? '-'}</ValueCapsule>
+                    <ValueCapsule>-</ValueCapsule>
                   )}
-                </TableCell>
-                {/* OT Noon */}
-                <TableCell>
-                  {tsOtNoon !== scanOtNoon && tsOtNoon != null && scanOtNoon != null ? (
-                    <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-                      <ValueCapsule isOT>{tsOtNoon}</ValueCapsule>
-                      <Typography variant="caption" fontWeight="bold">&</Typography>
-                      <ValueCapsule isOT highlight>{scanOtNoon}</ValueCapsule>
-                    </Stack>
-                  ) : (
-                    <ValueCapsule isOT>{tsOtNoon ?? scanOtNoon ?? '-'}</ValueCapsule>
-                  )}
-                </TableCell>
-                {/* OT Evening */}
-                <TableCell>
-                  {tsOtEve !== scanOtEve && tsOtEve != null && scanOtEve != null ? (
-                    <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-                      <ValueCapsule isOT>{tsOtEve}</ValueCapsule>
-                      <Typography variant="caption" fontWeight="bold">&</Typography>
-                      <ValueCapsule isOT highlight>{scanOtEve}</ValueCapsule>
-                    </Stack>
-                  ) : (
-                    <ValueCapsule isOT>{tsOtEve ?? scanOtEve ?? '-'}</ValueCapsule>
-                  )}
-                </TableCell>
-
-                <TableCell>
-                  <ValueCapsule>-</ValueCapsule> {/* Late minutes not tracked directly in reconciliation yet */}
                 </TableCell>
                 
-                <TableCell>
+                <TableCell sx={{ textAlign: 'center' }}>
+                  {row.earlyLeaveMinutes ? (
+                    <ValueCapsule highlight sx={{ backgroundColor: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' }}>
+                      {row.earlyLeaveMinutes}
+                    </ValueCapsule>
+                  ) : (
+                    <ValueCapsule>-</ValueCapsule>
+                  )}
+                </TableCell>
+                
+                <TableCell sx={{ textAlign: 'center' }}>
                    <Typography variant="caption" color="text.secondary">
                      {row.assigneeName || '-'}
                    </Typography>
@@ -848,6 +1045,16 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     {row.hasLeave && (
                       <Box sx={{ fontSize: '0.65rem', color: '#ea580c', fontWeight: 800, backgroundColor: '#fff7ed', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #fed7aa' }}>
                         มีลางาน ({row.leaveHours} ชม.)
+                      </Box>
+                    )}
+                    {row.isLate && (
+                      <Box sx={{ fontSize: '0.65rem', color: '#be123c', fontWeight: 800, backgroundColor: '#fff1f2', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #fecdd3' }}>
+                        เข้าสาย ({row.lateMinutes} น.)
+                      </Box>
+                    )}
+                    {row.isEarlyLeave && (
+                      <Box sx={{ fontSize: '0.65rem', color: '#1e40af', fontWeight: 800, backgroundColor: '#eff6ff', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                        ออกก่อน ({row.earlyLeaveMinutes} น.)
                       </Box>
                     )}
                   </Box>
@@ -986,81 +1193,12 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               </Box>
               {renderTimeTable(true)}
             </>
-          ) : selectedRow?.status === 'MISSING_SCAN' ? (
-            <>
-              <Grid container spacing={4}>
-                <Grid item xs={12} sm={6}>
-                  {dailyReportReferencePanel}
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ComparisonBox sx={{ borderColor: '#fed7aa', backgroundColor: '#fff7ed', height: '100%', p: 1.5, display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1, color: '#ea580c', borderBottom: '1px solid #fed7aa', pb: 0.5 }}>
-                      ข้อมูลในระบบสแกนนิ้ว
-                    </Typography>
-                    <ProofImagePlaceholder sx={{ border: '1px solid #fed7aa', backgroundColor: '#fff', flexDirection: 'column', color: '#ea580c', height: '100%', flex: 1, mb: 0 }}>
-                      <Box sx={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-                        <Typography variant="h5" fontWeight={900} sx={{ fontSize: '1.25rem', lineHeight: 1 }}>!</Typography>
-                      </Box>
-                      <Typography variant="body2" fontWeight={900}>ไม่มีข้อมูลสแกนนิ้ว</Typography>
-                    </ProofImagePlaceholder>
-                  </ComparisonBox>
-                </Grid>
-              </Grid>
-
-              <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
-                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
-                  ข้อมูลแสดงเวลาทำงาน
-                </Typography>
-                {renderTimeTable(false)}
-              </Box>
-            </>
           ) : (
             <>
-              <Grid container spacing={4}>
-                <Grid item xs={12} sm={6}>
-                  {dailyReportReferencePanel}
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1, display: 'block', color: selectedRow?.status === 'MATCHED' ? '#16a34a' : '#ea580c', borderBottom: selectedRow?.status === 'MATCHED' ? '2px solid #16a34a' : '2px solid #ea580c', pb: 0.5 }}>
-                    2. ข้อมูลในระบบสแกนนิ้ว
-                  </Typography>
-                  <ComparisonBox sx={{ backgroundColor: '#fff', p: 2 }}>
-                    <ProofImagePlaceholder sx={{ border: selectedRow?.status === 'MATCHED' ? '1px solid #bbf7d0' : '1px solid #1e293b', flexDirection: 'column', backgroundColor: selectedRow?.status === 'MATCHED' ? '#f0fdf4' : 'transparent' }}>
-                      {selectedRow?.status === 'MATCHED' ? (
-                        <>
-                          <InfoIcon sx={{ color: '#16a34a', mb: 1, fontSize: 24 }} />
-                          <Typography variant="body2" fontWeight={800} sx={{ color: '#16a34a' }}>ข้อมูลตรงกัน</Typography>
-                        </>
-                      ) : (
-                        <>
-                          <InfoIcon sx={{ color: '#ea580c', mb: 1, fontSize: 24 }} />
-                          <Typography variant="body2" fontWeight={800} sx={{ color: '#ea580c' }}>ข้อมูลขัดแย้งกัน</Typography>
-                        </>
-                      )}
-                    </ProofImagePlaceholder>
-                    <Stack spacing={1}>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>ชั่วโมงทำงานปกติ</Typography>
-                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanNormalHours ?? selectedRow?.scanDataHours ?? '-'} ชม.</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เช้า</Typography>
-                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtMorningHours ?? '-'} ชม.</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
-                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtNoonHours ?? '-'} ชม.</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>OT เย็น</Typography>
-                        <Typography variant="body2" fontWeight={900} sx={{ color: selectedRow?.status === 'MATCHED' ? '#334155' : '#ef4444' }}>{selectedRow?.scanOtEveningHours ?? '-'} ชม.</Typography>
-                      </Stack>
-                    </Stack>
-                  </ComparisonBox>
-                </Grid>
-              </Grid>
+              <Box sx={{ mb: 4 }}>
+                {dailyReportReferencePanel}
+              </Box>
 
-              {/* ตาราง punch times — เหมือนกับที่แสดงใน MISSING_SCAN */}
               <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
                 <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
                   ข้อมูลแสดงเวลาทำงาน
@@ -1071,60 +1209,80 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           )}
 
             <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4, pt: 3, borderTop: '1px solid #e2e8f0' }}>
-              {selectedRow?.status === 'MISSING_DAILY' ? (
-                <Button
-                  variant="contained"
-                  onClick={handleCloseCheckDialog}
-                  disableElevation
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 800,
-                    borderRadius: '10px',
-                    backgroundColor: '#1e293b',
-                    color: '#fff',
-                    px: 4,
-                    py: 1,
-                    boxShadow: 'none',
-                    '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
-                  }}
-                >
-                  ปิด
-                </Button>
+              {isEditingScan ? (
+                <Box sx={{ width: '100%' }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="เหตุผลการแก้ไข"
+                    required
+                    placeholder="ระบุเหตุผลการแก้ไข (เช่น พนักงานลืมสแกนแต่มีรูปยืนยัน)"
+                    value={scanEditReason}
+                    onChange={(e) => setScanEditReason(e.target.value)}
+                    sx={{ 
+                      mb: 2, 
+                      '& .MuiInputBase-input': { fontWeight: 600 },
+                      '& .MuiInputLabel-root': { fontWeight: 700, color: '#475569' },
+                      '& .MuiFormLabel-asterisk': { color: '#ef4444' }
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Button
+                      variant="outlined"
+                      onClick={() => setIsEditingScan(false)}
+                      sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 3 }}
+                    >
+                      ยกเลิก
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        if (!scanEditReason) {
+                          toast.error('โปรดระบุเหตุผลการแก้ไข');
+                          return;
+                        }
+                        updateScanMutation.mutate({
+                          id: selectedRow.id,
+                          punches: editingScanPunches.filter(p => p.trim() !== ''),
+                          reason: scanEditReason
+                        });
+                      }}
+                      disabled={updateScanMutation.isPending}
+                      sx={{
+                        textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4,
+                        backgroundColor: '#0f172a', '&:hover': { backgroundColor: '#1e293b' }
+                      }}
+                    >
+                      {updateScanMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกข้อมูลสแกนนิ้ว'}
+                    </Button>
+                  </Stack>
+                </Box>
               ) : (
                 <>
                   <Button
                     variant="outlined"
-                    onClick={handleCloseCheckDialog}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 800,
-                      borderRadius: '10px',
-                      borderColor: '#cbd5e1',
-                      color: '#475569',
-                      px: 4,
-                      py: 1,
-                      '&:hover': { backgroundColor: '#f8fafc', borderColor: '#94a3b8' }
+                    onClick={() => {
+                      setEditingScanPunches(selectedRow?.scanPunches || []);
+                      setScanEditReason('');
+                      setIsEditingScan(true);
                     }}
+                    sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 3, borderColor: '#64748b', color: '#64748b' }}
                   >
-                    ยกเลิก
+                    แก้ไขเวลาสแกนนิ้ว
                   </Button>
+                  
                   <Button
                     variant="contained"
-                    onClick={() => selectedRow?.status === 'MATCHED' ? handleCloseCheckDialog() : setConfirmFillOpen(true)}
+                    onClick={handleCloseCheckDialog}
                     disableElevation
                     sx={{
-                      textTransform: 'none',
-                      fontWeight: 800,
-                      borderRadius: '10px',
-                      backgroundColor: '#1e293b',
-                      color: '#fff',
-                      px: 4,
-                      py: 1,
-                      boxShadow: 'none',
+                      textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1,
+                      backgroundColor: '#1e293b', color: '#fff', boxShadow: 'none',
                       '&:hover': { backgroundColor: '#334155', boxShadow: 'none' }
                     }}
                   >
-                    {selectedRow?.status === 'MATCHED' ? 'ตกลง' : 'ยืนยันข้อมูลปรับตาม Daily Report'}
+                    ปิดหน้าต่าง
                   </Button>
                 </>
               )}

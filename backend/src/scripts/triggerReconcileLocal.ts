@@ -3,11 +3,11 @@ import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-import { matcherService } from '../services/reconciliation/MatcherService';
+import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 
 async function run() {
   console.log('Triggering local reconcile...');
-  await matcherService.reconcile('200030', '2026-05-02', 'P002');
+  await reconciliationService.generateForEmployee('200030', '2026-05-02', 'P002');
   console.log('Done!');
 }
 

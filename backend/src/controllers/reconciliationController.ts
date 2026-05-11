@@ -414,4 +414,63 @@ export async function deleteGhostScan(req: Request, res: Response): Promise<void
   }
 }
 
+// ---------------------------------------------------------------------------
+// POST /api/reconciliation/:id/resolve-manual
+// ---------------------------------------------------------------------------
+
+/**
+ * Admin แก้ไขชั่วโมงด้วยตนเอง (Manual Resolve)
+ * Body: { normalHours, otMorning, otNoon, otEvening, reason }
+ */
+export async function resolveManual(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user?.uid;
+
+    if (!adminId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const payload = req.body;
+    await reconciliationService.resolveManual(id, adminId, payload);
+    res.json({ success: true, message: 'Resolved manually successfully' });
+  } catch (error: any) {
+    console.error('[reconciliation] resolveManual error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to resolve manual' });
+  }
+}
+
+/**
+ * Admin แก้ไขรายการสแกนนิ้ว (Manual Adjust Scan Data)
+ * Body: { punches, reason }
+ */
+export async function updateScanPunches(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user?.uid;
+
+    if (!adminId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { punches, reason } = req.body as { punches: string[]; reason: string };
+    if (!punches || !Array.isArray(punches)) {
+      res.status(400).json({ success: false, error: 'punches array is required' });
+      return;
+    }
+    if (!reason) {
+      res.status(400).json({ success: false, error: 'reason is required' });
+      return;
+    }
+
+    await reconciliationService.updateScanPunches(id, adminId, punches, reason);
+    res.json({ success: true, message: 'Scan punches updated successfully' });
+  } catch (error: any) {
+    console.error('[reconciliation] updateScanPunches error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to update scan punches' });
+  }
+}
+
 // markAsExported ถูกลบออกแล้ว — Admin ดึงข้อมูลผ่าน getAnomaliesForExport แล้ว Export เอง

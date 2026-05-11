@@ -16,7 +16,7 @@ if (!admin.apps.length) {
     }
 }
 
-import { matcherService } from '../services/reconciliation/MatcherService';
+import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 
 async function backfill() {
     const db = admin.firestore();
@@ -59,7 +59,7 @@ async function backfill() {
     for (let i = 0; i < tasks.length; i++) {
         const t = tasks[i];
         try {
-            await matcherService.reconcile(t.employeeNumber, t.dateStr, t.projectLocationId);
+            await reconciliationService.generateForEmployee(t.employeeNumber, t.dateStr, t.projectLocationId);
             successCount++;
             if (successCount % 10 === 0) {
                 console.log(`Processed ${successCount}/${tasks.length}...`);

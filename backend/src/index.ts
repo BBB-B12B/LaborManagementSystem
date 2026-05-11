@@ -150,7 +150,10 @@ if (!isRunningAsCloudFunction) {
 
 export default app;
 
+
 // ============================================
 // Firebase Cloud Functions
 // ============================================
-export * from './functions/onScanDataChanged';
+// หมายเหตุ: Cloud Functions ทั้งหมดถูก manage ใน functions/src/index.ts แล้ว
+// ไม่มีการ export Firebase trigger functions จาก backend อีกต่อไป
+// (เคยมี onScanDataChanged ที่นี่ แต่ซ้ำกับ functions/ จึงถูก remove ออก)

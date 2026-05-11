@@ -58,6 +58,12 @@ interface DailyEmployeeTimesheet {
     otMorning: boolean;
     otNoon: boolean;
   };
+  shiftTimes?: {
+    day?: string;
+    otEvening?: string;
+    otMorning?: string;
+    otNoon?: string;
+  };
   isActive: boolean;
   projectLocationId: string;
   lastUpdated: string;
@@ -82,6 +88,95 @@ function generateReconciliationId(employeeId: string, workDate: string): string 
   return `REC_${employeeId}_${workDate}`;
 }
 
+/** แปลง HH:mm เป็นจำนวนนาทีจากเที่ยงคืน */
+function punchToMinutes(punch: string): number {
+  const [h, m] = punch.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+
+interface PunchClassifyResult {
+  status: ReconciliationStatus;
+  approvedNormalHours: number;
+  approvedOtMorning: number;
+  approvedOtNoon: number;
+  approvedOtEvening: number;
+  totalApprovedHours: number;
+  approvalSource: 'daily_report' | 'scan_data' | 'manual';
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  isLate: boolean;
+  isEarlyLeave: boolean;
+  note?: string | null;
+}
+
+/**
+ * [PRIMARY] กำหนดสถานะด้วย punch coverage
+ * CONFLICTED: มี OT เช้า/เย็น แต่ scan ไม่ครอบ boundary
+ * MATCHED:    ทุกกรณีอื่น + เก็บ lateMinutes / earlyLeaveMinutes
+ */
+function classifyByPunchCoverage(params: {
+  dailyReportPunches: string[];
+  scanPunches: string[];
+  normalHours: number;
+  otMorningHours: number;
+  otNoonHours: number;
+  otEveningHours: number;
+}): PunchClassifyResult {
+  const { dailyReportPunches, scanPunches, normalHours, otMorningHours, otNoonHours, otEveningHours } = params;
+
+  const sortedReport = [...dailyReportPunches].sort();
+  const reportStart = punchToMinutes(sortedReport[0]);
+  const reportEnd   = punchToMinutes(sortedReport[sortedReport.length - 1]);
+
+  // ใช้ scanPunches ทั้งหมดในการหาขอบเขต (Min/Max) เพื่อความแม่นยำ
+  const sortedScan = [...scanPunches].sort();
+  const scanFirstIn  = sortedScan.length > 0 ? punchToMinutes(sortedScan[0]) : 0;
+  const scanLastOut  = sortedScan.length > 0 ? punchToMinutes(sortedScan[sortedScan.length - 1]) : 0;
+
+  const lateMinutes       = Math.max(0, scanFirstIn - reportStart);
+  const earlyLeaveMinutes = Math.max(0, reportEnd - scanLastOut);
+
+  // --- Auto-Penalty Logic (30-min rule for OT) ---
+  let approvedNormal  = normalHours;
+  let approvedMorning = otMorningHours;
+  let approvedNoon    = otNoonHours;
+  let approvedEvening = otEveningHours;
+  let autoNote = '';
+
+  const isLateForOT = lateMinutes > 0 && otMorningHours > 0;
+  const isEarlyLeaveFromOT = earlyLeaveMinutes > 0 && otEveningHours > 0;
+
+  if (isLateForOT) {
+    const penaltyMins = Math.ceil(lateMinutes / 30) * 30;
+    approvedMorning = Math.max(0, otMorningHours - (penaltyMins / 60));
+    autoNote += `สายช่วง OT เช้า ${lateMinutes} นาที (หัก ${penaltyMins} นาที) `;
+  }
+
+  if (isEarlyLeaveFromOT) {
+    const penaltyMins = Math.ceil(earlyLeaveMinutes / 30) * 30;
+    approvedEvening = Math.max(0, otEveningHours - (penaltyMins / 60));
+    autoNote += `ออกก่อนช่วง OT เย็น ${earlyLeaveMinutes} นาที (หัก ${penaltyMins} นาที) `;
+  }
+
+  const totalApproved = approvedNormal + approvedMorning + approvedNoon + approvedEvening;
+
+  return {
+    status: 'MATCHED',
+    approvedNormalHours: approvedNormal,
+    approvedOtMorning: approvedMorning,
+    approvedOtNoon: approvedNoon,
+    approvedOtEvening: approvedEvening,
+    totalApprovedHours: totalApproved,
+    approvalSource: (isLateForOT || isEarlyLeaveFromOT) ? 'manual' : 'daily_report',
+    lateMinutes,
+    earlyLeaveMinutes,
+    isLate: lateMinutes > 0,
+    isEarlyLeave: earlyLeaveMinutes > 0,
+    note: autoNote || null,
+  };
+}
+
 // ─── Core Reconcile Function ──────────────────────────────────────────────────
 
 /**
@@ -96,17 +191,25 @@ async function reconcile(
   triggerDocData?: Record<string, any> // ข้อมูลจาก trigger doc (ใช้คำนวณชั่วโมงเผื่อ query พลาด)
 ): Promise<void> {
 
+  let updatesObj: Record<string, any> = {};
   const recordId = generateReconciliationId(employeeNumber, workDateStr);
   const recordRef = db.collection('reconciliationRecords').doc(recordId);
 
-  // ── 0. ตรวจสอบสถานะการล็อกงวดงาน (isLocked) ──────────────────────────────────
-  // ถ้า Admin กด Approve งวดงานแล้ว เอกสารนี้จะมี isLocked: true ห้ามแก้ไขเด็ดขาด
+  let preserveManualScan = false;
+  let existingRecord: any = null;
+
   const initialDoc = await recordRef.get();
   if (initialDoc.exists) {
-    const existing = initialDoc.data() as any;
-    if (existing['isLocked'] === true) {
+    existingRecord = initialDoc.data() as any;
+    if (existingRecord['isLocked'] === true) {
       console.log(`[reconcile] ${employeeNumber} on ${workDateStr} isLocked (Wage Period Approved) — skip all processing`);
       return;
+    }
+    
+    // หาก Admin เคยแก้ไขเวลาสแกนนิ้วด้วยตนเอง หรือกดยืนยันข้อมูลไปแล้ว จะต้องสงวนข้อมูลชุดนั้นไว้ ไม่ให้ถูกทับด้วยข้อมูลดิบ
+    if (existingRecord['approvalSource'] === 'manual' || existingRecord['resolvedAt'] != null) {
+      preserveManualScan = true;
+      console.log(`[reconcile] ${employeeNumber} on ${workDateStr} was manually resolved. Preserving manual scan data.`);
     }
   }
 
@@ -206,12 +309,18 @@ async function reconcile(
       scanOtNoon      += (data['otNoonHours']    || 0);
       scanOtEvening   += (data['otEveningHours'] || 0);
     } else {
-      // คำนวณจาก allScans โดยใช้ logic เดียวกับ ScanDataAggregator
-      const allTimes: string[] = Array.isArray(data['allScans']) && data['allScans'].length > 0
-        ? data['allScans'] as string[]
-        : (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
-            .map(k => data[k] as string | undefined)
-            .filter((t): t is string => !!t && t !== '-');
+      // คำนวณจาก punch times เมื่อ precomputed hours fields ไม่มี
+      // Priority: punches (HH:mm) → allScans (HH:mm:ss) → Time1-6 (legacy)
+      let allTimes: string[] = [];
+      if (Array.isArray(data['punches']) && data['punches'].length > 0) {
+        allTimes = data['punches'] as string[];             // HH:mm — ใช้โดยตรง
+      } else if (Array.isArray(data['allScans']) && data['allScans'].length > 0) {
+        allTimes = data['allScans'] as string[];            // HH:mm:ss — toMins รับได้อยู่แล้ว
+      } else {
+        allTimes = (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
+          .map(k => data[k] as string | undefined)
+          .filter((t): t is string => !!t && t !== '-');
+      }
 
       if (allTimes.length >= 2) {
         // แปลง HH:mm หรือ HH:mm:ss → นาทีนับจากเที่ยงคืน (รองรับทศนิยมวินาที)
@@ -279,12 +388,17 @@ async function reconcile(
       scanOtNoon      = (triggerDocData['otNoonHours']    || 0);
       scanOtEvening   = (triggerDocData['otEveningHours'] || 0);
     } else {
-      // คำนวณจาก allScans
-      const allTimes: string[] = Array.isArray(triggerDocData['allScans']) && triggerDocData['allScans'].length > 0
-        ? triggerDocData['allScans'] as string[]
-        : (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
-            .map(k => triggerDocData[k] as string | undefined)
-            .filter((t): t is string => !!t && t !== '-');
+      // Priority: punches (HH:mm) → allScans (HH:mm:ss) → Time1-6 (legacy)
+      let allTimes: string[] = [];
+      if (Array.isArray(triggerDocData['punches']) && triggerDocData['punches'].length > 0) {
+        allTimes = triggerDocData['punches'] as string[];
+      } else if (Array.isArray(triggerDocData['allScans']) && triggerDocData['allScans'].length > 0) {
+        allTimes = triggerDocData['allScans'] as string[];
+      } else {
+        allTimes = (['Time1','Time2','Time3','Time4','Time5','Time6'] as const)
+          .map(k => triggerDocData[k] as string | undefined)
+          .filter((t): t is string => !!t && t !== '-');
+      }
 
       if (allTimes.length >= 2) {
         const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
@@ -296,6 +410,20 @@ async function reconcile(
     }
     totalScanHours = scanNormalHours + scanOtMorning + scanOtNoon + scanOtEvening;
   }
+
+  // ── Restore Manual Scan Data ─────────────────────────────────────────────
+  // หาก Admin เคยแก้ไขข้อมูลสแกนนิ้วด้วยตนเองแล้ว เราจะยึดข้อมูลนั้นเป็นหลัก ไม่เอาข้อมูลดิบมาเขียนทับ
+  if (preserveManualScan && existingRecord) {
+    hasScan = Array.isArray(existingRecord['scanPunches']) && existingRecord['scanPunches'].length > 0;
+    scanPunches = existingRecord['scanPunches'] || [];
+    scanNormalHours = existingRecord['scanNormalHours'] || 0;
+    scanOtMorning = existingRecord['scanOtMorningHours'] || 0;
+    scanOtNoon = existingRecord['scanOtNoonHours'] || 0;
+    scanOtEvening = existingRecord['scanOtEveningHours'] || 0;
+    totalScanHours = existingRecord['scanDataHours'] || 0;
+    scanDataId = existingRecord['scanDataId'] || scanDataId;
+  }
+
 
   // ── 2. เช็ควันหยุดบริษัท (companyHolidays) ────────────────────────────────
   // Document ID = YYYY-MM-DD หรือ query by date field
@@ -324,6 +452,7 @@ async function reconcile(
   let leaveEntries: LeaveEntry[] = [];
   let totalLeaveHours = 0;
   let dailyReportPhotos: string[] | null = null;
+  let dailyReportPunches: string[] = [];
 
   if (timesheetDoc.exists) {
     timesheet = timesheetDoc.data() as DailyEmployeeTimesheet;
@@ -333,6 +462,32 @@ async function reconcile(
     tsOtNoon      = (timesheet.expectedHours?.otNoon    || 0);
     tsOtEvening   = (timesheet.expectedHours?.otEvening || 0);
     totalTimesheetHours = tsNormalHours + tsOtMorning + tsOtNoon + tsOtEvening;
+
+    // สกัด punches จาก shiftTimes (เหมือนใน ReconciliationService)
+    if (timesheet.shiftTimes) {
+      const punches: string[] = [];
+      const extractPunches = (timeStr?: string) => {
+        if (!timeStr) return;
+        const parts = timeStr.split('-').map(s => s.trim());
+        if (parts.length === 2 && parts[0] && parts[1]) {
+          punches.push(parts[0], parts[1]);
+        }
+      };
+      if (timesheet.expectedShifts) {
+        if (timesheet.expectedShifts.otMorning) extractPunches(timesheet.shiftTimes.otMorning);
+        if (timesheet.expectedShifts.normal)    extractPunches(timesheet.shiftTimes.day);
+        if (timesheet.expectedShifts.otNoon)    extractPunches(timesheet.shiftTimes.otNoon);
+        if (timesheet.expectedShifts.otEvening) extractPunches(timesheet.shiftTimes.otEvening);
+      } else {
+        extractPunches(timesheet.shiftTimes.otMorning);
+        extractPunches(timesheet.shiftTimes.day);
+        extractPunches(timesheet.shiftTimes.otNoon);
+        extractPunches(timesheet.shiftTimes.otEvening);
+      }
+      if (punches.length > 0) {
+        dailyReportPunches = punches.sort((a, b) => a.localeCompare(b));
+      }
+    }
 
     // Handle legacy 'leave' array if present
     if (timesheet.leave && Array.isArray(timesheet.leave)) {
@@ -406,41 +561,72 @@ async function reconcile(
     }
   }
 
+  // ── 4. ตัดสิน Status — punch coverage logic ────────────────────────────────
+  let status: ReconciliationStatus;
+  let lateMinutes = 0;
+  let earlyLeaveMinutes = 0;
+  let isLate = false;
+  let isEarlyLeave = false;
+  let conflictNote: string | null | undefined;
+
   const hasTimesheet = timesheetDoc.exists;
   const isLeave      = leaveEntries.length > 0 && totalLeaveHours > 0;
-  const hasTimesheetHours = hasTimesheet && totalTimesheetHours > 0;
-  const hasScanHours = hasScan && totalScanHours > 0;
-
-  // ── 4. ตัดสิน Status ──────────────────────────────────────────────────────
-  let status: ReconciliationStatus;
 
   if (isMultipleProjects) {
-    // ตรวจจับ Anomaly: พบข้อมูลจากหลายโครงการ
     status = 'CONFLICTED';
+    conflictNote = multipleProjectsReason;
   } else if (!isRegistered && hasScan) {
-    // ไม่มีในระบบเลย — Admin ต้องไปเพิ่มข้อมูลพนักงานก่อน
     status = 'UNREGISTERED_EMPLOYEE';
-  } else if (!hasTimesheetHours && !hasScanHours) {
-    // ถ้าไม่มีข้อมูลการทำงานเลย ถึงจะมาเช็คว่าเป็นวันหยุดหรือวันลา
-    if (isHoliday) {
-      status = 'HOLIDAY';
-    } else if (isLeave) {
-      status = 'LEAVE';
-    } else {
-      status = 'ABSENT';
-    }
-  } else if (hasScanHours && hasTimesheetHours) {
-    // มีทั้งสองแหล่ง — เปรียบเทียบชั่วโมง (tolerance ±6 นาที = 0.1 ชม.)
-    const diff = Math.abs(totalScanHours - totalTimesheetHours);
-    status = diff <= 0.1 ? 'MATCHED' : 'CONFLICTED';
-  } else if (hasScanHours && !hasTimesheetHours) {
-    // มี scan แต่ไม่มี timesheet — รอ foreman ลงข้อมูล
+  } else if (!hasScan && !hasTimesheet) {
+    if (isHoliday)    status = 'HOLIDAY';
+    else if (isLeave) status = 'LEAVE';
+    else              status = 'ABSENT';
+  } else if (hasScan && !hasTimesheet) {
     status = 'MISSING_DAILY';
-  } else if (!hasScanHours && hasTimesheetHours) {
-    // มี timesheet แต่ไม่มี scan
+  } else if (!hasScan && hasTimesheet) {
     status = 'MISSING_SCAN';
   } else {
-    status = 'ABSENT';
+    // มีทั้งสองแหล่ง — ใช้ punch coverage
+    const effectiveScan = scanPunches;
+
+    if (dailyReportPunches.length >= 2) {
+      if (effectiveScan.length >= 2) {
+        const result = classifyByPunchCoverage({
+          dailyReportPunches,
+          scanPunches: effectiveScan,
+          normalHours: tsNormalHours,
+          otMorningHours: tsOtMorning,
+          otNoonHours: tsOtNoon,
+          otEveningHours: tsOtEvening,
+        });
+        status = result.status;
+        lateMinutes = result.lateMinutes;
+        earlyLeaveMinutes = result.earlyLeaveMinutes;
+        isLate = result.isLate;
+        isEarlyLeave = result.isEarlyLeave;
+        conflictNote = result.note;
+        
+        // เก็บยอดที่อนุมัติ
+        updatesObj = {
+          approvedNormalHours: result.approvedNormalHours,
+          approvedOtMorning: result.approvedOtMorning,
+          approvedOtNoon: result.approvedOtNoon,
+          approvedOtEvening: result.approvedOtEvening,
+          totalApprovedHours: result.totalApprovedHours,
+          approvalSource: result.approvalSource,
+        };
+      } else {
+        // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า MISSING_SCAN
+        status = 'MISSING_SCAN';
+        conflictNote = effectiveScan.length === 1 
+          ? `พบการสแกนเพียงครั้งเดียว (${effectiveScan[0]}) ไม่สามารถคำนวณเวลาได้`
+          : 'ไม่พบข้อมูลการสแกนนิ้ว';
+      }
+    } else {
+      // ไม่มีข้อมูลช่วงเวลาใน Daily Report
+      status = 'MISSING_DAILY';
+      conflictNote = 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)';
+    }
   }
 
   // ── 5. Upsert ReconciliationRecord ────────────────────────────────────────
@@ -449,7 +635,7 @@ async function reconcile(
     status,
     changedAt: now,
     changedBy: 'system',
-    reason: isMultipleProjects ? multipleProjectsReason : 'Automated reconciliation via Cloud Function',
+    reason: conflictNote ?? 'Automated reconciliation via Cloud Function',
   };
 
   const finalDoc = await recordRef.get();
@@ -479,6 +665,13 @@ async function reconcile(
       timesheetOtMorning:   hasTimesheet ? tsOtMorning     : null,
       timesheetOtNoon:      hasTimesheet ? tsOtNoon        : null,
       timesheetOtEvening:   hasTimesheet ? tsOtEvening     : null,
+      dailyReportPunches:   hasTimesheet ? dailyReportPunches : [],
+      shiftTimes:           hasTimesheet ? timesheet?.shiftTimes : null,
+      lateMinutes,
+      earlyLeaveMinutes,
+      isLate,
+      isEarlyLeave,
+      note:                 conflictNote || null,
       // ── Leave & Holiday ──────────────────────────────────────────────────
       leaveHours:           isLeave      ? totalLeaveHours : null,
       leaveEntries:         isLeave      ? leaveEntries    : null,
@@ -489,6 +682,7 @@ async function reconcile(
       assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
       isHoliday,
       updatedAt: now,
+      ...updatesObj,
     };
 
     if (hasTimesheet && timesheet?.AssigneesID) {
@@ -534,6 +728,13 @@ async function reconcile(
       timesheetOtMorning:   hasTimesheet ? tsOtMorning     : null,
       timesheetOtNoon:      hasTimesheet ? tsOtNoon        : null,
       timesheetOtEvening:   hasTimesheet ? tsOtEvening     : null,
+      dailyReportPunches:   hasTimesheet ? dailyReportPunches : [],
+      shiftTimes:           hasTimesheet ? timesheet?.shiftTimes : null,
+      lateMinutes,
+      earlyLeaveMinutes,
+      isLate,
+      isEarlyLeave,
+      note:                 conflictNote || null,
       // ── Leave & Holiday ──────────────────────────────────────────────────
       leaveHours:           isLeave      ? totalLeaveHours : null,
       leaveEntries:         isLeave      ? leaveEntries    : null,
@@ -548,6 +749,7 @@ async function reconcile(
       statusHistory:        [newStatusEntry],
       createdAt:            now,
       updatedAt:            now,
+      ...updatesObj,
     };
 
     if (hasTimesheet && timesheet?.AssigneesID) {
@@ -742,11 +944,14 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
     }
 
     // ไม่มีข้อมูลเลย → ABSENT
+    // หมายเหตุ: projectLocationId จาก dailyContractors = homeProjectId (สังกัดถาวร)
+    // ต้อง set homeProjectId ด้วย เพื่อให้ backend query (buildBaseQuery) กรองเจอ
     currentBatch.set(recordRef, {
       employeeId,
       employeeName:      contractorData['name']          || null,
       workDate:          workDateStr,
       projectLocationId,
+      homeProjectId:     projectLocationId,              // ← เพิ่ม: ใช้ค่าเดียวกัน (สังกัดถาวร)
       dailyReportHours:  null,
       scanDataHours:     null,
       status:            'ABSENT' as ReconciliationStatus,
