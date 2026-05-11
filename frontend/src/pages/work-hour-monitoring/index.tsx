@@ -33,6 +33,7 @@ export default function WorkHourMonitoringPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const queryClient = useQueryClient();
   const toast = useToast();
   
@@ -204,36 +205,85 @@ export default function WorkHourMonitoringPage() {
     }
   };
 
-  const handleExportAbnormal = (id: string) => {
-    if (id === 'pending') {
-      console.log(`Exporting Excel for: รอแก้ไข`);
-      console.log(`Columns: ลำดับ, วันที่, รหัส, ชื่อ-นามสกุล, สังกัด, หมายเหตุ`);
-      // logic to trigger Excel generation for Pending Items
-      return;
+  const handleExportAbnormal = async (id: string) => {
+    const labelMap: Record<string, string> = {
+      pending: 'รอแก้ไข',
+      fixed: 'แก้ไขแล้ว',
+      missingDaily: 'ขาดDailyReport',
+      workHourConflict: 'ข้อมูลขัดแย้ง',
+      missingScan: 'ขาดสแกนนิ้ว',
+      unregistered: 'ไม่มีข้อมูลในระบบ',
+      absent: 'ขาดงาน',
+    };
+    const filterStatusMap: Record<string, string> = {
+      pending: 'abnormal_pending',
+      fixed: 'abnormal_fixed',
+      missingDaily: 'missingDaily',
+      workHourConflict: 'workHourConflict',
+      missingScan: 'missingScan',
+      unregistered: 'unregistered',
+      absent: 'absent',
+    };
+    const filterStatus = filterStatusMap[id] || id;
+    const label = labelMap[id] || id;
+    setIsExporting(true);
+    try {
+      const params: Record<string, string> = { filterStatus };
+      if (project !== 'all') params.projectLocationId = project;
+      if (startDate) params.startDate = startDate.toISOString().split('T')[0];
+      if (endDate) params.endDate = endDate.toISOString().split('T')[0];
+      const blob = await reconciliationService.exportToExcel(params);
+      const date = new Date().toISOString().split('T')[0];
+      reconciliationService.downloadExcelFile(blob, `Reconciliation_${label}_${date}.xlsx`);
+      toast.success(`Export ข้อมูล "${label}" สำเร็จ`);
+    } catch (error: any) {
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการ Export ข้อมูล');
+    } finally {
+      setIsExporting(false);
     }
-
-    if (id === 'fixed') {
-      console.log(`Exporting Excel for: แก้ไขแล้ว`);
-      console.log(`Columns: ลำดับ, รหัส, ชื่อ-นามสกุล, สังกัด, ผู้รับผิดชอบ, วันที่แก้ไข, หมายเหตุ`);
-      // logic to trigger Excel generation for Fixed Items
-      return;
-    }
-
-    const activeItem = [
-      { id: 'missingDaily', title: 'ขาดข้อมูล Daily Report' },
-      { id: 'workHourConflict', title: 'ข้อมูลขัดแย้งกัน' },
-      { id: 'missingScan', title: 'ขาดข้อมูลสแกนนิ้ว' },
-      { id: 'otConflict', title: 'ข้อมูล OT ขัดแย้งกัน' }
-    ].find(item => item.id === id);
-
-    console.log(`Exporting Excel for: ${activeItem?.title}`);
-    console.log(`Columns: ลำดับ, รหัส, ชื่อ-นามสกุล, สังกัด, ประเภทความผิดปกติ (${activeItem?.title}), ผู้รับผิดชอบ, หมายเหตุ`);
-    
-    // logic to trigger Excel generation with these columns
   };
 
-  const handleExportNormal = (id: string) => {
-    console.log(`Exporting Excel for Normal: ${id}`);
+  const handleExportNormal = async (id: string) => {
+    const labelMap: Record<string, string> = {
+      normal: 'ข้อมูลตรงกัน',
+      leave: 'ลา',
+    };
+    const label = labelMap[id] || id;
+    setIsExporting(true);
+    try {
+      const params: Record<string, string> = { filterStatus: id };
+      if (project !== 'all') params.projectLocationId = project;
+      if (startDate) params.startDate = startDate.toISOString().split('T')[0];
+      if (endDate) params.endDate = endDate.toISOString().split('T')[0];
+      const blob = await reconciliationService.exportToExcel(params);
+      const date = new Date().toISOString().split('T')[0];
+      reconciliationService.downloadExcelFile(blob, `Reconciliation_${label}_${date}.xlsx`);
+      toast.success(`Export ข้อมูล "${label}" สำเร็จ`);
+    } catch (error: any) {
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการ Export ข้อมูล');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportAll = async () => {
+    setIsExporting(true);
+    try {
+      const params: Record<string, string> = {};
+      if (filterStatus && filterStatus !== 'all') params.filterStatus = filterStatus;
+      if (project !== 'all') params.projectLocationId = project;
+      if (startDate) params.startDate = startDate.toISOString().split('T')[0];
+      if (endDate) params.endDate = endDate.toISOString().split('T')[0];
+      const blob = await reconciliationService.exportToExcel(params);
+      const date = new Date().toISOString().split('T')[0];
+      const label = filterStatus && filterStatus !== 'all' ? filterStatus : 'all';
+      reconciliationService.downloadExcelFile(blob, `Reconciliation_${label}_${date}.xlsx`);
+      toast.success('Export ข้อมูลสำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการ Export ข้อมูล');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleSync = async () => {
@@ -416,6 +466,8 @@ export default function WorkHourMonitoringPage() {
                 variant="outlined"
                 size="small"
                 startIcon={<FileDownloadIcon />}
+                onClick={handleExportAll}
+                disabled={isExporting}
                 sx={{ 
                   borderRadius: '6px', 
                   textTransform: 'none', 
@@ -428,7 +480,7 @@ export default function WorkHourMonitoringPage() {
                   '&:hover': { backgroundColor: '#f0f9ff', borderColor: '#2a9df4' }
                 }}
               >
-                Export
+                {isExporting ? 'กำลัง Export...' : 'Export'}
               </Button>
               
               <Box

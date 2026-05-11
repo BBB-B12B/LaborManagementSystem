@@ -214,6 +214,38 @@ export const reconciliationService = {
   },
 
   /**
+   * Export ข้อมูล Reconciliation เป็นไฟล์ Excel (.xlsx)
+   * @param params filterStatus, projectLocationId, startDate, endDate
+   * @returns Blob ของไฟล์ Excel
+   */
+  exportToExcel: async (params: {
+    filterStatus?: string;
+    projectLocationId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<Blob> => {
+    const response = await apiClient.get('/reconciliation/export-excel', {
+      params,
+      responseType: 'blob',
+    });
+    return response.data as Blob;
+  },
+
+  /**
+   * Helper: Trigger การดาวน์โหลดไฟล์ Excel จาก Blob
+   */
+  downloadExcelFile: (blob: Blob, filename: string): void => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  /**
    * ดึงสถิติ aggregate counts สำหรับ SummaryStats
    * ใช้ Firestore Count Aggregate — ไม่โหลดข้อมูลทั้งหมด
    */

@@ -17,6 +17,7 @@ import {
   resolveManual,
   deleteGhostScan,
   exportAnomalies,
+  exportToExcel,
   generateForProjectAuto,
   updateScanPunches,
 } from '../../controllers/reconciliationController';
@@ -32,8 +33,11 @@ router.get('/', getReconciliationRecords);
 // GET  /api/reconciliation/stats    — aggregate counts สำหรับ SummaryStats (ต้องอยู่ก่อน /:id)
 router.get('/stats', getReconciliationStats);
 
-// GET  /api/reconciliation/export   — Export CSV รายการผิดปกติ (ต้องอยู่ก่อน /:id)
+// GET  /api/reconciliation/export   — Export JSON รายการผิดปกติ (ต้องอยู่ก่อน /:id)
 router.get('/export', exportAnomalies);
+
+// GET  /api/reconciliation/export-excel — Export Excel (.xlsx) ตาม filterStatus (ต้องอยู่ก่อน /:id)
+router.get('/export-excel', exportToExcel);
 
 // POST /api/reconciliation/generate-auto — สร้าง/อัปเดต records สำหรับช่วงวันที่
 router.post('/generate-auto', generateForProjectAuto);

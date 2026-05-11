@@ -15,6 +15,7 @@
  */
 
 import { Request, Response } from 'express';
+import * as XLSX from 'xlsx';
 import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 import type { ReconciliationStatus } from '../models/ReconciliationRecord';
 import { AuthRequest } from '../api/middleware/auth';
@@ -470,6 +471,120 @@ export async function updateScanPunches(req: Request, res: Response): Promise<vo
   } catch (error: any) {
     console.error('[reconciliation] updateScanPunches error:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to update scan punches' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/reconciliation/export-excel
+// ---------------------------------------------------------------------------
+
+/**
+ * แปลง ReconciliationStatus เป็นข้อความภาษาไทยสำหรับ Excel
+ */
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    MATCHED: 'ข้อมูลตรงกัน',
+    CONFLICTED: 'ข้อมูลขัดแย้งกัน',
+    MISSING_SCAN: 'ขาดข้อมูลสแกนนิ้ว',
+    MISSING_DAILY: 'ขาดข้อมูล Daily Report',
+    ABSENT: 'ขาดงาน',
+    LEAVE: 'ลา',
+    HOLIDAY: 'วันหยุด',
+    UNREGISTERED_EMPLOYEE: 'ไม่มีข้อมูลในระบบ',
+  };
+  return labels[status] || status;
+}
+
+/**
+ * Export ข้อมูล Reconciliation เป็นไฟล์ Excel (.xlsx)
+ * Query params: filterStatus, homeProjectId/projectLocationId, startDate, endDate
+ */
+export async function exportToExcel(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthRequest;
+    const { homeProjectId, projectLocationId, startDate, endDate, filterStatus } = req.query;
+
+    const targetProject = (homeProjectId || projectLocationId) as string | undefined;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    // RBAC
+    if (targetProject) {
+      if (!userProjects.includes(targetProject)) {
+        res.status(403).json({ success: false, error: 'Access denied for this project' });
+        return;
+      }
+    } else {
+      if (userProjects.length === 0) {
+        res.status(400).json({ success: false, error: 'No projects assigned to this user' });
+        return;
+      }
+    }
+
+    // Map filterStatus → status array (reuse existing helper)
+    const statusFilter: ReconciliationStatus[] | undefined = filterStatus
+      ? mapFilterStatusToStatuses(filterStatus as string)
+      : undefined;
+    const isResolved = filterStatus === 'abnormal_fixed' ? true : undefined;
+
+    const result = await reconciliationService.getRecords({
+      homeProjectId: targetProject,
+      allowedHomeProjects: targetProject ? undefined : userProjects,
+      status: statusFilter,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+      isResolved,
+      page: 0,
+      pageSize: 5000, // export ทั้งหมด ไม่ paginate
+    });
+
+    // สร้าง rows สำหรับ Excel
+    const rows = result.records.map((r, idx) => ({
+      'ลำดับ': idx + 1,
+      'รหัสพนักงาน': r.employeeId,
+      'ชื่อ-นามสกุล': r.employeeName || '-',
+      'วันที่': r.workDate,
+      'โครงการ': r.projectName || r.projectLocationId || '-',
+      'สถานะ': statusLabel(r.status),
+      'ชั่วโมง Daily Report': r.dailyReportHours ?? '-',
+      'ชั่วโมงสแกนนิ้ว': r.scanDataHours ?? '-',
+      'ชั่วโมงปกติ (Daily)': r.timesheetNormalHours ?? '-',
+      'OT เช้า (Daily)': r.timesheetOtMorning ?? '-',
+      'OT กลางวัน (Daily)': r.timesheetOtNoon ?? '-',
+      'OT เย็น (Daily)': r.timesheetOtEvening ?? '-',
+      'ชั่วโมงที่อนุมัติ': r.totalApprovedHours ?? '-',
+      'โฟร์แมน': r.assigneeName || r.assigneeId || '-',
+      'หมายเหตุ': r.note || '-',
+      'แก้ไขแล้วเมื่อ': r.resolvedAt
+        ? (r.resolvedAt instanceof Date ? r.resolvedAt : new Date(r.resolvedAt as any))
+            .toLocaleDateString('th-TH')
+        : '-',
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // ปรับความกว้างคอลัมน์อัตโนมัติ
+    const colWidths = Object.keys(rows[0] || {}).map((key) => ({
+      wch: Math.max(key.length, 12),
+    }));
+    ws['!cols'] = colWidths;
+
+    const sheetName = 'Reconciliation';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `Reconciliation_${filterStatus || 'all'}_${timestamp}.xlsx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(filename)}`);
+    res.send(buffer);
+  } catch (error: any) {
+    console.error('[reconciliation] exportToExcel error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Export failed' });
   }
 }
 
