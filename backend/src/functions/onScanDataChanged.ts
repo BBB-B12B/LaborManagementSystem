@@ -42,10 +42,19 @@ export const onScanDataChanged = firestore
       workDateStr = wd.toISOString().split('T')[0];
     }
 
-    if (!employeeNumber || !workDateStr || !projectLocationId) {
+    if (!employeeNumber || !workDateStr) {
       logger.warn(
         `[onScanDataChanged] Missing required fields for docId=${docId}: ` +
-        `employeeNumber="${employeeNumber}", workDate="${workDateStr}", project="${projectLocationId}"`
+        `employeeNumber="${employeeNumber}", workDate="${workDateStr}"`
+      );
+      return null;
+    }
+
+    // ถ้าไม่มี projectLocationId → ข้าม reconciliation
+    // (พนักงานยังไม่อยู่ในระบบ หรือยังไม่ได้ผูก homeProject)
+    if (!projectLocationId) {
+      logger.info(
+        `[onScanDataChanged] No projectLocationId for ${employeeNumber} on ${workDateStr} — skipping reconcile until employee is registered`
       );
       return null;
     }

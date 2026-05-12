@@ -80,7 +80,7 @@ export const ScanDataUploadSchema = z.object({
         message: 'รองรับเฉพาะไฟล์ .dat, .txt, .xlsx หรือ .xls',
       }
     ),
-  projectLocationId: z.string().min(1, 'กรุณาเลือกโครงการ'),
+  projectLocationId: z.string().optional(),
   importNote: z.string().optional(),
 });
 

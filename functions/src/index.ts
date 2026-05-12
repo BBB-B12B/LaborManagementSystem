@@ -1006,14 +1006,21 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
     // ไม่มีข้อมูลเลย → ABSENT
     // หมายเหตุ: projectLocationId จาก dailyContractors = homeProjectId (สังกัดถาวร)
     // ต้อง set homeProjectId ด้วย เพื่อให้ backend query (buildBaseQuery) กรองเจอ
+
+    // ดึง fallback assignee จาก foremanUsage ก่อน write
+    const fallback = await getFallbackAssignee(employeeId);
+
     currentBatch.set(recordRef, {
       employeeId,
       employeeName:      contractorData['name']          || null,
       workDate:          workDateStr,
       projectLocationId,
-      homeProjectId:     projectLocationId,              // ← เพิ่ม: ใช้ค่าเดียวกัน (สังกัดถาวร)
+      homeProjectId:     projectLocationId,              // ← ใช้ค่าเดียวกัน (สังกัดถาวร)
       dailyReportHours:  null,
       scanDataHours:     null,
+      assigneeId:        fallback?.id   || null,
+      assigneeName:      fallback?.name || null,
+      isFallbackAssignee: fallback != null,
       status:            'ABSENT' as ReconciliationStatus,
       statusHistory: [{
         status:    'ABSENT',

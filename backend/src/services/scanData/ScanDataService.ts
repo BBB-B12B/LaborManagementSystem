@@ -35,7 +35,7 @@ export interface BulkImportRecord {
 }
 
 export interface BulkImportOptions {
-  projectLocationId: string;
+  projectLocationId?: string; // Optional — auto-resolved from contractor homeProjectId if not provided
   importedBy: string;
   importNote?: string;
   source: 'excel' | 'dat' | 'text';
@@ -93,10 +93,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
       }
 
       const scanDate = this.formatDate(input.scanDateTime);
-      const projectCodeSafe = String(input.projectCode || '').replace(/\//g, '-');
       const uniqueKey = ScanDataService.generateScanDocKey(
         input.employeeId,
-        projectCodeSafe,
         scanDate,
       );
 
@@ -358,11 +356,13 @@ class ScanDataService extends BaseCrudService<ScanData> {
     let projectCode = '';
     let projectName = '';
     try {
-      const projectLocation = await projectLocationService.getById(options.projectLocationId);
-      if (projectLocation) {
-        if (projectLocation.department) projectDepartmentName = projectLocation.department;
-        projectCode = projectLocation.projectCode || projectLocation.code || '';
-        projectName = projectLocation.projectName || '';
+      if (options.projectLocationId) {
+        const projectLocation = await projectLocationService.getById(options.projectLocationId);
+        if (projectLocation) {
+          if (projectLocation.department) projectDepartmentName = projectLocation.department;
+          projectCode = projectLocation.projectCode || projectLocation.code || '';
+          projectName = projectLocation.projectName || '';
+        }
       }
     } catch (e) {
       logger.warn(`Could not fetch details for project location ${options.projectLocationId}`);
@@ -374,27 +374,35 @@ class ScanDataService extends BaseCrudService<ScanData> {
     let skippedRecords = 0;
     let failedRecords = 0;
 
-    // ── Step 1: Fetch all employees in parallel ────────────────────────────
+    // ── Step 1: Fetch all employees in parallel and cache homeProjectId ──────
     const uniqueEmployeeNumbers = Array.from(new Set(records.map(r => r.employeeNumber).filter(Boolean)));
-    await Promise.all(uniqueEmployeeNumbers.map(async (empNum) => {
-      if (!employeeCache.has(empNum)) {
-        try {
-          const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empNum);
-          employeeCache.set(empNum, contractor ? contractor.id : null);
-        } catch (e: any) {
-          employeeCache.set(empNum, null);
+    const homeProjectCache = new Map<string, string>(); // empNo → homeProjectId
+
+    const CHUNK_EMP = 50;
+    for (let i = 0; i < uniqueEmployeeNumbers.length; i += CHUNK_EMP) {
+      const chunk = uniqueEmployeeNumbers.slice(i, i + CHUNK_EMP);
+      await Promise.all(chunk.map(async (empNum) => {
+        if (!employeeCache.has(empNum)) {
+          try {
+            const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empNum);
+            employeeCache.set(empNum, contractor ? contractor.id : null);
+            const homeProj = (contractor as any)?.projectLocationId || (contractor as any)?.homeProjectId || '';
+            homeProjectCache.set(empNum, homeProj);
+          } catch (e: any) {
+            employeeCache.set(empNum, null);
+            homeProjectCache.set(empNum, '');
+          }
         }
-      }
-    }));
+      }));
+    }
 
     // ── Step 2: Aggregate raw records into daily groups ────────────────────
     const aggregatedDailyRows = ScanDataAggregator.aggregate(records);
-    const projectCodeSafe = String(projectCode).replace(/\//g, '-');
 
     // Build all document refs for pre-fetch
     const allDocRefs = aggregatedDailyRows.map(group => ({
-      key: ScanDataService.generateScanDocKey(group.employeeNumber, projectCodeSafe, group.workDate),
-      ref: collections.scanData.doc(ScanDataService.generateScanDocKey(group.employeeNumber, projectCodeSafe, group.workDate)),
+      key: ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate),
+      ref: collections.scanData.doc(ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate)),
     }));
 
     // ── Step 3: Chunked getAll() to find which docs already exist ──────────
@@ -406,7 +414,11 @@ class ScanDataService extends BaseCrudService<ScanData> {
       for (let i = 0; i < allDocRefs.length; i += CHUNK_SIZE) {
         chunks.push(allDocRefs.slice(i, i + CHUNK_SIZE).map(d => d.ref));
       }
-      const snapshots = await Promise.all(chunks.map(chunk => db.getAll(...chunk)));
+      const snapshots: FirebaseFirestore.DocumentSnapshot[][] = [];
+      for (const chunk of chunks) {
+        const snap = await db.getAll(...chunk);
+        snapshots.push(snap);
+      }
       snapshots.flat().forEach(doc => {
         if (doc.exists) existingIds.add(doc.id);
       });
@@ -451,7 +463,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         }
 
         const scanDate = group.workDate;
-        const uniqueKey = ScanDataService.generateScanDocKey(group.employeeNumber, projectCodeSafe, scanDate);
+        const uniqueKey = ScanDataService.generateScanDocKey(group.employeeNumber, scanDate);
         const docRef = collections.scanData.doc(uniqueKey);
 
         const workDate = new Date(group.workDate);
@@ -490,11 +502,20 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const primaryScan = group.timeScans.length > 0 ? group.timeScans[0] : null;
         const scanDateTime = (primaryScan && !isNaN(primaryScan.getTime())) ? primaryScan : workDate;
 
+        // Resolve projectLocationId: use provided value OR auto-lookup from contractor's home project
+        const resolvedProjectId = options.projectLocationId
+          || homeProjectCache.get(group.employeeNumber)
+          || '';
+
+        if (!resolvedProjectId) {
+          logger.warn(`[bulkImport] No projectLocationId for ${group.employeeNumber} — saving without project, reconciliation will be skipped`);
+        }
+
         const scanData: any = {
           dailyContractorId: contractorId,
           employeeId: group.employeeNumber,
           employeeNumber: group.employeeNumber,
-          projectLocationId: options.projectLocationId,
+          projectLocationId: resolvedProjectId,
           scanDateTime,
           scanDate,
           workDate,
@@ -562,7 +583,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     // ── Step 6: Build row summaries for response ───────────────────────────
     for (const group of aggregatedDailyRows) {
       const rowDepartment = projectCode || projectDepartmentName || '-';
-      const uniqueKey = ScanDataService.generateScanDocKey(group.employeeNumber, projectCodeSafe, group.workDate);
+      const uniqueKey = ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate);
       
       rowSummaries.push({
         row: group.sourceRowNumbers[0] || 0,
@@ -944,13 +965,22 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const contractor = await dailyContractorService.findByEmployeeIdOrHistory(payload.employeeNumber);
       if (!contractor) throw new AppError(`ไม่พบข้อมูลพนักงานรหัส ${payload.employeeNumber}`, 404);
 
-      const projectLocation = await projectLocationService.getById(payload.projectLocationId);
-      const projectCode = projectLocation?.projectCode || projectLocation?.code || '';
+      // Resolve projectLocationId: use provided value, fallback to employee's home project
+      const resolvedProjectLocationId =
+        (payload.projectLocationId && payload.projectLocationId.trim() !== '')
+          ? payload.projectLocationId.trim()
+          : (contractor.projectLocationId || '');
+
+      let projectCode = '';
+      if (resolvedProjectLocationId) {
+        const projectLocation = await projectLocationService.getById(resolvedProjectLocationId);
+        projectCode = projectLocation?.projectCode || projectLocation?.code || '';
+      }
 
       const input: CreateScanDataInput = {
         dailyContractorId: contractor.id,
         employeeId: contractor.employeeId || payload.employeeNumber,
-        projectLocationId: payload.projectLocationId,
+        projectLocationId: resolvedProjectLocationId,
         projectCode,
         scanDateTime: payload.scanDateTime,
         importNote: payload.notes || 'Manual Entry',
@@ -1023,9 +1053,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         docRef = scanQuery.docs[0].ref;
         existingData = scanQuery.docs[0].data() as ScanData;
       } else {
-        const project = await projectLocationService.getById(projectLocationId);
-        const projectCode = project?.projectCode || project?.code || '';
-        const uniqueKey = ScanDataService.generateScanDocKey(employeeNumber, projectCode, workDateStr);
+        const uniqueKey = ScanDataService.generateScanDocKey(employeeNumber, workDateStr);
         docRef = collections.scanData.doc(uniqueKey);
         action = 'manual_create';
       }
@@ -1177,20 +1205,54 @@ class ScanDataService extends BaseCrudService<ScanData> {
     const results: any[] = [];
     
     let projectCode = '';
-    if (params.projectLocationId) {
-      const loc = await projectLocationService.getById(params.projectLocationId);
-      if (loc) projectCode = loc.projectCode || loc.code || loc.projectName || '';
+    let fallbackDepartment = '#N/A';
+    
+    try {
+      const resolvedProjectLocId = params.projectLocationId || (scans.length > 0 ? (scans[0] as any).projectLocationId : null);
+      if (resolvedProjectLocId) {
+        const loc = await projectLocationService.getById(resolvedProjectLocId);
+        if (loc) {
+          projectCode = loc.projectCode || loc.code || loc.projectName || '';
+          if (loc.department) fallbackDepartment = loc.department;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch project location for export:', e);
     }
 
-    for (const group of aggregated) {
-      const contractor = await dailyContractorService.findByEmployeeIdOrHistory(group.employeeNumber);
-      let reportMorningOT = 0, reportEveningOT = 0, reportLunchOT = 0, reportNormalStatus = 0;
-      let department = '#N/A', hasReport = false;
+    const contractorCache = new Map<string, any>();
+    const timesheetCache = new Map<string, any>();
+    const CHUNK_SIZE = 50;
 
-      if (contractor) {
-        const dateStr = group.workDate;
-        try {
-          const timesheet = await projectBDailyReportService.getDailyTimesheet(group.employeeNumber, dateStr);
+    for (let i = 0; i < aggregated.length; i += CHUNK_SIZE) {
+      const chunk = aggregated.slice(i, i + CHUNK_SIZE);
+      
+      const chunkResults = await Promise.all(chunk.map(async (group) => {
+        let contractor = contractorCache.get(group.employeeNumber);
+        if (contractor === undefined) {
+          contractor = await dailyContractorService.findByEmployeeIdOrHistory(group.employeeNumber);
+          contractorCache.set(group.employeeNumber, contractor);
+        }
+
+        let reportMorningOT = 0, reportEveningOT = 0, reportLunchOT = 0, reportNormalStatus = 0;
+        let department = fallbackDepartment, hasReport = false;
+
+        if (contractor) {
+          const dateStr = group.workDate;
+          const tsKey = `${group.employeeNumber}_${dateStr}`;
+          
+          let timesheet = timesheetCache.get(tsKey);
+          if (timesheet === undefined) {
+            try {
+              timesheet = await projectBDailyReportService.getDailyTimesheet(group.employeeNumber, dateStr);
+              timesheetCache.set(tsKey, timesheet);
+            } catch (e) {
+              console.error('Error fetching Project B timesheet:', e);
+              timesheetCache.set(tsKey, null);
+              timesheet = null;
+            }
+          }
+
           if (timesheet) {
              hasReport = true;
              if (timesheet.expectedShifts?.normal) reportNormalStatus = 1;
@@ -1198,38 +1260,36 @@ class ScanDataService extends BaseCrudService<ScanData> {
              reportLunchOT = timesheet.expectedHours?.otNoon || 0;
              reportEveningOT = timesheet.expectedHours?.otEvening || 0;
           }
-          const loc = await projectLocationService.getById(params.projectLocationId || (scans[0] as any).projectLocationId);
-          if (loc?.department) department = loc.department;
-        } catch (e) {
-          console.error('Error fetching Project B timesheet:', e);
         }
-      }
 
-      const diffLunch = !hasReport ? '-' : (group.lunchStatus - reportLunchOT);
-      const diffMorning = !hasReport ? '-' : (group.otMorningHours - reportMorningOT);
-      const diffEvening = !hasReport ? '-' : (group.otEveningHours - reportEveningOT);
-      const rowDepartment = projectCode || department || '-';
+        const diffLunch = !hasReport ? '-' : (group.lunchStatus - reportLunchOT);
+        const diffMorning = !hasReport ? '-' : (group.otMorningHours - reportMorningOT);
+        const diffEvening = !hasReport ? '-' : (group.otEveningHours - reportEveningOT);
+        const rowDepartment = projectCode || department || '-';
 
-      results.push({
-        EmployeeNumber: group.employeeNumber,
-        Date: group.workDate,
-        Time1: group.time1 || '', Time2: group.time2 || '', Time3: group.time3 || '',
-        Time4: group.time4 || '', Time5: group.time5 || '', Time6: group.time6 || '',
-        NormalStatus: group.normalStatus,
-        RegularHours: group.regularHours,
-        LunchStatus: group.lunchStatus,
-        MorningOT: group.otMorningHours,
-        EveningOT: group.otEveningHours,
-        LateMinutes: group.lateMinutes,
-        ReportNormalStatus: reportNormalStatus,
-        ReportMorningOT: reportMorningOT,
-        ReportLunchOT: reportLunchOT,
-        ReportEveningOT: reportEveningOT,
-        DiffLunch: diffLunch,
-        DiffMorning: diffMorning,
-        DiffEvening: diffEvening,
-        Department: rowDepartment
-      });
+        return {
+          EmployeeNumber: group.employeeNumber,
+          Date: group.workDate,
+          Time1: group.time1 || '', Time2: group.time2 || '', Time3: group.time3 || '',
+          Time4: group.time4 || '', Time5: group.time5 || '', Time6: group.time6 || '',
+          Time7: group.time7 || '', Time8: group.time8 || '', Time9: group.time9 || '', Time10: group.time10 || '',
+          NormalStatus: group.normalStatus,
+          RegularHours: group.regularHours,
+          LunchStatus: group.lunchStatus,
+          MorningOT: group.otMorningHours,
+          EveningOT: group.otEveningHours,
+          LateMinutes: group.lateMinutes,
+          ReportNormalStatus: reportNormalStatus,
+          ReportMorningOT: reportMorningOT,
+          ReportLunchOT: reportLunchOT,
+          ReportEveningOT: reportEveningOT,
+          DiffLunch: diffLunch,
+          DiffMorning: diffMorning,
+          DiffEvening: diffEvening,
+          Department: rowDepartment
+        };
+      }));
+      results.push(...chunkResults);
     }
     return results;
   }
@@ -1237,16 +1297,21 @@ class ScanDataService extends BaseCrudService<ScanData> {
   /**
    * Single source of truth for scanData document IDs.
    * Format: SCAN_[employeeNumber]_[projectCode]_[YYYY-MM-DD]
+  /**
+   * Generate a consistent document key for a scan record.
+   * Format: SCAN_{employeeNumber}_{workDate}
    *
+   * Note: projectCode is no longer part of the key. One scan record per employee per day.
    * Used by bulkImport and importScanData to guarantee consistent keys.
    */
   static generateScanDocKey(
     employeeNumber: string,
-    projectCode: string,
-    workDate: string, // expects YYYY-MM-DD
+    workDate: string | Date, // accepts YYYY-MM-DD string or Date
   ): string {
-    const safeCode = String(projectCode || 'NOPROJ').replace(/\//g, '-');
-    return `SCAN_${employeeNumber}_${safeCode}_${workDate}`;
+    const dateStr = typeof workDate === 'string'
+      ? workDate
+      : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(workDate);
+    return `SCAN_${employeeNumber}_${dateStr}`;
   }
 
 }

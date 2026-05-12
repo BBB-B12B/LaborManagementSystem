@@ -86,14 +86,6 @@ const tableHeaders = [
   'Time8',
   'Time9',
   'Time10',
-
-  'สถานะงาน',
-  'ชั่วโมงการทำงาน',
-  'สถานะผ่าเที่ยง',
-  'จำนวน OT เช้า',
-  'จำนวน OT เย็น',
-  'จำนวนนาทีมาสาย',
-  'ส่วนงาน',
 ];
 
 const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
@@ -122,7 +114,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
   } = useForm<ScanDataUploadInput>({
     resolver: zodResolver(ScanDataUploadSchema),
     defaultValues: {
-      projectLocationId: defaultProjectId || '',
+      projectLocationId: undefined,
       importNote: '',
       file: undefined as unknown as File,
     },
@@ -134,7 +126,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
       console.log('Starting validation mutation for file:', data.file.name);
       return await uploadScanDataFile(
         data.file,
-        data.projectLocationId,
+        data.projectLocationId || '',
         data.importNote,
         true // dryRun = true
       );
@@ -157,7 +149,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
 
       return await uploadScanDataFile(
         fileToUpload!,
-        data.projectLocationId,
+        data.projectLocationId || '',
         data.importNote,
         false // dryRun = false
       );
@@ -293,18 +285,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
     },
   });
 
-  const deleteBulkMutation = useMutation({
-    mutationFn: () => {
-      if (!dateRange || !validationResult) throw new Error('Missing data range');
-      const projectId = getValues('projectLocationId');
-      return deleteScanDataBulk(projectId, dateRange.start, dateRange.end);
-    },
-    onSuccess: (res) => {
-      alert(`ล้างข้อมูลโครงการสำเร็จ ${res.deletedCount} รายการ คุณสามารถตรวจสอบ (Refresh) และอัปโหลดใหม่ได้ครับ`);
-      // Re-validate to show updated status
-      onStartValidation(getValues());
-    },
-  });
+
 
   const canUpload = useMemo(() => {
     return validationResult && validationResult.failedRecords === 0;
@@ -340,26 +321,7 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
       case 'select':
         return (
           <form id="scan-data-upload-form" onSubmit={handleSubmit(onStartValidation)}>
-            {/* Project Selection */}
-            <Box sx={{ mt: 1 }}>
-              <Controller
-                name="projectLocationId"
-                control={control}
-                render={({ field }) => (
-                  <ProjectSelect
-                    label="โครงการ"
-                    value={field.value || ''}
-                    onChange={(value) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
-                    error={!!errors.projectLocationId}
-                    helperText={errors.projectLocationId?.message}
-                    required
-                    fullWidth
-                  />
-                )}
-              />
-            </Box>
-
-            {/* File Selection */}
+        {/* File Selection */}
             <Box sx={{ mt: 3 }}>
               <Box
                 sx={{
@@ -789,39 +751,6 @@ const ScanDataUploadDialog: React.FC<ScanDataUploadDialogProps> = ({
                       <TableCell>{getValueByKeys(record.data, ['Time8', 'time8', 'เวลา8'], '')}</TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time9', 'time9', 'เวลา9'], '')}</TableCell>
                       <TableCell>{getValueByKeys(record.data, ['Time10', 'time10', 'เวลา10'], '')}</TableCell>
-
-                      
-                      {/* Text Status - ปกติ / ผิดปกติ */}
-                      <TableCell sx={{ fontWeight: isNormalStatusZero ? 'bold' : 'normal', color: isNormalStatusZero ? 'error.main' : 'success.main', textAlign: 'center' }}>
-                        {normalVal === '1' ? 'ปกติ' : 'ไม่ครบ'}
-                      </TableCell>
-
-                      {/* ชั่วโมงการทำงาน (actual calculated hours) */}
-                      <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['RegularHours', 'regularHours', 'scannedRegularHours'], '0.0')}
-                      </TableCell>
-
-                      {/* สถานะผ่าเที่ยง */}
-                      <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus', 'scannedNoonOT'], '0')}
-                      </TableCell>
-                      {/* OT เช้า */}
-                      <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['MorningOT', 'จำนวน OT เช้าสแกนนิ้ว', 'otMorningHours', 'scannedMorningOT'], '0')}
-                      </TableCell>
-
-                      {/* OT เย็น */}
-                      <TableCell sx={{ textAlign: 'center' }}>
-                        {getValueByKeys(record.data, ['EveningOT', 'จำนวน OT เย็นสแกนนิ้ว', 'otEveningHours', 'scannedEveningOT'], '0')}
-                      </TableCell>
-
-                      {/* นาทีมาสาย */}
-                      <TableCell sx={{ textAlign: 'center', color: 'error.main', fontWeight: 'bold' }}>
-                        {getValueByKeys(record.data, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], '0')}
-                      </TableCell>
-                      
-                      {/* ส่วนงาน */}
-                      <TableCell sx={{ textAlign: 'center' }}>{getValueByKeys(record.data, ['Department', 'ส่วนงาน', 'department'], '-')}</TableCell>
                     </TableRow>
                   );
                 })}

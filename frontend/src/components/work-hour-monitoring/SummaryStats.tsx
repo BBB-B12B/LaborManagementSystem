@@ -1,86 +1,74 @@
 import React from 'react';
-import { Box, Grid, Paper, Typography, Stack } from '@mui/material';
+import { Box, Grid, Paper, Typography, Stack, Skeleton } from '@mui/material';
 import {
   People as PeopleIcon,
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
+  FilterList as FilterIcon,
+  TableChart as TableIcon,
   RocketLaunch as RocketIcon,
   NearMe as SendIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 import { reconciliationService } from '../../services/reconciliationService';
-
-// --- Blue Theme Palette (from Image 5) ---
-const BLUE = {
-  NAVY: '#001b48',
-  ROYAL: '#01497c',
-  CERULEAN: '#2a9df4',
-  LIGHT: '#a1c1db',
-  ICE: '#f0f9ff',
-  TEXT_MAIN: '#1c1e2b',
-  TEXT_LIGHT: '#64748b',
-};
+import { RECON_COLORS, MIN_FONT_SIZE } from '../../constants/theme';
 
 // --- Compact Styled Components ---
 
-const StatCard = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(1.5, 2),
-  borderRadius: '12px',
-  height: '145px', // Fixed height to ensure symmetry across all cards
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  border: '1px solid #e2e8f0',
-  transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-  '&:hover': {
-    transform: 'translateY(-4px)',
-    boxShadow: `0 12px 24px -10px ${BLUE.ROYAL}40`,
-    borderColor: BLUE.CERULEAN,
-  },
-}));
+const StatCard = styled(Paper, {
+  shouldForwardProp: (prop) => prop !== 'active' && prop !== 'colorTheme',
+})<{ active?: boolean; colorTheme: 'blue' | 'green' | 'red' }>(({ theme, active, colorTheme }) => {
+  const themes = {
+    blue: { 
+      bg: active ? RECON_COLORS.BLUE.bg : `linear-gradient(135deg, ${RECON_COLORS.BLUE.NAVY} 0%, ${RECON_COLORS.BLUE.ROYAL} 100%)`, 
+      border: RECON_COLORS.BLUE.activeBorder,
+      text: active ? RECON_COLORS.BLUE.text : '#fff'
+    },
+    green: { 
+      bg: active ? RECON_COLORS.GREEN.bg : '#fff', 
+      border: RECON_COLORS.GREEN.activeBorder,
+      text: RECON_COLORS.GREEN.text
+    },
+    red: { 
+      bg: active ? RECON_COLORS.RED.bg : '#fff', 
+      border: RECON_COLORS.RED.activeBorder,
+      text: RECON_COLORS.RED.text
+    },
+  };
 
-const SubBox = styled(Box)(({ theme }) => ({
-  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  border: '1px solid #e2e8f0',
-  borderRadius: '10px',
-  padding: theme.spacing(0.5, 1),
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  minWidth: '70px',
-  flex: 1,
-  transition: 'all 0.2s ease',
-  '&:hover': {
-    borderColor: BLUE.CERULEAN,
-    backgroundColor: '#fff',
-  }
-}));
+  const selected = themes[colorTheme];
 
-const BannerHeader = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(1.2, 3),
-  marginBottom: theme.spacing(2),
-  borderRadius: '12px',
-  border: '1px solid #e2e8f0',
-  background: `linear-gradient(90deg, #ffffff 0%, ${BLUE.ICE} 100%)`,
-  textAlign: 'center',
-  boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-  position: 'relative',
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    bottom: 0,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: '40px',
-    height: '3px',
-    background: BLUE.ROYAL,
-    borderRadius: '2px 2px 0 0',
-  }
-}));
+  return {
+    padding: theme.spacing(1.5, 2),
+    borderRadius: '12px',
+    height: '145px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    border: active ? `2px solid ${selected.border}` : '1px solid #e2e8f0',
+    background: selected.bg,
+    color: selected.text,
+    cursor: 'pointer',
+    transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    '&:hover': {
+      transform: 'translateY(-4px)',
+      boxShadow: `0 12px 24px -10px ${RECON_COLORS.BLUE.ROYAL}40`,
+      borderColor: selected.border,
+    },
+  };
+});
+
+const HintText = ({ text, icon: Icon, color }: { text: string; icon: any; color?: string }) => (
+  <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5, opacity: 0.7 }}>
+    <Icon sx={{ fontSize: 14, color: color || 'inherit' }} />
+    <Typography variant="caption" sx={{ fontSize: MIN_FONT_SIZE.SECONDARY, fontWeight: 500 }}>
+      {text}
+    </Typography>
+  </Stack>
+);
 
 // --- Main Component ---
-
 
 interface Props {
   onStatusClick?: (status: string) => void;
@@ -94,7 +82,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
   const { data: statsData, isLoading } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: () => reconciliationService.getStats({
-      projectLocationId: project !== 'all' ? project : undefined,  // backward compat
+      projectLocationId: project !== 'all' ? project : undefined,
       startDate: startDate ? startDate.toISOString() : undefined,
       endDate: endDate ? endDate.toISOString() : undefined,
     }),
@@ -112,48 +100,46 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
   return (
     <Box sx={{ mb: 2 }}>
       <Grid container spacing={2}>
-        {/* Card 1: Total Employees (Navy) */}
+        {/* Card 1: Total Employees (Navy/Blue) */}
         <Grid item xs={12} md={4}>
           <StatCard 
             elevation={0} 
+            colorTheme="blue"
+            active={activeStatus === 'all'}
             onClick={() => onStatusClick?.('all')}
-            sx={{ 
-              background: `linear-gradient(135deg, ${BLUE.NAVY} 0%, ${BLUE.ROYAL} 100%)`, 
-              color: '#fff', 
-              borderColor: activeStatus === 'all' ? BLUE.CERULEAN : BLUE.NAVY,
-              borderWidth: activeStatus === 'all' ? '3px' : '1px',
-              cursor: 'pointer'
-            }}
           >
             <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
-              {/* Left: Main Stats */}
               <Box sx={{ flex: 1.2 }}>
-                <Typography variant="caption" fontWeight="700" sx={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>
+                <Typography variant="caption" fontWeight="800" sx={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>
                   พนักงานทั้งหมด
                 </Typography>
                 <Stack direction="row" alignItems="baseline" spacing={1}>
-                  <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', textShadow: '0 2px 10px rgba(0,0,0,0.3)', lineHeight: 1 }}>
-                    {isLoading ? '-' : stats.employeeCount.toLocaleString()}
-                  </Typography>
+                  {isLoading ? (
+                    <Skeleton variant="text" width={80} height={60} sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
+                  ) : (
+                    <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', lineHeight: 1 }}>
+                      {stats.employeeCount.toLocaleString()}
+                    </Typography>
+                  )}
                   <Typography variant="body2" sx={{ opacity: 0.7, fontWeight: 800 }}>คน</Typography>
                 </Stack>
+                <HintText text="ดูทั้งหมด" icon={TableIcon} />
               </Box>
 
-              {/* Right: Sub Data & Icon */}
               <Stack direction="column" alignItems="center" spacing={1} sx={{ flex: 1 }}>
                 <Box
                   sx={{
                     width: '100%',
                     p: 1,
                     borderRadius: '12px',
-                    background: 'rgba(255,255,255,0.12)',
+                    background: activeStatus === 'all' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.12)',
                     border: '1px solid rgba(255,255,255,0.15)',
                     textAlign: 'center',
                     backdropFilter: 'blur(4px)'
                   }}
                 >
                   <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 700, fontSize: '0.6rem', display: 'block' }}>แถวข้อมูลสะสม</Typography>
-                  <Typography variant="subtitle1" fontWeight="900" sx={{ lineHeight: 1.1 }}>{stats.totalRows.toLocaleString()}</Typography>
+                  <Typography variant="subtitle1" fontWeight="900" sx={{ lineHeight: 1.1 }}>{isLoading ? '...' : stats.totalRows.toLocaleString()}</Typography>
                 </Box>
                 <PeopleIcon sx={{ fontSize: 32, opacity: 0.3 }} />
               </Stack>
@@ -161,62 +147,49 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
           </StatCard>
         </Grid>
 
-        {/* Card 2: Normal Status (Pearl/Cerulean) */}
+        {/* Card 2: Normal Status (Green) */}
         <Grid item xs={12} md={4}>
           <StatCard 
             elevation={0} 
+            colorTheme="green"
+            active={activeStatus === 'normal'}
             onClick={() => onStatusClick?.('normal')}
-            sx={{ 
-              background: '#ffffff', 
-              borderColor: activeStatus === 'normal' ? BLUE.CERULEAN : '#e2e8f0',
-              borderWidth: activeStatus === 'normal' ? '3px' : '1px',
-              cursor: 'pointer'
-            }}
           >
             <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
-              {/* Left: Main Stats */}
               <Box sx={{ flex: 1.2 }}>
-                <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.TEXT_LIGHT, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.65rem' }}>
+                <Typography variant="caption" fontWeight="800" sx={{ color: activeStatus === 'normal' ? 'inherit' : RECON_COLORS.NEUTRAL.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.65rem' }}>
                   สถานะปกติ
                 </Typography>
                 <Stack direction="row" alignItems="baseline" spacing={1}>
-                  <Typography variant="h2" fontWeight="900" sx={{ color: BLUE.NAVY, fontSize: '3rem', lineHeight: 1 }}>
-                    {stats.normalCount.toLocaleString()}
-                  </Typography>
-                  <Typography variant="caption" fontWeight="800" sx={{ color: BLUE.LIGHT }}>รายการ</Typography>
+                  {isLoading ? (
+                    <Skeleton variant="text" width={80} height={60} />
+                  ) : (
+                    <Typography variant="h2" fontWeight="900" sx={{ color: activeStatus === 'normal' ? RECON_COLORS.GREEN.text : RECON_COLORS.BLUE.NAVY, fontSize: '3rem', lineHeight: 1 }}>
+                      {stats.normalCount.toLocaleString()}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" fontWeight="800" sx={{ color: RECON_COLORS.BLUE.LIGHT }}>รายการ</Typography>
                 </Stack>
+                <HintText text="คลิกเพื่อกรองตาราง" icon={FilterIcon} />
               </Box>
 
-              {/* Right: Icon */}
               <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-                <Box sx={{ position: 'absolute', width: 60, height: 60, borderRadius: '50%', background: `${BLUE.CERULEAN}10`, zIndex: 0 }} />
-                <CheckCircleIcon sx={{ fontSize: 60, color: BLUE.CERULEAN, position: 'relative', zIndex: 1 }} />
+                <Box sx={{ position: 'absolute', width: 60, height: 60, borderRadius: '50%', background: `${RECON_COLORS.GREEN.accent}10`, zIndex: 0 }} />
+                <CheckCircleIcon sx={{ fontSize: 60, color: RECON_COLORS.GREEN.activeBorder, position: 'relative', zIndex: 1 }} />
               </Box>
             </Stack>
           </StatCard>
         </Grid>
 
-        {/* Card 3: Abnormal Status (Softer Warning Theme) */}
+        {/* Card 3: Abnormal Status (Red) */}
         <Grid item xs={12} md={4}>
           <StatCard 
             elevation={0} 
+            colorTheme="red"
+            active={activeStatus?.startsWith('abnormal')}
             onClick={() => onStatusClick?.('abnormal')}
-            sx={{ 
-              background: '#fff', 
-              borderColor: activeStatus?.startsWith('abnormal') ? '#ef4444' : '#fca5a5', 
-              borderWidth: activeStatus?.startsWith('abnormal') ? '3px' : '2px',
-              color: '#1c1e2b',
-              cursor: 'pointer',
-              boxShadow: '0 4px 15px rgba(220, 38, 38, 0.05)',
-              '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: '0 12px 25px rgba(220, 38, 38, 0.1)',
-                borderColor: '#ef4444',
-              }
-            }}
           >
             <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ height: '100%' }}>
-              {/* Left Side: Status & Count */}
               <Box sx={{ flex: 1 }}>
                 <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.5 }}>
                   <Box 
@@ -224,32 +197,36 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
                       width: 8, 
                       height: 8, 
                       borderRadius: '50%', 
-                      backgroundColor: '#ef4444',
+                      backgroundColor: RECON_COLORS.RED.activeBorder,
                       animation: 'pulse 1.5s infinite',
                       '@keyframes pulse': {
-                        '0%': { transform: 'scale(1)', opacity: 1, boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.4)' },
-                        '70%': { transform: 'scale(1.5)', opacity: 0, boxShadow: '0 0 0 10px rgba(239, 68, 68, 0)' },
-                        '100%': { transform: 'scale(1)', opacity: 0, boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)' }
+                        '0%': { transform: 'scale(1)', opacity: 1, boxShadow: `0 0 0 0 ${RECON_COLORS.RED.activeBorder}40` },
+                        '70%': { transform: 'scale(1.5)', opacity: 0, boxShadow: `0 0 0 10px ${RECON_COLORS.RED.activeBorder}0` },
+                        '100%': { transform: 'scale(1)', opacity: 0, boxShadow: `0 0 0 0 ${RECON_COLORS.RED.activeBorder}0` }
                       }
                     }} 
                   />
-                  <Typography variant="caption" fontWeight="900" sx={{ textTransform: 'uppercase', color: '#ef4444', fontSize: '0.65rem' }}>
+                  <Typography variant="caption" fontWeight="900" sx={{ textTransform: 'uppercase', color: RECON_COLORS.RED.activeBorder, fontSize: '0.65rem' }}>
                     สถานะผิดปกติ
                   </Typography>
                 </Stack>
                 
                 <Stack direction="row" alignItems="center" spacing={0.5}>
-                  <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', color: '#dc2626', lineHeight: 1 }}>
-                    {isLoading ? '-' : stats.pendingCount}
-                  </Typography>
+                  {isLoading ? (
+                    <Skeleton variant="text" width={80} height={60} />
+                  ) : (
+                    <Typography variant="h2" fontWeight="900" sx={{ fontSize: '3rem', color: RECON_COLORS.RED.activeBorder, lineHeight: 1 }}>
+                      {stats.pendingCount}
+                    </Typography>
+                  )}
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <InfoIcon sx={{ fontSize: 20, color: '#ef4444', mb: -0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 800, fontSize: '0.65rem' }}>รายการ</Typography>
+                    <InfoIcon sx={{ fontSize: 20, color: RECON_COLORS.RED.activeBorder, mb: -0.5 }} />
+                    <Typography variant="caption" sx={{ color: RECON_COLORS.NEUTRAL.textSecondary, fontWeight: 800, fontSize: '0.65rem' }}>รายการ</Typography>
                   </Box>
                 </Stack>
+                <HintText text="คลิกเพื่อกรองตาราง" icon={FilterIcon} />
               </Box>
 
-              {/* Right Side: Stacked Status Boxes */}
               <Stack spacing={0.75} sx={{ flex: 1.3 }}>
                 <Box 
                   onClick={(e) => {
@@ -259,19 +236,19 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
                   sx={{ 
                     p: 0.75, 
                     borderRadius: '10px', 
-                    background: activeStatus === 'abnormal_pending' ? '#fef3c7' : 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                    background: activeStatus === 'abnormal_pending' ? RECON_COLORS.ORANGE.bg : '#fff',
                     border: '1px solid',
-                    borderColor: activeStatus === 'abnormal_pending' ? '#d97706' : '#fde68a',
+                    borderColor: activeStatus === 'abnormal_pending' ? RECON_COLORS.ORANGE.activeBorder : RECON_COLORS.ORANGE.border,
                     textAlign: 'center',
                     cursor: 'pointer',
-                    '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 10px rgba(251, 191, 36, 0.15)' }
+                    '&:hover': { transform: 'scale(1.02)', borderColor: RECON_COLORS.ORANGE.activeBorder }
                   }}
                 >
                   <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-                    <RocketIcon sx={{ fontSize: 10, color: '#d97706' }} />
-                    <Typography variant="caption" fontWeight="900" sx={{ color: '#b45309', fontSize: '0.65rem' }}>รอแก้ไข</Typography>
+                    <RocketIcon sx={{ fontSize: 10, color: RECON_COLORS.ORANGE.text }} />
+                    <Typography variant="caption" fontWeight="900" sx={{ color: RECON_COLORS.ORANGE.text, fontSize: '0.65rem' }}>รอแก้ไข</Typography>
                   </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: '#92400e', lineHeight: 1 }}>{isLoading ? '-' : stats.pendingCount}</Typography>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: RECON_COLORS.ORANGE.text, lineHeight: 1 }}>{isLoading ? '...' : stats.pendingCount}</Typography>
                 </Box>
 
                 <Box 
@@ -282,20 +259,19 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
                   sx={{ 
                     p: 0.75, 
                     borderRadius: '10px', 
-                    background: activeStatus === 'abnormal_fixed' ? '#e0f2fe' : 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)',
+                    background: activeStatus === 'abnormal_fixed' ? RECON_COLORS.BLUE.bg : '#fff',
                     border: '1px solid',
-                    borderColor: activeStatus === 'abnormal_fixed' ? '#0284c7' : '#bae6fd',
+                    borderColor: activeStatus === 'abnormal_fixed' ? RECON_COLORS.BLUE.activeBorder : RECON_COLORS.BLUE.border,
                     textAlign: 'center',
                     cursor: 'pointer',
-                    '&:hover': { transform: 'scale(1.02)', boxShadow: '0 4px 10px rgba(14, 165, 233, 0.1)' }
+                    '&:hover': { transform: 'scale(1.02)', borderColor: RECON_COLORS.BLUE.activeBorder }
                   }}
                 >
                   <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-                    <SendIcon sx={{ fontSize: 10, color: '#0284c7', transform: 'rotate(-45deg)' }} />
-                    <Typography variant="caption" fontWeight="900" sx={{ color: '#0369a1', fontSize: '0.65rem' }}>แก้ไขแล้ว</Typography>
+                    <SendIcon sx={{ fontSize: 10, color: RECON_COLORS.BLUE.text, transform: 'rotate(-45deg)' }} />
+                    <Typography variant="caption" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.text, fontSize: '0.65rem' }}>แก้ไขแล้ว</Typography>
                   </Stack>
-                  {/* TODO: เชื่อม resolvedAt จาก backend เมื่อออกแบบ field เสร็จ */}
-                  <Typography variant="h6" fontWeight="900" sx={{ color: '#075985', lineHeight: 1 }}>{isLoading ? '-' : stats.resolvedCount}</Typography>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.text, lineHeight: 1 }}>{isLoading ? '...' : stats.resolvedCount}</Typography>
                 </Box>
               </Stack>
             </Stack>

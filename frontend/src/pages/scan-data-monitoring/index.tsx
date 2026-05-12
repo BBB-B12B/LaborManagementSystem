@@ -74,7 +74,6 @@ import {
   getAllScanData,
   addManualScan,
   type ScanData,
-  exportScanData,
   restoreScanDataById,
 } from '../../services/scanDataService';
 import { reconciliationService } from '../../services/reconciliationService';
@@ -245,26 +244,7 @@ export default function ScanDataMonitoringPage() {
     handleRefresh();
   };
 
-  const handleExport = async () => {
-    if (!filter.projectLocationId || !filter.startDate || !filter.endDate) {
-      alert('กรุณาเลือกโครงการและช่วงวันที่ก่อนส่งออกข้อมูล');
-      return;
-    }
 
-    try {
-      await exportScanData({
-        projectLocationId: filter.projectLocationId,
-        startDate: new Date(filter.startDate),
-        endDate: new Date(filter.endDate),
-        employeeNumber: filter.employeeNumber,
-        onlyDeleted: currentTab === 2,
-      });
-
-      showSuccess('ส่งออกข้อมูลสำเร็จแล้ว');
-    } catch (err: any) {
-      alert(`เกิดข้อผิดพลาดในการส่งออก: ${err.message}`);
-    }
-  };
 
   const handleOpenEdit = (row: any) => {
 
@@ -391,13 +371,6 @@ export default function ScanDataMonitoringPage() {
     { label: 'Time8', width: 90 },
     { label: 'Time9', width: 90 },
     { label: 'Time10', width: 90 },
-
-    { label: 'สถานะงาน', width: 100 },
-    { label: 'ชั่วโมงการทำงาน', width: 140 },
-    { label: 'สถานะผ่าเที่ยง', width: 120 },
-    { label: 'OT เช้า', width: 100 },
-    { label: 'OT เย็น', width: 100 },
-    { label: 'นาทีที่มาสาย', width: 120 }
   ];
 
 
@@ -599,30 +572,7 @@ export default function ScanDataMonitoringPage() {
           >
             Upload ScanData
           </Button>
-          <Button
-            variant="contained"
-            color="success"
-            size="medium"
-            startIcon={<List />}
-            onClick={handleExport}
-            disabled={!filter.projectLocationId} // Only require project location for export
-            sx={{ 
 
-              borderRadius: 2.5, 
-              height: 42, 
-              px: 2.5,
-              textTransform: 'none',
-              fontWeight: 600,
-              boxShadow: '0 4px 14px rgba(46, 125, 50, 0.3)',
-              transition: 'all 0.3s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 6px 20px rgba(46, 125, 50, 0.4)',
-              }
-            }}
-          >
-            Export to Excel
-          </Button>
 
 
           
@@ -1032,38 +982,6 @@ export default function ScanDataMonitoringPage() {
                             );
                           })}
   
-                          {/* 10. สถานะงาน */}
-                          <TableCell align="center" sx={{ 
-                            color: (String(displayRow.scanNormalStatus) === '1' || String(displayRow.scanNormalStatus) === 'ปกติ') ? 'success.main' : 'error.main',
-                            fontWeight: 'bold'
-                          }}>
-                            {(String(displayRow.scanNormalStatus) === '1' || String(displayRow.scanNormalStatus) === 'ปกติ') ? 'ปกติ' : 'ผิดปกติ'}
-                          </TableCell>
-  
-                          {/* 11. ชั่วโมงการทำงาน */}
-                          <TableCell align="center">{displayRow.regularHours}</TableCell>
-  
-                          {/* 12. สถานะผ่าเที่ยง */}
-                          <TableCell align="center">{displayRow.scanLunchStatus}</TableCell>
-  
-                          {/* 13. OT เช้า */}
-                          <TableCell align="center">{displayRow.scanOTMorning}</TableCell>
-
-                          {/* 14. OT เย็น */}
-                          <TableCell align="center">{displayRow.scanOTEvening}</TableCell>
-  
-                          {/* 15. นาทีที่มาสาย */}
-                          <TableCell 
-                            align="center" 
-                            sx={{ 
-                              color: Number(displayRow.lateMinutes || 0) > 0 ? 'error.main' : 'inherit', 
-                              fontWeight: Number(displayRow.lateMinutes || 0) > 0 ? 'bold' : 'normal' 
-                            }}
-                          >
-                            {displayRow.lateMinutes || 0}
-                          </TableCell>
-
-  
 
                         </TableRow>
                       );
@@ -1137,21 +1055,6 @@ export default function ScanDataMonitoringPage() {
           <form onSubmit={handleManualSubmit(onAddManualScan)}>
             <DialogContent>
               <Stack spacing={2} sx={{ mt: 1 }}>
-                <Controller
-                  name="projectLocationId"
-                  control={manualControl}
-                  rules={{ required: 'กรุณาเลือกโครงการ' }}
-                  render={({ field, fieldState }) => (
-                    <ProjectSelect
-                      label="โครงการ"
-                      value={field.value || ''}
-                      onChange={(val) => field.onChange(val)}
-                      fullWidth
-                      error={!!fieldState.error}
-                      helperText={fieldState.error?.message}
-                    />
-                  )}
-                />
                 <Controller
                   name="employeeNumber"
                   control={manualControl}

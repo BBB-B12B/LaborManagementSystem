@@ -276,7 +276,7 @@ router.post(
   '/import',
   authorize(['AM', 'MD']),
   upload.single('file'),
-  [body('projectLocationId').notEmpty().withMessage('กรุณาเลือกโครงการ')],
+  [body('projectLocationId').optional().isString()],
   async (req: Request, res: Response) => {
     const authReq = req as AuthRequest;
     try {
@@ -360,7 +360,7 @@ router.post(
   '/import-text',
   authorize(['AM', 'MD']),
   [
-    body('projectLocationId').notEmpty().withMessage('กรุณาเลือกโครงการ'),
+    body('projectLocationId').optional().isString(),
     body('textData').notEmpty().withMessage('กรุณาระบุข้อมูล'),
   ],
   async (req: Request, res: Response) => {
@@ -564,8 +564,8 @@ router.post('/:id/restore', authorize(['AM', 'MD']), async (req: Request, res: R
 router.post('/manual', async (req: Request, res: Response) => {
   try {
     const { employeeNumber, projectLocationId, scanDateTime, notes } = req.body;
-    if (!employeeNumber || !projectLocationId || !scanDateTime) {
-      throw new AppError('กรุณาระบุข้อมูลให้ครบถ้วน (รหัสพนักงาน, โครงการ, วันเวลา)', 400);
+    if (!employeeNumber || !scanDateTime) {
+      throw new AppError('กรุณาระบุข้อมูลให้ครบถ้วน (รหัสพนักงาน, วันเวลา)', 400);
     }
 
     const result = await scanDataService.addManualScan(

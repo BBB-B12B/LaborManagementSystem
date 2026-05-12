@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -9,7 +9,6 @@ import {
   Paper,
   Box,
   Typography,
-  Chip,
   Button,
   Stack,
   TablePagination,
@@ -18,7 +17,6 @@ import {
   Grid,
   IconButton,
   TextField,
-  Collapse,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { styled, alpha } from '@mui/material/styles';
@@ -26,9 +24,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reconciliationService, ReconciliationRecord, PaginatedReconciliationResponse } from '../../services/reconciliationService';
 import { fillFromDailyReport } from '../../services/scanDataService';
 import { format } from 'date-fns';
-import { Info as InfoIcon, Close as CloseIcon, ArrowBackIosNew as PrevIcon, ArrowForwardIos as NextIcon } from '@mui/icons-material';
+import { Info as InfoIcon, Close as CloseIcon, ArrowBackIosNew as PrevIcon, ArrowForwardIos as NextIcon, FileDownload as FileDownloadIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useToast } from '@/components/common';
 import { TimePicker } from '../../components/forms/TimePicker';
+import { RECON_COLORS, MIN_FONT_SIZE, STATUS_LABEL_MAP } from '../../constants/theme';
+
+const EmDash = () => (
+  <Typography component="span" sx={{ color: RECON_COLORS.NEUTRAL.textTertiary, fontWeight: 500 }}>
+    —
+  </Typography>
+);
 
 // --- Styled Components to match Image 1 ---
 
@@ -53,37 +58,31 @@ const StyledTableContainer = styled(TableContainer)({
   '& .MuiTableBody-root .MuiTableCell-root': {
     color: '#1e293b',
     fontWeight: 500,
-    fontSize: '0.85rem',
+    fontSize: MIN_FONT_SIZE.TABLE_CELL,
   },
   '& .MuiTableCell-root': {
     borderRight: '1px solid #f1f5f9',
-    padding: '6px 8px',
+    padding: '4px 8px',
     textAlign: 'center',
-    transition: 'all 0.2s ease',
+    fontSize: MIN_FONT_SIZE.TABLE_CELL,
   },
   '& .MuiTableHead-root .MuiTableCell-root': {
-    backgroundColor: '#2c2437', // Match Navbar top color
+    backgroundColor: '#2c2437',
     color: '#ffffff',
     fontWeight: 900,
-    verticalAlign: 'middle',
     borderBottom: '2px solid #201b2b',
     textTransform: 'uppercase',
-    fontSize: '0.72rem',
-    letterSpacing: '0.1em',
-    borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+    letterSpacing: '0.05em',
     position: 'sticky',
     top: 0,
     zIndex: 10,
-    whiteSpace: 'nowrap',
     height: '36px',
     padding: '0 8px',
-    boxSizing: 'border-box',
   },
   '& .MuiTableHead-root .MuiTableRow-root:first-of-type .MuiTableCell-root': {
-    backgroundColor: '#201b2b', // Match Navbar bottom color
+    backgroundColor: '#201b2b',
     zIndex: 11,
   },
-  // Adjust top for subsequent header rows based on fixed 36px height
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(2) .MuiTableCell-root': {
     top: '36px',
     zIndex: 10,
@@ -112,83 +111,36 @@ const StyledTableContainer = styled(TableContainer)({
   }
 });
 
-const ValueCapsule = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'variant' && prop !== 'highlight' && prop !== 'isOT',
-})<{ variant?: 'outline' | 'filled'; highlight?: boolean; isOT?: boolean }>(({ highlight, isOT }) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: '36px',
-  height: '26px',
-  borderRadius: '8px',
-  border: '1px solid',
-  backgroundColor: highlight ? '#fff7ed' : (isOT ? '#f0f9ff' : '#fff'),
-  borderColor: highlight ? '#f97316' : (isOT ? '#a1c1db' : '#e2e8f0'),
-  color: highlight ? '#c2410c' : (isOT ? '#01497c' : '#1e293b'),
-  fontWeight: (highlight || isOT) ? 800 : 600,
-  padding: '0 6px',
-  fontSize: '0.85rem',
-  boxShadow: highlight ? '0 2px 4px rgba(249, 115, 22, 0.1)' : '0 1px 2px rgba(0,0,0,0.02)',
-  transition: 'all 0.2s ease',
-}));
-
-const StatusCapsule = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'statusType',
-})<{ statusType: string }>(({ statusType }) => {
-  let styles = {
+// ใช้ function แทน styled component เพื่อหลีกเลี่ยง prop spread ที่ชนกัน
+const getStatusStyle = (statusType: string) => {
+  const base = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: '140px',
-    height: '26px',
-    borderRadius: '10px',
-    fontWeight: 800,
-    fontSize: '0.75rem',
-    border: '1px solid #e2e8f0',
-    transition: 'all 0.2s ease',
+    minWidth: '110px',
+    height: '22px',
+    borderRadius: '20px',
+    fontWeight: 700,
+    fontSize: MIN_FONT_SIZE.TABLE_CELL,
+    border: '1px solid',
+    px: 1.5,
+    whiteSpace: 'nowrap' as const,
   };
-
   switch (statusType) {
+    case 'MATCHED':
+      return { ...base, backgroundColor: RECON_COLORS.GREEN.bg, color: RECON_COLORS.GREEN.text, borderColor: RECON_COLORS.GREEN.border };
     case 'CONFLICTED':
-      return {
-        ...styles,
-        backgroundColor: '#f5f3ff',
-        color: '#7c3aed',
-        borderColor: '#ddd6fe',
-      };
+    case 'LEAVE':
+      return { ...base, backgroundColor: RECON_COLORS.ORANGE.bg, color: RECON_COLORS.ORANGE.text, borderColor: RECON_COLORS.ORANGE.border };
     case 'MISSING_SCAN':
     case 'MISSING_DAILY':
-      return {
-        ...styles,
-        backgroundColor: '#fff7ed',
-        color: '#ea580c',
-        borderColor: '#fed7aa',
-      };
-    case 'UNREGISTERED_EMPLOYEE':
-      return {
-        ...styles,
-        backgroundColor: '#fff1f2',
-        color: '#be123c',
-        borderColor: '#fecdd3',
-      };
     case 'ABSENT':
-      return {
-        ...styles,
-        backgroundColor: '#f8fafc',
-        color: '#64748b',
-        borderColor: '#e2e8f0',
-        borderStyle: 'dashed',
-      };
-    case 'MATCHED':
+    case 'UNREGISTERED_EMPLOYEE':
+      return { ...base, backgroundColor: RECON_COLORS.RED.bg, color: RECON_COLORS.RED.text, borderColor: RECON_COLORS.RED.border };
     default:
-      return {
-        ...styles,
-        backgroundColor: '#f0fdf4',
-        color: '#16a34a',
-        borderColor: '#bbf7d0',
-      };
+      return { ...base, backgroundColor: RECON_COLORS.BLUE.bg, color: RECON_COLORS.BLUE.text, borderColor: RECON_COLORS.BLUE.border };
   }
-});
+};
 
 const ActionButton = styled(Button, {
   shouldForwardProp: (prop) => prop !== 'actionType',
@@ -304,15 +256,21 @@ interface Props {
   endDate: Date | null;
   project: string;
   projectsList?: { id: string; code: string; name: string }[];
+  onClearFilter?: () => void;
+  onExport?: () => void;
+  onRefresh?: () => void;
 }
 
-const WorkHourComparisonTable: React.FC<Props> = ({ 
-  selectedDate, 
-  filterStatus, 
-  startDate, 
-  endDate, 
+const WorkHourComparisonTable: React.FC<Props> = ({
+  selectedDate,
+  filterStatus,
+  startDate,
+  endDate,
   project,
-  projectsList = []
+  projectsList = [],
+  onClearFilter,
+  onExport,
+  onRefresh
 }) => {
   const { t } = useTranslation();
   const [page, setPage] = React.useState(0);
@@ -531,172 +489,142 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const records = paginatedData?.records ?? [];
   const total = paginatedData?.total ?? 0;
 
-  const dailyReportReferencePanel = selectedRow && (
-    <>
-      {selectedRow?.note && (
-        <Box sx={{ mb: 2, p: 2, borderRadius: '8px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Typography variant="body2" sx={{ color: '#9a3412', fontWeight: 700 }}>
-            💡 หมายเหตุจากระบบ: {selectedRow.note}
-          </Typography>
-        </Box>
-      )}
-      <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5, display: 'block', color: '#475569', borderBottom: '2px solid #cbd5e1', pb: 0.75 }}>
-        1. ข้อมูลอ้างอิง Daily Report
-      </Typography>
-      <ComparisonBox sx={{ backgroundColor: '#fff', p: 2.5 }}>
-        {selectedRow?.dailyReportPhotos && selectedRow.dailyReportPhotos.length > 0 ? (
-          <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#f8fafc' }}>
-            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              📷 รูปถ่ายอ้างอิง ({selectedRow.dailyReportPhotos.length} รูป) — คลิกเพื่อดูรูปเต็ม
+  const dailyReportReferencePanel = useMemo(() => {
+    if (!selectedRow) return null;
+
+    // helper แปลง shiftTimes เป็น label ช่วงเวลา เช่น "06:00–08:00"
+    const fmtRange = (start?: string, end?: string) =>
+      start && end ? `${start}–${end}` : null;
+
+    const otMorningRange = fmtRange(
+      selectedRow?.shiftTimes?.otMorning?.split('-')[0]?.trim(),
+      selectedRow?.shiftTimes?.otMorning?.split('-')[1]?.trim(),
+    );
+    const otNoonRange = fmtRange(
+      selectedRow?.shiftTimes?.otNoon?.split('-')[0]?.trim(),
+      selectedRow?.shiftTimes?.otNoon?.split('-')[1]?.trim(),
+    );
+    const otEveningRange = fmtRange(
+      selectedRow?.shiftTimes?.otEvening?.split('-')[0]?.trim(),
+      selectedRow?.shiftTimes?.otEvening?.split('-')[1]?.trim(),
+    );
+    const dayRange = selectedRow?.shiftTimes?.day ?? null;
+
+    const dailyItems = [
+      {
+        label: 'ชั่วโมงทำงานปกติ',
+        timeRange: dayRange,
+        value: selectedRow?.approvedNormalHours ?? selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours,
+        tagColor: { bg: '#E6F1FB', text: '#185FA5', border: '#B5D4F4' },
+      },
+      {
+        label: 'OT เช้า',
+        timeRange: otMorningRange,
+        value: selectedRow?.approvedOtMorning ?? selectedRow?.timesheetOtMorning,
+        tagColor: { bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
+      },
+      {
+        label: 'OT เที่ยง',
+        timeRange: otNoonRange,
+        value: selectedRow?.approvedOtNoon ?? selectedRow?.timesheetOtNoon,
+        tagColor: { bg: '#DCFCE7', text: '#166534', border: '#BBF7D0' },
+      },
+      {
+        label: 'OT เย็น',
+        timeRange: otEveningRange,
+        value: selectedRow?.approvedOtEvening ?? selectedRow?.timesheetOtEvening,
+        tagColor: { bg: '#EDE9FE', text: '#4C1D95', border: '#DDD6FE' },
+      },
+    ];
+
+    return (
+      <Box>
+        {selectedRow?.note && (
+          <Box sx={{ mb: 2, p: 2, borderRadius: '8px', backgroundColor: RECON_COLORS.ORANGE.bg, border: `1px solid ${RECON_COLORS.ORANGE.border}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography variant="body2" sx={{ color: RECON_COLORS.ORANGE.text, fontWeight: 700 }}>
+              💡 หมายเหตุจากระบบ: {selectedRow.note}
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-              {(() => {
-                const allViewerUrls: string[] = [];
-                if (selectedRow?.dailyReportPhotos) {
-                  allViewerUrls.push(...selectedRow.dailyReportPhotos.map((u: string) => getFullImageUrl(u)));
-                }
-                if (selectedRow?.medCertFileUrl) {
-                  allViewerUrls.push(getFullImageUrl(selectedRow.medCertFileUrl));
-                }
-                
-                return selectedRow.dailyReportPhotos.map((photoUrl: string, idx: number) => {
+          </Box>
+        )}
+        <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5, display: 'block', color: RECON_COLORS.BLUE.NAVY, borderBottom: `2px solid ${RECON_COLORS.BLUE.border}`, pb: 0.75 }}>
+          1. ข้อมูลอ้างอิง Daily Report
+        </Typography>
+        <ComparisonBox sx={{ backgroundColor: '#fff', p: 2.5 }}>
+          {selectedRow?.dailyReportPhotos && selectedRow.dailyReportPhotos.length > 0 ? (
+            <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#f8fafc' }}>
+              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                📸 รูปถ่ายอ้างอิง ({selectedRow.dailyReportPhotos.length} รูป) — คลิกเพื่อดูรูปเต็ม
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                {selectedRow.dailyReportPhotos.map((photoUrl: string, idx: number) => {
                   const fullUrl = getFullImageUrl(photoUrl);
                   return (
-                    <Box 
+                    <Box
                       key={idx}
-                      onClick={() => handleOpenViewer(allViewerUrls, idx)}
-                      sx={{ 
-                        width: 120, 
-                        height: 120, 
-                        flexShrink: 0, 
-                        borderRadius: '10px', 
-                        cursor: 'pointer',
+                      onClick={() => handleOpenViewer(selectedRow.dailyReportPhotos.map(getFullImageUrl), idx)}
+                      sx={{
+                        width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
                         border: '2px solid #e2e8f0',
-                        '&:hover': { borderColor: '#3b82f6', transform: 'scale(1.03)', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' },
-                        transition: 'all 0.2s ease',
                         backgroundImage: `url(${fullUrl})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        backgroundColor: '#e2e8f0',
-                        position: 'relative',
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        '&:hover': { transform: 'scale(1.05)', borderColor: RECON_COLORS.BLUE.ROYAL },
                       }}
                     />
                   );
-                });
-              })()}
-            </Box>
-          </Box>
-        ) : (
-          <ProofImagePlaceholder sx={{ height: '80px', mb: 2 }}>ไม่มีรูปภาพอ้างอิง</ProofImagePlaceholder>
-        )}
-
-        {selectedRow?.hasLeave && selectedRow?.medCertFileUrl && (
-          <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#fdf4ff' }}>
-            <Typography variant="caption" fontWeight={800} color="#c026d3" sx={{ display: 'block', mb: 1.5 }}>
-              📝 เอกสารใบรับรองแพทย์ / ใบลางาน
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-              <Box 
-                onClick={() => {
-                  const allViewerUrls: string[] = [];
-                  if (selectedRow?.dailyReportPhotos) {
-                    allViewerUrls.push(...selectedRow.dailyReportPhotos.map((u: string) => getFullImageUrl(u)));
-                  }
-                  if (selectedRow?.medCertFileUrl) {
-                    allViewerUrls.push(getFullImageUrl(selectedRow.medCertFileUrl));
-                  }
-                  handleOpenViewer(allViewerUrls, selectedRow?.dailyReportPhotos?.length || 0);
-                }}
-                sx={{ 
-                  width: 120, 
-                  height: 120, 
-                  flexShrink: 0, 
-                  borderRadius: '10px', 
-                  cursor: 'pointer',
-                  border: '2px solid #f5d0fe',
-                  '&:hover': { borderColor: '#c026d3', transform: 'scale(1.03)', boxShadow: '0 4px 12px rgba(192,38,211,0.2)' },
-                  transition: 'all 0.2s ease',
-                  backgroundImage: `url(${getFullImageUrl(selectedRow.medCertFileUrl!)})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  backgroundColor: '#fdf4ff',
-                  position: 'relative',
-                }}
-              />
-            </Box>
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-          <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block' }}>
-            📅 รายละเอียดเวลาทำงานตาม Daily Report (คำนวณจ่ายจริง)
-          </Typography>
-        </Box>
-
-        <Stack spacing={1.5}>
-          {(
-            [
-              { label: 'ชั่วโมงทำงานปกติ', value: selectedRow?.approvedNormalHours ?? selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours, range: selectedRow?.shiftTimes?.day },
-              ...(selectedRow?.hasLeave ? [{ label: 'ชั่วโมงลางาน', value: selectedRow?.leaveHours, highlight: true }] : []),
-              { label: 'OT เช้า', value: selectedRow?.approvedOtMorning ?? selectedRow?.timesheetOtMorning, range: selectedRow?.shiftTimes?.otMorning },
-              { label: 'OT เที่ยง', value: selectedRow?.approvedOtNoon ?? selectedRow?.timesheetOtNoon, range: selectedRow?.shiftTimes?.otNoon },
-              { label: 'OT เย็น', value: selectedRow?.approvedOtEvening ?? selectedRow?.timesheetOtEvening, range: selectedRow?.shiftTimes?.otEvening },
-            ] as Array<{label: string; value: any; highlight?: boolean; range?: string}>
-          ).map(({ label, value, highlight, range }) => (
-            <Stack key={label} direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="body2" fontWeight={700} sx={{ color: '#64748b' }}>{label}</Typography>
-              
-              <Box sx={{ 
-                px: 1.5, py: 0.25, borderRadius: '6px', 
-                backgroundColor: highlight ? '#fff7ed' : '#f1f5f9', 
-                border: highlight ? '1px solid #fed7aa' : '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}>
-                <Typography variant="body2" fontWeight={900} sx={{ color: highlight ? '#ea580c' : '#334155' }}>
-                  {value ?? '-'} ชม.
-                </Typography>
-                {range && (
-                  <Typography variant="caption" sx={{ color: highlight ? '#f97316' : '#64748b', fontWeight: 600 }}>
-                    ({range})
-                  </Typography>
-                )}
+                })}
               </Box>
-            </Stack>
-          ))}
-        </Stack>
+            </Box>
+          ) : (
+            <ProofImagePlaceholder sx={{ height: '80px', mb: 2 }}>ไม่มีรูปภาพอ้างอิง</ProofImagePlaceholder>
+          )}
 
-        {selectedRow?.note && (
-          <Box sx={{ mt: 2, p: 1.5, borderRadius: '8px', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1' }}>
-            <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block', mb: 0.5 }}>
-              💡 หมายเหตุจากระบบ
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#475569', fontSize: '0.8rem', fontWeight: 600 }}>
-              {selectedRow.note}
-            </Typography>
-          </Box>
-        )}
-      </ComparisonBox>
-    </>
-  );
+          <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block', mb: 1.5 }}>
+            📅 รายละเอียดเวลาทำงานตาม Daily Report
+          </Typography>
+
+          <Stack spacing={1}>
+            {dailyItems.map(({ label, timeRange, value, tagColor }) => {
+              const hasValue = value !== undefined && value !== null && value !== 0;
+              return (
+                <Stack
+                  key={label}
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{
+                    p: 1,
+                    borderRadius: '8px',
+                    backgroundColor: hasValue ? tagColor.bg : '#f8fafc',
+                    border: `1px solid ${hasValue ? tagColor.border : '#e2e8f0'}`,
+                    opacity: hasValue ? 1 : 0.5,
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body2" fontWeight={700} sx={{ color: hasValue ? tagColor.text : '#94a3b8', minWidth: 120 }}>
+                      {label}
+                    </Typography>
+                    {timeRange && hasValue && (
+                      <Typography variant="caption" sx={{ color: hasValue ? tagColor.text : '#94a3b8', opacity: 0.8 }}>
+                        {timeRange}
+                      </Typography>
+                    )}
+                  </Stack>
+                  <Box sx={{ px: 1.5, py: 0.25, borderRadius: '6px', backgroundColor: hasValue ? '#fff' : '#f1f5f9', border: `1px solid ${hasValue ? tagColor.border : '#e2e8f0'}` }}>
+                    <Typography variant="body2" fontWeight={900} sx={{ color: hasValue ? tagColor.text : '#94a3b8' }}>
+                      {value ?? 0} ชม.
+                    </Typography>
+                  </Box>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </ComparisonBox>
+      </Box>
+    );
+  }, [selectedRow]);
 
   const renderTimeTable = (hideDailyReport: boolean = false) => {
     const drPunches: string[] = selectedRow?.dailyReportPunches || [];
-    const scanPunches: string[] = selectedRow?.scanPunches || [];
-
-    const leavePunches: string[] = [];
-    if (selectedRow?.leaveEntries?.length > 0) {
-      selectedRow.leaveEntries.forEach((entry: any) => {
-        if (entry.description) {
-          if (entry.description.includes('-')) {
-            leavePunches.push(...entry.description.split('-').map((s: string) => s.trim()));
-          } else {
-            leavePunches.push(entry.description);
-          }
-        }
-      });
-    }
 
     // ── helper: แปลง "HH:MM" → นาที เพื่อใช้เรียงลำดับ ──────────────────────
     const toMinutes = (t: string): number => {
@@ -704,6 +632,30 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       if (parts.length < 2) return Infinity;
       return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
     };
+
+    // [FIX 1] sort scanPunches ตามเวลาก่อนใช้งาน
+    // Backend ไม่รับประกัน order ของ scanPunches — ต้อง sort เองฝั่ง frontend
+    const scanPunches: string[] = [...(selectedRow?.scanPunches || [])].sort(
+      (a, b) => toMinutes(a) - toMinutes(b)
+    );
+
+    // [FIX 2] validate description ด้วย regex ก่อน split
+    // leaveEntries.description มีหลาย format: "Full Day", "Morning", "HH:MM-HH:MM", หรือ custom text
+    // ใช้ regex เพื่อให้ split เฉพาะกรณีที่เป็น time range จริงๆ เท่านั้น
+    const TIME_RANGE_RE = /^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/;
+    const leavePunches: string[] = [];
+    if (selectedRow?.leaveEntries?.length > 0) {
+      selectedRow.leaveEntries.forEach((entry: any) => {
+        if (entry.description) {
+          if (TIME_RANGE_RE.test(entry.description.trim())) {
+            // format "HH:MM-HH:MM" → แยก start และ end
+            leavePunches.push(...entry.description.split('-').map((s: string) => s.trim()));
+          }
+          // format อื่น (Full Day, Morning, Afternoon, Partial, custom text)
+          // → ไม่ push เข้า leavePunches เพราะไม่ใช่ timestamp ที่ใช้ match กับ scan ได้
+        }
+      });
+    }
 
     // ── Merge logic ────────────────────────────────────────────────────────────
     // แต่ละ slot รู้ drIndex ของตัวเอง (null = pure-leave column ที่ไม่มี drPunch)
@@ -757,10 +709,16 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         <TimeTable>
           <thead>
             <tr>
-              <th></th>
-              {slots.map((_, i) => (
-                <th key={i}>Time {i + 1}</th>
-              ))}
+              <th style={{ textAlign: 'left', paddingLeft: 16, width: 140 }}></th>
+              {slots.map((slot, i) => {
+                // ตั้งชื่อ column ตามลำดับเวลา: คู่คี่ = เข้า, คู่ = ออก
+                const isEntry = i % 2 === 0;
+                const pairNum = Math.floor(i / 2) + 1;
+                const label = slots.length === 2
+                  ? (isEntry ? 'สแกนเข้า' : 'สแกนออก')
+                  : (isEntry ? `เข้า ${pairNum}` : `ออก ${pairNum}`);
+                return <th key={i} style={{ minWidth: 80 }}>{label}</th>;
+              })}
             </tr>
           </thead>
           <tbody>
@@ -825,8 +783,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                             setEditingScanPunches(next);
                           }}
                         />
-                        <IconButton 
-                          size="small" 
+                        <IconButton
+                          size="small"
                           onClick={() => {
                             const next = [...editingScanPunches];
                             next.splice(idx, 1);
@@ -838,9 +796,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                         </IconButton>
                       </Box>
                     ))}
-                    <Button 
-                      variant="outlined" 
-                      size="small" 
+                    <Button
+                      variant="outlined"
+                      size="small"
                       onClick={() => setEditingScanPunches([...editingScanPunches, ''])}
                       sx={{ textTransform: 'none', fontSize: '0.7rem', fontWeight: 800, py: 0.25 }}
                     >
@@ -850,292 +808,306 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 </td>
               ) : (
                 slots.map((slot, i) => {
-                  const scanVal = slot.drIndex !== null ? (scanPunches[slot.drIndex] ?? '-') : '-';
-                  const drVal = slot.time;
-                  const hasConflict = !hideDailyReport && slot.drIndex !== null && scanVal !== '-' && drVal !== '-' && scanVal !== drVal;
-                  const isEmpty = !hideDailyReport && slot.drIndex !== null && (scanVal === '-' || !scanVal);
+                  // [FIX 1] ใช้ scanPunches ตาม position (i) แทน drIndex
+                  // เพราะทั้งคู่ถูก sort ตามเวลาแล้ว (drPunches sort โดย backend, scanPunches sort โดย frontend)
+                  // position ที่ตรงกันจึงหมายถึงช่วงเวลาเดียวกัน
+                  const scanVal = scanPunches[i] ?? null;
+                  const drVal = slot.time !== '-' ? slot.time : null;
+                  const hasConflict = !hideDailyReport && drVal && scanVal && drVal !== scanVal;
+                  const isEmpty = !hideDailyReport && drVal && !scanVal;
                   return (
                     <td
                       key={`scan-${i}`}
-                      className={`time-cell ${hasConflict ? 'empty-scan' : isEmpty ? 'empty-scan' : ''}`}
+                      className={`time-cell ${(hasConflict || isEmpty) ? 'empty-scan' : ''}`}
                     >
-                      {scanVal}
+                      {scanVal ?? '-'}
                     </td>
                   );
                 })
               )}
             </tr>
+            {/* row ผล: เช็คว่า scan ครอบ daily range ไหม (ไม่ใช่ exact match ต่อ slot)
+                Logic: drPunches เป็นคู่ (start, end) → daily range คู่ที่ i คือ [i*2, i*2+1]
+                scan "ครอบ" range นั้นได้ถ้า scanFirst ≤ rangeStart และ scanLast ≥ rangeEnd */}
+            {!isEditingScan && !hideDailyReport && (() => {
+              // หา scanFirst และ scanLast จาก sorted scanPunches
+              const scanFirst = scanPunches.length > 0 ? toMinutes(scanPunches[0]) : null;
+              const scanLast = scanPunches.length > 0 ? toMinutes(scanPunches[scanPunches.length - 1]) : null;
+              const hasScan = scanFirst !== null && scanLast !== null;
+
+              // drPunches เป็นคู่ start/end เรียงตามเวลา
+              // แต่ละคู่ [drPunches[0],drPunches[1]], [drPunches[2],drPunches[3]], ...
+              // แต่ละ slot ใน slots ตรงกับ drPunches ตามลำดับ
+              const drRangeStart = slots.length >= 1 && slots[0].time !== '-' ? toMinutes(slots[0].time) : null;
+              const drRangeEnd = slots.length >= 2 && slots[slots.length - 1].time !== '-' ? toMinutes(slots[slots.length - 1].time) : null;
+
+              // สรุปผลรวม: scan ครอบ daily range ทั้งหมดไหม
+              const isCovered = hasScan && drRangeStart !== null && drRangeEnd !== null
+                && scanFirst! <= drRangeStart && scanLast! >= drRangeEnd;
+
+              return (
+                <tr>
+                  <td className="label" style={{ fontSize: '0.8rem', color: '#475569' }}>ผล :</td>
+                  {/* แสดงผลรวมในช่องแรก (colspan ทั้งหมด) แทนการแสดงต่อ slot */}
+                  <td colSpan={slots.length} style={{ textAlign: 'center', padding: '8px' }}>
+                    {!hasScan ? (
+                      <Box sx={{
+                        display: 'inline-flex', alignItems: 'center', gap: 1,
+                        backgroundColor: RECON_COLORS.RED.bg, color: RECON_COLORS.RED.text,
+                        border: `1px solid ${RECON_COLORS.RED.border}`,
+                        borderRadius: '20px', px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 700
+                      }}>
+                        ✗ ไม่มีข้อมูลสแกน
+                      </Box>
+                    ) : isCovered ? (
+                      <Box sx={{
+                        display: 'inline-flex', alignItems: 'center', gap: 1,
+                        backgroundColor: RECON_COLORS.GREEN.bg, color: RECON_COLORS.GREEN.text,
+                        border: `1px solid ${RECON_COLORS.GREEN.border}`,
+                        borderRadius: '20px', px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 700
+                      }}>
+                        ✓ สแกนครอบช่วงเวลาที่ขอ ({scanPunches[0]} – {scanPunches[scanPunches.length - 1]})
+                      </Box>
+                    ) : (
+                      <Box sx={{
+                        display: 'inline-flex', alignItems: 'center', gap: 1,
+                        backgroundColor: RECON_COLORS.RED.bg, color: RECON_COLORS.RED.text,
+                        border: `1px solid ${RECON_COLORS.RED.border}`,
+                        borderRadius: '20px', px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 700
+                      }}>
+                        ✗ สแกนไม่ครอบ — สแกน {scanPunches[0]} – {scanPunches[scanPunches.length - 1]}
+                      </Box>
+                    )}
+                  </td>
+                </tr>
+              );
+            })()}
           </tbody>
         </TimeTable>
       </Box>
     );
   };
 
+  const getFilterLabel = () => {
+    if (filterStatus === 'all') return `ทั้งหมด (${total} รายการ)`;
+    return `${getStatusLabel(filterStatus.replace('all_', '').replace('abnormal_', ''))} (${total} รายการ)`;
+  };
+
+  const getStatusLabel = (status: string) => STATUS_LABEL_MAP[status] ?? status;
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Table Toolbar */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 1, borderBottom: '1px solid #e2e8f0', bgcolor: '#fff' }}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Box sx={{
+            px: 1.5, py: 0.5, borderRadius: '20px',
+            backgroundColor: filterStatus === 'all' ? RECON_COLORS.BLUE.bg : (filterStatus.includes('normal') ? RECON_COLORS.GREEN.bg : RECON_COLORS.RED.bg),
+            color: filterStatus === 'all' ? RECON_COLORS.BLUE.text : (filterStatus.includes('normal') ? RECON_COLORS.GREEN.text : RECON_COLORS.RED.text),
+            fontSize: '0.75rem', fontWeight: 800, border: '1px solid transparent'
+          }}>
+            {getFilterLabel()}
+          </Box>
+          {filterStatus !== 'all' && (
+            <Button
+              size="small"
+              startIcon={<CloseIcon sx={{ fontSize: 14 }} />}
+              onClick={onClearFilter}
+              sx={{ textTransform: 'none', color: RECON_COLORS.RED.text, fontWeight: 700, fontSize: '0.75rem' }}
+            >
+              ล้างตัวกรอง
+            </Button>
+          )}
+        </Stack>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <IconButton size="small" onClick={onRefresh}>
+            <RefreshIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<FileDownloadIcon />}
+            onClick={onExport}
+            sx={{ borderRadius: '6px', textTransform: 'none', fontWeight: 700, bgcolor: RECON_COLORS.BLUE.ROYAL }}
+          >
+            Export
+          </Button>
+        </Stack>
+      </Stack>
+
       <StyledTableContainer>
-        <Table sx={{ minWidth: 1200 }} aria-label="work hour comparison table" stickyHeader>
-        <TableHead>
-                  {/* Row 1 */}
-          <TableRow>
-            <TableCell rowSpan={2} sx={{ minWidth: 36, width: 40 }}>{t('workHourMonitoring.table.no')}</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 90, whiteSpace: 'nowrap' }}>{t('workHourMonitoring.table.date')}</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 130 }}>{t('workHourMonitoring.table.employee')}</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
-              {t('workHourMonitoring.table.project')}
-            </TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', lineHeight: 1.2, px: 1.5 }}>
-              โครงการที่ทำงาน
-            </TableCell>
-            <TableCell colSpan={3} sx={{ borderBottom: 'none', textAlign: 'center' }}>
-              เปรียบเทียบช่วงเวลา (Daily & สแกนนิ้ว)
-            </TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 52 }}>{t('workHourMonitoring.table.lateMinutes')}</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 52 }}>ออกก่อน</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 60 }}>{t('workHourMonitoring.table.responsible')}</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 150 }}>{t('workHourMonitoring.table.status')}</TableCell>
-            <TableCell rowSpan={2} sx={{ minWidth: 90 }}>{t('workHourMonitoring.table.actions')}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ minWidth: 80, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>เวลาปกติ (Daily)</TableCell>
-            <TableCell sx={{ minWidth: 100, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>OT ตาม Daily</TableCell>
-            <TableCell sx={{ minWidth: 120, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>ช่วงเวลาสแกนจริง</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {isLoading ? (
+        <Table sx={{ minWidth: 900 }} aria-label="work hour comparison table" stickyHeader>
+          <TableHead>
             <TableRow>
-              <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body2" color="text.secondary">Loading data...</Typography>
-              </TableCell>
+              <TableCell sx={{ width: 36 }}>#</TableCell>
+              <TableCell sx={{ width: 90, textAlign: 'left !important' }}>วันที่</TableCell>
+              <TableCell sx={{ width: 120, textAlign: 'left !important' }}>รหัส / ชื่อ</TableCell>
+              <TableCell sx={{ width: 100, textAlign: 'left !important' }}>สังกัด</TableCell>
+              <TableCell sx={{ width: 110, textAlign: 'left !important' }}>ทำงานที่</TableCell>
+              <TableCell sx={{ width: 110 }}>สถานะ</TableCell>
+              <TableCell sx={{ width: 85 }}>สาย / ออกก่อน</TableCell>
+              <TableCell sx={{ width: 100, textAlign: 'left !important' }}>ผู้รับผิดชอบ</TableCell>
+              <TableCell sx={{ width: 80 }}>จัดการ</TableCell>
             </TableRow>
-          ) : records.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body2" color="text.secondary">No data found</Typography>
-              </TableCell>
-            </TableRow>
-          ) : (
-          records.map((row, index) => {
-            const rowNumber = page * rowsPerPage + index + 1;
-            // ชั่วโมงปกติ (Daily = timesheetNormalHours, Scan = scanNormalHours)
-            const tsNormal   = row.timesheetNormalHours  ?? row.dailyReportHours ?? row.timesheetHours;
-            const scanNormal = row.scanNormalHours        ?? row.scanDataHours;
-            // OT hours
-            const tsOtMorn   = row.timesheetOtMorning   ?? null;
-            const tsOtNoon   = row.timesheetOtNoon       ?? null;
-            const tsOtEve    = row.timesheetOtEvening    ?? null;
-            const scanOtMorn = row.scanOtMorningHours    ?? null;
-            const scanOtNoon = row.scanOtNoonHours       ?? null;
-            const scanOtEve  = row.scanOtEveningHours    ?? null;
-            const scanRange = row.scanPunches && row.scanPunches.length >= 2
-              ? `${row.scanPunches[0]} - ${row.scanPunches[row.scanPunches.length - 1]}`
-              : row.scanPunches && row.scanPunches.length === 1
-                ? `${row.scanPunches[0]} (1 ครั้ง)`
-                : '-';
-
-            // highlight ถ้าชั่วโมงปกติไม่ตรงกัน (รักษา logic เดิมไว้เบื้องหลังแต่เน้นการโชว์ช่วงเวลา)
-            const hasRegularConflict = tsNormal !== scanNormal && tsNormal != null && scanNormal != null;
-            
-            // Map status to action label
-            let actionStr = 'view';
-            if (row.status === 'UNREGISTERED_EMPLOYEE') actionStr = 'register'; // ไปเพิ่มพนักงานก่อน
-            else if (row.status === 'MISSING_DAILY') actionStr = 'pending';
-            else if (row.status !== 'MATCHED') actionStr = 'check';
-
-            return (
-              <TableRow key={row.id} hover>
-                <TableCell sx={{ whiteSpace: 'nowrap', width: 40, textAlign: 'center' }}>{rowNumber}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 90 }}>{row.workDate}</TableCell>
-                <TableCell sx={{ textAlign: 'left !important', pl: 2 }}>
-                  <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.85rem', lineHeight: 1.1 }}>{row.employeeId}</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{row.employeeName || '-'}</Typography>
-                </TableCell>
-                <TableCell sx={{ minWidth: 140, maxWidth: 200, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, textAlign: 'left !important', pl: 1.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#334155' }}>
-                    {projectsList.find(p => p.id === row.homeProjectId || p.code === row.homeProjectId)?.name || row.homeProjectId || row.projectLocationId}
-                  </Typography>
-                </TableCell>
-                {/* โครงการที่ทำงานจริงวันนั้น (workLocationIds) */}
-                <TableCell sx={{ minWidth: 130, textAlign: 'left !important', pl: 1.5 }}>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {(row.workLocationIds && row.workLocationIds.length > 0
-                      ? row.workLocationIds
-                      : [row.projectLocationId]
-                    ).map((locId) => {
-                      const projName = projectsList.find(p => p.id === locId || p.code === locId)?.name || locId;
-                      const isHome = locId === row.homeProjectId;
-                      return (
-                        <Chip
-                          key={locId}
-                          label={projName}
-                          size="small"
-                          sx={{
-                            height: '20px',
-                            fontSize: '0.7rem',
-                            fontWeight: 700,
-                            backgroundColor: isHome ? '#f0fdf4' : '#fff7ed',
-                            color: isHome ? '#16a34a' : '#ea580c',
-                            border: `1px solid ${isHome ? '#bbf7d0' : '#fed7aa'}`,
-                            '& .MuiChip-label': { px: 0.75 },
-                          }}
-                        />
-                      );
-                    })}
-                  </Box>
-                </TableCell>
-                
-                {/* เวลาปกติ (Daily) */}
-                <TableCell sx={{ textAlign: 'center' }}>
-                  <ValueCapsule>{tsNormal ?? '-'}</ValueCapsule>
-                </TableCell>
-
-                {/* OT ตาม Daily (Condensed) */}
-                <TableCell sx={{ textAlign: 'center' }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, alignItems: 'center' }}>
-                    {tsOtMorn ? (
-                      <Chip label={`เช้า: ${tsOtMorn} ชม.`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, backgroundColor: '#eff6ff', color: '#1e40af' }} />
-                    ) : null}
-                    {tsOtNoon ? (
-                      <Chip label={`เที่ยง: ${tsOtNoon} ชม.`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, backgroundColor: '#fef2f2', color: '#991b1b' }} />
-                    ) : null}
-                    {tsOtEve ? (
-                      <Chip label={`เย็น: ${tsOtEve} ชม.`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 800, backgroundColor: '#f0fdf4', color: '#166534' }} />
-                    ) : null}
-                    {!tsOtMorn && !tsOtNoon && !tsOtEve && <Typography variant="caption" color="text.disabled">-</Typography>}
-                  </Box>
-                </TableCell>
-
-                {/* ช่วงเวลาสแกนจริง */}
-                <TableCell sx={{ textAlign: 'center' }}>
-                  <ValueCapsule highlight={row.status === 'CONFLICTED' || row.status === 'MISSING_SCAN'}>
-                    {scanRange}
-                  </ValueCapsule>
-                </TableCell>
-
-                <TableCell sx={{ textAlign: 'center' }}>
-                  {row.lateMinutes ? (
-                    <ValueCapsule highlight>{row.lateMinutes}</ValueCapsule>
-                  ) : (
-                    <ValueCapsule>-</ValueCapsule>
-                  )}
-                </TableCell>
-                
-                <TableCell sx={{ textAlign: 'center' }}>
-                  {row.earlyLeaveMinutes ? (
-                    <ValueCapsule highlight sx={{ backgroundColor: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' }}>
-                      {row.earlyLeaveMinutes}
-                    </ValueCapsule>
-                  ) : (
-                    <ValueCapsule>-</ValueCapsule>
-                  )}
-                </TableCell>
-                
-                <TableCell sx={{ textAlign: 'center' }}>
-                   <Typography variant="caption" color="text.secondary">
-                     {row.assigneeName || '-'}
-                   </Typography>
-                </TableCell>
-
-                <TableCell sx={{ minWidth: 150 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
-                    <StatusCapsule statusType={row.status}>
-                      {t(`workHourMonitoring.status.${row.status.toLowerCase()}`, row.status)}
-                    </StatusCapsule>
-                    {row.hasLeave && (
-                      <Box sx={{ fontSize: '0.65rem', color: '#ea580c', fontWeight: 800, backgroundColor: '#fff7ed', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #fed7aa' }}>
-                        มีลางาน ({row.leaveHours} ชม.)
-                      </Box>
-                    )}
-                    {row.isLate && (
-                      <Box sx={{ fontSize: '0.65rem', color: '#be123c', fontWeight: 800, backgroundColor: '#fff1f2', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #fecdd3' }}>
-                        เข้าสาย ({row.lateMinutes} น.)
-                      </Box>
-                    )}
-                    {row.isEarlyLeave && (
-                      <Box sx={{ fontSize: '0.65rem', color: '#1e40af', fontWeight: 800, backgroundColor: '#eff6ff', px: 1, py: 0.25, borderRadius: '4px', border: '1px solid #bfdbfe' }}>
-                        ออกก่อน ({row.earlyLeaveMinutes} น.)
-                      </Box>
-                    )}
-                  </Box>
-                </TableCell>
-
-                <TableCell sx={{ minWidth: 90, textAlign: 'center' }}>
-                  {row.status === 'MISSING_DAILY' ? (
-                    <ActionButton
-                      variant="outlined"
-                      actionType="pending"
-                      size="small"
-                      onClick={() => handleOpenCheckDialog(row)}
-                    >
-                      {t(`workHourMonitoring.actions.pending`)}
-                    </ActionButton>
-                  ) : (actionStr === 'check' || actionStr === 'view') ? (
-                    <ActionButton 
-                      variant="outlined" 
-                      actionType={actionStr}
-                      size="small"
-                      onClick={() => handleOpenCheckDialog(row)}
-                    >
-                      {t(`workHourMonitoring.actions.${actionStr}`)}
-                    </ActionButton>
-                  ) : actionStr === 'fixed' ? (
-                    <Box sx={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: '8px', border: '1px solid #cbd5e1', color: '#64748b',
-                      fontWeight: 800, minWidth: '80px', height: '26px', fontSize: '0.75rem',
-                      cursor: 'default', backgroundColor: '#fff'
-                    }}>
-                      {t(`workHourMonitoring.actions.${actionStr}`)}
-                    </Box>
-                  ) : actionStr && (
-                    <ActionButton 
-                      variant="outlined" 
-                      actionType={actionStr}
-                      size="small"
-                    >
-                      {t(`workHourMonitoring.actions.${actionStr}`)}
-                    </ActionButton>
-                  )}
+          </TableHead>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">Loading data...</Typography>
                 </TableCell>
               </TableRow>
-            );
-          }))}
-        </TableBody>
-      </Table>
-    </StyledTableContainer>
-    <TablePagination
-      rowsPerPageOptions={[25, 50, 100]}
-      component="div"
-      count={total}
-      rowsPerPage={rowsPerPage}
-      page={page}
-      onPageChange={handleChangePage}
-      onRowsPerPageChange={handleChangeRowsPerPage}
-      labelRowsPerPage="จำนวนแถวต่อหน้า:"
-      labelDisplayedRows={({ from, to, count }) => `${from}-${to} จาก ${count !== -1 ? count : `มากกว่า ${to}`}`}
-      sx={{
-        borderTop: '1px solid #e2e8f0',
-        backgroundColor: '#fff',
-        flexShrink: 0,
-        zIndex: 2,
-        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-          fontSize: '0.85rem',
-          fontWeight: 600,
-          color: '#64748b',
-        },
-        '& .MuiTablePagination-select': {
-          borderRadius: '8px',
-          border: '1px solid #e2e8f0',
-          padding: '4px 8px',
-          marginRight: '16px',
-        }
-      }}
-    />
+            ) : records.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">No data found</Typography>
+                </TableCell>
+              </TableRow>
+            ) : records.map((row, index) => {
+              const rowNumber = page * rowsPerPage + index + 1;
+              const isMismatch = row.homeProjectId !== row.projectLocationId;
+              const homeProj = projectsList.find(p => p.id === row.homeProjectId || p.code === row.homeProjectId)?.name || row.homeProjectId || <EmDash />;
+              const workProj = projectsList.find(p => p.id === row.projectLocationId || p.code === row.projectLocationId)?.name || row.projectLocationId || <EmDash />;
+
+              return (
+                <TableRow
+                  key={row.id}
+                  sx={{
+                    backgroundColor: isMismatch ? RECON_COLORS.YELLOW.bg : 'inherit',
+                    '&:hover td': {
+                      backgroundColor: isMismatch ? `${RECON_COLORS.YELLOW.hover} !important` : '#f8fafc !important',
+                    },
+                  }}
+                >
+                  {/* # */}
+                  <TableCell sx={{ color: RECON_COLORS.NEUTRAL.textTertiary }}>{rowNumber}</TableCell>
+
+                  {/* วันที่ */}
+                  <TableCell sx={{ textAlign: 'left !important', whiteSpace: 'nowrap', color: RECON_COLORS.NEUTRAL.textSecondary }}>
+                    {row.workDate}
+                  </TableCell>
+
+                  {/* รหัส / ชื่อ */}
+                  <TableCell sx={{ textAlign: 'left !important' }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ fontSize: MIN_FONT_SIZE.TABLE_CELL }}>
+                      {row.employeeId}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: RECON_COLORS.NEUTRAL.textTertiary, fontSize: '10px' }}>
+                      {row.employeeName || <EmDash />}
+                    </Typography>
+                  </TableCell>
+
+                  {/* สังกัด — จาง เป็น context เสริม */}
+                  <TableCell sx={{ textAlign: 'left !important', color: RECON_COLORS.NEUTRAL.textTertiary, fontSize: '10px' }}>
+                    {homeProj}
+                  </TableCell>
+
+                  {/* ทำงานที่ — เด่นกว่า */}
+                  <TableCell sx={{ textAlign: 'left !important', fontWeight: 600, fontSize: MIN_FONT_SIZE.TABLE_CELL }}>
+                    {workProj}
+                  </TableCell>
+
+                  {/* สถานะ */}
+                  <TableCell>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+                      <Box sx={getStatusStyle(row.status)}>
+                        {getStatusLabel(row.status)}
+                      </Box>
+                      {row.hasLeave && (
+                        <Typography sx={{ fontSize: '9px', color: RECON_COLORS.ORANGE.text, fontWeight: 700 }}>
+                          ลางาน {row.leaveHours} ชม.
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
+
+                  {/* สาย / ออกก่อน — รวม 2 column เดิมเป็น 1 */}
+                  <TableCell>
+                    {(row.lateMinutes || row.earlyLeaveMinutes) ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, alignItems: 'center' }}>
+                        {row.lateMinutes ? (
+                          <Box sx={{
+                            display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                            backgroundColor: RECON_COLORS.PURPLE.bg,
+                            color: RECON_COLORS.PURPLE.text,
+                            border: `1px solid ${RECON_COLORS.PURPLE.border}`,
+                            borderRadius: '20px', px: 1, py: 0.25,
+                            fontSize: '10px', fontWeight: 600, whiteSpace: 'nowrap',
+                          }}>
+                            สาย {row.lateMinutes} น.
+                          </Box>
+                        ) : null}
+                        {row.earlyLeaveMinutes ? (
+                          <Box sx={{
+                            display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                            backgroundColor: RECON_COLORS.PURPLE.bg,
+                            color: RECON_COLORS.PURPLE.text,
+                            border: `1px solid ${RECON_COLORS.PURPLE.border}`,
+                            borderRadius: '20px', px: 1, py: 0.25,
+                            fontSize: '10px', fontWeight: 600, whiteSpace: 'nowrap',
+                          }}>
+                            ออกก่อน {row.earlyLeaveMinutes} น.
+                          </Box>
+                        ) : null}
+                      </Box>
+                    ) : (
+                      <EmDash />
+                    )}
+                  </TableCell>
+
+                  {/* ผู้รับผิดชอบ */}
+                  <TableCell sx={{ textAlign: 'left !important', color: RECON_COLORS.NEUTRAL.textTertiary, fontSize: '10px' }}>
+                    {row.assigneeName || <EmDash />}
+                  </TableCell>
+
+                  {/* จัดการ */}
+                  <TableCell>
+                    <ActionButton
+                      variant="outlined"
+                      actionType={row.status === 'MATCHED' ? 'view' : 'check'}
+                      onClick={() => handleOpenCheckDialog(row)}
+                    >
+                      {row.status === 'MATCHED' ? 'ดูข้อมูล' : 'ตรวจสอบ'}
+                    </ActionButton>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </StyledTableContainer>
+      <TablePagination
+        rowsPerPageOptions={[25, 50, 100]}
+        component="div"
+        count={total}
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        labelRowsPerPage="จำนวนแถวต่อหน้า:"
+        labelDisplayedRows={({ from, to, count }) => `${from}-${to} จาก ${count !== -1 ? count : `มากกว่า ${to}`}`}
+        sx={{
+          borderTop: '1px solid #e2e8f0',
+          backgroundColor: '#fff',
+          flexShrink: 0,
+          zIndex: 2,
+          '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            color: '#64748b',
+          },
+          '& .MuiTablePagination-select': {
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
+            padding: '4px 8px',
+            marginRight: '16px',
+          }
+        }}
+      />
 
       {/* Check Conflict Dialog */}
-      <Dialog 
-        open={checkDialogOpen} 
+      <Dialog
+        open={checkDialogOpen}
         onClose={handleCloseCheckDialog}
         maxWidth="lg"
         fullWidth
@@ -1156,57 +1128,44 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             <Box>
               <Typography variant="h6" fontWeight={900} sx={{ color: '#fff', mb: 0.5 }}>
                 {selectedRow?.status === 'MISSING_SCAN' ? 'ขาดข้อมูลสแกนนิ้ว'
-                 : selectedRow?.status === 'MISSING_DAILY' ? 'ดูข้อมูลสแกนนิ้ว (ไม่มี Daily Report)'
-                 : selectedRow?.status === 'MATCHED' ? 'ข้อมูลเวลาทำงาน'
-                 : 'ตรวจสอบข้อมูลขัดแย้ง'}
+                  : selectedRow?.status === 'MISSING_DAILY' ? 'ดูข้อมูลสแกนนิ้ว (ไม่มี Daily Report)'
+                    : selectedRow?.status === 'MATCHED' ? 'ข้อมูลเวลาทำงาน'
+                      : 'ตรวจสอบข้อมูลขัดแย้ง'}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
                 {selectedRow?.employeeId} — {selectedRow?.employeeName} &nbsp;|&nbsp; วันที่ {selectedRow?.workDate}
               </Typography>
             </Box>
-            <Box sx={{
-              px: 2, py: 0.75, borderRadius: '20px', fontWeight: 800, fontSize: '0.8rem',
-              backgroundColor:
-                selectedRow?.status === 'MATCHED' ? '#dcfce7' :
-                selectedRow?.status === 'MISSING_DAILY' ? '#fff7ed' :
-                selectedRow?.status === 'MISSING_SCAN' ? '#fff7ed' : '#fef2f2',
-              color:
-                selectedRow?.status === 'MATCHED' ? '#16a34a' :
-                selectedRow?.status === 'MISSING_DAILY' ? '#ea580c' :
-                selectedRow?.status === 'MISSING_SCAN' ? '#ea580c' : '#dc2626',
-            }}>
-              {selectedRow?.status === 'MATCHED' ? '✓ ข้อมูลตรงกัน'
-               : selectedRow?.status === 'MISSING_DAILY' ? '⚠ ไม่มีข้อมูล Daily Report'
-               : selectedRow?.status === 'MISSING_SCAN' ? '⚠ ขาดข้อมูลสแกนนิ้ว'
-               : '✕ ข้อมูลขัดแย้งกัน'}
+            <Box sx={getStatusStyle(selectedRow?.status || 'ALL')}>
+              {getStatusLabel(selectedRow?.status)}
             </Box>
           </Box>
 
           <Box sx={{ p: 4 }}>
 
-          {selectedRow?.status === 'MISSING_DAILY' ? (
-            <>
-              <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
-                <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
-                  ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
-                </Typography>
-              </Box>
-              {renderTimeTable(true)}
-            </>
-          ) : (
-            <>
-              <Box sx={{ mb: 4 }}>
-                {dailyReportReferencePanel}
-              </Box>
+            {selectedRow?.status === 'MISSING_DAILY' ? (
+              <>
+                <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
+                    ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
+                  </Typography>
+                </Box>
+                {renderTimeTable(true)}
+              </>
+            ) : (
+              <>
+                <Box sx={{ mb: 4 }}>
+                  {dailyReportReferencePanel}
+                </Box>
 
-              <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
-                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
-                  ข้อมูลแสดงเวลาทำงาน
-                </Typography>
-                {renderTimeTable(false)}
-              </Box>
-            </>
-          )}
+                <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
+                  <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
+                    ข้อมูลแสดงเวลาทำงาน
+                  </Typography>
+                  {renderTimeTable(false)}
+                </Box>
+              </>
+            )}
 
             <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4, pt: 3, borderTop: '1px solid #e2e8f0' }}>
               {isEditingScan ? (
@@ -1219,8 +1178,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     placeholder="ระบุเหตุผลการแก้ไข (เช่น พนักงานลืมสแกนแต่มีรูปยืนยัน)"
                     value={scanEditReason}
                     onChange={(e) => setScanEditReason(e.target.value)}
-                    sx={{ 
-                      mb: 2, 
+                    sx={{
+                      mb: 2,
                       '& .MuiInputBase-input': { fontWeight: 600 },
                       '& .MuiInputLabel-root': { fontWeight: 700, color: '#475569' },
                       '& .MuiFormLabel-asterisk': { color: '#ef4444' }
@@ -1315,7 +1274,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           </Box>
         </DialogContent>
       </Dialog>
-      
+
       {/* Confirm Fill Dialog */}
       <Dialog
         open={confirmFillOpen}
@@ -1336,7 +1295,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
             ระบบจะทำการบันทึกเวลาจาก Daily Report ลงในสแกนนิ้วของพนักงาน และจะอัปเดตสถานะเป็น "ปกติ" ทันที
           </Typography>
-          
+
           <Stack direction="row" spacing={2} justifyContent="center">
             <Button
               variant="outlined"
@@ -1370,7 +1329,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           sx: { backgroundColor: 'transparent', boxShadow: 'none', overflow: 'visible', position: 'relative' }
         }}
       >
-        <IconButton 
+        <IconButton
           onClick={() => setViewerOpen(false)}
           sx={{ position: 'absolute', top: -40, right: -40, color: '#fff', '&:hover': { color: '#e2e8f0' } }}
         >
@@ -1379,18 +1338,18 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         {viewerImages.length > 0 && (
           <Box sx={{ maxWidth: '90vw', maxHeight: '90vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             {viewerImages.length > 1 && (
-              <IconButton 
+              <IconButton
                 onClick={handlePrevImage}
                 sx={{ position: 'absolute', left: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}
               >
                 <PrevIcon />
               </IconButton>
             )}
-            
+
             <img src={viewerImages[viewerIndex]} alt={`Image ${viewerIndex + 1}`} style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }} />
-            
+
             {viewerImages.length > 1 && (
-              <IconButton 
+              <IconButton
                 onClick={handleNextImage}
                 sx={{ position: 'absolute', right: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}
               >
