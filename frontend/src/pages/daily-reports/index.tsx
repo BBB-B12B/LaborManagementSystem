@@ -27,7 +27,9 @@ import {
   HardHat,
   Menu,
   Eye,
-  Paperclip
+  Paperclip,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { 
   Box, 
@@ -117,6 +119,23 @@ export default function DailyReportPage() {
     return isViewingCrossProject && selectedTask.isSupportRequest && selectedTask.isPickedUpBySupport;
   }, [selectedTask, user]);
 
+  const boundaryDate = useMemo(() => {
+    if (!selectedTask) return null;
+    
+    // Fallback if previousCompletionDate is not calculated (handled below)
+    if (isActingAsSupport && selectedTask.supportCreatedAt) {
+      const d = new Date(selectedTask.supportCreatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    if (!isActingAsSupport && selectedTask.revisionCreatedAt && selectedTask.revisionId && selectedTask.revisionId !== 'rev00') {
+      const d = new Date(selectedTask.revisionCreatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    return null;
+  }, [selectedTask, isActingAsSupport]);
+
   const { data: taskReportsData } = useQuery({
     queryKey: ['task-reports-all', selectedTask?.id, isActingAsSupport],
     queryFn: async () => {
@@ -153,11 +172,50 @@ export default function DailyReportPage() {
     enabled: !!selectedTask,
   });
 
-  const completionDateStr = useMemo(() => {
-    if (!selectedTask || (selectedTask.dailyProgress || 0) < 100) return null;
-    if (!allSiteReportsData || allSiteReportsData.length === 0) return null;
+  const previousCompletionDateStr = useMemo(() => {
+    if (!taskReportsData || taskReportsData.length === 0 || !selectedTask) return null;
+    
+    const currentRevId = isActingAsSupport 
+        ? (selectedTask.currentRevision || 'rev00').replace('rev', 'help') 
+        : (selectedTask.revisionId || selectedTask.currentRevision || 'rev00');
 
-    const completedReports = allSiteReportsData.filter((r: any) => r.progress >= 100);
+    const previousCompletedReports = taskReportsData.filter((r: any) => r.progress >= 100 && r._revisionId && r._revisionId !== currentRevId);
+    if (previousCompletedReports.length === 0) return null;
+    
+    const dates = previousCompletedReports.map((r: any) => {
+      let rDate: Date;
+      if (r.reportDate && typeof r.reportDate === 'object' && ('_seconds' in r.reportDate || 'seconds' in r.reportDate)) {
+        rDate = new Date((r.reportDate._seconds || r.reportDate.seconds) * 1000);
+      } else {
+        rDate = new Date(r.reportDate || new Date());
+      }
+      return format(rDate, 'yyyy-MM-dd');
+    });
+    
+    dates.sort();
+    return dates[dates.length - 1]; // Latest date of previous revision's completion
+  }, [selectedTask, taskReportsData, isActingAsSupport]);
+
+  const effectiveBoundaryDate = useMemo(() => {
+    if (previousCompletionDateStr) {
+      const d = new Date(previousCompletionDateStr);
+      d.setDate(d.getDate() + 1); // Start from the day AFTER completion
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    return boundaryDate; // Fallback to revisionCreatedAt
+  }, [previousCompletionDateStr, boundaryDate]);
+
+  const completionDateStr = useMemo(() => {
+    const progress = isActingAsSupport ? (selectedTask?.supportDailyProgress || 0) : (selectedTask?.dailyProgress || 0);
+    if (!selectedTask || progress < 100) return null;
+    if (!taskReportsData || taskReportsData.length === 0) return null;
+
+    const currentRevId = isActingAsSupport 
+        ? (selectedTask.currentRevision || 'rev00').replace('rev', 'help') 
+        : (selectedTask.revisionId || selectedTask.currentRevision || 'rev00');
+
+    const completedReports = taskReportsData.filter((r: any) => r.progress >= 100 && r._revisionId === currentRevId);
     if (completedReports.length === 0) return null;
     
     const dates = completedReports.map((r: any) => {
@@ -173,7 +231,7 @@ export default function DailyReportPage() {
     
     dates.sort();
     return dates[dates.length - 1]; // Latest date where progress was 100
-  }, [selectedTask, allSiteReportsData]);
+  }, [selectedTask, taskReportsData, isActingAsSupport]);
 
   const isAfterCompletion = useMemo(() => {
     if (!completionDateStr || !reportDate) return false;
@@ -184,6 +242,20 @@ export default function DailyReportPage() {
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateStr = format(day, 'yyyy-MM-dd');
+
+    if (effectiveBoundaryDate) {
+      const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
+      if (dateStr < boundDateStr) {
+        return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
+      }
+    }
+
+    if (completionDateStr) {
+      if (dateStr > completionDateStr) {
+        return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
+      }
+    }
+
     const hasReport = reportDates.includes(dateStr);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -373,7 +445,8 @@ export default function DailyReportPage() {
   
   const [sitePhotos, setSitePhotos] = useState<File[]>([]);
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [laborPhotos, setLaborPhotos] = useState<File[]>([]);
   const [laborPhotoPreviews, setLaborPhotoPreviews] = useState<string[]>([]);
 
@@ -506,21 +579,76 @@ export default function DailyReportPage() {
 
   const [activeTab, setActiveTab] = useState<'pending' | 'finish'>('pending');
 
+  const processedTasks = useMemo(() => {
+    const items: any[] = [];
+    if (!user) return items;
+
+    allTasks.forEach(task => {
+      const isCurrentAssignee = task.assignees?.some((a: any) => a.employeeId === user.employeeId);
+      const isCurrentSupport = task.supportAssignees?.some((a: any) => a.employeeId === user.employeeId);
+      const isSupportRequest = task.isSupportRequest === true;
+
+      // 1. Current Revision (Show only if active assignee or it's a joinable support request)
+      if (isCurrentAssignee || isCurrentSupport || isSupportRequest) {
+        items.push({
+          ...task,
+          isPastRevision: false
+        });
+      }
+
+      // 2. Past Revisions (Always show in Finish if user is historical participant)
+      const currentRevNum = parseInt(task.currentRevision?.replace('rev', '') || '0', 10);
+      if (currentRevNum > 0) {
+        for (let i = 0; i < currentRevNum; i++) {
+          const revId = `rev${String(i).padStart(2, '0')}`;
+          
+          const isUserHistoricalAssignee = user.employeeId ? task.historicalAssigneeIds?.includes(user.employeeId) : false;
+          const wasSupportRevision = task.supportedRevisionIds?.includes(revId);
+          
+          // Site FM sees all revisions. Support FM only sees revisions they supported.
+          const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+          const shouldShowRevision = !isViewingCrossProject || wasSupportRevision;
+
+          if (isUserHistoricalAssignee && shouldShowRevision) {
+            items.push({
+              ...task,
+              id: `${task.id}__${revId}`, 
+              originalTaskId: task.id,
+              revisionId: revId,
+              revisionName: `งานรอบเก่า (${revId})`, 
+              dailyProgress: 100, 
+              isPastRevision: true,
+              isSupportRequest: wasSupportRevision, // Precisely set based on support involvement
+              status: 'completed'
+            });
+          }
+        }
+      }
+    });
+    return items;
+  }, [allTasks, user]);
+
   const filteredTasks = useMemo(() => {
-    let filtered = allTasks.filter(t => 
+    let filtered = processedTasks.filter(t => 
       t.taskName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.categoryName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.taskId.toLowerCase().includes(searchTerm.toLowerCase())
+      t.taskId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.revisionName || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (activeTab === 'pending') {
-      filtered = filtered.filter(t => (t.dailyProgress || 0) < 100);
+      // Show only current revision tasks that are not yet 100%
+      filtered = filtered.filter(t => !t.isPastRevision && (t.dailyProgress || 0) < 100);
     } else if (activeTab === 'finish') {
-      filtered = filtered.filter(t => (t.dailyProgress || 0) >= 100);
+      // Show finished current revision OR any past revision
+      filtered = filtered.filter(t => t.isPastRevision || (t.dailyProgress || 0) >= 100);
     }
 
-    return filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  }, [allTasks, searchTerm, activeTab]);
+    return filtered.sort((a, b) => {
+      if (a.isPastRevision !== b.isPastRevision) return a.isPastRevision ? 1 : -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+  }, [processedTasks, searchTerm, activeTab]);
 
   // --- 3. Handlers ---
   const handleSelectTask = (task: any) => {
@@ -637,7 +765,14 @@ export default function DailyReportPage() {
             <img 
               src={getImageUrl(url)} 
               alt="Uploaded" 
-              onClick={() => setPreviewImage(getImageUrl(url))}
+              onClick={() => {
+                const allUrls = [
+                  ...existingUrls.map(u => getImageUrl(u)),
+                  ...previews
+                ];
+                setPreviewImages(allUrls);
+                setPreviewIndex(index);
+              }}
               style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
             />
             <IconButton
@@ -669,7 +804,14 @@ export default function DailyReportPage() {
               <>
                 <img 
                   src={previews[index]} 
-                  onClick={() => setPreviewImage(previews[index])}
+                  onClick={() => {
+                    const allUrls = [
+                      ...existingUrls.map(u => getImageUrl(u)),
+                      ...previews
+                    ];
+                    setPreviewImages(allUrls);
+                    setPreviewIndex(existingUrls.length + index);
+                  }}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
                 />
                 <IconButton 
@@ -1014,7 +1156,8 @@ export default function DailyReportPage() {
                               }
                               setReportDate(newValue || new Date());
                             }}
-                            maxDate={new Date()}
+                            minDate={effectiveBoundaryDate || undefined}
+                            maxDate={completionDateStr ? new Date(completionDateStr) : new Date()}
                             slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
                             slotProps={{ 
                               textField: { 
@@ -1111,32 +1254,46 @@ export default function DailyReportPage() {
                                 />
                               </Grid>
                               <Grid item xs={12} md={9}>
-                                <Grid container spacing={3}>
-                                  <Grid item xs={6}>
-                                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน (จาก Site)</Typography>
-                                    <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
-                                      {siteReportData.photos?.site?.length > 0 ? (
-                                        siteReportData.photos.site.map((url: string, i: number) => (
-                                          <Box key={i} component="img" src={url} onClick={() => setPreviewImage(url)} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', flexShrink: 0, border: '1px solid #e2e8f0' }} />
-                                        ))
-                                      ) : (
-                                        <Typography variant="caption" color="text.secondary">ไม่มีรูป</Typography>
-                                      )}
-                                    </Stack>
-                                  </Grid>
-                                  <Grid item xs={6}>
-                                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายแรงงาน (จาก Site)</Typography>
-                                    <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
-                                      {siteReportData.photos?.labor?.length > 0 ? (
-                                        siteReportData.photos.labor.map((url: string, i: number) => (
-                                          <Box key={i} component="img" src={url} onClick={() => setPreviewImage(url)} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', flexShrink: 0, border: '1px solid #e2e8f0' }} />
-                                        ))
-                                      ) : (
-                                        <Typography variant="caption" color="text.secondary">ไม่มีรูป</Typography>
-                                      )}
-                                    </Stack>
-                                  </Grid>
-                                </Grid>
+                                {(() => {
+                                  const allPhotos = [
+                                    ...(siteReportData.photos?.site || []),
+                                    ...(siteReportData.photos?.labor || [])
+                                  ].map(url => getImageUrl(url));
+                                  const totalCount = allPhotos.length;
+
+                                  return (
+                                    <Grid container spacing={3}>
+                                      <Grid item xs={12}>
+                                        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, textAlign: 'center' }}>
+                                          รูปแนบทั้งหมด {totalCount > 0 ? `1/${totalCount}` : '0/0'}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                                          {totalCount > 0 ? (
+                                            <Box 
+                                              component="img" 
+                                              src={allPhotos[0]} 
+                                              onClick={() => {
+                                                setPreviewImages(allPhotos);
+                                                setPreviewIndex(0);
+                                              }} 
+                                              sx={{ 
+                                                width: 120, 
+                                                height: 120, 
+                                                borderRadius: '12px', 
+                                                objectFit: 'cover', 
+                                                cursor: 'zoom-in', 
+                                                border: '1px solid #e2e8f0',
+                                                '&:hover': { opacity: 0.8 } 
+                                              }} 
+                                            />
+                                          ) : (
+                                            <Typography variant="caption" color="text.secondary">ไม่มีรูปแนบ</Typography>
+                                          )}
+                                        </Box>
+                                      </Grid>
+                                    </Grid>
+                                  );
+                                })()}
                               </Grid>
                             </Grid>
                           ) : (
@@ -1292,12 +1449,41 @@ export default function DailyReportPage() {
             </DialogActions>
           </Dialog>
 
-          <Dialog open={Boolean(previewImage)} onClose={() => setPreviewImage(null)} maxWidth="md" fullWidth>
-            <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 2 }}>
-              <IconButton onClick={() => setPreviewImage(null)} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}>
+          <Dialog open={previewImages.length > 0} onClose={() => setPreviewImages([])} maxWidth="md" fullWidth>
+            <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 1, minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <IconButton onClick={() => setPreviewImages([])} sx={{ position: 'absolute', top: 12, right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' }, zIndex: 10 }}>
                 <X />
               </IconButton>
-              {previewImage && <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />}
+              
+              {previewImages.length > 1 && (
+                <>
+                  <IconButton 
+                    onClick={() => setPreviewIndex((prev) => (prev > 0 ? prev - 1 : previewImages.length - 1))}
+                    sx={{ position: 'absolute', left: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' }, zIndex: 10 }}
+                  >
+                    <ChevronLeft size={40} />
+                  </IconButton>
+                  <IconButton 
+                    onClick={() => setPreviewIndex((prev) => (prev < previewImages.length - 1 ? prev + 1 : 0))}
+                    sx={{ position: 'absolute', right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' }, zIndex: 10 }}
+                  >
+                    <ChevronRight size={40} />
+                  </IconButton>
+                </>
+              )}
+
+              {previewImages.length > 0 && (
+                <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <img 
+                    src={previewImages[previewIndex]} 
+                    alt={`Preview ${previewIndex + 1}`} 
+                    style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} 
+                  />
+                  <Typography variant="caption" sx={{ color: '#fff', mt: 1, bgcolor: 'rgba(0,0,0,0.5)', px: 2, py: 0.5, borderRadius: 2 }}>
+                    {previewIndex + 1} / {previewImages.length}
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Dialog>
         </Layout>
@@ -1357,6 +1543,11 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
             <Chip label="Support" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#fef08a', color: '#854d0e', borderRadius: '4px' }} />
           )}
         </Box>
+        {task.revisionId && task.revisionId !== 'rev00' && (
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#ef4444', mb: 0.5, fontSize: '0.7rem', letterSpacing: 0.3 }}>
+            {task.revisionId} : "{task.revisionName || 'แก้ไขงาน'}"
+          </Typography>
+        )}
         <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>{displayTaskName}</Typography>
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.3, fontWeight: 600 }}>{getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}</Typography>
         <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>Duedate : {format(new Date(task.dueDate), 'dd/MM/yyyy')}</Typography>

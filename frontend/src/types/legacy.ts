@@ -2,6 +2,10 @@
 
 export interface MasterTask {
     id: string;
+    revisionId?: string;
+    revisionName?: string;
+    revisionCreatedAt?: string | Date;
+    supportCreatedAt?: string | Date;
     name: string;
     status: string;
     responsibleStaffIds?: string[];

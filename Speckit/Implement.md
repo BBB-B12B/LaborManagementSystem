@@ -200,13 +200,13 @@ markdown
 ---
 
 ## 5. Daily Report Core Concept & Migration Strategy (แผนพัฒนาระบบรายงานประจำวัน)
-> **สถานะ:** 🔵 กำลังดำเนินการ (รอรับไฟล์อ้างอิงจาก User)
+> **สถานะ:** 🟢 เสร็จสมบูรณ์ (Integrated & Refactored)
 
 **เป้าหมายหลัก (Core Objective):** 
 นำหน้าจอและ Flow การทำงาน (UI Source Code) ของระบบ Daily Report จากระบบอ้างอิง (ระบบหลังการขาย) นำเข้ามาติดตั้งในระบบโปรเจกต์งาน ก่อสร้าง/จัดการแรงงาน ของเรา จากนั้นทำการ Refactor เพื่อให้เข้ากับประสบการณ์ใช้งาน (UX) ของเรา พร้อมเชื่อมข้อมูลวิ่งเข้า Production Firebase อย่างสมบูรณ์
 
 ### 🔄 A. Integration Lifecycle (วงจรการเชื่อมต่อ)
-1. **Source Integration (รอโค้ดจากผู้ใช้งาน):**
+1. **Source Integration (นำเข้าไฟล์ UI สำเร็จแล้ว):**
     - นำเข้าไฟล์ UI Components, React Hooks, หรือ Utils ที่เกี่ยวข้องจากระบบอ้างอิงเข้ามาใน Workspace
 2. **Refactoring & UX Adaptation (ปรับจูนประสบการณ์):**
     - แปลง Form Logic ให้เข้ากับ Tech Stack ในระบบเรา 
@@ -224,7 +224,7 @@ markdown
 ---
 
 ## 6. Sales System Firebase Integration (ระบบหลังการขาย)
-> **สถานะ:** 🔄 กำลังดำเนินการพัฒนาระบบ Sync (Phase 2.0)
+> **สถานะ:** 🟢 เสร็จสมบูรณ์ (Phase 2.0 Deployed)
 
 **เป้าหมายหลัก (Core Objective):** 
 เชื่อมต่อข้อมูลระหว่าง Labor System (ของเรา) และ Sales System (ของระบบหลังการขาย) แบบ 2-way (Read & Write) เพื่อให้ โฟร์แมนจัดการ Task และทำ Daily Report ผ่าน UI ของเรา แต่ข้อมูลสะท้อนกลับไปที่ระบบหลัก
@@ -289,7 +289,7 @@ markdown
 | มิติการทำงาน | รายละเอียด |
 | :--- | :--- |
 | **Component** | `TaskCreateModal.tsx` (Reuse) |
-| **Edit Mode** | เมื่อเปิดในโหมด Edit: <br> 1. รับ `task` object ผ่าน props <br> 2. ล็อคฟิลด์ `Project` และ `Work Order` ให้เป็น Read-only <br> 3. เปลี่ยนปุ่ม Submit เป็น "บันทึกการแก้ไข" |
+| **Edit Mode** | เมื่อเปิดในโหมด Edit: <br> 1. รับ `task` object ผ่าน props <br> 2. ล็อคฟิลด์ `Project` และ `Work Order` ให้เป็น Read-only <br> 3. แสดง Checkbox "ขอความช่วยเหลือ" เพื่อให้สามารถเรียกทีม Support ได้ภายหลัง <br> 4. เปลี่ยนปุ่ม Submit เป็น "บันทึกการแก้ไข" |
 | **Confirmation** | เมื่อกด Delete: <br> - แสดง Dialog ยืนยัน "คุณแน่ใจหรือไม่ว่าต้องการลบงานนี้?" |
 
 ### 🛣️ [F-015] Daily Report Form & Labor Management — E2E Flow
@@ -317,7 +317,8 @@ markdown
 | **User Action Path** | `Workspace Kanban` -> `Reject Button (Supervisor)` -> ใส่ชื่องานที่ให้แก้และระบุ FM -> `Submit` |
 | **API Contract** | `POST /api/tasks/:id/reject` <br> Payload: `{ revisionName, assignees }` |
 | **Database Schema** | **1. Task Document (Container):** ไม่ถูกสร้างใหม่ แต่เก็บ `assignees` สะสมทุกคนจากทุก Rev ไว้เพื่อใช้ Filter และเก็บ `currentRevision: "rev0X"` ชี้ไปยังเวอร์ชั่นล่าสุด <br> **2. Revision Document (Subcollection):** ซ้อนอยู่ใต้ `revisions/{revId}` เก็บประวัติของรอบนั้นๆ (`revisionName`, `assignees` เฉพาะรอบนั้น, `createdAt`) |
-| **Backend Logic (T-852/T-853)** | 1. **Task Model Setup:** `Task` model has `currentRevision` defaulting to `rev00`. <br> 2. **Create Trigger:** In `TaskService.createTask`, `revisions/rev00` is generated atomically. <br> 3. **Reject Action (`POST /api/tasks/:id/reject`):** Increment `currentRevision` (e.g., `rev01`), union `assignees` to main task, reset `dailyProgress = 0`. <br> 4. **Daily Report Dynamic Routing:** Change daily report write/read paths to `revisions/{currentRevision}/dailyReports/{dateStr}`. |
+| **Backend Logic (T-852/T-853)** | 1. **Task Model Setup:** `Task` model has `currentRevision` defaulting to `rev00`. <br> 2. **Create Trigger:** In `TaskService.createTask`, `revisions/rev00` is generated atomically. <br> 3. **Reject Action (`POST /api/tasks/:id/reject`):** Increment `currentRevision` (e.g., `rev01`), union `assignees` to main task, reset `dailyProgress = 0`. <br> 4. **Daily Report Dynamic Routing:** Change daily report write/read paths to `revisions/{currentRevision}/dailyReports/{dateStr}`. <br> 5. **Cross-Revision Intelligence:** `getAllDailyReports` query reports across ALL revisions to show full history on calendar. |
+| **Daily Report Logic** | 1. **Task Expansion (Frontend):** หาก Task มี Revision > rev00 ระบบจะสร้าง Virtual Task Items สำหรับรอบเก่าๆ และแสดงในแถบ `Finish` อัตโนมัติ <br> 2. **UI Labeling:** แสดงรหัส Revision นำหน้าชื่อ (e.g. `rev01 : "..."`) <br> 3. **Conflict Protection:** ระบบบล็อกการลงรายงานในรอบปัจจุบัน (rev01) หากพบว่าวันนั้นมีรายงานอยู่ในรอบเก่า (rev00) แล้ว เพื่อป้องกันข้อมูลทับซ้อน |
 
 ### 🛣️ [F-018] Task Daily Report Calendar & Unlock Access — E2E Flow
 
@@ -356,3 +357,14 @@ Leave Tracking separates work hours (`labor`) from leave hours (`leave`) strictl
 | **Database Schema** | **1. Task Document (Container):** งานยังคงอิงอ้างอิงกับ `taskId` ฝั่ง Site เสมอ (Composite ID: `woId__catId__taskId`) <br> **2. Support Data Flags:** เพิ่มฟิลด์ `isSupportRequest`, `isPickedUpBySupport`, `supportTaskName`, `supportDailyProgress` และ `supportAssignees` แยกต่างหากจาก `assignees` ปกติ<br> **3. Held Document (Subcollection):** เก็บ `held00` ไว้ใต้ `held/{heldId}` เพื่อแยก Version Control ของฝั่ง Support ออกจาก Rev ของ Site |
 | **Backend Logic** | 1. ค้นหาเอกสารผ่าน `.includes('__')` สำหรับ Composite Path Navigation <br> 2. `runTransaction` ทำงานแบบ Atomic อ่านข้อมูลจาก `revisions/rev00` และคัดลอกมาสร้างเป็น `held/held00` <br> 3. แก้ไข `supportAssignees` กลับไปที่เอกสารหลัก เพื่ออำนวยความสะดวกในการกรองผล |
 | **Frontend UI/UX** | 1. **Data Isolation:** การแสดงผลในการ์ดงานจะแยกชื่อ Assignees อย่างเด็ดขาด (`site` เห็นเฉพาะของตัวเอง, `support` เห็นเฉพาะ `supportAssignees`) <br> 2. **Task Board Rule:** งาน Support จะไม่ปรากฏใน Kanban Board จนกว่า `isPickedUpBySupport` จะเป็น `true` |
+
+---
+
+### 🛣️ [F-021] Image Display & Preview Carousel — Logic Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Request** | ปรับปรุงการแสดงผลรูปภาพในหน้าสรุปข้อมูล (Modal) ให้ดู Premium และใช้งานง่ายขึ้น |
+| **UI/UX Update** | 1. **Single Image Summary:** ในหน้า `TaskDailyReportModal` และ `Summary View` ของหน้าสร้างรายงาน จะรวมรูปถ่าย `site` และ `labor` เข้าด้วยกันและแสดงเพียงรูปแรกรูปเดียว <br> 2. **Dynamic Header:** เปลี่ยนหัวข้อเป็น "รูปแนบทั้งหมด 1/N" โดย N คือจำนวนรูปทั้งหมดที่มีในวันนั้น <br> 3. **Image Counter:** มีการแสดงตัวเลขกำกับตำแหน่งรูปปัจจุบัน (เช่น 1/5) ในหน้า Preview |
+| **Preview Mechanism** | เมื่อคลิกที่รูปภาพ ระบบจะเปิด `Dialog` แสดงรูปขนาดใหญ่ พร้อมปุ่ม `ChevronLeft` และ `ChevronRight` (Carousel) เพื่อเลื่อนดูรูปทั้งหมดในรายการนั้นๆ |
+| **Technical Implementation** | 1. **State Management:** เพิ่ม `previewImages` (string[]) และ `previewIndex` (number) เพื่อจัดการลำดับรูปภาพใน Carousel <br> 2. **Shared Logic:** ใช้ `getImageUrl` helper เพื่อจัดการ Path ของรูปภาพทั้งแบบ Local และ Cloud Storage |

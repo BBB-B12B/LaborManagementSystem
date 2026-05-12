@@ -272,6 +272,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           categoryName: data.categoryName,
           assignees: data.assignees,
           dueDate: data.dueDate.toISOString(),
+          isSupportRequest: data.isSupportRequest,
         }, user?.id || 'system');
       } else {
         const selectedProject = projects.find(p => p.id === data.projectId);
@@ -705,7 +706,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
               </Grid>
 
               <Grid item xs={12}>
-                {!isEdit && !isHelperUser && (
+                {!isHelperUser && (
                   <Controller
                     name="isSupportRequest"
                     control={control}

@@ -304,6 +304,8 @@ const DailyReport = () => {
                 // Map to legacy MasterTask shape for UI compatibility
                 const mappedTask = {
                     id: t.id,
+                    revisionId: t.revisionId,
+                    revisionName: t.revisionName,
                     name: t.taskName,
                     dailyProgress: t.status === 'in-progress' ? 50 : 0,
                     status: t.status === 'in-progress' ? 'In Progress' : 'Approved',
@@ -682,6 +684,11 @@ const DailyReport = () => {
                         <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#3b82f6', textTransform: 'uppercase', background: '#dbeafe', padding: '2px 6px', borderRadius: '4px' }}>{wo.id}</div>
                         {isNew && <div style={{ background: '#ef4444', color: '#fff', fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '8px' }}>ใหม่</div>}
                     </div>
+                    {task.revisionId && task.revisionId !== 'rev00' && (
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', marginBottom: '6px', letterSpacing: '0.3px' }}>
+                            {task.revisionId} : "{task.revisionName || 'แก้ไขงาน'}"
+                        </div>
+                    )}
                     <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.name}</div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Building2 size={12} /> <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wo.locationName}</span>

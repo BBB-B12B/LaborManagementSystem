@@ -34,6 +34,7 @@ export interface Task {
   currentRevision: string; // e.g. "rev00"
   revisionId?: string; // [NEW] e.g. "rev01"
   revisionName?: string; // [NEW] e.g. "แก้ไขรอยร้าว"
+  revisionCreatedAt?: Date; // [NEW] Track when the current revision was created
   dailyProgress: number;
   attachmentsCount: number;
   isActive: boolean;
@@ -42,11 +43,14 @@ export interface Task {
   supportTaskName?: string; // [NEW] Custom task name for Support
   supportDailyProgress?: number; // [NEW] Separate progress for Support
   supportAssignees?: TaskAssignee[]; // [NEW] Support team assignees
+  supportCreatedAt?: Date; // [NEW] Track when the support team joined
+  supportedRevisionIds?: string[]; // [NEW] Revisions that had support team
   unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>; // [NEW] Track unlocked dates for Daily Reports
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
   updatedBy: string;
+  historicalAssigneeIds?: string[]; // [NEW] Track all users who ever participated in this task
 }
 
 export interface CreateTaskInput {
@@ -86,7 +90,9 @@ export interface UpdateTaskInput {
   supportTaskName?: string;
   supportDailyProgress?: number;
   supportAssignees?: TaskAssignee[];
+  supportedRevisionIds?: string[]; // [NEW] Revisions that had support team
   unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
+  isSupportRequest?: boolean;
 }
 
 export const taskConverter = {
@@ -109,6 +115,7 @@ export const taskConverter = {
       currentRevision: task.currentRevision || 'rev00',
       revisionId: task.revisionId || task.currentRevision || 'rev00',
       revisionName: task.revisionName || null,
+      revisionCreatedAt: task.revisionCreatedAt || task.createdAt || null,
       dailyProgress: task.dailyProgress || 0,
       attachmentsCount: task.attachmentsCount || 0,
       isActive: task.isActive,
@@ -117,11 +124,13 @@ export const taskConverter = {
       supportTaskName: task.supportTaskName || null,
       supportDailyProgress: task.supportDailyProgress || 0,
       supportAssignees: task.supportAssignees || [],
+      supportCreatedAt: task.supportCreatedAt || task.createdAt || null,
       unlockedDates: task.unlockedDates || {},
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       createdBy: task.createdBy,
       updatedBy: task.updatedBy,
+      historicalAssigneeIds: task.historicalAssigneeIds || [],
     };
   },
   fromFirestore: (snapshot: any): Task => {
@@ -153,6 +162,7 @@ export const taskConverter = {
       currentRevision: data.currentRevision || 'rev00',
       revisionId: data.revisionId || data.currentRevision || 'rev00',
       revisionName: data.revisionName || '',
+      revisionCreatedAt: data.revisionCreatedAt ? safeDate(data.revisionCreatedAt) : safeDate(data.createdAt),
       dailyProgress: data.dailyProgress || 0,
       attachmentsCount: data.attachmentsCount || 0,
       isActive: data.isActive !== false,
@@ -161,6 +171,7 @@ export const taskConverter = {
       supportTaskName: data.supportTaskName || '',
       supportDailyProgress: data.supportDailyProgress || 0,
       supportAssignees: data.supportAssignees || [],
+      supportCreatedAt: data.supportCreatedAt ? safeDate(data.supportCreatedAt) : safeDate(data.createdAt),
       unlockedDates: data.unlockedDates ? Object.keys(data.unlockedDates).reduce((acc, key) => {
         acc[key] = {
           ...data.unlockedDates[key],
@@ -172,6 +183,7 @@ export const taskConverter = {
       updatedAt: safeDate(data.updatedAt),
       createdBy: data.createdBy || '',
       updatedBy: data.updatedBy || '',
+      historicalAssigneeIds: data.historicalAssigneeIds || [],
     };
   },
 };

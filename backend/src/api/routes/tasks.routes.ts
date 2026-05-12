@@ -201,7 +201,10 @@ router.post('/:id/unlock-report', async (req: Request, res: Response, next: Next
 router.get('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const isSupportReport = req.query.isSupportReport === 'true';
+    let isSupportReport: boolean | undefined = undefined;
+    if (req.query.isSupportReport === 'true') isSupportReport = true;
+    if (req.query.isSupportReport === 'false') isSupportReport = false;
+    
     const reports = await taskService.getAllDailyReports(id, isSupportReport);
 
     res.status(200).json({

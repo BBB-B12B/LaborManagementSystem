@@ -25,6 +25,7 @@ export interface Task {
   assignees: TaskAssignee[];
   dueDate: string; // ISO string
   status: TaskStatus;
+  currentRevision: string;
   revisionId?: string;
   revisionName?: string;
   dailyProgress: number;
@@ -38,6 +39,8 @@ export interface Task {
   unlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
   createdAt: string;
   updatedAt: string;
+  historicalAssigneeIds?: string[];
+  supportedRevisionIds?: string[];
 }
 
 export interface CreateTaskInput {
@@ -58,6 +61,7 @@ export interface CreateTaskInput {
 
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {
   dailyProgress?: number;
+  supportedRevisionIds?: string[];
 }
 
 export const taskService = {

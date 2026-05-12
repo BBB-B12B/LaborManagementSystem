@@ -32,6 +32,8 @@ import {
   Cancel as CancelIcon,
   PhotoCamera as PhotoCameraIcon,
   Sync as SyncIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
@@ -99,7 +101,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const [reportDates, setReportDates] = useState<string[]>([]);
   const [allAvailableDates, setAllAvailableDates] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState<number>(0);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
   const isActingAsSupport = useMemo(() => {
@@ -667,36 +670,48 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                           </Box>
 
                           <Box sx={{ p: 2, flexGrow: 1, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                            <Grid container spacing={2}>
-                              <Grid item xs={6}>
-                                <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center' }}>รูปถ่ายหน้างาน (Site)</Typography>
-                                <Stack direction="row" spacing={1} justifyContent="center">
-                                  {selectedSummary.hasSiteReport && selectedSummary.sitePhotos.length > 0 ? (
-                                    selectedSummary.sitePhotos.slice(0, 2).map((url, i) => (
-                                      <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
-                                    ))
-                                  ) : (
-                                    <Box sx={{ width: '100%', py: 2, border: '1px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc' }}>
-                                      <Typography variant="caption" color="text.secondary">ไม่มีรูปหน้างาน</Typography>
-                                    </Box>
-                                  )}
-                                </Stack>
-                              </Grid>
-                              <Grid item xs={6}>
-                                <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center' }}>รูปถ่ายแรงงาน (Labor)</Typography>
-                                <Stack direction="row" spacing={1} justifyContent="center">
-                                  {selectedSummary.hasSiteReport && selectedSummary.laborPhotos.length > 0 ? (
-                                    selectedSummary.laborPhotos.slice(0, 2).map((url, i) => (
-                                      <Box key={i} component="img" src={getImageUrl(url)} onClick={() => setPreviewImage(getImageUrl(url))} sx={{ width: 80, height: 80, borderRadius: 2, objectFit: 'cover', cursor: 'zoom-in', transition: '0.2s', '&:hover': { opacity: 0.8 } }} />
-                                    ))
-                                  ) : (
-                                    <Box sx={{ width: '100%', py: 2, border: '1px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc' }}>
-                                      <Typography variant="caption" color="text.secondary">ไม่มีรูปแรงงาน</Typography>
-                                    </Box>
-                                  )}
-                                </Stack>
-                              </Grid>
-                            </Grid>
+                            {(() => {
+                              const allPhotos = [
+                                ...(selectedSummary.hasSiteReport ? selectedSummary.sitePhotos : []),
+                                ...(selectedSummary.hasSiteReport ? selectedSummary.laborPhotos : [])
+                              ].map(url => getImageUrl(url));
+                              
+                              const totalCount = allPhotos.length;
+
+                              return (
+                                <>
+                                  <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center', fontWeight: 700 }}>
+                                    รูปแนบทั้งหมด {totalCount > 0 ? `1/${totalCount}` : '0/0'}
+                                  </Typography>
+                                  <Stack direction="row" spacing={1} justifyContent="center">
+                                    {totalCount > 0 ? (
+                                      <Box 
+                                        component="img" 
+                                        src={allPhotos[0]} 
+                                        onClick={() => {
+                                          setPreviewImages(allPhotos);
+                                          setPreviewIndex(0);
+                                        }} 
+                                        sx={{ 
+                                          width: 120, 
+                                          height: 120, 
+                                          borderRadius: 2, 
+                                          objectFit: 'cover', 
+                                          cursor: 'zoom-in', 
+                                          transition: '0.2s', 
+                                          border: '1px solid #e2e8f0',
+                                          '&:hover': { opacity: 0.8, transform: 'scale(1.02)' } 
+                                        }} 
+                                      />
+                                    ) : (
+                                      <Box sx={{ width: '100%', py: 3, border: '1px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc' }}>
+                                        <Typography variant="caption" color="text.secondary">ไม่มีรูปภาพแนบ</Typography>
+                                      </Box>
+                                    )}
+                                  </Stack>
+                                </>
+                              );
+                            })()}
                           </Box>
                         </Stack>
                       </Grid>
@@ -777,12 +792,41 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
       {/* Approve/Reject Footer removed as requested - already in header */}
 
-      <Dialog open={Boolean(previewImage)} onClose={() => setPreviewImage(null)} maxWidth="md" fullWidth>
-        <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 2 }}>
-          <IconButton onClick={() => setPreviewImage(null)} sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}>
+      <Dialog open={previewImages.length > 0} onClose={() => setPreviewImages([])} maxWidth="md" fullWidth>
+        <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 1, minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <IconButton onClick={() => setPreviewImages([])} sx={{ position: 'absolute', top: 12, right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' }, zIndex: 10 }}>
             <CloseIcon />
           </IconButton>
-          {previewImage && <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />}
+          
+          {previewImages.length > 1 && (
+            <>
+              <IconButton 
+                onClick={() => setPreviewIndex((prev) => (prev > 0 ? prev - 1 : previewImages.length - 1))}
+                sx={{ position: 'absolute', left: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' }, zIndex: 10 }}
+              >
+                <ChevronLeftIcon sx={{ fontSize: 40 }} />
+              </IconButton>
+              <IconButton 
+                onClick={() => setPreviewIndex((prev) => (prev < previewImages.length - 1 ? prev + 1 : 0))}
+                sx={{ position: 'absolute', right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' }, zIndex: 10 }}
+              >
+                <ChevronRightIcon sx={{ fontSize: 40 }} />
+              </IconButton>
+            </>
+          )}
+
+          {previewImages.length > 0 && (
+            <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <img 
+                src={previewImages[previewIndex]} 
+                alt={`Preview ${previewIndex + 1}`} 
+                style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} 
+              />
+              <Typography variant="caption" sx={{ color: '#fff', mt: 1, bgcolor: 'rgba(0,0,0,0.5)', px: 2, py: 0.5, borderRadius: 2 }}>
+                {previewIndex + 1} / {previewImages.length}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Dialog>
 

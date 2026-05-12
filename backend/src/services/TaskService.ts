@@ -166,6 +166,12 @@ export class TaskService {
         updatedAt: now,
         createdBy: isNewTask ? createdBy : (existingTaskData?.createdBy || createdBy),
         updatedBy: createdBy,
+        supportedRevisionIds: [],
+        historicalAssigneeIds: Array.from(new Set([
+          ...(existingTaskData?.historicalAssigneeIds || []),
+          ...input.assignees.map(a => a.employeeId),
+          createdBy
+        ]))
       };
 
       transaction.set(taskRef.withConverter(taskConverter), newTaskData as any, { merge: true });
@@ -251,6 +257,8 @@ export class TaskService {
         supportAssignees: [],
         updatedAt: now,
         updatedBy: updatedBy,
+        revisionCreatedAt: now, // [NEW] Track when the revision was created
+        historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(...newAssignees.map(a => a.employeeId), updatedBy) as any
       };
       transaction.update(taskRef, taskUpdates);
 
@@ -353,24 +361,26 @@ export class TaskService {
       // 4. อัปเดต Task หลักโดยเก็บ supportAssignees แยกต่างหาก ไม่เอาไปรวมใน assignees ของ Site
       // Note: We don't have direct access to user's projectLocationIds here easily without querying, 
       // but we can pass it from the frontend or just use the first assignee's ID if we must.
-      // Wait, let's just let the frontend send it, OR we don't need it if we check employeeId!
-      
       const now = new Date();
       
+      const currentRev = taskData.currentRevision || 'rev00';
+      const revNum = currentRev.replace('rev', '');
+      const helpId = `help${revNum}`;
+      
       const taskUpdates = {
-        supportAssignees: supportAssignees,
         isPickedUpBySupport: true,
         supportTaskName: supportTaskName,
+        supportAssignees: supportAssignees,
         supportDailyProgress: 0,
         updatedAt: now,
         updatedBy: updatedBy,
+        supportCreatedAt: now, // [NEW] Track when support joined
+        supportedRevisionIds: admin.firestore.FieldValue.arrayUnion(currentRev) as any,
+        historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(...supportAssignees.map(a => a.employeeId), updatedBy) as any
       };
       transaction.update(taskRef, taskUpdates);
 
       // 5. สร้างเอกสาร helpXX ให้ตรงกับ currentRevision
-      const currentRev = taskData.currentRevision || 'rev00';
-      const revNum = currentRev.replace('rev', '');
-      const helpId = `help${revNum}`;
       const helpRef = taskRef.collection('help').doc(helpId);
       transaction.set(helpRef, {
         ...rev00Data,
@@ -400,7 +410,18 @@ export class TaskService {
     // ใช้การกรองใน Memory ชั่วคราวเพื่อเลี่ยง Error 500 (FAILED_PRECONDITION) เนื่องจากยังไม่ได้สร้าง Index ใน Firebase Console
     // สำหรับระบบที่มีข้อมูลเยอะ ควรไปสร้าง Index ใน Firebase Console แล้วเปลี่ยนกลับไปใช้ .where()
     const snapshot = await afterSaleDb.collectionGroup('tasks').withConverter(taskConverter).get();
-    let tasks = snapshot.docs.map(doc => doc.data() as Task);
+    
+    // [NEW] Populate supportedRevisionIds for old tasks on-the-fly
+    let tasks = await Promise.all(snapshot.docs.map(async (doc) => {
+      const data = doc.data() as Task;
+      if (!data.supportedRevisionIds) {
+        // If the array is missing, try to detect it from the 'help' subcollection
+        const helpSnapshot = await doc.ref.collection('help').get();
+        // Convert 'help00' -> 'rev00'
+        data.supportedRevisionIds = helpSnapshot.docs.map(h => h.id.replace('help', 'rev'));
+      }
+      return data;
+    }));
     
     // กรอง isActive ใน Memory
     tasks = tasks.filter(task => task.isActive === true);
@@ -415,10 +436,12 @@ export class TaskService {
 
     // กรอง assigneeId ใน Memory
     if (filters?.assigneeId) {
+      const targetId = filters.assigneeId;
       tasks = tasks.filter(task => {
-        const matchAssignee = task.assignees?.some((a: any) => a.employeeId === filters.assigneeId || a.id === filters.assigneeId);
-        const matchSupport = task.supportAssignees?.some((a: any) => a.employeeId === filters.assigneeId || a.id === filters.assigneeId);
-        return matchAssignee || matchSupport || task.isSupportRequest === true;
+        const matchAssignee = task.assignees?.some((a: any) => a.employeeId === targetId || a.id === targetId);
+        const matchSupport = task.supportAssignees?.some((a: any) => a.employeeId === targetId || a.id === targetId);
+        const matchHistorical = task.historicalAssigneeIds?.includes(targetId);
+        return matchAssignee || matchSupport || matchHistorical || task.isSupportRequest === true;
       });
     }
 
@@ -498,7 +521,13 @@ export class TaskService {
       await this.recordHistory(newTaskRef, 'update', oldData, newData, updatedBy);
       console.log(`[TaskService] History recorded (Migration)`);
     } else {
-      const updates = { ...sanitizedInput, updatedAt: now, updatedBy };
+      const updates: any = { ...sanitizedInput, updatedAt: now, updatedBy };
+      if (sanitizedInput.assignees) {
+        updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...sanitizedInput.assignees.map((a: any) => a.employeeId));
+      }
+      if (sanitizedInput.supportAssignees) {
+        updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...sanitizedInput.supportAssignees.map((a: any) => a.employeeId));
+      }
       await taskRef.update(updates);
       console.log(`[TaskService] Task document updated (Regular)`);
       await this.recordHistory(taskRef, 'update', oldData, updates, updatedBy);
@@ -577,9 +606,21 @@ export class TaskService {
     console.log(`[TaskService] Submitting daily report for task: ${id}`, reportData);
     
     let taskRef: FirebaseFirestore.DocumentReference;
+    let selectedRevisionId: string | null = null;
+    
     if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      const parts = id.split('__');
+      if (parts.length >= 3) {
+        const [woId, catId, taskId] = parts;
+        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+        if (parts.length === 4) {
+          selectedRevisionId = parts[3];
+        }
+      } else {
+        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+        if (querySnapshot.empty) throw new AppError('Task not found', 404);
+        taskRef = querySnapshot.docs[0].ref;
+      }
     } else {
       const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) throw new AppError('Task not found', 404);
@@ -596,7 +637,7 @@ export class TaskService {
     const taskDocForRev = await taskRef.get();
     if (!taskDocForRev.exists) throw new AppError('Task not found', 404);
     const taskDataForRev = taskDocForRev.data() || {};
-    const currentRev = taskDataForRev.currentRevision || 'rev00';
+    const currentRev = selectedRevisionId || taskDataForRev.currentRevision || 'rev00';
 
     // 3-day retroactive validation
     const nowForValidation = new Date();
@@ -609,6 +650,56 @@ export class TaskService {
       const unlockInfo = unlockedDates[dateStr];
       if (!unlockInfo || (unlockInfo.unlockedUntil.toDate ? unlockInfo.unlockedUntil.toDate() : new Date(unlockInfo.unlockedUntil)) < nowForValidation) {
          throw new AppError(`Cannot submit report for date older than 3 days unless unlocked (date: ${dateStr})`, 403);
+      }
+    }
+
+    // [NEW] Revision Timeline Boundary Validation
+    // Users cannot submit reports before the current revision/support was created (rejected/joined)
+    if (isSupportReport && taskDataForRev.supportCreatedAt) {
+      const supportCreatedAt = taskDataForRev.supportCreatedAt.toDate ? taskDataForRev.supportCreatedAt.toDate() : new Date(taskDataForRev.supportCreatedAt);
+      const boundaryDate = new Date(supportCreatedAt);
+      boundaryDate.setHours(0, 0, 0, 0); // Start of the day
+      if (reportDate < boundaryDate) {
+        throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่ทีม Support เข้าร่วมงานได้`, 400);
+      }
+    } else if (!isSupportReport && taskDataForRev.revisionCreatedAt && currentRev !== 'rev00') {
+      const revisionCreatedAt = taskDataForRev.revisionCreatedAt.toDate ? taskDataForRev.revisionCreatedAt.toDate() : new Date(taskDataForRev.revisionCreatedAt);
+      const boundaryDate = new Date(revisionCreatedAt);
+      boundaryDate.setHours(0, 0, 0, 0); // Start of the day
+      if (reportDate < boundaryDate) {
+        throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่งานถูก Reject ได้`, 400);
+      }
+    }
+
+    // --- [NEW] Cross-Revision Conflict Validation ---
+    if (!isSupportReport) {
+      // Check if any revision (other than current) has a report for this date
+      const revisionsSnapshot = await taskRef.collection('revisions').get();
+      const allRevIds = revisionsSnapshot.docs.map(d => d.id);
+      
+      for (const revId of allRevIds) {
+        if (revId === currentRev) continue; // Skip current
+        
+        const otherReportRef = taskRef.collection('revisions').doc(revId).collection('dailyReports').doc(dateStr);
+        const otherReportDoc = await otherReportRef.get();
+        if (otherReportDoc.exists) {
+          throw new AppError(`มีข้อมูลรายงานในวันที่ ${dateStr} อยู่ใน ${revId} แล้ว ไม่สามารถลงข้อมูลทับซ้อนกันได้`, 400);
+        }
+      }
+    } else {
+      // Check help/support reports as well
+      const helpSnapshot = await taskRef.collection('help').get();
+      const allHelpIds = helpSnapshot.docs.map(d => d.id);
+      const helpIdToMatch = currentRev.replace('rev', 'help');
+      
+      for (const hId of allHelpIds) {
+        if (hId === helpIdToMatch) continue; // Skip current
+
+        const otherHelpReportRef = taskRef.collection('help').doc(hId).collection('dailyReports').doc(dateStr);
+        const otherHelpReportDoc = await otherHelpReportRef.get();
+        if (otherHelpReportDoc.exists) {
+          throw new AppError(`มีข้อมูลรายงาน Support ในวันที่ ${dateStr} อยู่ใน ${hId} แล้ว`, 400);
+        }
       }
     }
 
@@ -700,20 +791,23 @@ export class TaskService {
             dailyProgress: progress,
             status: newStatus,
             updatedAt: now,
-            updatedBy: updatedBy
+            updatedBy: updatedBy,
+            historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
           });
           historyUpdateData.dailyProgress = progress;
         } else {
           transaction.update(taskRef, {
             updatedAt: now,
-            updatedBy: updatedBy
+            updatedBy: updatedBy,
+            historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
           });
         }
       } else {
         // อัปเดตแค่วันที่แก้ไขล่าสุด
         transaction.update(taskRef, {
           updatedAt: now,
-          updatedBy: updatedBy
+          updatedBy: updatedBy,
+          historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
         });
       }
 
@@ -745,9 +839,18 @@ export class TaskService {
    */
   async getDailyReport(id: string, dateStr: string, isSupportReport: boolean = false): Promise<any> {
     let taskRef: FirebaseFirestore.DocumentReference;
+    let selectedRevisionId: string | null = null;
     if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      const parts = id.split('__');
+      if (parts.length >= 3) {
+        const [woId, catId, taskId] = parts;
+        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+        if (parts.length === 4) selectedRevisionId = parts[3];
+      } else {
+        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+        if (querySnapshot.empty) return null;
+        taskRef = querySnapshot.docs[0].ref;
+      }
     } else {
       const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) return null;
@@ -756,28 +859,52 @@ export class TaskService {
 
     const taskDocForRev = await taskRef.get();
     if (!taskDocForRev.exists) return null;
-    const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
+    const currentRev = selectedRevisionId || taskDocForRev.data()?.currentRevision || 'rev00';
 
-    let reportDoc;
     if (isSupportReport) {
+      // 1. Try current help first
       const helpId = currentRev.replace('rev', 'help');
-      reportDoc = await taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr).get();
-    } else {
-      reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
-    }
-    
-    if (!reportDoc.exists) return null;
+      const reportDoc = await taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr).get();
+      if (reportDoc.exists) return reportDoc.data();
 
-    return reportDoc.data();
+      // 2. Search in all other help docs
+      const helpSnapshot = await taskRef.collection('help').get();
+      for (const hDoc of helpSnapshot.docs) {
+        if (hDoc.id === helpId) continue;
+        const rDoc = await hDoc.ref.collection('dailyReports').doc(dateStr).get();
+        if (rDoc.exists) return rDoc.data();
+      }
+    } else {
+      // 1. Try current revision first
+      const reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
+      if (reportDoc.exists) return reportDoc.data();
+
+      // 2. Search in all other revisions
+      const revisionsSnapshot = await taskRef.collection('revisions').get();
+      for (const revDoc of revisionsSnapshot.docs) {
+        if (revDoc.id === currentRev) continue;
+        const rDoc = await revDoc.ref.collection('dailyReports').doc(dateStr).get();
+        if (rDoc.exists) return rDoc.data();
+      }
+    }
+
+    return null;
   }
   /**
    * ดึงข้อมูลรายงานประจำวันทั้งหมดของ Task
    */
-  async getAllDailyReports(id: string, isSupportReport: boolean = false): Promise<any[]> {
+  async getAllDailyReports(id: string, isSupportReport?: boolean): Promise<any[]> {
     let taskRef: FirebaseFirestore.DocumentReference;
     if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      const parts = id.split('__');
+      if (parts.length >= 3) {
+        const [woId, catId, taskId] = parts;
+        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+      } else {
+        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+        if (querySnapshot.empty) return [];
+        taskRef = querySnapshot.docs[0].ref;
+      }
     } else {
       const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
       if (querySnapshot.empty) return [];
@@ -786,19 +913,41 @@ export class TaskService {
 
     const taskDocForRev = await taskRef.get();
     if (!taskDocForRev.exists) return [];
-    const currentRev = taskDocForRev.data()?.currentRevision || 'rev00';
-
-    let reportsSnapshot;
-    if (isSupportReport) {
-      const helpId = currentRev.replace('rev', 'help');
-      reportsSnapshot = await taskRef.collection('help').doc(helpId).collection('dailyReports').get();
-    } else {
-      reportsSnapshot = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').get();
-    }
     
-    if (reportsSnapshot.empty) return [];
+    const allReports: any[] = [];
+    const dateMap = new Map<string, boolean>();
 
-    return reportsSnapshot.docs.map(doc => doc.data());
+    // 1. Fetch from all revisions (Site Reports)
+    if (isSupportReport === false || isSupportReport === undefined) {
+      const revisionsSnapshot = await taskRef.collection('revisions').get();
+      for (const revDoc of revisionsSnapshot.docs) {
+        const reports = await revDoc.ref.collection('dailyReports').get();
+        reports.docs.forEach(d => {
+          const data = d.data();
+          if (data.reportDate && !dateMap.has(d.id)) {
+            allReports.push({ ...data, _revisionId: revDoc.id });
+            dateMap.set(d.id, true);
+          }
+        });
+      }
+    }
+
+    // 2. Fetch from all help/support docs (Support Reports)
+    if (isSupportReport === true || isSupportReport === undefined) {
+      const helpSnapshot = await taskRef.collection('help').get();
+      for (const hDoc of helpSnapshot.docs) {
+        const reports = await hDoc.ref.collection('dailyReports').get();
+        reports.docs.forEach(d => {
+          const data = d.data();
+          if (data.reportDate && !dateMap.has(d.id)) {
+            allReports.push({ ...data, _revisionId: hDoc.id });
+            dateMap.set(d.id, true);
+          }
+        });
+      }
+    }
+
+    return allReports;
   }
 
   /**
