@@ -396,6 +396,36 @@ class ProjectBDailyReportService {
   // =========================================================================
 
   /**
+   * ดึง timesheets ทั้งหมดในช่วงวันที่ (ทุก project)
+   */
+  public async getTimesheetsByDateRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<DailyEmployeeTimesheet[]> {
+    const db = this.ensureDb();
+    const snap = await db
+      .collection(this.COLLECTION)
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .get();
+
+    return snap.docs
+      .map((doc) => doc.data() as DailyEmployeeTimesheet)
+      .filter((ts) => ts.isActive !== false);
+  }
+
+  /**
+   * ดึงและแปลงเป็น DailyTimesheetSummary[] (ทุก project)
+   */
+  public async getSummariesByDateRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<DailyTimesheetSummary[]> {
+    const timesheets = await this.getTimesheetsByDateRange(startDate, endDate);
+    return timesheets.map(toTimesheetSummary);
+  }
+
+  /**
    * ดึงและแปลงเป็น DailyTimesheetSummary[] พร้อมส่งให้ ReconciliationService
    */
   public async getSummariesByProjectAndDateRange(

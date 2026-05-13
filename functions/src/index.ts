@@ -129,7 +129,7 @@ function classifyByPunchCoverage(params: {
   const reportStart = punchToMinutes(sortedReport[0]);
   const reportEnd   = punchToMinutes(sortedReport[sortedReport.length - 1]);
 
-  // ใช้ scanPunches ทั้งหมดในการหาขอบเขต (Min/Max) เพื่อความแม่นยำ
+  // หาจุดสแกนจริง (หัว-ท้าย) — ยึดตามหลัก Coverage (เอกสาร Section 2.3)
   const sortedScan = [...scanPunches].sort();
   const scanFirstIn  = sortedScan.length > 0 ? punchToMinutes(sortedScan[0]) : 0;
   const scanLastOut  = sortedScan.length > 0 ? punchToMinutes(sortedScan[sortedScan.length - 1]) : 0;
@@ -137,7 +137,33 @@ function classifyByPunchCoverage(params: {
   const lateMinutes       = Math.max(0, scanFirstIn - reportStart);
   const earlyLeaveMinutes = Math.max(0, reportEnd - scanLastOut);
 
-  // --- Auto-Penalty Logic (30-min rule for OT) ---
+  // --- CONFLICT Threshold (30 นาที) ---
+  // หากสายหรือออกก่อนเกิน 30 นาที ให้เป็น CONFLICTED (ทั้งเวลาปกติและ OT)
+  const CONFLICT_THRESHOLD = 30;
+  const isLateConflict = lateMinutes > CONFLICT_THRESHOLD;
+  const isEarlyLeaveConflict = earlyLeaveMinutes > CONFLICT_THRESHOLD;
+
+  if (isLateConflict || isEarlyLeaveConflict) {
+    return {
+      status: 'CONFLICTED',
+      approvedNormalHours: normalHours,
+      approvedOtMorning: otMorningHours,
+      approvedOtNoon: otNoonHours,
+      approvedOtEvening: otEveningHours,
+      totalApprovedHours: normalHours + otMorningHours + otNoonHours + otEveningHours,
+      approvalSource: 'daily_report',
+      lateMinutes,
+      earlyLeaveMinutes,
+      isLate: isLateConflict,
+      isEarlyLeave: isEarlyLeaveConflict,
+      note: isEarlyLeaveConflict
+        ? `ออกก่อนเกิน ${CONFLICT_THRESHOLD} นาที (${earlyLeaveMinutes} นาที) — ต้องตรวจสอบ Daily Report`
+        : `สายเกิน ${CONFLICT_THRESHOLD} นาที (${lateMinutes} นาที) — ต้องตรวจสอบ Daily Report`,
+    };
+  }
+
+  // --- MATCHED Case ---
+  // เมื่อผ่านการเช็ค Conflict (สาย/ออกก่อน <= 30 นาที)
   let approvedNormal  = normalHours;
   let approvedMorning = otMorningHours;
   let approvedNoon    = otNoonHours;
@@ -168,7 +194,7 @@ function classifyByPunchCoverage(params: {
     approvedOtNoon: approvedNoon,
     approvedOtEvening: approvedEvening,
     totalApprovedHours: totalApproved,
-    approvalSource: (isLateForOT || isEarlyLeaveFromOT) ? 'manual' : 'daily_report',
+    approvalSource: 'daily_report',
     lateMinutes,
     earlyLeaveMinutes,
     isLate: lateMinutes > 0,
@@ -207,7 +233,17 @@ async function getFallbackAssignee(employeeId: string): Promise<{ id: string; na
     }
 
     if (maxAssigneeId && maxCount > 0) {
-      return { id: maxAssigneeId, name: maxAssigneeName || 'Unknown' };
+      let finalName = maxAssigneeName;
+      if (!finalName || finalName === 'Unknown') {
+        try {
+          const userSnap = await db.collection('users').where('Employeeid', '==', maxAssigneeId).limit(1).get();
+          if (!userSnap.empty) {
+            const uData = userSnap.docs[0].data();
+            finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+          }
+        } catch { /* ignore */ }
+      }
+      return { id: maxAssigneeId, name: finalName || 'Unknown' };
     }
   } catch (err) {
     console.error(`[getFallbackAssignee] Error for ${employeeId}:`, err);
@@ -657,11 +693,15 @@ async function reconcile(
           approvalSource: result.approvalSource,
         };
       } else {
-        // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า MISSING_SCAN
-        status = 'MISSING_SCAN';
+        // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า CONFLICTED (กรณี B)
+        status = 'CONFLICTED';
         conflictNote = effectiveScan.length === 1 
-          ? `พบการสแกนเพียงครั้งเดียว (${effectiveScan[0]}) ไม่สามารถคำนวณเวลาได้`
+          ? `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${effectiveScan[0]}) — Admin ต้องเติมเวลาที่ขาด`
           : 'ไม่พบข้อมูลการสแกนนิ้ว';
+        
+        if (effectiveScan.length === 0) {
+           status = 'MISSING_SCAN'; // ถ้าไม่มีเลยจริงๆ ค่อยเป็น MISSING_SCAN
+        }
       }
     } else {
       // ไม่มีข้อมูลช่วงเวลาใน Daily Report
@@ -735,7 +775,7 @@ async function reconcile(
           .get();
         if (!userSnap.empty) {
           const uData = userSnap.docs[0].data();
-          updates['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
+          updates['assigneeName'] = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || null;
         }
       } catch { /* ignore */ }
     } else if (!hasTimesheet) {
@@ -812,7 +852,7 @@ async function reconcile(
           .get();
         if (!userSnap.empty) {
           const uData = userSnap.docs[0].data();
-          setObj['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
+          setObj['assigneeName'] = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || null;
         }
       } catch { /* ignore */ }
     } else if (!hasTimesheet) {
@@ -1246,7 +1286,21 @@ export const onReconciliationChanged = firestore
     // 2. Increment new assignee if exists
     if (afterAssigneeId) {
       updates[`foremanUsage.${afterAssigneeId}.count`] = admin.firestore.FieldValue.increment(1);
-      if (afterAssigneeName) {
+      
+      let finalAssigneeName = afterAssigneeName;
+      if (!finalAssigneeName || finalAssigneeName === 'Unknown') {
+        try {
+          const userSnap = await db.collection('users').where('Employeeid', '==', afterAssigneeId).limit(1).get();
+          if (!userSnap.empty) {
+            const uData = userSnap.docs[0].data();
+            finalAssigneeName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (finalAssigneeName && finalAssigneeName !== 'Unknown') {
+        updates[`foremanUsage.${afterAssigneeId}.name`] = finalAssigneeName;
+      } else if (afterAssigneeName) {
         updates[`foremanUsage.${afterAssigneeId}.name`] = afterAssigneeName;
       }
     }

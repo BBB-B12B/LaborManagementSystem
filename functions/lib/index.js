@@ -74,13 +74,37 @@ function classifyByPunchCoverage(params) {
     const sortedReport = [...dailyReportPunches].sort();
     const reportStart = punchToMinutes(sortedReport[0]);
     const reportEnd = punchToMinutes(sortedReport[sortedReport.length - 1]);
-    // ใช้ scanPunches ทั้งหมดในการหาขอบเขต (Min/Max) เพื่อความแม่นยำ
+    // หาจุดสแกนจริง (หัว-ท้าย) — ยึดตามหลัก Coverage (เอกสาร Section 2.3)
     const sortedScan = [...scanPunches].sort();
     const scanFirstIn = sortedScan.length > 0 ? punchToMinutes(sortedScan[0]) : 0;
     const scanLastOut = sortedScan.length > 0 ? punchToMinutes(sortedScan[sortedScan.length - 1]) : 0;
     const lateMinutes = Math.max(0, scanFirstIn - reportStart);
     const earlyLeaveMinutes = Math.max(0, reportEnd - scanLastOut);
-    // --- Auto-Penalty Logic (30-min rule for OT) ---
+    // --- CONFLICT Threshold (30 นาที) ---
+    // หากสายหรือออกก่อนเกิน 30 นาที ให้เป็น CONFLICTED (ทั้งเวลาปกติและ OT)
+    const CONFLICT_THRESHOLD = 30;
+    const isLateConflict = lateMinutes > CONFLICT_THRESHOLD;
+    const isEarlyLeaveConflict = earlyLeaveMinutes > CONFLICT_THRESHOLD;
+    if (isLateConflict || isEarlyLeaveConflict) {
+        return {
+            status: 'CONFLICTED',
+            approvedNormalHours: normalHours,
+            approvedOtMorning: otMorningHours,
+            approvedOtNoon: otNoonHours,
+            approvedOtEvening: otEveningHours,
+            totalApprovedHours: normalHours + otMorningHours + otNoonHours + otEveningHours,
+            approvalSource: 'daily_report',
+            lateMinutes,
+            earlyLeaveMinutes,
+            isLate: isLateConflict,
+            isEarlyLeave: isEarlyLeaveConflict,
+            note: isEarlyLeaveConflict
+                ? `ออกก่อนเกิน ${CONFLICT_THRESHOLD} นาที (${earlyLeaveMinutes} นาที) — ต้องตรวจสอบ Daily Report`
+                : `สายเกิน ${CONFLICT_THRESHOLD} นาที (${lateMinutes} นาที) — ต้องตรวจสอบ Daily Report`,
+        };
+    }
+    // --- MATCHED Case ---
+    // เมื่อผ่านการเช็ค Conflict (สาย/ออกก่อน <= 30 นาที)
     let approvedNormal = normalHours;
     let approvedMorning = otMorningHours;
     let approvedNoon = otNoonHours;
@@ -106,7 +130,7 @@ function classifyByPunchCoverage(params) {
         approvedOtNoon: approvedNoon,
         approvedOtEvening: approvedEvening,
         totalApprovedHours: totalApproved,
-        approvalSource: (isLateForOT || isEarlyLeaveFromOT) ? 'manual' : 'daily_report',
+        approvalSource: 'daily_report',
         lateMinutes,
         earlyLeaveMinutes,
         isLate: lateMinutes > 0,
@@ -572,11 +596,14 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
                 };
             }
             else {
-                // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า MISSING_SCAN
-                status = 'MISSING_SCAN';
+                // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า CONFLICTED (กรณี B)
+                status = 'CONFLICTED';
                 conflictNote = effectiveScan.length === 1
-                    ? `พบการสแกนเพียงครั้งเดียว (${effectiveScan[0]}) ไม่สามารถคำนวณเวลาได้`
+                    ? `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${effectiveScan[0]}) — Admin ต้องเติมเวลาที่ขาด`
                     : 'ไม่พบข้อมูลการสแกนนิ้ว';
+                if (effectiveScan.length === 0) {
+                    status = 'MISSING_SCAN'; // ถ้าไม่มีเลยจริงๆ ค่อยเป็น MISSING_SCAN
+                }
             }
         }
         else {
@@ -889,14 +916,19 @@ async function checkDailyAbsence(workDateStr) {
         // ไม่มีข้อมูลเลย → ABSENT
         // หมายเหตุ: projectLocationId จาก dailyContractors = homeProjectId (สังกัดถาวร)
         // ต้อง set homeProjectId ด้วย เพื่อให้ backend query (buildBaseQuery) กรองเจอ
+        // ดึง fallback assignee จาก foremanUsage ก่อน write
+        const fallback = await getFallbackAssignee(employeeId);
         currentBatch.set(recordRef, {
             employeeId,
             employeeName: contractorData['name'] || null,
             workDate: workDateStr,
             projectLocationId,
-            homeProjectId: projectLocationId, // ← เพิ่ม: ใช้ค่าเดียวกัน (สังกัดถาวร)
+            homeProjectId: projectLocationId, // ← ใช้ค่าเดียวกัน (สังกัดถาวร)
             dailyReportHours: null,
             scanDataHours: null,
+            assigneeId: fallback?.id || null,
+            assigneeName: fallback?.name || null,
+            isFallbackAssignee: fallback != null,
             status: 'ABSENT',
             statusHistory: [{
                     status: 'ABSENT',

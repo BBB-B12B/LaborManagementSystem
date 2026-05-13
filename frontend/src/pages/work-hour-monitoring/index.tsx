@@ -109,8 +109,8 @@ export default function WorkHourMonitoringPage() {
   };
 
   const handleSync = async () => {
-    if (project === 'all' || !startDate || !endDate) {
-      toast.warning('กรุณาเลือกโครงการและช่วงวันที่');
+    if (!startDate || !endDate) {
+      toast.warning('กรุณาเลือกช่วงวันที่');
       return;
     }
     setIsSyncing(true);

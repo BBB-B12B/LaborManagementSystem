@@ -62,7 +62,8 @@ export const onScanDataChanged = firestore
     logger.info(`[onScanDataChanged] Triggered for ${employeeNumber} on ${workDateStr} (project: ${projectLocationId})`);
 
     try {
-      await reconciliationService.generateForEmployee(employeeNumber, workDateStr, projectLocationId);
+      // ส่ง data ไปด้วยเพื่อเลี่ยงปัญหา Stale Data (index lag) ในการ Query รอบใหม่
+      await reconciliationService.generateForEmployee(employeeNumber, workDateStr, projectLocationId, data);
       logger.info(`[onScanDataChanged] Reconciliation complete for ${employeeNumber} on ${workDateStr}`);
     } catch (err) {
       logger.error(`[onScanDataChanged] Reconciliation failed for ${employeeNumber} on ${workDateStr}:`, err);

@@ -218,8 +218,27 @@ class ScanDataService extends BaseCrudService<ScanData> {
       // Filter in-memory to include documents based on onlyDeleted flag
       return scans.filter(s => onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true);
     } catch (error: any) {
-
       logger.error('Error getting scan data by project:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get scan data by date range (all projects)
+   */
+  async getByDateRange(
+    startDate: Date,
+    endDate: Date,
+    onlyDeleted: boolean = false
+  ): Promise<ScanData[]> {
+    try {
+      const scans = await this.queryWithFallback([
+        { field: 'workDate', operator: '>=', value: startDate },
+        { field: 'workDate', operator: '<=', value: endDate },
+      ]);
+      return scans.filter(s => onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true);
+    } catch (error: any) {
+      logger.error('Error getting scan data by date range:', error);
       throw error;
     }
   }

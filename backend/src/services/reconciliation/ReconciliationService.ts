@@ -124,6 +124,52 @@ export class ReconciliationService {
   // Core: Classify
   // =========================================================================
 
+  private async getFallbackAssignee(employeeId: string): Promise<{ id: string; name: string } | null> {
+    try {
+      let targetDoc = await this.db.collection('dailyContractors').doc(`DC-${employeeId}`).get();
+      if (!targetDoc.exists) {
+        targetDoc = await this.db.collection('dailyContractors').doc(employeeId).get();
+        if (!targetDoc.exists) {
+          const qSnap = await this.db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+          if (qSnap.empty) return null;
+          targetDoc = qSnap.docs[0];
+        }
+      }
+      const data = targetDoc.data();
+      if (!data?.foremanUsage) return null;
+
+      let maxCount = -1;
+      let maxAssigneeId: string | null = null;
+      let maxAssigneeName: string | null = null;
+
+      for (const [foremanId, usage] of Object.entries(data.foremanUsage)) {
+        const u = usage as { count: number; name: string };
+        if (u.count > maxCount) {
+          maxCount = u.count;
+          maxAssigneeId = foremanId;
+          maxAssigneeName = u.name;
+        }
+      }
+
+      if (maxAssigneeId && maxCount > 0) {
+        let finalName = maxAssigneeName;
+        if (!finalName || finalName === 'Unknown') {
+          try {
+            const userSnap = await this.db.collection('users').where('Employeeid', '==', maxAssigneeId).limit(1).get();
+            if (!userSnap.empty) {
+              const uData = userSnap.docs[0].data();
+              finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+            }
+          } catch { /* ignore */ }
+        }
+        return { id: maxAssigneeId, name: finalName || 'Unknown' };
+      }
+    } catch (err) {
+      console.error(`[ReconciliationService.getFallbackAssignee] Error for ${employeeId}:`, err);
+    }
+    return null;
+  }
+
   /**
    * แปลง HH:mm เป็นจำนวนนาทีจากเที่ยงคืน
    */
@@ -177,8 +223,8 @@ export class ReconciliationService {
     } = params;
 
     const dailyPunchesValid = Array.isArray(dailyReportPunches) && dailyReportPunches.length >= 2;
-    const effectiveScanPunches = this.makeEvenScanPunches(scanPunches || []);
-    const scanValid = effectiveScanPunches.length >= 2;
+    const scanCount = (scanPunches || []).length;
+    const scanValid = scanCount >= 2;
     const dailyExists = dailyPunchesValid || (dailyReportHours !== undefined && dailyReportHours > 0);
 
     // --- Base cases ---
@@ -189,45 +235,69 @@ export class ReconciliationService {
     }
     if (!dailyExists && scanValid) return { status: 'MISSING_DAILY' };
     if (dailyExists && !scanValid) {
-      return { 
-        status: 'MISSING_SCAN', 
-        suggestedHours: 0,
-        note: scanPunches && scanPunches.length === 1 
-          ? `พบการสแกนเพียงครั้งเดียว (${scanPunches[0]}) ไม่สามารถคำนวณเวลาได้`
-          : 'ไม่พบข้อมูลการสแกนนิ้ว'
-      };
+      // กรณีมี daily แต่สแกนไม่พอ
+      if (scanCount === 0) {
+        return { 
+          status: 'MISSING_SCAN', 
+          suggestedHours: 0,
+          note: 'ไม่พบข้อมูลการสแกนนิ้ว'
+        };
+      } else {
+        // มี 1 ครั้ง -> CONFLICTED (กรณี B)
+        return { 
+          status: 'CONFLICTED', 
+          suggestedHours: 0,
+          note: `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${scanPunches[0]}) — Admin ต้องเติมเวลาที่ขาด`
+        };
+      }
     }
 
     // --- Punch Coverage Check ---
-    // ถ้าไม่มี dailyReportPunches (ข้อมูล Daily Report ไม่สมบูรณ์) -> ให้เป็น MISSING_DAILY (ขาดข้อมูลช่วงเวลา)
     if (!dailyPunchesValid) {
       return { status: 'MISSING_DAILY', note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)' };
     }
 
-    // reportStart = punch แรกของวัน (รวม OT เช้า ถ้ามี)
-    // reportEnd   = punch สุดท้ายของวัน (รวม OT เย็น ถ้ามี)
+    // หาจุดเริ่มและจุดจบที่ขอมา (รวม OT ทุกช่วง)
     const sortedReportPunches = [...dailyReportPunches].sort();
     const reportStart = this.punchToMinutes(sortedReportPunches[0]);
     const reportEnd   = this.punchToMinutes(sortedReportPunches[sortedReportPunches.length - 1]);
 
-    // สำหรับการตรวจสอบ Range (Coverage) ให้ใช้ scanPunches ดั้งเดิมที่เรียงลำดับแล้ว
-    // เพื่อให้ได้จุดเริ่มต้นและจุดสุดท้ายที่แท้จริง แม้จำนวนสแกนจะเป็นเลขคี่
+    // หาจุดสแกนจริง (หัว-ท้าย) — ไม่สนใจจำนวนสแกนตรงกลาง
     const sortedScan = [...(scanPunches || [])].sort();
-    const scanFirstIn  = sortedScan.length > 0 ? this.punchToMinutes(sortedScan[0]) : 0;
-    const scanLastOut  = sortedScan.length > 0 ? this.punchToMinutes(sortedScan[sortedScan.length - 1]) : 0;
+    const scanFirstIn  = this.punchToMinutes(sortedScan[0]);
+    const scanLastOut  = this.punchToMinutes(sortedScan[sortedScan.length - 1]);
 
-    const lateMinutes      = Math.max(0, scanFirstIn - reportStart);
+    const lateMinutes       = Math.max(0, scanFirstIn - reportStart);
     const earlyLeaveMinutes = Math.max(0, reportEnd - scanLastOut);
 
-    // --- Auto-Penalty Logic (กฎ 30 นาที สำหรับ OT) ---
-    // กฎ: ถ้าสาย/ออกก่อนในช่วง OT ให้ปัดเศษออกทีละ 30 นาที (Penalty)
-    // แล้วปรับสถานะเป็น MATCHED อัตโนมัติโดยใช้ยอดที่หักแล้ว (Approved Hours)
+    // --- CONFLICT Threshold (30 นาที) ---
+    // ไม่ว่าจะเป็นเวลาปกติ หรือ OT ถ้าสาย/ออกก่อนเกิน 30 นาที -> CONFLICTED (กรณี A)
+    const CONFLICT_THRESHOLD = 30;
+    const isLateConflict = lateMinutes > CONFLICT_THRESHOLD;
+    const isEarlyLeaveConflict = earlyLeaveMinutes > CONFLICT_THRESHOLD;
+
+    if (isLateConflict || isEarlyLeaveConflict) {
+      return {
+        status: 'CONFLICTED',
+        lateMinutes,
+        earlyLeaveMinutes,
+        isLate: isLateConflict,
+        isEarlyLeave: isEarlyLeaveConflict,
+        note: isEarlyLeaveConflict
+          ? `ออกก่อนเกิน ${CONFLICT_THRESHOLD} นาที (${earlyLeaveMinutes} นาที) — ต้องตรวจสอบ Daily Report`
+          : `สายเกิน ${CONFLICT_THRESHOLD} นาที (${lateMinutes} นาที) — ต้องตรวจสอบ Daily Report`,
+      };
+    }
+
+    // --- MATCHED Case ---
+    // เมื่อผ่านการเช็ค Conflict มาได้ (สาย/ออกก่อน <= 30 นาที)
     let approvedNormalHours = timesheetNormalHours ?? dailyReportHours ?? 0;
     let approvedOtMorning = timesheetOtMorning ?? 0;
     let approvedOtNoon = timesheetOtNoon ?? 0;
     let approvedOtEvening = timesheetOtEvening ?? 0;
     let autoNote = '';
 
+    // Auto-Penalty สำหรับ OT (ถ้าสาย/ออกก่อนไม่เกิน 30 นาที)
     const isLateForOT = lateMinutes > 0 && (timesheetOtMorning ?? 0) > 0;
     const isEarlyLeaveFromOT = earlyLeaveMinutes > 0 && (timesheetOtEvening ?? 0) > 0;
 
@@ -243,6 +313,8 @@ export class ReconciliationService {
       autoNote += `ออกก่อนช่วง OT เย็น ${earlyLeaveMinutes} นาที (หัก ${penaltyMins} นาที) `;
     }
 
+    // หมายเหตุ: สำหรับเวลาปกติ (08:00-17:00) ไม่ต้องหัก approvedNormalHours เพราะระบบ HR จัดการเอง
+
     const totalApproved = approvedNormalHours + approvedOtMorning + approvedOtNoon + approvedOtEvening;
 
     return {
@@ -253,12 +325,12 @@ export class ReconciliationService {
       approvedOtNoon,
       approvedOtEvening,
       totalApprovedHours: totalApproved,
-      approvalSource: (isLateForOT || isEarlyLeaveFromOT) ? 'manual' : 'daily_report', // manual if auto-adjusted
+      approvalSource: 'daily_report',
       lateMinutes,
       earlyLeaveMinutes,
       isLate: lateMinutes > 0,
       isEarlyLeave: earlyLeaveMinutes > 0,
-      note: autoNote || null, // ถ้ามี penalty ให้ใส่ note อธิบาย ล้างค่าออกถ้าไม่มี penalty
+      note: autoNote || null,
     };
   }
 
@@ -388,10 +460,10 @@ export class ReconciliationService {
       approvedOtEvening:      classified.approvedOtEvening,
       totalApprovedHours:     classified.totalApprovedHours,
       approvalSource:         classified.approvalSource,
-      lateMinutes:            classified.lateMinutes,
-      earlyLeaveMinutes:      classified.earlyLeaveMinutes,
-      isLate:                 classified.isLate,
-      isEarlyLeave:           classified.isEarlyLeave,
+      lateMinutes:            classified.lateMinutes       ?? 0,
+      earlyLeaveMinutes:      classified.earlyLeaveMinutes  ?? 0,
+      isLate:                 classified.isLate            ?? false,
+      isEarlyLeave:           classified.isEarlyLeave      ?? false,
       note:                   classified.note,
       updatedAt:              now,
       hasLeave:               effectiveIsLeave === true,
@@ -486,26 +558,36 @@ export class ReconciliationService {
     startDate: string,
     endDate: string,
   ): Promise<{ succeeded: number; failed: number; total: number }> {
+    const isAllProjects = projectLocationId === 'all';
+
     // 1. ดึง Daily Report summaries จาก Project B
-    const dailySummaries = await projectBDailyReportService.getSummariesByProjectAndDateRange(
-      projectLocationId,
-      startDate,
-      endDate,
-    );
+    const dailySummaries = isAllProjects
+      ? await projectBDailyReportService.getSummariesByDateRange(startDate, endDate)
+      : await projectBDailyReportService.getSummariesByProjectAndDateRange(
+          projectLocationId,
+          startDate,
+          endDate,
+        );
 
     // 2. ดึง Scan Data จาก Local Firestore
-    const scanRecords = await scanDataService.getByProjectAndDate(
-      projectLocationId,
-      new Date(startDate),
-      new Date(endDate),
-    );
+    const scanRecords = isAllProjects
+      ? await scanDataService.getByDateRange(new Date(startDate), new Date(endDate))
+      : await scanDataService.getByProjectAndDate(
+          projectLocationId,
+          new Date(startDate),
+          new Date(endDate),
+        );
 
-    // 2.5 ดึง existing Reconciliation Records มาทั้งหมดในช่วงนี้ เพื่อหลีกเลี่ยงการ .get() ทีละตัว
-    const existingRecordsSnap = await this.db.collection(COLLECTION)
-      .where('projectLocationId', '==', projectLocationId)
+    // 2.5 ดึง existing Reconciliation Records มาทั้งหมดในช่วงนี้
+    let query = this.db.collection(COLLECTION)
       .where('workDate', '>=', startDate)
-      .where('workDate', '<=', endDate)
-      .get();
+      .where('workDate', '<=', endDate);
+    
+    if (!isAllProjects) {
+      query = query.where('projectLocationId', '==', projectLocationId);
+    }
+
+    const existingRecordsSnap = await query.get();
     
     const existingMap = new Map<string, ReconciliationRecord>();
     existingRecordsSnap.docs.forEach((doc) => {
@@ -523,8 +605,8 @@ export class ReconciliationService {
       scanOtNoonHours?: number;
       scanOtEveningHours?: number;
     }>();
-    for (const scan of scanRecords) {
-      if (scan.isDeleted) continue;
+
+    const addToScanMap = (scan: any) => {
       const dateKey =
         scan.scanDate ||
         (scan.workDate instanceof Date
@@ -539,7 +621,6 @@ export class ReconciliationService {
       scanMap.set(key, { 
         hours: totalScanHours, 
         id: scan.id,
-        // ใช้ extractScanPunches เพื่อ fallback จาก allScans / Time1-6 ถ้า punches ยังว่าง
         punches: extractScanPunches(scan as any),
         name: scan.name,
         scanNormalHours: scan.regularHours,
@@ -547,9 +628,44 @@ export class ReconciliationService {
         scanOtNoonHours: scan.otNoonHours,
         scanOtEveningHours: scan.otEveningHours
       });
+    };
+
+    for (const scan of scanRecords) {
+      if (scan.isDeleted) continue;
+      addToScanMap(scan);
     }
 
+    // 3.1 ตรวจหา Cross-Project Scans: 
+    // ถ้าพนักงานมี Daily Report ในโครงการนี้ แต่ไม่มี Scan Record ที่ระบุโครงการนี้ 
+    // ให้ลองดึงข้อมูลสแกนด้วย ID (SCAN_{empId}_{date}) เผื่อเขาสแกนไว้ที่โครงการอื่น
+    const crossProjectTargets: { empId: string, date: string }[] = [];
+    for (const summary of dailySummaries) {
+      const key = `${summary.employeeNumber}_${summary.date}`;
+      if (!scanMap.has(key)) {
+        crossProjectTargets.push({ empId: summary.employeeNumber, date: summary.date });
+      }
+    }
+
+    if (crossProjectTargets.length > 0) {
+      console.log(`[ReconciliationService] Checking ${crossProjectTargets.length} potential cross-project scans...`);
+      // Batch fetch by IDs (db.getAll() is efficient)
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < crossProjectTargets.length; i += BATCH_SIZE) {
+        const batch = crossProjectTargets.slice(i, i + BATCH_SIZE);
+        const refs = batch.map(t => this.db.collection(SCAN_COLLECTION).doc(generateScanDocId(t.empId, t.date)));
+        const snaps = await this.db.getAll(...refs);
+        snaps.forEach(snap => {
+          if (snap.exists && !snap.data()?.isDeleted) {
+            addToScanMap({ id: snap.id, ...snap.data() });
+          }
+        });
+      }
+    }
+
+
     const writer = this.db.bulkWriter();
+    let succeeded = 0;
+    let failed = 0;
     // หยุด retry หลัง 3 ครั้ง และ log error ออกมา เพื่อป้องกัน silent hang
     writer.onWriteError((error) => {
       console.error(
@@ -562,12 +678,7 @@ export class ReconciliationService {
       }
       return true; // retry ต่อ
     });
-    let succeeded = 0;
-    let failed = 0;
     const now = new Date();
-
-
-    // 3.5 ดึงรายชื่อพนักงานทั้งหมดที่เกี่ยวข้อง
     const employeeIds = new Set<string>();
     dailySummaries.forEach(s => employeeIds.add(s.employeeNumber));
     scanRecords.forEach(s => employeeIds.add(s.employeeId));
@@ -609,7 +720,7 @@ export class ReconciliationService {
           const snap = await Promise.race([queryPromise, timeoutPromise]);
           if (snap && 'empty' in snap && !snap.empty) {
             const data = snap.docs[0].data();
-            assigneeMap.set(empId, data.fullNameEn || data.Fullnameen || '');
+            assigneeMap.set(empId, data.Fullname || data.name || data.fullNameEn || data.Fullnameen || '');
           } else if (!snap) {
             console.warn(`[ReconciliationService] Assignee lookup timed out for empId=${empId} — skipping`);
           }
@@ -703,6 +814,8 @@ export class ReconciliationService {
         (scan.workDate instanceof Date
           ? scan.workDate.toISOString().split('T')[0]
           : String(scan.workDate).split('T')[0]);
+      
+      const fallback = await this.getFallbackAssignee(scan.employeeId);
       const totalScanHours =
         (scan.regularHours ?? 0) +
         (scan.otMorningHours ?? 0) +
@@ -731,6 +844,8 @@ export class ReconciliationService {
         scanOtEveningHours: scan.otEveningHours,
         scanDataId: scan.id,
         scanPunches: extractScanPunches(scan as any),
+        assigneeId: fallback?.id || undefined,
+        assigneeName: fallback?.name || undefined,
       };
 
       try {
@@ -764,27 +879,29 @@ export class ReconciliationService {
     employeeId: string,
     workDateStr: string,
     projectLocationId: string,
+    initialScanData?: any // รับข้อมูลสแกนชุดล่าสุดมาโดยตรง เพื่อเลี่ยงปัญหา Stale Data จากการ Query
   ): Promise<ReconciliationRecord> {
     // 1. ดึง Daily Report 1 record
     const timesheet = await projectBDailyReportService.getDailyTimesheet(employeeId, workDateStr);
     const summary = timesheet ? toTimesheetSummary(timesheet) : null;
 
-    // 2. ดึง Scan Data 1 record
-    const scanDateStart = new Date(`${workDateStr}T00:00:00.000Z`);
-    const scanDateEnd = new Date(`${workDateStr}T23:59:59.999Z`);
-    const scanQuery = await this.db.collection(SCAN_COLLECTION)
-      .where('employeeId', '==', employeeId)
-      .where('workDate', '>=', scanDateStart)
-      .where('workDate', '<=', scanDateEnd)
-      .get();
+    // 2. ดึง Scan Data (ใช้จาก initialScanData หรือดึงตรงจาก Firestore ด้วย ID)
+    let scanData = initialScanData;
+    let activeScanDocId: string | undefined = initialScanData?.id;
 
-    // กรองหาตัวที่ยังไม่ถูกลบ (ใน Firestore อาจเป็น undefined)
-    const activeScanDoc = scanQuery.docs.find(d => {
-      const data = d.data();
-      return !data.isDeleted;
-    });
+    if (!scanData) {
+      // ถ้าไม่มีข้อมูลส่งมา ให้ดึงตรงด้วย ID (เสถียรกว่าการใช้ where query)
+      const scanDataId = generateScanDocId(employeeId, workDateStr);
+      const scanDoc = await this.db.collection(SCAN_COLLECTION).doc(scanDataId).get();
+      
+      if (scanDoc.exists) {
+        scanData = scanDoc.data();
+        activeScanDocId = scanDoc.id;
+        // กรองเบื้องต้น
+        if (scanData.isDeleted) scanData = null;
+      }
+    }
 
-    const scanData = activeScanDoc ? (activeScanDoc.data() as any) : null;
     const totalScanHours = scanData ? 
       (scanData.regularHours ?? 0) + (scanData.otMorningHours ?? 0) + (scanData.otNoonHours ?? 0) + (scanData.otEveningHours ?? 0) : undefined;
 
@@ -879,7 +996,7 @@ export class ReconciliationService {
       scanOtMorningHours: scanData?.otMorningHours,
       scanOtNoonHours: scanData?.otNoonHours,
       scanOtEveningHours: scanData?.otEveningHours,
-      scanDataId: scanData ? activeScanDoc!.id : undefined,
+      scanDataId: scanData ? (activeScanDocId || generateScanDocId(employeeId, workDateStr)) : undefined,
       dailyReportPhotos: summary?.dailyReportPhotos,
       dailyReportPunches: summary?.dailyReportPunches,
       // fallback: allScans (HH:mm:ss) หรือ Time1-6 ถ้า punches ยังว่าง (docs เก่าจาก bulk import)

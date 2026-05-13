@@ -514,25 +514,25 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       {
         label: 'ชั่วโมงทำงานปกติ',
         timeRange: dayRange,
-        value: selectedRow?.approvedNormalHours ?? selectedRow?.timesheetNormalHours ?? selectedRow?.dailyReportHours,
+        value: selectedRow?.timesheetNormalHours ?? selectedRow?.approvedNormalHours ?? selectedRow?.dailyReportHours,
         tagColor: { bg: '#E6F1FB', text: '#185FA5', border: '#B5D4F4' },
       },
       {
         label: 'OT เช้า',
         timeRange: otMorningRange,
-        value: selectedRow?.approvedOtMorning ?? selectedRow?.timesheetOtMorning,
+        value: selectedRow?.timesheetOtMorning ?? selectedRow?.approvedOtMorning,
         tagColor: { bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
       },
       {
         label: 'OT เที่ยง',
         timeRange: otNoonRange,
-        value: selectedRow?.approvedOtNoon ?? selectedRow?.timesheetOtNoon,
+        value: selectedRow?.timesheetOtNoon ?? selectedRow?.approvedOtNoon,
         tagColor: { bg: '#DCFCE7', text: '#166534', border: '#BBF7D0' },
       },
       {
         label: 'OT เย็น',
         timeRange: otEveningRange,
-        value: selectedRow?.approvedOtEvening ?? selectedRow?.timesheetOtEvening,
+        value: selectedRow?.timesheetOtEvening ?? selectedRow?.approvedOtEvening,
         tagColor: { bg: '#EDE9FE', text: '#4C1D95', border: '#DDD6FE' },
       },
     ];
@@ -972,12 +972,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               return (
                 <TableRow
                   key={row.id}
-                  sx={{
-                    backgroundColor: isMismatch ? RECON_COLORS.YELLOW.bg : 'inherit',
-                    '&:hover td': {
-                      backgroundColor: isMismatch ? `${RECON_COLORS.YELLOW.hover} !important` : '#f8fafc !important',
-                    },
-                  }}
                 >
                   {/* # */}
                   <TableCell sx={{ color: RECON_COLORS.NEUTRAL.textTertiary }}>{rowNumber}</TableCell>

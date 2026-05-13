@@ -53,7 +53,7 @@ export const RECON_COLORS = {
 
 export const MIN_FONT_SIZE = {
   SECONDARY: '12px',
-  TABLE_CELL: '12px',
+  TABLE_CELL: '13px',
 };
 
 // --- Status → Color mapping (ใช้ใน StatusCapsule และ badge ทั่วไป) ---
