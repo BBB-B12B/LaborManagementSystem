@@ -639,13 +639,26 @@ export class TaskService {
     const taskDataForRev = taskDocForRev.data() || {};
     const currentRev = selectedRevisionId || taskDataForRev.currentRevision || 'rev00';
 
-    // 3-day retroactive validation
+    // บันทึกรายงานภายใต้ Revision หรือ Help
+    let dailyReportRef: FirebaseFirestore.DocumentReference;
+    if (isSupportReport) {
+      const helpId = currentRev.replace('rev', 'help');
+      dailyReportRef = taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr);
+    } else {
+      dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
+    }
+
+    // Check if report already exists (to allow edits even if retroactive window is closed)
+    const existingReportDoc = await dailyReportRef.get();
+    const isUpdate = existingReportDoc.exists;
+
+    // 3-day retroactive validation (Only for NEW reports)
     const nowForValidation = new Date();
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     threeDaysAgo.setHours(0, 0, 0, 0);
 
-    if (reportDate < threeDaysAgo) {
+    if (!isUpdate && reportDate < threeDaysAgo) {
       const unlockedDates = taskDataForRev.unlockedDates || {};
       const unlockInfo = unlockedDates[dateStr];
       if (!unlockInfo || (unlockInfo.unlockedUntil.toDate ? unlockInfo.unlockedUntil.toDate() : new Date(unlockInfo.unlockedUntil)) < nowForValidation) {
@@ -703,15 +716,6 @@ export class TaskService {
       }
     }
 
-    // บันทึกรายงานภายใต้ Revision หรือ Help
-    let dailyReportRef: FirebaseFirestore.DocumentReference;
-    if (isSupportReport) {
-      const helpId = currentRev.replace('rev', 'help');
-      dailyReportRef = taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr);
-    } else {
-      dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
-    }
-
     await afterSaleDb.runTransaction(async (transaction) => {
       // 1. ALL READS
       const taskDoc = await transaction.get(taskRef);
@@ -742,6 +746,16 @@ export class TaskService {
       // 2. ALL WRITES
       const now = new Date();
 
+      // [RESTRICTION] หากเป็นการแก้ไขงานเก่าเกิน 3 วัน ให้แก้ได้เฉพาะแรงงาน (Labor/Leave) เท่านั้น
+      let finalReportData = { ...reportData };
+      if (isUpdate && reportDate < threeDaysAgo) {
+        const existingData = dailyReportDoc.data() || {};
+        // บังคับคืนค่า Progress, Note และ Photos เดิม (ไม่อนุญาตให้แก้)
+        finalReportData.progress = existingData.progress;
+        finalReportData.note = existingData.note;
+        finalReportData.photos = existingData.photos;
+      }
+
       // Check if this is the latest report chronologically
       const reportsCollectionRef = isSupportReport 
         ? taskRef.collection('help').doc(currentRev.replace('rev', 'help')).collection('dailyReports')
@@ -762,7 +776,7 @@ export class TaskService {
       
       // บันทึกลง Sub-collection
       const payload: any = {
-        ...reportData,
+        ...finalReportData,
         reportDate: reportDate,
         updatedAt: now,
         updatedBy: updatedBy,

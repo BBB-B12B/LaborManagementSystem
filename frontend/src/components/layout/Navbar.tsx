@@ -42,7 +42,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.dashboard'),
       path: '/dashboard',
       icon: <DashboardIcon />,
-      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
     {
       label: t('nav.dailyReport'),
@@ -54,7 +54,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.management', 'การจัดการ'),
       path: '/management',
       icon: <ManageAccountsIcon />,
-      roles: ['AM', 'FM', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
     {
       label: t('nav.wageCalculation'),
@@ -72,7 +72,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.workspace', 'Workspace'),
       path: '/workspace',
       icon: <ViewKanbanIcon />,
-      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
   ];
 

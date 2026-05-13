@@ -65,6 +65,12 @@
         2. **Action**: Updated `TaskDailyReportModal` to sort reports chronologically and compute `pastProgress` and `progressAdded`. Styled the bar with 2 distinct green tones (light for past, dark for newly added).
         3. **Status**: Fixed
 *   [/] **T-804**: [Frontend] Task-based Reporting UI (Sidebar + Form) in Daily Report Page.
+    - **Error Logs**:
+      - **[T-804-E1-1]**: Finished tasks not appearing in "Finish" tab for FM
+        1. **Root Cause**: The filter `t.status !== 'completed'` is applied globally to the task list, preventing completed tasks from being fetched or displayed in any tab.
+        2. **Action**: Remove the global `isNotCompleted` filter and move the status-based filtering logic into the tab-specific display logic.
+        3. **Status**: In Progress
+
 *   [ ] **T-820**: [Frontend] Add "View Summary Table" button and redirect logic.
 *   [ ] **T-821**: [Frontend] Sync Task Progress (dailyProgress & status) after report submission.
 *   [x] **T-805**: [Backend] Hierarchical Schema & ID Generation (STR/ARC per WorkOrder)
@@ -169,3 +175,5 @@
 *   [x] **T-920**: [Frontend] Fix `TaskCacheStore` invalidate method to retain data for seamless Silent Refresh.
 *   [x] **T-921**: [Frontend] Ensure `TaskCreateModal` properly resets React-Hook-Form state when opening in "Add New" mode.
 *   [x] **T-922**: [Frontend] Auto-refresh WorkOrder and Category dropdowns upon successful child modal creation.
+- [x] T-905: Implement " Sync\ button logic in Topbar to clear cache and reload data across Workspace/DailyReport
+- [/] T-920-E1-1: Refactor Daily Report to use TaskCacheStore with Midnight Reset logic

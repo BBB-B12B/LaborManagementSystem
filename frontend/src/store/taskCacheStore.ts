@@ -36,9 +36,6 @@ export interface TaskCacheState {
   isCacheValid: () => boolean;
 }
 
-/** Cache TTL (ms): 5 นาที — ป้องกันข้อมูลเก่าเกินไปกรณีเปิด Tab ทิ้งไว้ */
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
 export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
   // ─── Initial State ────────────────────────────────────────────
   tasks: [],
@@ -67,7 +64,14 @@ export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
   isCacheValid: () => {
     const { lastFetchedAt } = get();
     if (!lastFetchedAt) return false;
-    return Date.now() - lastFetchedAt.getTime() < CACHE_TTL_MS;
+    
+    const now = new Date();
+    const last = new Date(lastFetchedAt);
+    
+    // Cache remains valid as long as it's the same calendar day (Reset at midnight)
+    return now.getFullYear() === last.getFullYear() &&
+           now.getMonth() === last.getMonth() &&
+           now.getDate() === last.getDate();
   },
 }));
 

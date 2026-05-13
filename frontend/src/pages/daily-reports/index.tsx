@@ -6,6 +6,9 @@ import { taskService } from '@/services/taskService';
 import { dailyReportService, WorkType } from '@/services/dailyReportService';
 import { dcService, DailyContractor } from '@/services/dcService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTaskCacheStore } from '@/store/taskCacheStore';
+import { useToast } from '@/components/common/Toast';
+import { useFeedbackStore } from '@/store/feedbackStore';
 import { 
   Search, 
   LayoutDashboard, 
@@ -36,6 +39,7 @@ import {
   Typography, 
   Button, 
   CircularProgress, 
+  Backdrop,
   TextField, 
   Slider, 
   Grid,
@@ -63,7 +67,7 @@ import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
 import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import thLocale from 'date-fns/locale/th';
-import { format, subDays, isBefore, isSameDay } from 'date-fns';
+import { format, subDays, isBefore, isSameDay, isValid } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
 // Helper to map project codes to full names (UX Improvement)
@@ -95,16 +99,19 @@ export default function DailyReportPage() {
   const { user } = useAuthStore();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const taskCache = useTaskCacheStore();
+  const toast = useToast();
+  const feedback = useFeedbackStore();
 
   // --- 1. State Management ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [reportDate, setReportDate] = useState<Date>(new Date());
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState<number | string>(0);
+  const [previousProgress, setPreviousProgress] = useState(0);
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [existingPhotos, setExistingPhotos] = useState<{ site: string[]; labor: string[] }>({
     site: [],
     labor: [],
@@ -115,8 +122,25 @@ export default function DailyReportPage() {
   // Determine if the user is acting as support for the selected task
   const isActingAsSupport = useMemo(() => {
     if (!selectedTask || !user) return false;
+    
+    // 1. If it's a past revision specifically marked as support
+    if (selectedTask.isPastRevision && selectedTask.revisionId?.startsWith('help')) return true;
+
+    // 2. Explicit assignee check
+    const uEmpId = String(user.employeeId || '').toLowerCase().trim();
+    const uId = String(user.id || '').toLowerCase().trim();
+    const isSupportAssignee = selectedTask.supportAssignees?.some((a: any) => {
+      const aEmpId = String(a.employeeId || a.id || '').toLowerCase().trim();
+      return aEmpId === uEmpId || aEmpId === uId;
+    });
+    if (isSupportAssignee) return true;
+
+    // 3. Cross-project + Support Request check (Robust fallback)
+    // If the task is not in user's projects and it is a support request, treat as support
     const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(selectedTask.projectId) : false;
-    return isViewingCrossProject && selectedTask.isSupportRequest && selectedTask.isPickedUpBySupport;
+    if (isViewingCrossProject && selectedTask.isSupportRequest) return true;
+
+    return false;
   }, [selectedTask, user]);
 
   const boundaryDate = useMemo(() => {
@@ -140,6 +164,7 @@ export default function DailyReportPage() {
     queryKey: ['task-reports-all', selectedTask?.id, isActingAsSupport],
     queryFn: async () => {
       if (!selectedTask) return [];
+      // MUST use the full composite ID (e.g. taskId__help00) to ensure the backend queries the exact revision
       return await dailyReportService.getAllTaskReports(selectedTask.id, false, isActingAsSupport);
     },
     enabled: !!selectedTask,
@@ -147,39 +172,67 @@ export default function DailyReportPage() {
 
   useEffect(() => {
     if (taskReportsData && Array.isArray(taskReportsData)) {
-      const dates = taskReportsData.map(r => {
-        let rDate: Date;
-        if (r.reportDate && typeof r.reportDate === 'object' && ('_seconds' in r.reportDate || 'seconds' in r.reportDate)) {
-          const secs = r.reportDate._seconds || r.reportDate.seconds;
-          rDate = new Date(secs * 1000);
-        } else {
-          rDate = new Date(r.reportDate || new Date());
-        }
-        return format(rDate, 'yyyy-MM-dd');
-      });
+      let currentRevId = selectedTask?.revisionId || selectedTask?.currentRevision || 'rev00';
+      if (isActingAsSupport) {
+        currentRevId = currentRevId.replace('rev', 'help');
+      }
+
+      const dates = taskReportsData
+        .filter((r: any) => {
+          const rRevId = r.revisionId || r._revisionId;
+          // STRICT FILTER: Each card shows ONLY its own reports.
+          return rRevId === currentRevId;
+        })
+        .map(r => {
+          let rDate: any = null;
+          const rawDate = r.reportDate || r.id || r.date || r.reportDateId;
+          
+          if (rawDate && typeof rawDate === 'object' && ('_seconds' in rawDate || 'seconds' in rawDate)) {
+            const secs = rawDate._seconds || rawDate.seconds;
+            rDate = new Date(secs * 1000);
+          } else if (typeof rawDate === 'string' && rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            // Handle YYYY-MM-DD strings directly (common for document IDs)
+            const [y, m, d] = rawDate.split('-').map(Number);
+            rDate = new Date(y, m - 1, d);
+          } else {
+            rDate = new Date(rawDate || new Date());
+          }
+          
+          return rDate instanceof Date && !isNaN(rDate.getTime()) 
+            ? format(rDate, 'yyyy-MM-dd') 
+            : null;
+        })
+        .filter(Boolean) as string[];
+
+      console.log(`DEBUG: [${currentRevId}] Calculated reportDates:`, dates);
       setReportDates(dates);
     } else {
       setReportDates([]);
     }
-  }, [taskReportsData]);
+  }, [taskReportsData, selectedTask, isActingAsSupport]);
 
   const { data: allSiteReportsData } = useQuery({
     queryKey: ['task-reports-site', selectedTask?.id],
     queryFn: async () => {
       if (!selectedTask) return [];
-      return await dailyReportService.getAllTaskReports(selectedTask.id, false, false);
+      // For global completion locking, we always need the corresponding SITE reports for this revision.
+      // E.g., if looking at help00, we need rev00 reports.
+      const siteTaskId = selectedTask.id.replace('help', 'rev');
+      return await dailyReportService.getAllTaskReports(siteTaskId, false, false);
     },
     enabled: !!selectedTask,
   });
 
   const previousCompletionDateStr = useMemo(() => {
-    if (!taskReportsData || taskReportsData.length === 0 || !selectedTask) return null;
+    // Always use Site reports to determine previous completion date for locking purposes
+    const reportsToSearch = allSiteReportsData || [];
+    if (reportsToSearch.length === 0 || !selectedTask) return null;
     
-    const currentRevId = isActingAsSupport 
-        ? (selectedTask.currentRevision || 'rev00').replace('rev', 'help') 
-        : (selectedTask.revisionId || selectedTask.currentRevision || 'rev00');
+    // For previous completion, we look at the site revision ID
+    // If we are looking at help01, we want to know when rev00 finished.
+    const currentRevId = (selectedTask.revisionId || selectedTask.currentRevision || 'rev00').replace('help', 'rev');
 
-    const previousCompletedReports = taskReportsData.filter((r: any) => r.progress >= 100 && r._revisionId && r._revisionId !== currentRevId);
+    const previousCompletedReports = reportsToSearch.filter((r: any) => r.progress >= 100 && r._revisionId && r._revisionId !== currentRevId);
     if (previousCompletedReports.length === 0) return null;
     
     const dates = previousCompletedReports.map((r: any) => {
@@ -193,29 +246,49 @@ export default function DailyReportPage() {
     });
     
     dates.sort();
-    return dates[dates.length - 1]; // Latest date of previous revision's completion
-  }, [selectedTask, taskReportsData, isActingAsSupport]);
+    return dates[dates.length - 1];
+  }, [selectedTask, allSiteReportsData]);
+
+  const earliestReportDateStr = useMemo(() => {
+    if (!reportDates || reportDates.length === 0) return null;
+    const sorted = [...reportDates].sort();
+    return sorted[0];
+  }, [reportDates]);
 
   const effectiveBoundaryDate = useMemo(() => {
-    if (previousCompletionDateStr) {
-      const d = new Date(previousCompletionDateStr);
-      d.setDate(d.getDate() + 1); // Start from the day AFTER completion
-      d.setHours(0, 0, 0, 0);
-      return d;
+    const dates: Date[] = [];
+    
+    // 1. Revision Creation Date (The best boundary for "Per-Card" view)
+    if (selectedTask?.revisionCreatedAt) {
+      dates.push(new Date(selectedTask.revisionCreatedAt));
+    } else if (boundaryDate) {
+      // Fallback to original task boundary
+      dates.push(boundaryDate);
     }
-    return boundaryDate; // Fallback to revisionCreatedAt
-  }, [previousCompletionDateStr, boundaryDate]);
+    
+    // 2. Earliest Report Date (If reports exist before the creation record)
+    if (earliestReportDateStr) {
+      dates.push(new Date(earliestReportDateStr));
+    }
+    
+    if (dates.length === 0) return subDays(new Date(), 30);
+
+    // For "แยกการ์ด ใครการ์ดมัน", we use the earliest available date for THIS revision
+    const minTimestamp = Math.min(...dates.map(d => d.getTime()));
+    const d = new Date(minTimestamp);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [selectedTask, boundaryDate, earliestReportDateStr]);
 
   const completionDateStr = useMemo(() => {
-    const progress = isActingAsSupport ? (selectedTask?.supportDailyProgress || 0) : (selectedTask?.dailyProgress || 0);
-    if (!selectedTask || progress < 100) return null;
-    if (!taskReportsData || taskReportsData.length === 0) return null;
+    // Always use Site reports to determine completion date for locking purposes
+    const reportsToSearch = allSiteReportsData || [];
+    if (reportsToSearch.length === 0 || !selectedTask) return null;
 
-    const currentRevId = isActingAsSupport 
-        ? (selectedTask.currentRevision || 'rev00').replace('rev', 'help') 
-        : (selectedTask.revisionId || selectedTask.currentRevision || 'rev00');
+    // Normalize to site revision ID (revXX)
+    const currentRevId = (selectedTask.revisionId || selectedTask.currentRevision || 'rev00').replace('help', 'rev');
 
-    const completedReports = taskReportsData.filter((r: any) => r.progress >= 100 && r._revisionId === currentRevId);
+    const completedReports = reportsToSearch.filter((r: any) => r.progress >= 100 && r._revisionId === currentRevId);
     if (completedReports.length === 0) return null;
     
     const dates = completedReports.map((r: any) => {
@@ -230,44 +303,64 @@ export default function DailyReportPage() {
     });
     
     dates.sort();
-    return dates[dates.length - 1]; // Latest date where progress was 100
-  }, [selectedTask, taskReportsData, isActingAsSupport]);
+    return dates[dates.length - 1];
+  }, [selectedTask, allSiteReportsData]);
 
   const isAfterCompletion = useMemo(() => {
     if (!completionDateStr || !reportDate) return false;
     const selectedDateStr = format(reportDate, 'yyyy-MM-dd');
-    return selectedDateStr > completionDateStr;
+    const locked = selectedDateStr > completionDateStr;
+    if (locked) console.log(`DEBUG: Date ${selectedDateStr} is LOCKED because completionDate is ${completionDateStr}`);
+    return locked;
   }, [completionDateStr, reportDate]);
+
+  const isLockedDate = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // RULE: If a report already exists for this date, NEVER disable it.
+    // This allows users to view/edit what they've already submitted.
+    if (reportDates.includes(dateStr)) return false;
+
+    const isAfterCompletion = completionDateStr && dateStr > completionDateStr;
+    const isBeforePrevious = previousCompletionDateStr && dateStr <= previousCompletionDateStr;
+    const isBeforeBoundary = date < effectiveBoundaryDate;
+
+    return isAfterCompletion || isBeforePrevious || isBeforeBoundary;
+  };
+
 
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateStr = format(day, 'yyyy-MM-dd');
 
-    if (effectiveBoundaryDate) {
+    const hasReport = reportDates.includes(dateStr);
+
+    if (effectiveBoundaryDate && !hasReport) {
       const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
       if (dateStr < boundDateStr) {
         return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
       }
     }
 
-    if (completionDateStr) {
+    if (completionDateStr && !hasReport) {
       if (dateStr > completionDateStr) {
         return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
       }
     }
-
-    const hasReport = reportDates.includes(dateStr);
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isPast = isBefore(day, today) && !isSameDay(day, today);
-    const isLocked = isPast && isBefore(day, subDays(today, 3));
-    const isMissingReport = isPast && !hasReport && !outsideCurrentMonth;
+    const todayStr = format(today, 'yyyy-MM-dd');
+    
+    const isPastOrToday = dateStr <= todayStr;
+    // Retroactive Window: Today (13), Yesterday (12), Day-Before (11) -> Locked is < 11
+    const isLocked = dateStr < format(subDays(today, 2), 'yyyy-MM-dd');
+    const isMissingReport = isPastOrToday && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
-    if (isMissingReport) {
-      badgeColor = isLocked ? 'error.main' : 'warning.main';
-    } else if (hasReport && !outsideCurrentMonth) {
-      badgeColor = 'rgba(5, 150, 105, 0.4)';
+    if (hasReport && !outsideCurrentMonth) {
+      badgeColor = '#10b981'; // Green: Data exists
+    } else if (isMissingReport) {
+      // If missing: RED if locked (> 3 days), YELLOW if editable (within 3 days)
+      badgeColor = isLocked ? '#ef4444' : '#f59e0b';
     }
 
     return (
@@ -285,15 +378,15 @@ export default function DailyReportPage() {
     return (
       <Box className={props.className} sx={{ p: 1.5, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center', borderTop: '1px solid #f1f5f9', bgcolor: '#ffffff' }}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{ width: 10, height: 10, bgcolor: 'rgba(5, 150, 105, 0.4)', borderRadius: '50%' }} />
+          <Box sx={{ width: 10, height: 10, bgcolor: '#10b981', borderRadius: '50%' }} />
           <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>มีข้อมูล</Typography>
         </Stack>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{ width: 10, height: 10, bgcolor: 'warning.main', borderRadius: '50%' }} />
+          <Box sx={{ width: 10, height: 10, bgcolor: '#f59e0b', borderRadius: '50%' }} />
           <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ยังไม่ได้ลง</Typography>
         </Stack>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{ width: 10, height: 10, bgcolor: 'error.main', borderRadius: '50%' }} />
+          <Box sx={{ width: 10, height: 10, bgcolor: '#ef4444', borderRadius: '50%' }} />
           <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ไม่มีข้อมูล</Typography>
         </Stack>
       </Box>
@@ -308,12 +401,39 @@ export default function DailyReportPage() {
     const fetchReport = async () => {
       if (!selectedTask || !reportDate) return;
 
-      setIsLoadingReport(true);
+      feedback.showLoading();
       try {
         const year = reportDate.getFullYear();
         const month = String(reportDate.getMonth() + 1).padStart(2, '0');
         const day = String(reportDate.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
+
+        // หา Progress ล่าสุดก่อนหน้าเพื่อเป็นค่าเริ่มต้นและใช้แจ้งเตือน
+        let lastPrevProgress = 0;
+        if (taskReportsData && Array.isArray(taskReportsData)) {
+          const sortedPastReports = [...taskReportsData]
+            .filter((r: any) => {
+               const rDateRaw = r.reportDate || r.id;
+               let rDate: Date;
+               if (rDateRaw && typeof rDateRaw === 'object' && ('_seconds' in rDateRaw || 'seconds' in rDateRaw)) {
+                 rDate = new Date((rDateRaw._seconds || rDateRaw.seconds) * 1000);
+               } else {
+                 rDate = new Date(rDateRaw);
+               }
+               return format(rDate, 'yyyy-MM-dd') < dateStr;
+            })
+            .sort((a, b) => {
+               const aDateRaw = a.reportDate || a.id;
+               const bDateRaw = b.reportDate || b.id;
+               const aTime = (aDateRaw?.seconds || aDateRaw?._seconds || new Date(aDateRaw).getTime() / 1000);
+               const bTime = (bDateRaw?.seconds || bDateRaw?._seconds || new Date(bDateRaw).getTime() / 1000);
+               return bTime - aTime;
+            });
+          if (sortedPastReports.length > 0) {
+            lastPrevProgress = sortedPastReports[0].progress || 0;
+          }
+        }
+        setPreviousProgress(lastPrevProgress);
 
         const report = await dailyReportService.getTaskReport(selectedTask.id, dateStr, isActingAsSupport);
         
@@ -367,8 +487,8 @@ export default function DailyReportPage() {
                     otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00'
                   },
                   leave: {
-                    morning: lv?.leaveShifts?.morning || false,
-                    afternoon: lv?.leaveShifts?.afternoon || false,
+                    active: lv?.leaveShifts?.custom || false,
+                    time: lv?.leaveTimes?.custom || '08:00 - 17:00',
                     medCertFileUrl: lv?.medCertFileUrl || '',
                     leaveType: lv?.leaveType || 'Unpaid'
                   }
@@ -376,27 +496,24 @@ export default function DailyReportPage() {
             });
             setSelectedWorkers(mergedWorkers);
           }
-          // Fallback for old data
-          else if (report.laborEntries) {
-            setSelectedWorkers(report.laborEntries.map((entry: any) => ({
-              id: entry.workerId,
-              name: entry.workerName,
-              employeeId: entry.employeeId,
-              times: entry.times,
-              leave: {}
-            })));
-          }
         } else {
           // Reset if no report found for this date
-          setProgress(0);
+          setProgress(lastPrevProgress || selectedTask.dailyProgress || 0);
           setNote('');
           setSelectedWorkers([]);
           setExistingPhotos({ site: [], labor: [] });
         }
+
+        // --- SMART SYNC: If Support, pull progress/notes from Site report ---
+        if (isActingAsSupport && siteReport) {
+          if (siteReport.progress !== undefined) setProgress(siteReport.progress);
+          if (siteReport.note !== undefined) setNote(siteReport.note);
+          // Note: site photos are already handled by readonly display in the UI using siteReportData
+        }
       } catch (error) {
         console.error('Failed to fetch report', error);
       } finally {
-        setIsLoadingReport(false);
+        feedback.hideLoading();
       }
     };
 
@@ -414,7 +531,7 @@ export default function DailyReportPage() {
     
     const allWorkerIds = Array.from(new Set([...laborMap.keys(), ...leaveMap.keys()]));
     
-    return allWorkerIds.map(wId => {
+    const allWorkers = allWorkerIds.map(wId => {
        const l = laborMap.get(wId);
        const lv = leaveMap.get(wId);
        return {
@@ -439,6 +556,14 @@ export default function DailyReportPage() {
           }
        };
     });
+
+    // FILTER: Hide Support workers who are entirely on leave (only show those with productive work)
+    return allWorkers.filter(w => 
+      w.times.regular || 
+      w.times.otMorning || 
+      w.times.otNoon || 
+      w.times.otEvening
+    );
   }, [supportReportData]);
   const [isWorkerModalOpen, setIsWorkerModalOpen] = useState(false);
   const [workerSearchTerm, setWorkerSearchTerm] = useState('');
@@ -505,61 +630,75 @@ export default function DailyReportPage() {
   });
 
   // --- 2. Data Fetching ---
-  const { data: allTasks = [], isLoading: tasksLoading } = useQuery({
+  const { data: allTasks = [], isLoading: tasksLoading, refetch: refetchTasks } = useQuery({
     queryKey: ['tasks', 'assigned', user?.id],
     queryFn: async () => {
-      const tasks = await taskService.getTasks();
-      const currentUser = user;
-      
-      if (!currentUser) return [];
+      // Check Cache first
+      if (taskCache.isCacheValid() && taskCache.tasks.length > 0) {
+        console.log('[DailyReport] Using Cached Tasks');
+        return taskCache.tasks;
+      }
 
-      const uEmpId = String(currentUser.employeeId || '').toLowerCase().trim();
-      const uId = String(currentUser.id || '').toLowerCase().trim();
-      
-      console.log(`[DailyReport] Filtering Tasks for: ${currentUser.name} (EmpID: ${uEmpId}, UID: ${uId})`);
+      console.log('[DailyReport] Fetching fresh tasks from API');
+      taskCache.setLoading(true);
+      try {
+        const tasks = await taskService.getTasks();
+        const currentUser = user;
+        
+        if (!currentUser) return [];
 
-      return tasks.filter(t => {
-        const isNotCompleted = t.status !== 'completed';
-        const isActive = t.isActive !== false;
+        const uEmpId = String(currentUser.employeeId || '').toLowerCase().trim();
+        const uId = String(currentUser.id || '').toLowerCase().trim();
         
-        // 1. ตรวจสอบสิทธิ์ Admin/God
-        const role = String(currentUser.roleCode || currentUser.roleId || '').toUpperCase();
-        const isAdmin = ['AM', 'GOD', 'ADMIN'].includes(role);
-        
-        if (isAdmin) {
-          console.log(`[DailyReport] 👑 Admin Mode: Showing Task ${t.taskId}`);
-          return isNotCompleted && isActive;
-        }
-
-        // 2. กรองตาม Assignees และ Support Assignees
-        const assignees = Array.isArray(t.assignees) ? t.assignees : [];
-        const supportAssignees = Array.isArray(t.supportAssignees) ? t.supportAssignees : [];
-        const allAssignees = [...assignees, ...supportAssignees];
-        
-        const isAssigned = allAssignees.some((a: any) => {
-          const aEmpId = String(a.employeeId || '').toLowerCase().trim();
-          const aId = String(a.id || '').toLowerCase().trim();
+        const filtered = tasks.filter(t => {
+          const isActive = t.isActive !== false;
           
-          const match = 
-            (aEmpId !== '' && aEmpId === uEmpId) || 
-            (aEmpId !== '' && aEmpId === uId) || 
-            (aId !== '' && aId === uId) || 
-            (aId !== '' && aId === uEmpId);
-          return match;
+          const role = String(currentUser.roleCode || currentUser.roleId || '').toUpperCase();
+          const isAdmin = ['AM', 'GOD', 'ADMIN'].includes(role);
+          
+          if (isAdmin) return isActive;
+
+          const assignees = Array.isArray(t.assignees) ? t.assignees : [];
+          const supportAssignees = Array.isArray(t.supportAssignees) ? t.supportAssignees : [];
+          const historicalIds = Array.isArray(t.historicalAssigneeIds) ? t.historicalAssigneeIds : [];
+          
+          const taskRelatedIds = new Set([
+            ...assignees.map((a: any) => String(a.employeeId || a.id || '').toLowerCase().trim()),
+            ...supportAssignees.map((a: any) => String(a.employeeId || a.id || '').toLowerCase().trim()),
+            ...historicalIds.map((id: any) => String(id || '').toLowerCase().trim())
+          ]);
+
+          const isAssigned = taskRelatedIds.has(uEmpId) || taskRelatedIds.has(uId);
+          return isActive && isAssigned;
         });
 
-        if (isAssigned && isNotCompleted && isActive) {
-          console.log(`[DailyReport] ✅ Assigned: Task ${t.taskId} ("${t.taskName}") | Assignees:`, t.assignees);
-        } else if (isNotCompleted && isActive) {
-          // Log exactly who is assigned to this task that we are hiding
-          // console.log(`[DailyReport] ❌ Not Assigned: Task ${t.taskId} ("${t.taskName}") | Assigned to:`, t.assignees);
-        }
-
-        return isNotCompleted && isActive && isAssigned;
-      });
+        // Save to Cache
+        taskCache.setTasks(filtered);
+        return filtered;
+      } finally {
+        taskCache.setLoading(false);
+      }
     },
-    enabled: !!user
+    enabled: !!user,
+    staleTime: Infinity, // Manual control via taskCache and invalidation
   });
+
+  // Global Sync Listener
+  useEffect(() => {
+    const handleSync = async () => {
+      console.log('[DailyReport] Global Sync triggered');
+      taskCache.setLoading(true);
+      try {
+        taskCache.invalidate();
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        await refetchTasks();
+      } finally {
+        taskCache.setLoading(false);
+      }
+    };
+    window.addEventListener('globalSync', handleSync);
+    return () => window.removeEventListener('globalSync', handleSync);
+  }, [taskCache, queryClient, refetchTasks]);
 
   const { data: projectWorkers = [], isLoading: workersLoading } = useQuery({
     queryKey: ['workers', user?.projectLocationIds?.[0]],
@@ -586,10 +725,14 @@ export default function DailyReportPage() {
     allTasks.forEach(task => {
       const isCurrentAssignee = task.assignees?.some((a: any) => a.employeeId === user.employeeId);
       const isCurrentSupport = task.supportAssignees?.some((a: any) => a.employeeId === user.employeeId);
+      const isHistorical = user.employeeId ? task.historicalAssigneeIds?.includes(user.employeeId) : false;
       const isSupportRequest = task.isSupportRequest === true;
 
-      // 1. Current Revision (Show only if active assignee or it's a joinable support request)
-      if (isCurrentAssignee || isCurrentSupport || isSupportRequest) {
+      // 1. Current Revision (Show if participant, support request, or historical)
+      // also show if status is completed to ensure visibility in Finish tab
+      const isCompleted = task.status === 'completed';
+
+      if (isCurrentAssignee || isCurrentSupport || isSupportRequest || isHistorical || isCompleted) {
         items.push({
           ...task,
           isPastRevision: false
@@ -637,11 +780,21 @@ export default function DailyReportPage() {
     );
 
     if (activeTab === 'pending') {
-      // Show only current revision tasks that are not yet 100%
-      filtered = filtered.filter(t => !t.isPastRevision && (t.dailyProgress || 0) < 100);
+      // Show only current revision tasks that are not yet 100% AND not completed
+      filtered = filtered.filter(t => 
+        !t.isPastRevision && 
+        (t.dailyProgress || 0) < 100 && 
+        (t.supportDailyProgress || 0) < 100 &&
+        t.status !== 'completed'
+      );
     } else if (activeTab === 'finish') {
-      // Show finished current revision OR any past revision
-      filtered = filtered.filter(t => t.isPastRevision || (t.dailyProgress || 0) >= 100);
+      // Show finished current revision (either site or support 100%) OR status is completed OR any past revision
+      filtered = filtered.filter(t => 
+        t.isPastRevision || 
+        (t.dailyProgress || 0) >= 100 || 
+        (t.supportDailyProgress || 0) >= 100 ||
+        t.status === 'completed'
+      );
     }
 
     return filtered.sort((a, b) => {
@@ -693,10 +846,40 @@ export default function DailyReportPage() {
     });
   };
 
+  const isTimeOverlap = (time1: string, time2: string) => {
+    if (!time1 || !time2 || time1.includes('--') || time2.includes('--')) return false;
+    const parse = (t: string) => {
+      const [start, end] = t.split(' - ').map(s => {
+        const [h, m] = s.split(':').map(Number);
+        return h * 60 + (m || 0);
+      });
+      return { start, end };
+    };
+    try {
+      const t1 = parse(time1);
+      const t2 = parse(time2);
+      return t1.start < t2.end && t2.start < t1.end;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const updateWorkerTime = (workerId: string, field: string, value: any) => {
     setSelectedWorkers(prev => prev.map(w => {
       if (w.id === workerId) {
-        return { ...w, times: { ...w.times, [field]: value } };
+        let updatedTimes = { ...w.times, [field]: value };
+        
+        // Validation: If setting regular to true or changing regTime
+        if ((field === 'regular' && value === true) || (field === 'regTime')) {
+          if (w.leave?.active && isTimeOverlap(updatedTimes.regTime || '08:00 - 17:00', w.leave.time || '08:00 - 17:00')) {
+            enqueueSnackbar(`เวลาทำงานปกติขัดแย้งกับเวลาที่ลาของ ${w.name}`, { variant: 'warning' });
+            // If it's a conflict, we could either prevent it or auto-uncheck leave
+            // The user said: "ลาเต็มวันไม่สามารถ ทำงานเต็มวันได้"
+            return { ...w, times: updatedTimes, leave: { ...w.leave, active: false } };
+          }
+        }
+        
+        return { ...w, times: updatedTimes };
       }
       return w;
     }));
@@ -705,7 +888,28 @@ export default function DailyReportPage() {
   const updateWorkerLeave = (workerId: string, field: string, value: any) => {
     setSelectedWorkers(prev => prev.map(w => {
       if (w.id === workerId) {
-        return { ...w, leave: { ...w.leave, [field]: value } };
+        let updatedLeave = { ...w.leave, [field]: value };
+        let updatedTimes = { ...w.times };
+
+        // Validation & Smart Adjustment: If activating leave or changing leave time
+        if ((field === 'active' && value === true) || (field === 'time')) {
+          const leaveTime = updatedLeave.time || '08:00 - 17:00';
+          
+          // Smart Adjustment for standard half-days
+          if (leaveTime === '08:00 - 12:00') {
+            if (updatedTimes.regTime === '08:00 - 17:00') updatedTimes.regTime = '13:00 - 17:00';
+          } else if (leaveTime === '13:00 - 17:00') {
+            if (updatedTimes.regTime === '08:00 - 17:00') updatedTimes.regTime = '08:00 - 12:00';
+          }
+
+          const regTime = updatedTimes.regTime || '08:00 - 17:00';
+          if (updatedTimes.regular && isTimeOverlap(leaveTime, regTime)) {
+             enqueueSnackbar(`เวลาที่ลาขัดแย้งกับเวลาทำงานปกติของ ${w.name}`, { variant: 'warning' });
+             updatedTimes.regular = false;
+          }
+        }
+        
+        return { ...w, leave: updatedLeave, times: updatedTimes };
       }
       return w;
     }));
@@ -744,90 +948,82 @@ export default function DailyReportPage() {
     previews: string[], 
     onUpload: (f: FileList | null) => void, 
     onRemove: (i: number) => void,
-    type: 'site' | 'labor'
+    type: 'site' | 'labor',
+    disabled?: boolean
   ) => {
+    // Combine for labeling logic and uniform rendering
+    const allPhotoItems = [
+      ...existingUrls.map((url, i) => ({ id: `ex-${i}`, url: getImageUrl(url), isExisting: true, originalIndex: i })),
+      ...photos.map((file, i) => ({ id: `new-${i}`, url: previews[i], isExisting: false, originalIndex: i }))
+    ];
+
     return (
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        {/* Existing Photos from DB */}
-        {existingUrls.map((url, index) => (
-          <Box
-            key={`existing-${index}`}
-            sx={{
-              width: 120,
-              height: 120,
-              borderRadius: 2,
-              overflow: 'hidden',
-              position: 'relative',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
-            <img 
-              src={getImageUrl(url)} 
-              alt="Uploaded" 
-              onClick={() => {
-                const allUrls = [
-                  ...existingUrls.map(u => getImageUrl(u)),
-                  ...previews
-                ];
-                setPreviewImages(allUrls);
-                setPreviewIndex(index);
-              }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
-            />
-            <IconButton
-              size="small"
-              onClick={() => {
-                if (type === 'site') {
-                  setExistingPhotos(prev => ({ ...prev, site: prev.site.filter((_, i) => i !== index) }));
-                } else {
-                  setExistingPhotos(prev => ({ ...prev, labor: prev.labor.filter((_, i) => i !== index) }));
-                }
-              }}
-              sx={{
-                position: 'absolute',
-                top: 4,
-                right: 4,
-                bgcolor: 'rgba(255,255,255,0.8)',
-                '&:hover': { bgcolor: 'white' },
-              }}
-            >
-              <X size={14} />
-            </IconButton>
-          </Box>
-        ))}
-
-        {/* New Selected Files */}
-        {photos.map((file, index) => (
-          <Box key={`new-${index}`} sx={{ position: 'relative', width: 140, height: 140, borderRadius: '12px', overflow: 'hidden', border: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
-            {previews[index] && (
-              <>
+        {allPhotoItems.map((item, index) => {
+          const label = index === 0 ? "รูปก่อนเริ่มงาน" : index === 1 ? "รูปหลังเลิกงาน" : "";
+          return (
+            <Stack key={item.id} spacing={0.8} alignItems="center">
+              <Box
+                sx={{
+                  width: 140,
+                  height: 140,
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  border: '1px solid #e2e8f0',
+                  bgcolor: '#f8fafc',
+                  transition: 'all 0.2s ease-in-out',
+                  '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }
+                }}
+              >
                 <img 
-                  src={previews[index]} 
+                  src={item.url} 
+                  alt={label || "Daily Report"} 
                   onClick={() => {
-                    const allUrls = [
-                      ...existingUrls.map(u => getImageUrl(u)),
-                      ...previews
-                    ];
+                    const allUrls = allPhotoItems.map(p => p.url);
                     setPreviewImages(allUrls);
-                    setPreviewIndex(existingUrls.length + index);
+                    setPreviewIndex(index);
                   }}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
                 />
-                <IconButton 
-                  size="small" 
-                  onClick={() => onRemove(index)} 
-                  sx={{ position: 'absolute', top: 4, right: 4, bgcolor: 'rgba(0,0,0,0.5)', color: 'white' }}
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    if (item.isExisting) {
+                      if (type === 'site') {
+                        setExistingPhotos(prev => ({ ...prev, site: prev.site.filter((_, i) => i !== item.originalIndex) }));
+                      } else {
+                        setExistingPhotos(prev => ({ ...prev, labor: prev.labor.filter((_, i) => i !== item.originalIndex) }));
+                      }
+                    } else {
+                      onRemove(item.originalIndex);
+                    }
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    color: 'white',
+                    backdropFilter: 'blur(4px)',
+                    '&:hover': { bgcolor: 'rgba(255,0,0,0.7)' },
+                    display: disabled ? 'none' : 'flex'
+                  }}
                 >
                   <X size={16} />
                 </IconButton>
-              </>
-            )}
-          </Box>
-        ))}
+              </Box>
+              {label && (
+                <Typography variant="caption" fontWeight={900} sx={{ color: '#475569', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '6px', fontSize: '0.65rem' }}>
+                  {label}
+                </Typography>
+              )}
+            </Stack>
+          );
+        })}
 
         {/* Premium Upload Button (Limit to 10 photos total) */}
-        {(photos.length + existingUrls.length < 10) && (
+        {(!disabled && photos.length + existingUrls.length < 10) && (
           <Box 
             component="label"
             sx={{ 
@@ -846,8 +1042,8 @@ export default function DailyReportPage() {
               '&:hover': { 
                 borderColor: '#3b82f6', 
                 bgcolor: '#eff6ff',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)',
+                transform: 'translateY(-4px)',
+                boxShadow: '0 12px 24px rgba(59, 130, 246, 0.15)',
                 '& .upload-icon': { color: '#3b82f6', transform: 'scale(1.1)' },
                 '& .upload-text': { color: '#3b82f6' }
               }
@@ -876,6 +1072,53 @@ export default function DailyReportPage() {
     }
   };
 
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1280;
+          const MAX_HEIGHT = 1280;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          }, 'image/jpeg', 0.8);
+        };
+      };
+    });
+  };
+
   const handleSubmit = async () => {
     // 1. Validation
     if (!selectedTask) return;
@@ -902,19 +1145,53 @@ export default function DailyReportPage() {
       return;
     }
 
+    feedback.showLoading();
     setIsSubmitting(true);
     try {
-      // 2. Upload Photos (Only new files)
-      const newSitePhotoUrls = await dailyReportService.uploadPhotos(sitePhotos, `tasks/${selectedTask.taskId}/site`);
-      const newLaborPhotoUrls = await dailyReportService.uploadPhotos(laborPhotos, `tasks/${selectedTask.taskId}/labor`);
+      // 2. Compress and Prepare Parallel Uploads
+      const uploadPromises: Promise<any>[] = [];
+      
+      // Compress site photos
+      const compressedSitePhotos = await Promise.all(sitePhotos.map(compressImage));
+      // Compress labor photos
+      const compressedLaborPhotos = await Promise.all(laborPhotos.map(compressImage));
+      
+      // Index 0: Site Photos
+      uploadPromises.push(
+        compressedSitePhotos.length > 0 
+          ? dailyReportService.uploadPhotos(compressedSitePhotos, `tasks/${selectedTask.taskId}/site`) 
+          : Promise.resolve([])
+      );
+      
+      // Index 1: Labor Photos
+      uploadPromises.push(
+        compressedLaborPhotos.length > 0 
+          ? dailyReportService.uploadPhotos(compressedLaborPhotos, `tasks/${selectedTask.taskId}/labor`) 
+          : Promise.resolve([])
+      );
 
-      // 2.5 Upload Medical Certificates
-      for (const w of selectedWorkers) {
-        if (w.leave?.medCertFile) {
-          const urls = await dailyReportService.uploadPhotos([w.leave.medCertFile], `tasks/${selectedTask.taskId}/certs`);
-          w.leave.medCertFileUrl = urls[0];
+      // Medical Certificates
+      const certWorkers = selectedWorkers.filter(w => w.leave?.medCertFile);
+      for (const w of certWorkers) {
+        if (w.leave.medCertFile) {
+          const compressedCert = await compressImage(w.leave.medCertFile);
+          uploadPromises.push(dailyReportService.uploadPhotos([compressedCert], `tasks/${selectedTask.taskId}/certs`));
         }
       }
+
+      // Execute all uploads in parallel
+      const results = await Promise.all(uploadPromises);
+      
+      const newSitePhotoUrls = results[0];
+      const newLaborPhotoUrls = results[1];
+      
+      // Map results back to workers
+      certWorkers.forEach((w, idx) => {
+        const certUrls = results[idx + 2];
+        if (certUrls && certUrls.length > 0) {
+          w.leave.medCertFileUrl = certUrls[0];
+        }
+      });
 
       // 3. Prepare Payload
       // Split labor and leave
@@ -952,7 +1229,7 @@ export default function DailyReportPage() {
 
       const payload = {
         reportDate: reportDate,
-        progress: progress,
+        progress: Number(progress) || 0,
         note: note,
         photos: {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
@@ -966,7 +1243,12 @@ export default function DailyReportPage() {
       // selectedTask.id contains woId__catId__taskId
       await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
       
-      enqueueSnackbar('บันทึกรายงานประจำวันลงใน Task สำเร็จ', { variant: 'success' });
+      toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
+      
+      // Invalidate Cache after successful submission
+      taskCache.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      refetchTasks();
       
       // Reset or redirect
       setSelectedTask(null);
@@ -984,9 +1266,10 @@ export default function DailyReportPage() {
       queryClient.invalidateQueries({ queryKey: ['task-reports-all'] });
     } catch (error) {
       console.error('Failed to submit report', error);
-      enqueueSnackbar('เกิดข้อผิดพลาดในการบันทึกรายงาน: ' + (error as any).message, { variant: 'error' });
+      toast.error('เกิดข้อผิดพลาดในการบันทึกรายงาน: ' + (error as any).message);
     } finally {
       setIsSubmitting(false);
+      feedback.hideLoading();
     }
   };
 
@@ -1308,11 +1591,24 @@ export default function DailyReportPage() {
                               <Typography variant="body2" color="text.secondary" gutterBottom>ความคืบหน้า</Typography>
                                <TextField 
                                 fullWidth placeholder="0-100%" type="number" value={progress}
-                                onChange={(e) => setProgress(Number(e.target.value))}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setProgress('');
+                                  } else {
+                                    const num = Number(val);
+                                    if (num >= 0 && num <= 100) setProgress(num);
+                                  }
+                                }}
                                 InputProps={{ endAdornment: '%' }}
+                                error={progress !== '' && Number(progress) < previousProgress}
+                                helperText={
+                                  (progress !== '' && Number(progress) < previousProgress) 
+                                    ? `ความคืบหน้าน้อยกว่าเดิม (${previousProgress}%)`
+                                    : (isProgressLocked ? "ไม่สามารถแก้ไขความคืบหน้าย้อนหลังเกิน 3 วัน" : "ความคืบหน้าของงานทั้งหมด")
+                                }
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                                 disabled={isProgressLocked}
-                                helperText={isRetroactiveOver3Days ? "ไม่สามารถแก้ไขความคืบหน้าย้อนหลังเกิน 3 วัน" : ""}
                               />
                             </Grid>
 
@@ -1320,11 +1616,11 @@ export default function DailyReportPage() {
                               <Grid container spacing={3}>
                                 <Grid item xs={6}>
                                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน</Typography>
-                                  {renderPhotoGrid(sitePhotos, existingPhotos.site, sitePhotoPreviews, (f) => handlePhotoUpload(f, 'site'), (i) => removePhoto(i, 'site'), 'site')}
+                                  {renderPhotoGrid(sitePhotos, existingPhotos.site, sitePhotoPreviews, (f) => handlePhotoUpload(f, 'site'), (i) => removePhoto(i, 'site'), 'site', isProgressLocked)}
                                 </Grid>
                                 <Grid item xs={6}>
                                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายแรงงาน</Typography>
-                                  {renderPhotoGrid(laborPhotos, existingPhotos.labor, laborPhotoPreviews, (f) => handlePhotoUpload(f, 'labor'), (i) => removePhoto(i, 'labor'), 'labor')}
+                                  {renderPhotoGrid(laborPhotos, existingPhotos.labor, laborPhotoPreviews, (f) => handlePhotoUpload(f, 'labor'), (i) => removePhoto(i, 'labor'), 'labor', isProgressLocked)}
                                 </Grid>
                               </Grid>
                             </Grid>
@@ -1337,6 +1633,8 @@ export default function DailyReportPage() {
                             fullWidth multiline rows={1.5} value={note}
                             onChange={(e) => setNote(e.target.value)}
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                            disabled={isProgressLocked}
+                            placeholder={isProgressLocked ? "ไม่อนุญาตให้แก้ไขหมายเหตุย้อนหลังเกิน 3 วัน" : ""}
                           />
                         </Box>
                       </>
@@ -1486,6 +1784,7 @@ export default function DailyReportPage() {
               )}
             </Box>
           </Dialog>
+          {/* Global Loading Overlay is handled by Layout/GlobalFeedback */}
         </Layout>
       </LocalizationProvider>
     </ProtectedRoute>
@@ -1545,7 +1844,7 @@ function TaskSidebarCard({ task, active, onClick }: { task: any, active: boolean
         </Box>
         {task.revisionId && task.revisionId !== 'rev00' && (
           <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#ef4444', mb: 0.5, fontSize: '0.7rem', letterSpacing: 0.3 }}>
-            {task.revisionId} : "{task.revisionName || 'แก้ไขงาน'}"
+            {task.revisionId} : &quot;{task.revisionName || 'แก้ไขงาน'}&quot;
           </Typography>
         )}
         <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>{displayTaskName}</Typography>
@@ -1710,16 +2009,22 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
       
       {/* Leave */}
       <TableCell sx={{ borderRight: '1px solid #f1f5f9' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 26, justifyContent: 'center' }}>
-          <Checkbox size="small" sx={{ p: 0 }} checked={worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} disabled={isReadOnly} />
-          {worker.leave?.active ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val) => onUpdateLeave('time', val)} disabled={isReadOnly} />
-              
-              <Box sx={{ display: 'flex', gap: 0.2, ml: 0.5 }}>
+        {isReadOnly ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'center' }}>
+            {renderInactiveTime()}
+            <Box sx={{ width: 22, ml: 0.5 }} />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 26, justifyContent: 'flex-start', pl: 2 }}>
+            <Checkbox size="small" sx={{ p: 0 }} checked={worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} disabled={isReadOnly} />
+            {worker.leave?.active ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val) => onUpdateLeave('time', val)} disabled={isReadOnly} />
+                
+                <Box sx={{ display: 'flex', gap: 0.2, ml: 0.5 }}>
                 {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
                    <>
-                     <IconButton size="small" onClick={() => window.open(worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl, '_blank')} sx={{ color: '#3b82f6', p: 0.4, bgcolor: '#eff6ff', borderRadius: '6px' }}>
+                     <IconButton size="small" onClick={() => window.open(getImageUrl(worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl), '_blank')} sx={{ color: '#3b82f6', p: 0.4, bgcolor: '#eff6ff', borderRadius: '6px' }}>
                         <Eye size={14} />
                      </IconButton>
                      {!isReadOnly && (
@@ -1747,6 +2052,7 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
             </Box>
           )}
         </Box>
+      )}
       </TableCell>
       
       {/* Actions */}
@@ -1756,7 +2062,6 @@ function WorkerTableRow({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemov
             <Chip label="Support" size="small" sx={{ fontSize: '0.65rem', height: 20, bgcolor: '#fef08a', color: '#854d0e', fontWeight: 800 }} />
           ) : (
             <>
-              <IconButton size="small" sx={{ color: '#3b82f6', p: 0.5 }}><Pencil size={14} /></IconButton>
               <IconButton size="small" sx={{ color: '#ef4444', p: 0.5 }} onClick={onRemove}><Trash2 size={14} /></IconButton>
             </>
           )}

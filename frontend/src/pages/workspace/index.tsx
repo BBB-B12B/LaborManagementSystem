@@ -439,6 +439,10 @@ export default function WorkspacePage() {
         open={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         task={selectedTaskForReport}
+        onTaskUpdated={() => {
+          taskCache.invalidate();
+          fetchFromAPI(true);
+        }}
       />
 
       {/* Delete Confirmation Dialog */}

@@ -12,7 +12,7 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
 
   useEffect(() => {
     // Wait for auth state to load from localStorage
@@ -20,11 +20,15 @@ export default function Home() {
 
     // Redirect based on authentication status
     if (isAuthenticated) {
-      router.push('/dashboard');
+      if (user?.roleCode === 'FM') {
+        router.push('/daily-reports');
+      } else {
+        router.push('/dashboard');
+      }
     } else {
       router.push('/login');
     }
-  }, [router, isAuthenticated, isLoading]);
+  }, [router, isAuthenticated, isLoading, user]);
 
   return (
     <Container

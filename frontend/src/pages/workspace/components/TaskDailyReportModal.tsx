@@ -409,7 +409,16 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
               </Box>
             )}
 
-            {!isActingAsSupport && task?.dailyProgress === 100 && (
+            {!isActingAsSupport && task?.status === 'completed' && (
+              <Box sx={{ bgcolor: '#dcfce7', color: '#166534', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #bbf7d0' }}>
+                <CheckCircleIcon sx={{ fontSize: 18, mr: 1 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  อนุมัติแล้วเมื่อ: {task.updatedAt ? format(new Date(task.updatedAt), 'dd/MM/yyyy HH:mm', { locale: th }) : '-'}
+                </Typography>
+              </Box>
+            )}
+
+            {!isActingAsSupport && task?.dailyProgress === 100 && task?.status !== 'completed' && (
               <>
                 <Button
                   variant="outlined"

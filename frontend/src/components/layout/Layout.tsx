@@ -29,6 +29,7 @@ const Topbar: React.FC = () => {
 
   const handleGlobalSync = () => {
     dailyReportService.clearCache();
+    useTaskCacheStore.getState().invalidate();
     window.dispatchEvent(new CustomEvent('globalSync'));
   };
 
