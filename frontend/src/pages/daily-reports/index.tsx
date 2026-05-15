@@ -70,6 +70,15 @@ import thLocale from 'date-fns/locale/th';
 import { format, subDays, isBefore, isSameDay, isValid } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
+type ShiftPhotos = { regular: File[], otMorning: File[], otNoon: File[], otEvening: File[] };
+type ShiftPhotoPreviews = { regular: string[], otMorning: string[], otNoon: string[], otEvening: string[] };
+type ExistingShiftPhotos = { regular: string[], otMorning: string[], otNoon: string[], otEvening: string[] };
+
+const INITIAL_SHIFT_PHOTOS: ShiftPhotos = { regular: [], otMorning: [], otNoon: [], otEvening: [] };
+const INITIAL_SHIFT_PREVIEWS: ShiftPhotoPreviews = { regular: [], otMorning: [], otNoon: [], otEvening: [] };
+const INITIAL_EXISTING_SHIFT_PHOTOS: ExistingShiftPhotos = { regular: [], otMorning: [], otNoon: [], otEvening: [] };
+
+
 // Helper to map project codes to full names (UX Improvement)
 const getProjectFullName = (name: string, code: string) => {
   if (name && name.length > 3) return name;
@@ -112,9 +121,9 @@ export default function DailyReportPage() {
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [existingPhotos, setExistingPhotos] = useState<{ site: string[]; labor: string[] }>({
+  const [existingPhotos, setExistingPhotos] = useState<{ site: string[]; labor: ExistingShiftPhotos }>({
     site: [],
-    labor: [],
+    labor: INITIAL_EXISTING_SHIFT_PHOTOS,
   });
 
   // Fetch existing reports for the selected task to show calendar dots
@@ -352,7 +361,14 @@ export default function DailyReportPage() {
     
     const isPastOrToday = dateStr <= todayStr;
     // Retroactive Window: Today (13), Yesterday (12), Day-Before (11) -> Locked is < 11
-    const isLocked = dateStr < format(subDays(today, 2), 'yyyy-MM-dd');
+    let isLocked = dateStr < format(subDays(today, 3), 'yyyy-MM-dd');
+    if (selectedTask?.unlockedDates && selectedTask.unlockedDates[dateStr]) {
+      const unlockInfo = selectedTask.unlockedDates[dateStr];
+      const unlockUntil = new Date(unlockInfo.unlockedUntil);
+      if (unlockUntil > new Date()) {
+        isLocked = false;
+      }
+    }
     const isMissingReport = isPastOrToday && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
@@ -458,7 +474,28 @@ export default function DailyReportPage() {
         if (report) {
           setProgress(report.progress || 0);
           setNote(report.note || '');
-          setExistingPhotos(report.photos || { site: [], labor: [] });
+          const mapShiftFromDb = (dbShift: any, isRegular: boolean = false) => {
+            if (!dbShift) return [];
+            if (Array.isArray(dbShift)) return dbShift; // already in order
+            if (isRegular) {
+              // Legacy object format: {in, lunch, afternoon, out} - map in logical order
+              return [dbShift.in, dbShift.lunch, dbShift.afternoon, dbShift.out].filter(Boolean);
+            }
+            return [dbShift.in, dbShift.out].filter(Boolean);
+          };
+
+          setExistingPhotos({
+            site: report.photos?.site || [],
+            labor: report.photos?.laborByShift ? {
+              regular: mapShiftFromDb(report.photos.laborByShift.regular, true),
+              otMorning: mapShiftFromDb(report.photos.laborByShift.otMorning),
+              otNoon: mapShiftFromDb(report.photos.laborByShift.otNoon),
+              otEvening: mapShiftFromDb(report.photos.laborByShift.otEvening)
+            } : {
+              ...INITIAL_EXISTING_SHIFT_PHOTOS,
+              regular: report.photos?.labor || [] // Fallback for legacy data
+            }
+          });
           
           // Map labor and leave back to selectedWorkers
           if (report.labor || report.leave) {
@@ -501,7 +538,7 @@ export default function DailyReportPage() {
           setProgress(lastPrevProgress || selectedTask.dailyProgress || 0);
           setNote('');
           setSelectedWorkers([]);
-          setExistingPhotos({ site: [], labor: [] });
+          setExistingPhotos({ site: [], labor: INITIAL_EXISTING_SHIFT_PHOTOS });
         }
 
         // --- SMART SYNC: If Support, pull progress/notes from Site report ---
@@ -572,8 +609,18 @@ export default function DailyReportPage() {
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
-  const [laborPhotos, setLaborPhotos] = useState<File[]>([]);
-  const [laborPhotoPreviews, setLaborPhotoPreviews] = useState<string[]>([]);
+  const [laborPhotos, setLaborPhotos] = useState<ShiftPhotos>(INITIAL_SHIFT_PHOTOS);
+  const [laborPhotoPreviews, setLaborPhotoPreviews] = useState<ShiftPhotoPreviews>(INITIAL_SHIFT_PREVIEWS);
+  const [activePhotoModal, setActivePhotoModal] = useState<keyof ShiftPhotos | null>(null);
+
+  const activeShifts = useMemo(() => {
+    return {
+      regular: selectedWorkers.some(w => w.times?.regular),
+      otMorning: selectedWorkers.some(w => w.times?.otMorning),
+      otNoon: selectedWorkers.some(w => w.times?.otNoon),
+      otEvening: selectedWorkers.some(w => w.times?.otEvening),
+    };
+  }, [selectedWorkers]);
 
   // --- 1.1 Derived States for Business Rules ---
   const isRetroactiveOver3Days = useMemo(() => {
@@ -816,8 +863,8 @@ export default function DailyReportPage() {
     setSelectedWorkers([]);
     setSitePhotos([]);
     setSitePhotoPreviews([]);
-    setLaborPhotos([]);
-    setLaborPhotoPreviews([]);
+    setLaborPhotos(INITIAL_SHIFT_PHOTOS);
+    setLaborPhotoPreviews(INITIAL_SHIFT_PREVIEWS);
   };
 
   const handleWorkerToggle = (worker: DailyContractor, isSelected: boolean) => {
@@ -936,9 +983,34 @@ export default function DailyReportPage() {
     if (type === 'site') {
       setSitePhotos(prev => [...prev, ...newFiles]);
       setSitePhotoPreviews(prev => [...prev, ...newPreviews]);
-    } else {
-      setLaborPhotos(prev => [...prev, ...newFiles]);
-      setLaborPhotoPreviews(prev => [...prev, ...newPreviews]);
+    }
+  };
+
+  const handleLaborShiftPhotoUpload = (files: FileList | null, shift: keyof ShiftPhotos) => {
+    if (!files) return;
+    const maxPhotos = shift === 'regular' ? 4 : 2;
+    const newFiles = Array.from(files).slice(0, maxPhotos);
+    const newPreviews = newFiles.map(f => URL.createObjectURL(f));
+    setLaborPhotos(prev => ({ ...prev, [shift]: [...prev[shift], ...newFiles].slice(0, maxPhotos) }));
+    setLaborPhotoPreviews(prev => ({ ...prev, [shift]: [...prev[shift], ...newPreviews].slice(0, maxPhotos) }));
+  };
+
+  const removeLaborShiftPhoto = (index: number, shift: keyof ShiftPhotos) => {
+    setLaborPhotos(prev => ({ ...prev, [shift]: prev[shift].filter((_, i) => i !== index) }));
+    setLaborPhotoPreviews(prev => ({ ...prev, [shift]: prev[shift].filter((_, i) => i !== index) }));
+  };
+
+  const removeExistingLaborShiftPhoto = (index: number, shift: keyof ShiftPhotos) => {
+    setExistingPhotos(prev => ({
+      ...prev,
+      labor: { ...prev.labor, [shift]: prev.labor[shift].filter((_, i) => i !== index) }
+    }));
+  };
+
+  const removePhoto = (index: number, type: 'site' | 'labor') => {
+    if (type === 'site') {
+      setSitePhotos(prev => prev.filter((_, i) => i !== index));
+      setSitePhotoPreviews(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -951,110 +1023,25 @@ export default function DailyReportPage() {
     type: 'site' | 'labor',
     disabled?: boolean
   ) => {
-    // Combine for labeling logic and uniform rendering
     const allPhotoItems = [
       ...existingUrls.map((url, i) => ({ id: `ex-${i}`, url: getImageUrl(url), isExisting: true, originalIndex: i })),
       ...photos.map((file, i) => ({ id: `new-${i}`, url: previews[i], isExisting: false, originalIndex: i }))
     ];
 
     return (
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        {allPhotoItems.map((item, index) => {
-          const label = index === 0 ? "รูปก่อนเริ่มงาน" : index === 1 ? "รูปหลังเลิกงาน" : "";
-          return (
-            <Stack key={item.id} spacing={0.8} alignItems="center">
-              <Box
-                sx={{
-                  width: 140,
-                  height: 140,
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  border: '1px solid #e2e8f0',
-                  bgcolor: '#f8fafc',
-                  transition: 'all 0.2s ease-in-out',
-                  '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }
-                }}
-              >
-                <img 
-                  src={item.url} 
-                  alt={label || "Daily Report"} 
-                  onClick={() => {
-                    const allUrls = allPhotoItems.map(p => p.url);
-                    setPreviewImages(allUrls);
-                    setPreviewIndex(index);
-                  }}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
-                />
-                <IconButton
-                  size="small"
-                  onClick={() => {
-                    if (item.isExisting) {
-                      if (type === 'site') {
-                        setExistingPhotos(prev => ({ ...prev, site: prev.site.filter((_, i) => i !== item.originalIndex) }));
-                      } else {
-                        setExistingPhotos(prev => ({ ...prev, labor: prev.labor.filter((_, i) => i !== item.originalIndex) }));
-                      }
-                    } else {
-                      onRemove(item.originalIndex);
-                    }
-                  }}
-                  sx={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    bgcolor: 'rgba(0,0,0,0.5)',
-                    color: 'white',
-                    backdropFilter: 'blur(4px)',
-                    '&:hover': { bgcolor: 'rgba(255,0,0,0.7)' },
-                    display: disabled ? 'none' : 'flex'
-                  }}
-                >
-                  <X size={16} />
-                </IconButton>
-              </Box>
-              {label && (
-                <Typography variant="caption" fontWeight={900} sx={{ color: '#475569', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '6px', fontSize: '0.65rem' }}>
-                  {label}
-                </Typography>
-              )}
-            </Stack>
-          );
-        })}
-
-        {/* Premium Upload Button (Limit to 10 photos total) */}
-        {(!disabled && photos.length + existingUrls.length < 10) && (
-          <Box 
-            component="label"
-            sx={{ 
-              width: 140, 
-              height: 140, 
-              borderRadius: '16px', 
-              border: '2px dashed #cbd5e1', 
-              bgcolor: '#f8fafc',
-              display: 'flex', 
-              flexDirection: 'column',
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              gap: 1.5,
-              '&:hover': { 
-                borderColor: '#3b82f6', 
-                bgcolor: '#eff6ff',
-                transform: 'translateY(-4px)',
-                boxShadow: '0 12px 24px rgba(59, 130, 246, 0.15)',
-                '& .upload-icon': { color: '#3b82f6', transform: 'scale(1.1)' },
-                '& .upload-text': { color: '#3b82f6' }
-              }
-            }}
-          >
-            <Box className="upload-icon" sx={{ transition: 'all 0.3s', color: '#94a3b8' }}>
-              <Upload size={32} />
-            </Box>
-            <Typography className="upload-text" variant="caption" fontWeight={800} sx={{ color: '#94a3b8', transition: 'all 0.3s' }}>
-              แนบรูปภาพ
-            </Typography>
+      <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        {allPhotoItems.map((item, i) => (
+          <Box key={item.id} sx={{ width: 140, height: 140, borderRadius: '16px', overflow: 'hidden', position: 'relative', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+            <img src={item.url} alt="Site" onClick={() => { setPreviewImages(allPhotoItems.map(p => p.url)); setPreviewIndex(i); }} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
+            <IconButton size="small" onClick={() => onRemove(item.originalIndex)} sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(0,0,0,0.5)', color: 'white', backdropFilter: 'blur(4px)', '&:hover': { bgcolor: 'rgba(255,0,0,0.7)' }, display: disabled ? 'none' : 'flex' }}>
+              <X size={16} />
+            </IconButton>
+          </Box>
+        ))}
+        {(!disabled && allPhotoItems.length < 10) && (
+          <Box component="label" sx={{ width: 140, height: 140, borderRadius: '16px', border: '2px dashed #cbd5e1', bgcolor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', gap: 1.5, '&:hover': { borderColor: '#3b82f6', bgcolor: '#eff6ff', transform: 'translateY(-4px)', boxShadow: '0 12px 24px rgba(59, 130, 246, 0.15)', '& .upload-icon': { color: '#3b82f6', transform: 'scale(1.1)' }, '& .upload-text': { color: '#3b82f6' } } }}>
+            <Box className="upload-icon" sx={{ transition: 'all 0.3s', color: '#94a3b8' }}><Upload size={32} /></Box>
+            <Typography className="upload-text" variant="caption" fontWeight={800} sx={{ color: '#94a3b8', transition: 'all 0.3s' }}>แนบรูปภาพ</Typography>
             <input type="file" hidden multiple accept="image/*" onChange={(e) => onUpload(e.target.files)} />
           </Box>
         )}
@@ -1062,17 +1049,101 @@ export default function DailyReportPage() {
     );
   };
 
-  const removePhoto = (index: number, type: 'site' | 'labor') => {
-    if (type === 'site') {
-      setSitePhotos(prev => prev.filter((_, i) => i !== index));
-      setSitePhotoPreviews(prev => prev.filter((_, i) => i !== index));
-    } else {
-      setLaborPhotos(prev => prev.filter((_, i) => i !== index));
-      setLaborPhotoPreviews(prev => prev.filter((_, i) => i !== index));
-    }
+  
+  const renderLaborShiftPhotoGrid = (
+    shiftKey: keyof ShiftPhotos,
+    label: string,
+    disabled?: boolean
+  ) => {
+    const photos = laborPhotos[shiftKey];
+    const existingUrls = existingPhotos.labor[shiftKey];
+    const previews = laborPhotoPreviews[shiftKey];
+
+    const slotLabels = shiftKey === 'regular' ? ['เข้า', 'พักเที่ยง', 'เข้าบ่าย', 'ออก'] : ['เข้า', 'ออก'];
+    const maxPhotos = slotLabels.length;
+
+    const allPhotoItems = [
+      ...existingUrls.map((url, i) => ({ id: `ex-${i}`, url: getImageUrl(url), isExisting: true, originalIndex: i })),
+      ...photos.map((file, i) => ({ id: `new-${i}`, url: previews[i], isExisting: false, originalIndex: i }))
+    ].slice(0, maxPhotos);
+
+    const slots = slotLabels.map((label, index) => ({
+      label,
+      item: allPhotoItems[index] || null,
+      index
+    }));
+
+    return (
+      <Box sx={{ mt: 2, p: 2, border: '1px dashed #cbd5e1', borderRadius: '12px', bgcolor: '#f8fafc' }}>
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#334155' }}>
+          รูปถ่ายแรงงาน ({label})
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {slots.map(slot => (
+            <Stack key={slot.index} spacing={0.8} alignItems="center">
+              {slot.item ? (
+                <Box sx={{ width: 140, height: 140, borderRadius: '16px', overflow: 'hidden', position: 'relative', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                  <img src={slot.item.url} alt={slot.label} onClick={() => { setPreviewImages(allPhotoItems.map(p => p.url)); setPreviewIndex(slot.index); }} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
+                  <IconButton size="small" onClick={() => slot.item.isExisting ? removeExistingLaborShiftPhoto(slot.item.originalIndex, shiftKey) : removeLaborShiftPhoto(slot.item.originalIndex, shiftKey)} sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(0,0,0,0.5)', color: 'white', backdropFilter: 'blur(4px)', '&:hover': { bgcolor: 'rgba(255,0,0,0.7)' }, display: disabled ? 'none' : 'flex' }}>
+                    <X size={16} />
+                  </IconButton>
+                </Box>
+              ) : (
+                <Box component="label" sx={{ width: 140, height: 140, borderRadius: '16px', border: '2px dashed #cbd5e1', bgcolor: '#ffffff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: disabled ? 'default' : 'pointer', gap: 1.5, opacity: disabled ? 0.5 : 1, '&:hover': disabled ? {} : { borderColor: '#3b82f6', bgcolor: '#eff6ff', '& .upload-icon': { color: '#3b82f6', transform: 'scale(1.1)' } } }}>
+                  <Box className="upload-icon" sx={{ transition: 'all 0.3s', color: '#94a3b8' }}><Upload size={32} /></Box>
+                  <Typography variant="caption" fontWeight={800} sx={{ color: '#94a3b8' }}>แนบรูปภาพ</Typography>
+                  <input type="file" hidden accept="image/*" disabled={disabled} onChange={(e) => handleLaborShiftPhotoUpload(e.target.files, shiftKey)} />
+                </Box>
+              )}
+              <Typography variant="caption" fontWeight={900} sx={{ color: '#475569', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '6px', fontSize: '0.65rem' }}>{slot.label}</Typography>
+            </Stack>
+          ))}
+        </Box>
+      </Box>
+    );
   };
 
-  const compressImage = (file: File): Promise<File> => {
+  const renderLaborShiftPhotoButton = (shiftKey: keyof ShiftPhotos, label: string, disabled?: boolean) => {
+    const photos = laborPhotos[shiftKey];
+    const existingUrls = existingPhotos.labor[shiftKey];
+    const totalCount = photos.length + existingUrls.length;
+    const maxPhotos = shiftKey === 'regular' ? 4 : 2;
+
+    const isComplete = totalCount >= maxPhotos;
+
+    return (
+      <Button
+        variant="outlined"
+        fullWidth
+        sx={{
+          justifyContent: 'space-between',
+          py: 1.5,
+          px: 2,
+          borderRadius: '12px',
+          borderColor: isComplete ? '#10b981' : '#cbd5e1',
+          bgcolor: isComplete ? '#ecfdf5' : '#ffffff',
+          color: isComplete ? '#059669' : '#334155',
+          textTransform: 'none',
+          '&:hover': {
+            bgcolor: isComplete ? '#d1fae5' : '#f8fafc',
+            borderColor: isComplete ? '#10b981' : '#94a3b8'
+          }
+        }}
+        onClick={() => setActivePhotoModal(shiftKey)}
+        disabled={disabled}
+        startIcon={isComplete ? <CheckCircle2 size={20} /> : <Upload size={20} color={disabled ? "#cbd5e1" : "#64748b"} />}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, ml: 1 }}>
+          <Typography variant="body2" fontWeight={700}>{label}</Typography>
+          <Typography variant="caption" sx={{ color: isComplete ? '#059669' : '#64748b' }}>
+            แนบแล้ว {totalCount}/{maxPhotos} รูป
+          </Typography>
+        </Box>
+        <ChevronRight size={18} color={isComplete ? "#059669" : "#94a3b8"} />
+      </Button>
+    );
+  };
+const compressImage = (file: File): Promise<File> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -1134,9 +1205,24 @@ export default function DailyReportPage() {
         return;
       }
 
-      if (laborPhotos.length + existingPhotos.labor.length < 2) {
-        enqueueSnackbar('กรุณาแนบรูปถ่ายแรงงานอย่างน้อย 2 รูป', { variant: 'warning' });
-        return;
+      // Check Labor Photos based on active shifts
+      const shiftsMap: Array<{ key: keyof ShiftPhotos, label: string }> = [
+        { key: 'regular', label: 'เวลาทำงานปกติ' },
+        { key: 'otMorning', label: 'OT เช้า' },
+        { key: 'otNoon', label: 'OT เที่ยง' },
+        { key: 'otEvening', label: 'OT เย็น' }
+      ];
+
+      for (const shift of shiftsMap) {
+        if (activeShifts[shift.key]) {
+          const totalPhotos = laborPhotos[shift.key].length + existingPhotos.labor[shift.key].length;
+          const required = shift.key === 'regular' ? 4 : 2;
+          const reqText = shift.key === 'regular' ? '(เข้า/พักเที่ยง/เข้าบ่าย/ออก)' : '(เข้า/ออก)';
+          if (totalPhotos < required) {
+            enqueueSnackbar(`กรุณาแนบรูปถ่ายแรงงาน (${shift.label}) ให้ครบ ${required} รูป ${reqText}`, { variant: 'error' });
+            return;
+          }
+        }
       }
     }
 
@@ -1153,8 +1239,6 @@ export default function DailyReportPage() {
       
       // Compress site photos
       const compressedSitePhotos = await Promise.all(sitePhotos.map(compressImage));
-      // Compress labor photos
-      const compressedLaborPhotos = await Promise.all(laborPhotos.map(compressImage));
       
       // Index 0: Site Photos
       uploadPromises.push(
@@ -1163,12 +1247,20 @@ export default function DailyReportPage() {
           : Promise.resolve([])
       );
       
-      // Index 1: Labor Photos
-      uploadPromises.push(
-        compressedLaborPhotos.length > 0 
-          ? dailyReportService.uploadPhotos(compressedLaborPhotos, `tasks/${selectedTask.taskId}/labor`) 
-          : Promise.resolve([])
-      );
+      // Compress and upload shift photos
+      const uploadShiftPhotos = async (shiftKey: keyof ShiftPhotos) => {
+        const files = laborPhotos[shiftKey];
+        if (files.length === 0) return [];
+        const compressed = await Promise.all(files.map(compressImage));
+        return dailyReportService.uploadPhotos(compressed, `tasks/${selectedTask.taskId}/labor/${shiftKey}`);
+      };
+
+      const shiftUploadPromises = [
+        uploadShiftPhotos('regular'),
+        uploadShiftPhotos('otMorning'),
+        uploadShiftPhotos('otNoon'),
+        uploadShiftPhotos('otEvening')
+      ];
 
       // Medical Certificates
       const certWorkers = selectedWorkers.filter(w => w.leave?.medCertFile);
@@ -1180,14 +1272,18 @@ export default function DailyReportPage() {
       }
 
       // Execute all uploads in parallel
+      const shiftResults = await Promise.all(shiftUploadPromises);
       const results = await Promise.all(uploadPromises);
       
       const newSitePhotoUrls = results[0];
-      const newLaborPhotoUrls = results[1];
+      const regularUrls = shiftResults[0];
+      const otMorningUrls = shiftResults[1];
+      const otNoonUrls = shiftResults[2];
+      const otEveningUrls = shiftResults[3];
       
       // Map results back to workers
       certWorkers.forEach((w, idx) => {
-        const certUrls = results[idx + 2];
+        const certUrls = results[idx + 1];
         if (certUrls && certUrls.length > 0) {
           w.leave.medCertFileUrl = certUrls[0];
         }
@@ -1233,7 +1329,15 @@ export default function DailyReportPage() {
         note: note,
         photos: {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
-          labor: [...existingPhotos.labor, ...newLaborPhotoUrls]
+          laborByShift: {
+            // regular: Array stored in order [เข้า, พักเที่ยง, เข้าบ่าย, ออก]
+            regular: [...existingPhotos.labor.regular, ...regularUrls].length 
+              ? [...existingPhotos.labor.regular, ...regularUrls].slice(0, 4) 
+              : null,
+            otMorning: [...existingPhotos.labor.otMorning, ...otMorningUrls].length ? { in: [...existingPhotos.labor.otMorning, ...otMorningUrls][0] || '', out: [...existingPhotos.labor.otMorning, ...otMorningUrls][1] || '' } : null,
+            otNoon: [...existingPhotos.labor.otNoon, ...otNoonUrls].length ? { in: [...existingPhotos.labor.otNoon, ...otNoonUrls][0] || '', out: [...existingPhotos.labor.otNoon, ...otNoonUrls][1] || '' } : null,
+            otEvening: [...existingPhotos.labor.otEvening, ...otEveningUrls].length ? { in: [...existingPhotos.labor.otEvening, ...otEveningUrls][0] || '', out: [...existingPhotos.labor.otEvening, ...otEveningUrls][1] || '' } : null
+          }
         },
         labor: laborPayload,
         leave: leavePayload
@@ -1253,13 +1357,13 @@ export default function DailyReportPage() {
       // Reset or redirect
       setSelectedTask(null);
       setSitePhotos([]);
-      setLaborPhotos([]);
+      setLaborPhotos(INITIAL_SHIFT_PHOTOS);
       setSelectedWorkers([]);
       setProgress(0);
       setNote('');
       setSitePhotoPreviews([]);
-      setLaborPhotoPreviews([]);
-      setExistingPhotos({ site: [], labor: [] });
+      setLaborPhotoPreviews(INITIAL_SHIFT_PREVIEWS);
+      setExistingPhotos({ site: [], labor: INITIAL_EXISTING_SHIFT_PHOTOS });
       setReportDate(new Date());
       dailyReportService.clearCache(selectedTask.id);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -1614,13 +1718,18 @@ export default function DailyReportPage() {
 
                             <Grid item xs={12} md={9}>
                               <Grid container spacing={3}>
-                                <Grid item xs={6}>
-                                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน</Typography>
+                                <Grid item xs={12}>
+<Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายหน้างาน</Typography>
                                   {renderPhotoGrid(sitePhotos, existingPhotos.site, sitePhotoPreviews, (f) => handlePhotoUpload(f, 'site'), (i) => removePhoto(i, 'site'), 'site', isProgressLocked)}
                                 </Grid>
-                                <Grid item xs={6}>
-                                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>รูปถ่ายแรงงาน</Typography>
-                                  {renderPhotoGrid(laborPhotos, existingPhotos.labor, laborPhotoPreviews, (f) => handlePhotoUpload(f, 'labor'), (i) => removePhoto(i, 'labor'), 'labor', isProgressLocked)}
+                                <Grid item xs={12}>
+                                  {/* Dynamic Labor Photos based on Shifts */}
+                                  <Grid container spacing={2}>
+                                    {activeShifts.regular && <Grid item xs={12} sm={6} md={3}>{renderLaborShiftPhotoButton('regular', 'เวลาทำงานปกติ', isProgressLocked)}</Grid>}
+                                    {activeShifts.otMorning && <Grid item xs={12} sm={6} md={3}>{renderLaborShiftPhotoButton('otMorning', 'OT เช้า', isProgressLocked)}</Grid>}
+                                    {activeShifts.otNoon && <Grid item xs={12} sm={6} md={3}>{renderLaborShiftPhotoButton('otNoon', 'OT เที่ยง', isProgressLocked)}</Grid>}
+                                    {activeShifts.otEvening && <Grid item xs={12} sm={6} md={3}>{renderLaborShiftPhotoButton('otEvening', 'OT เย็น', isProgressLocked)}</Grid>}
+                                  </Grid>
                                 </Grid>
                               </Grid>
                             </Grid>

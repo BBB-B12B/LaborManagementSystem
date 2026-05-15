@@ -876,30 +876,12 @@ export class TaskService {
     const currentRev = selectedRevisionId || taskDocForRev.data()?.currentRevision || 'rev00';
 
     if (isSupportReport) {
-      // 1. Try current help first
       const helpId = currentRev.replace('rev', 'help');
       const reportDoc = await taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr).get();
       if (reportDoc.exists) return reportDoc.data();
-
-      // 2. Search in all other help docs
-      const helpSnapshot = await taskRef.collection('help').get();
-      for (const hDoc of helpSnapshot.docs) {
-        if (hDoc.id === helpId) continue;
-        const rDoc = await hDoc.ref.collection('dailyReports').doc(dateStr).get();
-        if (rDoc.exists) return rDoc.data();
-      }
     } else {
-      // 1. Try current revision first
       const reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
       if (reportDoc.exists) return reportDoc.data();
-
-      // 2. Search in all other revisions
-      const revisionsSnapshot = await taskRef.collection('revisions').get();
-      for (const revDoc of revisionsSnapshot.docs) {
-        if (revDoc.id === currentRev) continue;
-        const rDoc = await revDoc.ref.collection('dailyReports').doc(dateStr).get();
-        if (rDoc.exists) return rDoc.data();
-      }
     }
 
     return null;
