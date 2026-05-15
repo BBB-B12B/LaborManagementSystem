@@ -51,7 +51,7 @@ export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
       error: null,
     }),
 
-  setLoading: (isLoading) => set({ isLoading }),
+  setLoading: (isLoading) => set((state) => (state.isLoading === isLoading ? {} : { isLoading })),
 
   setError: (error) => set({ error, isLoading: false }),
 

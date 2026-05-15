@@ -28,6 +28,8 @@ const Topbar: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleGlobalSync = () => {
+    // แค่ invalidate cache และยิง event
+    // DailyReport page จะรับ event นี้ และเป็นเจ้าของ Spinner + refetch ทั้งหมด
     dailyReportService.clearCache();
     useTaskCacheStore.getState().invalidate();
     window.dispatchEvent(new CustomEvent('globalSync'));

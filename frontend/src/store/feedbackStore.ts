@@ -27,8 +27,8 @@ interface FeedbackState {
 export const useFeedbackStore = create<FeedbackState>((set) => ({
   // Initial Loading State
   isLoading: false,
-  showLoading: () => set({ isLoading: true }),
-  hideLoading: () => set({ isLoading: false }),
+  showLoading: () => set((state) => (state.isLoading ? {} : { isLoading: true })),
+  hideLoading: () => set((state) => (!state.isLoading ? {} : { isLoading: false })),
 
   // Initial Feedback State
   isOpen: false,
