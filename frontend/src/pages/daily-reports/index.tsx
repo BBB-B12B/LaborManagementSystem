@@ -946,19 +946,33 @@ export default function DailyReportPage() {
   }, [invalidateCache, queryClient, refetchTasks, showLoading, hideLoading]);
 
   const { data: projectWorkers = [], isLoading: workersLoading } = useQuery({
-    queryKey: ['workers', user?.projectLocationIds?.[0]],
+    queryKey: ['workers', user?.roleCode, user?.department, user?.projectLocationIds?.[0]],
     queryFn: async () => {
-      // FM's projectLocationIds contains the site they belong to (e.g. ["P002"])
-      // DC.projectLocationId (old) or DC.projectLocationIds (new) must match this value
+      // T-944: Logic for worker selection
+      // 1. If FM or Support FM (SFM): Fetch by department
+      // 2. If Admin or others: Fetch by current project
+      const isFM = user?.roleCode === 'FM';
+      
+      if (isFM) {
+        const dept = user?.department;
+        if (!dept) {
+          console.warn('[DailyReport] FM has no department:', user?.name);
+          return [];
+        }
+        console.log('[DailyReport] FM fetching workers by department:', dept);
+        return await dcService.getAllDCs({ department: dept }).then(res => res.dailyContractors);
+      }
+
+      // Default: Fetch by Project Location
       const locationId = user?.projectLocationIds?.[0];
       if (!locationId) {
         console.warn('[DailyReport] No projectLocationId found for user:', user?.name);
         return [];
       }
-      console.log('[DailyReport] Fetching DCs for locationId:', locationId);
+      console.log('[DailyReport] Admin/User fetching workers for locationId:', locationId);
       return await dcService.getDCsByProject(locationId);
     },
-    enabled: !!user?.projectLocationIds?.[0],
+    enabled: !!user,
     staleTime: remainingStaleTime,
     gcTime: remainingStaleTime + 60000,
   });

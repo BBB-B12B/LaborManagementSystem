@@ -35,6 +35,7 @@ export interface DailyContractor {
   phoneAllowance?: number;
   mouDeductionRate?: number;
   nationality?: string;
+  department?: string; // T-943: Added department field
 }
 
 export interface DCCompensationIncome {
@@ -92,6 +93,7 @@ export interface DCFilterOptions {
   search?: string;
   skillId?: string;
   projectLocationId?: string;
+  department?: string; // T-943: Added department filter
   isActive?: boolean;
   page?: number;
   pageSize?: number;
@@ -110,6 +112,8 @@ export async function getAllDCs(
   if (filters?.skillId) params.append('skillId', filters.skillId);
   if (filters?.projectLocationId)
     params.append('projectLocationId', filters.projectLocationId);
+  if (filters?.department)
+    params.append('department', filters.department);
   if (filters?.isActive !== undefined)
     params.append('isActive', String(filters.isActive));
   if (filters?.page) params.append('page', String(filters.page));

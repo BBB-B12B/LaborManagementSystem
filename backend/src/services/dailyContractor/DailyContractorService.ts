@@ -108,6 +108,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         laundryFee: input.laundryFee || 0,
         airConFee: input.airConFee || 0,
         otherDeduction: input.otherDeduction || 0,
+        department: input.department?.trim() || undefined,
       };
 
       // Enforce DocumentID = DC-EmployeeID (F-006 & T-230)
@@ -262,6 +263,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       if (input.laundryFee !== undefined) updateData.laundryFee = input.laundryFee;
       if (input.airConFee !== undefined) updateData.airConFee = input.airConFee;
       if (input.otherDeduction !== undefined) updateData.otherDeduction = input.otherDeduction;
+      if (input.department !== undefined) updateData.department = input.department?.trim() || undefined;
 
       // Remove password from update data (we use passwordHash)
       delete (updateData as any).password;
@@ -402,6 +404,26 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       return combined.map((dc) => this.toDTO(dc));
     } catch (error: any) {
       logger.error('Error getting DCs by project:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get DCs by department
+   */
+  async getByDepartment(department: string): Promise<DailyContractorDTO[]> {
+    try {
+      const results = await this.query([
+        {
+          field: 'department',
+          operator: '==',
+          value: department,
+        },
+      ]);
+
+      return results.map((dc) => this.toDTO(dc));
+    } catch (error: any) {
+      logger.error('Error getting DCs by department:', error);
       throw error;
     }
   }

@@ -43,6 +43,7 @@ export interface DailyContractor {
   laundryFee: number; // Default: 0
   airConFee: number; // Default: 0
   otherDeduction: number; // Default: 0
+  department?: string; // T-940: Added for department-based filtering
 }
 
 export interface DailyContractorDTO {
@@ -76,6 +77,7 @@ export interface DailyContractorDTO {
   laundryFee: number;
   airConFee: number;
   otherDeduction: number;
+  department?: string;
 }
 
 export interface CreateDailyContractorInput {
@@ -108,6 +110,7 @@ export interface CreateDailyContractorInput {
   laundryFee?: number;
   airConFee?: number;
   otherDeduction?: number;
+  department?: string;
 }
 
 export interface UpdateDailyContractorInput {
@@ -140,6 +143,7 @@ export interface UpdateDailyContractorInput {
   laundryFee?: number;
   airConFee?: number;
   otherDeduction?: number;
+  department?: string;
 }
 
 /**
@@ -182,6 +186,7 @@ export const dailyContractorConverter = {
       laundryFee: dc.laundryFee || 0,
       airConFee: dc.airConFee || 0,
       otherDeduction: dc.otherDeduction || 0,
+      department: dc.department || null,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
@@ -222,6 +227,7 @@ export const dailyContractorConverter = {
       laundryFee: data.laundryFee || 0,
       airConFee: data.airConFee || 0,
       otherDeduction: data.otherDeduction || 0,
+      department: data.department || null,
     };
   },
 };

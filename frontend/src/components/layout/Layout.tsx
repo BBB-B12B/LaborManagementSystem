@@ -179,16 +179,9 @@ export const Layout: React.FC<LayoutProps> = ({
   disablePadding = false,
   disableTopGap = false,
 }) => {
-  const { isLoading } = useTaskCacheStore();
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
-      <Backdrop
-        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1000 }}
-        open={isLoading}
-      >
-        <CircularProgress color="inherit" />
-      </Backdrop>
 
       <Navbar />
 

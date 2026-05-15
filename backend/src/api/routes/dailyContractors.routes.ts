@@ -162,6 +162,7 @@ router.get(
   [
     query('skillId').optional().isString(),
     query('projectLocationId').optional().isString(),
+    query('department').optional().isString().trim(),
     query('search').optional().isString(),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
@@ -173,7 +174,7 @@ router.get(
         throw new AppError('Validation failed', 400);
       }
 
-      const { skillId, projectLocationId, search } = req.query;
+      const { skillId, projectLocationId, department, search } = req.query;
 
       let contractors: DailyContractorDTO[] = [];
       let total = 0;
@@ -188,6 +189,12 @@ router.get(
         pageSize = result.length;
       } else if (projectLocationId) {
         const result = await dailyContractorService.getByProject(projectLocationId as string);
+        contractors = result;
+        total = result.length;
+        page = 1;
+        pageSize = result.length;
+      } else if (department) {
+        const result = await dailyContractorService.getByDepartment((department as string).trim().toUpperCase());
         contractors = result;
         total = result.length;
         page = 1;
@@ -367,6 +374,8 @@ router.post(
         const employeeId = getValue(row, 'รหัสพนักงาน');
         const name = getValue(row, 'ชื่อ-นามสกุล');
         const skillId = getValue(row, 'รหัสทักษะ');
+        const departmentRaw = getValue(row, 'แผนก') || getValue(row, 'Department');
+        const department = departmentRaw ? departmentRaw.trim().toUpperCase() : undefined;
 
         if (!employeeId || !name || !skillId) {
           console.warn(`[CSV Import] Row ${rowNumber} missing required fields`);
@@ -405,6 +414,7 @@ router.post(
               projectLocationIds: toProjectIds(projectIdsRaw),
               isActive,
               startDate,
+              department: department || undefined,
             },
             'import-csv'
           );
@@ -643,6 +653,7 @@ router.post(
     body('employeeId').optional({ checkFalsy: true }).trim(),
     body('name').optional({ checkFalsy: true }).trim(),
     body('skillId').optional({ checkFalsy: true }).trim(),
+    body('department').optional({ checkFalsy: true }).trim().toUpperCase(),
     body('username').optional({ checkFalsy: true }).trim(),
     body('password').optional({ checkFalsy: true }).isLength({ min: 8 }),
     body('projectLocationIds').optional().isArray(),
@@ -758,6 +769,7 @@ router.put(
     body('employeeId').optional({ checkFalsy: true }).trim(),
     body('name').optional({ checkFalsy: true }).trim(),
     body('skillId').optional({ checkFalsy: true }).trim(),
+    body('department').optional({ checkFalsy: true }).trim().toUpperCase(),
     body('username').optional({ checkFalsy: true }).trim(),
     body('password').optional({ checkFalsy: true }).isLength({ min: 8 }),
     body('projectLocationIds').optional().isArray(),
