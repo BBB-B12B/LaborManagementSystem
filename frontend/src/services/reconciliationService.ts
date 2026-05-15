@@ -57,7 +57,12 @@ export interface ReconciliationRecord {
   statusHistory: StatusHistoryEntry[];
   dailyReportId?: string;
   scanDataId?: string;
-  dailyReportPhotos?: string[];
+  dailyReportPhotos?: {
+    regular?: string[];
+    otMorning?: { in?: string; out?: string };
+    otNoon?: { in?: string; out?: string };
+    otEvening?: { in?: string; out?: string };
+  };
   dailyReportPunches?: string[];
   scanPunches?: string[];
   createdAt: string;
@@ -220,7 +225,8 @@ export const reconciliationService = {
    */
   exportToExcel: async (params: {
     filterStatus?: string;
-    projectLocationId?: string;
+    homeProjectId?: string;       // กรองตามสังกัด (RBAC หลัก)
+    projectLocationId?: string;  // backward compat
     startDate?: string;
     endDate?: string;
   }): Promise<Blob> => {
@@ -250,12 +256,14 @@ export const reconciliationService = {
    * ใช้ Firestore Count Aggregate — ไม่โหลดข้อมูลทั้งหมด
    */
   getStats: async (params: {
-    projectLocationId?: string;
+    homeProjectId?: string;       // กรองตามสังกัด (RBAC หลัก)
+    projectLocationId?: string;  // backward compat
     startDate?: string;
     endDate?: string;
   }): Promise<{
     totalRows: number;
     normalCount: number;
+    matchedCount: number;
     otherCount: number;
     absentCount: number;
     leaveCount: number;
@@ -272,6 +280,7 @@ export const reconciliationService = {
       data: {
         totalRows: number;
         normalCount: number;
+        matchedCount: number;
         otherCount: number;
         absentCount: number;
         leaveCount: number;
@@ -286,4 +295,5 @@ export const reconciliationService = {
     }>('/reconciliation/stats', { params });
     return response.data.data;
   },
+
 };

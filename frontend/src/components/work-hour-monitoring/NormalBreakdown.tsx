@@ -21,7 +21,7 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
   const { data: stats } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: () => reconciliationService.getStats({
-      projectLocationId: project !== 'all' ? project : undefined,
+      homeProjectId: project !== 'all' ? project : undefined,
       startDate: startDate ? startDate.toISOString() : undefined,
       endDate: endDate ? endDate.toISOString() : undefined,
     }),
@@ -35,7 +35,7 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
       description: 'ชั่วโมงทำงานใน Daily Report ตรงกับสแกนนิ้ว',
       icon: <CheckCircleIcon sx={{ fontSize: 28, color: RECON_COLORS.GREEN.activeBorder }} />,
       colorTheme: 'green' as const,
-      count: stats?.normalCount ?? 0,
+      count: stats?.matchedCount ?? 0,
     },
     {
       id: 'leave',

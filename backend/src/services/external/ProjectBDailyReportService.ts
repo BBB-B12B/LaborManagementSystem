@@ -77,6 +77,12 @@ export interface DailyEmployeeTimesheet {
   photos?: {
     labor?: string[];
     site?: string[];
+    laborByShift?: {
+      regular?: string[];
+      otMorning?: { in?: string; out?: string };
+      otNoon?: { in?: string; out?: string };
+      otEvening?: { in?: string; out?: string };
+    };
   };
   AssigneesID?: string;
   lastUpdated?: string;            // ISO string
@@ -100,7 +106,12 @@ export interface DailyTimesheetSummary {
   leaveEntries?: { type: string; hours: number; description?: string }[];
   medCertFileUrl?: string;
   assigneeId?: string;
-  dailyReportPhotos?: string[];    // ดึงมาจาก photos.labor
+  dailyReportPhotos?: {
+    regular?: string[];
+    otMorning?: { in?: string; out?: string };
+    otNoon?: { in?: string; out?: string };
+    otEvening?: { in?: string; out?: string };
+  };    // ดึงมาจาก photos.laborByShift
   dailyReportPunches?: string[];   // ดึงมาจาก shiftTimes
   shiftTimes?: {
     day?: string;
@@ -174,19 +185,10 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     leaveEntries = [{ type: lType, hours: leaveHours, description: desc }];
   }
 
-  let dailyReportPhotos: string[] | undefined = undefined;
-    if (doc.photos) {
-      dailyReportPhotos = [];
-      if (Array.isArray(doc.photos.labor)) {
-        dailyReportPhotos.push(...doc.photos.labor);
-      }
-      if (Array.isArray(doc.photos.site)) {
-        dailyReportPhotos.push(...doc.photos.site);
-      }
-      if (dailyReportPhotos.length === 0) {
-        dailyReportPhotos = undefined;
-      }
-    }
+  let dailyReportPhotos: DailyTimesheetSummary['dailyReportPhotos'] = undefined;
+  if (doc.photos?.laborByShift) {
+    dailyReportPhotos = doc.photos.laborByShift;
+  }
 
   let dailyReportPunches: string[] | undefined = undefined;
   if (doc.shiftTimes) {
@@ -370,7 +372,7 @@ class ProjectBDailyReportService {
 
     return snap.docs
       .map((doc) => doc.data() as DailyEmployeeTimesheet)
-      .filter((ts) => ts.isActive !== false); // filter isActive ใน memory
+      .filter((ts) => ts.isActive !== false || ts.leaveStatus != null || ts.leaveType != null || (ts.leave && ts.leave.length > 0));
   }
 
   /**
@@ -388,7 +390,7 @@ class ProjectBDailyReportService {
 
     return snap.docs
       .map((doc) => doc.data() as DailyEmployeeTimesheet)
-      .filter((ts) => ts.isActive !== false);
+      .filter((ts) => ts.isActive !== false || ts.leaveStatus != null || ts.leaveType != null || (ts.leave && ts.leave.length > 0));
   }
 
   // =========================================================================
@@ -411,7 +413,7 @@ class ProjectBDailyReportService {
 
     return snap.docs
       .map((doc) => doc.data() as DailyEmployeeTimesheet)
-      .filter((ts) => ts.isActive !== false);
+      .filter((ts) => ts.isActive !== false || ts.leaveStatus != null || ts.leaveType != null || (ts.leave && ts.leave.length > 0));
   }
 
   /**

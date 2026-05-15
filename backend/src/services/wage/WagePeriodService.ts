@@ -15,7 +15,7 @@ import {
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
-import { lateRecordService } from '../scanData/LateRecordService';
+
 
 /**
  * WagePeriodService
@@ -86,10 +86,18 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       // Generate period code
       const periodCode = generatePeriodCode(input.startDate);
 
-      // Check for duplicate period
-      const existing = await this.findByPeriodCode(periodCode);
-      if (existing) {
-        throw new AppError('Wage period already exists', 409);
+      // Check for date overlap within the same project
+      // A new period must not have any dates that overlap with an existing active period
+      const overlapping = await this.findOverlappingPeriod(
+        input.projectCode,
+        input.startDate,
+        input.endDate
+      );
+      if (overlapping) {
+        throw new AppError(
+          `งวดที่สร้างมีวันที่ซ้อนทับกับงวด ${overlapping.periodCode} (${overlapping.startDate.toLocaleDateString('th-TH')} - ${overlapping.endDate.toLocaleDateString('th-TH')}) ของโครงการนี้`,
+          409
+        );
       }
 
       const now = new Date();
@@ -102,7 +110,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         periodDays,
         status: 'draft',
         dcSummaries: [],
-        totalRegularHours: 0,
+        totalRegularDays: 0,
         totalOtHours: 0,
         totalGrossWages: 0,
         totalDeductions: 0,
@@ -138,22 +146,28 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       }
 
       // [T-360] Get project UUID for querying related collections
-      const projects = await collections.projectLocations.where('projectCode', '==', period.projectCode).get();
+      let projects = await collections.projectLocations.where('projectCode', '==', period.projectCode).get();
+      
+      // Fallback to legacy 'code' field if 'projectCode' is not found
+      if (projects.empty) {
+        projects = await collections.projectLocations.where('code', '==', period.projectCode).get();
+      }
+
       if (projects.empty) {
         throw new AppError(`Project not found for code: ${period.projectCode}`, 404);
       }
       const projectLocationId = projects.docs[0].id;
 
-      // 1. Fetch all daily reports for the period and project
-      const reports = await collections.dailyReports
-        .where('projectLocationId', '==', projectLocationId)
-        .where('date', '>=', period.startDate)
-        .where('date', '<=', period.endDate)
+      // 1. Fetch all reconciliation records for the period and home project
+      const startStr = period.startDate.toISOString().split('T')[0];
+      const endStr = period.endDate.toISOString().split('T')[0];
+
+      const reconRecords = await collections.reconciliationRecords
+        .where('homeProjectId', '==', projectLocationId)
+        .where('workDate', '>=', startStr)
+        .where('workDate', '<=', endStr)
         .get()
         .then((s: any) => s.docs.map((doc: any) => doc.data()));
-
-      // Flatten all entries from all reports
-      const allEntries = reports.flatMap((report: any) => (report.entries || []));
 
       // 2. Fetch all daily contractors active in this project
       const { dailyContractorService } = await import('../dailyContractor/DailyContractorService');
@@ -189,7 +203,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       );
 
       const dcSummaries: DCWageSummary[] = [];
-      let totalRegularHours = 0;
+      let totalRegularDays = 0;
       let totalOtHours = 0;
       let totalGrossWages = 0;
       let totalDeductions = 0;
@@ -197,15 +211,41 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       // 6. Calculate for each DC
       for (const dc of dcs) {
-        // Filter entries for this DC
-        // [T-401] In the future, we could filter here: e.g., e.verificationStatus === 'auto_verified'
-        const dcEntries = allEntries.filter((e: any) => e.dailyContractorId === dc.id);
+        // Filter reconciliation records for this DC and only process valid statuses
+        const dcRecons = reconRecords.filter((r: any) => 
+          r.employeeId === dc.employeeId && 
+          ['MATCHED', 'LEAVE', 'HOLIDAY'].includes(r.status)
+        );
 
-        // Aggregate hours
-        const regHours = dcEntries.filter((e: any) => e.workType === 'regular').reduce((sum: number, e: any) => sum + e.netHours, 0);
-        const otMorning = dcEntries.filter((e: any) => e.workType === 'ot_morning').reduce((sum: number, e: any) => sum + e.totalHours, 0);
-        const otNoon = dcEntries.filter((e: any) => e.workType === 'ot_noon').reduce((sum: number, e: any) => sum + e.totalHours, 0);
-        const otEvening = dcEntries.filter((e: any) => e.workType === 'ot_evening').reduce((sum: number, e: any) => sum + e.totalHours, 0);
+        let regularHours = 0;
+        let paidLeaveHours = 0;
+        let unpaidLeaveHours = 0;
+        let otMorning = 0;
+        let otNoon = 0;
+        let otEvening = 0;
+        let penaltyMinutes = 0;
+
+        for (const r of dcRecons) {
+          regularHours += r.approvedNormalHours || 0;
+          otMorning += r.approvedOtMorning || 0;
+          otNoon += r.approvedOtNoon || 0;
+          otEvening += r.approvedOtEvening || 0;
+          penaltyMinutes += (r.lateMinutes || 0) + (r.earlyLeaveMinutes || 0);
+
+          if (r.leaveEntries && r.leaveEntries.length > 0) {
+            for (const leave of r.leaveEntries) {
+              if (leave.type && leave.type.toLowerCase() === 'paid') {
+                paidLeaveHours += leave.hours || 0;
+              } else {
+                unpaidLeaveHours += leave.hours || 0;
+              }
+            }
+          }
+        }
+
+        const regularDays = regularHours / 8;
+        const paidLeaveDays = paidLeaveHours / 8;
+        const unpaidLeaveDays = unpaidLeaveHours / 8;
         const dcTotalOtHours = otMorning + otNoon + otEvening;
 
         // Fetch income/expense details
@@ -218,11 +258,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           continue;
         }
 
-        // Calculate wages (hourlyRate is derived from dailyWageRate)
+        // Calculate wages
         const hourlyRate = income.dailyWageRate / 8;
-        const regularWages = regHours * hourlyRate;
+        const regularWages = (regularDays + paidLeaveDays) * income.dailyWageRate;
         const otWages = dcTotalOtHours * hourlyRate * 1.5;
-        const professionalFees = regHours * income.professionalRate;
+        const professionalFees = regularDays * income.professionalRate;
 
         // Sum additional income for this DC
         const dcAddIncomeList = additionalIncomes.filter(i => i.dailyContractorId === dc.id);
@@ -234,18 +274,13 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         const dcAddExpenseList = additionalExpenses.filter(e => e.dailyContractorId === dc.id);
         const totalAddExpense = dcAddExpenseList.reduce((sum, e) => sum + e.amount, 0);
 
-        // Fetch late deductions (already generated by detectDiscrepancies)
-        const dcLateRecords = await lateRecordService.getByPeriod(periodId);
-        const dcSpecificLateRecords = dcLateRecords.filter(r => r.dailyContractorId === dc.id);
-        const lateDeductions = dcSpecificLateRecords.reduce((sum, r) => sum + r.lateDeduction, 0);
+        // Calculate late deductions based on penalty minutes
+        const lateDeductions = Math.round((income.dailyWageRate / 8 / 60) * penaltyMinutes);
 
         // Calculate Social Security (SS) dynamically using the new Rules engine
         let ssDeduction = 0;
         
-        // 1) First check: is the employee exempt? We still respect the "9" rule inside the service or we can check it upfront.
-        // But the Rules engine handles the employeeId exemption natively
-        
-        // 2) Deduct what was already paid this month
+        // Deduct what was already paid this month
         let ssPaidInMonth = 0;
         for (const pastPeriod of pastPeriodsInMonth) {
           const pastSummary = pastPeriod.dcSummaries.find(s => s.dailyContractorId === dc.id);
@@ -254,11 +289,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           }
         }
 
-        // 3) Evaluate current period's raw deduction based on Admin rules (Using Total Income per User Request)
+        // Evaluate current period's raw deduction based on Admin rules
         const { socialSecurityRuleService } = await import('./SocialSecurityRuleService');
         const rawSSDeduction = await socialSecurityRuleService.calculateDeduction(totalIncome, dc.employeeId);
         
-        // 4) Apply logic: max SS per month is typically 750 combined
+        // Apply logic: max SS per month is typically 750 combined
         if (rawSSDeduction > 0) {
             if (rawSSDeduction + ssPaidInMonth > 750) {
                 ssDeduction = Math.max(0, 750 - ssPaidInMonth);
@@ -285,13 +320,16 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           employeeId: dc.employeeId,
           name: dc.name,
           skillName: dc.skillId || 'ไม่ระบุ',
-          regularHours: regHours,
+          regularDays,
+          paidLeaveDays,
+          unpaidLeaveDays,
           otMorningHours: otMorning,
           otNoonHours: otNoon,
           otEveningHours: otEvening,
           totalOtHours: dcTotalOtHours,
-          totalHours: regHours + dcTotalOtHours,
-          hourlyRate: income.dailyWageRate / 8,
+          totalHours: regularHours + paidLeaveHours + unpaidLeaveHours + dcTotalOtHours,
+          penaltyMinutes,
+          hourlyRate,
           professionalRate: income.professionalRate,
           phoneAllowance: income.phoneAllowance || 0,
           regularWages,
@@ -317,7 +355,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         });
 
         // Global totals
-        totalRegularHours += regHours;
+        totalRegularDays += regularDays + paidLeaveDays;
         totalOtHours += dcTotalOtHours;
         totalGrossWages += totalIncome;
         totalDeductions += totalExpense;
@@ -326,7 +364,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       const updateData: Partial<WagePeriod> = {
         dcSummaries,
-        totalRegularHours,
+        totalRegularDays,
         totalOtHours,
         totalGrossWages,
         totalDeductions,
@@ -427,18 +465,16 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   }
 
   /**
-   * Find wage period by period code
+   * Find wage period by period code (optionally scoped to a project)
    */
-  async findByPeriodCode(periodCode: string): Promise<WagePeriod | null> {
+  async findByPeriodCode(periodCode: string, projectCode?: string): Promise<WagePeriod | null> {
     try {
-      // Query by periodCode only
-      const results = await this.query([
-        {
-          field: 'periodCode',
-          operator: '==',
-          value: periodCode,
-        },
-      ]);
+      const filters: any[] = [{ field: 'periodCode', operator: '==', value: periodCode }];
+      if (projectCode) {
+        filters.push({ field: 'projectCode', operator: '==', value: projectCode });
+      }
+
+      const results = await this.query(filters);
 
       // Filter in memory to handle legacy data (where isDeleted is missing)
       // and soft-deleted data (where isDeleted is true)
@@ -447,6 +483,32 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       return active || null;
     } catch (error: any) {
       logger.error('Error finding wage period by code:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find any active wage period for a project whose date range overlaps with [newStart, newEnd]
+   * Overlap condition: existing.startDate <= newEnd AND existing.endDate >= newStart
+   */
+  async findOverlappingPeriod(
+    projectCode: string,
+    newStart: Date,
+    newEnd: Date
+  ): Promise<WagePeriod | null> {
+    try {
+      // Fetch all active periods for this project
+      const existing = await this.getByProject(projectCode);
+
+      // Check for date overlap in memory
+      // Two ranges [A,B] and [C,D] overlap when A <= D AND B >= C
+      const overlapping = existing.find(
+        (p) => p.startDate <= newEnd && p.endDate >= newStart
+      );
+
+      return overlapping || null;
+    } catch (error: any) {
+      logger.error('Error checking for overlapping wage period:', error);
       throw error;
     }
   }

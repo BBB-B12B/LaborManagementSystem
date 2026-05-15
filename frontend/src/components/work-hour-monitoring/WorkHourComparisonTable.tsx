@@ -550,33 +550,159 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           1. ข้อมูลอ้างอิง Daily Report
         </Typography>
         <ComparisonBox sx={{ backgroundColor: '#fff', p: 2.5 }}>
-          {selectedRow?.dailyReportPhotos && selectedRow.dailyReportPhotos.length > 0 ? (
-            <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#f8fafc' }}>
-              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                📸 รูปถ่ายอ้างอิง ({selectedRow.dailyReportPhotos.length} รูป) — คลิกเพื่อดูรูปเต็ม
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                {selectedRow.dailyReportPhotos.map((photoUrl: string, idx: number) => {
-                  const fullUrl = getFullImageUrl(photoUrl);
-                  return (
-                    <Box
-                      key={idx}
-                      onClick={() => handleOpenViewer(selectedRow.dailyReportPhotos.map(getFullImageUrl), idx)}
-                      sx={{
-                        width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
-                        border: '2px solid #e2e8f0',
-                        backgroundImage: `url(${fullUrl})`,
-                        backgroundSize: 'cover', backgroundPosition: 'center',
-                        '&:hover': { transform: 'scale(1.05)', borderColor: RECON_COLORS.BLUE.ROYAL },
-                      }}
-                    />
-                  );
-                })}
-              </Box>
-            </Box>
-          ) : (
-            <ProofImagePlaceholder sx={{ height: '80px', mb: 2 }}>ไม่มีรูปภาพอ้างอิง</ProofImagePlaceholder>
-          )}
+          {(() => {
+            const photoMap = selectedRow?.dailyReportPhotos;
+            const medCert: string | undefined = selectedRow?.medCertFileUrl;
+
+            // ตรวจสอบว่าเป็นรูปแบบใหม่ (Map) หรือแบบเก่า (Array)
+            const isMap = photoMap && !Array.isArray(photoMap);
+
+            // Helper to get urls from group data (handles both Array and In/Out Map)
+            const getGroupUrls = (data: any): string[] => {
+              if (Array.isArray(data)) return data;
+              if (data && typeof data === 'object') {
+                const urls: string[] = [];
+                if (data.in) urls.push(data.in);
+                if (data.out) urls.push(data.out);
+                return urls;
+              }
+              return [];
+            };
+
+            const groups = isMap ? [
+              { label: 'OT เช้า', data: photoMap?.otMorning },
+              { label: 'กะปกติ', data: photoMap?.regular },
+              { label: 'OT เที่ยง', data: photoMap?.otNoon },
+              { label: 'OT เย็น', data: photoMap?.otEvening },
+            ].filter(g => getGroupUrls(g.data).length > 0) : [];
+
+            // สำหรับ Viewer ให้เรียงลำดับรูปทั้งหมด
+            const flatPhotos = isMap 
+              ? groups.flatMap(g => getGroupUrls(g.data))
+              : (Array.isArray(photoMap) ? photoMap : []);
+            
+            const allImagesForViewer = medCert ? [...flatPhotos, medCert] : flatPhotos;
+
+            if (allImagesForViewer.length > 0) {
+              return (
+                <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#f8fafc' }}>
+                  <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                    📸 รูปถ่ายอ้างอิง / หลักฐานการลา — คลิกเพื่อดูรูปเต็ม
+                  </Typography>
+
+                  {isMap ? (
+                    <Stack spacing={2}>
+                      {groups.map((group, gIdx) => (
+                        <Box key={gIdx}>
+                          <Typography variant="caption" fontWeight={900} sx={{ color: RECON_COLORS.BLUE.ROYAL, display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            • {group.label} ({getGroupUrls(group.data).length} รูป)
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                            {getGroupUrls(group.data).map((photoUrl: string) => {
+                              const globalIdx = allImagesForViewer.indexOf(photoUrl);
+                              const fullUrl = getFullImageUrl(photoUrl);
+                              
+                              // Check if it's IN or OUT (handles Map and Regular Array)
+                              let label = "";
+                              if (!Array.isArray(group.data)) {
+                                if (photoUrl === group.data?.in) label = "IN";
+                                else if (photoUrl === group.data?.out) label = "OUT";
+                              } else if (group.label === 'กะปกติ') {
+                                const idx = group.data.indexOf(photoUrl);
+                                if (idx === 0) label = "IN (08:00)";
+                                else if (idx === 1) label = "OUT (12:00)";
+                                else if (idx === 2) label = "IN (13:00)";
+                                else if (idx === 3) label = "OUT (17:00)";
+                              }
+
+                              return (
+                                <Box key={photoUrl} sx={{ position: 'relative' }}>
+                                  <Box
+                                    onClick={() => handleOpenViewer(allImagesForViewer.map(getFullImageUrl), globalIdx)}
+                                    sx={{
+                                      width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
+                                      border: '2px solid #e2e8f0',
+                                      backgroundImage: `url(${fullUrl})`,
+                                      backgroundSize: 'cover', backgroundPosition: 'center',
+                                      '&:hover': { transform: 'scale(1.05)', borderColor: RECON_COLORS.BLUE.ROYAL },
+                                    }}
+                                  />
+                                  {label && (
+                                    <Box sx={{
+                                      position: 'absolute', top: 6, right: 6,
+                                      backgroundColor: label === 'IN' ? RECON_COLORS.GREEN.bg : RECON_COLORS.ORANGE.bg,
+                                      color: label === 'IN' ? RECON_COLORS.GREEN.text : RECON_COLORS.ORANGE.text,
+                                      fontSize: '0.6rem', fontWeight: 900, px: 0.6, py: 0.2, borderRadius: '4px',
+                                      border: `1px solid ${label === 'IN' ? RECON_COLORS.GREEN.border : RECON_COLORS.ORANGE.border}`,
+                                      pointerEvents: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                    }}>
+                                      {label}
+                                    </Box>
+                                  )}
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      ))}
+                      {medCert && (
+                        <Box>
+                          <Typography variant="caption" fontWeight={900} sx={{ color: '#f97316', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            • หลักฐานการลา
+                          </Typography>
+                          <Box
+                            onClick={() => handleOpenViewer(allImagesForViewer.map(getFullImageUrl), allImagesForViewer.length - 1)}
+                            sx={{
+                              width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
+                              border: '2px solid #f97316',
+                              backgroundImage: `url(${getFullImageUrl(medCert)})`,
+                              backgroundSize: 'cover', backgroundPosition: 'center',
+                              '&:hover': { transform: 'scale(1.05)', borderColor: '#ea580c' },
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </Stack>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                      {allImagesForViewer.map((photoUrl: string, idx: number) => {
+                        const fullUrl = getFullImageUrl(photoUrl);
+                        const isMedCert = medCert && photoUrl === medCert;
+                        return (
+                          <Box key={idx} sx={{ position: 'relative' }}>
+                            <Box
+                              onClick={() => handleOpenViewer(allImagesForViewer.map(getFullImageUrl), idx)}
+                              sx={{
+                                width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
+                                border: isMedCert ? '2px solid #f97316' : '2px solid #e2e8f0',
+                                backgroundImage: `url(${fullUrl})`,
+                                backgroundSize: 'cover', backgroundPosition: 'center',
+                                '&:hover': { transform: 'scale(1.05)', borderColor: isMedCert ? '#ea580c' : RECON_COLORS.BLUE.ROYAL },
+                              }}
+                            />
+                            {isMedCert && (
+                              <Box sx={{
+                                position: 'absolute', bottom: -10, left: '50%', transform: 'translateX(-50%)',
+                                backgroundColor: '#f97316', color: '#fff', fontSize: '0.65rem', fontWeight: 800,
+                                px: 1, py: 0.25, borderRadius: '10px', whiteSpace: 'nowrap',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)', zIndex: 2
+                              }}>
+                                หลักฐานการลา
+                              </Box>
+                            )}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Box>
+              );
+            } else {
+              return (
+                <ProofImagePlaceholder sx={{ height: '80px', mb: 2 }}>ไม่มีรูปภาพอ้างอิง / หลักฐานการลา</ProofImagePlaceholder>
+              );
+            }
+          })()}
 
           <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block', mb: 1.5 }}>
             📅 รายละเอียดเวลาทำงานตาม Daily Report
@@ -967,7 +1093,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               const rowNumber = page * rowsPerPage + index + 1;
               const isMismatch = row.homeProjectId !== row.projectLocationId;
               const homeProj = projectsList.find(p => p.id === row.homeProjectId || p.code === row.homeProjectId)?.name || row.homeProjectId || <EmDash />;
-              const workProj = projectsList.find(p => p.id === row.projectLocationId || p.code === row.projectLocationId)?.name || row.projectLocationId || <EmDash />;
+              const workProj = projectsList.find(p => p.id === row.projectLocationId || p.code === row.projectLocationId)?.name || row.projectName || row.projectLocationId || <EmDash />;
 
               return (
                 <TableRow
@@ -1137,29 +1263,46 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
           <Box sx={{ p: 4 }}>
 
-            {selectedRow?.status === 'MISSING_DAILY' ? (
-              <>
-                <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
-                  <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
-                    ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
-                  </Typography>
-                </Box>
-                {renderTimeTable(true)}
-              </>
-            ) : (
-              <>
-                <Box sx={{ mb: 4 }}>
-                  {dailyReportReferencePanel}
-                </Box>
+            {(() => {
+              const hasDailyData = (selectedRow?.dailyReportHours ?? 0) > 0 || 
+                                   (selectedRow?.dailyReportPunches?.length ?? 0) > 0 || 
+                                   (selectedRow?.leaveHours ?? 0) > 0;
 
-                <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
-                  <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
-                    ข้อมูลแสดงเวลาทำงาน
-                  </Typography>
-                  {renderTimeTable(false)}
-                </Box>
-              </>
-            )}
+              if (selectedRow?.status === 'MISSING_DAILY' && !hasDailyData) {
+                return (
+                  <>
+                    <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
+                        ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
+                      </Typography>
+                    </Box>
+                    {renderTimeTable(true)}
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  {selectedRow?.status === 'MISSING_DAILY' && hasDailyData && (
+                    <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
+                        ℹ️ ข้อมูล Daily Report ไม่สมบูรณ์ (มีเฉพาะข้อมูลลาหรือข้อมูลบางส่วน) — โปรดแจ้งโฟร์แมนให้ลงข้อมูลเพิ่มเติม
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ mb: 4 }}>
+                    {dailyReportReferencePanel}
+                  </Box>
+
+                  <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
+                    <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
+                      ข้อมูลแสดงเวลาทำงาน
+                    </Typography>
+                    {renderTimeTable(false)}
+                  </Box>
+                </>
+              );
+            })()}
 
             <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4, pt: 3, borderTop: '1px solid #e2e8f0' }}>
               {isEditingScan ? (

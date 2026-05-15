@@ -28,8 +28,12 @@ export interface DCWageSummary {
   name: string;
   skillName: string;
 
+  // Days and leaves
+  regularDays: number;
+  paidLeaveDays: number;
+  unpaidLeaveDays: number;
+
   // Hours worked
-  regularHours: number;
   otMorningHours: number;
   otNoonHours: number;
   otEveningHours: number;
@@ -62,6 +66,9 @@ export interface DCWageSummary {
 
   // Net calculation
   netWages: number;
+  
+  // Penalty
+  penaltyMinutes: number;
 }
 
 /**
@@ -77,7 +84,7 @@ export interface WagePeriod {
   periodDays: number;
   status: PeriodStatus;
   dcSummaries: DCWageSummary[];
-  totalRegularHours: number;
+  totalRegularDays: number;
   totalOtHours: number;
   totalGrossWages: number;
   totalDeductions: number;

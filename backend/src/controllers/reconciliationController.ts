@@ -120,6 +120,69 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
       pageSize: pageSize !== undefined ? parseInt(pageSize as string, 10) : 100,
     });
 
+    // Enrich projectName สำหรับ records ที่ยังไม่มีชื่อโครงการ
+    // Query แบบ global (ไม่ผ่าน RBAC) เพื่อให้แสดงชื่อโครงการที่พนักงานไปทำงาน
+    const missingNameIds = [...new Set(
+      result.records
+        .filter(r => !r.projectName && r.projectLocationId)
+        .map(r => r.projectLocationId)
+    )];
+
+    if (missingNameIds.length > 0) {
+      try {
+        const { collections } = await import('../config/collections');
+        const projectNameMap = new Map<string, string>();
+
+        // Batch query — Firestore 'in' รองรับสูงสุด 10 ค่าต่อครั้ง
+        const batchSize = 10;
+        for (let i = 0; i < missingNameIds.length; i += batchSize) {
+          const batch = missingNameIds.slice(i, i + batchSize);
+
+          // 1) หา document ที่ doc ID ตรงกับ projectLocationId
+          const idSnap = await collections.projectLocations
+            .where('__name__', 'in', batch)
+            .get();
+          idSnap.forEach(doc => {
+            const name = doc.data().projectName;
+            if (name) projectNameMap.set(doc.id, name);
+          });
+
+          // 2) Fallback: หาจาก code field
+          const stillMissingByCode = batch.filter(id => !projectNameMap.has(id));
+          if (stillMissingByCode.length > 0) {
+            const codeSnap = await collections.projectLocations
+              .where('code', 'in', stillMissingByCode)
+              .get();
+            codeSnap.forEach(doc => {
+              const d = doc.data();
+              if (d.projectName && d.code) projectNameMap.set(d.code, d.projectName);
+            });
+          }
+
+          // 3) Fallback: หาจาก projectCode field
+          const stillMissingByProjectCode = batch.filter(id => !projectNameMap.has(id));
+          if (stillMissingByProjectCode.length > 0) {
+            const pcSnap = await collections.projectLocations
+              .where('projectCode', 'in', stillMissingByProjectCode)
+              .get();
+            pcSnap.forEach(doc => {
+              const d = doc.data();
+              if (d.projectName && d.projectCode) projectNameMap.set(d.projectCode, d.projectName);
+            });
+          }
+        }
+
+        // Patch projectName เข้า records ที่ยังไม่มีชื่อ
+        result.records.forEach(r => {
+          if (!r.projectName && projectNameMap.has(r.projectLocationId)) {
+            r.projectName = projectNameMap.get(r.projectLocationId);
+          }
+        });
+      } catch (enrichErr) {
+        console.warn('[reconciliation] projectName enrichment failed:', enrichErr);
+      }
+    }
+
     res.json({
       success: true,
       data: result.records,
@@ -127,6 +190,7 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
       page: result.page,
       pageSize: result.pageSize,
     });
+
   } catch (error) {
     console.error('[reconciliation] getRecords error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch reconciliation records' });

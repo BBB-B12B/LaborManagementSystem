@@ -14,13 +14,20 @@ export interface DCWageSummary {
   name: string;
   skillName: string;
 
-  // ชั่วโมงทำงาน
-  regularHours: number;
+  // วันทำงานและวันลา (หน่วยเป็นวัน)
+  regularDays: number;
+  paidLeaveDays: number;
+  unpaidLeaveDays: number;
+
+  // ชั่วโมง OT (หน่วยเป็นชั่วโมง)
   otMorningHours: number;
   otNoonHours: number;
   otEveningHours: number;
   totalOtHours: number;
   totalHours: number;
+
+  // บทลงโทษ (หน่วยเป็นนาที)
+  penaltyMinutes: number;
 
   // การคำนวณรายได้
   hourlyRate: number;
@@ -65,7 +72,7 @@ export interface WagePeriod {
   periodDays: number; // Always 15
   status: PeriodStatus;
   dcSummaries: DCWageSummary[];
-  totalRegularHours: number;
+  totalRegularDays: number;
   totalOtHours: number;
   totalGrossWages: number;
   totalDeductions: number;
@@ -126,7 +133,7 @@ export const wagePeriodConverter = {
       periodDays: period.periodDays,
       status: period.status,
       dcSummaries: period.dcSummaries,
-      totalRegularHours: period.totalRegularHours,
+      totalRegularDays: period.totalRegularDays,
       totalOtHours: period.totalOtHours,
       totalGrossWages: period.totalGrossWages,
       totalDeductions: period.totalDeductions,
@@ -158,7 +165,7 @@ export const wagePeriodConverter = {
       periodDays: data.periodDays,
       status: data.status,
       dcSummaries: data.dcSummaries || [],
-      totalRegularHours: data.totalRegularHours || 0,
+      totalRegularDays: data.totalRegularDays || 0,
       totalOtHours: data.totalOtHours || 0,
       totalGrossWages: data.totalGrossWages || 0,
       totalDeductions: data.totalDeductions || 0,

@@ -24,7 +24,7 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, st
   const { data: stats } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: () => reconciliationService.getStats({
-      projectLocationId: project !== 'all' ? project : undefined,
+      homeProjectId: project !== 'all' ? project : undefined,
       startDate: startDate ? startDate.toISOString() : undefined,
       endDate: endDate ? endDate.toISOString() : undefined,
     }),

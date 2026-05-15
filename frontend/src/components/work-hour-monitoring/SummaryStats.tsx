@@ -82,7 +82,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
   const { data: statsData, isLoading } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: () => reconciliationService.getStats({
-      projectLocationId: project !== 'all' ? project : undefined,
+      homeProjectId: project !== 'all' ? project : undefined,
       startDate: startDate ? startDate.toISOString() : undefined,
       endDate: endDate ? endDate.toISOString() : undefined,
     }),
@@ -152,8 +152,8 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
           <StatCard 
             elevation={0} 
             colorTheme="green"
-            active={activeStatus === 'normal'}
-            onClick={() => onStatusClick?.('normal')}
+            active={activeStatus === 'normal' || activeStatus === 'all_normal' || activeStatus === 'leave'}
+            onClick={() => onStatusClick?.('all_normal')}
           >
             <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
               <Box sx={{ flex: 1.2 }}>

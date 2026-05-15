@@ -9,7 +9,7 @@
  * - Conservative Rule (min hours) แสดงเป็น suggestedHours — UI hint เท่านั้น
  */
 
-import { getFirestore, Timestamp, FieldValue, Filter } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import {
   ReconciliationRecord,
   ReconciliationStatus,
@@ -178,18 +178,7 @@ export class ReconciliationService {
     return (h || 0) * 60 + (m || 0);
   }
 
-  /**
-   * ปรับ scanPunches ให้มีจำนวนคู่ (even count)
-   * ถ้า odd → ตัด punch สุดท้ายออก เพราะไม่มีคู่ out
-   * ตัวอย่าง: ["07:56", "12:02", "12:58"] → ["07:56", "12:02"]
-   */
-  private makeEvenScanPunches(punches: string[]): string[] {
-    if (!punches || punches.length === 0) return [];
-    const sorted = [...punches].sort();
-    // ถ้าจำนวนคี่ → ตัด punch สุดท้ายออก
-    if (sorted.length % 2 !== 0) sorted.pop();
-    return sorted;
-  }
+
 
   /**
    * [PRIMARY] กำหนดสถานะโดยเปรียบ punch coverage
@@ -209,6 +198,7 @@ export class ReconciliationService {
     dailyReportHours?: number;   // ใช้เป็น suggestedHours
     isHoliday?: boolean;
     isLeave?: boolean;
+    leaveHours?: number;          // จำนวนชั่วโมงที่ลา (ใช้แยกลาเต็มวัน vs บางส่วน)
   }): ClassifyResult {
     const {
       dailyReportPunches,
@@ -220,17 +210,61 @@ export class ReconciliationService {
       dailyReportHours,
       isHoliday,
       isLeave,
+      leaveHours,
     } = params;
 
     const dailyPunchesValid = Array.isArray(dailyReportPunches) && dailyReportPunches.length >= 2;
     const scanCount = (scanPunches || []).length;
     const scanValid = scanCount >= 2;
-    const dailyExists = dailyPunchesValid || (dailyReportHours !== undefined && dailyReportHours > 0);
 
     // --- Base cases ---
+    // ลาเต็มวัน = ลา >= 8 ชั่วโมง (8 ชม. ปกติ ไม่นับ OT)
+    const isFullDayLeave = isLeave === true && (leaveHours ?? 0) >= 8;
+    // ลาบางส่วน = มี leaveHours แต่ < 8 → ยังต้องทำงานบางส่วน
+    const isPartialLeave = isLeave === true && (leaveHours ?? 0) > 0 && (leaveHours ?? 0) < 8;
+    const noWorkHours = !dailyReportHours || dailyReportHours === 0;
+    
+    // ตรวจสอบว่ามีการลง "งาน" (Work) ใน Daily Report หรือยัง
+    const dailyWorkExists = dailyPunchesValid || (dailyReportHours !== undefined && dailyReportHours > 0);
+    
+    // ถ้าลาบางส่วน ให้ถือว่า daily report มีอยู่เสมอ (แม้จะเป็นแค่ข้อมูลลา)
+    const dailyExists = dailyWorkExists || isPartialLeave;
+
+    // 1. ลาเต็มวัน (>= 8 ชั่วโมง) และไม่มีชั่วโมงทำงานเลย (รวม OT)
+    if (isFullDayLeave && noWorkHours) {
+      return { status: 'LEAVE' };
+    }
+
+    // 2. ถ้าเป็นวันหยุดและไม่มีชั่วโมงทำงาน (ไม่มาทำ OT)
+    if (isHoliday && noWorkHours) {
+      if (scanCount > 0) {
+        return { 
+          status: 'CONFLICTED', 
+          suggestedHours: 0,
+          note: `วันหยุดแต่พบข้อมูลการสแกนนิ้ว (${scanCount} ครั้ง)`
+        };
+      }
+      return { status: 'HOLIDAY' };
+    }
+
+    // 3. กรณีลาบางส่วน แต่ไม่มีการลงเวลาทำงานใน Daily Report (Incomplete Report)
+    if (isPartialLeave && !dailyWorkExists) {
+      if (scanCount > 0) {
+        return { 
+          status: 'CONFLICTED', 
+          suggestedHours: 0,
+          note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว (${scanCount} ครั้ง)` 
+        };
+      }
+      return { 
+        status: 'MISSING_DAILY', 
+        suggestedHours: 0,
+        note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ` 
+      };
+    }
+
+    // 3. Fallback สำหรับ Base cases ปกติ
     if (!dailyExists && !scanValid) {
-      if (isHoliday) return { status: 'HOLIDAY' };
-      if (isLeave) return { status: 'LEAVE' };
       return { status: 'ABSENT' };
     }
     if (!dailyExists && scanValid) return { status: 'MISSING_DAILY' };
@@ -361,6 +395,7 @@ export class ReconciliationService {
         dailyReportHours: input.dailyReportHours,
         isHoliday: input.isHoliday ?? isHoliday,
         isLeave: isLeaveCalculated ?? isLeave,
+        leaveHours: input.leaveHours,
       });
 
       const historyEntry: StatusHistoryEntry = {
@@ -424,6 +459,7 @@ export class ReconciliationService {
       dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
       isHoliday: effectiveIsHoliday,
       isLeave: effectiveIsLeave,
+      leaveHours: input.leaveHours ?? existing.leaveHours,
     });
 
     const newStatus = classified.status;
@@ -1026,15 +1062,11 @@ export class ReconciliationService {
   private buildBaseQuery(filter: Omit<ReconciliationFilter, 'page' | 'pageSize'>): FirebaseFirestore.Query {
     let query: FirebaseFirestore.Query = this.collection;
 
-    // กรองตามสังกัด (RBAC หลัก) — ใช้ Filter.or เฉพาะกรณีโครงการเดียว
-    // เพื่อรองรับ record เก่าที่ Cloud Function สร้างโดยไม่มี homeProjectId
+    // กรองตามสังกัด (RBAC หลัก) — กรองเฉพาะ homeProjectId เท่านั้น
     if (filter.homeProjectId) {
-      query = query.where(Filter.or(
-        Filter.where('homeProjectId', '==', filter.homeProjectId),
-        Filter.where('projectLocationId', '==', filter.homeProjectId),
-      ));
+      query = query.where('homeProjectId', '==', filter.homeProjectId);
     } else if (filter.allowedHomeProjects && filter.allowedHomeProjects.length > 0) {
-      // กรณี "ทั้งหมด" ใช้ homeProjectId IN เหมือนเดิม (Firestore Count ไม่รองรับ Filter.or กับ in)
+      // กรณี "ทั้งหมด" ใช้ homeProjectId IN
       query = query.where('homeProjectId', 'in', filter.allowedHomeProjects);
     } else if (filter.projectLocationId) {
       query = query.where('projectLocationId', '==', filter.projectLocationId);
@@ -1053,23 +1085,12 @@ export class ReconciliationService {
     if (filter.status) {
       if (Array.isArray(filter.status)) {
         if (filter.status.length === 1) {
-          if (filter.status[0] === 'LEAVE') {
-            query = query.where(Filter.or(Filter.where('status', '==', 'LEAVE'), Filter.where('hasLeave', '==', true)));
-          } else {
-            query = query.where('status', '==', filter.status[0]);
-          }
+          query = query.where('status', '==', filter.status[0]);
         } else {
-          // If LEAVE is in array, we can't easily do a mixed IN + OR in Firestore.
-          // For now, if LEAVE is in the array, we just use IN for statuses. 
-          // (Usually filter.status is either a single status or an array of anomalies without LEAVE).
           query = query.where('status', 'in', filter.status);
         }
       } else {
-        if (filter.status === 'LEAVE') {
-          query = query.where(Filter.or(Filter.where('status', '==', 'LEAVE'), Filter.where('hasLeave', '==', true)));
-        } else {
-          query = query.where('status', '==', filter.status);
-        }
+        query = query.where('status', '==', filter.status);
       }
     }
     if (filter.isLocked !== undefined) {
@@ -1476,6 +1497,7 @@ export class ReconciliationService {
     totalRows: number;
     normalCount: number;      // MATCHED + LEAVE
     absentCount: number;      // ABSENT เฉพาะ
+    matchedCount: number;     // MATCHED เฉพาะ
     leaveCount: number;       // LEAVE เฉพาะ
     pendingCount: number;
     resolvedCount: number;
@@ -1492,15 +1514,11 @@ export class ReconciliationService {
     // Base project/date filter (ไม่ใส่ status)
     const buildProjectDateQuery = () => {
       let q: FirebaseFirestore.Query = this.collection;
-      // ใช้ Filter.or เฉพาะกรณีโครงการเดียว เพื่อรองรับ record เก่าที่ไม่มี homeProjectId
-      // Firestore Count Aggregate ไม่รองรับ Filter.or ร่วมกับ in operator (จะ error silently)
+      // กรองตามสังกัด (RBAC หลัก) — กรองเฉพาะ homeProjectId เท่านั้น
       if (filter.homeProjectId) {
-        q = q.where(Filter.or(
-          Filter.where('homeProjectId', '==', filter.homeProjectId),
-          Filter.where('projectLocationId', '==', filter.homeProjectId),
-        ));
+        q = q.where('homeProjectId', '==', filter.homeProjectId);
       } else if (filter.allowedHomeProjects && filter.allowedHomeProjects.length > 0) {
-        // กรณี "ทั้งหมด" ใช้ homeProjectId IN เหมือนเดิม ป้องกัน query พัง
+        // กรณี "ทั้งหมด" ใช้ homeProjectId IN
         q = q.where('homeProjectId', 'in', filter.allowedHomeProjects);
       } else if (filter.projectLocationId) {
         q = q.where('projectLocationId', '==', filter.projectLocationId);
@@ -1524,8 +1542,7 @@ export class ReconciliationService {
       conflictedSnap,
       unregisteredSnap,
       absentSnap,
-      statusLeaveSnap,
-      hasLeaveSnap,
+      leaveSnap,
       holidaySnap,
       employeeCountSnap,
     ] = await Promise.all([
@@ -1539,7 +1556,6 @@ export class ReconciliationService {
       baseQ.where('status', '==', 'UNREGISTERED_EMPLOYEE').count().get(),
       baseQ.where('status', '==', 'ABSENT').count().get(),
       baseQ.where('status', '==', 'LEAVE').count().get(),
-      baseQ.where('hasLeave', '==', true).count().get(),
       baseQ.where('status', '==', 'HOLIDAY').count().get(),
       // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project (สังกัด)
       (() => {
@@ -1559,9 +1575,10 @@ export class ReconciliationService {
 
     return {
       totalRows:          totalSnap.data().count - holidaySnap.data().count,
-      normalCount:        normalSnap.data().count + statusLeaveSnap.data().count, // MATCHED + LEAVE (status)
+      normalCount:        normalSnap.data().count + leaveSnap.data().count, // MATCHED + LEAVE (ใช้ใน SummaryStats การ์ดใหญ่)
+      matchedCount:       normalSnap.data().count,                          // MATCHED อย่างเดียว (ใช้ใน NormalBreakdown)
       absentCount:        absentSnap.data().count,
-      leaveCount:         hasLeaveSnap.data().count, // Include both full leave (status=LEAVE) and partial leave (hasLeave=true)
+      leaveCount:         leaveSnap.data().count, // status=LEAVE เท่านั้น
       pendingCount:       pendingSnap.data().count,
       resolvedCount:      resolvedSnap.data().count,
       missingDailyCount:  missingDailySnap.data().count,

@@ -31,10 +31,8 @@ export const wagePeriodCreateSchema = z.object({
     'วันที่เริ่มต้นต้องไม่เกินวันปัจจุบัน'
   ),
 
-  endDate: baseDate('วันที่สิ้นสุดงวด').refine(
-    (date) => date <= new Date(),
-    'วันที่สิ้นสุดต้องไม่เกินวันปัจจุบัน'
-  ),
+  // endDate can be in the future (pre-create periods before they end)
+  endDate: baseDate('วันที่สิ้นสุดงวด'),
 
   // Notes
   notes: optionalString,
@@ -174,5 +172,4 @@ export default {
   dcIncomeDetailsSchema,
   dcExpenseDetailsSchema,
   wagePeriodFilterSchema,
-  validate15DayPeriod,
 };

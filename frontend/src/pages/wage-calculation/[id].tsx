@@ -31,7 +31,7 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import { ArrowBack, Download, Calculate, AccessTime, Add, CheckCircle, Payment } from '@mui/icons-material';
+import { ArrowBack, Download, Calculate, AccessTime, Add, CheckCircle, Payment, Visibility, VisibilityOff } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { wageService, type DCWageSummary } from '../../services/wageService';
@@ -54,6 +54,7 @@ export default function WageCalculationDetailsPage() {
   // State for Manage Dialog
   const [openDialog, setOpenDialog] = React.useState(false);
   const [selectedDC, setSelectedDC] = React.useState<DCWageSummary | null>(null);
+  const [showDetails, setShowDetails] = React.useState(false);
 
   // Fetch wage period
   const {
@@ -181,9 +182,31 @@ export default function WageCalculationDetailsPage() {
 
     // === กลุ่ม: ชั่วโมงการทำงาน (สีฟ้าอ่อน) ===
     {
-      field: 'regularHours',
-      headerName: 'ชม.ปกติ',
+      field: 'regularDays',
+      headerName: 'วันทำงานปกติ',
       minWidth: 90,
+      flex: 0.5,
+      align: 'right',
+      headerAlign: 'right',
+      headerClassName: 'hours-column',
+      cellClassName: 'hours-column',
+      valueFormatter: (params) => params.value?.toFixed(2) || '0.00',
+    },
+    {
+      field: 'paidLeaveDays',
+      headerName: 'วันลา (Paid)',
+      minWidth: 90,
+      flex: 0.5,
+      align: 'right',
+      headerAlign: 'right',
+      headerClassName: 'hours-column',
+      cellClassName: 'hours-column',
+      valueFormatter: (params) => params.value?.toFixed(2) || '0.00',
+    },
+    {
+      field: 'unpaidLeaveDays',
+      headerName: 'วันลา (Unpaid)',
+      minWidth: 100,
       flex: 0.5,
       align: 'right',
       headerAlign: 'right',
@@ -271,6 +294,17 @@ export default function WageCalculationDetailsPage() {
       headerClassName: 'expense-column',
       cellClassName: 'expense-column',
       valueFormatter: (params) => params.value?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00',
+    },
+    {
+      field: 'penaltyMinutes',
+      headerName: 'สาย/ออกก่อน (นาที)',
+      minWidth: 120,
+      flex: 0.7,
+      align: 'right',
+      headerAlign: 'right',
+      headerClassName: 'expense-column',
+      cellClassName: 'expense-column',
+      valueFormatter: (params) => params.value?.toString() || '0',
     },
     {
       field: 'lateDeductions',
@@ -468,10 +502,10 @@ export default function WageCalculationDetailsPage() {
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="body2" color="text.secondary">
-              ชั่วโมงรวม
+              วันทำงานรวม / OT รวม
             </Typography>
             <Typography variant="h5">
-              {(period.totalRegularHours + period.totalOtHours).toFixed(2)} ชม.
+              {period.totalRegularDays.toFixed(2)} วัน / {period.totalOtHours.toFixed(2)} ชม.
             </Typography>
           </Paper>
         </Grid>
@@ -524,6 +558,15 @@ export default function WageCalculationDetailsPage() {
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">รายละเอียดค่าแรงรายคน</Typography>
+          <Button
+            size="small"
+            startIcon={showDetails ? <VisibilityOff /> : <Visibility />}
+            onClick={() => setShowDetails(!showDetails)}
+            variant="outlined"
+            color="primary"
+          >
+            {showDetails ? 'ซ่อนรายละเอียดเงิน' : 'แสดงรายละเอียดเงิน'}
+          </Button>
         </Box>
         <Divider />
         <DataGrid
@@ -550,6 +593,19 @@ export default function WageCalculationDetailsPage() {
               ),
             },
           ]}
+          columnVisibilityModel={{
+            regularWages: showDetails,
+            otWages: showDetails,
+            professionalFees: showDetails,
+            totalIncome: showDetails,
+            accommodationCost: showDetails,
+            phoneAllowance: showDetails,
+            lateDeductions: showDetails,
+            socialSecurityDeduction: showDetails,
+            totalExpenses: showDetails,
+            netWages: showDetails,
+            actions: showDetails,
+          }}
           autoHeight
           disableSelectionOnClick
           getRowId={(row) => row.dailyContractorId}

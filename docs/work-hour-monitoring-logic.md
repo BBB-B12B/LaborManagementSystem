@@ -29,12 +29,17 @@
 
 ### 2.1 Base Cases (ตรวจก่อนทุกอย่าง)
 
-```
-ไม่มี daily AND ไม่มี scan  →  ABSENT (หรือ HOLIDAY / LEAVE ถ้าตรงเงื่อนไข)
-ไม่มี daily AND มี scan     →  MISSING_DAILY
-มี daily AND ไม่มี scan     →  MISSING_SCAN
-ไม่มี dailyReportPunches   →  MISSING_DAILY (daily ไม่มีข้อมูลช่วงเวลา)
-```
+**Priority 1: วันลาและวันหยุดเต็มวัน (ไม่มีชั่วโมงทำงาน)**
+- `ลางานเต็มวัน (isLeave) + ไม่มีสแกนนิ้ว` → `LEAVE`
+- `ลางานเต็มวัน (isLeave) + มีสแกนนิ้ว` → `CONFLICTED` (พร้อมหมายเหตุ: ลางานเต็มวันแต่พบข้อมูลสแกนนิ้ว)
+- `วันหยุด (isHoliday) + ไม่มีสแกนนิ้ว` → `HOLIDAY`
+- `วันหยุด (isHoliday) + มีสแกนนิ้ว` → `CONFLICTED`
+
+**Priority 2: ขาดงานและการขาดข้อมูล**
+- `ไม่มี daily AND ไม่มี scan`  →  `ABSENT`
+- `ไม่มี daily AND มี scan`     →  `MISSING_DAILY`
+- `มี daily AND ไม่มี scan`     →  `MISSING_SCAN`
+- `ไม่มี dailyReportPunches`   →  `MISSING_DAILY` (daily ไม่มีข้อมูลช่วงเวลา)
 
 ### 2.2 CONFLICTED — กรณีที่ต้องให้ Admin ตรวจสอบ
 

@@ -79,7 +79,12 @@ export interface ReconciliationRecord {
   dailyReportId?: string;            // ref → DailyWorkerReport doc id
   scanDataId?: string;               // ref → scanData doc id
   suggestedHours?: number;           // min(dailyReportHours, scanDataHours) — UI hint เท่านั้น
-  dailyReportPhotos?: string[];      // รูปถ่ายอ้างอิงจาก Daily Report (Aftersale)
+  dailyReportPhotos?: {
+    regular?: string[]; // [IN 08:00, OUT 12:00, IN 13:00, OUT 17:00]
+    otMorning?: { in?: string; out?: string };
+    otNoon?: { in?: string; out?: string };
+    otEvening?: { in?: string; out?: string };
+  };      // รูปถ่ายอ้างอิงจาก Daily Report (Aftersale)
   dailyReportPunches?: string[];     // Array ของเวลาจาก Daily Report เช่น ["08:00", "17:00"]
   scanPunches?: string[];            // Array ของเวลาสแกนนิ้ว
 
@@ -158,7 +163,12 @@ export interface CreateReconciliationRecordInput {
   };
   dailyReportId?: string;
   scanDataId?: string;
-  dailyReportPhotos?: string[];
+  dailyReportPhotos?: {
+    regular?: string[];
+    otMorning?: { in?: string; out?: string };
+    otNoon?: { in?: string; out?: string };
+    otEvening?: { in?: string; out?: string };
+  };
   dailyReportPunches?: string[];
   scanPunches?: string[];
   note?: string | null;

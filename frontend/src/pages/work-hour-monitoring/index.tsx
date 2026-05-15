@@ -96,7 +96,7 @@ export default function WorkHourMonitoringPage() {
     setIsExporting(true);
     try {
       const params: any = { filterStatus };
-      if (project !== 'all') params.projectLocationId = project;
+      if (project !== 'all') params.homeProjectId = project;
       if (startDate) params.startDate = startDate.toISOString().split('T')[0];
       if (endDate) params.endDate = endDate.toISOString().split('T')[0];
       const blob = await reconciliationService.exportToExcel(params);

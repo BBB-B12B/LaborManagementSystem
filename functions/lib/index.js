@@ -166,7 +166,18 @@ async function getFallbackAssignee(employeeId) {
             }
         }
         if (maxAssigneeId && maxCount > 0) {
-            return { id: maxAssigneeId, name: maxAssigneeName || 'Unknown' };
+            let finalName = maxAssigneeName;
+            if (!finalName || finalName === 'Unknown') {
+                try {
+                    const userSnap = await db.collection('users').where('Employeeid', '==', maxAssigneeId).limit(1).get();
+                    if (!userSnap.empty) {
+                        const uData = userSnap.docs[0].data();
+                        finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+                    }
+                }
+                catch { /* ignore */ }
+            }
+            return { id: maxAssigneeId, name: finalName || 'Unknown' };
         }
     }
     catch (err) {
@@ -522,18 +533,11 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
                 });
             }
         }
-        if (timesheet.photos) {
-            const collected = [];
-            if (Array.isArray(timesheet.photos.labor)) {
-                collected.push(...timesheet.photos.labor);
-            }
-            if (Array.isArray(timesheet.photos.site)) {
-                collected.push(...timesheet.photos.site);
-            }
-            dailyReportPhotos = collected.length > 0 ? collected : null;
+        if (timesheet.photos?.laborByShift) {
+            dailyReportPhotos = timesheet.photos.laborByShift;
         }
         else {
-            dailyReportPhotos = null; // ไม่มี photos field → ใช้ null แทน undefined เพราะ Firestore ไม่รับ undefined
+            dailyReportPhotos = null;
         }
     }
     // ── 4. ตัดสิน Status — punch coverage logic ────────────────────────────────
@@ -545,6 +549,13 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
     let conflictNote;
     const hasTimesheet = timesheetDoc.exists;
     const isLeave = leaveEntries.length > 0 && totalLeaveHours > 0;
+    const isFullDayLeave = isLeave && totalLeaveHours >= 8;
+    const isPartialLeave = isLeave && totalLeaveHours > 0 && totalLeaveHours < 8;
+    const noWorkHours = !totalTimesheetHours || totalTimesheetHours === 0;
+    // ตรวจสอบว่ามีการลง "งาน" (Work) ใน Daily Report หรือยัง
+    const dailyWorkExists = (hasTimesheet && totalTimesheetHours > 0);
+    // ถ้าลาบางส่วน ให้ถือว่า daily report มีอยู่เสมอ (แม้จะเป็นแค่ข้อมูลลา)
+    const dailyExists = dailyWorkExists || isPartialLeave;
     if (isMultipleProjects) {
         status = 'CONFLICTED';
         conflictNote = multipleProjectsReason;
@@ -552,19 +563,44 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
     else if (!isRegistered && hasScan) {
         status = 'UNREGISTERED_EMPLOYEE';
     }
-    else if (!hasScan && !hasTimesheet) {
-        if (isHoliday)
-            status = 'HOLIDAY';
-        else if (isLeave)
-            status = 'LEAVE';
-        else
-            status = 'ABSENT';
+    else if (isFullDayLeave && noWorkHours) {
+        // --- Full Day Leave Priority ---
+        status = 'LEAVE';
+        if (hasScan) {
+            status = 'CONFLICTED';
+            conflictNote = 'ลางานเต็มวันแต่พบข้อมูลการสแกนนิ้ว';
+        }
     }
-    else if (hasScan && !hasTimesheet) {
+    else if (isHoliday && noWorkHours) {
+        // --- Holiday Priority ---
+        status = 'HOLIDAY';
+        if (hasScan) {
+            status = 'CONFLICTED';
+            conflictNote = 'วันหยุดแต่พบข้อมูลการสแกนนิ้ว';
+        }
+    }
+    else if (isPartialLeave && !dailyWorkExists) {
+        // --- Incomplete Report (Leave only, no work) ---
+        if (hasScan) {
+            status = 'CONFLICTED';
+            conflictNote = `แจ้งลา ${totalLeaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว`;
+        }
+        else {
+            status = 'MISSING_DAILY';
+            conflictNote = `แจ้งลา ${totalLeaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ`;
+        }
+    }
+    else if (!hasScan && !dailyExists) {
+        status = 'ABSENT';
+    }
+    else if (hasScan && !dailyExists) {
         status = 'MISSING_DAILY';
     }
-    else if (!hasScan && hasTimesheet) {
+    else if (!hasScan && dailyExists) {
         status = 'MISSING_SCAN';
+        if (isPartialLeave) {
+            conflictNote = `ลา ${totalLeaveHours} ชม. แต่ไม่พบข้อมูลการสแกนนิ้วในช่วงเวลาทำงานที่เหลือ`;
+        }
     }
     else {
         // มีทั้งสองแหล่ง — ใช้ punch coverage
@@ -672,7 +708,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
                     .get();
                 if (!userSnap.empty) {
                     const uData = userSnap.docs[0].data();
-                    updates['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
+                    updates['assigneeName'] = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || null;
                 }
             }
             catch { /* ignore */ }
@@ -748,7 +784,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
                     .get();
                 if (!userSnap.empty) {
                     const uData = userSnap.docs[0].data();
-                    setObj['assigneeName'] = uData['fullNameEn'] || uData['Fullnameen'] || null;
+                    setObj['assigneeName'] = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || null;
                 }
             }
             catch { /* ignore */ }
@@ -1115,7 +1151,21 @@ exports.onReconciliationChanged = firebase_functions_1.firestore
     // 2. Increment new assignee if exists
     if (afterAssigneeId) {
         updates[`foremanUsage.${afterAssigneeId}.count`] = admin.firestore.FieldValue.increment(1);
-        if (afterAssigneeName) {
+        let finalAssigneeName = afterAssigneeName;
+        if (!finalAssigneeName || finalAssigneeName === 'Unknown') {
+            try {
+                const userSnap = await db.collection('users').where('Employeeid', '==', afterAssigneeId).limit(1).get();
+                if (!userSnap.empty) {
+                    const uData = userSnap.docs[0].data();
+                    finalAssigneeName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+                }
+            }
+            catch { /* ignore */ }
+        }
+        if (finalAssigneeName && finalAssigneeName !== 'Unknown') {
+            updates[`foremanUsage.${afterAssigneeId}.name`] = finalAssigneeName;
+        }
+        else if (afterAssigneeName) {
             updates[`foremanUsage.${afterAssigneeId}.name`] = afterAssigneeName;
         }
     }

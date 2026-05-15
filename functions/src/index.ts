@@ -78,6 +78,12 @@ interface DailyEmployeeTimesheet {
   photos?: {
     labor?: string[];
     site?: string[];
+    laborByShift?: {
+      regular?: string[];
+      otMorning?: { in?: string; out?: string };
+      otNoon?: { in?: string; out?: string };
+      otEvening?: { in?: string; out?: string };
+    };
   };
   AssigneesID?: string;
 }
@@ -624,17 +630,10 @@ async function reconcile(
       }
     }
 
-    if (timesheet.photos) {
-      const collected: string[] = [];
-      if (Array.isArray(timesheet.photos.labor)) {
-        collected.push(...timesheet.photos.labor);
-      }
-      if (Array.isArray(timesheet.photos.site)) {
-        collected.push(...timesheet.photos.site);
-      }
-      dailyReportPhotos = collected.length > 0 ? collected : null;
+    if (timesheet.photos?.laborByShift) {
+      dailyReportPhotos = timesheet.photos.laborByShift as any;
     } else {
-      dailyReportPhotos = null; // ไม่มี photos field → ใช้ null แทน undefined เพราะ Firestore ไม่รับ undefined
+      dailyReportPhotos = null;
     }
   }
 
@@ -648,20 +647,53 @@ async function reconcile(
 
   const hasTimesheet = timesheetDoc.exists;
   const isLeave      = leaveEntries.length > 0 && totalLeaveHours > 0;
+  const isFullDayLeave = isLeave && totalLeaveHours >= 8;
+  const isPartialLeave = isLeave && totalLeaveHours > 0 && totalLeaveHours < 8;
+  const noWorkHours = !totalTimesheetHours || totalTimesheetHours === 0;
+
+  // ตรวจสอบว่ามีการลง "งาน" (Work) ใน Daily Report หรือยัง
+  const dailyWorkExists = (hasTimesheet && totalTimesheetHours > 0);
+  
+  // ถ้าลาบางส่วน ให้ถือว่า daily report มีอยู่เสมอ (แม้จะเป็นแค่ข้อมูลลา)
+  const dailyExists = dailyWorkExists || isPartialLeave;
 
   if (isMultipleProjects) {
     status = 'CONFLICTED';
     conflictNote = multipleProjectsReason;
   } else if (!isRegistered && hasScan) {
     status = 'UNREGISTERED_EMPLOYEE';
-  } else if (!hasScan && !hasTimesheet) {
-    if (isHoliday)    status = 'HOLIDAY';
-    else if (isLeave) status = 'LEAVE';
-    else              status = 'ABSENT';
-  } else if (hasScan && !hasTimesheet) {
+  } else if (isFullDayLeave && noWorkHours) {
+    // --- Full Day Leave Priority ---
+    status = 'LEAVE';
+    if (hasScan) {
+      status = 'CONFLICTED';
+      conflictNote = 'ลางานเต็มวันแต่พบข้อมูลการสแกนนิ้ว';
+    }
+  } else if (isHoliday && noWorkHours) {
+    // --- Holiday Priority ---
+    status = 'HOLIDAY';
+    if (hasScan) {
+      status = 'CONFLICTED';
+      conflictNote = 'วันหยุดแต่พบข้อมูลการสแกนนิ้ว';
+    }
+  } else if (isPartialLeave && !dailyWorkExists) {
+    // --- Incomplete Report (Leave only, no work) ---
+    if (hasScan) {
+      status = 'CONFLICTED';
+      conflictNote = `แจ้งลา ${totalLeaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว`;
+    } else {
+      status = 'MISSING_DAILY';
+      conflictNote = `แจ้งลา ${totalLeaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ`;
+    }
+  } else if (!hasScan && !dailyExists) {
+    status = 'ABSENT';
+  } else if (hasScan && !dailyExists) {
     status = 'MISSING_DAILY';
-  } else if (!hasScan && hasTimesheet) {
+  } else if (!hasScan && dailyExists) {
     status = 'MISSING_SCAN';
+    if (isPartialLeave) {
+      conflictNote = `ลา ${totalLeaveHours} ชม. แต่ไม่พบข้อมูลการสแกนนิ้วในช่วงเวลาทำงานที่เหลือ`;
+    }
   } else {
     // มีทั้งสองแหล่ง — ใช้ punch coverage
     const effectiveScan = scanPunches;

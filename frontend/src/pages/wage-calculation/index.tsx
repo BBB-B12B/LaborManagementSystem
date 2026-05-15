@@ -49,7 +49,6 @@ import { wageService, type WagePeriod, type PeriodStatus } from '../../services/
 import {
   wagePeriodCreateSchema,
   type WagePeriodCreateInput,
-  validate15DayPeriod,
 } from '../../validation/wageSchema';
 
 import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
@@ -143,8 +142,11 @@ export default function WageCalculationPage() {
   const startDate = watch('startDate');
   const endDate = watch('endDate');
 
-  // Check if period is valid 15 days
-  const isValid15Days = startDate && endDate ? validate15DayPeriod(startDate, endDate) : false;
+  // Calculate number of days in the selected period (informational only)
+  const periodDays =
+    startDate && endDate
+      ? Math.ceil(Math.abs(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : null;
 
   // Handlers
   const handleCreatePeriod = async (data: WagePeriodCreateInput) => {
@@ -492,29 +494,23 @@ export default function WageCalculationPage() {
                         error={!!errors.endDate}
                         helperText={errors.endDate?.message}
                         required
-                        maxDate={new Date()}
                       />
                     )}
                   />
                 </Grid>
 
-                {/* 15-Day Period Validation */}
-                {startDate && endDate && (
+                {/* Period days info */}
+                {startDate && endDate && periodDays !== null && (
                   <Grid item xs={12}>
                     <Box
                       sx={{
                         p: 2,
-                        bgcolor: isValid15Days ? 'success.light' : 'error.light',
+                        bgcolor: 'info.light',
                         borderRadius: 1,
                       }}
                     >
-                      <Typography
-                        variant="body2"
-                        color={isValid15Days ? 'success.dark' : 'error.dark'}
-                      >
-                        {isValid15Days
-                          ? '✓ งวดนี้เป็น 15 วันพอดี (ถูกต้อง)'
-                          : '✗ งวดค่าแรงต้องเป็น 15 วันพอดี (FR-WC-001)'}
+                      <Typography variant="body2" color="info.dark">
+                        📅 งวดนี้มีระยะเวลา {periodDays} วัน
                       </Typography>
                     </Box>
                   </Grid>
