@@ -23,6 +23,8 @@ export interface Project {
   department: string;
   projectManager?: string | null;
   status: ProjectStatus;
+  workDays?: number[];
+  followCompanyHoliday?: boolean;
   createdBy: string;
   updatedBy: string;
   createdAt: Date;
@@ -48,6 +50,8 @@ class ProjectService {
       department: project.department ?? '',
       projectManager: project.projectManager ?? null,
       status: (project.status || PROJECT_STATUS_OPTIONS[0]) as ProjectStatus,
+      workDays: project.workDays ?? [1, 2, 3, 4, 5, 6],
+      followCompanyHoliday: project.followCompanyHoliday ?? true,
       createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
       updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date(),
     };
@@ -80,7 +84,10 @@ class ProjectService {
    */
   async getById(id: string): Promise<Project> {
     const project = await api.get<Project>(`/projects/${id}`);
-    return this.normalize(project);
+    console.log(`[Frontend projectService] getById(${id}) raw response:`, project);
+    const normalized = this.normalize(project);
+    console.log(`[Frontend projectService] getById(${id}) normalized:`, normalized);
+    return normalized;
   }
 
   /**

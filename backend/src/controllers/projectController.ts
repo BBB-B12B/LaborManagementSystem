@@ -129,6 +129,7 @@ export async function getProjectByIdHandler(
   try {
     const { id } = req.params;
     const project = await getProjectById(id);
+    console.log(`[getProjectByIdHandler] returning project ${id}:`, JSON.stringify(project));
     return res.status(200).json({
       success: true,
       data: project,
@@ -172,6 +173,8 @@ export async function createProjectHandler(
           ? String(req.body.projectManager).trim()
           : undefined,
       status: req.body.status ? String(req.body.status).trim() : undefined,
+      workDays: req.body.workDays !== undefined ? req.body.workDays : undefined,
+      followCompanyHoliday: req.body.followCompanyHoliday !== undefined ? req.body.followCompanyHoliday : undefined,
     };
 
     const project = await createProject(data, userId);
@@ -207,6 +210,8 @@ export async function updateProjectHandler(
 
     const userId = authUser.uid || authUser.id || authUser.employeeId || 'system';
 
+    console.log('[updateProjectHandler] req.body:', JSON.stringify(req.body));
+
     const data = {
       code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
       projectCode:
@@ -226,6 +231,8 @@ export async function updateProjectHandler(
           ? String(req.body.projectManager ?? '').trim()
           : undefined,
       status: req.body.status ? String(req.body.status).trim() : undefined,
+      workDays: req.body.workDays !== undefined ? req.body.workDays : undefined,
+      followCompanyHoliday: req.body.followCompanyHoliday !== undefined ? req.body.followCompanyHoliday : undefined,
     };
 
     Object.keys(data).forEach((key) => {

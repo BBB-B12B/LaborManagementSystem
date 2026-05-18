@@ -489,529 +489,256 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const records = paginatedData?.records ?? [];
   const total = paginatedData?.total ?? 0;
 
-  const dailyReportReferencePanel = useMemo(() => {
-    if (!selectedRow) return null;
+  const resolveSinglePunch = (punches: number[], expectedStart: number, expectedEnd: number): { inVal: number | null; outVal: number | null } => {
+    if (punches.length >= 2) {
+      return { inVal: punches[0], outVal: punches[punches.length - 1] };
+    }
+    if (punches.length === 1) {
+      const punch = punches[0];
+      const midpoint = (expectedStart + expectedEnd) / 2;
+      if (punch < midpoint) {
+        return { inVal: punch, outVal: null };
+      } else {
+        return { inVal: null, outVal: punch };
+      }
+    }
+    return { inVal: null, outVal: null };
+  };
 
-    // helper แปลง shiftTimes เป็น label ช่วงเวลา เช่น "06:00–08:00"
-    const fmtRange = (start?: string, end?: string) =>
-      start && end ? `${start}–${end}` : null;
+  const buildSegmentRows = (row: any) => {
+    if (!row) return [];
 
-    const otMorningRange = fmtRange(
-      selectedRow?.shiftTimes?.otMorning?.split('-')[0]?.trim(),
-      selectedRow?.shiftTimes?.otMorning?.split('-')[1]?.trim(),
-    );
-    const otNoonRange = fmtRange(
-      selectedRow?.shiftTimes?.otNoon?.split('-')[0]?.trim(),
-      selectedRow?.shiftTimes?.otNoon?.split('-')[1]?.trim(),
-    );
-    const otEveningRange = fmtRange(
-      selectedRow?.shiftTimes?.otEvening?.split('-')[0]?.trim(),
-      selectedRow?.shiftTimes?.otEvening?.split('-')[1]?.trim(),
-    );
-    const dayRange = selectedRow?.shiftTimes?.day ?? null;
-
-    const dailyItems = [
-      {
-        label: 'ชั่วโมงทำงานปกติ',
-        timeRange: dayRange,
-        value: selectedRow?.timesheetNormalHours ?? selectedRow?.approvedNormalHours ?? selectedRow?.dailyReportHours,
-        tagColor: { bg: '#E6F1FB', text: '#185FA5', border: '#B5D4F4' },
-      },
-      {
-        label: 'OT เช้า',
-        timeRange: otMorningRange,
-        value: selectedRow?.timesheetOtMorning ?? selectedRow?.approvedOtMorning,
-        tagColor: { bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
-      },
-      {
-        label: 'OT เที่ยง',
-        timeRange: otNoonRange,
-        value: selectedRow?.timesheetOtNoon ?? selectedRow?.approvedOtNoon,
-        tagColor: { bg: '#DCFCE7', text: '#166534', border: '#BBF7D0' },
-      },
-      {
-        label: 'OT เย็น',
-        timeRange: otEveningRange,
-        value: selectedRow?.timesheetOtEvening ?? selectedRow?.approvedOtEvening,
-        tagColor: { bg: '#EDE9FE', text: '#4C1D95', border: '#DDD6FE' },
-      },
-    ];
-
-    return (
-      <Box>
-        {selectedRow?.note && (
-          <Box sx={{ mb: 2, p: 2, borderRadius: '8px', backgroundColor: RECON_COLORS.ORANGE.bg, border: `1px solid ${RECON_COLORS.ORANGE.border}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Typography variant="body2" sx={{ color: RECON_COLORS.ORANGE.text, fontWeight: 700 }}>
-              💡 หมายเหตุจากระบบ: {selectedRow.note}
-            </Typography>
-          </Box>
-        )}
-        <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5, display: 'block', color: RECON_COLORS.BLUE.NAVY, borderBottom: `2px solid ${RECON_COLORS.BLUE.border}`, pb: 0.75 }}>
-          1. ข้อมูลอ้างอิง Daily Report
-        </Typography>
-        <ComparisonBox sx={{ backgroundColor: '#fff', p: 2.5 }}>
-          {(() => {
-            const photoMap = selectedRow?.dailyReportPhotos;
-            const medCert: string | undefined = selectedRow?.medCertFileUrl;
-
-            // ตรวจสอบว่าเป็นรูปแบบใหม่ (Map) หรือแบบเก่า (Array)
-            const isMap = photoMap && !Array.isArray(photoMap);
-
-            // Helper to get urls from group data (handles both Array and In/Out Map)
-            const getGroupUrls = (data: any): string[] => {
-              if (Array.isArray(data)) return data;
-              if (data && typeof data === 'object') {
-                const urls: string[] = [];
-                if (data.in) urls.push(data.in);
-                if (data.out) urls.push(data.out);
-                return urls;
-              }
-              return [];
-            };
-
-            const groups = isMap ? [
-              { label: 'OT เช้า', data: photoMap?.otMorning },
-              { label: 'กะปกติ', data: photoMap?.regular },
-              { label: 'OT เที่ยง', data: photoMap?.otNoon },
-              { label: 'OT เย็น', data: photoMap?.otEvening },
-            ].filter(g => getGroupUrls(g.data).length > 0) : [];
-
-            // สำหรับ Viewer ให้เรียงลำดับรูปทั้งหมด
-            const flatPhotos = isMap 
-              ? groups.flatMap(g => getGroupUrls(g.data))
-              : (Array.isArray(photoMap) ? photoMap : []);
-            
-            const allImagesForViewer = medCert ? [...flatPhotos, medCert] : flatPhotos;
-
-            if (allImagesForViewer.length > 0) {
-              return (
-                <Box sx={{ border: '1px solid #e2e8f0', borderRadius: '10px', p: 2, mb: 2.5, backgroundColor: '#f8fafc' }}>
-                  <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                    📸 รูปถ่ายอ้างอิง / หลักฐานการลา — คลิกเพื่อดูรูปเต็ม
-                  </Typography>
-
-                  {isMap ? (
-                    <Stack spacing={2}>
-                      {groups.map((group, gIdx) => (
-                        <Box key={gIdx}>
-                          <Typography variant="caption" fontWeight={900} sx={{ color: RECON_COLORS.BLUE.ROYAL, display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            • {group.label} ({getGroupUrls(group.data).length} รูป)
-                          </Typography>
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                            {getGroupUrls(group.data).map((photoUrl: string) => {
-                              const globalIdx = allImagesForViewer.indexOf(photoUrl);
-                              const fullUrl = getFullImageUrl(photoUrl);
-                              
-                              // Check if it's IN or OUT (handles Map and Regular Array)
-                              let label = "";
-                              if (!Array.isArray(group.data)) {
-                                if (photoUrl === group.data?.in) label = "IN";
-                                else if (photoUrl === group.data?.out) label = "OUT";
-                              } else if (group.label === 'กะปกติ') {
-                                const idx = group.data.indexOf(photoUrl);
-                                if (idx === 0) label = "IN (08:00)";
-                                else if (idx === 1) label = "OUT (12:00)";
-                                else if (idx === 2) label = "IN (13:00)";
-                                else if (idx === 3) label = "OUT (17:00)";
-                              }
-
-                              return (
-                                <Box key={photoUrl} sx={{ position: 'relative' }}>
-                                  <Box
-                                    onClick={() => handleOpenViewer(allImagesForViewer.map(getFullImageUrl), globalIdx)}
-                                    sx={{
-                                      width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
-                                      border: '2px solid #e2e8f0',
-                                      backgroundImage: `url(${fullUrl})`,
-                                      backgroundSize: 'cover', backgroundPosition: 'center',
-                                      '&:hover': { transform: 'scale(1.05)', borderColor: RECON_COLORS.BLUE.ROYAL },
-                                    }}
-                                  />
-                                  {label && (
-                                    <Box sx={{
-                                      position: 'absolute', top: 6, right: 6,
-                                      backgroundColor: label === 'IN' ? RECON_COLORS.GREEN.bg : RECON_COLORS.ORANGE.bg,
-                                      color: label === 'IN' ? RECON_COLORS.GREEN.text : RECON_COLORS.ORANGE.text,
-                                      fontSize: '0.6rem', fontWeight: 900, px: 0.6, py: 0.2, borderRadius: '4px',
-                                      border: `1px solid ${label === 'IN' ? RECON_COLORS.GREEN.border : RECON_COLORS.ORANGE.border}`,
-                                      pointerEvents: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                                    }}>
-                                      {label}
-                                    </Box>
-                                  )}
-                                </Box>
-                              );
-                            })}
-                          </Box>
-                        </Box>
-                      ))}
-                      {medCert && (
-                        <Box>
-                          <Typography variant="caption" fontWeight={900} sx={{ color: '#f97316', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            • หลักฐานการลา
-                          </Typography>
-                          <Box
-                            onClick={() => handleOpenViewer(allImagesForViewer.map(getFullImageUrl), allImagesForViewer.length - 1)}
-                            sx={{
-                              width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
-                              border: '2px solid #f97316',
-                              backgroundImage: `url(${getFullImageUrl(medCert)})`,
-                              backgroundSize: 'cover', backgroundPosition: 'center',
-                              '&:hover': { transform: 'scale(1.05)', borderColor: '#ea580c' },
-                            }}
-                          />
-                        </Box>
-                      )}
-                    </Stack>
-                  ) : (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                      {allImagesForViewer.map((photoUrl: string, idx: number) => {
-                        const fullUrl = getFullImageUrl(photoUrl);
-                        const isMedCert = medCert && photoUrl === medCert;
-                        return (
-                          <Box key={idx} sx={{ position: 'relative' }}>
-                            <Box
-                              onClick={() => handleOpenViewer(allImagesForViewer.map(getFullImageUrl), idx)}
-                              sx={{
-                                width: 100, height: 100, borderRadius: '8px', cursor: 'pointer',
-                                border: isMedCert ? '2px solid #f97316' : '2px solid #e2e8f0',
-                                backgroundImage: `url(${fullUrl})`,
-                                backgroundSize: 'cover', backgroundPosition: 'center',
-                                '&:hover': { transform: 'scale(1.05)', borderColor: isMedCert ? '#ea580c' : RECON_COLORS.BLUE.ROYAL },
-                              }}
-                            />
-                            {isMedCert && (
-                              <Box sx={{
-                                position: 'absolute', bottom: -10, left: '50%', transform: 'translateX(-50%)',
-                                backgroundColor: '#f97316', color: '#fff', fontSize: '0.65rem', fontWeight: 800,
-                                px: 1, py: 0.25, borderRadius: '10px', whiteSpace: 'nowrap',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)', zIndex: 2
-                              }}>
-                                หลักฐานการลา
-                              </Box>
-                            )}
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  )}
-                </Box>
-              );
-            } else {
-              return (
-                <ProofImagePlaceholder sx={{ height: '80px', mb: 2 }}>ไม่มีรูปภาพอ้างอิง / หลักฐานการลา</ProofImagePlaceholder>
-              );
-            }
-          })()}
-
-          <Typography variant="caption" fontWeight={800} color="#64748b" sx={{ display: 'block', mb: 1.5 }}>
-            📅 รายละเอียดเวลาทำงานตาม Daily Report
-          </Typography>
-
-          <Stack spacing={1}>
-            {dailyItems.map(({ label, timeRange, value, tagColor }) => {
-              const hasValue = value !== undefined && value !== null && value !== 0;
-              return (
-                <Stack
-                  key={label}
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{
-                    p: 1,
-                    borderRadius: '8px',
-                    backgroundColor: hasValue ? tagColor.bg : '#f8fafc',
-                    border: `1px solid ${hasValue ? tagColor.border : '#e2e8f0'}`,
-                    opacity: hasValue ? 1 : 0.5,
-                  }}
-                >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" fontWeight={700} sx={{ color: hasValue ? tagColor.text : '#94a3b8', minWidth: 120 }}>
-                      {label}
-                    </Typography>
-                    {timeRange && hasValue && (
-                      <Typography variant="caption" sx={{ color: hasValue ? tagColor.text : '#94a3b8', opacity: 0.8 }}>
-                        {timeRange}
-                      </Typography>
-                    )}
-                  </Stack>
-                  <Box sx={{ px: 1.5, py: 0.25, borderRadius: '6px', backgroundColor: hasValue ? '#fff' : '#f1f5f9', border: `1px solid ${hasValue ? tagColor.border : '#e2e8f0'}` }}>
-                    <Typography variant="body2" fontWeight={900} sx={{ color: hasValue ? tagColor.text : '#94a3b8' }}>
-                      {value ?? 0} ชม.
-                    </Typography>
-                  </Box>
-                </Stack>
-              );
-            })}
-          </Stack>
-        </ComparisonBox>
-      </Box>
-    );
-  }, [selectedRow]);
-
-  const renderTimeTable = (hideDailyReport: boolean = false) => {
-    const drPunches: string[] = selectedRow?.dailyReportPunches || [];
-
-    // ── helper: แปลง "HH:MM" → นาที เพื่อใช้เรียงลำดับ ──────────────────────
-    const toMinutes = (t: string): number => {
+    const toMins = (t?: string): number | null => {
+      if (!t) return null;
       const parts = t.split(':');
-      if (parts.length < 2) return Infinity;
+      if (parts.length < 2) return null;
       return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
     };
 
-    // [FIX 1] sort scanPunches ตามเวลาก่อนใช้งาน
-    // Backend ไม่รับประกัน order ของ scanPunches — ต้อง sort เองฝั่ง frontend
-    const scanPunches: string[] = [...(selectedRow?.scanPunches || [])].sort(
-      (a, b) => toMinutes(a) - toMinutes(b)
-    );
+    const fromMins = (m: number | null): string => {
+      if (m === null) return '—';
+      const h = Math.floor(m / 60).toString().padStart(2, '0');
+      const mins = (m % 60).toString().padStart(2, '0');
+      return `${h}:${mins}`;
+    };
 
-    // [FIX 2] validate description ด้วย regex ก่อน split
-    // leaveEntries.description มีหลาย format: "Full Day", "Morning", "HH:MM-HH:MM", หรือ custom text
-    // ใช้ regex เพื่อให้ split เฉพาะกรณีที่เป็น time range จริงๆ เท่านั้น
-    const TIME_RANGE_RE = /^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/;
-    const leavePunches: string[] = [];
-    if (selectedRow?.leaveEntries?.length > 0) {
-      selectedRow.leaveEntries.forEach((entry: any) => {
-        if (entry.description) {
-          if (TIME_RANGE_RE.test(entry.description.trim())) {
-            // format "HH:MM-HH:MM" → แยก start และ end
-            leavePunches.push(...entry.description.split('-').map((s: string) => s.trim()));
-          }
-          // format อื่น (Full Day, Morning, Afternoon, Partial, custom text)
-          // → ไม่ push เข้า leavePunches เพราะไม่ใช่ timestamp ที่ใช้ match กับ scan ได้
+    const scanMinsList = (row.scanPunches || [])
+      .map((p: string) => toMins(p))
+      .filter((m: number | null): m is number => m !== null)
+      .sort((a: number, b: number) => a - b);
+
+    // Grouping punches
+    const otMorningPunches = scanMinsList.filter((m: number) => m < 480);
+    const morningPunches = scanMinsList.filter((m: number) => m >= 480 && m < 720);
+    const noonPunches = scanMinsList.filter((m: number) => m >= 720 && m < 780);
+    const afternoonPunches = scanMinsList.filter((m: number) => m >= 780 && m <= 1020);
+    const otEveningPunches = scanMinsList.filter((m: number) => m > 1020);
+
+    // Get photo helper
+    const photoMap = row.dailyReportPhotos;
+    const getPhoto = (groupData: any, type: 'in' | 'out' | number): string | null => {
+      if (!groupData) return null;
+      if (Array.isArray(groupData)) {
+        if (typeof type === 'number') return groupData[type] || null;
+        if (type === 'in') return groupData[0] || null;
+        if (type === 'out') return groupData[groupData.length - 1] || null;
+      }
+      if (typeof groupData === 'object') {
+        if (typeof type === 'number') {
+          const strKey = type.toString();
+          return groupData[strKey] || groupData[type] || null;
         }
+        const keys = Object.keys(groupData);
+        const isNumericMap = keys.length > 0 && keys.every((k) => /^\d+$/.test(k));
+        if (isNumericMap) {
+          const sortedKeys = keys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+          if (type === 'in') return groupData[sortedKeys[0]] || null;
+          if (type === 'out') return groupData[sortedKeys[sortedKeys.length - 1]] || null;
+        }
+        return groupData[type] || null;
+      }
+      return null;
+    };
+
+    const getFullUrl = (url: string | null): string | null => {
+      if (!url) return null;
+      return getFullImageUrl(url);
+    };
+
+    // 1. OT Morning
+    const otMorningExpectedStart = toMins(row.shiftTimes?.otMorning?.split('-')[0]) ?? 360; // 06:00
+    const otMorningExpectedEnd = toMins(row.shiftTimes?.otMorning?.split('-')[1]) ?? 480; // 08:00
+    const otMorningActual = resolveSinglePunch(otMorningPunches, otMorningExpectedStart, otMorningExpectedEnd);
+    const isOtMorningActive = (row.timesheetOtMorning ?? 0) > 0 || (row.approvedOtMorning ?? 0) > 0 || !!row.shiftTimes?.otMorning || otMorningPunches.length > 0;
+
+    // 2. เช้า
+    const morningExpectedStart = 480; // 08:00
+    const morningExpectedEnd = 720; // 12:00
+    const morningActual = resolveSinglePunch(morningPunches, morningExpectedStart, morningExpectedEnd);
+    const isMorningActive = true; // Always show regular shift
+
+    // 3. บ่าย
+    const afternoonExpectedStart = 780; // 13:00
+    const afternoonExpectedEnd = 1020; // 17:00
+    const afternoonActual = resolveSinglePunch(afternoonPunches, afternoonExpectedStart, afternoonExpectedEnd);
+    const isAfternoonActive = true; // Always show regular shift
+
+    // 4. OT Noon (OT เที่ยง)
+    const otNoonExpectedStart = toMins(row.shiftTimes?.otNoon?.split('-')[0]) ?? 720; // 12:00
+    const otNoonExpectedEnd = toMins(row.shiftTimes?.otNoon?.split('-')[1]) ?? 780; // 13:00
+    const otNoonActual = resolveSinglePunch(noonPunches, otNoonExpectedStart, otNoonExpectedEnd);
+    const isOtNoonActive = (row.timesheetOtNoon ?? 0) > 0 || (row.approvedOtNoon ?? 0) > 0 || !!row.shiftTimes?.otNoon || noonPunches.length > 0;
+
+    // 5. OT Evening
+    const otEveningExpectedStart = 1020; // 17:00
+    const otEveningHours = row.timesheetOtEvening ?? row.approvedOtEvening ?? 0;
+    const otEveningExpectedEnd = toMins(row.shiftTimes?.otEvening?.split('-')[1]) ?? (otEveningHours > 0 ? (1020 + otEveningHours * 60) : 1260); // 21:00
+    const otEveningActual = resolveSinglePunch(otEveningPunches, otEveningExpectedStart, otEveningExpectedEnd);
+    const isOtEveningActive = (row.timesheetOtEvening ?? 0) > 0 || (row.approvedOtEvening ?? 0) > 0 || !!row.shiftTimes?.otEvening || otEveningPunches.length > 0;
+
+    const segments = [];
+
+    if (isOtMorningActive) {
+      segments.push({
+        key: 'otMorning',
+        name: 'OT เช้า',
+        subLabel: `${fromMins(otMorningExpectedStart)}–${fromMins(otMorningExpectedEnd)}`,
+        color: '#166534',
+        bgColor: '#dcfce7',
+        expectedStart: otMorningExpectedStart,
+        expectedEnd: otMorningExpectedEnd,
+        actualIn: otMorningActual.inVal,
+        actualOut: otMorningActual.outVal,
+        photoIn: getFullUrl(getPhoto(photoMap?.otMorning, 'in') || getPhoto(photoMap?.otMorning, 0)),
+        photoOut: getFullUrl(getPhoto(photoMap?.otMorning, 'out') || getPhoto(photoMap?.otMorning, 1)),
+        requestedHours: row.timesheetOtMorning || row.approvedOtMorning || 0,
       });
     }
 
-    // ── Merge logic ────────────────────────────────────────────────────────────
-    // แต่ละ slot รู้ drIndex ของตัวเอง (null = pure-leave column ที่ไม่มี drPunch)
-    // และรู้ว่าเป็น leave boundary หรือไม่
-    type Slot = { time: string; drIndex: number | null; isLeaveBoundary: boolean };
-
-    // เริ่มจาก drPunches ทุกตัวเป็น slot
-    const slots: Slot[] = drPunches.map((time, idx) => ({
-      time,
-      drIndex: idx,
-      isLeaveBoundary: false,
-    }));
-
-    // track drPunch ที่ถูก match แล้ว (ป้องกัน match ซ้ำ)
-    const matchedDrIndices = new Set<number>();
-
-    // สำหรับ leavePunch แต่ละตัว: ถ้าตรงกับ drPunch ที่ยังไม่ถูก match → merge
-    // ถ้าไม่ตรง → สร้าง slot ใหม่
-    leavePunches.forEach((lp) => {
-      const matchIdx = slots.findIndex(
-        (s) => s.drIndex !== null && !matchedDrIndices.has(s.drIndex) && s.time === lp
-      );
-      if (matchIdx !== -1) {
-        // merge: ใช้คอลัมน์เดิม แค่ mark เป็น leave boundary
-        slots[matchIdx].isLeaveBoundary = true;
-        matchedDrIndices.add(slots[matchIdx].drIndex!);
-      } else {
-        // ไม่มี drPunch ตรงกัน → สร้าง pure-leave column ใหม่
-        slots.push({ time: lp, drIndex: null, isLeaveBoundary: true });
-      }
-    });
-
-    // เติม empty slots ให้ครบ min 2 ถ้ายังไม่พอ
-    while (slots.filter((s) => s.drIndex !== null).length < Math.max(scanPunches.length, 2)) {
-      const nextIdx = slots.filter((s) => s.drIndex !== null).length;
-      slots.push({ time: '-', drIndex: nextIdx, isLeaveBoundary: false });
+    if (isMorningActive) {
+      segments.push({
+        key: 'morning',
+        name: 'เช้า',
+        subLabel: '08:00–12:00',
+        color: '#991b1b',
+        bgColor: '#fee2e2',
+        expectedStart: morningExpectedStart,
+        expectedEnd: morningExpectedEnd,
+        actualIn: morningActual.inVal,
+        actualOut: morningActual.outVal,
+        photoIn: getFullUrl(getPhoto(photoMap?.regular, 0)),
+        photoOut: getFullUrl(getPhoto(photoMap?.regular, 1)),
+        requestedHours: 4, // 4 hours for morning
+      });
     }
 
-    // เรียงตามเวลา (ช่อง '-' ลอยไปท้าย)
-    slots.sort((a, b) => {
-      if (a.time === '-' && b.time === '-') return 0;
-      if (a.time === '-') return 1;
-      if (b.time === '-') return -1;
-      return toMinutes(a.time) - toMinutes(b.time);
+    if (isOtNoonActive) {
+      segments.push({
+        key: 'otNoon',
+        name: 'OT เที่ยง',
+        subLabel: `${fromMins(otNoonExpectedStart)}–${fromMins(otNoonExpectedEnd)}`,
+        color: '#581c87',
+        bgColor: '#f3e8ff',
+        expectedStart: otNoonExpectedStart,
+        expectedEnd: otNoonExpectedEnd,
+        actualIn: otNoonActual.inVal,
+        actualOut: otNoonActual.outVal,
+        photoIn: getFullUrl(getPhoto(photoMap?.otNoon, 'in') || getPhoto(photoMap?.otNoon, 0)),
+        photoOut: getFullUrl(getPhoto(photoMap?.otNoon, 'out') || getPhoto(photoMap?.otNoon, 1)),
+        requestedHours: row.timesheetOtNoon || row.approvedOtNoon || 0,
+      });
+    }
+
+    if (isAfternoonActive) {
+      segments.push({
+        key: 'afternoon',
+        name: 'บ่าย',
+        subLabel: '13:00–17:00',
+        color: '#1e3a8a',
+        bgColor: '#dbeafe',
+        expectedStart: afternoonExpectedStart,
+        expectedEnd: afternoonExpectedEnd,
+        actualIn: afternoonActual.inVal,
+        actualOut: afternoonActual.outVal,
+        photoIn: getFullUrl(getPhoto(photoMap?.regular, 2)),
+        photoOut: getFullUrl(getPhoto(photoMap?.regular, 3)),
+        requestedHours: 4, // 4 hours for afternoon
+      });
+    }
+
+    if (isOtEveningActive) {
+      segments.push({
+        key: 'otEvening',
+        name: 'OT เย็น',
+        subLabel: `${fromMins(otEveningExpectedStart)}–${fromMins(otEveningExpectedEnd)}`,
+        color: '#854d0e',
+        bgColor: '#fef9c3',
+        expectedStart: otEveningExpectedStart,
+        expectedEnd: otEveningExpectedEnd,
+        actualIn: otEveningActual.inVal,
+        actualOut: otEveningActual.outVal,
+        photoIn: getFullUrl(getPhoto(photoMap?.otEvening, 'in') || getPhoto(photoMap?.otEvening, 0)),
+        photoOut: getFullUrl(getPhoto(photoMap?.otEvening, 'out') || getPhoto(photoMap?.otEvening, 1)),
+        requestedHours: row.timesheetOtEvening || row.approvedOtEvening || 0,
+      });
+    }
+
+    // Calculate results and remarks for each segment
+    return segments.map((seg) => {
+      const hasIn = seg.actualIn !== null;
+      const hasOut = seg.actualOut !== null;
+
+      let result = '';
+      let remark = '';
+      let statusColor = { bg: '#f1f5f9', text: '#64748b', border: '#cbd5e1' };
+
+      if (!hasIn && !hasOut) {
+        result = '✗ ขาดสแกน';
+        remark = 'ไม่มีข้อมูลสแกน IN & OUT';
+        statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
+      } else if (hasIn && !hasOut) {
+        result = '✗ ขาด OUT';
+        remark = 'ไม่มีสแกน OUT และไม่มีรูป';
+        statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
+      } else if (!hasIn && hasOut) {
+        result = '✗ ขาด IN';
+        remark = 'ไม่มีสแกน IN และไม่มีรูป';
+        statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
+      } else {
+        // Both IN & OUT exist
+        const inDiff = seg.actualIn! - seg.expectedStart;
+        const outDiff = seg.expectedEnd - seg.actualOut!;
+
+        if (inDiff > 0 && outDiff > 0) {
+          result = '⚠ สาย & ออกก่อน';
+          remark = `สาย ${inDiff} นาที, ออกก่อน ${outDiff} นาที`;
+          statusColor = { bg: '#fef3c7', text: '#d97706', border: '#fcd34d' };
+        } else if (inDiff > 0) {
+          result = '⚠ สาย';
+          remark = `สาย ${inDiff} นาที`;
+          statusColor = { bg: '#fef3c7', text: '#d97706', border: '#fcd34d' };
+        } else if (outDiff > 0) {
+          result = '⚠ ออกก่อน';
+          remark = `ออกก่อน ${outDiff} นาที`;
+          statusColor = { bg: '#fef3c7', text: '#d97706', border: '#fcd34d' };
+        } else {
+          result = '✓ ปกติ';
+          remark = 'บันทึกเวลาทำงานปกติ';
+          statusColor = { bg: '#dcfce7', text: '#166534', border: '#86efac' };
+        }
+      }
+
+      return {
+        ...seg,
+        inText: fromMins(seg.actualIn),
+        outText: fromMins(seg.actualOut),
+        expectedInText: fromMins(seg.expectedStart),
+        expectedOutText: fromMins(seg.expectedEnd),
+        result,
+        remark,
+        statusColor,
+      };
     });
-
-    const hasLeave = leavePunches.length > 0;
-
-    return (
-      <Box sx={{ overflowX: 'auto' }}>
-        <TimeTable>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', paddingLeft: 16, width: 140 }}></th>
-              {slots.map((slot, i) => {
-                // ตั้งชื่อ column ตามลำดับเวลา: คู่คี่ = เข้า, คู่ = ออก
-                const isEntry = i % 2 === 0;
-                const pairNum = Math.floor(i / 2) + 1;
-                const label = slots.length === 2
-                  ? (isEntry ? 'สแกนเข้า' : 'สแกนออก')
-                  : (isEntry ? `เข้า ${pairNum}` : `ออก ${pairNum}`);
-                return <th key={i} style={{ minWidth: 80 }}>{label}</th>;
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {!hideDailyReport && (
-              <>
-                <tr>
-                  <td className="label" rowSpan={hasLeave ? 2 : 1}>Daily Report :</td>
-                  {slots.map((slot, i) => (
-                    <td
-                      key={`dr-${i}`}
-                      className="time-cell"
-                      rowSpan={!slot.isLeaveBoundary && hasLeave ? 2 : 1}
-                      style={slot.isLeaveBoundary ? { borderBottom: 'none', paddingBottom: '4px' } : {}}
-                    >
-                      {slot.time}
-                    </td>
-                  ))}
-                </tr>
-                {hasLeave && (
-                  <tr>
-                    {slots.map((slot, i) =>
-                      slot.isLeaveBoundary ? (
-                        <td
-                          key={`leave-label-${i}`}
-                          style={{ borderTop: 'none', borderBottom: '1px solid #cbd5e1', padding: '0 8px 8px 8px' }}
-                        >
-                          <Box
-                            sx={{
-                              backgroundColor: '#f97316',
-                              color: '#fff',
-                              borderRadius: '12px',
-                              fontSize: '0.75rem',
-                              fontWeight: 'bold',
-                              py: 0.25,
-                              textAlign: 'center',
-                            }}
-                          >
-                            ลางาน
-                          </Box>
-                        </td>
-                      ) : null
-                    )}
-                  </tr>
-                )}
-              </>
-            )}
-            <tr>
-              <td className="label">สแกนนิ้ว :</td>
-              {isEditingScan ? (
-                <td colSpan={slots.length} style={{ padding: '8px' }}>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                    {editingScanPunches.map((p, idx) => (
-                      <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <TimePicker
-                          label=""
-                          size="small"
-                          fullWidth={false}
-                          value={p}
-                          onChange={(newVal) => {
-                            const next = [...editingScanPunches];
-                            next[idx] = newVal || '';
-                            setEditingScanPunches(next);
-                          }}
-                        />
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            const next = [...editingScanPunches];
-                            next.splice(idx, 1);
-                            setEditingScanPunches(next);
-                          }}
-                          sx={{ color: '#ef4444', p: 0 }}
-                        >
-                          <CloseIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                      </Box>
-                    ))}
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => setEditingScanPunches([...editingScanPunches, ''])}
-                      sx={{ textTransform: 'none', fontSize: '0.7rem', fontWeight: 800, py: 0.25 }}
-                    >
-                      + เพิ่มเวลา
-                    </Button>
-                  </Box>
-                </td>
-              ) : (
-                slots.map((slot, i) => {
-                  // [FIX 1] ใช้ scanPunches ตาม position (i) แทน drIndex
-                  // เพราะทั้งคู่ถูก sort ตามเวลาแล้ว (drPunches sort โดย backend, scanPunches sort โดย frontend)
-                  // position ที่ตรงกันจึงหมายถึงช่วงเวลาเดียวกัน
-                  const scanVal = scanPunches[i] ?? null;
-                  const drVal = slot.time !== '-' ? slot.time : null;
-                  const hasConflict = !hideDailyReport && drVal && scanVal && drVal !== scanVal;
-                  const isEmpty = !hideDailyReport && drVal && !scanVal;
-                  return (
-                    <td
-                      key={`scan-${i}`}
-                      className={`time-cell ${(hasConflict || isEmpty) ? 'empty-scan' : ''}`}
-                    >
-                      {scanVal ?? '-'}
-                    </td>
-                  );
-                })
-              )}
-            </tr>
-            {/* row ผล: เช็คว่า scan ครอบ daily range ไหม (ไม่ใช่ exact match ต่อ slot)
-                Logic: drPunches เป็นคู่ (start, end) → daily range คู่ที่ i คือ [i*2, i*2+1]
-                scan "ครอบ" range นั้นได้ถ้า scanFirst ≤ rangeStart และ scanLast ≥ rangeEnd */}
-            {!isEditingScan && !hideDailyReport && (() => {
-              // หา scanFirst และ scanLast จาก sorted scanPunches
-              const scanFirst = scanPunches.length > 0 ? toMinutes(scanPunches[0]) : null;
-              const scanLast = scanPunches.length > 0 ? toMinutes(scanPunches[scanPunches.length - 1]) : null;
-              const hasScan = scanFirst !== null && scanLast !== null;
-
-              // drPunches เป็นคู่ start/end เรียงตามเวลา
-              // แต่ละคู่ [drPunches[0],drPunches[1]], [drPunches[2],drPunches[3]], ...
-              // แต่ละ slot ใน slots ตรงกับ drPunches ตามลำดับ
-              const drRangeStart = slots.length >= 1 && slots[0].time !== '-' ? toMinutes(slots[0].time) : null;
-              const drRangeEnd = slots.length >= 2 && slots[slots.length - 1].time !== '-' ? toMinutes(slots[slots.length - 1].time) : null;
-
-              // สรุปผลรวม: scan ครอบ daily range ทั้งหมดไหม
-              const isCovered = hasScan && drRangeStart !== null && drRangeEnd !== null
-                && scanFirst! <= drRangeStart && scanLast! >= drRangeEnd;
-
-              return (
-                <tr>
-                  <td className="label" style={{ fontSize: '0.8rem', color: '#475569' }}>ผล :</td>
-                  {/* แสดงผลรวมในช่องแรก (colspan ทั้งหมด) แทนการแสดงต่อ slot */}
-                  <td colSpan={slots.length} style={{ textAlign: 'center', padding: '8px' }}>
-                    {!hasScan ? (
-                      <Box sx={{
-                        display: 'inline-flex', alignItems: 'center', gap: 1,
-                        backgroundColor: RECON_COLORS.RED.bg, color: RECON_COLORS.RED.text,
-                        border: `1px solid ${RECON_COLORS.RED.border}`,
-                        borderRadius: '20px', px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 700
-                      }}>
-                        ✗ ไม่มีข้อมูลสแกน
-                      </Box>
-                    ) : isCovered ? (
-                      <Box sx={{
-                        display: 'inline-flex', alignItems: 'center', gap: 1,
-                        backgroundColor: RECON_COLORS.GREEN.bg, color: RECON_COLORS.GREEN.text,
-                        border: `1px solid ${RECON_COLORS.GREEN.border}`,
-                        borderRadius: '20px', px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 700
-                      }}>
-                        ✓ สแกนครอบช่วงเวลาที่ขอ ({scanPunches[0]} – {scanPunches[scanPunches.length - 1]})
-                      </Box>
-                    ) : (
-                      <Box sx={{
-                        display: 'inline-flex', alignItems: 'center', gap: 1,
-                        backgroundColor: RECON_COLORS.RED.bg, color: RECON_COLORS.RED.text,
-                        border: `1px solid ${RECON_COLORS.RED.border}`,
-                        borderRadius: '20px', px: 2, py: 0.5, fontSize: '0.8rem', fontWeight: 700
-                      }}>
-                        ✗ สแกนไม่ครอบ — สแกน {scanPunches[0]} – {scanPunches[scanPunches.length - 1]}
-                      </Box>
-                    )}
-                  </td>
-                </tr>
-              );
-            })()}
-          </tbody>
-        </TimeTable>
-      </Box>
-    );
   };
 
   const getFilterLabel = () => {
@@ -1264,43 +991,242 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           <Box sx={{ p: 4 }}>
 
             {(() => {
-              const hasDailyData = (selectedRow?.dailyReportHours ?? 0) > 0 || 
-                                   (selectedRow?.dailyReportPunches?.length ?? 0) > 0 || 
-                                   (selectedRow?.leaveHours ?? 0) > 0;
-
-              if (selectedRow?.status === 'MISSING_DAILY' && !hasDailyData) {
-                return (
-                  <>
-                    <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
-                        ℹ️ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วที่บันทึกไว้เพื่อให้ตรวจสอบ
-                      </Typography>
-                    </Box>
-                    {renderTimeTable(true)}
-                  </>
-                );
-              }
-
               return (
-                <>
-                  {selectedRow?.status === 'MISSING_DAILY' && hasDailyData && (
-                    <Box sx={{ mb: 3, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
-                        ℹ️ ข้อมูล Daily Report ไม่สมบูรณ์ (มีเฉพาะข้อมูลลาหรือข้อมูลบางส่วน) — โปรดแจ้งโฟร์แมนให้ลงข้อมูลเพิ่มเติม
+                <Box>
+                  {/* System Note Section */}
+                  {selectedRow?.note && (
+                    <Box sx={{ mb: 2.5, p: 2, borderRadius: '8px', backgroundColor: RECON_COLORS.ORANGE.bg, border: `1px solid ${RECON_COLORS.ORANGE.border}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Typography variant="body2" sx={{ color: RECON_COLORS.ORANGE.text, fontWeight: 700 }}>
+                        💡 หมายเหตุจากระบบ: {selectedRow.note}
                       </Typography>
                     </Box>
                   )}
-                  <Box sx={{ mb: 4 }}>
-                    {dailyReportReferencePanel}
-                  </Box>
 
-                  <Box sx={{ mt: 4, pt: 3, borderTop: '1px dashed #cbd5e1' }}>
-                    <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2, display: 'block', color: '#334155', textAlign: 'center' }}>
-                      ข้อมูลแสดงเวลาทำงาน
-                    </Typography>
-                    {renderTimeTable(false)}
-                  </Box>
-                </>
+                  {/* Missing Daily Report Alert */}
+                  {selectedRow?.status === 'MISSING_DAILY' && (
+                    <Box sx={{ mb: 2.5, p: 2, borderRadius: '10px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: '#ea580c' }}>
+                        ℹ️ ข้อมูล Daily Report ไม่สมบูรณ์ หรือ ไม่มีข้อมูล Daily Report สำหรับวันนี้ — แสดงข้อมูลสแกนนิ้วตามจริง
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Editing Scan Punches Panel */}
+                  {isEditingScan && (
+                    <Box sx={{ mb: 3, p: 3, border: '1px solid #cbd5e1', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
+                      <Typography variant="body2" fontWeight={800} sx={{ color: '#334155', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        📝 แก้ไขข้อมูลสแกนนิ้วสำหรับวันนี้ (เรียงตามลำดับเวลา)
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+                        {editingScanPunches.map((p, idx) => (
+                          <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#fff', p: 1, borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <TimePicker
+                              label=""
+                              size="small"
+                              fullWidth={false}
+                              value={p}
+                              onChange={(newVal) => {
+                                const next = [...editingScanPunches];
+                                next[idx] = newVal || '';
+                                setEditingScanPunches(next);
+                              }}
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const next = [...editingScanPunches];
+                                next.splice(idx, 1);
+                                setEditingScanPunches(next);
+                              }}
+                              sx={{ color: '#ef4444', p: 0.5 }}
+                            >
+                              <CloseIcon sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+                          </Box>
+                        ))}
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => setEditingScanPunches([...editingScanPunches, ''])}
+                          sx={{ textTransform: 'none', fontSize: '0.8rem', fontWeight: 800, px: 2, py: 1, borderRadius: '8px' }}
+                        >
+                          + เพิ่มเวลาสแกน
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Segment-based Comparison Table */}
+                  <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', mb: 3 }}>
+                    <Table sx={{ minWidth: 800 }}>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', textAlign: 'left', py: 1.5 }}>segment</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', py: 1.5, textAlign: 'center' }}>Daily Report</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', py: 1.5, textAlign: 'center' }}>รูป IN</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', py: 1.5, textAlign: 'center' }}>สแกนนิ้ว</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', py: 1.5, textAlign: 'center' }}>รูป OUT</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', py: 1.5, textAlign: 'center' }}>ผล</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: '#475569', fontSize: '0.85rem', textAlign: 'left', py: 1.5 }}>หมายเหตุ</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {buildSegmentRows(selectedRow).map((seg) => {
+                          const allViewerImages = [
+                            seg.photoIn,
+                            seg.photoOut,
+                            selectedRow?.medCertFileUrl ? getFullImageUrl(selectedRow.medCertFileUrl) : null
+                          ].filter((x): x is string => x !== null);
+
+                          return (
+                            <TableRow key={seg.key} sx={{ '&:hover': { backgroundColor: '#f8fafc' } }}>
+                              {/* Segment Name */}
+                              <TableCell sx={{ textAlign: 'left', py: 2 }}>
+                                <Typography variant="body2" fontWeight={800} sx={{ color: seg.color }}>
+                                  {seg.name}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                                  {seg.subLabel}
+                                </Typography>
+                              </TableCell>
+
+                              {/* Daily Report Expected Hours/Time */}
+                              <TableCell sx={{ fontWeight: 700, color: '#1e293b', textAlign: 'center' }}>
+                                {seg.expectedInText} → {seg.expectedOutText}
+                              </TableCell>
+
+                              {/* Photo IN */}
+                              <TableCell sx={{ textAlign: 'center' }}>
+                                {seg.photoIn ? (
+                                  <Box
+                                    onClick={() => handleOpenViewer(allViewerImages, allViewerImages.indexOf(seg.photoIn!))}
+                                    sx={{
+                                      position: 'relative',
+                                      width: 60,
+                                      height: 60,
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      border: '2px solid #e2e8f0',
+                                      backgroundImage: `url(${seg.photoIn})`,
+                                      backgroundSize: 'cover',
+                                      backgroundPosition: 'center',
+                                      mx: 'auto',
+                                      transition: 'all 0.2s',
+                                      '&:hover': { transform: 'scale(1.08)', borderColor: seg.color },
+                                    }}
+                                  >
+                                    <Box sx={{
+                                      position: 'absolute', top: 3, right: 3,
+                                      backgroundColor: '#dcfce7', color: '#166534',
+                                      fontSize: '0.55rem', fontWeight: 900, px: 0.5, py: 0.1, borderRadius: '4px',
+                                      border: '1px solid #bbf7d0', pointerEvents: 'none'
+                                    }}>
+                                      IN
+                                    </Box>
+                                  </Box>
+                                ) : (
+                                  <Box sx={{
+                                    width: 60, height: 60, borderRadius: '8px', border: '1.5px dashed #cbd5e1',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto',
+                                    backgroundColor: '#f8fafc'
+                                  }}>
+                                    <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 700 }}>
+                                      ไม่มีรูป
+                                    </Typography>
+                                  </Box>
+                                )}
+                              </TableCell>
+
+                              {/* Actual Scan punches */}
+                              <TableCell sx={{ fontWeight: 800, color: seg.actualIn || seg.actualOut ? '#1e293b' : '#ef4444', textAlign: 'center' }}>
+                                {seg.inText} → {seg.outText}
+                              </TableCell>
+
+                              {/* Photo OUT */}
+                              <TableCell sx={{ textAlign: 'center' }}>
+                                {seg.photoOut ? (
+                                  <Box
+                                    onClick={() => handleOpenViewer(allViewerImages, allViewerImages.indexOf(seg.photoOut!))}
+                                    sx={{
+                                      position: 'relative',
+                                      width: 60,
+                                      height: 60,
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      border: '2px solid #e2e8f0',
+                                      backgroundImage: `url(${seg.photoOut})`,
+                                      backgroundSize: 'cover',
+                                      backgroundPosition: 'center',
+                                      mx: 'auto',
+                                      transition: 'all 0.2s',
+                                      '&:hover': { transform: 'scale(1.08)', borderColor: seg.color },
+                                    }}
+                                  >
+                                    <Box sx={{
+                                      position: 'absolute', top: 3, right: 3,
+                                      backgroundColor: '#fee2e2', color: '#991b1b',
+                                      fontSize: '0.55rem', fontWeight: 900, px: 0.5, py: 0.1, borderRadius: '4px',
+                                      border: '1px solid #fca5a5', pointerEvents: 'none'
+                                    }}>
+                                      OUT
+                                    </Box>
+                                  </Box>
+                                ) : (
+                                  <Box sx={{
+                                    width: 60, height: 60, borderRadius: '8px', border: '1.5px dashed #cbd5e1',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto',
+                                    backgroundColor: '#f8fafc'
+                                  }}>
+                                    <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 700 }}>
+                                      ไม่มีรูป
+                                    </Typography>
+                                  </Box>
+                                )}
+                              </TableCell>
+
+                              {/* Comparison Result Badge */}
+                              <TableCell sx={{ textAlign: 'center' }}>
+                                <Box sx={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  px: 1.5, py: 0.5, borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800,
+                                  border: '1px solid', backgroundColor: seg.statusColor.bg,
+                                  color: seg.statusColor.text, borderColor: seg.statusColor.border,
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {seg.result}
+                                </Box>
+                              </TableCell>
+
+                              {/* Remarks */}
+                              <TableCell sx={{ textAlign: 'left', py: 2, fontWeight: 650, color: seg.actualIn && seg.actualOut ? '#475569' : '#ef4444' }}>
+                                {seg.remark}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  {/* Medical Certificate / Leave Evidence */}
+                  {selectedRow?.medCertFileUrl && (
+                    <Box sx={{ mt: 2, p: 2, border: '1px solid #f97316', borderRadius: '8px', backgroundColor: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Typography variant="body2" fontWeight={850} sx={{ color: '#ea580c' }}>
+                          📄 มีหลักฐานใบรับรองแพทย์ / การลางานแนบไว้
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleOpenViewer([getFullImageUrl(selectedRow.medCertFileUrl!)])}
+                        sx={{ textTransform: 'none', fontWeight: 800, bgcolor: '#f97316', '&:hover': { bgcolor: '#ea580c' } }}
+                      >
+                        เปิดหลักฐาน
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
               );
             })()}
 

@@ -14,6 +14,8 @@ export interface ProjectLocation {
   status: ProjectStatus;
   description?: string;
   isActive: boolean;
+  workDays?: number[]; // [0,1,2,3,4,5,6] (0 = Sunday)
+  followCompanyHoliday?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -32,6 +34,8 @@ export interface CreateProjectLocationInput {
   status?: ProjectStatus;
   description?: string;
   isActive?: boolean;
+  workDays?: number[];
+  followCompanyHoliday?: boolean;
 }
 
 export interface UpdateProjectLocationInput {
@@ -46,6 +50,8 @@ export interface UpdateProjectLocationInput {
   status?: ProjectStatus;
   description?: string;
   isActive?: boolean;
+  workDays?: number[];
+  followCompanyHoliday?: boolean;
 }
 
 export const projectLocationConverter = {
@@ -62,6 +68,8 @@ export const projectLocationConverter = {
       status: project.status,
       description: project.description,
       isActive: project.isActive,
+      workDays: project.workDays,
+      followCompanyHoliday: project.followCompanyHoliday,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
       createdBy: project.createdBy,
@@ -92,6 +100,8 @@ export const projectLocationConverter = {
       status: data.status,
       description: data.description,
       isActive: data.isActive !== undefined ? data.isActive : true,
+      workDays: data.workDays !== undefined ? data.workDays : [1, 2, 3, 4, 5, 6], // Default Mon-Sat
+      followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true, // Default to true
       createdAt: safeDate(data.createdAt) || new Date(),
       updatedAt: safeDate(data.updatedAt) || new Date(),
       createdBy: data.createdBy,

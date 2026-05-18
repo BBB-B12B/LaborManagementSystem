@@ -22,140 +22,172 @@
 
 ---
 
-## 2. เกณฑ์การกำหนดสถานะ (`classifyByPunchCoverage`)
+## 2. เกณฑ์การกำหนดสถานะ (`classifyBySegments`)
 
-ฟังก์ชันหลักที่กำหนดสถานะคือ `classifyByPunchCoverage()` ใน `ReconciliationService`
-**ห้ามเปลี่ยน logic นี้โดยไม่อัปเดตเอกสารนี้พร้อมกัน**
+> ⚠️ **BREAKING CHANGE (2026-05-15)**: เปลี่ยน logic จาก "ครอบช่วงเวลา" เป็น "ต้องมีสแกนครบทุก segment"
+> ฟังก์ชันเปลี่ยนชื่อจาก `classifyByPunchCoverage()` เป็น `classifyBySegments()`
+> **ห้ามเปลี่ยน logic นี้โดยไม่อัปเดตเอกสารนี้พร้อมกัน**
 
-### 2.1 Base Cases (ตรวจก่อนทุกอย่าง)
+### 2.1 หลักการ: Daily Report คือ Source of Truth
 
-**Priority 1: วันลาและวันหยุดเต็มวัน (ไม่มีชั่วโมงทำงาน)**
-- `ลางานเต็มวัน (isLeave) + ไม่มีสแกนนิ้ว` → `LEAVE`
-- `ลางานเต็มวัน (isLeave) + มีสแกนนิ้ว` → `CONFLICTED` (พร้อมหมายเหตุ: ลางานเต็มวันแต่พบข้อมูลสแกนนิ้ว)
-- `วันหยุด (isHoliday) + ไม่มีสแกนนิ้ว` → `HOLIDAY`
-- `วันหยุด (isHoliday) + มีสแกนนิ้ว` → `CONFLICTED`
+ระบบสร้าง **expected segments** จาก Daily Report ก่อน แล้วตรวจว่า scan ครอบแต่ละ segment ครบไหม
 
-**Priority 2: ขาดงานและการขาดข้อมูล**
-- `ไม่มี daily AND ไม่มี scan`  →  `ABSENT`
-- `ไม่มี daily AND มี scan`     →  `MISSING_DAILY`
-- `มี daily AND ไม่มี scan`     →  `MISSING_SCAN`
-- `ไม่มี dailyReportPunches`   →  `MISSING_DAILY` (daily ไม่มีข้อมูลช่วงเวลา)
+- ไม่ยกเว้นวันหยุดบริษัทหรือวันอาทิตย์
+- ถ้าโฟร์แมนส่ง Daily Report วันไหน = วันนั้นมีงาน ระบบเช็คตามปกติทุกกรณี
 
-### 2.2 CONFLICTED — กรณีที่ต้องให้ Admin ตรวจสอบ
+### 2.2 การสร้าง Expected Segments จาก Daily Report
 
-> **หลักการ**: ระบบตัดสินใจแทน Admin ไม่ได้ในกรณีที่ข้อมูลขัดแย้งกันอย่างมีนัยสำคัญ
+แต่ละ segment = IN punch + OUT punch 1 คู่
 
-#### กรณี B: สแกนนิ้วไม่ครบ (Insufficient Punch Count)
-
-| จำนวนสแกน | สถานะ | เหตุผล | Admin ทำอะไร |
-|---|---|---|---|
-| 0 ครั้ง | `MISSING_SCAN` | ไม่มีข้อมูลเลย → ยืนยันตาม Daily Report ได้ทันที | กด "ยืนยันตาม Daily Report" |
-| 1 ครั้ง | `CONFLICTED` | มีข้อมูลบางส่วน แต่ไม่รู้เวลาเข้าหรือออก → ต้องเติมให้ครบก่อน | เปิด Modal แก้ไขสแกนนิ้ว |
-| ≥ 2 ครั้ง | ตรวจต่อ | ระบบเทียบได้ → เข้าสู่การเช็ค threshold | — |
-
-> ⚠️ scan 3 ครั้งที่เวลาแรก–ท้ายครอบช่วงเวลาทำงานได้ → **ไม่ใช่กรณีนี้** ผ่านไปเช็ค threshold ต่อ
-
-```typescript
-// ตรวจก่อน punch coverage check — แยก 0 กับ 1 ออกจากกัน
-const scanCount = (scanPunches || []).length;
-
-if (scanCount === 0) {
-  return {
-    status: 'MISSING_SCAN',
-    note: 'ไม่พบข้อมูลการสแกนนิ้ว',
-  };
-}
-
-if (scanCount === 1) {
-  return {
-    status: 'CONFLICTED',
-    note: `พบการสแกนเพียง 1 ครั้ง (${scanPunches[0]}) — Admin ต้องเติมเวลาที่ขาด`,
-  };
-}
-```
-
-> ⚠️ **Implementation Note**: ต้องตรวจ `scanCount` จาก `scanPunches` ดิบก่อน **เสมอ** ก่อนเรียก `makeEvenScanPunches()`
-> เพราะ `makeEvenScanPunches()` ตัด punch สุดท้ายออกเมื่อจำนวนคี่ ทำให้ scan 1 ครั้ง → array ว่าง → โดนดักเป็น `MISSING_SCAN` แทน
->
-> ```typescript
-> // ❌ ผิด — makeEvenScanPunches([x]) คืน [] → scanValid = false → MISSING_SCAN (ไม่ใช่ CONFLICTED)
-> const effectiveScanPunches = this.makeEvenScanPunches(scanPunches || []);
-> const scanValid = effectiveScanPunches.length >= 2;
-> if (dailyExists && !scanValid) return { status: 'MISSING_SCAN' };
->
-> // ✅ ถูก — ตรวจ raw count ก่อน แล้วค่อย makeEven
-> const scanCount = (scanPunches || []).length;
-> if (scanCount === 0) return { status: 'MISSING_SCAN', ... };
-> if (scanCount === 1) return { status: 'CONFLICTED', ... };
-> const effectiveScanPunches = this.makeEvenScanPunches(scanPunches);
-> // ... ตรวจ threshold ต่อ
-> ```
-
-#### กรณี A: สาย/ออกก่อน เกิน Threshold (Time Boundary Conflict)
-ไม่ว่าจะเป็นเวลาปกติหรือ OT หากสแกนเข้าสายหรือออกก่อนเกินกว่า 30 นาที → ต้องสืบหาความจริง
-
-```typescript
-const CONFLICT_THRESHOLD = 30; // นาที
-
-const isLateConflict      = lateMinutes > CONFLICT_THRESHOLD;
-const isEarlyLeaveConflict = earlyLeaveMinutes > CONFLICT_THRESHOLD;
-
-if (isLateConflict || isEarlyLeaveConflict) {
-  return {
-    status: 'CONFLICTED',
-    lateMinutes,
-    earlyLeaveMinutes,
-    note: isEarlyLeaveConflict
-      ? `ออกก่อนเกิน ${CONFLICT_THRESHOLD} นาที — ต้องตรวจสอบ Daily Report`
-      : `สายเกิน ${CONFLICT_THRESHOLD} นาที — ต้องตรวจสอบ Daily Report`,
-  };
-}
-```
-
-**สิ่งที่ Admin ต้องทำ**:
-- หากเป็นเวลาปกติ (08:00–17:00): ตรวจสอบว่าพนักงานมาจริงหรือไม่ (อาจลืมสแกน)
-- หากเป็น OT: แจ้งโฟร์แมนให้แก้ Daily Report ให้ตรงกับความเป็นจริง
-
-### 2.3 MATCHED — กรณีที่ผ่านได้อัตโนมัติ
-
-เมื่อผ่าน Base Cases และ CONFLICTED checks แล้ว ระบบคำนวณ lateMinutes / earlyLeaveMinutes แล้ว return MATCHED พร้อม auto-penalty สำหรับ OT ที่ต่างกัน ≤ 30 นาที
+#### กรณีปกติ (ไม่มี OT พิเศษ)
 
 ```
-มี daily + มี scan (≥ 2 ครั้ง) + สาย/ออกก่อน ≤ 30 นาที  →  MATCHED
+[OT เช้า: otStart→normalStart]  (ถ้ามี otMorning)
+[เช้า:    normalStart→12:00  ]
+[บ่าย:    13:00→normalEnd    ]
+[OT เย็น: otEveningStart→otEveningEnd]  (ถ้ามี otEvening)
+
+ตัวอย่าง: OT เช้า 06:00-08:00 + ปกติ 08:00-17:00 + OT เย็น 18:00-21:00
+→ segments: [06:00→08:00] [08:00→12:00] [13:00→17:00] [18:00→21:00]
+→ expect 8 punch
 ```
 
-#### Auto-Penalty Rule (≤ 30 นาที)
-- สายช่วง OT เช้า → `approvedOtMorning` ถูกหักอัตโนมัติ (ปัดขึ้นทีละ 30 นาที)
-- ออกก่อนช่วง OT เย็น → `approvedOtEvening` ถูกหักอัตโนมัติ (ปัดขึ้นทีละ 30 นาที)
-- สาย/ออกก่อนในเวลาปกติ (08:00–17:00) → **ไม่ถือว่าขัดแย้ง** เพราะระบบ HR จัดการ penalty เอง
+#### กรณีพิเศษ 1: OT ผ่าเที่ยง (`otNoon > 0`)
 
-```typescript
-// ตัวอย่าง: ออกก่อน OT เย็น 20 นาที (≤ 30 → MATCHED)
-const penaltyMins = Math.ceil(20 / 30) * 30; // = 30 นาที
-approvedOtEvening = Math.max(0, timesheetOtEvening - (30 / 60)); // หัก 0.5 ชม.
-```
-
-### 2.4 Flow Chart สรุป
+รวม segment เช้า+บ่ายเป็นอันเดียว ไม่มีสแกนช่วง 12:00-13:00
 
 ```
-มี scan?  ─No─→  มี daily? ─No─→  ABSENT / HOLIDAY / LEAVE
-   │                 │Yes
-   │              MISSING_SCAN
-   │Yes
-มี daily? ─No─→  MISSING_DAILY
+[OT เช้า: otStart→normalStart]  (ถ้ามี)
+[ปกติ:    normalStart→normalEnd]   ← รวมเช้า+บ่าย ไม่หยุดพัก
+[OT เย็น: otEveningStart→otEveningEnd]  (ถ้ามี)
+
+ตัวอย่าง: OT เช้า 06:00-08:00 + ปกติ 08:00-17:00 + OT เที่ยง + OT เย็น 18:00-21:00
+→ segments: [06:00→08:00] [08:00→17:00] [18:00→21:00]
+→ expect 6 punch
+```
+
+#### กรณีพิเศษ 2: OT ผ่าเย็น (`otEvening.start == normalEnd`)
+
+รวม segment บ่าย+OT เย็นเป็นอันเดียว ไม่มีสแกนช่วง 17:00-18:00
+
+```
+[OT เช้า: otStart→normalStart]  (ถ้ามี)
+[เช้า:    normalStart→12:00]
+[บ่าย+OT เย็น: 13:00→otEveningEnd]   ← รวมบ่าย+OT เย็น ไม่มีพัก 17-18
+
+ตัวอย่าง: OT เช้า 06:00-08:00 + ปกติ 08:00-17:00 + OT เย็น 17:00-21:00
+→ segments: [06:00→08:00] [08:00→12:00] [13:00→21:00]
+→ expect 6 punch
+```
+
+> ⚠️ **ข้อห้าม**: OT ผ่าเที่ยง + OT ผ่าเย็นในวันเดียวกันทำไม่ได้
+
+### 2.3 Base Cases (ตรวจก่อนทุกอย่าง)
+
+```
+ไม่มี daily AND ไม่มี scan  →  ABSENT (สร้างโดย Scheduled Job ไม่ใช่ที่นี่)
+ไม่มี daily AND มี scan     →  MISSING_DAILY
+มี daily AND scan = 0 ครั้ง →  MISSING_SCAN
+มี daily AND scan = 1 ครั้ง →  CONFLICTED (มีบางส่วนแต่ไม่รู้เข้าหรือออก)
+ไม่มี dailyReportPunches   →  MISSING_DAILY (daily ไม่มีข้อมูลช่วงเวลา)
+```
+
+> ⚠️ **Implementation Note**: ตรวจ `scanCount` จาก raw `scanPunches` ก่อน **เสมอ** ก่อนเรียก `makeEvenScanPunches()`
+> เพราะ `makeEvenScanPunches([x])` คืน `[]` → scan 1 ครั้งจะกลายเป็น `MISSING_SCAN` แทน `CONFLICTED`
+
+### 2.4 การเช็ค Segment (หลัง Base Cases)
+
+เช็คทีละ segment เทียบกับ scan punches ที่มี:
+
+```
+สำหรับแต่ละ expected segment:
+  หา scan IN ที่ใกล้เคียง segmentStart ± 30 นาที
+  หา scan OUT ที่ใกล้เคียง segmentEnd ± 30 นาที
+
+  ถ้าหาไม่ได้ทั้ง IN หรือ OUT → CONFLICTED (ขาด segment นี้)
+  ถ้าหาได้แต่ต่างกัน > 30 นาที → CONFLICTED (สาย/ออกก่อนเกิน threshold)
+  ถ้าหาได้และต่างกัน ≤ 30 นาที → segment นี้ผ่าน (บันทึก lateMinutes/earlyLeaveMinutes)
+
+ถ้าทุก segment ผ่าน → MATCHED
+```
+
+### 2.5 สถานะและเงื่อนไข
+
+| สถานการณ์ | สถานะ | Admin ทำอะไร |
+|---|---|---|
+| สแกนครบทุก segment ± 30 นาที | `MATCHED` | — |
+| ไม่มีสแกนเลย (0 ครั้ง) | `MISSING_SCAN` | กด "ยืนยันตาม Daily Report" |
+| มีสแกน 1 ครั้ง | `CONFLICTED` | เปิด Modal เติมสแกนที่ขาด |
+| มีสแกน แต่ขาด segment ใดก็ตาม | `CONFLICTED` | เปิด Modal เติมสแกนที่ขาด |
+| สาย/ออกก่อน > 30 นาที ใน segment ใดก็ตาม | `CONFLICTED` | แจ้งโฟร์แมนแก้ Daily Report |
+| ไม่มี Daily Report แต่มีสแกน | `MISSING_DAILY` | รอโฟร์แมนส่งรายงาน |
+
+### 2.6 Auto-Penalty Rule (≤ 30 นาที — เฉพาะ MATCHED)
+
+เมื่อทุก segment ผ่าน แต่มีบาง segment ที่สาย/ออกก่อนเล็กน้อย:
+- ต่างกัน ≤ 30 นาที → MATCHED + หัก approved hours อัตโนมัติ (ปัดขึ้นทีละ 30 นาที)
+- เวลาปกติ (ไม่ใช่ OT) → ไม่หัก เพราะระบบ HR จัดการ penalty เอง
+
+### 2.7 Flow Chart สรุป
+
+```
+มี daily? ─No─→  มี scan? ─No─→  (ไม่สร้าง record — ABSENT จัดการโดย Scheduled Job)
+   │                  │Yes
+   │              MISSING_DAILY
    │Yes
 dailyPunches valid? ─No─→  MISSING_DAILY
    │Yes
-scan count < 2? ─Yes─→  CONFLICTED (กรณี B)
+scan = 0 ครั้ง? ─Yes─→  MISSING_SCAN
    │No
-สาย หรือ ออกก่อน > 30 นาที? ─Yes─→  CONFLICTED (กรณี A)
+scan = 1 ครั้ง? ─Yes─→  CONFLICTED
    │No
-MATCHED (+ auto-penalty ถ้าสาย/ออกก่อน ≤ 30 นาที ในช่วง OT)
+สร้าง expected segments จาก daily report
+   │
+   ├── ผ่าเที่ยง? (otNoon > 0)            → รวม segment เช้า+บ่าย
+   ├── ผ่าเย็น? (otEvening.start=normalEnd) → รวม segment บ่าย+OT เย็น
+   │
+เช็คทีละ segment vs scan punches
+   │
+มี segment ที่ขาด หรือ > 30 นาที? ─Yes─→  CONFLICTED
+   │No
+MATCHED (+ auto-penalty ถ้ามี segment ที่ต่างกัน ≤ 30 นาที ในช่วง OT)
 ```
 
 ---
 
-## 3. โครงสร้าง Data (`ReconciliationRecord`)
+## 2.8 ABSENT — Scheduled Job (แยกออกจาก Reconciliation ปกติ)
+
+> ABSENT **ไม่ได้สร้างจาก** `classifyBySegments()` แต่สร้างจาก Cloud Function แยกต่างหาก
+
+### หลักการ
+
+| | รายละเอียด |
+|---|---|
+| Trigger | Cloud Function Scheduled — รันทุกวัน เวลาเที่ยงคืน |
+| ตรวจย้อนหลัง | 1 วัน (เที่ยงคืนวันที่ 16 = ตรวจวันที่ 15) |
+| เหตุผลที่รอเที่ยงคืน | โฟร์แมนลง Daily Report ได้ถึงคืนวันนั้นหรือเช้าวันถัดไป ต้องรอให้ข้อมูลครบก่อน |
+
+### Logic
+
+```
+เที่ยงคืนวันที่ N+1:
+→ ดึง active employees ทุกคน (isActive: true)
+→ เทียบกับ ReconciliationRecords ของวันที่ N
+→ ใครไม่มี record เลย → สร้าง ABSENT record
+→ write เฉพาะคนที่ขาดจริง (ไม่ใช่ทุกคน)
+```
+
+### Re-classify อัตโนมัติ
+
+ถ้าโฟร์แมนลง Daily Report สาย (เช่น ลงวันที่ 17 สำหรับวันที่ 15):
+- ระบบ re-classify ABSENT → สถานะที่ถูกต้องอัตโนมัติ
+- Admin ไม่ต้อง manual resolve
+
+### สิ่งที่ Admin ทำได้
+
+Admin เห็น ABSENT แล้วตัดสินใจเองว่าจะตามโฟร์แมนให้ลง Daily Report ไหม ระบบไม่บังคับ เพราะถ้าไม่มี Daily Report admin ก็ไม่สามารถแก้ไขได้ด้วยตัวเองอยู่แล้ว
+
+---
 
 ### ชั่วโมงทำงาน — มีหลาย source ต้องระวัง priority
 
@@ -356,4 +388,9 @@ manualHours = {
 | 2026-05-12 | กำหนด OT_CONFLICT_THRESHOLD = 30 นาที: เกินกว่านี้ → CONFLICTED, ไม่เกิน → MATCHED + auto-penalty |
 | 2026-05-12 | กำหนด scan count < 2 → CONFLICTED (กรณี B) — scan 3 ครั้งที่ครอบช่วงเวลาได้ไม่ใช่ CONFLICTED |
 | 2026-05-12 | ขยาย threshold ครอบคลุมทุกช่วงเวลา ไม่ใช่แค่ OT (สาย/ออกก่อน > 30 นาที → CONFLICTED เสมอ) |
-| 2026-05-13 | เพิ่ม Implementation Note: ต้องตรวจ raw scanCount ก่อน makeEvenScanPunches() เสมอ ไม่งั้น scan 1 ครั้งจะกลายเป็น MISSING_SCAN แทน CONFLICTED |
+| 2026-05-15 | **BREAKING CHANGE**: เปลี่ยน logic จาก "ครอบช่วงเวลา" เป็น "ต้องมีสแกนครบทุก segment" |
+| 2026-05-15 | เปลี่ยนชื่อฟังก์ชัน `classifyByPunchCoverage()` → `classifyBySegments()` |
+| 2026-05-15 | เพิ่ม segment rules: ปกติ / ผ่าเที่ยง / ผ่าเย็น พร้อม expected punch count แต่ละกรณี |
+| 2026-05-15 | ไม่ยกเว้นวันหยุดบริษัทหรือวันอาทิตย์ — เช็คทุกวันที่โฟร์แมนส่ง Daily Report |
+| 2026-05-15 | เพิ่ม Section 2.8: ABSENT Scheduled Job — รันเที่ยงคืนทุกวัน เช็คย้อนหลัง 1 วัน |
+| 2026-05-15 | ABSENT ไม่สร้างจาก classifyBySegments() อีกต่อไป แยกเป็น Scheduled Job ต่างหาก |

@@ -10,6 +10,14 @@ import {
   CircularProgress,
   MenuItem,
   InputAdornment,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
+  Switch,
+  Typography,
+  FormHelperText,
+  FormControl,
+  FormLabel,
 } from '@mui/material';
 import LabelIcon from '@mui/icons-material/Label';
 import CodeIcon from '@mui/icons-material/Code';
@@ -50,15 +58,21 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 }) => {
   const toast = useToast();
 
+  React.useEffect(() => {
+    console.log('[ProjectForm] defaultValues changed:', defaultValues);
+  }, [defaultValues]);
+
   const mergedDefaults: ProjectFormData = React.useMemo(
     () => ({
+      ...defaultValues,
       code: defaultValues?.code ?? (mode === 'create' ? 'P001' : ''),
       projectCode: defaultValues?.projectCode ?? '',
       department: defaultValues?.department ?? '',
       projectName: defaultValues?.projectName ?? '',
       status: defaultValues?.status ?? PROJECT_STATUS_OPTIONS[0],
       projectManager: defaultValues?.projectManager ?? '',
-      ...defaultValues,
+      workDays: defaultValues?.workDays ?? [1, 2, 3, 4, 5, 6],
+      followCompanyHoliday: defaultValues?.followCompanyHoliday ?? true,
     }),
     [defaultValues, mode]
   );
@@ -67,11 +81,16 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     control,
     handleSubmit,
     setValue,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
     defaultValues: mergedDefaults,
   });
+
+  React.useEffect(() => {
+    reset(mergedDefaults);
+  }, [mergedDefaults, reset]);
 
   const [codeLoading, setCodeLoading] = React.useState(false);
   const [codeLocked, setCodeLocked] = React.useState(
@@ -324,6 +343,88 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               />
             )}
           />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
+            การตั้งค่าเวลาทำงาน
+          </Typography>
+          <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Controller
+                  name="workDays"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl component="fieldset" error={!!errors.workDays} disabled={isLoading || isSubmitting}>
+                      <FormLabel component="legend" sx={{ fontSize: '0.875rem', mb: 1 }}>วันทำงานของโครงการ</FormLabel>
+                      <FormGroup row>
+                        {[
+                          { value: 1, label: 'จ.' },
+                          { value: 2, label: 'อ.' },
+                          { value: 3, label: 'พ.' },
+                          { value: 4, label: 'พฤ.' },
+                          { value: 5, label: 'ศ.' },
+                          { value: 6, label: 'ส.' },
+                          { value: 0, label: 'อา.' },
+                        ].map((day) => (
+                          <FormControlLabel
+                            key={day.value}
+                            control={
+                              <Checkbox
+                                checked={field.value.includes(day.value)}
+                                onChange={(e) => {
+                                  const newValue = e.target.checked
+                                    ? [...field.value, day.value]
+                                    : field.value.filter((v: number) => v !== day.value);
+                                  field.onChange(newValue);
+                                }}
+                                name={`day-${day.value}`}
+                                size="small"
+                              />
+                            }
+                            label={day.label}
+                          />
+                        ))}
+                      </FormGroup>
+                      {errors.workDays && (
+                        <FormHelperText>{errors.workDays.message}</FormHelperText>
+                      )}
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Controller
+                  name="followCompanyHoliday"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={field.value}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                          disabled={isLoading || isSubmitting}
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            หยุดตามวันหยุดบริษัท
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            หากเปิด โครงการนี้จะไม่มีการเช็คขาดงานในวันหยุดบริษัทที่ตั้งค่าไว้
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+            </Grid>
+          </Box>
         </Grid>
 
         <Grid item xs={12}>

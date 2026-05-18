@@ -18,6 +18,7 @@ export interface DailyContractor {
   name: string;
   skillId: string;
   projectLocationId?: string;
+  department?: string;
   phoneNumber?: string;
   idCardNumber?: string;
   address?: string;

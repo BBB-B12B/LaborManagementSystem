@@ -19,6 +19,7 @@ export interface DailyContractor {
   name: string;
   skillId: string;
   projectLocationId?: string;
+  department?: string;
   dateOfBirth?: Date | null;
   isActive: boolean;
   startDate?: Date | null;
@@ -40,6 +41,7 @@ export interface DailyContractorDTO {
   name: string;
   skillId: string;
   projectLocationId?: string;
+  department?: string;
   dateOfBirth?: Date | null;
   isActive: boolean;
   startDate?: Date | null;
@@ -59,6 +61,7 @@ export interface CreateDailyContractorInput {
   name?: string;
   skillId?: string;
   projectLocationId?: string;
+  department?: string;
   dateOfBirth?: Date;
   isActive?: boolean;
   startDate?: Date;
@@ -72,6 +75,7 @@ export interface UpdateDailyContractorInput {
   name?: string;
   skillId?: string;
   projectLocationId?: string;
+  department?: string;
   dateOfBirth?: Date;
   isActive?: boolean;
   startDate?: Date;
@@ -101,6 +105,7 @@ export const dailyContractorConverter = {
       name: dc.name,
       skillId: dc.skillId,
       projectLocationId: dc.projectLocationId || null,
+      department: dc.department || null,
       dateOfBirth: dc.dateOfBirth || null,
       isActive: dc.isActive,
       startDate: dc.startDate || null,
@@ -129,6 +134,7 @@ export const dailyContractorConverter = {
       name: data.name,
       skillId: data.skillId || '',
       projectLocationId: projectLocationId || '',
+      department: data.department || '',
       dateOfBirth: parseDate(data.dateOfBirth),
       isActive: data.isActive !== undefined ? data.isActive : true,
       startDate: parseDate(data.startDate),

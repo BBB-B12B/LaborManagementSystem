@@ -904,22 +904,24 @@ exports.onEmployeeChanged = firebase_functions_1.firestore
  */
 async function checkDailyAbsence(workDateStr) {
     console.log(`[checkDailyAbsence] Starting for date: ${workDateStr}`);
-    // ── 0. เช็คว่าเป็นวันอาทิตย์หรือเปล่า (ไม่ต้อง loop เลย) ─────────────────
     const targetDate = new Date(`${workDateStr}T00:00:00.000Z`);
     const dayOfWeek = targetDate.getUTCDay(); // 0 = อาทิตย์
-    if (dayOfWeek === 0) {
-        console.log(`[checkDailyAbsence] ${workDateStr} is Sunday — skip`);
-        return;
-    }
     // ── 1. เช็ควันหยุดบริษัท ────────────────────────────────────────────────────
     const holidaySnap = await db.collection('companyHolidays')
         .where('date', '==', workDateStr)
         .limit(1)
         .get();
-    if (!holidaySnap.empty) {
-        console.log(`[checkDailyAbsence] ${workDateStr} is a company holiday — skip`);
-        return;
-    }
+    const isGlobalHoliday = !holidaySnap.empty;
+    // ── 1.5. ดึงข้อมูล Project Locations เพื่อตรวจสอบการตั้งค่าวันทำงาน ───────────
+    const projectsSnap = await db.collection('projectLocations').get();
+    const projectConfigMap = new Map();
+    projectsSnap.docs.forEach(doc => {
+        const data = doc.data();
+        projectConfigMap.set(doc.id, {
+            workDays: data.workDays !== undefined ? data.workDays : [1, 2, 3, 4, 5, 6], // default จันทร์-เสาร์
+            followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true, // default หยุดตามบริษัท
+        });
+    });
     // ── 2. ดึงพนักงาน Active ทั้งหมด ───────────────────────────────────────────
     const contractorsSnap = await db.collection('dailyContractors')
         .where('isActive', '==', true)
@@ -943,6 +945,18 @@ async function checkDailyAbsence(workDateStr) {
         const projectLocationId = contractorData['projectLocationId'] || '';
         const recordId = generateReconciliationId(employeeId, workDateStr);
         const recordRef = db.collection('reconciliationRecords').doc(recordId);
+        // ตรวจสอบการตั้งค่าของโครงการ
+        const pConfig = projectConfigMap.get(projectLocationId) || { workDays: [1, 2, 3, 4, 5, 6], followCompanyHoliday: true };
+        // ถ้าวันนี้ไม่ใช่วันทำงานของโครงการนี้ → ข้าม
+        if (!pConfig.workDays.includes(dayOfWeek)) {
+            skippedCount++;
+            continue;
+        }
+        // ถ้าวันนี้เป็นวันหยุดบริษัท และโครงการนี้หยุดตามบริษัท → ข้าม
+        if (isGlobalHoliday && pConfig.followCompanyHoliday) {
+            skippedCount++;
+            continue;
+        }
         // ตรวจว่ามี record อยู่แล้วไหม
         const existingSnap = await recordRef.get();
         if (existingSnap.exists) {

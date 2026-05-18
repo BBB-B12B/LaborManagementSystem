@@ -19,6 +19,8 @@ export interface ProjectData {
   department: string;
   projectManager?: string | null;
   status?: string;
+  workDays?: number[];
+  followCompanyHoliday?: boolean;
 }
 
 const PROJECT_COLLECTION = 'Project';
@@ -148,6 +150,8 @@ export async function createProject(
     department: data.department.trim(),
     projectManager: data.projectManager ? data.projectManager.trim() : null,
     status: normalizeStatusValue(data.status),
+    workDays: data.workDays !== undefined ? data.workDays : [1, 2, 3, 4, 5, 6],
+    followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true,
     createdBy,
     updatedBy: createdBy,
     createdAt: FieldValue.serverTimestamp(),
@@ -214,6 +218,8 @@ export async function updateProject(
           : null
         : undefined,
     status: data.status ? normalizeStatusValue(data.status) : undefined,
+    workDays: data.workDays !== undefined ? data.workDays : undefined,
+    followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : undefined,
     updatedBy,
     updatedAt: FieldValue.serverTimestamp(),
   };

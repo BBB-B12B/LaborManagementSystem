@@ -22,6 +22,7 @@ import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { config } from '../../config';
+import { projectLocationService } from '../project/ProjectLocationService';
 
 /**
  * DailyContractorService
@@ -68,6 +69,15 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         passwordHash = await bcrypt.hash(input.password, config.bcryptRounds);
       }
 
+      // Fetch department from ProjectLocation
+      let department = '';
+      if (input.projectLocationId) {
+        const project = await projectLocationService.getById(input.projectLocationId);
+        if (project && project.department) {
+          department = project.department;
+        }
+      }
+
       const now = new Date();
       const dcData: Omit<DailyContractor, 'id'> = {
         employeeId,
@@ -76,6 +86,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         name,
         skillId,
         projectLocationId: input.projectLocationId || '',
+        department,
         dateOfBirth: input.dateOfBirth || null,
         isActive: input.isActive !== undefined ? input.isActive : true,
         startDate: input.startDate || null,
@@ -173,6 +184,18 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
 
       if (input.projectLocationId !== undefined) {
         updateData.projectLocationId = input.projectLocationId;
+        
+        // Update department if project changes
+        if (!input.projectLocationId) {
+          updateData.department = '';
+        } else if (input.projectLocationId !== existing.projectLocationId) {
+          const project = await projectLocationService.getById(input.projectLocationId);
+          if (project && project.department) {
+            updateData.department = project.department;
+          } else {
+            updateData.department = '';
+          }
+        }
       }
 
       if (input.dateOfBirth !== undefined) {
