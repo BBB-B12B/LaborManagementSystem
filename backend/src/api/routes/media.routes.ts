@@ -17,6 +17,6 @@ router.use(authenticate);
 router.post('/upload', upload.single('file'), mediaController.upload);
 
 /** Upload multiple files */
-router.post('/upload-multiple', upload.array('files', 10), mediaController.uploadMultiple);
+router.post('/upload-multiple', upload.array('files', 100), mediaController.uploadMultiple);
 
 export default router;

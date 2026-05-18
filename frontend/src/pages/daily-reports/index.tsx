@@ -274,15 +274,7 @@ export default function DailyReportPage() {
       .filter(Boolean) as string[];
   }, [taskReportsData, selectedTask, isActingAsSupport]);
 
-  // Handle Global Sync from Navbar — แค่ invalidate queries เพิ่มเติม (Layout.tsx จัดการ spinner แล้ว)
-  useEffect(() => {
-    const handleSync = () => {
-      queryClient.invalidateQueries({ queryKey: ['task-reports-all'] });
-      queryClient.invalidateQueries({ queryKey: ['task-reports-site'] });
-    };
-    window.addEventListener('globalSync', handleSync);
-    return () => window.removeEventListener('globalSync', handleSync);
-  }, [queryClient]);
+
 
   const { data: allSiteReportsData } = useQuery({
     queryKey: ['task-reports-site', selectedTask?.id],
@@ -763,6 +755,25 @@ export default function DailyReportPage() {
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [isImageLoading, setIsImageLoading] = useState(false);
+
+  // Preload all preview images to cache in background for instant viewing
+  useEffect(() => {
+    if (previewImages.length > 0) {
+      setIsImageLoading(true);
+      previewImages.forEach((url) => {
+        const img = new Image();
+        img.src = url;
+      });
+    }
+  }, [previewImages]);
+
+  // Reset image loading state on slide/index change
+  useEffect(() => {
+    if (previewImages.length > 0) {
+      setIsImageLoading(true);
+    }
+  }, [previewIndex, previewImages]);
   const [laborPhotos, setLaborPhotos] = useState<ShiftPhotos>(INITIAL_SHIFT_PHOTOS);
   const [laborPhotoPreviews, setLaborPhotoPreviews] =
     useState<ShiftPhotoPreviews>(INITIAL_SHIFT_PREVIEWS);
@@ -789,6 +800,46 @@ export default function DailyReportPage() {
       otEvening: selectedWorkers.some((w) => w.times?.otEvening),
     };
   }, [selectedWorkers]);
+
+  const siteReportPhotos = useMemo(() => {
+    if (!siteReportData || !siteReportData.photos) {
+      return {
+        site: [],
+        labor: {
+          regular: [],
+          otMorning: [],
+          otNoon: [],
+          otEvening: [],
+        }
+      };
+    }
+    const p = siteReportData.photos;
+    const mapShift = (dbShift: any, isRegular: boolean = false) => {
+      if (!dbShift) return [];
+      if (Array.isArray(dbShift)) return dbShift;
+      if (isRegular) {
+        return [dbShift.in, dbShift.lunch, dbShift.afternoon, dbShift.out].filter(Boolean);
+      }
+      return [dbShift.in, dbShift.out].filter(Boolean);
+    };
+    return {
+      site: p.site || [],
+      labor: p.laborByShift
+        ? {
+            regular: mapShift(p.laborByShift.regular, true),
+            otMorning: mapShift(p.laborByShift.otMorning),
+            otNoon: mapShift(p.laborByShift.otNoon),
+            otEvening: mapShift(p.laborByShift.otEvening),
+          }
+        : {
+            regular: [],
+            otMorning: [],
+            otNoon: [],
+            otEvening: [],
+          }
+    };
+  }, [siteReportData]);
+
 
   // --- 1.1 Derived States for Business Rules ---
   const isRetroactiveOver3Days = useMemo(() => {
@@ -931,8 +982,11 @@ export default function DailyReportPage() {
       showLoading();
       try {
         invalidateCache();
+        dailyReportService.clearCache();
         // Invalidate React Query cache ทั้งหมด (รวม unlockedDates, tasks, reports)
         await queryClient.invalidateQueries();
+        // Force Refetch of active queries directly from Firestore bypassing query cache (Hard Refresh 100%)
+        await queryClient.refetchQueries({ type: 'active' });
         await refetchTasks();
       } catch (e) {
         console.error('[DailyReport] Sync error:', e);
@@ -945,6 +999,41 @@ export default function DailyReportPage() {
     return () => window.removeEventListener('globalSync', handleSync);
   }, [invalidateCache, queryClient, refetchTasks, showLoading, hideLoading]);
 
+  // Midnight (24:00) Auto-Refresh — Reset cached data and perform 100% hard fetch daily
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const setupMidnightTimer = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0); // Next midnight
+      const timeToMidnight = midnight.getTime() - now.getTime();
+
+      console.log(`[DailyReport] Midnight auto-refresh scheduled in ${Math.round(timeToMidnight / 1000 / 60)} minutes.`);
+
+      timeoutId = setTimeout(async () => {
+        console.log('[DailyReport] Midnight automatic reset triggered!');
+        try {
+          invalidateCache();
+          dailyReportService.clearCache();
+          await queryClient.invalidateQueries();
+          await queryClient.refetchQueries({ type: 'active' });
+          await refetchTasks();
+          toast.info('อัปเดตข้อมูลอัตโนมัติประจำวันเสร็จสิ้น');
+        } catch (e) {
+          console.error('[DailyReport] Midnight auto-refresh error:', e);
+        }
+        setupMidnightTimer(); // Reschedule for next midnight
+      }, timeToMidnight);
+    };
+
+    setupMidnightTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [invalidateCache, queryClient, refetchTasks]);
+
   const { data: projectWorkers = [], isLoading: workersLoading } = useQuery({
     queryKey: ['workers', user?.roleCode, user?.department, user?.projectLocationIds?.[0]],
     queryFn: async () => {
@@ -952,6 +1041,7 @@ export default function DailyReportPage() {
       // 1. If FM or Support FM (SFM): Fetch by department
       // 2. If Admin or others: Fetch by current project
       const isFM = user?.roleCode === 'FM';
+      let workers: any[] = [];
       
       if (isFM) {
         const dept = user?.department;
@@ -960,17 +1050,29 @@ export default function DailyReportPage() {
           return [];
         }
         console.log('[DailyReport] FM fetching workers by department:', dept);
-        return await dcService.getAllDCs({ department: dept }).then(res => res.dailyContractors);
+        workers = await dcService.getAllDCs({ department: dept }).then(res => res.dailyContractors);
+      } else {
+        // Default: Fetch by Project Location
+        const locationId = user?.projectLocationIds?.[0];
+        if (!locationId) {
+          console.warn('[DailyReport] No projectLocationId found for user:', user?.name);
+          return [];
+        }
+        console.log('[DailyReport] Admin/User fetching workers for locationId:', locationId);
+        workers = await dcService.getDCsByProject(locationId);
       }
 
-      // Default: Fetch by Project Location
-      const locationId = user?.projectLocationIds?.[0];
-      if (!locationId) {
-        console.warn('[DailyReport] No projectLocationId found for user:', user?.name);
-        return [];
+      // Sort by foremanUsage count for the logged-in foreman (user.employeeId) descending
+      if (user?.employeeId && workers.length > 0) {
+        const empId = user.employeeId;
+        workers.sort((a, b) => {
+          const aCount = a.foremanUsage?.[empId]?.count || 0;
+          const bCount = b.foremanUsage?.[empId]?.count || 0;
+          return bCount - aCount;
+        });
       }
-      console.log('[DailyReport] Admin/User fetching workers for locationId:', locationId);
-      return await dcService.getDCsByProject(locationId);
+      
+      return workers;
     },
     enabled: !!user,
     staleTime: remainingStaleTime,
@@ -1160,6 +1262,14 @@ export default function DailyReportPage() {
       prev.map((w) => {
         if (w.id === workerId) {
           let updatedTimes = { ...w.times, [field]: value };
+          if (field === 'regular' && value === false) {
+            updatedTimes.otMorning = false;
+            updatedTimes.otNoon = false;
+            updatedTimes.otEvening = false;
+            updatedTimes.otMorningTime = '';
+            updatedTimes.otNoonTime = '';
+            updatedTimes.otEveningTime = '';
+          }
 
           // Validation: If setting regular to true or changing regTime
           if ((field === 'regular' && value === true) || field === 'regTime') {
@@ -1210,6 +1320,16 @@ export default function DailyReportPage() {
                 variant: 'warning',
               });
               updatedTimes.regular = false;
+            }
+
+            // [VALIDATION] If leave is active and there is no regular working time, wipe all OT shifts
+            if (!updatedTimes.regular) {
+              updatedTimes.otMorning = false;
+              updatedTimes.otNoon = false;
+              updatedTimes.otEvening = false;
+              updatedTimes.otMorningTime = '';
+              updatedTimes.otNoonTime = '';
+              updatedTimes.otEveningTime = '';
             }
           }
 
@@ -1411,9 +1531,12 @@ export default function DailyReportPage() {
     label: string,
     disabled?: boolean
   ) => {
-    const photos = laborPhotos[shiftKey];
-    const existingUrls = existingPhotos.labor[shiftKey];
-    const previews = laborPhotoPreviews[shiftKey];
+    const isGridDisabled = disabled || isActingAsSupport;
+    const photos = isActingAsSupport ? [] : laborPhotos[shiftKey];
+    const existingUrls = isActingAsSupport
+      ? siteReportPhotos.labor[shiftKey]
+      : existingPhotos.labor[shiftKey];
+    const previews = isActingAsSupport ? [] : laborPhotoPreviews[shiftKey];
 
     const slotLabels =
       shiftKey === 'regular' ? ['เข้า', 'พักเที่ยง', 'เข้าบ่าย', 'ออก'] : ['เข้า', 'ออก'];
@@ -1486,13 +1609,13 @@ export default function DailyReportPage() {
                       color: 'white',
                       backdropFilter: 'blur(4px)',
                       '&:hover': { bgcolor: 'rgba(255,0,0,0.7)' },
-                      display: disabled ? 'none' : 'flex',
+                      display: isGridDisabled ? 'none' : 'flex',
                     }}
                   >
                     <X size={16} />
                   </IconButton>
                 </Box>
-              ) : (
+              ) : !isActingAsSupport ? (
                 <Box
                   component="label"
                   sx={{
@@ -1505,10 +1628,10 @@ export default function DailyReportPage() {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: disabled ? 'default' : 'pointer',
+                    cursor: isGridDisabled ? 'default' : 'pointer',
                     gap: 1.5,
-                    opacity: disabled ? 0.5 : 1,
-                    '&:hover': disabled
+                    opacity: isGridDisabled ? 0.5 : 1,
+                    '&:hover': isGridDisabled
                       ? {}
                       : {
                           borderColor: '#3b82f6',
@@ -1527,11 +1650,11 @@ export default function DailyReportPage() {
                     type="file"
                     hidden
                     accept="image/*"
-                    disabled={disabled}
+                    disabled={isGridDisabled}
                     onChange={(e) => handleLaborShiftPhotoUpload(e.target.files, shiftKey)}
                   />
                 </Box>
-              )}
+              ) : null}
               <Typography
                 variant="caption"
                 fontWeight={900}
@@ -1674,52 +1797,63 @@ export default function DailyReportPage() {
         Promise.all(certWorkers.map((w) => compressImage(w.leave.medCertFile!))),
       ]);
 
-      // ─── Phase 2: Upload ALL in parallel ────────────────────────────────
-      const uploadSite = compressedSitePhotos.length > 0
-        ? dailyReportService.uploadPhotos(compressedSitePhotos, `tasks/${selectedTask.taskId}/site`)
-        : Promise.resolve([] as string[]);
+      // ─── Phase 2: Upload ALL in 1 consolidated Parallel HTTP Request ────
+      const filesToUpload: File[] = [];
+      const shiftMappings: Array<{ shiftKey: string; index: number }> = [];
 
-      const uploadRegular = compressedRegular.length > 0
-        ? dailyReportService.uploadPhotos(compressedRegular, `tasks/${selectedTask.taskId}/labor/regular`)
-        : Promise.resolve([] as string[]);
+      compressedSitePhotos.forEach((file, idx) => {
+        filesToUpload.push(file);
+        shiftMappings.push({ shiftKey: 'site', index: idx });
+      });
+      compressedRegular.forEach((file, idx) => {
+        filesToUpload.push(file);
+        shiftMappings.push({ shiftKey: 'regular', index: idx });
+      });
+      compressedOtMorning.forEach((file, idx) => {
+        filesToUpload.push(file);
+        shiftMappings.push({ shiftKey: 'otMorning', index: idx });
+      });
+      compressedOtNoon.forEach((file, idx) => {
+        filesToUpload.push(file);
+        shiftMappings.push({ shiftKey: 'otNoon', index: idx });
+      });
+      compressedOtEvening.forEach((file, idx) => {
+        filesToUpload.push(file);
+        shiftMappings.push({ shiftKey: 'otEvening', index: idx });
+      });
+      compressedCerts.forEach((file, idx) => {
+        filesToUpload.push(file);
+        shiftMappings.push({ shiftKey: 'certs', index: idx });
+      });
 
-      const uploadOtMorning = compressedOtMorning.length > 0
-        ? dailyReportService.uploadPhotos(compressedOtMorning, `tasks/${selectedTask.taskId}/labor/otMorning`)
-        : Promise.resolve([] as string[]);
+      // Single Unified HTTP Upload request — extremely fast!
+      const uploadedUrls = filesToUpload.length > 0
+        ? await dailyReportService.uploadPhotos(filesToUpload, `tasks/${selectedTask.taskId}/reports`)
+        : [];
 
-      const uploadOtNoon = compressedOtNoon.length > 0
-        ? dailyReportService.uploadPhotos(compressedOtNoon, `tasks/${selectedTask.taskId}/labor/otNoon`)
-        : Promise.resolve([] as string[]);
+      // Redistribute URLs back to their original groups
+      const newSitePhotoUrls: string[] = [];
+      const regularUrls: string[] = [];
+      const otMorningUrls: string[] = [];
+      const otNoonUrls: string[] = [];
+      const otEveningUrls: string[] = [];
+      const certUrls: string[] = [];
 
-      const uploadOtEvening = compressedOtEvening.length > 0
-        ? dailyReportService.uploadPhotos(compressedOtEvening, `tasks/${selectedTask.taskId}/labor/otEvening`)
-        : Promise.resolve([] as string[]);
-
-      const uploadCerts = compressedCerts.map((cert) =>
-        dailyReportService.uploadPhotos([cert], `tasks/${selectedTask.taskId}/certs`)
-      );
-
-      const [
-        newSitePhotoUrls,
-        regularUrls,
-        otMorningUrls,
-        otNoonUrls,
-        otEveningUrls,
-        ...certUrlArrays
-      ] = await Promise.all([
-        uploadSite,
-        uploadRegular,
-        uploadOtMorning,
-        uploadOtNoon,
-        uploadOtEvening,
-        ...uploadCerts,
-      ]);
+      uploadedUrls.forEach((url, idx) => {
+        const mapping = shiftMappings[idx];
+        if (mapping.shiftKey === 'site') newSitePhotoUrls.push(url);
+        else if (mapping.shiftKey === 'regular') regularUrls.push(url);
+        else if (mapping.shiftKey === 'otMorning') otMorningUrls.push(url);
+        else if (mapping.shiftKey === 'otNoon') otNoonUrls.push(url);
+        else if (mapping.shiftKey === 'otEvening') otEveningUrls.push(url);
+        else if (mapping.shiftKey === 'certs') certUrls.push(url);
+      });
 
       // Map cert URLs back to workers
-      certWorkers.forEach((w, idx) => {
-        const certUrls = certUrlArrays[idx];
-        if (certUrls && certUrls.length > 0) {
-          w.leave.medCertFileUrl = certUrls[0];
+      let certIdx = 0;
+      certWorkers.forEach((w) => {
+        if (w.leave?.medCertFile) {
+          w.leave.medCertFileUrl = certUrls[certIdx++] || '';
         }
       });
 
@@ -1731,10 +1865,10 @@ export default function DailyReportPage() {
           workerName: w.name,
           employeeId: w.employeeId,
           shiftTimes: {
-            day: w.times.regTime,
-            otEvening: w.times.otEveningTime,
-            otMorning: w.times.otMorningTime,
-            otNoon: w.times.otNoonTime,
+            day: w.times.regular ? w.times.regTime : null,
+            otEvening: w.times.otEvening ? w.times.otEveningTime : null,
+            otMorning: w.times.otMorning ? w.times.otMorningTime : null,
+            otNoon: w.times.otNoon ? w.times.otNoonTime : null,
           },
           shifts: {
             normal: w.times.regular,
@@ -1757,6 +1891,7 @@ export default function DailyReportPage() {
             custom: true,
           },
           medCertFileUrl: w.leave.medCertFileUrl || '',
+          leaveType: (w.leave.medCertFileUrl || w.leave.medCertFile) ? 'Paid' : 'Unpaid',
         }));
 
       const payload = {
@@ -1798,10 +1933,12 @@ export default function DailyReportPage() {
 
       toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
 
-      // Invalidate Cache once
+      // Invalidate Cache once and perform a 100% Hard Refresh
       invalidateCache();
-      queryClient.invalidateQueries();
-      refetchTasks();
+      dailyReportService.clearCache();
+      await queryClient.invalidateQueries();
+      await queryClient.refetchQueries({ type: 'active' });
+      await refetchTasks();
 
       // Reset UI → กลับหน้า My Job list
       setSelectedTask(null);
@@ -2399,106 +2536,6 @@ export default function DailyReportPage() {
                                 </TableContainer>
                               </Box>
 
-                              {isActingAsSupport ? (
-                                siteReportData ? (
-                                  <Grid container spacing={4} alignItems="flex-start">
-                                    <Grid item xs={12} md={3}>
-                                      <Typography variant="h6" fontWeight={800} gutterBottom>
-                                        Progress
-                                      </Typography>
-                                      <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        gutterBottom
-                                      >
-                                        ความคืบหน้า (จาก Site)
-                                      </Typography>
-                                      <TextField
-                                        fullWidth
-                                        value={siteReportData.progress || 0}
-                                        InputProps={{ endAdornment: '%', readOnly: true }}
-                                        sx={{
-                                          '& .MuiOutlinedInput-root': {
-                                            borderRadius: '12px',
-                                            bgcolor: '#f8fafc',
-                                          },
-                                        }}
-                                      />
-                                    </Grid>
-                                    <Grid item xs={12} md={9}>
-                                      {(() => {
-                                        const allPhotos = [
-                                          ...(siteReportData.photos?.site || []),
-                                          ...(siteReportData.photos?.labor || []),
-                                        ].map((url) => getImageUrl(url));
-                                        const totalCount = allPhotos.length;
-
-                                        return (
-                                          <Grid container spacing={3}>
-                                            <Grid item xs={12}>
-                                              <Typography
-                                                variant="subtitle2"
-                                                fontWeight={700}
-                                                sx={{ mb: 1, textAlign: 'center' }}
-                                              >
-                                                รูปแนบทั้งหมด{' '}
-                                                {totalCount > 0 ? `1/${totalCount}` : '0/0'}
-                                              </Typography>
-                                              <Box
-                                                sx={{ display: 'flex', justifyContent: 'center' }}
-                                              >
-                                                {totalCount > 0 ? (
-                                                  <Box
-                                                    component="img"
-                                                    src={allPhotos[0]}
-                                                    onClick={() => {
-                                                      setPreviewImages(allPhotos);
-                                                      setPreviewIndex(0);
-                                                    }}
-                                                    sx={{
-                                                      width: 120,
-                                                      height: 120,
-                                                      borderRadius: '12px',
-                                                      objectFit: 'cover',
-                                                      cursor: 'zoom-in',
-                                                      border: '1px solid #e2e8f0',
-                                                      '&:hover': { opacity: 0.8 },
-                                                    }}
-                                                  />
-                                                ) : (
-                                                  <Typography
-                                                    variant="caption"
-                                                    color="text.secondary"
-                                                  >
-                                                    ไม่มีรูปแนบ
-                                                  </Typography>
-                                                )}
-                                              </Box>
-                                            </Grid>
-                                          </Grid>
-                                        );
-                                      })()}
-                                    </Grid>
-                                  </Grid>
-                                ) : (
-                                  <Box
-                                    sx={{
-                                      width: '100%',
-                                      py: 4,
-                                      display: 'flex',
-                                      justifyContent: 'center',
-                                      alignItems: 'center',
-                                      bgcolor: '#f8fafc',
-                                      border: '1px dashed #cbd5e1',
-                                      borderRadius: '12px',
-                                    }}
-                                  >
-                                    <Typography variant="body2" fontWeight={700} color="#94a3b8">
-                                      ยังไม่มีข้อมูลความคืบหน้าและรูปถ่ายจากทีม Site
-                                    </Typography>
-                                  </Box>
-                                )
-                              ) : (
                                 <Grid container spacing={4} alignItems="flex-start">
                                   <Grid item xs={12} md={3}>
                                     <Typography variant="h6" fontWeight={800} gutterBottom>
@@ -2647,12 +2684,12 @@ export default function DailyReportPage() {
                                           : 'ความคืบหน้าของงานทั้งหมด'
                                       }
                                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
-                                      disabled={isProgressLocked}
+                                      disabled={isProgressLocked || isActingAsSupport}
                                     />
                                   </Grid>
 
-                                  <Grid item xs={12} md={9}>
-                                    <Box ref={photoSectionRef}>
+                                                                      <Grid item xs={12} md={9}>
+                                      <Box ref={photoSectionRef}>
                                     <Box
                                       sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}
                                     >
@@ -2661,42 +2698,39 @@ export default function DailyReportPage() {
                                           id: 'site',
                                           label: 'รูปถ่ายหน้างาน',
                                           required: 2,
-                                          current: sitePhotos.length + existingPhotos.site.length,
+                                          current: isActingAsSupport ? siteReportPhotos.site.length : sitePhotos.length + existingPhotos.site.length,
                                         },
                                         {
                                           id: 'regular',
                                           label: 'เวลาทำงานปกติ',
                                           required: 4,
-                                          current:
-                                            laborPhotos.regular.length +
-                                            existingPhotos.labor.regular.length,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.regular.length : laborPhotos.regular.length + existingPhotos.labor.regular.length,
                                         },
                                         {
                                           id: 'otMorning',
                                           label: 'OT เช้า',
                                           required: 2,
-                                          current:
-                                            laborPhotos.otMorning.length +
-                                            existingPhotos.labor.otMorning.length,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.otMorning.length : laborPhotos.otMorning.length + existingPhotos.labor.otMorning.length,
                                         },
                                         {
                                           id: 'otNoon',
                                           label: 'OT เที่ยง',
                                           required: 2,
-                                          current:
-                                            laborPhotos.otNoon.length +
-                                            existingPhotos.labor.otNoon.length,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.otNoon.length : laborPhotos.otNoon.length + existingPhotos.labor.otNoon.length,
                                         },
                                         {
                                           id: 'otEvening',
                                           label: 'OT เย็น',
                                           required: 2,
-                                          current:
-                                            laborPhotos.otEvening.length +
-                                            existingPhotos.labor.otEvening.length,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.otEvening.length : laborPhotos.otEvening.length + existingPhotos.labor.otEvening.length,
                                         },
                                       ]
-                                        .filter((tab) => tab.id === 'site' || activeShifts[tab.id as keyof typeof activeShifts])
+                                        .filter((tab) => {
+                                           if (isActingAsSupport) {
+                                             return tab.current > 0;
+                                           }
+                                           return tab.id === 'site' || activeShifts[tab.id as keyof typeof activeShifts];
+                                         })
                                         .map((tab: any) => {
                                           const isComplete = tab.current >= tab.required;
                                           const isActive = activePhotoTab === tab.id;
@@ -2790,13 +2824,13 @@ export default function DailyReportPage() {
                                             รูปถ่ายหน้างาน
                                           </Typography>
                                           {renderPhotoGrid(
-                                            sitePhotos,
-                                            existingPhotos.site,
-                                            sitePhotoPreviews,
+                                            isActingAsSupport ? [] : sitePhotos,
+                                            isActingAsSupport ? siteReportPhotos.site : existingPhotos.site,
+                                            isActingAsSupport ? [] : sitePhotoPreviews,
                                             (f) => handlePhotoUpload(f, 'site'),
                                             (i) => removePhoto(i, 'site'),
                                             'site',
-                                            isProgressLocked
+                                            isProgressLocked || isActingAsSupport
                                           )}
                                         </Box>
                                       )}
@@ -2828,7 +2862,7 @@ export default function DailyReportPage() {
                                     </Box>
                                   </Grid>
                                 </Grid>
-                              )}
+
 
                               <Box sx={{ mt: 3 }}>
                                 <Typography variant="h6" fontWeight={800} gutterBottom>
@@ -3236,22 +3270,55 @@ export default function DailyReportPage() {
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
                   }}
                 >
-                  <img
-                    src={previewImages[previewIndex]}
-                    alt={`Preview ${previewIndex + 1}`}
-                    style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
-                  />
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '60vh',
+                      width: '100%',
+                    }}
+                  >
+                    {isImageLoading && (
+                      <CircularProgress
+                        size={50}
+                        sx={{
+                          position: 'absolute',
+                          color: '#ffffff',
+                          zIndex: 2,
+                        }}
+                      />
+                    )}
+                    <img
+                      key={`${previewIndex}-${previewImages[previewIndex]}`}
+                      src={previewImages[previewIndex]}
+                      alt={`Preview ${previewIndex + 1}`}
+                      onLoad={() => setIsImageLoading(false)}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '80vh',
+                        objectFit: 'contain',
+                        opacity: isImageLoading ? 0.3 : 1,
+                        transition: 'opacity 0.2s ease-in-out',
+                        zIndex: 1,
+                      }}
+                    />
+                  </Box>
                   <Typography
                     variant="caption"
                     sx={{
                       color: '#fff',
-                      mt: 1,
+                      mt: 2,
                       bgcolor: 'rgba(0,0,0,0.5)',
                       px: 2,
                       py: 0.5,
                       borderRadius: 2,
+                      zIndex: 3,
                     }}
                   >
                     {previewIndex + 1} / {previewImages.length}
@@ -3618,7 +3685,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otMorning}
             onChange={(e) => onUpdate('otMorning', e.target.checked)}
-            disabled={isReadOnly}
+            disabled={isReadOnly || !worker.times.regular}
           />
           {worker.times.otMorning ? (
             <TimeRangePicker
@@ -3640,7 +3707,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otNoon}
             onChange={(e) => onUpdate('otNoon', e.target.checked)}
-            disabled={isReadOnly}
+            disabled={isReadOnly || !worker.times.regular}
           />
           {worker.times.otNoon ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -3694,7 +3761,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otEvening}
             onChange={(e) => onUpdate('otEvening', e.target.checked)}
-            disabled={isReadOnly}
+            disabled={isReadOnly || !worker.times.regular}
           />
           {worker.times.otEvening ? (
             <TimeRangePicker

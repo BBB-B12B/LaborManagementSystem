@@ -831,6 +831,55 @@ export class TaskService {
     });
 
     // -------------------------------------------------------------
+    // Update foremanUsage count for selected workers in Labor DB
+    // -------------------------------------------------------------
+    try {
+      let userEmployeeId = 'unknown';
+      let userFullName = 'Unknown User';
+      
+      const userDoc = await db.collection('users').doc(updatedBy).get();
+      if (userDoc.exists) {
+        const uData = userDoc.data();
+        userEmployeeId = uData?.employeeId || updatedBy;
+        userFullName = uData?.name || uData?.username || 'Unknown User';
+      } else {
+        const userQuery = await db.collection('users').where('employeeId', '==', updatedBy).limit(1).get();
+        if (!userQuery.empty) {
+          const uData = userQuery.docs[0].data();
+          userEmployeeId = uData.employeeId;
+          userFullName = uData.name || uData.username || 'Unknown User';
+        }
+      }
+
+      const workerIds = new Set<string>();
+      if (reportData.labor && Array.isArray(reportData.labor)) {
+        reportData.labor.forEach((w: any) => {
+          if (w.workerId) workerIds.add(w.workerId);
+        });
+      }
+      if (reportData.leave && Array.isArray(reportData.leave)) {
+        reportData.leave.forEach((w: any) => {
+          if (w.workerId) workerIds.add(w.workerId);
+        });
+      }
+
+      for (const dcId of workerIds) {
+        try {
+          const dcRef = db.collection('dailyContractors').doc(dcId);
+          await dcRef.update({
+            [`foremanUsage.${userEmployeeId}.count`]: admin.firestore.FieldValue.increment(1),
+            [`foremanUsage.${userEmployeeId}.name`]: userFullName
+          });
+          console.log(`[TaskService] Updated foremanUsage for worker ${dcId} under foreman ${userEmployeeId} (${userFullName})`);
+        } catch (err: any) {
+          console.error(`Failed to update foremanUsage for worker ${dcId}:`, err.message);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to process foremanUsage for submitted report:', err.message);
+    }
+
+    // -------------------------------------------------------------
     // Trigger After-Sale System Webhook (F-014 Sync)
     // -------------------------------------------------------------
     try {

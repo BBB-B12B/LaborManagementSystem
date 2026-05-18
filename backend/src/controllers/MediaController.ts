@@ -51,20 +51,20 @@ export class MediaController {
       }
 
       const folder = (req.body.folder as string) || 'general';
-      const results = [];
-
-      for (const file of files) {
+      const uploadPromises = files.map(async (file) => {
         const fileUrl = await storage.uploadBuffer(
           file.buffer,
           folder,
           file.originalname,
           file.mimetype
         );
-        results.push({
+        return {
           url: fileUrl,
           filename: file.originalname
-        });
-      }
+        };
+      });
+
+      const results = await Promise.all(uploadPromises);
 
       return res.status(200).json({
         success: true,

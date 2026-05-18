@@ -44,6 +44,7 @@ export interface DailyContractor {
   airConFee: number; // Default: 0
   otherDeduction: number; // Default: 0
   department?: string; // T-940: Added for department-based filtering
+  foremanUsage?: Record<string, { count: number; name: string }>;
 }
 
 export interface DailyContractorDTO {
@@ -78,6 +79,7 @@ export interface DailyContractorDTO {
   airConFee: number;
   otherDeduction: number;
   department?: string;
+  foremanUsage?: Record<string, { count: number; name: string }>;
 }
 
 export interface CreateDailyContractorInput {
@@ -111,6 +113,7 @@ export interface CreateDailyContractorInput {
   airConFee?: number;
   otherDeduction?: number;
   department?: string;
+  foremanUsage?: Record<string, { count: number; name: string }>;
 }
 
 export interface UpdateDailyContractorInput {
@@ -144,6 +147,7 @@ export interface UpdateDailyContractorInput {
   airConFee?: number;
   otherDeduction?: number;
   department?: string;
+  foremanUsage?: Record<string, { count: number; name: string }>;
 }
 
 /**
@@ -187,6 +191,7 @@ export const dailyContractorConverter = {
       airConFee: dc.airConFee || 0,
       otherDeduction: dc.otherDeduction || 0,
       department: dc.department || null,
+      foremanUsage: dc.foremanUsage || null,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
@@ -228,6 +233,7 @@ export const dailyContractorConverter = {
       airConFee: data.airConFee || 0,
       otherDeduction: data.otherDeduction || 0,
       department: data.department || null,
+      foremanUsage: data.foremanUsage || null,
     };
   },
 };
