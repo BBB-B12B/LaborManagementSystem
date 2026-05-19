@@ -151,6 +151,10 @@ export default function DailyReportPage() {
   const [nextProgress, setNextProgress] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUnlockRequestDialogOpen, setIsUnlockRequestDialogOpen] = useState(false);
+  const [unlockRequestDate, setUnlockRequestDate] = useState<Date | null>(null);
+  const [isSubmittingUnlockRequest, setIsSubmittingUnlockRequest] = useState(false);
+
   // loadingSource: กำหนดว่าใครเป็น "เจ้าของ" Spinner ณ เวลานั้น
   // Priority: 'submit' > 'sync' > 'detail' > null
   const loadingSource = useRef<'submit' | 'sync' | 'detail' | null>(null);
@@ -355,6 +359,28 @@ export default function DailyReportPage() {
     return d;
   }, [selectedTask, boundaryDate, earliestReportDateStr]);
 
+  const calendarMinDate = useMemo(() => {
+    if (!effectiveBoundaryDate) return undefined;
+    let minD = new Date(effectiveBoundaryDate);
+
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = selectedTask?.[unlockedDatesField];
+
+    if (unlockedDates) {
+      const now = new Date();
+      Object.entries(unlockedDates).forEach(([dateStr, unlockInfo]: [string, any]) => {
+        const unlockUntil = new Date(unlockInfo.unlockedUntil);
+        if (unlockUntil > now) {
+          const d = new Date(dateStr);
+          if (d < minD) {
+            minD = d;
+          }
+        }
+      });
+    }
+    return minD;
+  }, [effectiveBoundaryDate, selectedTask, isActingAsSupport]);
+
   const completionDateStr = useMemo(() => {
     // Always use Site reports to determine completion date for locking purposes
     const reportsToSearch = allSiteReportsData || [];
@@ -422,7 +448,18 @@ export default function DailyReportPage() {
 
     const hasReport = reportDates.includes(dateStr);
 
-    if (effectiveBoundaryDate && !hasReport) {
+    let hasValidUnlock = false;
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = selectedTask?.[unlockedDatesField];
+    if (unlockedDates && unlockedDates[dateStr]) {
+      const unlockInfo = unlockedDates[dateStr];
+      const unlockUntil = new Date(unlockInfo.unlockedUntil);
+      if (unlockUntil > new Date()) {
+        hasValidUnlock = true;
+      }
+    }
+
+    if (effectiveBoundaryDate && !hasReport && !hasValidUnlock) {
       const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
       if (dateStr < boundDateStr) {
         return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
@@ -438,23 +475,28 @@ export default function DailyReportPage() {
     const todayStr = format(today, 'yyyy-MM-dd');
 
     const isPastOrToday = dateStr <= todayStr;
+    const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
+    const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
+
     // Retroactive Window: Today (13), Yesterday (12), Day-Before (11) -> Locked is < 11
-    let isLocked = dateStr < format(subDays(today, 3), 'yyyy-MM-dd');
-    if (selectedTask?.unlockedDates && selectedTask.unlockedDates[dateStr]) {
-      const unlockInfo = selectedTask.unlockedDates[dateStr];
-      const unlockUntil = new Date(unlockInfo.unlockedUntil);
-      if (unlockUntil > new Date()) {
-        isLocked = false;
-      }
+    let isLocked = dateStr < format(subDays(today, 3), 'yyyy-MM-dd') || isBeforeBound;
+    if (hasValidUnlock) {
+      isLocked = false;
     }
-    const isMissingReport = isPastOrToday && !hasReport && !outsideCurrentMonth;
+    const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+    const isRequested = selectedTask?.[requestsField] && selectedTask[requestsField][dateStr];
+    const isMissingReport = (isPastOrToday || isBeforeBound) && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
     if (hasReport && !outsideCurrentMonth) {
       badgeColor = '#10b981'; // Green: Data exists
     } else if (isMissingReport) {
-      // If missing: RED if locked (> 3 days), YELLOW if editable (within 3 days)
-      badgeColor = isLocked ? '#ef4444' : '#f59e0b';
+      if (isRequested) {
+        badgeColor = '#a855f7'; // Purple: Pending unlock request
+      } else {
+        // If missing: RED if locked (> 3 days), YELLOW if editable (within 3 days)
+        badgeColor = isLocked ? '#ef4444' : '#f59e0b';
+      }
     }
 
     return (
@@ -855,8 +897,10 @@ export default function DailyReportPage() {
 
     // Check if it's unlocked
     const dateStr = format(reportDate, 'yyyy-MM-dd');
-    if (selectedTask?.unlockedDates && selectedTask.unlockedDates[dateStr]) {
-      const unlockInfo = selectedTask.unlockedDates[dateStr];
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = selectedTask?.[unlockedDatesField];
+    if (unlockedDates && unlockedDates[dateStr]) {
+      const unlockInfo = unlockedDates[dateStr];
       const unlockUntil = new Date(unlockInfo.unlockedUntil);
       if (unlockUntil > new Date()) {
         return false; // It's unlocked, so it's not locked
@@ -1163,16 +1207,14 @@ export default function DailyReportPage() {
         (t) =>
           !t.isPastRevision &&
           (t.dailyProgress || 0) < 100 &&
-          (t.supportDailyProgress || 0) < 100 &&
           t.status !== 'completed'
       );
     } else if (activeTab === 'finish') {
-      // Show finished current revision (either site or support 100%) OR status is completed OR any past revision
+      // Show finished current revision (site 100%) OR status is completed OR any past revision
       filtered = filtered.filter(
         (t) =>
           t.isPastRevision ||
           (t.dailyProgress || 0) >= 100 ||
-          (t.supportDailyProgress || 0) >= 100 ||
           t.status === 'completed'
       );
     }
@@ -1200,6 +1242,40 @@ export default function DailyReportPage() {
     setSitePhotoPreviews([]);
     setLaborPhotos(INITIAL_SHIFT_PHOTOS);
     setLaborPhotoPreviews(INITIAL_SHIFT_PREVIEWS);
+  };
+
+  const handleRequestUnlockSubmit = async () => {
+    if (!selectedTask || !unlockRequestDate) return;
+    const dateStr = format(unlockRequestDate, 'yyyy-MM-dd');
+    setIsSubmittingUnlockRequest(true);
+    try {
+      await taskService.requestTaskReportUnlock(selectedTask.id, dateStr, isActingAsSupport);
+      toast.success(`ส่งคำขอปลดล็อคสิทธิ์สำหรับวันที่ ${dateStr} เรียบร้อยแล้ว`);
+      
+      setSelectedTask((prev: any) => {
+        if (!prev) return prev;
+        const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+        const unlockRequests = prev[requestsField] || {};
+        return {
+          ...prev,
+          [requestsField]: {
+            ...unlockRequests,
+            [dateStr]: {
+              requestedAt: new Date(),
+              requestedBy: user?.id || ''
+            }
+          }
+        };
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    } catch (e: any) {
+      console.error('[DailyReport] Request unlock error:', e);
+      toast.error(e?.message || 'ไม่สามารถส่งคำขอปลดล็อคสิทธิ์ได้');
+    } finally {
+      setIsSubmittingUnlockRequest(false);
+      setIsUnlockRequestDialogOpen(false);
+    }
   };
 
   const handleWorkerToggle = (worker: DailyContractor, isSelected: boolean) => {
@@ -1677,6 +1753,9 @@ export default function DailyReportPage() {
   };
 
   const compressImage = (file: File): Promise<File> => {
+    if (!file.type.startsWith('image/')) {
+      return Promise.resolve(file);
+    }
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -1772,6 +1851,26 @@ export default function DailyReportPage() {
         variant: 'warning',
       });
       return;
+    }
+
+    if (!isActingAsSupport) {
+      if (progress === '') {
+        enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
+        return;
+      }
+      const numProgress = Number(progress);
+      if (numProgress <= previousProgress) {
+        enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
+          variant: 'error',
+        });
+        return;
+      }
+      if (nextProgress !== null && numProgress >= nextProgress) {
+        enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
+          variant: 'error',
+        });
+        return;
+      }
     }
 
     showLoading();
@@ -2293,18 +2392,18 @@ export default function DailyReportPage() {
                                   today.setHours(0, 0, 0, 0);
                                   const isPast =
                                     isBefore(newValue, today) && !isSameDay(newValue, today);
-                                  const isLocked = isPast && isBefore(newValue, subDays(today, 3));
+                                  const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
                                   const dateStr = format(newValue, 'yyyy-MM-dd');
+                                  const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
+                                  const isLocked = (isPast && isBefore(newValue, subDays(today, 3))) || isBeforeBound;
                                   const hasReport = reportDates.includes(dateStr);
-                                  const isMissingReport = isPast && !hasReport;
+                                  const isMissingReport = (isPast || isBeforeBound) && !hasReport;
 
-                                  // Check if this date has been unlocked
                                   let hasValidUnlock = false;
-                                  if (
-                                    selectedTask?.unlockedDates &&
-                                    selectedTask.unlockedDates[dateStr]
-                                  ) {
-                                    const unlockInfo = selectedTask.unlockedDates[dateStr];
+                                  const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+                                  const unlockedDates = selectedTask?.[unlockedDatesField];
+                                  if (unlockedDates && unlockedDates[dateStr]) {
+                                    const unlockInfo = unlockedDates[dateStr];
                                     const unlockUntil = new Date(unlockInfo.unlockedUntil);
                                     if (unlockUntil > new Date()) {
                                       hasValidUnlock = true;
@@ -2312,15 +2411,14 @@ export default function DailyReportPage() {
                                   }
 
                                   if (isMissingReport && isLocked && !hasValidUnlock) {
-                                    enqueueSnackbar('ติดต่อหัวหน้างานเพื่อปลดล็อคสิทธิ์', {
-                                      variant: 'error',
-                                    });
+                                    setUnlockRequestDate(newValue);
+                                    setIsUnlockRequestDialogOpen(true);
                                     return;
                                   }
                                 }
                                 setReportDate(newValue || new Date());
                               }}
-                              minDate={effectiveBoundaryDate || undefined}
+                              minDate={calendarMinDate}
                               maxDate={completionDateStr ? new Date(completionDateStr) : new Date()}
                               slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
                               slotProps={{
@@ -2671,11 +2769,11 @@ export default function DailyReportPage() {
                                       InputProps={{ endAdornment: '%' }}
                                       error={
                                         progress !== '' &&
-                                        (Number(progress) < previousProgress ||
+                                        (Number(progress) <= previousProgress ||
                                           (nextProgress !== null && Number(progress) >= nextProgress))
                                       }
                                       helperText={
-                                        progress !== '' && Number(progress) < previousProgress
+                                        progress !== '' && Number(progress) <= previousProgress
                                           ? `ต้องมากกว่าค่าล่าสุด (${previousProgress}%)`
                                           : progress !== '' && nextProgress !== null && Number(progress) >= nextProgress
                                           ? `ต้องน้อยกว่ารายงานถัดไป (${nextProgress}%)`
@@ -3192,6 +3290,83 @@ export default function DailyReportPage() {
                 ยืนยันรายการ
               </Button>
             </DialogActions>
+          </Dialog>
+
+          <Dialog
+            open={isUnlockRequestDialogOpen}
+            onClose={() => setIsUnlockRequestDialogOpen(false)}
+            maxWidth="xs"
+            fullWidth
+            PaperProps={{
+              sx: { borderRadius: '12px', p: 1 }
+            }}
+          >
+            {unlockRequestDate && (() => {
+              const reqDateStr = format(unlockRequestDate, 'yyyy-MM-dd');
+              const isAlreadyRequested = selectedTask?.unlockRequests && selectedTask.unlockRequests[reqDateStr];
+              
+              if (isAlreadyRequested) {
+                return (
+                  <>
+                    <DialogTitle sx={{ fontWeight: 800, textAlign: 'center', pb: 1, color: '#a855f7' }}>
+                      คำขออยู่ระหว่างรออนุมัติ
+                    </DialogTitle>
+                    <DialogContent sx={{ textAlign: 'center', py: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        คำขอปลดล็อคสิทธิ์ลงเวลาทำงานย้อนหลังสำหรับวันที่ <strong>{reqDateStr}</strong> ได้ถูกส่งไปยังหัวหน้างานของคุณแล้ว กรุณารอหัวหน้างานอนุมัติ
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
+                      <Button
+                        onClick={() => setIsUnlockRequestDialogOpen(false)}
+                        variant="outlined"
+                        sx={{ borderRadius: '8px', px: 4, fontWeight: 700 }}
+                      >
+                        ตกลง
+                      </Button>
+                    </DialogActions>
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  <DialogTitle sx={{ fontWeight: 800, textAlign: 'center', pb: 1 }}>
+                    ขอปลดล็อคสิทธิ์ลงข้อมูลย้อนหลัง
+                  </DialogTitle>
+                  <DialogContent sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      คุณต้องการส่งคำขอปลดล็อคสิทธิ์เพื่อลงรายงานย้อนหลังสำหรับวันที่ <strong>{reqDateStr}</strong> ไปยังหัวหน้างานของคุณใช่หรือไม่?
+                    </Typography>
+                  </DialogContent>
+                  <DialogActions sx={{ justifyContent: 'space-around', pb: 2, px: 2 }}>
+                    <Button
+                      onClick={() => setIsUnlockRequestDialogOpen(false)}
+                      variant="outlined"
+                      color="inherit"
+                      disabled={isSubmittingUnlockRequest}
+                      sx={{ borderRadius: '8px', px: 3, fontWeight: 700 }}
+                    >
+                      ยกเลิก
+                    </Button>
+                    <Button
+                      onClick={handleRequestUnlockSubmit}
+                      variant="contained"
+                      disabled={isSubmittingUnlockRequest}
+                      sx={{
+                        borderRadius: '8px',
+                        px: 3,
+                        fontWeight: 700,
+                        bgcolor: '#a855f7',
+                        '&:hover': { bgcolor: '#8b5cf6' }
+                      }}
+                    >
+                      {isSubmittingUnlockRequest ? <CircularProgress size={20} color="inherit" /> : 'ขอลงข้อมูลย้อนหลัง'}
+                    </Button>
+                  </DialogActions>
+                </>
+              );
+            })()}
           </Dialog>
 
           <Dialog
@@ -3848,7 +4023,7 @@ function WorkerTableRow({
                       <input
                         type="file"
                         hidden
-                        accept="image/*"
+                        accept="image/*,application/pdf"
                         onChange={(e) => onUploadCert(e.target.files?.[0] || null)}
                       />
                     </IconButton>

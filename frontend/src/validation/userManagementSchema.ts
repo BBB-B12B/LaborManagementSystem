@@ -12,7 +12,6 @@ import {
   username,
   strongPassword,
   requiredString,
-  optionalDate,
   departmentEnum,
   roleEnum,
   baseBoolean,
@@ -61,11 +60,7 @@ export const userCreateSchema = z.object({
   // Accessible Projects (multi-select, array of project IDs)
   projectLocationIds: baseArray(z.string()).default([]),
 
-  // Birth Date (optional)
-  birthDate: optionalDate,
 
-  // Start Date (optional)
-  startDate: optionalDate,
 
   // Active status
   isActive: baseBoolean.default(true),
@@ -108,11 +103,7 @@ export const userUpdateSchema = z.object({
   // Accessible Projects (multi-select, array of project IDs)
   projectLocationIds: baseArray(z.string()).default([]),
 
-  // Birth Date (optional)
-  birthDate: optionalDate,
 
-  // Start Date (optional)
-  startDate: optionalDate,
 
   // Active status
   isActive: baseBoolean.default(true),

@@ -94,8 +94,6 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
   const [unlockAnchorEl, setUnlockAnchorEl] = useState<null | HTMLElement>(null);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [unlockedUntil, setUnlockedUntil] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<Record<string, DailySummary>>({});
   const [reportDates, setReportDates] = useState<string[]>([]);
@@ -107,8 +105,19 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
   const isActingAsSupport = useMemo(() => {
     if (!task || !user) return false;
+    if (!task.isSupportRequest) return false;
+    if (user.department === 'WH') return true;
+
+    const uEmpId = String(user.employeeId || user.id || '').toLowerCase().trim();
+    const uId = String(user.id || '').toLowerCase().trim();
+    const isSupportAssignee = task.supportAssignees?.some((a: any) => {
+      const aEmpId = String(a.employeeId || a.id || '').toLowerCase().trim();
+      return aEmpId === uEmpId || aEmpId === uId;
+    });
+    if (isSupportAssignee) return true;
+
     const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
-    return isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
+    return isViewingCrossProject && task.isPickedUpBySupport;
   }, [task, user]);
 
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -280,15 +289,25 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
     if (isConfirmed) {
       try {
-        await taskService.unlockTaskReport(task.id, dateStr, days);
+        await taskService.unlockTaskReport(task.id, dateStr, days, isActingAsSupport);
         enqueueSnackbar('ปลดล็อคสิทธิ์เรียบร้อยแล้ว', { variant: 'success' });
         
-        setIsUnlocked(true);
+        const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+        const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+
+        if (!task[unlockedDatesField]) task[unlockedDatesField] = {};
         const until = new Date();
         until.setDate(until.getDate() + days);
-        setUnlockedUntil(until);
+        task[unlockedDatesField][dateStr] = { unlockedUntil: until, unlockedBy: user?.id || '' };
         
-        // Invalidate tasks query to update unlockedDates in other components like index.tsx
+        if (task[requestsField] && task[requestsField][dateStr]) {
+          delete task[requestsField][dateStr];
+        }
+
+        if (onTaskUpdated) {
+          onTaskUpdated();
+        }
+        
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
       } catch (error: any) {
         enqueueSnackbar(error.message || 'ไม่สามารถปลดล็อคได้', { variant: 'error' });
@@ -317,6 +336,77 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
   const closedWageDate = startOfDay(subDays(today, 6));
 
+  const boundaryDate = useMemo(() => {
+    if (!task) return null;
+
+    if (isActingAsSupport && task.supportCreatedAt) {
+      const d = new Date(task.supportCreatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    if (
+      !isActingAsSupport &&
+      task.revisionCreatedAt &&
+      task.revisionId &&
+      task.revisionId !== 'rev00'
+    ) {
+      const d = new Date(task.revisionCreatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    if (task.createdAt) {
+      const d = new Date(task.createdAt);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    return null;
+  }, [task, isActingAsSupport]);
+
+  const earliestReportDateStr = useMemo(() => {
+    if (!reportDates || reportDates.length === 0) return null;
+    const sorted = [...reportDates].sort();
+    return sorted[0];
+  }, [reportDates]);
+
+  const effectiveBoundaryDate = useMemo(() => {
+    const dates: Date[] = [];
+
+    if (isActingAsSupport && task?.supportCreatedAt) {
+      dates.push(new Date(task.supportCreatedAt));
+    } else if (!isActingAsSupport && task?.revisionCreatedAt) {
+      dates.push(new Date(task.revisionCreatedAt));
+    } else if (boundaryDate) {
+      dates.push(boundaryDate);
+    }
+
+    if (earliestReportDateStr) {
+      dates.push(new Date(earliestReportDateStr));
+    }
+
+    if (dates.length === 0) return subDays(new Date(), 30);
+
+    const minTimestamp = Math.min(...dates.map((d) => d.getTime()));
+    const d = new Date(minTimestamp);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [task, isActingAsSupport, boundaryDate, earliestReportDateStr]);
+
+  const completionDateStr = useMemo(() => {
+    const reportsToSearch = Object.entries(reportData).map(([dateStr, summary]) => ({
+      dateStr,
+      progress: summary.totalProgress,
+    }));
+
+    if (reportsToSearch.length === 0 || !task) return null;
+
+    const completedReports = reportsToSearch.filter((r) => r.progress >= 100);
+    if (completedReports.length === 0) return null;
+
+    const dates = completedReports.map((r) => r.dateStr);
+    dates.sort();
+    return dates[dates.length - 1];
+  }, [task, reportData]);
+
   const isSelectedDateLocked = useMemo(() => {
     if (!selectedDate) return false;
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -333,17 +423,63 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
   const selectedSummary = reportData[selectedDateStr] || null;
 
+  const currentUnlockedUntil = useMemo(() => {
+    if (!task || !selectedDateStr) return null;
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = task[unlockedDatesField];
+    if (!unlockedDates) return null;
+    const data = unlockedDates[selectedDateStr];
+    if (!data || !data.unlockedUntil) return null;
+    return new Date(data.unlockedUntil);
+  }, [task, selectedDateStr, isActingAsSupport]);
+
+  const isUnlocked = useMemo(() => {
+    if (!currentUnlockedUntil) return false;
+    return isBefore(new Date(), currentUnlockedUntil);
+  }, [currentUnlockedUntil]);
+
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateStr = format(day, 'yyyy-MM-dd');
     const hasReport = reportDates.includes(dateStr);
+
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = task?.[unlockedDatesField];
+    const unlockData = unlockedDates?.[dateStr];
+    const isExplicitlyUnlocked = !!(unlockData && isBefore(new Date(), new Date(unlockData.unlockedUntil)));
+
+    // 1. Boundary Lock: Hide dots for dates before task creation / revision boundary
+    if (effectiveBoundaryDate && !hasReport && !isExplicitlyUnlocked) {
+      const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
+      if (dateStr < boundDateStr) {
+        return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
+      }
+    }
+
+    // 2. Completion Lock: Hide dots for dates after task completion
+    if (completionDateStr && !hasReport) {
+      if (dateStr > completionDateStr) {
+        return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
+      }
+    }
+
+    const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+    const isRequested = task?.[requestsField] && task[requestsField][dateStr];
     const isPast = isBefore(day, today) && !isSameDay(day, today);
-    const isLocked = isPast && isBefore(day, subDays(today, 3));
-    const isMissingReport = isPast && !hasReport && !outsideCurrentMonth;
+    
+    const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
+    const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
+
+    const isLocked = (isPast && isBefore(day, subDays(today, 3)) && !isExplicitlyUnlocked) || (isBeforeBound && !isExplicitlyUnlocked);
+    const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
     if (isMissingReport) {
-      badgeColor = isLocked ? 'error.main' : 'warning.main';
+      if (isRequested) {
+        badgeColor = '#a855f7'; // Purple dot for supervisor to indicate requested unlock
+      } else {
+        badgeColor = isLocked ? 'error.main' : 'warning.main';
+      }
     }
 
     return (
@@ -409,7 +545,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
               </Box>
             )}
 
-            {!isActingAsSupport && task?.status === 'completed' && (
+            {task?.status === 'completed' && (
               <Box sx={{ bgcolor: '#dcfce7', color: '#166534', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #bbf7d0' }}>
                 <CheckCircleIcon sx={{ fontSize: 18, mr: 1 }} />
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -463,17 +599,22 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
                     Daily Report Log
                   </Typography>
-                  <Button
-                    variant={isUnlocked ? "outlined" : "contained"}
-                    color={isUnlocked ? "primary" : "warning"}
-                    size="small"
-                    startIcon={isUnlocked ? <LockOpenIcon /> : <LockIcon />}
-                    onClick={handleUnlockClick}
-                    disabled={isWagePeriodClosed || !isSelectedDateLocked}
-                    sx={{ borderRadius: '999px', textTransform: 'none', fontWeight: 700, boxShadow: 'none', px: 2 }}
-                  >
-                    {isUnlocked ? 'ขยายเวลา' : 'ปลดล็อคสิทธิ์'}
-                  </Button>
+                  {(() => {
+                    const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+                    const hasRequest = task?.[requestsField] && task[requestsField][selectedDateStr];
+                    return hasRequest ? (
+                      <Button
+                        variant={isUnlocked ? "outlined" : "contained"}
+                        color={isUnlocked ? "primary" : "warning"}
+                        size="small"
+                        startIcon={isUnlocked ? <LockOpenIcon /> : <LockIcon />}
+                        onClick={handleUnlockClick}
+                        sx={{ borderRadius: '999px', textTransform: 'none', fontWeight: 700, boxShadow: 'none', px: 2 }}
+                      >
+                        {isUnlocked ? 'ขยายเวลา' : 'ปลดล็อคสิทธิ์'}
+                      </Button>
+                    ) : null;
+                  })()}
                 </Box>
 
                 <Menu
@@ -485,8 +626,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   <MenuItem onClick={() => handleUnlock(1)}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 1 วัน</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => handleUnlock(7)}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 7 วัน</Typography>
+                  <MenuItem onClick={() => handleUnlock(3)}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 3 วัน</Typography>
                   </MenuItem>
                 </Menu>
 

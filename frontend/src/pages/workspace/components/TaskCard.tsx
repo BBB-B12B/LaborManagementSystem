@@ -36,11 +36,26 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
-  // If the task's projectId is NOT in the user's assigned projects, they are viewing it cross-project
-  const isViewingCrossProject = user && user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
-  
-  // A user is acting as support if they are viewing a cross-project task AND it's a support request they picked up
-  const isActingAsSupport = isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
+  // A user is acting as support if:
+  // 1. Their department is 'WH' (Support) AND it is a support request
+  // 2. They are in the supportAssignees list
+  // 3. Or they are viewing a cross-project support request that has been picked up
+  const isActingAsSupport = (() => {
+    if (!user) return false;
+    if (!task.isSupportRequest) return false;
+    if (user.department === 'WH') return true;
+
+    const uEmpId = String(user.employeeId || user.id || '').toLowerCase().trim();
+    const uId = String(user.id || '').toLowerCase().trim();
+    const isSupportAssignee = task.supportAssignees?.some((a: any) => {
+      const aEmpId = String(a.employeeId || a.id || '').toLowerCase().trim();
+      return aEmpId === uEmpId || aEmpId === uId;
+    });
+    if (isSupportAssignee) return true;
+
+    const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+    return isViewingCrossProject && task.isPickedUpBySupport;
+  })();
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -217,7 +232,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563' }}>
             Progress
           </Typography>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: task.dailyProgress >= 100 ? '#059669' : '#1c1e2b' }}>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: (task.dailyProgress || 0) >= 100 ? '#059669' : '#1c1e2b' }}>
             {task.dailyProgress || 0}%
           </Typography>
         </Stack>
@@ -230,7 +245,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
             backgroundColor: '#f1f3f6',
             '& .MuiLinearProgress-bar': {
               borderRadius: 3,
-              background: task.dailyProgress >= 100 
+              background: (task.dailyProgress || 0) >= 100 
                 ? 'linear-gradient(90deg, #059669, #10b981)' 
                 : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
             }

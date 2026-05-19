@@ -181,16 +181,39 @@ router.post('/:id/unlock-report', async (req: Request, res: Response, next: Next
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
-    const { dateStr, daysToUnlock } = req.body;
+    const { dateStr, daysToUnlock, isSupportReport } = req.body;
     if (!dateStr || !daysToUnlock) {
       throw new AppError('dateStr and daysToUnlock are required', 400);
     }
 
-    await taskService.unlockDailyReport(id, dateStr, daysToUnlock, userId);
+    await taskService.unlockDailyReport(id, dateStr, daysToUnlock, userId, isSupportReport === true);
 
     res.status(200).json({
       success: true,
       message: 'Daily report unlocked successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/request-unlock
+router.post('/:id/request-unlock', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const { dateStr, isSupportReport } = req.body;
+    if (!dateStr) {
+      throw new AppError('dateStr is required', 400);
+    }
+
+    await taskService.requestDailyReportUnlock(id, dateStr, userId, isSupportReport === true);
+
+    res.status(200).json({
+      success: true,
+      message: 'Daily report unlock requested successfully',
     });
   } catch (error) {
     next(error);

@@ -22,7 +22,6 @@ import {
   FormControlLabel,
   Switch,
 } from '@mui/material';
-import { DatePicker } from '@/components/forms/DatePicker';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 import {
@@ -291,48 +290,7 @@ export function UserForm({
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-              วันที่
-            </Typography>
-          </Grid>
 
-          <Grid item xs={12} md={6}>
-            <Controller
-              name='birthDate'
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label='วันเกิด'
-                  value={field.value ? new Date(field.value as string | Date) : null}
-                  onChange={(date) => field.onChange(date)}
-                  disabled={isLoading || isSubmitting}
-                  maxDate={new Date()}
-                  error={!!errors.birthDate}
-                  helperText={errors.birthDate?.message}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Controller
-              name='startDate'
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label='วันที่เริ่มงาน *'
-                  value={field.value ? new Date(field.value as string | Date) : null}
-                  onChange={(date) => field.onChange(date)}
-                  disabled={isLoading || isSubmitting}
-                  maxDate={new Date()}
-                  error={!!errors.startDate}
-                  helperText={errors.startDate?.message}
-                  required
-                />
-              )}
-            />
-          </Grid>
 
           <Grid item xs={12}>
             <Typography variant='subtitle1' sx={{ mt: 1, mb: 1, fontWeight: 600 }}>

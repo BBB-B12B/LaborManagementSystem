@@ -40,7 +40,7 @@ export class TaskService {
       let isNewWo = false;
       let woNextRun = 1;
       const currentYear = new Date().getFullYear();
-      const woCounterId = `wo_counter_${projectCode}_${currentYear}`;
+      const woCounterId = `wo_counter_${projectCode}_${input.workOrderCode || 'GEN'}_${currentYear}`;
       const woCounterRef = afterSaleDb.collection('system_counters').doc(woCounterId);
 
       if (!woQuery.empty) {
@@ -51,7 +51,7 @@ export class TaskService {
         if (woCounterDoc.exists) {
           woNextRun = (woCounterDoc.data()?.count || 0) + 1;
         }
-        woId = `${projectCode}-${currentYear}-${woNextRun.toString().padStart(4, '0')}-${input.workOrderCode || 'GEN'}`;
+        woId = `${projectCode}-${currentYear}-${input.workOrderCode || 'GEN'}-${woNextRun.toString().padStart(4, '0')}`;
       }
       const workOrderRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId);
 
@@ -652,35 +652,39 @@ export class TaskService {
     const existingReportDoc = await dailyReportRef.get();
     const isUpdate = existingReportDoc.exists;
 
-    // 3-day retroactive validation (Only for NEW reports)
     const nowForValidation = new Date();
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     threeDaysAgo.setHours(0, 0, 0, 0);
 
+    // Check if the date is explicitly unlocked
+    const unlockedDatesField = isSupportReport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = taskDataForRev[unlockedDatesField] || {};
+    const unlockInfo = unlockedDates[dateStr];
+    const isUnlocked = unlockInfo && (
+      (unlockInfo.unlockedUntil.toDate ? unlockInfo.unlockedUntil.toDate() : new Date(unlockInfo.unlockedUntil)) >= nowForValidation
+    );
+
     if (!isUpdate && reportDate < threeDaysAgo) {
-      const unlockedDates = taskDataForRev.unlockedDates || {};
-      const unlockInfo = unlockedDates[dateStr];
-      if (!unlockInfo || (unlockInfo.unlockedUntil.toDate ? unlockInfo.unlockedUntil.toDate() : new Date(unlockInfo.unlockedUntil)) < nowForValidation) {
+      if (!isUnlocked) {
          throw new AppError(`Cannot submit report for date older than 3 days unless unlocked (date: ${dateStr})`, 403);
       }
     }
 
     // [NEW] Revision Timeline Boundary Validation
-    // Users cannot submit reports before the current revision/support was created (rejected/joined)
-    if (isSupportReport && taskDataForRev.supportCreatedAt) {
-      const supportCreatedAt = taskDataForRev.supportCreatedAt.toDate ? taskDataForRev.supportCreatedAt.toDate() : new Date(taskDataForRev.supportCreatedAt);
-      const boundaryDate = new Date(supportCreatedAt);
-      boundaryDate.setHours(0, 0, 0, 0); // Start of the day
-      if (reportDate < boundaryDate) {
-        throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่ทีม Support เข้าร่วมงานได้`, 400);
-      }
-    } else if (!isSupportReport && taskDataForRev.revisionCreatedAt && currentRev !== 'rev00') {
-      const revisionCreatedAt = taskDataForRev.revisionCreatedAt.toDate ? taskDataForRev.revisionCreatedAt.toDate() : new Date(taskDataForRev.revisionCreatedAt);
-      const boundaryDate = new Date(revisionCreatedAt);
-      boundaryDate.setHours(0, 0, 0, 0); // Start of the day
-      if (reportDate < boundaryDate) {
-        throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่งานถูก Reject ได้`, 400);
+    // Users cannot submit reports before the current revision was created (rejected/joined)
+    if (!isUnlocked) {
+      if (taskDataForRev.revisionCreatedAt && currentRev !== 'rev00') {
+        const revisionCreatedAt = taskDataForRev.revisionCreatedAt.toDate ? taskDataForRev.revisionCreatedAt.toDate() : new Date(taskDataForRev.revisionCreatedAt);
+        const boundaryDate = new Date(revisionCreatedAt);
+        boundaryDate.setHours(0, 0, 0, 0); // Start of the day
+        if (reportDate < boundaryDate) {
+          if (isSupportReport) {
+            throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่ปรับปรุงงานนี้ได้`, 400);
+          } else {
+            throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่งานถูก Reject ได้`, 400);
+          }
+        }
       }
     }
 
@@ -998,7 +1002,7 @@ export class TaskService {
   /**
    * Unlock daily report for a specific date
    */
-  async unlockDailyReport(id: string, dateStr: string, days: number, updatedBy: string): Promise<void> {
+  async unlockDailyReport(id: string, dateStr: string, days: number, updatedBy: string, isSupportReport: boolean = false): Promise<void> {
     let taskRef: FirebaseFirestore.DocumentReference;
     if (id.includes('__')) {
       const [woId, catId, taskId] = id.split('__');
@@ -1016,16 +1020,56 @@ export class TaskService {
     if (!taskDoc.exists) throw new AppError('Task not found', 404);
     
     const taskData = taskDoc.data();
-    const unlockedDates = taskData?.unlockedDates || {};
+    const unlockedDatesField = isSupportReport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockRequestsField = isSupportReport ? 'supportUnlockRequests' : 'unlockRequests';
+
+    const unlockedDates = taskData?.[unlockedDatesField] || {};
     unlockedDates[dateStr] = {
       unlockedUntil: until,
       unlockedBy: updatedBy
     };
 
+    const unlockRequests = taskData?.[unlockRequestsField] || {};
+    if (unlockRequests[dateStr]) {
+      delete unlockRequests[dateStr];
+    }
+
     await taskRef.update({
-      unlockedDates,
+      [unlockedDatesField]: unlockedDates,
+      [unlockRequestsField]: unlockRequests,
       updatedAt: new Date(),
       updatedBy
+    });
+  }
+
+  /**
+   * Request daily report unlock for a specific date
+   */
+  async requestDailyReportUnlock(id: string, dateStr: string, requestedBy: string, isSupportReport: boolean = false): Promise<void> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const [woId, catId, taskId] = id.split('__');
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Task not found', 404);
+      taskRef = querySnapshot.docs[0].ref;
+    }
+
+    const taskDoc = await taskRef.get();
+    if (!taskDoc.exists) throw new AppError('Task not found', 404);
+
+    const taskData = taskDoc.data();
+    const unlockRequestsField = isSupportReport ? 'supportUnlockRequests' : 'unlockRequests';
+    const unlockRequests = taskData?.[unlockRequestsField] || {};
+    unlockRequests[dateStr] = {
+      requestedAt: new Date(),
+      requestedBy
+    };
+
+    await taskRef.update({
+      [unlockRequestsField]: unlockRequests,
+      updatedAt: new Date()
     });
   }
 }

@@ -195,7 +195,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             const userProjectId = user.projectLocationIds[0];
             // Match by ID or Project Code (to support both legacy and new ID formats)
             const matchedProject = projectsData.find(p => 
-              p.id === userProjectId || p.projectCode === userProjectId
+              p.id === userProjectId || p.code === userProjectId
             );
 
             if (matchedProject) {
@@ -559,6 +559,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         <Autocomplete
                           sx={{ flex: 1 }}
                           freeSolo
+                          forcePopupIcon={true}
                           options={categories.map(c => c.name)}
                           onChange={(_, newValue) => field.onChange(newValue || '')}
                           onInputChange={(_, newValue) => field.onChange(newValue)}

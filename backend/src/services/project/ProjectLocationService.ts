@@ -42,6 +42,7 @@ class ProjectLocationService extends BaseCrudService<ProjectLocation> {
       const now = new Date();
       const projectData: Omit<ProjectLocation, 'id'> = {
         code: input.code.toUpperCase(),
+        projectCode: input.projectCode || input.code.toUpperCase(),
         projectName: input.projectName, // Updated field
         location: input.location,
         department: input.department.trim(),
@@ -173,8 +174,8 @@ class ProjectLocationService extends BaseCrudService<ProjectLocation> {
         },
         {
           field: 'status',
-          operator: '==',
-          value: 'active',
+          operator: 'in',
+          value: ['active', 'กำลังดำเนินการอยู่'],
         },
       ]);
     } catch (error: any) {

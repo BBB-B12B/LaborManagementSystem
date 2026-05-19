@@ -37,10 +37,15 @@ export interface Task {
   supportDailyProgress?: number;
   supportAssignees?: TaskAssignee[];
   unlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
+  supportUnlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
   createdAt: string;
   updatedAt: string;
   historicalAssigneeIds?: string[];
   supportedRevisionIds?: string[];
+  revisionCreatedAt?: string;
+  supportCreatedAt?: string;
+  unlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
+  supportUnlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
 }
 
 export interface CreateTaskInput {
@@ -124,7 +129,14 @@ export const taskService = {
   /**
    * Unlock daily report access for past dates
    */
-  unlockTaskReport: async (id: string, dateStr: string, daysToUnlock: number): Promise<void> => {
-    await api.post(`/tasks/${id}/unlock-report`, { dateStr, daysToUnlock });
+  unlockTaskReport: async (id: string, dateStr: string, daysToUnlock: number, isSupportReport?: boolean): Promise<void> => {
+    await api.post(`/tasks/${id}/unlock-report`, { dateStr, daysToUnlock, isSupportReport });
+  },
+
+  /**
+   * Request daily report unlock for a specific past date
+   */
+  requestTaskReportUnlock: async (id: string, dateStr: string, isSupportReport?: boolean): Promise<void> => {
+    await api.post(`/tasks/${id}/request-unlock`, { dateStr, isSupportReport });
   },
 };
