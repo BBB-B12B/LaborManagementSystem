@@ -527,13 +527,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       .filter((m: number | null): m is number => m !== null)
       .sort((a: number, b: number) => a - b);
 
-    // Grouping punches
-    const otMorningPunches = scanMinsList.filter((m: number) => m < 480);
-    const morningPunches = scanMinsList.filter((m: number) => m >= 480 && m < 720);
-    const noonPunches = scanMinsList.filter((m: number) => m >= 720 && m < 780);
-    const afternoonPunches = scanMinsList.filter((m: number) => m >= 780 && m <= 1020);
-    const otEveningPunches = scanMinsList.filter((m: number) => m > 1020);
-
     // Get photo helper
     const photoMap = row.dailyReportPhotos;
     const getPhoto = (groupData: any, type: 'in' | 'out' | number): string | null => {
@@ -565,41 +558,64 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       return getFullImageUrl(url);
     };
 
-    // 1. OT Morning
     const otMorningExpectedStart = toMins(row.shiftTimes?.otMorning?.split('-')[0]) ?? 360; // 06:00
     const otMorningExpectedEnd = toMins(row.shiftTimes?.otMorning?.split('-')[1]) ?? 480; // 08:00
-    const otMorningActual = resolveSinglePunch(otMorningPunches, otMorningExpectedStart, otMorningExpectedEnd);
-    const isOtMorningActive = (row.timesheetOtMorning ?? 0) > 0 || (row.approvedOtMorning ?? 0) > 0 || !!row.shiftTimes?.otMorning || otMorningPunches.length > 0;
+    const isOtMorningActive = !!row.shiftTimes?.otMorning;
 
-    // 2. เช้า
-    const morningExpectedStart = 480; // 08:00
-    const morningExpectedEnd = 720; // 12:00
-    const morningActual = resolveSinglePunch(morningPunches, morningExpectedStart, morningExpectedEnd);
-    const isMorningActive = true; // Always show regular shift
+    const leaveEntries = row.leaveEntries || [];
 
-    // 3. บ่าย
-    const afternoonExpectedStart = 780; // 13:00
-    const afternoonExpectedEnd = 1020; // 17:00
-    const afternoonActual = resolveSinglePunch(afternoonPunches, afternoonExpectedStart, afternoonExpectedEnd);
-    const isAfternoonActive = true; // Always show regular shift
+    // Helper: parse "HH:MM-HH:MM" from timeRange — same format as shiftTimes.day
+    const parseLeaveRange = (entry: any): { start: number; end: number } | null => {
+      const range: string | undefined = entry.timeRange;
+      if (!range) return null;
+      const parts = range.split('-').map((s: string) => s.trim());
+      if (parts.length < 2) return null;
+      const s = toMins(parts[0]);
+      const e = toMins(parts[1]);
+      if (s === null || e === null) return null;
+      return { start: s, end: e };
+    };
 
-    // 4. OT Noon (OT เที่ยง)
+    let hasMorningLeave   = false;
+    let hasAfternoonLeave = false;
+    for (const entry of leaveEntries) {
+      const range = parseLeaveRange(entry);
+      if (!range) continue;
+      if (range.start < 13 * 60) hasMorningLeave   = true;
+      if (range.end   > 12 * 60) hasAfternoonLeave = true;
+    }
+
+    const dayShiftStart = toMins(row.shiftTimes?.day?.split('-')[0]) ?? 480; // 08:00
+    const dayShiftEnd   = toMins(row.shiftTimes?.day?.split('-')[1]) ?? 1020; // 17:00
+
+    let actualDayShiftEnd = dayShiftEnd;
+    if (hasAfternoonLeave && dayShiftEnd <= 12 * 60) {
+      actualDayShiftEnd = 1020; // 17:00
+    }
+
+    let actualDayShiftStart = dayShiftStart;
+    if (hasMorningLeave && dayShiftStart >= 13 * 60) {
+      actualDayShiftStart = 480; // 08:00
+    }
+
+    const isMorningActive = (row.shiftTimes?.day ? actualDayShiftStart < 13 * 60 : (row.dailyReportHours ?? 0) > 0) || hasMorningLeave;
+    const isAfternoonActive = (row.shiftTimes?.day ? actualDayShiftEnd > 12 * 60 : (row.dailyReportHours ?? 0) > 4) || hasAfternoonLeave;
+
+    const morningExpectedEnd = Math.min(actualDayShiftEnd, 12 * 60);
+    const afternoonExpectedStart = Math.max(actualDayShiftStart, 13 * 60);
+
     const otNoonExpectedStart = toMins(row.shiftTimes?.otNoon?.split('-')[0]) ?? 720; // 12:00
     const otNoonExpectedEnd = toMins(row.shiftTimes?.otNoon?.split('-')[1]) ?? 780; // 13:00
-    const otNoonActual = resolveSinglePunch(noonPunches, otNoonExpectedStart, otNoonExpectedEnd);
-    const isOtNoonActive = (row.timesheetOtNoon ?? 0) > 0 || (row.approvedOtNoon ?? 0) > 0 || !!row.shiftTimes?.otNoon || noonPunches.length > 0;
+    const isOtNoonActive = !!row.shiftTimes?.otNoon;
 
-    // 5. OT Evening
-    const otEveningExpectedStart = 1020; // 17:00
-    const otEveningHours = row.timesheetOtEvening ?? row.approvedOtEvening ?? 0;
-    const otEveningExpectedEnd = toMins(row.shiftTimes?.otEvening?.split('-')[1]) ?? (otEveningHours > 0 ? (1020 + otEveningHours * 60) : 1260); // 21:00
-    const otEveningActual = resolveSinglePunch(otEveningPunches, otEveningExpectedStart, otEveningExpectedEnd);
-    const isOtEveningActive = (row.timesheetOtEvening ?? 0) > 0 || (row.approvedOtEvening ?? 0) > 0 || !!row.shiftTimes?.otEvening || otEveningPunches.length > 0;
+    const otEveningExpectedStart = toMins(row.shiftTimes?.otEvening?.split('-')[0]) ?? 1020; // 17:00
+    const otEveningExpectedEnd = toMins(row.shiftTimes?.otEvening?.split('-')[1]) ?? 1260; // 21:00
+    const isOtEveningActive = !!row.shiftTimes?.otEvening;
 
-    const segments = [];
+    const baseSegments: { key: string; name: string; subLabel: string; color: string; bgColor: string; expectedStart: number; expectedEnd: number; photoIn?: string | null; photoOut?: string | null }[] = [];
 
     if (isOtMorningActive) {
-      segments.push({
+      baseSegments.push({
         key: 'otMorning',
         name: 'OT เช้า',
         subLabel: `${fromMins(otMorningExpectedStart)}–${fromMins(otMorningExpectedEnd)}`,
@@ -607,33 +623,27 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         bgColor: '#dcfce7',
         expectedStart: otMorningExpectedStart,
         expectedEnd: otMorningExpectedEnd,
-        actualIn: otMorningActual.inVal,
-        actualOut: otMorningActual.outVal,
         photoIn: getFullUrl(getPhoto(photoMap?.otMorning, 'in') || getPhoto(photoMap?.otMorning, 0)),
         photoOut: getFullUrl(getPhoto(photoMap?.otMorning, 'out') || getPhoto(photoMap?.otMorning, 1)),
-        requestedHours: row.timesheetOtMorning || row.approvedOtMorning || 0,
       });
     }
 
     if (isMorningActive) {
-      segments.push({
+      baseSegments.push({
         key: 'morning',
         name: 'เช้า',
-        subLabel: '08:00–12:00',
+        subLabel: `${fromMins(dayShiftStart)}–${fromMins(morningExpectedEnd)}`,
         color: '#991b1b',
         bgColor: '#fee2e2',
-        expectedStart: morningExpectedStart,
+        expectedStart: dayShiftStart,
         expectedEnd: morningExpectedEnd,
-        actualIn: morningActual.inVal,
-        actualOut: morningActual.outVal,
         photoIn: getFullUrl(getPhoto(photoMap?.regular, 0)),
         photoOut: getFullUrl(getPhoto(photoMap?.regular, 1)),
-        requestedHours: 4, // 4 hours for morning
       });
     }
 
     if (isOtNoonActive) {
-      segments.push({
+      baseSegments.push({
         key: 'otNoon',
         name: 'OT เที่ยง',
         subLabel: `${fromMins(otNoonExpectedStart)}–${fromMins(otNoonExpectedEnd)}`,
@@ -641,33 +651,27 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         bgColor: '#f3e8ff',
         expectedStart: otNoonExpectedStart,
         expectedEnd: otNoonExpectedEnd,
-        actualIn: otNoonActual.inVal,
-        actualOut: otNoonActual.outVal,
         photoIn: getFullUrl(getPhoto(photoMap?.otNoon, 'in') || getPhoto(photoMap?.otNoon, 0)),
         photoOut: getFullUrl(getPhoto(photoMap?.otNoon, 'out') || getPhoto(photoMap?.otNoon, 1)),
-        requestedHours: row.timesheetOtNoon || row.approvedOtNoon || 0,
       });
     }
 
     if (isAfternoonActive) {
-      segments.push({
+      baseSegments.push({
         key: 'afternoon',
         name: 'บ่าย',
-        subLabel: '13:00–17:00',
+        subLabel: `${fromMins(afternoonExpectedStart)}–${fromMins(actualDayShiftEnd)}`,
         color: '#1e3a8a',
         bgColor: '#dbeafe',
         expectedStart: afternoonExpectedStart,
-        expectedEnd: afternoonExpectedEnd,
-        actualIn: afternoonActual.inVal,
-        actualOut: afternoonActual.outVal,
+        expectedEnd: actualDayShiftEnd,
         photoIn: getFullUrl(getPhoto(photoMap?.regular, 2)),
         photoOut: getFullUrl(getPhoto(photoMap?.regular, 3)),
-        requestedHours: 4, // 4 hours for afternoon
       });
     }
 
     if (isOtEveningActive) {
-      segments.push({
+      baseSegments.push({
         key: 'otEvening',
         name: 'OT เย็น',
         subLabel: `${fromMins(otEveningExpectedStart)}–${fromMins(otEveningExpectedEnd)}`,
@@ -675,13 +679,50 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         bgColor: '#fef9c3',
         expectedStart: otEveningExpectedStart,
         expectedEnd: otEveningExpectedEnd,
-        actualIn: otEveningActual.inVal,
-        actualOut: otEveningActual.outVal,
         photoIn: getFullUrl(getPhoto(photoMap?.otEvening, 'in') || getPhoto(photoMap?.otEvening, 0)),
         photoOut: getFullUrl(getPhoto(photoMap?.otEvening, 'out') || getPhoto(photoMap?.otEvening, 1)),
-        requestedHours: row.timesheetOtEvening || row.approvedOtEvening || 0,
       });
     }
+
+    const usedPunches = new Set<number>();
+    const segments = baseSegments.map(seg => {
+      const available = scanMinsList.filter((t: number) => !usedPunches.has(t));
+      let closestIn = -1;
+      let minInDiff = Infinity;
+      for (const t of available) {
+        if (t > seg.expectedEnd) continue;
+        const diff = Math.abs(t - seg.expectedStart);
+        if (diff < minInDiff) { minInDiff = diff; closestIn = t; }
+      }
+
+      let closestOut = -1;
+      let minOutDiff = Infinity;
+      for (const t of available) {
+        if (t <= closestIn) continue;
+        const diff = Math.abs(t - seg.expectedEnd);
+        if (diff < minOutDiff) { minOutDiff = diff; closestOut = t; }
+      }
+
+      // Only consume a punch if it's within the 90-minute threshold (same as backend)
+      // This prevents a far-away punch from being "used" by the wrong segment
+      if (closestIn !== -1 && minInDiff <= 90) usedPunches.add(closestIn);
+      // Mirror backend logic: don't mark OUT as used if it equals the next segment's expectedStart
+      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning)
+      if (closestOut !== -1 && minOutDiff <= 90) {
+        const segIdx = baseSegments.indexOf(seg);
+        const nextSeg = baseSegments[segIdx + 1];
+        const isBoundaryShared = nextSeg && closestOut === nextSeg.expectedStart;
+        if (!isBoundaryShared) {
+          usedPunches.add(closestOut);
+        }
+      }
+
+      return {
+        ...seg,
+        actualIn: (closestIn !== -1 && minInDiff <= 90) ? closestIn : null,
+        actualOut: (closestOut !== -1 && minOutDiff <= 90) ? closestOut : null,
+      };
+    });
 
     // Calculate results and remarks for each segment
     return segments.map((seg) => {
@@ -692,17 +733,35 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       let remark = '';
       let statusColor = { bg: '#f1f5f9', text: '#64748b', border: '#cbd5e1' };
 
-      if (!hasIn && !hasOut) {
+      const isThisSegmentLeave = 
+        (seg.key === 'morning' && hasMorningLeave) ||
+        (seg.key === 'afternoon' && hasAfternoonLeave);
+
+      if (isThisSegmentLeave) {
+        result = '✓ ลางาน';
+        remark = 'บันทึกการลางาน (Leave)';
+        statusColor = { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };
+      } else if (!hasIn && !hasOut) {
         result = '✗ ขาดสแกน';
-        remark = 'ไม่มีข้อมูลสแกน IN & OUT';
+        const hasPhotoIn = !!seg.photoIn;
+        const hasPhotoOut = !!seg.photoOut;
+        if (hasPhotoIn && hasPhotoOut) {
+          remark = 'ไม่มีข้อมูลสแกน IN & OUT (มีรูปยืนยันครบ)';
+        } else if (hasPhotoIn) {
+          remark = 'ไม่มีข้อมูลสแกน IN & OUT (มีรูปยืนยัน IN)';
+        } else if (hasPhotoOut) {
+          remark = 'ไม่มีข้อมูลสแกน IN & OUT (มีรูปยืนยัน OUT)';
+        } else {
+          remark = 'ไม่มีข้อมูลสแกน IN & OUT';
+        }
         statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
       } else if (hasIn && !hasOut) {
         result = '✗ ขาด OUT';
-        remark = 'ไม่มีสแกน OUT และไม่มีรูป';
+        remark = seg.photoOut ? 'ไม่มีสแกน OUT (มีรูปยืนยัน)' : 'ไม่มีสแกน OUT และไม่มีรูป';
         statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
       } else if (!hasIn && hasOut) {
         result = '✗ ขาด IN';
-        remark = 'ไม่มีสแกน IN และไม่มีรูป';
+        remark = seg.photoIn ? 'ไม่มีสแกน IN (มีรูปยืนยัน)' : 'ไม่มีสแกน IN และไม่มีรูป';
         statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
       } else {
         // Both IN & OUT exist

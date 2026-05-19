@@ -1030,25 +1030,91 @@ class ScanDataService extends BaseCrudService<ScanData> {
         throw new AppError('ไม่พบข้อมูล Daily Report ใน Aftersale System สำหรับวันนี้', 404);
       }
 
-      const punches: string[] = [];
-      if (timesheet.shiftTimes) {
-        const extractPunches = (timeStr?: string) => {
-          if (!timeStr) return;
-          const parts = timeStr.split('-').map(s => s.trim());
-          if (parts.length === 2 && parts[0] && parts[1]) {
-            punches.push(parts[0], parts[1]);
-          }
-        };
-        // Guard: ดึงเวลาเฉพาะกะที่ expectedShifts บอกว่าทำจริง
-        // ป้องกันกรณี shiftTimes เก็บ template ไว้ทุกกะ แม้กะนั้นจะไม่ได้ทำ
-        // (!shifts) = fallback สำหรับ document เก่าที่ไม่มี expectedShifts field
-        const shifts = timesheet.expectedShifts;
-        if (!shifts || shifts.otMorning) extractPunches(timesheet.shiftTimes.otMorning);
-        if (!shifts || shifts.normal)    extractPunches(timesheet.shiftTimes.day);
-        if (!shifts || shifts.otNoon)    extractPunches(timesheet.shiftTimes.otNoon);
-        if (!shifts || shifts.otEvening) extractPunches(timesheet.shiftTimes.otEvening);
-        punches.sort((a, b) => a.localeCompare(b));
+      /**
+       * Segment-aware punch generation
+       *
+       * Rules:
+       *  - otMorning  → contributes IN  (start of otMorning) only — it merges with the regular segment
+       *  - day        → contributes OUT (end of day) always
+       *                 If day runs across lunch (end > 13:00) → also add 12:00 OUT and 13:00 IN
+       *                 If day runs across lunch AND there is an otNoon segment → skip 12:00/13:00
+       *  - otNoon     → does NOT add extra punches (covered by the continuous day scan)
+       *  - otEvening  → contributes OUT (end of otEvening); the IN is shared with day's OUT (17:00)
+       *                 but if day ends before otEvening starts → add otEvening start as IN too
+       *
+       * In short we build a Set of HH:mm times and deduplicate automatically.
+       */
+      const timeToMins = (t: string): number => {
+        const parts = t.split(':').map(Number);
+        return parts[0] * 60 + (parts[1] || 0);
+      };
+      const parseRange = (timeStr?: string): [string, string] | null => {
+        if (!timeStr) return null;
+        const parts = timeStr.split('-').map(s => s.trim());
+        if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+        return [parts[0], parts[1]];
+      };
+
+      const punchSet = new Set<string>();
+      const shifts = timesheet.expectedShifts;
+
+      const hasOtMorning  = !shifts || shifts.otMorning;
+      const hasDay        = !shifts || shifts.normal;
+      const hasOtNoon     = !shifts || shifts.otNoon;
+      const hasOtEvening  = !shifts || shifts.otEvening;
+
+      const otMorningRange = parseRange(timesheet.shiftTimes?.otMorning);
+      const dayRange       = parseRange(timesheet.shiftTimes?.day);
+      const otEveningRange = parseRange(timesheet.shiftTimes?.otEvening);
+
+      // --- OT เช้า ---
+      // ใส่ทั้ง IN และ OUT ของ OT เช้า
+      // (OUT ที่ boundary เช่น 08:00 จะถูก reuse เป็น IN ของกะปกติโดย segment algorithm)
+      if (hasOtMorning && otMorningRange) {
+        punchSet.add(otMorningRange[0]); // IN ของ OT เช้า
+        punchSet.add(otMorningRange[1]); // OUT ของ OT เช้า (= boundary กับกะปกติ)
       }
+
+      // --- กะปกติ (day) ---
+      if (hasDay && dayRange) {
+        const [dayStart, dayEnd] = dayRange;
+        const dayStartMins = timeToMins(dayStart);
+        const dayEndMins   = timeToMins(dayEnd);
+
+        // ถ้าไม่มี OT เช้า → ใส่ IN ของกะปกติด้วย
+        if (!hasOtMorning) {
+          punchSet.add(dayStart);
+        }
+
+        // ถ้ากะปกติครอบคลุมพักเที่ยง (เริ่มก่อน 12:00 และสิ้นสุดหลัง 13:00) และไม่มี otNoon
+        // → แยก punch ออกเป็น 12:00 OUT และ 13:00 IN
+        const spanLunch = dayStartMins < 12 * 60 && dayEndMins > 13 * 60;
+        if (spanLunch && !hasOtNoon) {
+          punchSet.add('12:00'); // OUT ก่อนพัก
+          punchSet.add('13:00'); // IN หลังพัก
+        }
+
+        // OUT ของกะปกติ → ใส่เสมอ ยกเว้นถ้ามี OT เย็นที่ต่อเนื่อง (IN ของ OT เย็น = OUT ของกะปกติ)
+        if (!hasOtEvening) {
+          punchSet.add(dayEnd);
+        } else {
+          // มี OT เย็น — ต้องการ punch ณ เวลา dayEnd เพื่อเป็น OUT ของบ่าย ด้วย
+          // (scan ลำดับนั้นจะถูก reuse เป็น IN ของ OT เย็นโดย segment algorithm)
+          punchSet.add(dayEnd);
+        }
+      }
+
+      // --- OT เย็น ---
+      if (hasOtEvening && otEveningRange) {
+        const [eveningStart, eveningEnd] = otEveningRange;
+        // ถ้า eveningStart ≠ dayEnd → ต้องมี IN แยกต่างหาก
+        if (dayRange && eveningStart !== dayRange[1]) {
+          punchSet.add(eveningStart);
+        }
+        punchSet.add(eveningEnd); // OUT ของ OT เย็น
+      }
+
+      const punches = Array.from(punchSet).sort((a, b) => a.localeCompare(b));
 
       if (punches.length === 0) {
         throw new AppError('ไม่พบช่วงเวลา (shiftTimes) ใน Daily Report', 400);

@@ -140,6 +140,8 @@ export default function ProjectListPage() {
         department: detail.department,
         status: detail.status,
         projectManager: detail.projectManager || '',
+        workDays: detail.workDays,
+        followCompanyHoliday: detail.followCompanyHoliday,
       });
     } catch (error: any) {
       toast.error(error.message || 'ไม่สามารถโหลดข้อมูลโครงการได้');

@@ -181,6 +181,278 @@ export class ReconciliationService {
 
 
   /**
+   * [PRIMARY] กำหนดสถานะโดยเปรียบเทียบจาก Segments
+   * ใช้ shiftTimes เป็น source of truth ในการสร้างช่วงเวลาที่ควรจะมีการสแกน
+   */
+  classifyBySegments(params: {
+    shiftTimes?: { day?: string; otMorning?: string; otNoon?: string; otEvening?: string; };
+    scanPunches: string[];
+    timesheetNormalHours?: number;
+    timesheetOtMorning?: number;
+    timesheetOtNoon?: number;
+    timesheetOtEvening?: number;
+    dailyReportHours?: number;
+    isHoliday?: boolean;
+    isLeave?: boolean;
+    leaveHours?: number;
+  }): ClassifyResult {
+    const {
+      shiftTimes,
+      scanPunches,
+      timesheetNormalHours,
+      timesheetOtMorning,
+      timesheetOtNoon,
+      timesheetOtEvening,
+      dailyReportHours,
+      isHoliday,
+      isLeave,
+      leaveHours,
+    } = params;
+
+    const scanCount = (scanPunches || []).length;
+
+    // --- Base cases ---
+    const isFullDayLeave = isLeave === true && (leaveHours ?? 0) >= 8;
+    const isPartialLeave = isLeave === true && (leaveHours ?? 0) > 0 && (leaveHours ?? 0) < 8;
+    const noWorkHours = !dailyReportHours || dailyReportHours === 0;
+    
+    const dailyWorkExists = !!shiftTimes?.day || (dailyReportHours !== undefined && dailyReportHours > 0);
+    const dailyExists = dailyWorkExists || isPartialLeave;
+
+    if (isFullDayLeave && noWorkHours) {
+      return { status: 'LEAVE' };
+    }
+
+    if (isHoliday && noWorkHours) {
+      if (scanCount > 0) {
+        return { status: 'CONFLICTED', suggestedHours: 0, note: `วันหยุดแต่พบข้อมูลการสแกนนิ้ว (${scanCount} ครั้ง)` };
+      }
+      return { status: 'HOLIDAY' };
+    }
+
+    if (isPartialLeave && !dailyWorkExists) {
+      if (scanCount > 0) {
+        return { status: 'CONFLICTED', suggestedHours: 0, note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว (${scanCount} ครั้ง)` };
+      }
+      return { status: 'MISSING_DAILY', suggestedHours: 0, note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ` };
+    }
+
+    if (!dailyExists && scanCount === 0) return { status: 'ABSENT' };
+    if (!dailyExists && scanCount > 0) return { status: 'MISSING_DAILY' };
+    
+    if (dailyExists && scanCount === 0) {
+      return { status: 'MISSING_SCAN', suggestedHours: 0, note: 'ไม่พบข้อมูลการสแกนนิ้ว' };
+    }
+    
+    if (dailyExists && scanCount === 1) {
+      return { status: 'CONFLICTED', suggestedHours: 0, note: `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${scanPunches[0]}) — Admin ต้องเติมเวลาที่ขาด` };
+    }
+
+    if (!shiftTimes || !shiftTimes.day) {
+      return { status: 'MISSING_DAILY', note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)' };
+    }
+
+    // --- Parse Segments ---
+    const parseTime = (timeStr?: string): { start: number; end: number } | null => {
+      if (!timeStr) return null;
+      const parts = timeStr.split('-').map(s => s.trim());
+      if (parts.length !== 2) return null;
+      return { start: this.punchToMinutes(parts[0]), end: this.punchToMinutes(parts[1]) };
+    };
+
+    const segments: { start: number; end: number; type: string }[] = [];
+    const dayShift = parseTime(shiftTimes.day);
+    const otMorning = parseTime(shiftTimes.otMorning);
+    const otNoon = parseTime(shiftTimes.otNoon);
+    const otEvening = parseTime(shiftTimes.otEvening);
+
+    if (!dayShift) {
+       return { status: 'MISSING_DAILY', note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)' };
+    }
+
+    if (otMorning) {
+      segments.push({ start: otMorning.start, end: otMorning.end, type: 'otMorning' });
+    }
+
+    const hasOtNoon = !!otNoon;
+    const hasOtEveningConnected = otEvening && otEvening.start === dayShift.end;
+
+    if (hasOtNoon) {
+      segments.push({ start: dayShift.start, end: dayShift.end, type: 'normal' });
+    } else {
+      if (dayShift.end <= 12 * 60) {
+        segments.push({ start: dayShift.start, end: dayShift.end, type: 'morning' });
+      } else if (dayShift.start >= 13 * 60) {
+        if (hasOtEveningConnected) {
+          segments.push({ start: dayShift.start, end: otEvening.end, type: 'combined_afternoon_evening' });
+        } else {
+          segments.push({ start: dayShift.start, end: dayShift.end, type: 'afternoon' });
+        }
+      } else {
+        segments.push({ start: dayShift.start, end: 12 * 60, type: 'morning' });
+        if (hasOtEveningConnected) {
+          segments.push({ start: 13 * 60, end: otEvening.end, type: 'combined_afternoon_evening' });
+        } else {
+          segments.push({ start: 13 * 60, end: dayShift.end, type: 'afternoon' });
+        }
+      }
+    }
+
+    if (otEvening) {
+      if (!(hasOtEveningConnected && !hasOtNoon)) {
+        segments.push({ start: otEvening.start, end: otEvening.end, type: 'otEvening' });
+      }
+    }
+
+    // --- Segment Checking ---
+    const sortedScans = scanPunches.map(p => this.punchToMinutes(p)).sort((a, b) => a - b);
+    
+    let isConflicted = false;
+    let conflictNote = '';
+    let maxLateMinutes = 0;
+    let maxEarlyLeaveMinutes = 0;
+    let penaltyOtMorning = 0;
+    let penaltyOtEvening = 0;
+
+    const formatTime = (mins: number) => {
+      const h = Math.floor(mins / 60).toString().padStart(2, '0');
+      const m = (mins % 60).toString().padStart(2, '0');
+      return `${h}:${m}`;
+    };
+
+    const usedPunches = new Set<number>();
+
+    const conflictNotes: string[] = [];
+
+    for (const seg of segments) {
+      const available = sortedScans.filter(t => !usedPunches.has(t));
+
+      let closestIn = -1;
+      let minInDiff = Infinity;
+      for (const t of available) {
+        if (t > seg.end) continue;
+        const diff = Math.abs(t - seg.start);
+        if (diff < minInDiff) { minInDiff = diff; closestIn = t; }
+        else if (diff === minInDiff && t < closestIn) { closestIn = t; }
+      }
+
+      let closestOut = -1;
+      let minOutDiff = Infinity;
+      for (const t of available) {
+        if (t <= closestIn) continue;
+        const diff = Math.abs(t - seg.end);
+        if (diff < minOutDiff) { minOutDiff = diff; closestOut = t; }
+        else if (diff === minOutDiff && t > closestOut) { closestOut = t; }
+      }
+
+      if (closestIn !== -1) usedPunches.add(closestIn);
+      // Only mark closestOut as "used" if it is NOT the exact start of the next segment
+      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning)
+      if (closestOut !== -1) {
+        const segIndex = segments.indexOf(seg);
+        const nextSeg = segments[segIndex + 1];
+        const isBoundaryShared = nextSeg && closestOut === nextSeg.start;
+        if (!isBoundaryShared) {
+          usedPunches.add(closestOut);
+        }
+      }
+
+      if (closestIn === -1 || minInDiff > 90) {
+        isConflicted = true;
+        conflictNotes.push(`ไม่พบสแกน IN สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
+        continue;
+      }
+      if (closestOut === -1 || minOutDiff > 90) {
+        isConflicted = true;
+        conflictNotes.push(`ไม่พบสแกน OUT สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
+        continue;
+      }
+
+      const late = closestIn - seg.start;
+      const early = seg.end - closestOut;
+
+      if (late > 30) {
+        isConflicted = true;
+        conflictNotes.push(`สแกนเข้าสายเกิน 30 นาทีในรอบ ${formatTime(seg.start)} (${late} นาที)`);
+      }
+      if (early > 30) {
+        isConflicted = true;
+        conflictNotes.push(`สแกนออกก่อนเกิน 30 นาทีในรอบ ${formatTime(seg.end)} (${early} นาที)`);
+      }
+
+      if (late > 0) {
+        maxLateMinutes = Math.max(maxLateMinutes, late);
+        if (seg.type === 'otMorning') penaltyOtMorning += late;
+      }
+      if (early > 0) {
+        maxEarlyLeaveMinutes = Math.max(maxEarlyLeaveMinutes, early);
+        if (seg.type === 'otEvening' || seg.type === 'combined_afternoon_evening') {
+          penaltyOtEvening += early;
+        }
+      }
+    }
+
+    if (conflictNotes.length > 0) {
+      conflictNote = conflictNotes.join(', ');
+    }
+
+    if (isConflicted) {
+      return {
+        status: 'CONFLICTED',
+        suggestedHours: dailyReportHours,
+        approvedNormalHours: timesheetNormalHours,
+        approvedOtMorning: timesheetOtMorning,
+        approvedOtNoon: timesheetOtNoon,
+        approvedOtEvening: timesheetOtEvening,
+        totalApprovedHours: (timesheetNormalHours || 0) + (timesheetOtMorning || 0) + (timesheetOtNoon || 0) + (timesheetOtEvening || 0),
+        approvalSource: 'daily_report',
+        lateMinutes: maxLateMinutes,
+        earlyLeaveMinutes: maxEarlyLeaveMinutes,
+        isLate: maxLateMinutes > 0,
+        isEarlyLeave: maxEarlyLeaveMinutes > 0,
+        note: conflictNote
+      };
+    }
+
+    // --- MATCHED Case ---
+    let approvedNormal = timesheetNormalHours ?? dailyReportHours ?? 0;
+    let approvedMorning = timesheetOtMorning ?? 0;
+    let approvedNoon = timesheetOtNoon ?? 0;
+    let approvedEvening = timesheetOtEvening ?? 0;
+    let autoNote = '';
+
+    if (penaltyOtMorning > 0 && approvedMorning > 0) {
+      const penaltyMins = Math.ceil(penaltyOtMorning / 30) * 30;
+      approvedMorning = Math.max(0, approvedMorning - (penaltyMins / 60));
+      autoNote += `สายช่วง OT เช้า ${penaltyOtMorning} นาที (หัก ${penaltyMins} นาที) `;
+    }
+
+    if (penaltyOtEvening > 0 && approvedEvening > 0) {
+      const penaltyMins = Math.ceil(penaltyOtEvening / 30) * 30;
+      approvedEvening = Math.max(0, approvedEvening - (penaltyMins / 60));
+      autoNote += `ออกก่อนช่วง OT เย็น ${penaltyOtEvening} นาที (หัก ${penaltyMins} นาที) `;
+    }
+
+    const totalApproved = approvedNormal + approvedMorning + approvedNoon + approvedEvening;
+
+    return {
+      status: 'MATCHED',
+      suggestedHours: dailyReportHours,
+      approvedNormalHours: approvedNormal,
+      approvedOtMorning: approvedMorning,
+      approvedOtNoon: approvedNoon,
+      approvedOtEvening: approvedEvening,
+      totalApprovedHours: totalApproved,
+      approvalSource: 'daily_report',
+      lateMinutes: maxLateMinutes,
+      earlyLeaveMinutes: maxEarlyLeaveMinutes,
+      isLate: maxLateMinutes > 0,
+      isEarlyLeave: maxEarlyLeaveMinutes > 0,
+      note: autoNote || null,
+    };
+  }
+
+  /**
    * [PRIMARY] กำหนดสถานะโดยเปรียบ punch coverage
    * เอา dailyReportPunches เป็น source of truth
    * เช็คว่า scan ครอบช่วงเวลาทำงานทั้งหมดไหม (รวม OT)
@@ -448,19 +720,39 @@ export class ReconciliationService {
     const effectiveScanPunches = (input.scanPunches?.length ?? 0) > 0
       ? input.scanPunches!
       : (existing.scanPunches ?? []);
+      
+    const inputShiftTimes = input.shiftTimes ?? existing?.shiftTimes;
 
-    const classified = this.classifyByPunchCoverage({
-      dailyReportPunches: effectiveDailyPunches,
-      scanPunches: effectiveScanPunches,
-      timesheetNormalHours: input.timesheetNormalHours ?? existing.timesheetNormalHours,
-      timesheetOtMorning: input.timesheetOtMorning ?? existing.timesheetOtMorning,
-      timesheetOtNoon: input.timesheetOtNoon ?? existing.timesheetOtNoon,
-      timesheetOtEvening: input.timesheetOtEvening ?? existing.timesheetOtEvening,
-      dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
-      isHoliday: effectiveIsHoliday,
-      isLeave: effectiveIsLeave,
-      leaveHours: input.leaveHours ?? existing.leaveHours,
-    });
+    let classified: ClassifyResult;
+    
+    if (inputShiftTimes && inputShiftTimes.day) {
+      classified = this.classifyBySegments({
+        shiftTimes: inputShiftTimes,
+        scanPunches: effectiveScanPunches,
+        timesheetNormalHours: input.timesheetNormalHours ?? existing.timesheetNormalHours,
+        timesheetOtMorning: input.timesheetOtMorning ?? existing.timesheetOtMorning,
+        timesheetOtNoon: input.timesheetOtNoon ?? existing.timesheetOtNoon,
+        timesheetOtEvening: input.timesheetOtEvening ?? existing.timesheetOtEvening,
+        dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
+        isHoliday: effectiveIsHoliday,
+        isLeave: effectiveIsLeave,
+        leaveHours: input.leaveHours ?? existing.leaveHours,
+      });
+    } else {
+      // Fallback for legacy data that doesn't have shiftTimes
+      classified = this.classifyByPunchCoverage({
+        dailyReportPunches: effectiveDailyPunches,
+        scanPunches: effectiveScanPunches,
+        timesheetNormalHours: input.timesheetNormalHours ?? existing.timesheetNormalHours,
+        timesheetOtMorning: input.timesheetOtMorning ?? existing.timesheetOtMorning,
+        timesheetOtNoon: input.timesheetOtNoon ?? existing.timesheetOtNoon,
+        timesheetOtEvening: input.timesheetOtEvening ?? existing.timesheetOtEvening,
+        dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
+        isHoliday: effectiveIsHoliday,
+        isLeave: effectiveIsLeave,
+        leaveHours: input.leaveHours ?? existing.leaveHours,
+      });
+    }
 
     const newStatus = classified.status;
     const statusChanged = newStatus !== existing.status;

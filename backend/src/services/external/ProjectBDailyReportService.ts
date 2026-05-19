@@ -103,7 +103,7 @@ export interface DailyTimesheetSummary {
   isActive: boolean;
   isLeave: boolean;
   leaveHours: number;
-  leaveEntries?: { type: string; hours: number; description?: string }[];
+  leaveEntries?: { type: string; hours: number; description?: string; timeRange?: string }[];
   medCertFileUrl?: string;
   assigneeId?: string;
   dailyReportPhotos?: {
@@ -171,18 +171,31 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
   }
   const isLeave = leaveHours > 0;
 
-  let leaveEntries: { type: string; hours: number; description?: string }[] | undefined = undefined;
+  let leaveEntries: { type: string; hours: number; description?: string; timeRange?: string }[] | undefined = undefined;
   if (isLeave) {
     const lType = doc.leaveStatus?.leaveType || doc.leaveType || 'Leave';
-    let desc = 'Full Day';
-    if (!doc.leaveStatus?.isFullDay) {
-      const times = doc.leaveStatus?.leaveTimes || doc.leaveTimes;
-      if (times?.custom) desc = times.custom;
-      else if (doc.leaveStatus?.leaveShifts?.morning) desc = 'Morning';
-      else if (doc.leaveStatus?.leaveShifts?.afternoon) desc = 'Afternoon';
-      else desc = 'Partial';
+    const shifts = doc.leaveStatus?.leaveShifts || doc.leaveShifts;
+    const times  = doc.leaveStatus?.leaveTimes  || doc.leaveTimes;
+
+    let desc      = 'Full Day';
+    let timeRange: string | undefined = undefined;
+
+    if (doc.leaveStatus?.isFullDay) {
+      timeRange = '08:00-17:00';
+    } else if (times?.custom) {
+      desc      = times.custom;
+      timeRange = times.custom.replace(/\s/g, ''); // normalise: "13:00 - 17:00" → "13:00-17:00"
+    } else if (shifts?.morning) {
+      desc      = 'Morning';
+      timeRange = '08:00-12:00';
+    } else if (shifts?.afternoon) {
+      desc      = 'Afternoon';
+      timeRange = '13:00-17:00';
+    } else {
+      desc = 'Partial';
     }
-    leaveEntries = [{ type: lType, hours: leaveHours, description: desc }];
+
+    leaveEntries = [{ type: lType, hours: leaveHours, description: desc, timeRange }];
   }
 
   let dailyReportPhotos: DailyTimesheetSummary['dailyReportPhotos'] = undefined;

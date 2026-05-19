@@ -57,16 +57,25 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
   const targetDate = new Date(`${workDateStr}T00:00:00.000Z`);
   const dayOfWeek = targetDate.getUTCDay(); // 0 = อาทิตย์
 
-  // ── 1. เช็ควันหยุดบริษัท ────────────────────────────────────────────────────
+  // ── 1. เช็ควันหยุดบริษัท (ดึงตามปีและเปรียบเทียบในระดับวันแบบ UTC) ──────────────
+  const targetYear = new Date(`${workDateStr}T00:00:00.000Z`).getUTCFullYear();
   const holidaySnap = await db.collection('companyHolidays')
-    .where('date', '==', workDateStr)
-    .limit(1)
+    .doc(String(targetYear))
+    .collection('holidays')
     .get();
 
-  const isGlobalHoliday = !holidaySnap.empty;
+  const isGlobalHoliday = holidaySnap.docs.some(doc => {
+    const data = doc.data();
+    if (!data.date) return false;
+    const d = typeof data.date.toDate === 'function' ? data.date.toDate() : new Date(data.date);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}` === workDateStr;
+  });
 
   // ── 1.5. ดึงข้อมูล Project Locations เพื่อตรวจสอบการตั้งค่าวันทำงาน ───────────
-  const projectsSnap = await db.collection('projectLocations').get();
+  const projectsSnap = await db.collection('Project').get();
   const projectConfigMap = new Map<string, { workDays: number[], followCompanyHoliday: boolean }>();
   
   projectsSnap.docs.forEach(doc => {

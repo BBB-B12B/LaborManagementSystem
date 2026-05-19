@@ -377,7 +377,120 @@ manualHours = {
 
 ---
 
-## 11. Changelog
+## 11. Bug fixes ที่ต้องแก้ใน `classifyBySegments()`
+
+> ⚠️ **Bug เหล่านี้มีอยู่ใน 2 ไฟล์พร้อมกัน ต้องแก้ทั้งคู่**
+> - `backend/src/services/reconciliation/ReconciliationService.ts`
+> - `functions/src/index.ts`
+
+---
+
+### Bug #1 — `continue` เมื่อหา punch ไม่เจอ แทนที่จะเป็น CONFLICTED
+
+**อาการ**: scan 3 ครั้ง ([07:50, 12:50, 17:10]) กับ 2 segment (เช้า 08:00–12:00, บ่าย 13:00–17:00) → ระบบขึ้น `MATCHED` ทั้งที่ขาดสแกน OUT ช่วงเช้า
+
+**สาเหตุ**: เมื่อหา `closestIn` หรือ `closestOut` ไม่เจอ (หรือห่างเกิน threshold) loop จะ `continue` ข้าม segment นั้นไปเงียบๆ แทนที่จะขึ้น CONFLICTED
+
+```typescript
+// ❌ ผิด — ข้าม segment ที่หา punch ไม่เจอ ทำให้ MATCHED ทั้งที่ขาดสแกน
+if (closestIn === -1 || closestOut === -1) {
+  continue;
+}
+
+// ✅ ถูก — segment ที่หา punch ไม่เจอต้องเป็น CONFLICTED ทันที
+if (closestIn === -1 || minInDiff > 90) {
+  isConflicted = true;
+  conflictNote = `ไม่พบสแกน IN สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`;
+  break;
+}
+if (closestOut === -1 || minOutDiff > 90) {
+  isConflicted = true;
+  conflictNote = `ไม่พบสแกน OUT สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`;
+  break;
+}
+```
+
+---
+
+### Bug #2 — punch ถูกใช้ซ้ำข้าม segment
+
+**อาการ**: punch `12:50` ถูกดึงไปเป็นทั้ง OUT ของ segment เช้า (closest to 12:00) และ IN ของ segment บ่าย (closest to 13:00) พร้อมกัน → ทุก segment "ผ่าน" ทั้งที่ใช้ punch เดียวกัน
+
+**สาเหตุ**: loop หา punch ทำซ้ำจาก `sortedScans` ทั้งหมดทุก segment โดยไม่ mark punch ที่ assign แล้วว่า "ใช้ไปแล้ว"
+
+```typescript
+// ❌ ผิด — punch เดิมถูกหยิบไปใช้ได้หลาย segment
+for (const seg of segments) {
+  for (const t of sortedScans) { /* หา closestIn */ }
+  for (const t of sortedScans) { /* หา closestOut */ }
+}
+
+// ✅ ถูก — ต้อง track punch ที่ใช้ไปแล้ว
+const usedPunches = new Set<number>();
+
+for (const seg of segments) {
+  // กรอง punch ที่ยังไม่ถูกใช้
+  const available = sortedScans.filter(t => !usedPunches.has(t));
+
+  // หา IN: punch ที่ใกล้ seg.start มากที่สุด และต้องมาก่อน seg.end
+  let closestIn = -1;
+  let minInDiff = Infinity;
+  for (const t of available) {
+    if (t > seg.end) continue; // ไม่เอา punch ที่อยู่หลัง segment
+    const diff = Math.abs(t - seg.start);
+    if (diff < minInDiff) { minInDiff = diff; closestIn = t; }
+  }
+
+  // หา OUT: punch ที่ใกล้ seg.end มากที่สุด และต้องมาหลัง closestIn
+  let closestOut = -1;
+  let minOutDiff = Infinity;
+  for (const t of available) {
+    if (t <= closestIn) continue; // ต้องมาหลัง IN เสมอ
+    const diff = Math.abs(t - seg.end);
+    if (diff < minOutDiff) { minOutDiff = diff; closestOut = t; }
+  }
+
+  // mark ว่าใช้แล้ว
+  if (closestIn !== -1) usedPunches.add(closestIn);
+  if (closestOut !== -1) usedPunches.add(closestOut);
+
+  // ถ้าหาไม่เจอ → CONFLICTED
+  if (closestIn === -1 || minInDiff > 90) { isConflicted = true; break; }
+  if (closestOut === -1 || minOutDiff > 90) { isConflicted = true; break; }
+}
+```
+
+---
+
+### Bug #3 — `hasOtNoon` ใช้ `timesheetOtNoon` แทน `shiftTimes.otNoon`
+
+**อาการ**: ถ้า scan aggregator คำนวณ `otNoonHours > 0` ระบบสร้าง segment OT เที่ยงทั้งที่ daily report ไม่ได้ขอ → segment ผิดตั้งแต่ต้น
+
+**สาเหตุ**: เงื่อนไข `hasOtNoon` ผสม `timesheetOtNoon` (มาจาก scan aggregator) เข้าไปด้วย ทั้งที่ควรดูแค่ `shiftTimes.otNoon` จาก daily report เท่านั้น
+
+```typescript
+// ❌ ผิด — timesheetOtNoon มาจาก scan aggregator ไม่ใช่ daily report
+const hasOtNoon = !!otNoon || (timesheetOtNoon ?? 0) > 0;
+
+// ✅ ถูก — ดูแค่ shiftTimes จาก daily report (otNoon มาจาก parseTime(shiftTimes.otNoon) อยู่แล้ว)
+const hasOtNoon = !!otNoon;
+```
+
+> ⚠️ หลักการสำคัญ: **segment ต้องสร้างจาก `shiftTimes` เท่านั้น** ห้ามใช้ค่าที่คำนวณจาก scan (`timesheetOtMorning`, `timesheetOtNoon`, `timesheetOtEvening`) มาตัดสินใจว่ามี segment ไหนบ้าง เพราะค่าเหล่านี้มาจาก scan aggregator ไม่ใช่จาก daily report
+
+---
+
+### สรุปสิ่งที่ต้องแก้
+
+| # | Bug | ไฟล์ที่ต้องแก้ | แก้อย่างไร |
+|---|---|---|---|
+| 1 | `continue` เมื่อหา punch ไม่เจอ | `ReconciliationService.ts`, `index.ts` | เปลี่ยนเป็น `isConflicted = true; break;` |
+| 2 | punch ถูกใช้ซ้ำข้าม segment | `ReconciliationService.ts`, `index.ts` | เพิ่ม `usedPunches: Set<number>` กรอง available punches ทุก iteration |
+| 3 | `hasOtNoon` ใช้ค่าจาก scan แทน daily report | `ReconciliationService.ts`, `index.ts` | เปลี่ยนเป็น `const hasOtNoon = !!otNoon` |
+
+---
+
+## 12. Changelog
 
 | วันที่ | การเปลี่ยนแปลง |
 |---|---|
@@ -393,4 +506,7 @@ manualHours = {
 | 2026-05-15 | เพิ่ม segment rules: ปกติ / ผ่าเที่ยง / ผ่าเย็น พร้อม expected punch count แต่ละกรณี |
 | 2026-05-15 | ไม่ยกเว้นวันหยุดบริษัทหรือวันอาทิตย์ — เช็คทุกวันที่โฟร์แมนส่ง Daily Report |
 | 2026-05-15 | เพิ่ม Section 2.8: ABSENT Scheduled Job — รันเที่ยงคืนทุกวัน เช็คย้อนหลัง 1 วัน |
-| 2026-05-15 | ABSENT ไม่สร้างจาก classifyBySegments() อีกต่อไป แยกเป็น Scheduled Job ต่างหาก |
+| 2026-05-18 | เพิ่ม Section 11: Bug fixes ใน `classifyBySegments()` — 3 bugs ที่ทำให้ขึ้น MATCHED ผิดพลาด |
+| 2026-05-18 | Bug #1: `continue` เมื่อหา punch ไม่เจอ → ต้องเป็น CONFLICTED ทันที |
+| 2026-05-18 | Bug #2: punch ถูกใช้ซ้ำข้าม segment → ต้องเพิ่ม `usedPunches: Set<number>` |
+| 2026-05-18 | Bug #3: `hasOtNoon` ใช้ค่าจาก scan aggregator → ต้องใช้แค่ `shiftTimes.otNoon` จาก daily report |
