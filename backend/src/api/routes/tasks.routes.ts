@@ -1,12 +1,336 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { taskService } from '../../services/TaskService';
 import { AppError } from '../middleware/errorHandler';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthRequest } from '../middleware/auth';
+import { db } from '../../config/firebase';
+import { afterSaleDb } from '../../config/firebaseProjectB';
+import admin from 'firebase-admin';
 
 const router = Router();
 
 // Apply authentication to all routes
 router.use(authenticate);
+
+// GET /api/tasks/backlog
+router.get('/backlog', async (req: Request, res: Response, next: NextFunction) => {
+  const authReq = req as AuthRequest;
+  try {
+    const { startDate, endDate } = req.query;
+    const userRole = authReq.user?.roleCode;
+    const userEmployeeId = authReq.user?.employeeId;
+
+    if (!startDate || !endDate) {
+      throw new AppError('ต้องระบุวันที่เริ่มต้น (startDate) และวันที่สิ้นสุด (endDate) (startDate and endDate are required)', 400);
+    }
+
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new AppError('รูปแบบวันที่ไม่ถูกต้อง (Invalid date format)', 400);
+    }
+
+    // 1. Fetch all projects to build projectCode map
+    const projectsSnapshot = await db.collection('Project').get();
+    const projectsMap = new Map<string, string>(); // projectId -> projectCode
+    projectsSnapshot.forEach(doc => {
+      const data = doc.data();
+      projectsMap.set(doc.id, data.projectCode || data.code || '');
+    });
+
+    // 2. Fetch locked wage periods for all projects
+    const periodsSnapshot = await db.collection('wagePeriods').get();
+    const periods = periodsSnapshot.docs.map(doc => doc.data()).filter(p => p.isDeleted !== true);
+
+    const isProjectDateLocked = (projectCode: string, date: Date) => {
+      if (!projectCode) return false;
+      return periods.some(p => {
+        if (p.projectCode !== projectCode) return false;
+        const pStart = p.startDate.toDate ? p.startDate.toDate() : new Date(p.startDate);
+        const pEnd = p.endDate.toDate ? p.endDate.toDate() : new Date(p.endDate);
+        
+        // Normalize to local midnight to prevent timezone shifts
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        const s = new Date(pStart);
+        s.setHours(0, 0, 0, 0);
+        const e = new Date(pEnd);
+        e.setHours(0, 0, 0, 0);
+        
+        return d >= s && d <= e && ['approved', 'paid', 'locked'].includes(p.status);
+      });
+    };
+
+    // 3. Fetch all active daily contractors
+    let dcQuery = db.collection('dailyContractors').where('isActive', '==', true);
+    const contractorsSnapshot = await dcQuery.get();
+    let contractors = contractorsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as any[];
+
+    if (userRole === 'FM' && userEmployeeId) {
+      // Filter strictly to contractors recorded by this foreman
+      contractors = contractors.filter(dc => {
+        const usage = dc.foremanUsage || {};
+        return usage[userEmployeeId] && usage[userEmployeeId].count > 0;
+      });
+    }
+
+    // 4. Fetch all tasks from afterSaleDb
+    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    let tasks = tasksSnapshot.docs.map(doc => ({
+      id: doc.id,
+      path: doc.ref.path,
+      ...doc.data()
+    }) as any);
+
+    // Filter tasks if role is FM
+    const userProjectIds = authReq.user?.projectLocationIds || [];
+    if (userRole === 'FM' && userProjectIds.length > 0) {
+      tasks = tasks.filter((t: any) => userProjectIds.includes(t.projectId));
+    }
+
+    // Fetch all users to map uid/employeeId -> name
+    const usersSnapshot = await db.collection('users').get();
+    const usersMap = new Map<string, string>();
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      const name = data.name || data.username || 'Unknown User';
+      usersMap.set(doc.id, name);
+      if (data.employeeId) {
+        usersMap.set(data.employeeId, name);
+      }
+    });
+
+    const getUserName = (uid: string) => {
+      if (!uid) return '';
+      return usersMap.get(uid) || uid;
+    };
+
+    // 5. Fetch daily reports for these tasks within date range
+    const allReports: any[] = [];
+    
+    // Generate dates array for matching
+    const dates: string[] = [];
+    let curr = new Date(start);
+    while (curr <= end) {
+      dates.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    if (dates.length > 0) {
+      for (const task of tasks) {
+        const currentRev = task.currentRevision || 'rev00';
+        const taskRef = afterSaleDb.doc(task.path);
+
+        // Normal reports
+        const normalReportsPromise = taskRef.collection('revisions').doc(currentRev).collection('dailyReports')
+          .where(admin.firestore.FieldPath.documentId(), '>=', dates[0])
+          .where(admin.firestore.FieldPath.documentId(), '<=', dates[dates.length - 1])
+          .get();
+
+        // Support reports (help)
+        const helpId = currentRev.replace('rev', 'help');
+        const supportReportsPromise = taskRef.collection('help').doc(helpId).collection('dailyReports')
+          .where(admin.firestore.FieldPath.documentId(), '>=', dates[0])
+          .where(admin.firestore.FieldPath.documentId(), '<=', dates[dates.length - 1])
+          .get();
+
+        const [normalSnap, supportSnap] = await Promise.all([normalReportsPromise, supportReportsPromise]);
+
+        normalSnap.forEach(doc => {
+          allReports.push({
+            taskId: task.taskId,
+            taskName: task.taskName,
+            taskPath: task.path,
+            isSupport: false,
+            dateStr: doc.id,
+            unlockedDates: task.unlockedDates || {},
+            ...doc.data()
+          });
+        });
+
+        supportSnap.forEach(doc => {
+          allReports.push({
+            taskId: task.taskId,
+            taskName: task.taskName,
+            taskPath: task.path,
+            isSupport: true,
+            dateStr: doc.id,
+            unlockedDates: task.supportUnlockedDates || {},
+            ...doc.data()
+          });
+        });
+      }
+    }
+
+    // 6. Build the grid
+    const grid = contractors.map(dc => {
+      // Find contractor project code
+      const contractorProjectId = dc.projectLocationIds?.[0] || '';
+      const contractorProjectCode = projectsMap.get(contractorProjectId) || '';
+
+      // Determine the last used foreman name and date
+      let lastUsedByName = dc.lastUsedByName || '';
+      let lastUsedDateStr = '';
+      if (dc.lastUsedAt) {
+        try {
+          const dateObj = typeof dc.lastUsedAt.toDate === 'function' ? dc.lastUsedAt.toDate() : new Date(dc.lastUsedAt);
+          lastUsedDateStr = dateObj.toISOString().split('T')[0];
+        } catch (e) {
+          console.error('Failed to parse lastUsedAt:', e);
+        }
+      }
+      
+      // 1. Search in the 15-day reports first (since it's the most recent real data)
+      const sortedReports = [...allReports].sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+      for (const report of sortedReports) {
+        const hasWorker = report.labor?.some((l: any) => l.workerId === dc.id || l.employeeId === dc.employeeId) ||
+                          report.leave?.some((l: any) => l.workerId === dc.id || l.employeeId === dc.employeeId);
+        if (hasWorker && report.createdBy) {
+          lastUsedByName = getUserName(report.createdBy);
+          lastUsedDateStr = report.dateStr;
+          break;
+        }
+      }
+      
+      // 2. If still empty, fall back to foremanUsage
+      if (!lastUsedByName && dc.foremanUsage) {
+        const usages = Object.values(dc.foremanUsage) as any[];
+        if (usages.length > 0) {
+          // Find the foreman with the highest count
+          const highestUsage = usages.reduce((prev, current) => (prev.count > current.count) ? prev : current);
+          lastUsedByName = highestUsage.name || '';
+        }
+      }
+
+      const workerDays = dates.map(dateStr => {
+        const dateObj = new Date(dateStr);
+        const isLocked = isProjectDateLocked(contractorProjectCode, dateObj);
+
+        // Find if there is any work or leave record for this worker on this date
+        const reportsForDate = allReports.filter(r => r.dateStr === dateStr);
+        
+        let workedEntry: any = null;
+        let leaveEntry: any = null;
+        let matchedReport: any = null;
+
+        for (const report of reportsForDate) {
+          const laborItem = report.labor?.find((l: any) => l.workerId === dc.id || l.employeeId === dc.employeeId);
+          if (laborItem) {
+            workedEntry = laborItem;
+            matchedReport = report;
+            break;
+          }
+          const leaveItem = report.leave?.find((l: any) => l.workerId === dc.id || l.employeeId === dc.employeeId);
+          if (leaveItem) {
+            leaveEntry = leaveItem;
+            matchedReport = report;
+            break;
+          }
+        }
+
+        // Determine edit authorization rules
+        let allowEdit = false;
+        let reason = '';
+        if (isLocked) {
+          allowEdit = false;
+          reason = 'ล็อกโดยงวดค่าแรง (Locked by wage period)';
+        } else {
+          const threeDaysAgo = new Date();
+          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+          threeDaysAgo.setHours(0, 0, 0, 0);
+
+          if (matchedReport) {
+            // Already has report for this date -> edit is allowed since it's labor update
+            allowEdit = true;
+          } else {
+            // No report exists for any task. If user wants to add, they must pick a task.
+            const isWithin3Days = dateObj >= threeDaysAgo;
+            if (isWithin3Days) {
+              allowEdit = true;
+            } else {
+              // Check if any task is unlocked for this date
+              const unlockedTask = tasks.find((t: any) => {
+                const unlockedDates = t.unlockedDates || {};
+                const unlockInfo = unlockedDates[dateStr];
+                return unlockInfo && new Date(unlockInfo.unlockedUntil) >= new Date();
+              });
+              if (unlockedTask) {
+                allowEdit = true;
+              } else {
+                allowEdit = false;
+                reason = 'รายงานเกิน 3 วันและไม่ได้ปลดล็อกสิทธิ์ (Older than 3 days and not unlocked)';
+              }
+            }
+          }
+        }
+
+        return {
+          date: dateStr,
+          isLocked,
+          allowEdit,
+          reason,
+          record: workedEntry ? {
+            type: 'regular',
+            shifts: workedEntry.shifts,
+            shiftTimes: workedEntry.shiftTimes,
+            taskId: matchedReport.taskId,
+            taskName: matchedReport.taskName,
+            isSupport: matchedReport.isSupport,
+            reportDate: matchedReport.reportDate,
+            reportStatus: matchedReport.status || 'draft',
+            createdBy: matchedReport.createdBy || null,
+            createdByName: matchedReport.createdBy ? getUserName(matchedReport.createdBy) : null,
+            updatedBy: matchedReport.updatedBy || null,
+            updatedByName: matchedReport.updatedBy ? getUserName(matchedReport.updatedBy) : null
+          } : leaveEntry ? {
+            type: 'leave',
+            leaveType: leaveEntry.leaveType,
+            medCertFileUrl: leaveEntry.medCertFileUrl,
+            taskId: matchedReport.taskId,
+            taskName: matchedReport.taskName,
+            isSupport: matchedReport.isSupport,
+            reportDate: matchedReport.reportDate,
+            reportStatus: matchedReport.status || 'draft',
+            createdBy: matchedReport.createdBy || null,
+            createdByName: matchedReport.createdBy ? getUserName(matchedReport.createdBy) : null,
+            updatedBy: matchedReport.updatedBy || null,
+            updatedByName: matchedReport.updatedBy ? getUserName(matchedReport.updatedBy) : null
+          } : null
+        };
+      });
+
+      return {
+        workerId: dc.id,
+        workerName: dc.name,
+        employeeId: dc.employeeId,
+        skillId: dc.skillId,
+        lastUsedByName: lastUsedByName || null,
+        lastUsedDateStr: lastUsedDateStr || null,
+        days: workerDays
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        dates,
+        grid,
+        tasks: tasks.map((t: any) => ({
+          taskId: t.taskId,
+          taskName: t.taskName,
+          isSupportRequest: t.isSupportRequest || false,
+          currentRevision: t.currentRevision || 'rev00'
+        }))
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 // GET /api/tasks
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {

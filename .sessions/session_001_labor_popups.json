@@ -1,0 +1,24 @@
+{
+  "session_id": "session_001_labor_popups",
+  "associated_tasks": ["T-001", "T-002", "T-003"],
+  "status": "completed",
+  "estimated_tokens": 49000,
+  "summary_context": "ปรับปรุงป๊อปอัปบันทึกรายงานการทำงาน: แสดงผู้บันทึกข้อมูล (Creator) ในวันที่มีรายงาน และแสดงชื่อ FM พร้อมวันที่ที่เรียกใช้แรงงานรายนั้นล่าสุดเมื่อสถานะการ์ดเป็นขาดงาน (ไม่มีรายงานของวัน)",
+  "History": [
+    {
+      "turn": 1,
+      "user": "ปรับ popup ให้แสดงรายชื่อ User ที่ลงข้อมูลให้ว่าคือใคร",
+      "agent": "ปรับปรุง backend/src/api/routes/tasks.routes.ts และ frontend/src/pages/daily-reports/list.tsx แสดงผู้ลงข้อมูล"
+    },
+    {
+      "turn": 2,
+      "user": "ปรับการ์ด ขาดงานให้แสดงรายชื่อคนที่ใช้ล่าสุด",
+      "agent": "ปรับปรุง backend/src/services/TaskService.ts ให้บันทึกข้อมูล และ tasks.routes.ts ดึง/fallback ข้อมูล FM ล่าสุด"
+    },
+    {
+      "turn": 3,
+      "user": "เพิ่ม (วันที่ที่ใช้งานล่าสุด) ข้างหลังชื่อ foreman ที่ใช้งานล่าสุดด้วย",
+      "agent": "ปรับปรุง tasks.routes.ts ให้ดึง/แปลงวันที่ และ list.tsx แสดงผลวันที่ใช้งานล่าสุด"
+    }
+  ]
+}

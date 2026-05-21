@@ -45,6 +45,9 @@ export interface DailyContractor {
   otherDeduction: number; // Default: 0
   department?: string; // T-940: Added for department-based filtering
   foremanUsage?: Record<string, { count: number; name: string }>;
+  lastUsedByName?: string;
+  lastUsedById?: string;
+  lastUsedAt?: Date;
 }
 
 export interface DailyContractorDTO {
@@ -80,6 +83,9 @@ export interface DailyContractorDTO {
   otherDeduction: number;
   department?: string;
   foremanUsage?: Record<string, { count: number; name: string }>;
+  lastUsedByName?: string;
+  lastUsedById?: string;
+  lastUsedAt?: Date;
 }
 
 export interface CreateDailyContractorInput {
@@ -114,6 +120,9 @@ export interface CreateDailyContractorInput {
   otherDeduction?: number;
   department?: string;
   foremanUsage?: Record<string, { count: number; name: string }>;
+  lastUsedByName?: string;
+  lastUsedById?: string;
+  lastUsedAt?: Date;
 }
 
 export interface UpdateDailyContractorInput {
@@ -148,6 +157,9 @@ export interface UpdateDailyContractorInput {
   otherDeduction?: number;
   department?: string;
   foremanUsage?: Record<string, { count: number; name: string }>;
+  lastUsedByName?: string;
+  lastUsedById?: string;
+  lastUsedAt?: Date;
 }
 
 /**
@@ -192,6 +204,9 @@ export const dailyContractorConverter = {
       otherDeduction: dc.otherDeduction || 0,
       department: dc.department || null,
       foremanUsage: dc.foremanUsage || null,
+      lastUsedByName: dc.lastUsedByName || null,
+      lastUsedById: dc.lastUsedById || null,
+      lastUsedAt: dc.lastUsedAt || null,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
@@ -234,6 +249,9 @@ export const dailyContractorConverter = {
       otherDeduction: data.otherDeduction || 0,
       department: data.department || null,
       foremanUsage: data.foremanUsage || null,
+      lastUsedByName: data.lastUsedByName || null,
+      lastUsedById: data.lastUsedById || null,
+      lastUsedAt: data.lastUsedAt?.toDate() || null,
     };
   },
 };

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button, Backdrop, CircularProgress } from '@mui/material';
-import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon } from '@mui/icons-material';
+import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon, Menu as MenuIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore';
 import { dailyReportService } from '@/services/dailyReportService';
 
 import { useTaskCacheStore } from '@/store/taskCacheStore';
+import { useUIStore } from '@/store/uiStore';
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -26,6 +27,8 @@ const Topbar: React.FC = () => {
   const { user, logout } = useAuthStore();
   const { isLoading } = useTaskCacheStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const sidebarOpen = useUIStore((state) => state.sidebarOpen);
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
 
   const handleGlobalSync = () => {
     // แค่ invalidate cache และยิง event
@@ -56,13 +59,14 @@ const Topbar: React.FC = () => {
       sx={{
         position: 'fixed',
         top: 0,
-        left: { xs: 0, md: SIDEBAR_WIDTH },
-        width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
+        left: sidebarOpen ? { xs: 0, md: SIDEBAR_WIDTH } : 0,
+        width: sidebarOpen ? { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` } : '100%',
         height: TOPBAR_HEIGHT,
         zIndex: 900,
         backgroundColor: '#f7f7f9',
         color: '#1c1e2b',
         borderBottom: '1px solid #e5e7ed',
+        transition: 'left 0.2s ease, width 0.2s ease',
       }}
     >
       <Box
@@ -76,6 +80,21 @@ const Topbar: React.FC = () => {
         }}
       >
         <Stack direction="row" alignItems="center" spacing={1.25}>
+          <IconButton
+            onClick={toggleSidebar}
+            sx={{
+              width: 38,
+              height: 38,
+              bgcolor: '#ffffff',
+              color: '#1c1e2b',
+              border: '1px solid #e5e7ed',
+              borderRadius: '50%',
+              '&:hover': { bgcolor: '#f0f1f5' },
+              mr: 1,
+            }}
+          >
+            <MenuIcon fontSize="small" sx={{ color: '#64748b' }} />
+          </IconButton>
           <Button
             onClick={() => router.back()}
             startIcon={<ArrowBackIcon />}
@@ -179,6 +198,7 @@ export const Layout: React.FC<LayoutProps> = ({
   disablePadding = false,
   disableTopGap = false,
 }) => {
+  const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
@@ -189,11 +209,12 @@ export const Layout: React.FC<LayoutProps> = ({
         component="main"
         sx={{
           flexGrow: 1,
-          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
-          width: { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` },
+          ml: sidebarOpen ? { xs: 0, md: `${SIDEBAR_WIDTH}px` } : 0,
+          width: sidebarOpen ? { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` } : '100%',
           display: 'flex',
           flexDirection: 'column',
           pt: disableTopGap ? `${TOPBAR_HEIGHT}px` : `${TOPBAR_HEIGHT + 12}px`,
+          transition: 'margin-left 0.2s ease, width 0.2s ease',
         }}
       >
         <Topbar />

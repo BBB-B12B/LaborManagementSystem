@@ -2992,7 +2992,7 @@ export default function DailyReportPage() {
                 }}
               >
                 <Typography variant="h6" fontWeight={800}>
-                  เลือกรายชื่อพนักงาน
+                  เลือกรายชื่อพนักงาน ({selectedWorkers.length})
                 </Typography>
                 <TextField
                   size="small"
@@ -3015,7 +3015,7 @@ export default function DailyReportPage() {
                 fontWeight={800}
                 sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
               >
-                <Users size={16} /> เลือกรายชื่อพนักงาน
+                <Users size={16} /> เลือกรายชื่อพนักงาน ({selectedWorkers.length})
               </Typography>
               <Stack
                 spacing={0.5}

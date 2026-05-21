@@ -1,0 +1,211 @@
+{
+  "version": "2.0",
+  "_comment": "Machine-readable skill routing. Agent reads at Boot B2 to match intent → load skill. Each skill defines sections[] for Loop Architecture.",
+  "always_loaded": [
+    "token_tracker",
+    "identity"
+  ],
+  "_always_loaded_note": "Skills in this list load unconditionally at Boot — no keyword match needed. Both have entries in skills{} for completeness (see token_tracker and identity entries).",
+  "skills": {
+    "mece": {
+      "path": ".agents/skills/mece/SKILL.md",
+      "trigger": "Loop Phase 2 — runs once per task after Info Gather Loop. Builds section-based plan mapping 1:1 to target Skill sections[]. Output MUST be written to .sessions/mece_plan.md.",
+      "keywords": [
+        "implement",
+        "refactor",
+        "restructure",
+        "build",
+        "multi-step",
+        "rename all",
+        "migrate"
+      ],
+      "context_files": [
+        ".sessions/mece_plan.md"
+      ],
+      "skip_when": "read-only task OR single file edit with backlinks=0 AND no ERR documentation needed OR resuming with existing .sessions/mece_plan.md (skip Phase 1+2, jump to Phase 3 at first [/] or [ ] section)"
+    },
+    "coder": {
+      "path": ".agents/skills/coder/SKILL.md",
+      "trigger": "Creating new files, scaffolding features, adding new pages or API routes",
+      "keywords": [
+        "create",
+        "new file",
+        "scaffold",
+        "add page",
+        "add component",
+        "new api",
+        "new route",
+        "build",
+        "implement"
+      ],
+      "context_files": [
+        "knowledge/index_files.json",
+        "docs/master_roadmap.md",
+        "INVARIANTS.md",
+        "REPO_MAP.md"
+      ]
+    },
+    "editor": {
+      "path": ".agents/skills/editor/SKILL.md",
+      "trigger": "Modifying, debugging, or fixing existing files",
+      "keywords": [
+        "fix",
+        "bug",
+        "error",
+        "broken",
+        "edit",
+        "modify",
+        "update",
+        "change",
+        "debug",
+        "not working",
+        "issue",
+        "wrong",
+        "fail"
+      ],
+      "context_files": [
+        "knowledge/index_variables.json",
+        "knowledge/index_files.json",
+        "INVARIANTS.md",
+        "REPO_MAP.md",
+        "CODING_FAILURE_PATTERNS.md"
+      ]
+    },
+    "file_manager": {
+      "path": ".agents/skills/file_manager/SKILL.md",
+      "trigger": "MANDATORY after any file is created, moved, deleted, or has imports changed",
+      "keywords": [
+        "move file",
+        "delete file",
+        "rename file",
+        "restructure",
+        "new file created"
+      ],
+      "context_files": [
+        "knowledge/index_files.json"
+      ],
+      "auto_after": [
+        "coder"
+      ]
+    },
+    "variable_manager": {
+      "path": ".agents/skills/variable_manager/SKILL.md",
+      "trigger": "MANDATORY after any symbol is created, renamed, deleted, or its body is edited",
+      "keywords": [
+        "new function",
+        "new component",
+        "rename symbol",
+        "delete function",
+        "refactor",
+        "new hook",
+        "new type"
+      ],
+      "context_files": [
+        "knowledge/index_variables.json"
+      ],
+      "auto_after": [
+        "coder",
+        "editor"
+      ]
+    },
+    "session_manager": {
+      "path": ".agents/skills/session_manager/SKILL.md",
+      "trigger": "Token pause, blocked halt, session rotation, task completion, or user-requested close. Also handles mece_plan.md clear flow on 'จบ session' and CFP flag review (reads .sessions/cfp_flags.md at Step 0.5 — asks user to confirm any correction events as CFP entries before closing).",
+      "keywords": [
+        "new session",
+        "switch task",
+        "done",
+        "complete",
+        "wrap up",
+        "start over",
+        "continue",
+        "resume",
+        "close session",
+        "end session",
+        "end",
+        "ปิด session",
+        "ปิด",
+        "จบ session",
+        "จบงาน",
+        "close",
+        "finish",
+        "ล้างแผน",
+        "clear plan",
+        "สรุป session"
+      ],
+      "context_files": [
+        ".sessions/active_thread.md",
+        ".sessions/session_handoff.md",
+        ".sessions/session_tokens.md",
+        ".sessions/mece_plan.md"
+      ]
+    },
+    "token_tracker": {
+      "path": ".agents/skills/token_tracker/SKILL.md",
+      "trigger": "Boot-load only — SESSION_TOTAL read once at Boot, tracked in memory per turn, written at checkpoints",
+      "keywords": [
+        "__always__"
+      ],
+      "context_files": [
+        ".sessions/session_tokens.md"
+      ]
+    },
+    "token_auditor": {
+      "path": ".agents/skills/token_auditor/SKILL.md",
+      "trigger": "When SESSION_TOTAL > 60k (R3 threshold)",
+      "keywords": [
+        "token overflow",
+        "session limit",
+        "too long"
+      ],
+      "context_files": [
+        ".sessions/session_tokens.md"
+      ]
+    },
+    "identity": {
+      "path": ".agents/skills/identity/SKILL.md",
+      "trigger": "Always loaded via always_loaded[] — persona and communication rules active every session",
+      "keywords": [
+        "__always__"
+      ],
+      "context_files": [],
+      "_note": "No keyword routing needed. Entry here matches always_loaded[] pattern (same as token_tracker) for completeness and discoverability."
+    },
+    "agent": {
+      "path": ".agents/skills/agent/SKILL.md",
+      "trigger": "Meta-orchestration — explicitly invoked when re-routing is needed or user requests orchestration across multiple skills",
+      "keywords": [
+        "orchestrate",
+        "route",
+        "delegate",
+        "which skill",
+        "re-route"
+      ],
+      "context_files": [
+        ".agents/skills/registry.md"
+      ],
+      "_note": "Does NOT override fallback block — fallback remains editor per CLAUDE.md §B2. This entry enables explicit keyword routing to agent skill only."
+    }
+  },
+  "error_protocol": {
+    "description": "MANDATORY 3-step check before ANY debug or bug fix (R9). Skipping = rule violation.",
+    "steps": [
+      "grep -A 12 '<symptom_keyword>' knowledge/error_index.md | head -30   → if ERR found: apply immediately, stop",
+      "grep -A 8 '\"FailingSymbol\"' knowledge/index_variables.json          → check source, line, used_in",
+      "grep -A 6 '\"failing/file.ts\"' knowledge/index_files.json            → check backlinks"
+    ]
+  },
+  "fallback": {
+    "path": ".agents/skills/editor/SKILL.md",
+    "trigger": "No keyword matches any skill — default to editor (modify/debug existing files)",
+    "context_files": [
+      "knowledge/index_variables.json",
+      "knowledge/index_files.json"
+    ],
+    "note": "Matches CLAUDE.md §B2 and AGENTS.md §Boot — both specify 'editor' as fallback"
+  },
+  "learned_routes": {
+    "_comment": "Agent appends confirmed keyword→skill pairs here after repeated use. Format per entry: {keyword, skill_path, uses, last_gap}",
+    "routes": []
+  }
+}

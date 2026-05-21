@@ -27,11 +27,14 @@ export const NAV_TEXT = '#f5f5f8';
 const activeBg = 'rgba(255, 255, 255, 0.08)';
 const accent = '#d62828';
 
+import { useUIStore } from '@/store/uiStore';
+
 export const Navbar: React.FC = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuthStore();
   const [isClient, setIsClient] = useState(false);
+  const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 
   useEffect(() => {
     setIsClient(true);
@@ -101,13 +104,15 @@ export const Navbar: React.FC = () => {
         left: 0,
         top: 0,
         bottom: 0,
-        display: { xs: 'none', md: 'flex' },
+        display: sidebarOpen ? { xs: 'none', md: 'flex' } : 'none',
         flexDirection: 'column',
         background: GRADIENT_BG,
         color: NAV_TEXT,
         px: 2,
         py: 3,
         zIndex: 900,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.2s ease',
       }}
     >
       {/* Brand */}

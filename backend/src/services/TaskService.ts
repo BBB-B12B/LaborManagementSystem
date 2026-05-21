@@ -867,12 +867,16 @@ export class TaskService {
         });
       }
 
+      const now = new Date();
       for (const dcId of workerIds) {
         try {
           const dcRef = db.collection('dailyContractors').doc(dcId);
           await dcRef.update({
             [`foremanUsage.${userEmployeeId}.count`]: admin.firestore.FieldValue.increment(1),
-            [`foremanUsage.${userEmployeeId}.name`]: userFullName
+            [`foremanUsage.${userEmployeeId}.name`]: userFullName,
+            lastUsedByName: userFullName,
+            lastUsedById: userEmployeeId,
+            lastUsedAt: now
           });
           console.log(`[TaskService] Updated foremanUsage for worker ${dcId} under foreman ${userEmployeeId} (${userFullName})`);
         } catch (err: any) {

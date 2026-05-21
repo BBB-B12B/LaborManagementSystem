@@ -139,4 +139,33 @@ export const taskService = {
   requestTaskReportUnlock: async (id: string, dateStr: string, isSupportReport?: boolean): Promise<void> => {
     await api.post(`/tasks/${id}/request-unlock`, { dateStr, isSupportReport });
   },
+
+  /**
+   * Fetch daily report backlog/history in a date range for foreman workers
+   */
+  getBacklog: async (startDate: string, endDate: string): Promise<{
+    dates: string[];
+    grid: Array<{
+      workerId: string;
+      workerName: string;
+      employeeId: string;
+      skillId: string;
+      days: Array<{
+        date: string;
+        isLocked: boolean;
+        allowEdit: boolean;
+        reason: string;
+        record: any | null;
+      }>;
+    }>;
+    tasks: Array<{
+      taskId: string;
+      taskName: string;
+      isSupportRequest: boolean;
+      currentRevision: string;
+    }>;
+  }> => {
+    return await api.get('/tasks/backlog', { startDate, endDate });
+  },
 };
+
