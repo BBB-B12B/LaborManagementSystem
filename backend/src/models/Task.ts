@@ -56,6 +56,44 @@ export interface Task {
   historicalAssigneeIds?: string[]; // [NEW] Track all users who ever participated in this task
 }
 
+export interface Subtask {
+  id: string;
+  subtaskId: string;
+  subtaskName: string;
+  status: TaskStatus;
+  assignees: TaskAssignee[];
+  dailyProgress: number;
+  currentRevision: string;
+  revisionId?: string;
+  revisionName?: string;
+  revisionCreatedAt?: Date;
+  isPickedUpBySupport?: boolean;
+  supportTaskName?: string;
+  supportDailyProgress?: number;
+  supportAssignees?: TaskAssignee[];
+  supportCreatedAt?: Date;
+  supportedRevisionIds?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+  updatedBy: string;
+  historicalAssigneeIds?: string[];
+}
+
+export interface AdvanceRequest {
+  id: string; // usually YYYY-MM-DD
+  reportDate: Date; // The future date being planned
+  labor: any[]; // same as daily report labor but planned
+  leave?: any[]; // planned leave
+  progress: number; // planned progress
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+  updatedBy: string;
+}
+
 export interface CreateTaskInput {
   taskName: string;
   description?: string;
@@ -66,10 +104,13 @@ export interface CreateTaskInput {
   workOrderName?: string;
   categoryId?: string;
   categoryName: string;
-  assignees: TaskAssignee[];
   dueDate: Date;
   status?: TaskStatus;
-  isSupportRequest?: boolean;
+  subtasks: {
+    subtaskName: string;
+    assignees: TaskAssignee[];
+    isSupportRequest?: boolean;
+  }[];
 }
 
 export interface UpdateTaskInput {
@@ -96,6 +137,13 @@ export interface UpdateTaskInput {
   supportedRevisionIds?: string[]; // [NEW] Revisions that had support team
   unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
   isSupportRequest?: boolean;
+  subtasks?: {
+    id?: string;
+    subtaskId?: string;
+    subtaskName: string;
+    assignees: TaskAssignee[];
+    isSupportRequest?: boolean;
+  }[];
 }
 
 export const taskConverter = {

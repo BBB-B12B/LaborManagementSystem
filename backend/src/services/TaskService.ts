@@ -104,7 +104,7 @@ export class TaskService {
         if (taskCounterDoc.exists) {
           taskNextRun = (taskCounterDoc.data()?.count || 0) + 1;
         }
-        taskId = `${catId}-${taskNextRun.toString().padStart(7, '0')}`;
+        taskId = `${catId}-${taskNextRun.toString().padStart(3, '0')}`;
       }
       const taskRef = categoryRef.collection('tasks').doc(taskId);
 
@@ -140,6 +140,20 @@ export class TaskService {
         updatedAt: now
       }, { merge: true });
 
+      
+      // Aggregate assignees from subtasks
+      const allAssigneesMap = new Map<string, any>();
+      let hasSupportRequest = false;
+      if (input.subtasks) {
+        input.subtasks.forEach(st => {
+          if (st.isSupportRequest) hasSupportRequest = true;
+          st.assignees.forEach(a => {
+            allAssigneesMap.set(a.employeeId, a);
+          });
+        });
+      }
+      const allAssignees = Array.from(allAssigneesMap.values());
+
       const newTaskData: Omit<Task, 'id'> = {
         taskId: taskId,
         taskName: input.taskName,
@@ -152,7 +166,7 @@ export class TaskService {
         workOrderName: input.workOrderName || 'General',
         categoryId: catId,
         categoryName: input.categoryName || 'General',
-        assignees: input.assignees,
+        assignees: allAssignees,
         dueDate: input.dueDate,
         status: input.status || 'upcoming',
         currentRevision: isNewTask ? 'rev00' : (existingTaskData?.currentRevision || 'rev00'),
@@ -161,7 +175,7 @@ export class TaskService {
         dailyProgress: isNewTask ? 0 : (existingTaskData?.dailyProgress || 0),
         attachmentsCount: isNewTask ? 0 : (existingTaskData?.attachmentsCount || 0),
         isActive: true,
-        isSupportRequest: input.isSupportRequest || false,
+        isSupportRequest: hasSupportRequest,
         createdAt: createdAtDate,
         updatedAt: now,
         createdBy: isNewTask ? createdBy : (existingTaskData?.createdBy || createdBy),
@@ -169,25 +183,52 @@ export class TaskService {
         supportedRevisionIds: [],
         historicalAssigneeIds: Array.from(new Set([
           ...(existingTaskData?.historicalAssigneeIds || []),
-          ...input.assignees.map(a => a.employeeId),
+          ...allAssignees.map(a => a.employeeId),
           createdBy
         ]))
       };
-
       transaction.set(taskRef.withConverter(taskConverter), newTaskData as any, { merge: true });
 
-      // [NEW] สร้าง Document `rev00` ใน `revisions` subcollection เฉพาะสำหรับงานใหม่ หรือยังไม่มี rev00
-      if (isNewTask) {
-        const rev00Ref = taskRef.collection('revisions').doc('rev00');
-        transaction.set(rev00Ref, {
-          revisionId: 'rev00',
-          revisionName: input.taskName,
-          taskName: input.taskName,
-          assignees: input.assignees,
-          createdAt: createdAtDate,
-          createdBy: createdBy,
+      if (isNewTask && input.subtasks && input.subtasks.length > 0) {
+        input.subtasks.forEach((st, index) => {
+          const subtaskNum = (index + 1).toString().padStart(4, '0');
+          const subtaskId = `${taskId}-${subtaskNum}`;
+          const subtaskRef = taskRef.collection('subtasks').doc(subtaskId);
+          
+          const subtaskData = {
+            id: `${woId}__${catId}__${taskId}__${subtaskId}`,
+            subtaskId: subtaskId,
+            subtaskName: st.subtaskName,
+            status: input.status || 'upcoming',
+            assignees: st.assignees,
+            dailyProgress: 0,
+            currentRevision: 'rev00',
+            isSupportRequest: st.isSupportRequest || false,
+            createdAt: createdAtDate,
+            updatedAt: now,
+            createdBy: createdBy,
+            updatedBy: createdBy,
+            historicalAssigneeIds: Array.from(new Set([
+              ...st.assignees.map(a => a.employeeId),
+              createdBy
+            ]))
+          };
+          
+          transaction.set(subtaskRef, subtaskData);
+          
+          const rev00Ref = subtaskRef.collection('revisions').doc('rev00');
+          transaction.set(rev00Ref, {
+            revisionId: 'rev00',
+            revisionName: st.subtaskName,
+            taskName: st.subtaskName,
+            assignees: st.assignees,
+            createdAt: createdAtDate,
+            createdBy: createdBy,
+          });
         });
       }
+
+
 
       return {
         id: `${woId}__${catId}__${taskId}`,
@@ -262,15 +303,18 @@ export class TaskService {
       };
       transaction.update(taskRef, taskUpdates);
 
-      // 5. สร้างเอกสาร Revision ใหม่
-      const nextRevRef = taskRef.collection('revisions').doc(nextRevId);
-      transaction.set(nextRevRef, {
-        revisionId: nextRevId,
-        revisionName: revisionName,
-        taskName: taskData.taskName,
-        assignees: newAssignees, // เฉพาะคนที่รับผิดชอบในรอบนี้
-        createdAt: now,
-        createdBy: updatedBy,
+      // 5. สร้างเอกสาร Revision ใหม่ ภายใต้ "ทุก Subtasks" ของงานนี้
+      const subtasksSnap = await transaction.get(taskRef.collection('subtasks'));
+      subtasksSnap.docs.forEach(doc => {
+        const nextRevRef = doc.ref.collection('revisions').doc(nextRevId);
+        transaction.set(nextRevRef, {
+          revisionId: nextRevId,
+          revisionName: revisionName,
+          taskName: doc.data().subtaskName || taskData.taskName,
+          assignees: doc.data().assignees || newAssignees, 
+          createdAt: now,
+          createdBy: updatedBy,
+        });
       });
 
       // 6. เก็บ Audit Trail
@@ -353,10 +397,7 @@ export class TaskService {
         throw new AppError('Task นี้มีทีม Support รับไปแล้ว', 400);
       }
 
-      // 2. อ่านข้อมูล rev00 เพื่อคัดลอก Field
-      const rev00Ref = taskRef.collection('revisions').doc('rev00');
-      const rev00Doc = await transaction.get(rev00Ref);
-      const rev00Data = rev00Doc.exists ? rev00Doc.data() : {};
+      // rev00Data ไม่จำเป็นแล้วเนื่องจากแยกไปอยู่ที่ subtasks
 
       // 4. อัปเดต Task หลักโดยเก็บ supportAssignees แยกต่างหาก ไม่เอาไปรวมใน assignees ของ Site
       // Note: We don't have direct access to user's projectLocationIds here easily without querying, 
@@ -380,16 +421,18 @@ export class TaskService {
       };
       transaction.update(taskRef, taskUpdates);
 
-      // 5. สร้างเอกสาร helpXX ให้ตรงกับ currentRevision
-      const helpRef = taskRef.collection('help').doc(helpId);
-      transaction.set(helpRef, {
-        ...rev00Data,
-        revisionId: helpId,
-        revisionName: supportTaskName,
-        taskName: supportTaskName, // Override original name for help document
-        assignees: supportAssignees, // เฉพาะ FM ของทีม Support
-        createdAt: now,
-        createdBy: updatedBy,
+      // 5. สร้างเอกสาร helpXX ให้ตรงกับ currentRevision ภายใต้ "ทุก Subtasks"
+      const subtasksSnap = await transaction.get(taskRef.collection('subtasks'));
+      subtasksSnap.docs.forEach(doc => {
+        const helpRef = doc.ref.collection('help').doc(helpId);
+        transaction.set(helpRef, {
+          revisionId: helpId,
+          revisionName: supportTaskName,
+          taskName: supportTaskName, 
+          assignees: supportAssignees, 
+          createdAt: now,
+          createdBy: updatedBy,
+        });
       });
 
       // 6. เก็บ Audit Trail
@@ -405,6 +448,25 @@ export class TaskService {
   /**
    * ดึงรายการ Tasks ทั้งหมด (กรองตาม Role)
    */
+
+  /**
+   * ดึงรายการงานย่อยของ Task (Subtasks)
+   */
+  async getSubtasks(taskId: string): Promise<any[]> {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    if (taskId.includes('__')) {
+      const [woId, catId, id] = taskId.split('__');
+      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(id);
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', taskId).limit(1).get();
+      if (querySnapshot.empty) return [];
+      taskRef = querySnapshot.docs[0].ref;
+    }
+    
+    const snapshot = await taskRef.collection('subtasks').get();
+    return snapshot.docs.map(doc => doc.data());
+  }
+
   async getTasks(filters?: { projectId?: string; assigneeId?: string }): Promise<Task[]> {
     // [TEMPORARY REVERT - Phase 1: Performance Fix] 
     // ใช้การกรองใน Memory ชั่วคราวเพื่อเลี่ยง Error 500 (FAILED_PRECONDITION) เนื่องจากยังไม่ได้สร้าง Index ใน Firebase Console
@@ -454,86 +516,145 @@ export class TaskService {
   async updateTask(id: string, input: UpdateTaskInput, updatedBy: string): Promise<void> {
     console.log(`[TaskService] Updating task: ${id}`, input);
     try {
-    let taskRef: FirebaseFirestore.DocumentReference;
-    let oldWoId: string = '', oldCatId: string = '', oldTaskId: string = '';
+      // 1. Resolve task reference outside transaction to avoid query inside transaction
+      let taskRef: FirebaseFirestore.DocumentReference;
+      let oldWoId: string = '', oldCatId: string = '', oldTaskId: string = '';
 
-    if (id.includes('__')) {
-      [oldWoId, oldCatId, oldTaskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories').doc(oldCatId).collection('tasks').doc(oldTaskId);
-    } else {
-      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (querySnapshot.empty) throw new AppError('Task not found', 404);
-      taskRef = querySnapshot.docs[0].ref;
-    }
-    
-    const doc = await taskRef.get();
-    console.log(`[TaskService] Document fetched: ${doc.exists}`);
-    if (!doc.exists) throw new AppError('ไม่พบข้อมูลงานที่ต้องการแก้ไข (Task not found)', 404);
-    
-    const oldData = doc.data() as any;
-    console.log(`[TaskService] Old data:`, { taskName: oldData.taskName, categoryName: oldData.categoryName });
-    const now = new Date();
-
-    // Sanitize input: Remove undefined values
-    const sanitizedInput = Object.keys(input).reduce((obj: any, key) => {
-      const val = (input as any)[key];
-      if (val !== undefined) obj[key] = val;
-      return obj;
-    }, {});
-
-    // 1. ตรวจสอบการเปลี่ยน Category (Category Migration)
-    if (input.categoryName && input.categoryName !== oldData.categoryName) {
-      // ดึงหรือสร้าง Category ID ใหม่ (ใช้ Logic คล้าย CreateTask)
-      // เพื่อความง่ายในจุดนี้ เราจะ Re-create task ใน Path ใหม่
-      const newCatId = `cat_counter_${oldWoId}`; // ใช้ counter เดิม
-      // หมายเหตุ: ในระบบจริงควรมี logic ตรวจสอบหมวดหมู่ที่มีอยู่แล้วด้วย
-      // แต่ในที่นี้เราจะรัน Task ภายใต้ Category Name ใหม่ไปเลย
-      
-      // เราจะทำการ Re-set ข้อมูลใน Path ใหม่ และลบอันเก่า (หรือ Mark isActive: false ในที่เก่า)
-      // แต่เพื่อรักษา Hierarchy เราจะย้าย Document ครับ
-      const newCategoryRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
-      
-      // ค้นหาว่ามีหมวดหมู่นี้อยู่แล้วหรือยัง
-      const catQuery = await newCategoryRef.where('catName', '==', input.categoryName).limit(1).get();
-      let targetCatId = '';
-      
-      if (!catQuery.empty) {
-        targetCatId = catQuery.docs[0].id;
+      if (id.includes('__')) {
+        [oldWoId, oldCatId, oldTaskId] = id.split('__');
+        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories').doc(oldCatId).collection('tasks').doc(oldTaskId);
       } else {
-        // สร้างหมวดหมู่ใหม่
-        const catCounterRef = afterSaleDb.collection('system_counters').doc(newCatId);
-        const catCounterDoc = await catCounterRef.get();
-        const nextCatRun = (catCounterDoc.data()?.count || 0) + 1;
-        targetCatId = `CAT-${nextCatRun.toString().padStart(4, '0')}`;
-        
-        await catCounterRef.set({ count: nextCatRun, updatedAt: now }, { merge: true });
-        await newCategoryRef.doc(targetCatId).set({ catId: targetCatId, catName: input.categoryName }, { merge: true });
+        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+        if (querySnapshot.empty) throw new AppError('Task not found', 404);
+        taskRef = querySnapshot.docs[0].ref;
+        oldTaskId = id;
+        const pathParts = taskRef.path.split('/');
+        oldWoId = pathParts[1];
+        oldCatId = pathParts[3];
       }
 
-      const newTaskRef = newCategoryRef.doc(targetCatId).collection('tasks').doc(oldTaskId);
-      const newData = { ...oldData, ...sanitizedInput, categoryId: targetCatId, updatedAt: now, updatedBy };
-      
-      await newTaskRef.set(newData);
-      console.log(`[TaskService] New task document created (Migration)`);
-      await taskRef.delete();
-      console.log(`[TaskService] Old task document deleted (Migration)`);
-      
-      await this.recordHistory(newTaskRef, 'update', oldData, newData, updatedBy);
-      console.log(`[TaskService] History recorded (Migration)`);
-    } else {
-      const updates: any = { ...sanitizedInput, updatedAt: now, updatedBy };
-      if (sanitizedInput.assignees) {
-        updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...sanitizedInput.assignees.map((a: any) => a.employeeId));
-      }
-      if (sanitizedInput.supportAssignees) {
-        updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...sanitizedInput.supportAssignees.map((a: any) => a.employeeId));
-      }
-      await taskRef.update(updates);
-      console.log(`[TaskService] Task document updated (Regular)`);
-      await this.recordHistory(taskRef, 'update', oldData, updates, updatedBy);
-      console.log(`[TaskService] History recorded (Regular)`);
-    }
-    console.log(`[TaskService] updateTask completed successfully`);
+      await afterSaleDb.runTransaction(async (transaction) => {
+        const doc = await transaction.get(taskRef);
+        if (!doc.exists) throw new AppError('ไม่พบข้อมูลงานที่ต้องการแก้ไข (Task not found)', 404);
+        
+        const oldData = doc.data() as any;
+        const now = new Date();
+
+        // Process Subtasks (Aggregate assignees)
+        const allAssigneesMap = new Map<string, any>();
+        let hasSupportRequest = false;
+
+        const subtasksRef = taskRef.collection('subtasks');
+        const existingSubtasksSnap = await transaction.get(subtasksRef);
+        const existingSubtasks = existingSubtasksSnap.docs.map(d => d.data());
+        
+        let currentSubtaskRun = existingSubtasks.length + 1;
+
+        if (input.subtasks) {
+          hasSupportRequest = input.subtasks.some(st => st.isSupportRequest) || false;
+          input.subtasks.forEach(st => {
+            st.assignees.forEach(a => {
+              allAssigneesMap.set(a.employeeId, a);
+            });
+          });
+        }
+        const allAssignees = Array.from(allAssigneesMap.values());
+
+        // Sanitize input: Remove undefined values and subtasks
+        const sanitizedInput = Object.keys(input).reduce((obj: any, key) => {
+          const val = (input as any)[key];
+          if (val !== undefined && key !== 'subtasks') obj[key] = val;
+          return obj;
+        }, {});
+
+        // Category Migration
+        let activeTaskRef = taskRef;
+        if (input.categoryName && input.categoryName !== oldData.categoryName) {
+          const newCatId = `cat_counter_${oldWoId}`;
+          const newCategoryRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
+          const catQuery = await newCategoryRef.where('catName', '==', input.categoryName).limit(1).get();
+          let targetCatId = '';
+          
+          if (!catQuery.empty) {
+            targetCatId = catQuery.docs[0].id;
+          } else {
+            // Note: Cannot easily create counters safely inside this transaction if we don't read them first.
+            // For simplicity in this fix, we assume we just reuse a generic fallback or generate a random ID if not found.
+            // To be safe, we'll just throw an error or use a timestamp for category ID if it's new.
+            targetCatId = `CAT-${now.getTime()}`;
+            transaction.set(newCategoryRef.doc(targetCatId), { catId: targetCatId, catName: input.categoryName }, { merge: true });
+          }
+
+          activeTaskRef = newCategoryRef.doc(targetCatId).collection('tasks').doc(oldTaskId);
+          const newData = { ...oldData, ...sanitizedInput, categoryId: targetCatId, updatedAt: now, updatedBy };
+          if (input.subtasks) {
+            newData.assignees = allAssignees;
+            newData.historicalAssigneeIds = Array.from(new Set([...(oldData.historicalAssigneeIds || []), ...allAssignees.map(a => a.employeeId)]));
+            newData.isSupportRequest = hasSupportRequest;
+          }
+          transaction.set(activeTaskRef, newData);
+          transaction.delete(taskRef);
+          
+          // Move existing subtasks to new path (simplified for migration)
+          existingSubtasks.forEach(st => {
+            transaction.set(activeTaskRef.collection('subtasks').doc(st.subtaskId), st);
+          });
+        } else {
+          const updates: any = { ...sanitizedInput, updatedAt: now, updatedBy };
+          if (input.subtasks) {
+            updates.assignees = allAssignees;
+            updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...allAssignees.map(a => a.employeeId));
+            updates.isSupportRequest = hasSupportRequest;
+          }
+          transaction.update(activeTaskRef, updates);
+        }
+        
+        // Update Subtasks
+        if (input.subtasks) {
+          input.subtasks.forEach(stInput => {
+            if (stInput.subtaskId) {
+              const stRef = activeTaskRef.collection('subtasks').doc(stInput.subtaskId);
+              transaction.update(stRef, {
+                subtaskName: stInput.subtaskName,
+                assignees: stInput.assignees,
+                isSupportRequest: stInput.isSupportRequest || false,
+                updatedAt: now,
+                updatedBy: updatedBy,
+                historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(...stInput.assignees.map(a => a.employeeId))
+              });
+            } else {
+              const subtaskNum = (currentSubtaskRun++).toString().padStart(4, '0');
+              const subtaskId = `${oldTaskId}-${subtaskNum}`;
+              const stRef = activeTaskRef.collection('subtasks').doc(subtaskId);
+              transaction.set(stRef, {
+                id: `${oldWoId}__${activeTaskRef.parent.parent?.id}__${oldTaskId}__${subtaskId}`,
+                subtaskId: subtaskId,
+                subtaskName: stInput.subtaskName,
+                status: 'upcoming',
+                assignees: stInput.assignees,
+                dailyProgress: 0,
+                currentRevision: 'rev00',
+                isSupportRequest: stInput.isSupportRequest || false,
+                createdAt: now,
+                updatedAt: now,
+                createdBy: updatedBy,
+                updatedBy: updatedBy,
+                historicalAssigneeIds: Array.from(new Set([...stInput.assignees.map(a => a.employeeId), updatedBy]))
+              });
+              const rev00Ref = stRef.collection('revisions').doc('rev00');
+              transaction.set(rev00Ref, {
+                revisionId: 'rev00',
+                revisionName: stInput.subtaskName,
+                taskName: stInput.subtaskName,
+                assignees: stInput.assignees,
+                createdAt: now,
+                createdBy: updatedBy,
+              });
+            }
+          });
+        }
+      });
+      console.log(`[TaskService] updateTask completed successfully`);
     } catch (error: any) {
       console.error(`[TaskService] CRITICAL ERROR in updateTask:`, error);
       throw new AppError(`Backend Error: ${error.message}`, 500);
@@ -603,29 +724,9 @@ export class TaskService {
    * Path: workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}
    */
   async submitDailyReport(id: string, reportData: any, updatedBy: string, isSupportReport: boolean = false): Promise<void> {
-    console.log(`[TaskService] Submitting daily report for task: ${id}`, reportData);
+    console.log(`[TaskService] Submitting daily report for subtask: ${id}`, reportData);
     
-    let taskRef: FirebaseFirestore.DocumentReference;
-    let selectedRevisionId: string | null = null;
-    
-    if (id.includes('__')) {
-      const parts = id.split('__');
-      if (parts.length >= 3) {
-        const [woId, catId, taskId] = parts;
-        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
-        if (parts.length === 4) {
-          selectedRevisionId = parts[3];
-        }
-      } else {
-        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-        if (querySnapshot.empty) throw new AppError('Task not found', 404);
-        taskRef = querySnapshot.docs[0].ref;
-      }
-    } else {
-      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (querySnapshot.empty) throw new AppError('Task not found', 404);
-      taskRef = querySnapshot.docs[0].ref;
-    }
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
 
     const reportDate = new Date(reportData.reportDate);
     const year = reportDate.getFullYear();
@@ -634,19 +735,19 @@ export class TaskService {
     const dateStr = `${year}-${month}-${day}`;
 
     // Get current revision first
-    const taskDocForRev = await taskRef.get();
-    if (!taskDocForRev.exists) throw new AppError('Task not found', 404);
-    const taskDataForRev = taskDocForRev.data() || {};
-    const currentRev = selectedRevisionId || taskDataForRev.currentRevision || 'rev00';
-
-    // บันทึกรายงานภายใต้ Revision หรือ Help
+    const subtaskDocForRev = await subtaskRef.get();
+    if (!subtaskDocForRev.exists) throw new AppError('Subtask not found', 404);
+    const subtaskDataForRev = subtaskDocForRev.data() || {};
+    const currentRev = subtaskDataForRev.currentRevision || 'rev00';
+    // บันทึกรายงานภายใต้ Revision หรือ Help ของ Subtask
     let dailyReportRef: FirebaseFirestore.DocumentReference;
     if (isSupportReport) {
       const helpId = currentRev.replace('rev', 'help');
-      dailyReportRef = taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr);
+      dailyReportRef = subtaskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr);
     } else {
-      dailyReportRef = taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
+      dailyReportRef = subtaskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
     }
+
 
     // Check if report already exists (to allow edits even if retroactive window is closed)
     const existingReportDoc = await dailyReportRef.get();
@@ -659,7 +760,7 @@ export class TaskService {
 
     // Check if the date is explicitly unlocked
     const unlockedDatesField = isSupportReport ? 'supportUnlockedDates' : 'unlockedDates';
-    const unlockedDates = taskDataForRev[unlockedDatesField] || {};
+    const unlockedDates = subtaskDataForRev[unlockedDatesField] || {};
     const unlockInfo = unlockedDates[dateStr];
     const isUnlocked = unlockInfo && (
       (unlockInfo.unlockedUntil.toDate ? unlockInfo.unlockedUntil.toDate() : new Date(unlockInfo.unlockedUntil)) >= nowForValidation
@@ -674,8 +775,8 @@ export class TaskService {
     // [NEW] Revision Timeline Boundary Validation
     // Users cannot submit reports before the current revision was created (rejected/joined)
     if (!isUnlocked) {
-      if (taskDataForRev.revisionCreatedAt && currentRev !== 'rev00') {
-        const revisionCreatedAt = taskDataForRev.revisionCreatedAt.toDate ? taskDataForRev.revisionCreatedAt.toDate() : new Date(taskDataForRev.revisionCreatedAt);
+      if (subtaskDataForRev.revisionCreatedAt && currentRev !== 'rev00') {
+        const revisionCreatedAt = subtaskDataForRev.revisionCreatedAt.toDate ? subtaskDataForRev.revisionCreatedAt.toDate() : new Date(subtaskDataForRev.revisionCreatedAt);
         const boundaryDate = new Date(revisionCreatedAt);
         boundaryDate.setHours(0, 0, 0, 0); // Start of the day
         if (reportDate < boundaryDate) {
@@ -766,17 +867,16 @@ export class TaskService {
         }
       }
     }
-
     // --- [NEW] Cross-Revision Conflict Validation ---
     if (!isSupportReport) {
       // Check if any revision (other than current) has a report for this date
-      const revisionsSnapshot = await taskRef.collection('revisions').get();
+      const revisionsSnapshot = await subtaskRef.collection('revisions').get();
       const allRevIds = revisionsSnapshot.docs.map(d => d.id);
       
       for (const revId of allRevIds) {
         if (revId === currentRev) continue; // Skip current
         
-        const otherReportRef = taskRef.collection('revisions').doc(revId).collection('dailyReports').doc(dateStr);
+        const otherReportRef = subtaskRef.collection('revisions').doc(revId).collection('dailyReports').doc(dateStr);
         const otherReportDoc = await otherReportRef.get();
         if (otherReportDoc.exists) {
           throw new AppError(`มีข้อมูลรายงานในวันที่ ${dateStr} อยู่ใน ${revId} แล้ว ไม่สามารถลงข้อมูลทับซ้อนกันได้`, 400);
@@ -784,20 +884,21 @@ export class TaskService {
       }
     } else {
       // Check help/support reports as well
-      const helpSnapshot = await taskRef.collection('help').get();
+      const helpSnapshot = await subtaskRef.collection('help').get();
       const allHelpIds = helpSnapshot.docs.map(d => d.id);
       const helpIdToMatch = currentRev.replace('rev', 'help');
       
       for (const hId of allHelpIds) {
         if (hId === helpIdToMatch) continue; // Skip current
 
-        const otherHelpReportRef = taskRef.collection('help').doc(hId).collection('dailyReports').doc(dateStr);
+        const otherHelpReportRef = subtaskRef.collection('help').doc(hId).collection('dailyReports').doc(dateStr);
         const otherHelpReportDoc = await otherHelpReportRef.get();
         if (otherHelpReportDoc.exists) {
           throw new AppError(`มีข้อมูลรายงาน Support ในวันที่ ${dateStr} อยู่ใน ${hId} แล้ว`, 400);
         }
       }
     }
+
 
     await afterSaleDb.runTransaction(async (transaction) => {
       // 1. ALL READS
@@ -838,11 +939,11 @@ export class TaskService {
         finalReportData.note = existingData.note;
         finalReportData.photos = existingData.photos;
       }
-
       // Check if this is the latest report chronologically
       const reportsCollectionRef = isSupportReport 
-        ? taskRef.collection('help').doc(currentRev.replace('rev', 'help')).collection('dailyReports')
-        : taskRef.collection('revisions').doc(currentRev).collection('dailyReports');
+        ? subtaskRef.collection('help').doc(currentRev.replace('rev', 'help')).collection('dailyReports')
+        : subtaskRef.collection('revisions').doc(currentRev).collection('dailyReports');
+
         
       const newerReportsSnapshot = await transaction.get(
         reportsCollectionRef.where(admin.firestore.FieldPath.documentId(), '>', dateStr).limit(1)
@@ -988,40 +1089,24 @@ export class TaskService {
    * ดึงข้อมูลรายงานประจำวันของ Task ตามวันที่ระบุ
    */
   async getDailyReport(id: string, dateStr: string, isSupportReport: boolean = false): Promise<any> {
-    let taskRef: FirebaseFirestore.DocumentReference;
-    let selectedRevisionId: string | null = null;
-    if (id.includes('__')) {
-      const parts = id.split('__');
-      if (parts.length >= 3) {
-        const [woId, catId, taskId] = parts;
-        taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
-        if (parts.length === 4) selectedRevisionId = parts[3];
-      } else {
-        const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-        if (querySnapshot.empty) return null;
-        taskRef = querySnapshot.docs[0].ref;
-      }
-    } else {
-      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (querySnapshot.empty) return null;
-      taskRef = querySnapshot.docs[0].ref;
-    }
+    const { subtaskRef } = await this.resolveRefs(id);
 
-    const taskDocForRev = await taskRef.get();
-    if (!taskDocForRev.exists) return null;
-    const currentRev = selectedRevisionId || taskDocForRev.data()?.currentRevision || 'rev00';
+    const subtaskDocForRev = await subtaskRef.get();
+    if (!subtaskDocForRev.exists) return null;
+    const currentRev = subtaskDocForRev.data()?.currentRevision || 'rev00';
 
     if (isSupportReport) {
       const helpId = currentRev.replace('rev', 'help');
-      const reportDoc = await taskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr).get();
+      const reportDoc = await subtaskRef.collection('help').doc(helpId).collection('dailyReports').doc(dateStr).get();
       if (reportDoc.exists) return reportDoc.data();
     } else {
-      const reportDoc = await taskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
+      const reportDoc = await subtaskRef.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr).get();
       if (reportDoc.exists) return reportDoc.data();
     }
 
     return null;
   }
+
   /**
    * ดึงข้อมูลรายงานประจำวันทั้งหมดของ Task
    */
@@ -1155,6 +1240,144 @@ export class TaskService {
       updatedAt: new Date()
     });
   }
+
+  async submitAdvanceRequest(id: string, requestData: any, createdBy: string, isSupportRequest: boolean = false): Promise<void> {
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
+    const requestDate = new Date(requestData.reportDate);
+    
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    const requestDateStart = new Date(requestDate);
+    requestDateStart.setHours(0, 0, 0, 0);
+
+    if (requestDateStart < tomorrow) {
+       throw new AppError('สามารถวางแผนงานล่วงหน้าได้อย่างน้อย 1 วัน (ไม่สามารถลงสำหรับวันนี้หรือย้อนหลังได้)', 400);
+    }
+
+    const year = requestDate.getFullYear();
+    const month = String(requestDate.getMonth() + 1).padStart(2, '0');
+    const day = String(requestDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const subtaskDoc = await subtaskRef.get();
+    if (!subtaskDoc.exists) throw new AppError('Subtask not found', 404);
+    const subtaskData = subtaskDoc.data() as any;
+    const currentRev = subtaskData.currentRevision || 'rev00';
+
+    let requestRef: FirebaseFirestore.DocumentReference;
+    if (isSupportRequest) {
+      const helpId = currentRev.replace('rev', 'help');
+      requestRef = subtaskRef.collection('help').doc(helpId).collection('requests').doc(dateStr);
+    } else {
+      requestRef = subtaskRef.collection('revisions').doc(currentRev).collection('requests').doc(dateStr);
+    }
+
+    const payload = {
+        requestId: dateStr,
+        ...requestData,
+        reportDate: requestDate,
+        createdAt: now,
+        updatedAt: now,
+        createdBy,
+        updatedBy: createdBy,
+        status: 'pending' 
+    };
+    
+    delete payload.photos;
+
+    await requestRef.set(payload, { merge: true });
+  }
+
+  async getAdvanceRequests(id: string, isSupportRequest?: boolean): Promise<any[]> {
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
+    const subtaskDoc = await subtaskRef.get();
+    if (!subtaskDoc.exists) return [];
+    
+    const allRequests: any[] = [];
+    
+    if (isSupportRequest === false || isSupportRequest === undefined) {
+      const revisionsSnapshot = await subtaskRef.collection('revisions').get();
+      for (const revDoc of revisionsSnapshot.docs) {
+        const requests = await revDoc.ref.collection('requests').get();
+        requests.docs.forEach((d: any) => {
+          allRequests.push({ ...d.data(), _revisionId: revDoc.id });
+        });
+      }
+    }
+
+    if (isSupportRequest === true || isSupportRequest === undefined) {
+      const helpSnapshot = await subtaskRef.collection('help').get();
+      for (const hDoc of helpSnapshot.docs) {
+        const requests = await hDoc.ref.collection('requests').get();
+        requests.docs.forEach((d: any) => {
+          allRequests.push({ ...d.data(), _revisionId: hDoc.id });
+        });
+      }
+    }
+    return allRequests;
+  }
+
+  private async resolveRefs(id: string) {
+    let taskRef: FirebaseFirestore.DocumentReference;
+    let subtaskRef: FirebaseFirestore.DocumentReference;
+    if (id.includes('__')) {
+      const parts = id.split('__');
+      if (parts.length >= 4) {
+        const [woId, catId, taskId, subtaskId] = parts;
+        taskRef = afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
+        subtaskRef = taskRef.collection('subtasks').doc(subtaskId);
+      } else {
+        throw new AppError('Invalid ID format', 400);
+      }
+    } else {
+      const querySnapshot = await afterSaleDb.collectionGroup('subtasks').where('subtaskId', '==', id).limit(1).get();
+      if (querySnapshot.empty) throw new AppError('Subtask not found', 404);
+      subtaskRef = querySnapshot.docs[0].ref;
+      taskRef = subtaskRef.parent.parent as FirebaseFirestore.DocumentReference;
+    }
+    return { taskRef, subtaskRef };
+  }
+
+
+  async createSubtask(taskId: string, input: any, userId: string): Promise<any> {
+    const { taskRef } = await this.resolveRefs(taskId);
+    const subtaskRef = taskRef.collection('subtasks').doc();
+    const subtaskId = subtaskRef.id;
+    const now = new Date();
+    
+    const subtaskData = {
+        subtaskId: subtaskId,
+        subtaskName: input.subtaskName,
+        status: input.status || 'upcoming',
+        assignees: input.assignees || [],
+        dailyProgress: 0,
+        currentRevision: 'rev00',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: userId,
+        updatedBy: userId,
+        isSupportRequest: input.isSupportRequest || false,
+    };
+    
+    await subtaskRef.set(subtaskData);
+    
+    // Create rev00 for the subtask
+    const rev00Ref = subtaskRef.collection('revisions').doc('rev00');
+    await rev00Ref.set({
+        revisionId: 'rev00',
+        revisionName: input.subtaskName,
+        taskName: input.subtaskName,
+        assignees: input.assignees || [],
+        createdAt: now,
+        createdBy: userId
+    });
+    
+    return { id: subtaskId, ...subtaskData };
+  }
+
 }
 
 export const taskService = new TaskService();

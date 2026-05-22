@@ -48,3 +48,11 @@ This catalog lists known errors and bug fix details.
 - **Root Cause:** The `/tasks/backlog` endpoint returned raw `taskId` values. When editing records, the frontend called report submission/retrieval endpoints using this raw ID, which triggered a Firestore `collectionGroup('tasks').where('taskId', '==', id)` query. This query requires an index that is missing in the local Firestore emulator.
 - **Resolution:** Modified `/api/tasks/backlog` to return the task's composite ID (`woId__catId__taskId`) instead of its raw `taskId`. Since this composite ID contains `__`, the backend's `getDailyReport` and `submitDailyReport` services resolve the task directly by document reference path, bypassing the index requirement and resolving the 500 error.
 
+
+## ERR-007: Maximum update depth exceeded in workspace/index.tsx
+- **Task:** T-010 · **Session:** session_004
+- **File:** src/pages/workspace/index.tsx · **Line:** 133
+- **Symptom:** React rendering infinite loop (Maximum update depth exceeded)
+- **Root Cause:** useTaskCacheStore() returned the whole state object which changes on every mutation, causing infinite re-renders when taskCache is used as a dependency in useCallback/useEffect.
+- **Resolution:** Destructured useTaskCacheStore into specific properties (tasksInCache, isCacheValid, etc.) to prevent unnecessary re-renders.
+

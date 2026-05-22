@@ -58,18 +58,52 @@ export interface CreateTaskInput {
   workOrderName?: string;
   categoryId?: string;
   categoryName: string;
-  assignees: TaskAssignee[];
   dueDate: string; // ISO string
   status?: TaskStatus;
-  isSupportRequest?: boolean;
+  subtasks: {
+    subtaskName: string;
+    assignees: TaskAssignee[];
+    isSupportRequest?: boolean;
+  }[];
 }
 
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {
+  isSupportRequest?: boolean;
   dailyProgress?: number;
   supportedRevisionIds?: string[];
 }
 
+export interface Subtask {
+  id: string;
+  subtaskId: string;
+  subtaskName: string;
+  status: TaskStatus;
+  assignees: TaskAssignee[];
+  dailyProgress: number;
+  currentRevision: string;
+  createdAt: string;
+  updatedAt: string;
+  isSupportRequest?: boolean;
+}
+
+export interface AdvanceRequestInput {
+  reportDate: string; // ISO or YYYY-MM-DD
+  progress: number;
+  labor: any[];
+  isSupportReport?: boolean;
+}
+
 export const taskService = {
+  getSubtasks: async (taskId: string): Promise<Subtask[]> => {
+    try {
+      const response = await api.get(`/tasks/${taskId}/subtasks`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error fetching subtasks for task ${taskId}:`, error);
+      throw error;
+    }
+  },
+
   /**
    * Fetch tasks with optional filters
    */
@@ -167,5 +201,25 @@ export const taskService = {
   }> => {
     return await api.get('/tasks/backlog', { startDate, endDate });
   },
-};
 
+  /**
+   * Create a new subtask
+   */
+  createSubtask: async (id: string, subtaskName: string, assignees: TaskAssignee[]): Promise<Subtask> => {
+    return await api.post<Subtask>(`/tasks/${id}/subtasks`, { subtaskName, assignees });
+  },
+
+  /**
+   * Submit advance work request
+   */
+  submitAdvanceRequest: async (id: string, data: AdvanceRequestInput): Promise<void> => {
+    await api.post(`/tasks/${id}/requests`, data);
+  },
+
+  /**
+   * Get advance requests for a task
+   */
+  getAdvanceRequests: async (id: string): Promise<any[]> => {
+    return await api.get<any[]>(`/tasks/${id}/requests`);
+  },
+};

@@ -516,13 +516,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/tasks
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { taskName, projectId, projectName, workOrderId, workOrderCode, workOrderName, categoryId, categoryName, assignees, dueDate, status, isSupportRequest } = req.body;
+    const { taskName, projectId, projectName, workOrderId, workOrderCode, workOrderName, categoryId, categoryName, subtasks, dueDate, status } = req.body;
     
-    const isSupport = isSupportRequest === true;
-    const hasAssignees = Array.isArray(assignees) && assignees.length > 0;
-
-    if (!taskName || !projectId || !workOrderCode || !categoryName || !dueDate || (!isSupport && !hasAssignees)) {
-      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Assignees, DueDate are required)', 400);
+    if (!taskName || !projectId || !workOrderCode || !categoryName || !dueDate || !subtasks || subtasks.length === 0) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Subtasks, DueDate are required)', 400);
     }
 
     const validatedData = {
@@ -535,10 +532,9 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       workOrderName,
       categoryId,
       categoryName,
-      assignees: assignees || [],
+      subtasks,
       dueDate: new Date(dueDate),
       status,
-      isSupportRequest: isSupport,
     };
 
     const userId = req.user?.uid;
@@ -697,6 +693,16 @@ router.post('/:id/request-unlock', async (req: Request, res: Response, next: Nex
   }
 });
 
+// GET /api/tasks/:id/subtasks
+router.get('/:id/subtasks', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const subtasks = await taskService.getSubtasks(req.params.id);
+    res.json({ success: true, data: subtasks });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/tasks/:id/reports
 router.get('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -799,6 +805,64 @@ router.post('/:id/support', async (req: Request, res: Response, next: NextFuncti
     res.status(200).json({
       success: true,
       message: 'เข้าร่วมงาน Support สำเร็จ (Support task joined successfully)',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/subtasks
+router.post('/:id/subtasks', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const subtask = await taskService.createSubtask(id, req.body, userId);
+    res.status(201).json({
+      success: true,
+      message: 'สร้าง Subtask สำเร็จ',
+      data: subtask
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/requests
+router.post('/:id/requests', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const requestData = req.body;
+    const isSupportRequest = req.body.isSupportReport === true;
+    
+    await taskService.submitAdvanceRequest(id, requestData, userId, isSupportRequest);
+
+    res.status(201).json({
+      success: true,
+      message: 'สร้างคำขอวางแผนงานล่วงหน้าสำเร็จ',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/:id/requests
+router.get('/:id/requests', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    let isSupportRequest: boolean | undefined = undefined;
+    if (req.query.isSupportReport === 'true') isSupportRequest = true;
+    if (req.query.isSupportReport === 'false') isSupportRequest = false;
+    
+    const requests = await taskService.getAdvanceRequests(id, isSupportRequest);
+
+    res.status(200).json({
+      success: true,
+      data: requests,
     });
   } catch (error) {
     next(error);

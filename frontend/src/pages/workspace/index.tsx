@@ -36,7 +36,12 @@ const COLUMNS = [
 
 export default function WorkspacePage() {
   const { user } = useAuthStore();
-  const taskCache = useTaskCacheStore();
+  const tasksInCache = useTaskCacheStore((s) => s.tasks);
+  const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
+  const invalidateCache = useTaskCacheStore((s) => s.invalidate);
+  const setTasksInCache = useTaskCacheStore((s) => s.setTasks);
+  const setCacheLoading = useTaskCacheStore((s) => s.setLoading);
+  const setCacheError = useTaskCacheStore((s) => s.setError);
   const { showLoading, hideLoading } = useFeedbackStore();
 
   const [activeTab, setActiveTab] = useState('All Tasks');
@@ -89,21 +94,21 @@ export default function WorkspacePage() {
       if (!silent) {
         setLoading(true);
       }
-      taskCache.setLoading(true);
+      setCacheLoading(true);
       try {
         const data = await taskService.getTasks();
-        taskCache.setTasks(data || []);
+        setTasksInCache(data || []);
         const filtered = filterTasksByRole(data || []);
         setTasks(filtered);
       } catch (error) {
         console.error('[WorkspacePage] Failed to fetch tasks', error);
-        taskCache.setError('ไม่สามารถโหลดข้อมูลงานได้');
+        setCacheError('ไม่สามารถโหลดข้อมูลงานได้');
       } finally {
         setLoading(false);
-        taskCache.setLoading(false);
+        setCacheLoading(false);
       }
     },
-    [filterTasksByRole, taskCache]
+    [filterTasksByRole, setCacheLoading, setTasksInCache, setCacheError]
   );
 
   /**
@@ -113,21 +118,21 @@ export default function WorkspacePage() {
    */
   const loadTasks = useCallback(
     async (forceRefresh = false) => {
-      if (!forceRefresh && taskCache.isCacheValid() && taskCache.tasks.length > 0) {
-        setTasks(filterTasksByRole(taskCache.tasks));
+      if (!forceRefresh && isCacheValid() && tasksInCache.length > 0) {
+        setTasks(filterTasksByRole(tasksInCache));
         setLoading(false);
         return;
       }
       await fetchFromAPI(forceRefresh);
     },
-    [taskCache, fetchFromAPI, filterTasksByRole]
+    [isCacheValid, tasksInCache, fetchFromAPI, filterTasksByRole]
   );
 
   // à¹‚à¸«à¸¥à¸”à¸„à¸£à¸±à¹‰à¸‡à¹à¸£à¸ + à¹€à¸¡à¸·à¹ˆà¸­ user à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™ â†’ invalidate cache
   useEffect(() => {
     const userChanged = prevUserIdRef.current !== (user?.id ?? null);
     if (userChanged) {
-      taskCache.invalidate();
+      invalidateCache();
       prevUserIdRef.current = user?.id ?? null;
     }
     setLoading(true);
@@ -135,7 +140,7 @@ export default function WorkspacePage() {
 
     const handleSync = async () => {
       showLoading();
-      taskCache.invalidate();
+      invalidateCache();
       try {
         await fetchFromAPI(true);
       } finally {
@@ -152,7 +157,7 @@ export default function WorkspacePage() {
   const handleModalSuccess = () => {
     setIsModalOpen(false);
     setEditingTask(null);
-    taskCache.invalidate();
+    invalidateCache();
     fetchFromAPI(true);
   };
 
@@ -172,7 +177,7 @@ export default function WorkspacePage() {
       await taskService.deleteTask(taskToDelete.id);
       setIsDeleteDialogOpen(false);
       setTaskToDelete(null);
-      taskCache.invalidate();
+      invalidateCache();
       fetchFromAPI(true);
     } catch (error) {
       console.error('Failed to delete task', error);
@@ -447,7 +452,7 @@ export default function WorkspacePage() {
         onClose={() => setIsReportModalOpen(false)}
         task={selectedTaskForReport}
         onTaskUpdated={() => {
-          taskCache.invalidate();
+          invalidateCache();
           fetchFromAPI(true);
         }}
       />

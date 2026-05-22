@@ -1,3 +1,3 @@
-task: Verify and implement API cache invalidation and loading spinner flow.
+task: Added multiple subtasks creation functionality in TaskCreateModal and TaskService. Updated workOrder schema documentation.
 phase: done
-next: N/A
+next: none

@@ -1,5 +1,15 @@
 {
   "files": {
+    "backend/src/check_backlog.ts": {
+      "description": "Module: check_backlog.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/check_user.ts": {
+      "description": "Module: check_user.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/index.ts": {
       "description": "Module: index.ts",
       "associated_tasks": [],
@@ -31,6 +41,7 @@
       "description": "Module: firebase.ts",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/check_user.ts",
         "backend/src/config/collections.ts",
         "backend/src/scripts/migrateDCIds.ts",
         "backend/src/scripts/runMigration.ts",
@@ -53,6 +64,7 @@
       "description": "Module: firebaseProjectB.ts",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/check_backlog.ts",
         "backend/src/config/storage.ts",
         "backend/src/services/ProjectConfigService.ts",
         "backend/src/services/TaskService.ts",

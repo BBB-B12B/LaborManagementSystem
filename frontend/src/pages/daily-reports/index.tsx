@@ -72,7 +72,7 @@ import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
 import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import thLocale from 'date-fns/locale/th';
-import { format, subDays, isBefore, isSameDay, isValid } from 'date-fns';
+import { format, subDays, isBefore, isSameDay, isValid, isAfter, startOfDay } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
 type ShiftPhotos = { regular: File[]; otMorning: File[]; otNoon: File[]; otEvening: File[] };
@@ -925,6 +925,7 @@ export default function DailyReportPage() {
   }, [reportDate]);
 
   const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion;
+  const isAdvanceRequestUI = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
   // Bulk Time State for Popup (T-903)
@@ -1816,7 +1817,9 @@ export default function DailyReportPage() {
       return;
     }
 
-    if (!isActingAsSupport) {
+    const isAdvanceRequest = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+
+    if (!isActingAsSupport && !isAdvanceRequest) {
       if (sitePhotos.length + existingPhotos.site.length < 2) {
         enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
         return;
@@ -1854,7 +1857,7 @@ export default function DailyReportPage() {
       return;
     }
 
-    if (!isActingAsSupport) {
+    if (!isActingAsSupport && !isAdvanceRequest) {
       if (progress === '') {
         enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
         return;
@@ -2029,9 +2032,19 @@ export default function DailyReportPage() {
       };
 
       // ─── 4. Submit ───────────────────────────────────────────────────────
-      await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
-
-      toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
+      const isAdvanceRequestSubmit = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+      if (isAdvanceRequestSubmit) {
+        await taskService.submitAdvanceRequest(selectedTask.id, {
+          reportDate: format(reportDate, 'yyyy-MM-dd'),
+          progress: Number(progress) || 0,
+          labor: laborPayload,
+          isSupportReport: isActingAsSupport,
+        });
+        toast.success('บันทึกแผนงานล่วงหน้าสำเร็จ');
+      } else {
+        await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
+        toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
+      }
 
       // Invalidate Cache once and perform a 100% Hard Refresh
       invalidateCache();
@@ -2421,7 +2434,13 @@ export default function DailyReportPage() {
                                 setReportDate(newValue || new Date());
                               }}
                               minDate={calendarMinDate}
-                              maxDate={completionDateStr ? new Date(completionDateStr) : new Date()}
+                              maxDate={completionDateStr ? new Date(completionDateStr) : (
+                                (() => {
+                                  const tomorrow = new Date();
+                                  tomorrow.setDate(tomorrow.getDate() + 1);
+                                  return tomorrow;
+                                })()
+                              )}
                               slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
                               slotProps={{
                                 textField: {
@@ -2788,7 +2807,8 @@ export default function DailyReportPage() {
                                     />
                                   </Grid>
 
-                                                                      <Grid item xs={12} md={9}>
+                                    <Grid item xs={12} md={9}>
+                                      {!isAdvanceRequestUI && (
                                       <Box ref={photoSectionRef}>
                                     <Box
                                       sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}
@@ -2960,6 +2980,7 @@ export default function DailyReportPage() {
                                         )}
                                     </Box>
                                     </Box>
+                                    )}
                                   </Grid>
                                 </Grid>
 

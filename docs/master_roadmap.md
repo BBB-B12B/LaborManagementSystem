@@ -31,7 +31,9 @@
 - [X] T-001-001-04: แก้ไข Error 500 เมื่อบันทึกเวลาทำงานย้อนหลังใน Backlog (→ ERR-006) · attempts: 1 · tool_calls: 61
 - [X] T-001-001-05: ปรับปรุงช่องกรองวันที่ให้เล็กลง ชิดขวา และเพิ่มช่องกรองรายชื่อแรงงาน (Autocomplete) · attempts: 1 · tool_calls: 12
 - [X] T-001-001-06: ปรับปรุงระบบจัดการ API Cache และหน้าจอดาวน์โหลด Spinner (Workspace, Daily Report, Backlog) · attempts: 1 · tool_calls: 38
+- [X] T-001-001-08: แก้ไข Error Maximum update depth exceeded ที่หน้า workspace/index.tsx (→ ERR-007) · attempts: 1 · tool_calls: 5
 - [/] T-009: บันทึกรูปภาพจาก Site FM แนบใน Help Daily Report เมื่อมีการเปิดงาน Support
+- [X] T-010: ปรับปรุง UI หน้าต่างสร้างรายงาน งานย่อย (Subtasks) เป็น 1 แถวต่อ 1 งาน และซ่อน Scrollbar · attempts: 1 · tool_calls: 10
 
 ---
 
