@@ -1,5 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Stack, Paper, Button, Popover, MenuItem, Select, FormControl, Divider, GlobalStyles } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Stack,
+  Paper,
+  Button,
+  Popover,
+  MenuItem,
+  Select,
+  FormControl,
+  Divider,
+  GlobalStyles,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  RadioGroup,
+  Radio
+} from '@mui/material';
 import projectService from '@/services/projectService';
 import {
   Fullscreen as FullscreenIcon,
@@ -25,6 +44,8 @@ export default function WorkHourMonitoringPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [foremanDialogOpen, setForemanDialogOpen] = useState(false);
+  const [splitByForeman, setSplitByForeman] = useState('false');
   const queryClient = useQueryClient();
   const toast = useToast();
   
@@ -101,6 +122,32 @@ export default function WorkHourMonitoringPage() {
       if (endDate) params.endDate = endDate.toISOString().split('T')[0];
       const blob = await reconciliationService.exportToExcel(params);
       reconciliationService.downloadExcelFile(blob, `Reconciliation_${filterStatus}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error: any) {
+      toast.error(error.message || 'Export failed');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportForeman = async () => {
+    setForemanDialogOpen(false);
+    setIsExporting(true);
+    try {
+      const params: any = {
+        splitByForeman: splitByForeman === 'true'
+      };
+      if (project !== 'all') params.homeProjectId = project;
+      if (startDate) params.startDate = startDate.toISOString().split('T')[0];
+      if (endDate) params.endDate = endDate.toISOString().split('T')[0];
+      
+      const blob = await reconciliationService.exportForemanReport(params);
+      const ext = splitByForeman === 'true' ? 'zip' : 'xlsx';
+      const dateStr = startDate && endDate 
+        ? `${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`
+        : new Date().toISOString().split('T')[0];
+      
+      reconciliationService.downloadExcelFile(blob, `รายงานความผิดปกติ_${dateStr}.${ext}`);
+      toast.success('ดาวน์โหลดรายงานเรียบร้อยแล้ว');
     } catch (error: any) {
       toast.error(error.message || 'Export failed');
     } finally {
@@ -201,11 +248,126 @@ export default function WorkHourMonitoringPage() {
                 projectsList={projectsList}
                 onClearFilter={() => handleStatusClick('all')}
                 onExport={handleExport}
+                onExportForeman={() => setForemanDialogOpen(true)}
                 onRefresh={() => queryClient.invalidateQueries({ queryKey: ['reconciliation'] })}
               />
             </Paper>
           </Box>
         </Box>
+
+        <Dialog
+          open={foremanDialogOpen}
+          onClose={() => setForemanDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: '12px',
+              p: 1.5,
+              boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+            }
+          }}
+        >
+          <DialogTitle sx={{ fontWeight: 900, color: '#0f172a', pb: 1, px: 2 }}>
+            เลือกรูปแบบการ Export รายงานโฟร์แมน
+          </DialogTitle>
+          <DialogContent sx={{ px: 2, py: 1 }}>
+            <Typography variant="body2" sx={{ color: '#475569', mb: 2 }}>
+              รายงานจะกรองเฉพาะรายการที่ต้องให้โฟร์แมนตรวจสอบเท่านั้น (ขาดงาน, ไม่มี Daily, ข้อมูลขัดแย้งเข้าสาย/ออกก่อน &gt; 30 นาที, ลาแต่มีสแกน)
+            </Typography>
+            <RadioGroup
+              value={splitByForeman}
+              onChange={(e) => setSplitByForeman(e.target.value)}
+              sx={{ gap: 1.5 }}
+            >
+              <Box
+                sx={{
+                  border: '1px solid',
+                  borderColor: splitByForeman === 'false' ? '#059669' : '#e2e8f0',
+                  borderRadius: '8px',
+                  p: 1.5,
+                  cursor: 'pointer',
+                  backgroundColor: splitByForeman === 'false' ? '#f0fdf4' : 'transparent',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    borderColor: '#059669',
+                    backgroundColor: '#f0fdf4',
+                  }
+                }}
+                onClick={() => setSplitByForeman('false')}
+              >
+                <FormControlLabel
+                  value="false"
+                  control={<Radio size="small" color="success" />}
+                  label={
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                      รวมทุกโฟร์แมนไว้ในไฟล์เดียว (.xlsx)
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%' }}
+                />
+                <Typography variant="caption" sx={{ display: 'block', pl: 3.5, color: '#64748b', mt: 0.5 }}>
+                  จัดกลุ่มตามชื่อโฟร์แมน คั่นด้วยหัวข้อและสรุปกลุ่มแยกในชีตเดียวกัน เหมาะสำหรับดูภาพรวมหรือพิมพ์ออกกระดาษ
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  border: '1px solid',
+                  borderColor: splitByForeman === 'true' ? '#059669' : '#e2e8f0',
+                  borderRadius: '8px',
+                  p: 1.5,
+                  cursor: 'pointer',
+                  backgroundColor: splitByForeman === 'true' ? '#f0fdf4' : 'transparent',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    borderColor: '#059669',
+                    backgroundColor: '#f0fdf4',
+                  }
+                }}
+                onClick={() => setSplitByForeman('true')}
+              >
+                <FormControlLabel
+                  value="true"
+                  control={<Radio size="small" color="success" />}
+                  label={
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                      แยกเป็นรายไฟล์บีบอัดลง ZIP (.zip)
+                    </Typography>
+                  }
+                  sx={{ m: 0, width: '100%' }}
+                />
+                <Typography variant="caption" sx={{ display: 'block', pl: 3.5, color: '#64748b', mt: 0.5 }}>
+                  แยกเป็นไฟล์ Excel 1 ไฟล์ต่อ 1 โฟร์แมน บีบอัดเป็น ZIP สำหรับส่งต่อให้แต่ละคนแยกตรวจสอบได้ทันที
+                </Typography>
+              </Box>
+            </RadioGroup>
+          </DialogContent>
+          <DialogActions sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+            <Button
+              onClick={() => setForemanDialogOpen(false)}
+              sx={{ color: '#64748b', textTransform: 'none', fontWeight: 600 }}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleExportForeman}
+              variant="contained"
+              sx={{
+                bgcolor: '#059669',
+                borderRadius: '6px',
+                px: 2.5,
+                textTransform: 'none',
+                fontWeight: 700,
+                '&:hover': {
+                  bgcolor: '#047857',
+                }
+              }}
+            >
+              ดาวน์โหลดรายงาน
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Popover
           open={Boolean(filterAnchorEl)}

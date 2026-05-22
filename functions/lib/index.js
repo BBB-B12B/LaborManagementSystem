@@ -371,6 +371,46 @@ function classifyByPunchCoverage(params) {
         note: autoNote || null,
     };
 }
+async function getAssigneeName(assigneeId) {
+    try {
+        // 1. Try direct document lookup (doc ID = assigneeId)
+        const doc = await db.collection('users').doc(assigneeId).get();
+        if (doc.exists) {
+            const data = doc.data();
+            if (data) {
+                const name = data.Fullname || data.name || data.fullNameEn || data.Fullnameen;
+                if (name)
+                    return name;
+            }
+        }
+        // 2. Fallback: query by lowercase 'employeeId'
+        const lowercaseSnap = await db.collection('users')
+            .where('employeeId', '==', assigneeId)
+            .limit(1)
+            .get();
+        if (!lowercaseSnap.empty) {
+            const data = lowercaseSnap.docs[0].data();
+            const name = data.Fullname || data.name || data.fullNameEn || data.Fullnameen;
+            if (name)
+                return name;
+        }
+        // 3. Fallback: query by uppercase 'Employeeid'
+        const uppercaseSnap = await db.collection('users')
+            .where('Employeeid', '==', assigneeId)
+            .limit(1)
+            .get();
+        if (!uppercaseSnap.empty) {
+            const data = uppercaseSnap.docs[0].data();
+            const name = data.Fullname || data.name || data.fullNameEn || data.Fullnameen;
+            if (name)
+                return name;
+        }
+    }
+    catch (err) {
+        console.warn(`[getAssigneeName] failed for ${assigneeId}:`, err);
+    }
+    return null;
+}
 // ─── Fallback Assignee Helper ──────────────────────────────────────────────────
 async function getFallbackAssignee(employeeId) {
     try {
@@ -401,14 +441,10 @@ async function getFallbackAssignee(employeeId) {
         if (maxAssigneeId && maxCount > 0) {
             let finalName = maxAssigneeName;
             if (!finalName || finalName === 'Unknown') {
-                try {
-                    const userSnap = await db.collection('users').where('Employeeid', '==', maxAssigneeId).limit(1).get();
-                    if (!userSnap.empty) {
-                        const uData = userSnap.docs[0].data();
-                        finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
-                    }
+                const resolvedName = await getAssigneeName(maxAssigneeId);
+                if (resolvedName) {
+                    finalName = resolvedName;
                 }
-                catch { /* ignore */ }
             }
             return { id: maxAssigneeId, name: finalName || 'Unknown' };
         }
@@ -943,7 +979,8 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             // ── Leave & Holiday ──────────────────────────────────────────────────
             leaveHours: isLeave ? totalLeaveHours : null,
             leaveEntries: isLeave ? leaveEntries : null,
-            medCertFileUrl: hasTimesheet ? (timesheet?.medCertFileUrl || null) : null,
+            medCertFileUrl: hasTimesheet ? (timesheet?.leaveStatus?.medCertFileUrl || timesheet?.medCertFileUrl || null) : null,
+            hasLeave: isLeave === true,
             scanDataId: scanDataId ?? null,
             timesheetId: hasTimesheet ? timesheetId : null,
             dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
@@ -953,17 +990,10 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             ...updatesObj,
         };
         if (hasTimesheet && timesheet?.AssigneesID) {
-            try {
-                const userSnap = await db.collection('users')
-                    .where('Employeeid', '==', timesheet.AssigneesID)
-                    .limit(1)
-                    .get();
-                if (!userSnap.empty) {
-                    const uData = userSnap.docs[0].data();
-                    updates['assigneeName'] = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || null;
-                }
+            const resolvedName = await getAssigneeName(timesheet.AssigneesID);
+            if (resolvedName) {
+                updates['assigneeName'] = resolvedName;
             }
-            catch { /* ignore */ }
         }
         else if (!hasTimesheet) {
             // ใช้ Fallback Assignee กรณีไม่มี Daily Report
@@ -1014,7 +1044,8 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             // ── Leave & Holiday ──────────────────────────────────────────────────
             leaveHours: isLeave ? totalLeaveHours : null,
             leaveEntries: isLeave ? leaveEntries : null,
-            medCertFileUrl: hasTimesheet ? (timesheet?.medCertFileUrl || null) : null,
+            medCertFileUrl: hasTimesheet ? (timesheet?.leaveStatus?.medCertFileUrl || timesheet?.medCertFileUrl || null) : null,
+            hasLeave: isLeave === true,
             scanDataId: scanDataId ?? null,
             timesheetId: hasTimesheet ? timesheetId : null,
             dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
@@ -1029,17 +1060,10 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             ...updatesObj,
         };
         if (hasTimesheet && timesheet?.AssigneesID) {
-            try {
-                const userSnap = await db.collection('users')
-                    .where('Employeeid', '==', timesheet.AssigneesID)
-                    .limit(1)
-                    .get();
-                if (!userSnap.empty) {
-                    const uData = userSnap.docs[0].data();
-                    setObj['assigneeName'] = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || null;
-                }
+            const resolvedName = await getAssigneeName(timesheet.AssigneesID);
+            if (resolvedName) {
+                setObj['assigneeName'] = resolvedName;
             }
-            catch { /* ignore */ }
         }
         else if (!hasTimesheet) {
             // ใช้ Fallback Assignee กรณีไม่มี Daily Report
@@ -1429,14 +1453,10 @@ exports.onReconciliationChanged = firebase_functions_1.firestore
         updates[`foremanUsage.${afterAssigneeId}.count`] = admin.firestore.FieldValue.increment(1);
         let finalAssigneeName = afterAssigneeName;
         if (!finalAssigneeName || finalAssigneeName === 'Unknown') {
-            try {
-                const userSnap = await db.collection('users').where('Employeeid', '==', afterAssigneeId).limit(1).get();
-                if (!userSnap.empty) {
-                    const uData = userSnap.docs[0].data();
-                    finalAssigneeName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
-                }
+            const resolvedName = await getAssigneeName(afterAssigneeId);
+            if (resolvedName) {
+                finalAssigneeName = resolvedName;
             }
-            catch { /* ignore */ }
         }
         if (finalAssigneeName && finalAssigneeName !== 'Unknown') {
             updates[`foremanUsage.${afterAssigneeId}.name`] = finalAssigneeName;

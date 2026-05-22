@@ -238,6 +238,28 @@ export const reconciliationService = {
   },
 
   /**
+   * Export รายการความผิดปกติสำหรับโฟร์แมน
+   * @param params homeProjectId, startDate, endDate, splitByForeman
+   * @returns Blob ของไฟล์ Excel หรือ ZIP
+   */
+  exportForemanReport: async (params: {
+    homeProjectId?: string;
+    projectLocationId?: string;
+    startDate?: string;
+    endDate?: string;
+    splitByForeman?: boolean;
+  }): Promise<Blob> => {
+    const response = await apiClient.get('/reconciliation/export-foreman', {
+      params: {
+        ...params,
+        splitByForeman: params.splitByForeman ? 'true' : 'false',
+      },
+      responseType: 'blob',
+    });
+    return response.data as Blob;
+  },
+
+  /**
    * Helper: Trigger การดาวน์โหลดไฟล์ Excel จาก Blob
    */
   downloadExcelFile: (blob: Blob, filename: string): void => {

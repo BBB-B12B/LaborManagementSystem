@@ -18,9 +18,9 @@ const STATUS_MAP: Record<string, 'active' | 'completed' | 'suspended'> = {
   active: 'active',
   completed: 'completed',
   suspended: 'suspended',
-  'กำลังดำเนินการอยู่': 'active',
-  'ปิดโครงการ': 'completed',
-  'ระงับชั่วคราว': 'suspended',
+  กำลังดำเนินการอยู่: 'active',
+  ปิดโครงการ: 'completed',
+  ระงับชั่วคราว: 'suspended',
 };
 const STATUS_OPTIONS = Object.keys(STATUS_MAP);
 
@@ -73,18 +73,31 @@ router.get(
       }
 
       // DEBUG: Log resolved user info for RBAC diagnosis
-      console.log('[RBAC Debug] user:', JSON.stringify(authReq.user?.projectLocationIds), 'role:', authReq.user?.roleCode, 'id:', authReq.user?.id);
+      console.log(
+        '[RBAC Debug] user:',
+        JSON.stringify(authReq.user?.projectLocationIds),
+        'role:',
+        authReq.user?.roleCode,
+        'id:',
+        authReq.user?.id
+      );
 
       // RBAC: All users see only their assigned projects
-      // userProjects stores values that may match p.id (Firestore docId) OR p.code OR p.projectCode
-      if (userProjects.length > 0) {
-        projects = projects.filter(p =>
-          userProjects.includes(p.id) ||
-          userProjects.includes(p.code) ||
-          userProjects.includes(p.projectCode)
-        );
-      } else {
-        projects = []; // No projects assigned → show nothing
+      // Admins (AM), Developer (GOD), and Managing Director (MD) bypass this filter to see all projects.
+      const userRole = authReq.user?.roleCode || authReq.user?.roleId;
+      const isSuperUser = userRole === 'AM' || userRole === 'GOD' || userRole === 'MD';
+
+      if (!isSuperUser) {
+        if (userProjects.length > 0) {
+          projects = projects.filter(
+            (p) =>
+              userProjects.includes(p.id) ||
+              userProjects.includes(p.code) ||
+              userProjects.includes(p.projectCode)
+          );
+        } else {
+          projects = []; // No projects assigned → show nothing
+        }
       }
 
       res.json({
@@ -255,11 +268,7 @@ router.put(
       if (input.startDate) input.startDate = new Date(input.startDate);
       if (input.endDate) input.endDate = new Date(input.endDate);
 
-      const project = await projectLocationService.updateProject(
-        req.params.id,
-        input,
-        updatedBy
-      );
+      const project = await projectLocationService.updateProject(req.params.id, input, updatedBy);
 
       if (!project) {
         throw new AppError('Project not found', 404);

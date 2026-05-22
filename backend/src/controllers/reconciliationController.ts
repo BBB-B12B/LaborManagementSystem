@@ -652,4 +652,78 @@ export async function exportToExcel(req: Request, res: Response): Promise<void> 
   }
 }
 
-// markAsExported ถูกลบออกแล้ว — Admin ดึงข้อมูลผ่าน getAnomaliesForExport แล้ว Export เอง
+// ---------------------------------------------------------------------------
+// GET /api/reconciliation/export-foreman
+// ---------------------------------------------------------------------------
+
+/**
+ * Export รายการความผิดปกติสำหรับโฟร์แมน
+ * รองรับทั้งแบบไฟล์เดียว (.xlsx) หรือแยกไฟล์บีบอัด (.zip)
+ * Query params: homeProjectId/projectLocationId, startDate, endDate, splitByForeman
+ */
+export async function exportForemanReport(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as AuthRequest;
+    const { homeProjectId, projectLocationId, startDate, endDate, splitByForeman } = req.query;
+
+    const targetProject = (homeProjectId || projectLocationId) as string | undefined;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    // RBAC
+    if (targetProject) {
+      if (!userProjects.includes(targetProject)) {
+        res.status(403).json({ success: false, error: 'Access denied for this project' });
+        return;
+      }
+    } else {
+      if (userProjects.length === 0) {
+        res.status(400).json({ success: false, error: 'No projects assigned to this user' });
+        return;
+      }
+    }
+
+    const records = await reconciliationService.getAnomaliesForForeman({
+      homeProjectId: targetProject,
+      allowedHomeProjects: targetProject ? undefined : userProjects,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+    });
+
+    const isSplit = splitByForeman === 'true';
+
+    if (isSplit) {
+      // Group records by foreman name
+      const foremanGroups = new Map<string, any[]>();
+      for (const r of records) {
+        const fName = r.assigneeName || 'ไม่ระบุโฟร์แมน';
+        if (!foremanGroups.has(fName)) {
+          foremanGroups.set(fName, []);
+        }
+        foremanGroups.get(fName)!.push(r);
+      }
+
+      const zipBuffer = await reconciliationService.generateForemanZip(
+        foremanGroups,
+        startDate as string,
+        endDate as string
+      );
+
+      const zipFilename = `รายงานความผิดปกติ_${startDate || ''}_${endDate || ''}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(zipFilename)}`);
+      res.send(zipBuffer);
+    } else {
+      const excelBuffer = await reconciliationService.generateForemanExcel(records);
+      const excelFilename = `รายงานความผิดปกติ_${startDate || ''}_${endDate || ''}.xlsx`;
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(excelFilename)}`);
+      res.send(excelBuffer);
+    }
+  } catch (error: any) {
+    console.error('[reconciliation] exportForemanReport error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Foreman export failed' });
+  }
+}

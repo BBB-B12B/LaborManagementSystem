@@ -27,6 +27,9 @@ import {
 } from '../external/ProjectBDailyReportService';
 import { scanDataService } from '../scanData/ScanDataService';
 import { dailyContractorService } from '../dailyContractor/DailyContractorService';
+import ExcelJS from 'exceljs';
+import archiver from 'archiver';
+import { PassThrough } from 'stream';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -120,6 +123,43 @@ export class ReconciliationService {
     return this.db.collection(COLLECTION);
   }
 
+  private async getAssigneeName(assigneeId: string): Promise<string | null> {
+    try {
+      // 1. Try direct document lookup (doc ID = assigneeId)
+      const doc = await this.db.collection('users').doc(assigneeId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data) {
+          const name = data.Fullname || data.name || data.fullNameEn || data.Fullnameen;
+          if (name) return name;
+        }
+      }
+      // 2. Fallback: query by lowercase 'employeeId'
+      const lowercaseSnap = await this.db.collection('users')
+        .where('employeeId', '==', assigneeId)
+        .limit(1)
+        .get();
+      if (!lowercaseSnap.empty) {
+        const data = lowercaseSnap.docs[0].data();
+        const name = data.Fullname || data.name || data.fullNameEn || data.Fullnameen;
+        if (name) return name;
+      }
+      // 3. Fallback: query by uppercase 'Employeeid'
+      const uppercaseSnap = await this.db.collection('users')
+        .where('Employeeid', '==', assigneeId)
+        .limit(1)
+        .get();
+      if (!uppercaseSnap.empty) {
+        const data = uppercaseSnap.docs[0].data();
+        const name = data.Fullname || data.name || data.fullNameEn || data.Fullnameen;
+        if (name) return name;
+      }
+    } catch (err) {
+      console.warn(`[ReconciliationService] getAssigneeName failed for ${assigneeId}:`, err);
+    }
+    return null;
+  }
+
   // =========================================================================
   // Core: Classify
   // =========================================================================
@@ -154,13 +194,10 @@ export class ReconciliationService {
       if (maxAssigneeId && maxCount > 0) {
         let finalName = maxAssigneeName;
         if (!finalName || finalName === 'Unknown') {
-          try {
-            const userSnap = await this.db.collection('users').where('Employeeid', '==', maxAssigneeId).limit(1).get();
-            if (!userSnap.empty) {
-              const uData = userSnap.docs[0].data();
-              finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
-            }
-          } catch { /* ignore */ }
+          const resolvedName = await this.getAssigneeName(maxAssigneeId);
+          if (resolvedName) {
+            finalName = resolvedName;
+          }
         }
         return { id: maxAssigneeId, name: finalName || 'Unknown' };
       }
@@ -657,18 +694,36 @@ export class ReconciliationService {
     if (!existing) {
       // สร้างใหม่
       const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
-      const classified = this.classifyByPunchCoverage({
-        dailyReportPunches: input.dailyReportPunches ?? [],
-        scanPunches: input.scanPunches ?? [],
-        timesheetNormalHours: input.timesheetNormalHours,
-        timesheetOtMorning: input.timesheetOtMorning,
-        timesheetOtNoon: input.timesheetOtNoon,
-        timesheetOtEvening: input.timesheetOtEvening,
-        dailyReportHours: input.dailyReportHours,
-        isHoliday: input.isHoliday ?? isHoliday,
-        isLeave: isLeaveCalculated ?? isLeave,
-        leaveHours: input.leaveHours,
-      });
+      const inputShiftTimes = input.shiftTimes;
+
+      let classified: ClassifyResult;
+      if (inputShiftTimes && inputShiftTimes.day) {
+        classified = this.classifyBySegments({
+          shiftTimes: inputShiftTimes,
+          scanPunches: input.scanPunches ?? [],
+          timesheetNormalHours: input.timesheetNormalHours,
+          timesheetOtMorning: input.timesheetOtMorning,
+          timesheetOtNoon: input.timesheetOtNoon,
+          timesheetOtEvening: input.timesheetOtEvening,
+          dailyReportHours: input.dailyReportHours,
+          isHoliday: input.isHoliday ?? isHoliday,
+          isLeave: isLeaveCalculated ?? isLeave,
+          leaveHours: input.leaveHours,
+        });
+      } else {
+        classified = this.classifyByPunchCoverage({
+          dailyReportPunches: input.dailyReportPunches ?? [],
+          scanPunches: input.scanPunches ?? [],
+          timesheetNormalHours: input.timesheetNormalHours,
+          timesheetOtMorning: input.timesheetOtMorning,
+          timesheetOtNoon: input.timesheetOtNoon,
+          timesheetOtEvening: input.timesheetOtEvening,
+          dailyReportHours: input.dailyReportHours,
+          isHoliday: input.isHoliday ?? isHoliday,
+          isLeave: isLeaveCalculated ?? isLeave,
+          leaveHours: input.leaveHours,
+        });
+      }
 
       const historyEntry: StatusHistoryEntry = {
         status: classified.status,
@@ -688,11 +743,11 @@ export class ReconciliationService {
         approvedOtEvening: classified.approvedOtEvening,
         totalApprovedHours: classified.totalApprovedHours,
         approvalSource: classified.approvalSource,
-        lateMinutes: classified.lateMinutes,
-        earlyLeaveMinutes: classified.earlyLeaveMinutes,
-        isLate: classified.isLate,
-        isEarlyLeave: classified.isEarlyLeave,
-        note: classified.note,
+        lateMinutes: classified.lateMinutes ?? 0,
+        earlyLeaveMinutes: classified.earlyLeaveMinutes ?? 0,
+        isLate: classified.isLate ?? false,
+        isEarlyLeave: classified.isEarlyLeave ?? false,
+        note: classified.note ?? null,
         statusHistory: [historyEntry],
         createdAt: now,
         updatedAt: now,
@@ -792,7 +847,7 @@ export class ReconciliationService {
       earlyLeaveMinutes:      classified.earlyLeaveMinutes  ?? 0,
       isLate:                 classified.isLate            ?? false,
       isEarlyLeave:           classified.isEarlyLeave      ?? false,
-      note:                   classified.note,
+      note:                   classified.note ?? null,
       updatedAt:              now,
       hasLeave:               effectiveIsLeave === true,
       assigneeId:             input.assigneeId    ?? existing.assigneeId,
@@ -1035,22 +1090,11 @@ export class ReconciliationService {
     const assigneeMap = new Map<string, string>(); // empId -> fullNameEn
     if (assigneeIds.size > 0) {
       console.log(`[ReconciliationService] Looking up ${assigneeIds.size} assignee(s): [${Array.from(assigneeIds).join(', ')}]`);
-      const timeoutMs = 5000; // 5 วินาที ต่อ 1 query หาก hang จะ skip ไปเลย
       await Promise.all(Array.from(assigneeIds).map(async (empId) => {
         try {
-          const queryPromise = this.db.collection('users')
-            .where('Employeeid', '==', empId)
-            .limit(1)
-            .get();
-          const timeoutPromise = new Promise<null>((resolve) =>
-            setTimeout(() => resolve(null), timeoutMs)
-          );
-          const snap = await Promise.race([queryPromise, timeoutPromise]);
-          if (snap && 'empty' in snap && !snap.empty) {
-            const data = snap.docs[0].data();
-            assigneeMap.set(empId, data.Fullname || data.name || data.fullNameEn || data.Fullnameen || '');
-          } else if (!snap) {
-            console.warn(`[ReconciliationService] Assignee lookup timed out for empId=${empId} — skipping`);
+          const name = await this.getAssigneeName(empId);
+          if (name) {
+            assigneeMap.set(empId, name);
           }
         } catch (e) {
           console.warn(`[ReconciliationService] Assignee lookup failed for empId=${empId}:`, e);
@@ -1250,24 +1294,9 @@ export class ReconciliationService {
     let isFallbackAssignee = false;
 
     if (summary?.assigneeId) {
-      try {
-        const timeoutMs = 5000;
-        const queryPromise = this.db.collection('users')
-          .where('Employeeid', '==', summary.assigneeId)
-          .limit(1)
-          .get();
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => resolve(null), timeoutMs)
-        );
-        const snap = await Promise.race([queryPromise, timeoutPromise]);
-        if (snap && 'empty' in snap && !snap.empty) {
-          const data = snap.docs[0].data();
-          assigneeName = data.fullNameEn || data.Fullnameen;
-        } else if (!snap) {
-          console.warn(`[ReconciliationService] Assignee lookup timed out for empId=${summary.assigneeId}`);
-        }
-      } catch {
-        // ignore
+      const resolvedName = await this.getAssigneeName(summary.assigneeId);
+      if (resolvedName) {
+        assigneeName = resolvedName;
       }
     } else if (!summary) {
       // ใช้ Fallback Assignee กรณีไม่มี Daily Report
@@ -1954,6 +1983,528 @@ export class ReconciliationService {
       }),
       snapshot: entry.snapshot,
     };
+  }
+
+  // =========================================================================
+  // FOREMAN EXPORT SPECIALIZED SYSTEM
+  // =========================================================================
+
+  private hasLeaveOverlapWithScan(record: ReconciliationRecord): boolean {
+    if (!record.leaveEntries || record.leaveEntries.length === 0) return false;
+    if (!record.scanPunches || record.scanPunches.length === 0) return false;
+
+    for (const leave of record.leaveEntries) {
+      const timeRange: string | undefined = leave.timeRange;
+      if (!timeRange) continue;
+
+      const rangeParts = timeRange.split('-').map(s => s.trim());
+      if (rangeParts.length !== 2) continue;
+
+      const startMin = this.punchToMinutes(rangeParts[0]);
+      const endMin = this.punchToMinutes(rangeParts[1]);
+
+      for (const punch of record.scanPunches) {
+        const punchMin = this.punchToMinutes(punch);
+        if (punchMin >= startMin && punchMin <= endMin) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private getDailyReportTimeRange(record: ReconciliationRecord): string {
+    const times: string[] = [];
+    if (record.shiftTimes?.otMorning) times.push(record.shiftTimes.otMorning);
+    if (record.shiftTimes?.day) times.push(record.shiftTimes.day);
+    if (record.shiftTimes?.otEvening) times.push(record.shiftTimes.otEvening);
+
+    if (times.length === 0) return '';
+
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+
+    for (const range of times) {
+      const parts = range.split('-').map(s => s.trim());
+      if (parts.length !== 2) continue;
+      const start = this.punchToMinutes(parts[0]);
+      const end = this.punchToMinutes(parts[1]);
+      minStart = Math.min(minStart, start);
+      maxEnd = Math.max(maxEnd, end);
+    }
+
+    if (minStart === Infinity || maxEnd === -Infinity) return '';
+
+    const formatMins = (mins: number) => {
+      const h = Math.floor(mins / 60).toString().padStart(2, '0');
+      const m = (mins % 60).toString().padStart(2, '0');
+      return `${h}:${m}`;
+    };
+
+    return `${formatMins(minStart)}–${formatMins(maxEnd)}`;
+  }
+
+  private getScanTimeRange(record: ReconciliationRecord): string {
+    if (!record.scanPunches || record.scanPunches.length === 0) return '';
+    const sorted = [...record.scanPunches].sort(
+      (a, b) => this.punchToMinutes(a) - this.punchToMinutes(b)
+    );
+    if (sorted.length === 1) return sorted[0];
+    return `${sorted[0]}–${sorted[sorted.length - 1]}`;
+  }
+
+  async getAnomaliesForForeman(filter: ReconciliationFilter): Promise<ReconciliationRecord[]> {
+    const anomalyStatuses: ReconciliationStatus[] = [
+      'ABSENT',
+      'MISSING_DAILY',
+      'CONFLICTED',
+      'LEAVE',
+    ];
+
+    const query = this.buildBaseQuery({
+      ...filter,
+      status: anomalyStatuses,
+    });
+
+    const snap = await query.get();
+    const allRecords = snap.docs.map((doc) => reconciliationRecordConverter.fromFirestore(doc));
+
+    // Filter in-memory for precise foreman anomalies
+    const filtered = allRecords.filter((r) => {
+      if (r.status === 'ABSENT') return true;
+      if (r.status === 'MISSING_DAILY') return true;
+      if (r.status === 'CONFLICTED') {
+        return (r.lateMinutes ?? 0) > 30 || (r.earlyLeaveMinutes ?? 0) > 30;
+      }
+      if (r.status === 'LEAVE') {
+        return this.hasLeaveOverlapWithScan(r);
+      }
+      return false;
+    });
+
+    // Map computed status for leaves that have scans
+    for (const r of filtered) {
+      if (r.status === 'LEAVE') {
+        (r as any).status = 'LEAVE_WITH_SCAN';
+      }
+    }
+
+    // Sort ก-ฮ by foreman assigneeName and workDate ASC
+    filtered.sort((a, b) => {
+      const getForemanName = (rec: ReconciliationRecord) => rec.assigneeName || 'ไม่ระบุโฟร์แมน';
+      const nameA = getForemanName(a);
+      const nameB = getForemanName(b);
+
+      if (nameA === 'ไม่ระบุโฟร์แมน' && nameB !== 'ไม่ระบุโฟร์แมน') return 1;
+      if (nameB === 'ไม่ระบุโฟร์แมน' && nameA !== 'ไม่ระบุโฟร์แมน') return -1;
+
+      const nameComp = nameA.localeCompare(nameB, 'th');
+      if (nameComp !== 0) return nameComp;
+
+      return a.workDate.localeCompare(b.workDate);
+    });
+
+    return filtered;
+  }
+
+  async generateForemanExcel(records: ReconciliationRecord[]): Promise<ExcelJS.Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('รายงานความผิดปกติ');
+
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    worksheet.columns = [
+      { header: 'โฟร์แมน', key: 'foreman', width: 25 },
+      { header: 'ชื่อพนักงาน', key: 'employeeName', width: 25 },
+      { header: 'รหัสพนักงาน', key: 'employeeId', width: 15 },
+      { header: 'วันที่', key: 'workDate', width: 15 },
+      { header: 'สถานะ', key: 'status', width: 20 },
+      { header: 'เวลาตาม Daily Report', key: 'dailyReportTime', width: 25 },
+      { header: 'เวลาสแกนจริง', key: 'scanTime', width: 25 },
+      { header: 'หมายเหตุ', key: 'remark', width: 45 },
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 30;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF374151' },
+      };
+      cell.font = {
+        name: 'Inter',
+        color: { argb: 'FFFFFFFF' },
+        bold: true,
+        size: 11,
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+      };
+      cell.border = {
+        bottom: { style: 'medium', color: { argb: 'FF1F2937' } }
+      };
+    });
+
+    const formatDateThai = (wDate: string) => {
+      if (!wDate || !wDate.includes('-')) return '-';
+      const [year, month, day] = wDate.split('-');
+      return `${day}/${month}/${year}`;
+    };
+
+    const getThaiStatusLabel = (status: string) => {
+      if (status === 'ABSENT') return 'ขาดงาน';
+      if (status === 'MISSING_DAILY') return 'ไม่มี Daily Report';
+      if (status === 'CONFLICTED') return 'ข้อมูลขัดแย้ง';
+      if (status === 'LEAVE' || (status as any) === 'LEAVE_WITH_SCAN') return 'ลาแต่มีสแกน';
+      return status;
+    };
+
+    const getSummaryText = (groupName: string, groupRecords: ReconciliationRecord[]) => {
+      const absent = groupRecords.filter(r => r.status === 'ABSENT').length;
+      const missingDaily = groupRecords.filter(r => r.status === 'MISSING_DAILY').length;
+      const conflicted = groupRecords.filter(r => r.status === 'CONFLICTED').length;
+      const leaveWithScan = groupRecords.filter(r => r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN').length;
+      const total = groupRecords.length;
+      return `สรุปกลุ่ม (${groupName}): ขาดงาน: ${absent} | ไม่มี Daily Report: ${missingDaily} | ข้อมูลขัดแย้ง: ${conflicted} | ลาแต่มีสแกน: ${leaveWithScan} | รวม: ${total} รายการ`;
+    };
+
+    const legendText = `* หมายเหตุสัญลักษณ์ (Legend):
+  - ขาดงาน = ไม่พบข้อมูล Daily Report และไม่พบข้อมูลการสแกนนิ้วในวันนี้
+  - ไม่มี Daily Report = พนักงานมีการสแกนนิ้วเข้างานจริง แต่ใน Daily Report ไม่พบรายชื่อพนักงานเข้างาน
+  - ข้อมูลขัดแย้ง = พนักงานมีข้อมูลทั้ง Daily Report และสแกนนิ้ว แต่สแกนเข้าสายหรือออกก่อนเกิน 30 นาที
+  - ลาแต่มีสแกน = พนักงานแจ้งเอกสารลางานในระบบ แต่พบข้อมูลสแกนนิ้วจริงในพื้นที่ช่วงเวลาที่ลา`;
+
+    const foremanGroups = new Map<string, ReconciliationRecord[]>();
+    for (const r of records) {
+      const fName = r.assigneeName || 'ไม่ระบุโฟร์แมน';
+      if (!foremanGroups.has(fName)) {
+        foremanGroups.set(fName, []);
+      }
+      foremanGroups.get(fName)!.push(r);
+    }
+
+    const sortedGroups = Array.from(foremanGroups.entries()).sort((a, b) => {
+      if (a[0] === 'ไม่ระบุโฟร์แมน' && b[0] !== 'ไม่ระบุโฟร์แมน') return 1;
+      if (b[0] === 'ไม่ระบุโฟร์แมน' && a[0] !== 'ไม่ระบุโฟร์แมน') return -1;
+      return a[0].localeCompare(b[0], 'th');
+    });
+
+    for (const [foremanName, groupRecords] of sortedGroups) {
+      const sectionRow = worksheet.addRow([`โฟร์แมน: ${foremanName}`]);
+      worksheet.mergeCells(sectionRow.number, 1, sectionRow.number, 8);
+      sectionRow.height = 24;
+      const sectionCell = sectionRow.getCell(1);
+      sectionCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3F4F6' },
+      };
+      sectionCell.font = {
+        name: 'Inter',
+        bold: true,
+        color: { argb: 'FF1F2937' },
+        size: 11,
+      };
+      sectionCell.alignment = {
+        vertical: 'middle',
+        horizontal: 'left',
+        indent: 1,
+      };
+
+      let alternate = false;
+      for (const r of groupRecords) {
+        const row = worksheet.addRow({
+          foreman: r.assigneeName || 'ไม่ระบุโฟร์แมน',
+          employeeName: r.employeeName || '-',
+          employeeId: r.employeeId,
+          workDate: formatDateThai(r.workDate),
+          status: getThaiStatusLabel(r.status),
+          dailyReportTime: (r.status === 'CONFLICTED' || r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN') ? this.getDailyReportTimeRange(r) : '',
+          scanTime: (r.status === 'CONFLICTED' || r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN') ? this.getScanTimeRange(r) : '',
+          remark: r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN'
+            ? 'มีสแกนนิ้วในช่วงที่ลา — ตรวจสอบ Daily Report'
+            : (r.note || ''),
+        });
+
+        row.height = 20;
+        const rowBgColor = alternate ? 'FFF9FAFB' : 'FFFFFFFF';
+        
+        row.eachCell((cell) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: rowBgColor },
+          };
+          cell.font = {
+            name: 'Inter',
+            size: 10,
+            color: { argb: 'FF374151' },
+          };
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: 'center',
+          };
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          };
+        });
+
+        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+        alternate = !alternate;
+      }
+
+      const summaryRow = worksheet.addRow([getSummaryText(foremanName, groupRecords)]);
+      worksheet.mergeCells(summaryRow.number, 1, summaryRow.number, 8);
+      summaryRow.height = 22;
+      const summaryCell = summaryRow.getCell(1);
+      summaryCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF9FAFB' },
+      };
+      summaryCell.font = {
+        name: 'Inter',
+        bold: true,
+        italic: true,
+        color: { argb: 'FF4B5563' },
+        size: 10,
+      };
+      summaryCell.alignment = {
+        vertical: 'middle',
+        horizontal: 'left',
+        indent: 1,
+      };
+      summaryRow.eachCell((cell) => {
+        cell.border = {
+          bottom: { style: 'double', color: { argb: 'FF9CA3AF' } }
+        };
+      });
+    }
+
+    const legendRow = worksheet.addRow([legendText]);
+    worksheet.mergeCells(legendRow.number, 1, legendRow.number, 8);
+    legendRow.height = 80;
+    const legendCell = legendRow.getCell(1);
+    legendCell.font = {
+      name: 'Inter',
+      size: 9.5,
+      color: { argb: 'FF6B7280' },
+      italic: true,
+    };
+    legendCell.alignment = {
+      vertical: 'top',
+      horizontal: 'left',
+      wrapText: true,
+    };
+    legendCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFFFFF' },
+    };
+
+    return await workbook.xlsx.writeBuffer();
+  }
+
+  async generateForemanZip(
+    foremanGroups: Map<string, ReconciliationRecord[]>,
+    startDate?: string,
+    endDate?: string
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      const buffers: Buffer[] = [];
+      const outputStream = new PassThrough();
+
+      outputStream.on('data', (chunk) => buffers.push(chunk));
+      outputStream.on('end', () => resolve(Buffer.concat(buffers)));
+      outputStream.on('error', (err) => reject(err));
+
+      archive.pipe(outputStream);
+
+      const promises: Promise<void>[] = [];
+
+      const formatDateThai = (wDate: string) => {
+        if (!wDate || !wDate.includes('-')) return '-';
+        const [year, month, day] = wDate.split('-');
+        return `${day}/${month}/${year}`;
+      };
+
+      const getThaiStatusLabel = (status: string) => {
+        if (status === 'ABSENT') return 'ขาดงาน';
+        if (status === 'MISSING_DAILY') return 'ไม่มี Daily Report';
+        if (status === 'CONFLICTED') return 'ข้อมูลขัดแย้ง';
+        if (status === 'LEAVE' || (status as any) === 'LEAVE_WITH_SCAN') return 'ลาแต่มีสแกน';
+        return status;
+      };
+
+      const getSummaryText = (groupName: string, groupRecords: ReconciliationRecord[]) => {
+        const absent = groupRecords.filter(r => r.status === 'ABSENT').length;
+        const missingDaily = groupRecords.filter(r => r.status === 'MISSING_DAILY').length;
+        const conflicted = groupRecords.filter(r => r.status === 'CONFLICTED').length;
+        const leaveWithScan = groupRecords.filter(r => r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN').length;
+        const total = groupRecords.length;
+        return `สรุปกลุ่ม (${groupName}): ขาดงาน: ${absent} | ไม่มี Daily Report: ${missingDaily} | ข้อมูลขัดแย้ง: ${conflicted} | ลาแต่มีสแกน: ${leaveWithScan} | รวม: ${total} รายการ`;
+      };
+
+      const legendText = `* หมายเหตุสัญลักษณ์ (Legend):
+  - ขาดงาน = ไม่พบข้อมูล Daily Report และไม่พบข้อมูลการสแกนนิ้วในวันนี้
+  - ไม่มี Daily Report = พนักงานมีการสแกนนิ้วเข้างานจริง แต่ใน Daily Report ไม่พบรายชื่อพนักงานเข้างาน
+  - ข้อมูลขัดแย้ง = พนักงานมีข้อมูลทั้ง Daily Report และสแกนนิ้ว แต่สแกนเข้าสายหรือออกก่อนเกิน 30 นาที
+  - ลาแต่มีสแกน = พนักงานแจ้งเอกสารลางานในระบบ แต่พบข้อมูลสแกนนิ้วจริงในพื้นที่ช่วงเวลาที่ลา`;
+
+      for (const [foremanName, records] of foremanGroups.entries()) {
+        const promise = (async () => {
+          const workbook = new ExcelJS.Workbook();
+          const worksheet = workbook.addWorksheet('รายงานความผิดปกติ');
+          
+          worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+          worksheet.columns = [
+            { header: 'โฟร์แมน', key: 'foreman', width: 25 },
+            { header: 'ชื่อพนักงาน', key: 'employeeName', width: 25 },
+            { header: 'รหัสพนักงาน', key: 'employeeId', width: 15 },
+            { header: 'วันที่', key: 'workDate', width: 15 },
+            { header: 'สถานะ', key: 'status', width: 20 },
+            { header: 'เวลาตาม Daily Report', key: 'dailyReportTime', width: 25 },
+            { header: 'เวลาสแกนจริง', key: 'scanTime', width: 25 },
+            { header: 'หมายเหตุ', key: 'remark', width: 45 },
+          ];
+
+          const headerRow = worksheet.getRow(1);
+          headerRow.height = 30;
+          headerRow.eachCell((cell) => {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FF374151' },
+            };
+            cell.font = {
+              name: 'Inter',
+              color: { argb: 'FFFFFFFF' },
+              bold: true,
+              size: 11,
+            };
+            cell.alignment = {
+              vertical: 'middle',
+              horizontal: 'center',
+            };
+            cell.border = {
+              bottom: { style: 'medium', color: { argb: 'FF1F2937' } }
+            };
+          });
+
+          let alternate = false;
+          for (const r of records) {
+            const row = worksheet.addRow({
+              foreman: r.assigneeName || 'ไม่ระบุโฟร์แมน',
+              employeeName: r.employeeName || '-',
+              employeeId: r.employeeId,
+              workDate: formatDateThai(r.workDate),
+              status: getThaiStatusLabel(r.status),
+              dailyReportTime: (r.status === 'CONFLICTED' || r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN') ? this.getDailyReportTimeRange(r) : '',
+              scanTime: (r.status === 'CONFLICTED' || r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN') ? this.getScanTimeRange(r) : '',
+              remark: r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN'
+                ? 'มีสแกนนิ้วในช่วงที่ลา — ตรวจสอบ Daily Report'
+                : (r.note || ''),
+            });
+
+            row.height = 20;
+            const rowBgColor = alternate ? 'FFF9FAFB' : 'FFFFFFFF';
+            row.eachCell((cell) => {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: rowBgColor },
+              };
+              cell.font = {
+                name: 'Inter',
+                size: 10,
+                color: { argb: 'FF374151' },
+              };
+              cell.alignment = {
+                vertical: 'middle',
+                horizontal: 'center',
+              };
+              cell.border = {
+                bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+              };
+            });
+
+            row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+            row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+            row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+            alternate = !alternate;
+          }
+
+          const summaryRow = worksheet.addRow([getSummaryText(foremanName, records)]);
+          worksheet.mergeCells(summaryRow.number, 1, summaryRow.number, 8);
+          summaryRow.height = 22;
+          const summaryCell = summaryRow.getCell(1);
+          summaryCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF9FAFB' },
+          };
+          summaryCell.font = {
+            name: 'Inter',
+            bold: true,
+            italic: true,
+            color: { argb: 'FF4B5563' },
+            size: 10,
+          };
+          summaryCell.alignment = {
+            vertical: 'middle',
+            horizontal: 'left',
+            indent: 1,
+          };
+          summaryRow.eachCell((cell) => {
+            cell.border = {
+              bottom: { style: 'double', color: { argb: 'FF9CA3AF' } }
+            };
+          });
+
+          const legendRow = worksheet.addRow([legendText]);
+          worksheet.mergeCells(legendRow.number, 1, legendRow.number, 8);
+          legendRow.height = 80;
+          const legendCell = legendRow.getCell(1);
+          legendCell.font = {
+            name: 'Inter',
+            size: 9.5,
+            color: { argb: 'FF6B7280' },
+            italic: true,
+          };
+          legendCell.alignment = {
+            vertical: 'top',
+            horizontal: 'left',
+            wrapText: true,
+          };
+          legendCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFFFF' },
+          };
+
+          const excelBuffer = await workbook.xlsx.writeBuffer();
+          const cleanName = foremanName.replace(/[\\/:*?"<>|]/g, '_');
+          const filename = `รายงาน_${cleanName}_${startDate || ''}_${endDate || ''}.xlsx`;
+          archive.append(excelBuffer as any, { name: filename });
+        })();
+
+        promises.push(promise);
+      }
+
+      Promise.all(promises)
+        .then(() => {
+          archive.finalize();
+        })
+        .catch((err) => reject(err));
+    });
   }
 }
 

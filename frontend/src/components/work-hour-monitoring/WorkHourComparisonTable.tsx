@@ -258,6 +258,7 @@ interface Props {
   projectsList?: { id: string; code: string; name: string }[];
   onClearFilter?: () => void;
   onExport?: () => void;
+  onExportForeman?: () => void;
   onRefresh?: () => void;
 }
 
@@ -270,6 +271,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   projectsList = [],
   onClearFilter,
   onExport,
+  onExportForeman,
   onRefresh
 }) => {
   const { t } = useTranslation();
@@ -426,6 +428,24 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     setViewerImages(urls);
     setViewerIndex(startIndex);
     setViewerOpen(true);
+  };
+
+  const handleOpenEvidence = (photoUrl: string) => {
+    const fullUrl = getFullImageUrl(photoUrl);
+    const cleanUrl = fullUrl.split('?')[0].toLowerCase();
+    const isImage = cleanUrl.endsWith('.jpg') || cleanUrl.endsWith('.jpeg') || cleanUrl.endsWith('.png') || cleanUrl.endsWith('.gif') || cleanUrl.endsWith('.webp');
+
+    if (isImage) {
+      handleOpenViewer([fullUrl]);
+    } else {
+      const link = document.createElement('a');
+      link.href = fullUrl;
+      link.download = fullUrl.split('/').pop()?.split('?')[0] || 'evidence';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleNextImage = (e: React.MouseEvent) => {
@@ -843,6 +863,23 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             sx={{ borderRadius: '6px', textTransform: 'none', fontWeight: 700, bgcolor: RECON_COLORS.BLUE.ROYAL }}
           >
             Export
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<FileDownloadIcon />}
+            onClick={onExportForeman}
+            sx={{
+              borderRadius: '6px',
+              textTransform: 'none',
+              fontWeight: 700,
+              bgcolor: '#059669',
+              '&:hover': {
+                bgcolor: '#047857',
+              },
+            }}
+          >
+            Export สำหรับโฟร์แมน
           </Button>
         </Stack>
       </Stack>
@@ -1278,7 +1315,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                       <Button
                         variant="contained"
                         size="small"
-                        onClick={() => handleOpenViewer([getFullImageUrl(selectedRow.medCertFileUrl!)])}
+                        onClick={() => handleOpenEvidence(selectedRow.medCertFileUrl!)}
                         sx={{ textTransform: 'none', fontWeight: 800, bgcolor: '#f97316', '&:hover': { bgcolor: '#ea580c' } }}
                       >
                         เปิดหลักฐาน

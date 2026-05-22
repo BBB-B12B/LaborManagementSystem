@@ -28,32 +28,35 @@ import { AuthRequest } from '../api/middleware/auth';
  * GET /api/projects
  * Get all projects with optional filters
  */
-export async function getAllProjectsHandler(
-  req: Request,
-  res: Response
-): Promise<Response> {
+export async function getAllProjectsHandler(req: Request, res: Response): Promise<Response> {
   try {
     const filters: any = {};
 
     if (req.query.department) filters.department = String(req.query.department);
     if (req.query.status) filters.status = String(req.query.status);
-    if (req.query.isActive !== undefined)
-      filters.isActive = String(req.query.isActive) === 'true';
+    if (req.query.isActive !== undefined) filters.isActive = String(req.query.isActive) === 'true';
     if (req.query.search) filters.search = String(req.query.search);
 
     let projects = await getAllProjects(filters);
 
     // RBAC: All users see only their assigned projects (by projectLocationIds)
+    // Admins (AM), Developer (GOD), and Managing Director (MD) bypass this filter to see all projects.
     const authReq = req as AuthRequest;
-    const userProjects = authReq.user?.projectLocationIds || [];
-    if (userProjects.length > 0) {
-      projects = projects.filter(p =>
-        userProjects.includes(p.id) ||
-        userProjects.includes((p as any).code) ||
-        userProjects.includes((p as any).projectCode)
-      );
-    } else {
-      projects = [];
+    const userRole = authReq.user?.roleCode || authReq.user?.roleId;
+    const isSuperUser = userRole === 'AM' || userRole === 'GOD' || userRole === 'MD';
+
+    if (!isSuperUser) {
+      const userProjects = authReq.user?.projectLocationIds || [];
+      if (userProjects.length > 0) {
+        projects = projects.filter(
+          (p) =>
+            userProjects.includes(p.id) ||
+            userProjects.includes((p as any).code) ||
+            userProjects.includes((p as any).projectCode)
+        );
+      } else {
+        projects = [];
+      }
     }
 
     return res.status(200).json({
@@ -74,10 +77,7 @@ export async function getAllProjectsHandler(
  * GET /api/projects/active
  * Get active projects only
  */
-export async function getActiveProjectsHandler(
-  _req: Request,
-  res: Response
-): Promise<Response> {
+export async function getActiveProjectsHandler(_req: Request, res: Response): Promise<Response> {
   try {
     const projects = await getActiveProjects();
     return res.status(200).json({
@@ -98,10 +98,7 @@ export async function getActiveProjectsHandler(
  * GET /api/projects/next-code
  * Get next available project code
  */
-export async function getNextProjectCodeHandler(
-  _req: Request,
-  res: Response
-): Promise<Response> {
+export async function getNextProjectCodeHandler(_req: Request, res: Response): Promise<Response> {
   try {
     const code = await getNextProjectCode();
     return res.status(200).json({
@@ -122,10 +119,7 @@ export async function getNextProjectCodeHandler(
  * GET /api/projects/:id
  * Get a single project by ID
  */
-export async function getProjectByIdHandler(
-  req: Request,
-  res: Response
-): Promise<Response> {
+export async function getProjectByIdHandler(req: Request, res: Response): Promise<Response> {
   try {
     const { id } = req.params;
     const project = await getProjectById(id);
@@ -148,10 +142,7 @@ export async function getProjectByIdHandler(
  * POST /api/projects
  * Create a new project
  */
-export async function createProjectHandler(
-  req: Request,
-  res: Response
-): Promise<Response> {
+export async function createProjectHandler(req: Request, res: Response): Promise<Response> {
   try {
     const authUser = (req as any).user;
     if (!authUser) {
@@ -162,10 +153,7 @@ export async function createProjectHandler(
 
     const data = {
       code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
-      projectCode:
-        req.body.projectCode !== undefined
-          ? String(req.body.projectCode).trim()
-          : '',
+      projectCode: req.body.projectCode !== undefined ? String(req.body.projectCode).trim() : '',
       projectName: req.body.projectName ? String(req.body.projectName).trim() : '',
       department: req.body.department ? String(req.body.department).trim() : '',
       projectManager:
@@ -174,7 +162,8 @@ export async function createProjectHandler(
           : undefined,
       status: req.body.status ? String(req.body.status).trim() : undefined,
       workDays: req.body.workDays !== undefined ? req.body.workDays : undefined,
-      followCompanyHoliday: req.body.followCompanyHoliday !== undefined ? req.body.followCompanyHoliday : undefined,
+      followCompanyHoliday:
+        req.body.followCompanyHoliday !== undefined ? req.body.followCompanyHoliday : undefined,
     };
 
     const project = await createProject(data, userId);
@@ -197,10 +186,7 @@ export async function createProjectHandler(
  * PUT /api/projects/:id
  * Update an existing project
  */
-export async function updateProjectHandler(
-  req: Request,
-  res: Response
-): Promise<Response> {
+export async function updateProjectHandler(req: Request, res: Response): Promise<Response> {
   try {
     const { id } = req.params;
     const authUser = (req as any).user;
@@ -215,24 +201,19 @@ export async function updateProjectHandler(
     const data = {
       code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
       projectCode:
-        req.body.projectCode !== undefined
-          ? String(req.body.projectCode).trim()
-          : undefined,
+        req.body.projectCode !== undefined ? String(req.body.projectCode).trim() : undefined,
       projectName:
-        req.body.projectName !== undefined
-          ? String(req.body.projectName).trim()
-          : undefined,
+        req.body.projectName !== undefined ? String(req.body.projectName).trim() : undefined,
       department:
-        req.body.department !== undefined
-          ? String(req.body.department).trim()
-          : undefined,
+        req.body.department !== undefined ? String(req.body.department).trim() : undefined,
       projectManager:
         req.body.projectManager !== undefined
           ? String(req.body.projectManager ?? '').trim()
           : undefined,
       status: req.body.status ? String(req.body.status).trim() : undefined,
       workDays: req.body.workDays !== undefined ? req.body.workDays : undefined,
-      followCompanyHoliday: req.body.followCompanyHoliday !== undefined ? req.body.followCompanyHoliday : undefined,
+      followCompanyHoliday:
+        req.body.followCompanyHoliday !== undefined ? req.body.followCompanyHoliday : undefined,
     };
 
     Object.keys(data).forEach((key) => {
@@ -261,10 +242,7 @@ export async function updateProjectHandler(
  * DELETE /api/projects/:id
  * Delete a project (soft delete)
  */
-export async function deleteProjectHandler(
-  req: Request,
-  res: Response
-): Promise<Response> {
+export async function deleteProjectHandler(req: Request, res: Response): Promise<Response> {
   try {
     const { id } = req.params;
     await deleteProject(id);
@@ -282,10 +260,7 @@ export async function deleteProjectHandler(
   }
 }
 
-export async function getDepartmentsHandler(
-  _req: Request,
-  res: Response
-): Promise<Response> {
+export async function getDepartmentsHandler(_req: Request, res: Response): Promise<Response> {
   try {
     const departments = await getDepartments();
     return res.status(200).json({

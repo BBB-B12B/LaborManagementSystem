@@ -1,0 +1,46 @@
+{
+  "version": "2.0",
+  "default_skill": "editor",
+  "skills": {
+    "editor": {
+      "path": ".agents/skills/editor/SKILL.md",
+      "keywords": ["แก้", "fix", "bug", "edit", "debug", "เปลี่ยน", "ปรับ", "อัปเดต", "update", "modify"]
+    },
+    "coder": {
+      "path": ".agents/skills/coder/SKILL.md",
+      "keywords": ["สร้าง", "create", "new file", "implement", "feature", "add", "เพิ่ม"]
+    },
+    "file_manager": {
+      "path": ".agents/skills/file_manager/SKILL.md",
+      "keywords": ["move", "rename", "delete file", "restructure", "ย้าย", "ลบ", "เปลี่ยนชื่อ"]
+    },
+    "variable_manager": {
+      "path": ".agents/skills/variable_manager/SKILL.md",
+      "keywords": ["rename symbol", "refactor", "export", "symbol", "function name"]
+    },
+    "session_manager": {
+      "path": ".agents/skills/session_manager/SKILL.md",
+      "keywords": ["จบ session", "close", "end session", "สรุป session", "ปิด session"]
+    },
+    "mece": {
+      "path": ".agents/skills/mece/SKILL.md",
+      "keywords": ["plan", "วางแผน", "mece", "orchestrate", "phases"]
+    },
+    "agent": {
+      "path": ".agents/skills/agent/SKILL.md",
+      "keywords": ["orchestrate", "multi-step", "coordinate", "spawn", "จัดการหลายขั้นตอน", "cycle", "fan-out", "orchestrate cycles"]
+    },
+    "identity": {
+      "path": ".agents/skills/identity/SKILL.md",
+      "keywords": ["identity", "session state", "who am i", "current skill", "ตัวตน"]
+    },
+    "token_auditor": {
+      "path": ".agents/skills/token_auditor/SKILL.md",
+      "keywords": ["token limit", "context full", "approaching limit", "token threshold"]
+    },
+    "token_tracker": {
+      "path": ".agents/skills/token_tracker/SKILL.md",
+      "keywords": ["token count", "session total", "how many tokens", "นับ token"]
+    }
+  }
+}
