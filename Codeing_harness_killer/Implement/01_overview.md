@@ -15,6 +15,17 @@ This agent management system provides three core capabilities:
 | **Session continuity** | Active thread file lets any agent resume mid-task across sessions |
 | **File + symbol indexing** | Backlink graph of files and exported symbols — agent looks up before editing |
 
+## Sub-agent Support
+
+**R4 — Sub-agent Spawn Patterns (3 types):**
+| Pattern | When | Output |
+|---|---|---|
+| Explore | scope ≥ 5 files / ≥ 300 lines | summary ≤500 tokens |
+| Execution | section > 8 steps, isolated output | `.sessions/cycle_N_<section_id>.json` |
+| Parallel fan-out | ≥ 2 sections in same Cycle | `.sessions/cycle_N_*.json` (one per section) |
+
+Limits: max depth = 1 · structured output only · tokens count toward SESSION_TOTAL
+
 ---
 
 ## 2. Required Directory Structure
@@ -48,7 +59,7 @@ project-root/
 │       ├── variable_manager/
 │       │   └── SKILL.md               # Rules for updating index_variables.json
 │       ├── agent/
-│       │   └── SKILL.md               # Fallback orchestrator — re-routes to correct skill
+│       │   └── SKILL.md               # Orchestrator — routes to correct skill + Cycle fan-out: spawns parallel sub-agents per Cycle, reads cycle_N_*.json results, injects context into next Cycle
 │       ├── identity/
 │       │   └── SKILL.md               # Persona + communication style + loop trace format
 │       ├── session_manager/
@@ -65,7 +76,8 @@ project-root/
     ├── active_thread.md               # 3-line state: task / phase / next
     ├── session_tokens.md              # Cumulative output token counter
     ├── session_handoff.md             # Brief written before /clear (optional)
-    └── mece_plan.md                   # Persistent MECE plan — survives chat resets, cleared only by "จบ session"
+    ├── mece_plan.md                   # Persistent MECE plan — survives chat resets, cleared only by "จบ session"
+    └── cycle_N_<section_id>.json      # ← result file written by each sub-agent per Cycle (N = cycle number)
 ```
 
 > `.sessions/` may be named `memory/` in Claude Code projects — same purpose.

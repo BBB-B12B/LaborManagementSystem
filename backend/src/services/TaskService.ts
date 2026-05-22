@@ -688,6 +688,85 @@ export class TaskService {
       }
     }
 
+    // --- [NEW] Global Cross-Task Overlap Validation ---
+    if (reportData.labor && Array.isArray(reportData.labor) && reportData.labor.length > 0) {
+      const startOfDay = new Date(reportDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(reportDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      // [TEMPORARY REVERT] ใช้การกรองใน Memory ชั่วคราวเพื่อเลี่ยง Error 500 (FAILED_PRECONDITION)
+      // เนื่องจาก Firebase ต้องการ COLLECTION_GROUP_ASC index สำหรับ dailyReports (reportDate)
+      // เมื่อสร้าง Index แล้ว ควรเปลี่ยนกลับมาใช้ .where('reportDate', '>=', startOfDay) เพื่อลด Read Cost
+      const allReportsQuerySnapshot = await afterSaleDb.collectionGroup('dailyReports').get();
+      const allReportsDocs = allReportsQuerySnapshot.docs.filter(doc => {
+        const data = doc.data();
+        if (!data.reportDate) return false;
+        const dDate = data.reportDate.toDate ? data.reportDate.toDate() : new Date(data.reportDate);
+        return dDate.getTime() >= startOfDay.getTime() && dDate.getTime() <= endOfDay.getTime();
+      });
+
+      const parseTimeToMinutes = (tStr: string | null | undefined): {start: number, end: number} | null => {
+        if (!tStr) return null;
+        const parts = tStr.split('-');
+        if (parts.length !== 2) return null;
+        const parseTime = (timeStr: string) => {
+          const [h, m] = timeStr.trim().split(':').map(Number);
+          if (isNaN(h) || isNaN(m)) return null;
+          return (h * 60) + m;
+        };
+        const start = parseTime(parts[0]);
+        let end = parseTime(parts[1]);
+        if (start === null || end === null) return null;
+        if (end < start) end += 24 * 60;
+        return { start, end };
+      };
+
+      const isTimeOverlap = (timeA: string | null | undefined, timeB: string | null | undefined): boolean => {
+        const a = parseTimeToMinutes(timeA);
+        const b = parseTimeToMinutes(timeB);
+        if (!a || !b) return false;
+        return Math.max(a.start, b.start) < Math.min(a.end, b.end);
+      };
+
+      for (const laborInput of reportData.labor) {
+        if (!laborInput.workerId || !laborInput.shiftTimes) continue;
+        const shiftsA = [
+          laborInput.shiftTimes.day,
+          laborInput.shiftTimes.otMorning,
+          laborInput.shiftTimes.otNoon,
+          laborInput.shiftTimes.otEvening
+        ].filter(Boolean);
+        
+        if (shiftsA.length === 0) continue;
+
+        for (const doc of allReportsDocs) {
+          if (doc.ref.path === dailyReportRef.path) continue;
+          
+          const otherData = doc.data();
+          if (!otherData.labor || !Array.isArray(otherData.labor)) continue;
+          
+          const matchingLabor = otherData.labor.find((l: any) => l.workerId === laborInput.workerId);
+          if (!matchingLabor || !matchingLabor.shiftTimes) continue;
+          
+          const shiftsB = [
+            matchingLabor.shiftTimes.day,
+            matchingLabor.shiftTimes.otMorning,
+            matchingLabor.shiftTimes.otNoon,
+            matchingLabor.shiftTimes.otEvening
+          ].filter(Boolean);
+          
+          for (const sA of shiftsA) {
+            for (const sB of shiftsB) {
+              if (isTimeOverlap(sA as string, sB as string)) {
+                throw new AppError(`ไม่อนุญาตให้บันทึก: พบแรงงาน (รหัส ${laborInput.employeeId || laborInput.workerId}) ลงเวลาซ้อนทับกับงานอื่น (${sA} ทับซ้อนกับ ${sB})`, 400);
+              }
+            }
+          }
+        }
+      }
+    }
+
     // --- [NEW] Cross-Revision Conflict Validation ---
     if (!isSupportReport) {
       // Check if any revision (other than current) has a report for this date

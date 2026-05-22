@@ -1,3 +1,3 @@
-task: none
+task: Verify and implement API cache invalidation and loading spinner flow.
 phase: done
-next: none
+next: N/A

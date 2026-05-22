@@ -2014,7 +2014,7 @@
     },
     "WorkRecordsPage": {
       "source": "frontend/src/pages/daily-reports/list.tsx",
-      "line": 220
+      "line": 229
     },
     "WorkRecordComposerPage": {
       "source": "frontend/src/pages/daily-reports/new.tsx",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 36
+      "line": 37
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",

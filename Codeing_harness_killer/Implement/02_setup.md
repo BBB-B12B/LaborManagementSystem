@@ -137,7 +137,9 @@ Run after onboarding or integration. All items must pass before starting develop
 [ ] scripts/symbol_indexer.py    — exists, runs without error
 [ ] .sessions/active_thread.md   — exists, phase: done
 [ ] .sessions/mece_plan.md       — exists (may be empty template); if has [ ] sections → resume flow active
+[ ] After first Cycle execution: `.sessions/cycle_1_<section_id>.json` exists per section with `status: done|blocked`
 [ ] CLAUDE.md                    — contains R5 (Index-First), R8 (Index Sync), R9 (Error Protocol), R-Roadmap, Token Gate, R19 (Self-Improvement)
+[ ] CLAUDE.md §R4 lists 3 spawn patterns (Explore / Execution / Parallel fan-out) with max depth=1 rule
 [ ] AGENTS.md                    — exists, contains Boot Sequence + Loop Architecture (Dual-Mode) + Quick Reference
 [ ] INVARIANTS.md                — exists, contains I1–I5 + Protected Zones (incl. db_migrations/ + .sessions/)
 [ ] REPO_MAP.md                  — exists, directory structure documented
@@ -150,7 +152,7 @@ Run after onboarding or integration. All items must pass before starting develop
 [ ] .agents/skills/token_auditor/SKILL.md — exists, contains threshold gate
 [ ] .agents/skills/token_tracker/SKILL.md — exists
 [ ] .agents/skills/identity/SKILL.md — exists
-[ ] .agents/skills/agent/SKILL.md — exists, contains orchestration protocol
+[ ] `.agents/skills/agent/SKILL.md` — contains Orchestration Protocol (Cycle fan-out, 7 steps) + Delegation Contract (goal/constraints/output_format/context_files/cycle_context)
 [ ] python scripts/symbol_indexer.py — exits 0, reports symbol count > 0
 ```
 

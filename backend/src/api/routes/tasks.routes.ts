@@ -78,16 +78,41 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
 
     // 4. Fetch all tasks from afterSaleDb
     const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
-    let tasks = tasksSnapshot.docs.map(doc => ({
-      id: doc.id,
-      path: doc.ref.path,
-      ...doc.data()
-    }) as any);
+    let tasks = tasksSnapshot.docs.map(doc => {
+      const data = doc.data();
+      const pathParts = doc.ref.path.split('/');
+      // Format: workOrders/{woId}/categories/{catId}/tasks/{taskId}
+      const compositeId = pathParts.length >= 6 ? `${pathParts[1]}__${pathParts[3]}__${pathParts[5]}` : data.taskId || doc.id;
+      return {
+        ...data,
+        id: compositeId,
+        taskId: compositeId,
+        path: doc.ref.path
+      };
+    }) as any;
 
     // Filter tasks if role is FM
     const userProjectIds = authReq.user?.projectLocationIds || [];
-    if (userRole === 'FM' && userProjectIds.length > 0) {
-      tasks = tasks.filter((t: any) => userProjectIds.includes(t.projectId));
+    if (userRole === 'FM') {
+      if (userProjectIds.length > 0) {
+        tasks = tasks.filter((t: any) => userProjectIds.includes(t.projectId));
+      }
+      if (userEmployeeId) {
+        const uEmpId = String(userEmployeeId).toLowerCase().trim();
+        const uId = String(authReq.user?.uid || '').toLowerCase().trim();
+        tasks = tasks.filter((t: any) => {
+          const isActive = t.isActive !== false;
+          const assignees = Array.isArray(t.assignees) ? t.assignees : [];
+          const supportAssignees = Array.isArray(t.supportAssignees) ? t.supportAssignees : [];
+          const historicalIds = Array.isArray(t.historicalAssigneeIds) ? t.historicalAssigneeIds : [];
+          const taskRelatedIds = new Set([
+            ...assignees.map((a: any) => String(a.employeeId || a.id || '').toLowerCase().trim()),
+            ...supportAssignees.map((a: any) => String(a.employeeId || a.id || '').toLowerCase().trim()),
+            ...historicalIds.map((id: any) => String(id || '').toLowerCase().trim()),
+          ]);
+          return isActive && (taskRelatedIds.has(uEmpId) || taskRelatedIds.has(uId));
+        });
+      }
     }
 
     // Fetch all users to map uid/employeeId -> name
@@ -122,6 +147,42 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       for (const task of tasks) {
         const currentRev = task.currentRevision || 'rev00';
         const taskRef = afterSaleDb.doc(task.path);
+
+        // Fetch completion date if task has reached 100% or completed
+        let completionDate: string | null = null;
+        if (
+          task.dailyProgress >= 100 ||
+          task.supportDailyProgress >= 100 ||
+          task.status === 'completed'
+        ) {
+          const reportsSnap = await taskRef
+            .collection('revisions')
+            .doc(currentRev)
+            .collection('dailyReports')
+            .where('progress', '>=', 100)
+            .get();
+
+          const completedDates = reportsSnap.docs.map((doc) => doc.id);
+
+          const helpId = currentRev.replace('rev', 'help');
+          const helpReportsSnap = await taskRef
+            .collection('help')
+            .doc(helpId)
+            .collection('dailyReports')
+            .where('progress', '>=', 100)
+            .get();
+
+          completedDates.push(...helpReportsSnap.docs.map((doc) => doc.id));
+
+          if (completedDates.length > 0) {
+            completedDates.sort();
+            completionDate = completedDates[0];
+          } else {
+            const fallbackDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+            completionDate = fallbackDate.toISOString().split('T')[0];
+          }
+        }
+        task.completionDate = completionDate;
 
         // Normal reports
         const normalReportsPromise = taskRef.collection('revisions').doc(currentRev).collection('dailyReports')
@@ -161,6 +222,40 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
             ...doc.data()
           });
         });
+
+        // Now compute startDate for this task using allReports and task creation fields
+        const getTaskDateStr = (timestampOrStr: any) => {
+          if (!timestampOrStr) return null;
+          if (typeof timestampOrStr === 'object' && ('_seconds' in timestampOrStr || 'seconds' in timestampOrStr)) {
+            const secs = timestampOrStr._seconds || timestampOrStr.seconds;
+            return new Date(secs * 1000).toISOString().split('T')[0];
+          }
+          try {
+            return new Date(timestampOrStr).toISOString().split('T')[0];
+          } catch (e) {
+            return null;
+          }
+        };
+
+        let startDate: string | null = null;
+        if (task.revisionCreatedAt && task.currentRevision && task.currentRevision !== 'rev00') {
+          startDate = getTaskDateStr(task.revisionCreatedAt);
+        } else if (task.isSupportRequest && task.supportCreatedAt) {
+          startDate = getTaskDateStr(task.supportCreatedAt);
+        } else {
+          startDate = getTaskDateStr(task.createdAt);
+        }
+
+        // Check if there are any reports for this task (inside allReports) that are earlier than startDate
+        const taskReports = allReports.filter(r => r.taskId === task.taskId);
+        if (taskReports.length > 0) {
+          const reportDates = taskReports.map(r => r.dateStr).sort();
+          const earliestReportDate = reportDates[0];
+          if (startDate && earliestReportDate < startDate) {
+            startDate = earliestReportDate;
+          }
+        }
+        task.startDate = startDate;
       }
     }
 
@@ -250,11 +345,16 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
             if (isWithin3Days) {
               allowEdit = true;
             } else {
-              // Check if any task is unlocked for this date
+              // Check if any task is unlocked for this date (handles Firestore Timestamps properly)
               const unlockedTask = tasks.find((t: any) => {
                 const unlockedDates = t.unlockedDates || {};
-                const unlockInfo = unlockedDates[dateStr];
-                return unlockInfo && new Date(unlockInfo.unlockedUntil) >= new Date();
+                const supportUnlockedDates = t.supportUnlockedDates || {};
+                const unlockInfo = unlockedDates[dateStr] || supportUnlockedDates[dateStr];
+                if (!unlockInfo) return false;
+                const unlockedUntilDate = unlockInfo.unlockedUntil?.toDate
+                  ? unlockInfo.unlockedUntil.toDate()
+                  : new Date(unlockInfo.unlockedUntil);
+                return unlockedUntilDate >= new Date();
               });
               if (unlockedTask) {
                 allowEdit = true;
@@ -266,11 +366,60 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
           }
         }
 
+        let reportUpdatedAtStr = '';
+        if (matchedReport) {
+          const timestamp = matchedReport.updatedAt || matchedReport.createdAt;
+          if (timestamp) {
+            try {
+              const dateObj = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+              reportUpdatedAtStr = dateObj.toISOString().split('T')[0];
+            } catch (e) {
+              console.error('Failed to parse report updatedAt:', e);
+            }
+          }
+        }
+
+        // Calculate last used foreman relative to this date (on or before dateStr)
+        let dayLastUsedByName = '';
+        let dayLastUsedDateStr = '';
+
+        // 1. Search in the 15-day reports that are on or before dateStr
+        const sortedReportsBeforeOrOnDate = [...allReports]
+          .filter(r => r.dateStr <= dateStr)
+          .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+
+        for (const report of sortedReportsBeforeOrOnDate) {
+          const hasWorker = report.labor?.some((l: any) => l.workerId === dc.id || l.employeeId === dc.employeeId) ||
+                            report.leave?.some((l: any) => l.workerId === dc.id || l.employeeId === dc.employeeId);
+          if (hasWorker && report.createdBy) {
+            dayLastUsedByName = getUserName(report.createdBy);
+            dayLastUsedDateStr = report.dateStr;
+            break;
+          }
+        }
+
+        // 2. Fallback to dc-level lastUsedByName / lastUsedDateStr if that date is on or before dateStr
+        if (!dayLastUsedByName && lastUsedDateStr && lastUsedDateStr <= dateStr) {
+          dayLastUsedByName = lastUsedByName;
+          dayLastUsedDateStr = lastUsedDateStr;
+        }
+
+        // 3. Fallback to dc.foremanUsage if still empty
+        if (!dayLastUsedByName && dc.foremanUsage) {
+          const usages = Object.values(dc.foremanUsage) as any[];
+          if (usages.length > 0) {
+            const highestUsage = usages.reduce((prev, current) => (prev.count > current.count) ? prev : current);
+            dayLastUsedByName = highestUsage.name || '';
+          }
+        }
+
         return {
           date: dateStr,
           isLocked,
           allowEdit,
           reason,
+          lastUsedByName: dayLastUsedByName || null,
+          lastUsedDateStr: dayLastUsedDateStr || null,
           record: workedEntry ? {
             type: 'regular',
             shifts: workedEntry.shifts,
@@ -283,7 +432,8 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
             createdBy: matchedReport.createdBy || null,
             createdByName: matchedReport.createdBy ? getUserName(matchedReport.createdBy) : null,
             updatedBy: matchedReport.updatedBy || null,
-            updatedByName: matchedReport.updatedBy ? getUserName(matchedReport.updatedBy) : null
+            updatedByName: matchedReport.updatedBy ? getUserName(matchedReport.updatedBy) : null,
+            updatedAtStr: reportUpdatedAtStr || null
           } : leaveEntry ? {
             type: 'leave',
             leaveType: leaveEntry.leaveType,
@@ -296,7 +446,8 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
             createdBy: matchedReport.createdBy || null,
             createdByName: matchedReport.createdBy ? getUserName(matchedReport.createdBy) : null,
             updatedBy: matchedReport.updatedBy || null,
-            updatedByName: matchedReport.updatedBy ? getUserName(matchedReport.updatedBy) : null
+            updatedByName: matchedReport.updatedBy ? getUserName(matchedReport.updatedBy) : null,
+            updatedAtStr: reportUpdatedAtStr || null
           } : null
         };
       });
@@ -321,7 +472,9 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
           taskId: t.taskId,
           taskName: t.taskName,
           isSupportRequest: t.isSupportRequest || false,
-          currentRevision: t.currentRevision || 'rev00'
+          currentRevision: t.currentRevision || 'rev00',
+          completionDate: t.completionDate || null,
+          startDate: t.startDate || null
         }))
       }
     });

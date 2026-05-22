@@ -42,6 +42,7 @@ import {
   Skeleton,
   Input,
   Avatar,
+  Autocomplete,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LockIcon from '@mui/icons-material/Lock';
@@ -61,6 +62,7 @@ import DatePicker from '@/components/forms/DatePicker';
 import { taskService } from '@/services/taskService';
 import { dailyReportService } from '@/services/dailyReportService';
 import { getSkills, type Skill } from '@/services/skillService';
+import { useFeedbackStore } from '@/store/feedbackStore';
 
 const getInitialDateRange = () => {
   const today = new Date();
@@ -217,10 +219,18 @@ const TimeRangePicker = ({
   );
 };
 
+interface WorkerOption {
+  workerId: string;
+  workerName: string;
+  employeeId: string;
+  label: string;
+}
+
 export default function WorkRecordsPage() {
   const router = useRouter();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const { showLoading, hideLoading } = useFeedbackStore();
 
   // Filters State
   const initialRange = useMemo(() => getInitialDateRange(), []);
@@ -243,9 +253,9 @@ export default function WorkRecordsPage() {
   const [isOtNoon, setIsOtNoon] = useState(false);
   const [isOtEvening, setIsOtEvening] = useState(false);
   const [regTime, setRegTime] = useState<string>('08:00 - 17:00');
-  const [otMorningTime, setOtMorningTime] = useState<string>('05:00 - 07:00');
+  const [otMorningTime, setOtMorningTime] = useState<string>('06:00 - 08:00');
   const [otNoonTime, setOtNoonTime] = useState<string>('12:00 - 13:00');
-  const [otEveningTime, setOtEveningTime] = useState<string>('17:30 - 20:30');
+  const [otEveningTime, setOtEveningTime] = useState<string>('18:00 - 21:00');
   const [leaveType, setLeaveType] = useState<string>('Sick');
   const [leaveTime, setLeaveTime] = useState<string>('08:00 - 17:00');
   const [medCertFile, setMedCertFile] = useState<File | null>(null);
@@ -324,6 +334,7 @@ export default function WorkRecordsPage() {
     setIsNormalShift(checked);
     if (checked) {
       setRecordType('regular');
+      setRegTime('08:00 - 17:00');
     } else if (!isOtMorning && !isOtNoon && !isOtEvening) {
       setRecordType('absent');
     }
@@ -333,6 +344,7 @@ export default function WorkRecordsPage() {
     setIsOtMorning(checked);
     if (checked) {
       setRecordType('regular');
+      setOtMorningTime('06:00 - 08:00');
     } else if (!isNormalShift && !isOtNoon && !isOtEvening) {
       setRecordType('absent');
     }
@@ -342,6 +354,7 @@ export default function WorkRecordsPage() {
     setIsOtNoon(checked);
     if (checked) {
       setRecordType('regular');
+      setOtNoonTime('12:00 - 13:00');
     } else if (!isNormalShift && !isOtMorning && !isOtEvening) {
       setRecordType('absent');
     }
@@ -351,6 +364,7 @@ export default function WorkRecordsPage() {
     setIsOtEvening(checked);
     if (checked) {
       setRecordType('regular');
+      setOtEveningTime('18:00 - 21:00');
     } else if (!isNormalShift && !isOtMorning && !isOtNoon) {
       setRecordType('absent');
     }
@@ -363,6 +377,7 @@ export default function WorkRecordsPage() {
       setIsOtMorning(false);
       setIsOtNoon(false);
       setIsOtEvening(false);
+      setLeaveTime('08:00 - 17:00');
     } else {
       setRecordType('absent');
     }
@@ -374,6 +389,77 @@ export default function WorkRecordsPage() {
     queryFn: () => taskService.getBacklog(filterStartDate, filterEndDate),
     enabled: true,
   });
+
+  // Add globalSync event listener for Hard Refresh
+  useEffect(() => {
+    const handleSync = async () => {
+      console.log('[WorkRecordsPage] Global Sync triggered');
+      showLoading();
+      try {
+        dailyReportService.clearCache();
+        await queryClient.invalidateQueries({ queryKey: ['daily-report-backlog'] });
+        await refetch();
+      } catch (e) {
+        console.error('[WorkRecordsPage] Sync error:', e);
+      } finally {
+        hideLoading();
+      }
+    };
+    window.addEventListener('globalSync', handleSync);
+    return () => window.removeEventListener('globalSync', handleSync);
+  }, [queryClient, refetch, showLoading, hideLoading]);
+
+  // Selected Worker state for filtering
+  const [selectedWorker, setSelectedWorker] = useState<WorkerOption | null>({
+    workerId: 'ALL',
+    workerName: 'ALL',
+    employeeId: '',
+    label: 'ALL',
+  });
+
+  // Unique worker options for the Autocomplete filter
+  const workerOptions = useMemo(() => {
+    const defaultOption = {
+      workerId: 'ALL',
+      workerName: 'ALL',
+      employeeId: '',
+      label: 'ALL',
+    };
+    if (!backlogData?.grid) return [defaultOption];
+
+    const workers = backlogData.grid.map((worker) => ({
+      workerId: worker.workerId,
+      workerName: worker.workerName,
+      employeeId: worker.employeeId,
+      label: `${worker.employeeId} : ${worker.workerName}`,
+    }));
+
+    return [defaultOption, ...workers];
+  }, [backlogData?.grid]);
+
+  // Reset selected worker if they no longer exist in the new date range's grid
+  useEffect(() => {
+    if (selectedWorker && selectedWorker.workerId !== 'ALL') {
+      const exists = backlogData?.grid.some((w) => w.workerId === selectedWorker.workerId);
+      if (!exists) {
+        setSelectedWorker({
+          workerId: 'ALL',
+          workerName: 'ALL',
+          employeeId: '',
+          label: 'ALL',
+        });
+      }
+    }
+  }, [backlogData?.grid, selectedWorker]);
+
+  // Filtered grid data based on selected worker
+  const filteredGrid = useMemo(() => {
+    if (!backlogData?.grid) return [];
+    if (!selectedWorker || selectedWorker.workerId === 'ALL') {
+      return backlogData.grid;
+    }
+    return backlogData.grid.filter((w) => w.workerId === selectedWorker.workerId);
+  }, [backlogData?.grid, selectedWorker]);
 
   // Fetch Skills for names mapping
   const { data: skills = [] } = useQuery<Skill[]>({
@@ -410,9 +496,9 @@ export default function WorkRecordsPage() {
         setIsOtNoon(!!day.record.shifts?.otNoon);
         setIsOtEvening(!!day.record.shifts?.otEvening);
         setRegTime(day.record.shiftTimes?.day || '08:00 - 17:00');
-        setOtMorningTime(day.record.shiftTimes?.otMorning || '05:00 - 07:00');
+        setOtMorningTime(day.record.shiftTimes?.otMorning || '06:00 - 08:00');
         setOtNoonTime(day.record.shiftTimes?.otNoon || '12:00 - 13:00');
-        setOtEveningTime(day.record.shiftTimes?.otEvening || '17:30 - 20:30');
+        setOtEveningTime(day.record.shiftTimes?.otEvening || '18:00 - 21:00');
         setLeaveTime('08:00 - 17:00');
         setLeaveType('Sick');
         setMedCertUrl('');
@@ -422,9 +508,9 @@ export default function WorkRecordsPage() {
         setIsOtNoon(false);
         setIsOtEvening(false);
         setRegTime('08:00 - 17:00');
-        setOtMorningTime('05:00 - 07:00');
+        setOtMorningTime('06:00 - 08:00');
         setOtNoonTime('12:00 - 13:00');
-        setOtEveningTime('17:30 - 20:30');
+        setOtEveningTime('18:00 - 21:00');
         setLeaveTime(day.record.leaveTimes?.custom || '08:00 - 17:00');
         setLeaveType(day.record.leaveType || 'Sick');
         setMedCertUrl(day.record.medCertFileUrl || '');
@@ -440,9 +526,9 @@ export default function WorkRecordsPage() {
       setIsOtNoon(false);
       setIsOtEvening(false);
       setRegTime('08:00 - 17:00');
-      setOtMorningTime('05:00 - 07:00');
+      setOtMorningTime('06:00 - 08:00');
       setOtNoonTime('12:00 - 13:00');
-      setOtEveningTime('17:30 - 20:30');
+      setOtEveningTime('18:00 - 21:00');
       setLeaveTime('08:00 - 17:00');
       setLeaveType('Sick');
       setMedCertUrl('');
@@ -478,6 +564,7 @@ export default function WorkRecordsPage() {
     }
 
     setIsSaving(true);
+    showLoading();
     try {
       // Find selected task metadata to determine support mode
       const selectedTask = backlogData?.tasks?.find((t) => t.taskId === targetTaskId);
@@ -596,12 +683,14 @@ export default function WorkRecordsPage() {
 
       enqueueSnackbar('บันทึกข้อมูลเรียบร้อยแล้ว', { variant: 'success' });
       setIsEditDialogOpen(false);
+      dailyReportService.clearCache();
       refetch();
     } catch (error: any) {
       console.error('Failed to save backlog work record', error);
       enqueueSnackbar(`เกิดข้อผิดพลาด: ${error.message || 'กรุณาลองใหม่อีกครั้ง'}`, { variant: 'error' });
     } finally {
       setIsSaving(false);
+      hideLoading();
     }
   };
 
@@ -620,23 +709,112 @@ export default function WorkRecordsPage() {
           </Box>
 
           {/* Filters Card */}
-          <Paper sx={{ p: 3, mb: 4, borderRadius: '20px', boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.05)' }}>
-            <Grid container spacing={3} alignItems="center">
-              <Grid item xs={12} sm={6}>
+          <Paper sx={{ p: 2, mb: 4, borderRadius: '20px', boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.05)' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                justifyContent: 'space-between',
+                alignItems: { xs: 'stretch', md: 'center' },
+                gap: 2,
+              }}
+            >
+              {/* Left Side: Worker Dropdown Filter */}
+              <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: '300px' }, maxWidth: { md: '450px' } }}>
+                <Autocomplete
+                  size="small"
+                  options={workerOptions}
+                  getOptionLabel={(option) => option.label || ''}
+                  value={selectedWorker}
+                  onChange={(event, newValue) => {
+                    setSelectedWorker(newValue || { workerId: 'ALL', workerName: 'ALL', employeeId: '', label: 'ALL' });
+                  }}
+                  isOptionEqualToValue={(option, value) => option.workerId === value.workerId}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="ค้นหา/เลือกรายชื่อแรงงาน (Worker Filter)"
+                      placeholder="เลือกทุกคน (ALL)"
+                    />
+                  )}
+                />
+              </Box>
+
+              {/* Right Side: Date Range (Compact and Adjacent) */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  alignSelf: { xs: 'flex-start', md: 'auto' },
+                  width: { xs: '100%', md: 'auto' },
+                  justifyContent: 'flex-end',
+                }}
+              >
                 <DatePicker
                   label="วันที่เริ่มต้น (Start Date)"
                   value={filterStartDate ? new Date(filterStartDate + 'T00:00:00Z') : null}
                   onChange={(date) => setFilterStartDate(date ? date.toISOString().split('T')[0] : '')}
+                  size="small"
+                  sx={{
+                    width: { xs: '50%', md: '170px' },
+                    '& .MuiOutlinedInput-root': {
+                      borderTopRightRadius: 0,
+                      borderBottomRightRadius: 0,
+                      '& fieldset': {
+                        borderRight: 'none',
+                      },
+                      '&:hover fieldset': {
+                        borderRight: 'none',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderRight: 'none',
+                      },
+                    },
+                  }}
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    px: 1.5,
+                    height: '40px', // Standard height of small input in MUI
+                    bgcolor: 'action.hover',
+                    borderTop: '1px solid',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    color: 'text.secondary',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    userSelect: 'none',
+                  }}
+                >
+                  to
+                </Box>
                 <DatePicker
                   label="วันที่สิ้นสุด (End Date)"
                   value={filterEndDate ? new Date(filterEndDate + 'T00:00:00Z') : null}
                   onChange={(date) => setFilterEndDate(date ? date.toISOString().split('T')[0] : '')}
+                  size="small"
+                  sx={{
+                    width: { xs: '50%', md: '170px' },
+                    '& .MuiOutlinedInput-root': {
+                      borderTopLeftRadius: 0,
+                      borderBottomLeftRadius: 0,
+                      '& fieldset': {
+                        borderLeft: 'none',
+                      },
+                      '&:hover fieldset': {
+                        borderLeft: 'none',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderLeft: 'none',
+                      },
+                    },
+                  }}
                 />
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </Paper>
 
           {/* Grid View */}
@@ -723,7 +901,7 @@ export default function WorkRecordsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {backlogData.grid.map((worker, index) => (
+                  {filteredGrid.map((worker, index) => (
                     <TableRow hover key={worker.workerId}>
                         <TableCell
                           align="center"
@@ -825,9 +1003,9 @@ export default function WorkRecordsPage() {
                             <TableCell
                               key={day.date}
                               align="center"
-                              onClick={() => day.allowEdit && handleCellClick(worker, day)}
+                              onClick={() => handleCellClick(worker, day)}
                               sx={{
-                                cursor: day.allowEdit ? 'pointer' : 'not-allowed',
+                                cursor: 'pointer',
                                 bgcolor: isToday
                                   ? 'rgba(255, 152, 0, 0.08)'
                                   : day.isLocked
@@ -836,13 +1014,9 @@ export default function WorkRecordsPage() {
                                 borderLeft: isToday ? '1px solid rgba(255, 152, 0, 0.3)' : '1px solid rgba(224, 224, 224, 0.5)',
                                 borderRight: isToday ? '1px solid rgba(255, 152, 0, 0.3)' : undefined,
                                 '&:hover': {
-                                  bgcolor: day.allowEdit
-                                    ? isToday
-                                      ? 'rgba(255, 152, 0, 0.15)'
-                                      : 'rgba(25, 118, 210, 0.04)'
-                                    : isToday
-                                    ? 'rgba(255, 152, 0, 0.1)'
-                                    : 'inherit',
+                                  bgcolor: isToday
+                                    ? 'rgba(255, 152, 0, 0.15)'
+                                    : 'rgba(25, 118, 210, 0.04)',
                                 },
                               }}
                             >
@@ -870,7 +1044,7 @@ export default function WorkRecordsPage() {
                 <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box>
                     แก้ไขเวลาทำงาน - {selectedCell.worker.workerName}
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: (selectedCell.day.record?.createdByName || selectedCell.worker.lastUsedByName) ? 0.75 : 0 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: (selectedCell.day.record?.createdByName || selectedCell.day.lastUsedByName) ? 0.75 : 0 }}>
                       วันที่ {format(new Date(selectedCell.day.date), 'dd MMMM yyyy', { locale: thLocale })}
                     </Typography>
                     {selectedCell.day.record?.createdByName ? (
@@ -887,10 +1061,19 @@ export default function WorkRecordsPage() {
                           {selectedCell.day.record.createdByName.substring(0, 2)}
                         </Avatar>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', fontSize: '0.75rem' }}>
-                          {selectedCell.day.record.createdByName}
+                          ผู้บันทึก: {selectedCell.day.record.createdByName}
+                          {(() => {
+                            try {
+                              const [year, month, day] = selectedCell.day.date.split('-').map(Number);
+                              const dateObj = new Date(year, month - 1, day);
+                              return ` (${format(dateObj, 'd MMM yyyy', { locale: thLocale })})`;
+                            } catch (e) {
+                              return '';
+                            }
+                          })()}
                         </Typography>
                       </Box>
-                    ) : selectedCell.worker.lastUsedByName ? (
+                    ) : selectedCell.day.lastUsedByName ? (
                       <Box sx={{ display: 'inline-flex', alignItems: 'center', bgcolor: '#f1f5f9', borderRadius: '9999px', py: 0.25, pl: 0.25, pr: 1.25 }}>
                         <Avatar sx={{ 
                           width: 20, 
@@ -901,14 +1084,14 @@ export default function WorkRecordsPage() {
                           color: '#ffffff',
                           mr: 0.75
                         }}>
-                          {selectedCell.worker.lastUsedByName.substring(0, 2)}
+                          {selectedCell.day.lastUsedByName.substring(0, 2)}
                         </Avatar>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: '#475569', fontSize: '0.75rem' }}>
-                          FM ที่ใช้งานล่าสุด: {selectedCell.worker.lastUsedByName}
+                          FM ที่ใช้งานล่าสุด: {selectedCell.day.lastUsedByName}
                           {(() => {
-                            if (!selectedCell.worker.lastUsedDateStr) return '';
+                            if (!selectedCell.day.lastUsedDateStr) return '';
                             try {
-                              const [year, month, day] = selectedCell.worker.lastUsedDateStr.split('-').map(Number);
+                              const [year, month, day] = selectedCell.day.lastUsedDateStr.split('-').map(Number);
                               const dateObj = new Date(year, month - 1, day);
                               return ` (${format(dateObj, 'd MMM yyyy', { locale: thLocale })})`;
                             } catch (e) {
@@ -935,24 +1118,61 @@ export default function WorkRecordsPage() {
                   />
                 </DialogTitle>
                 <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {recordType === 'regular' && (
-                    <Box sx={{ mb: 1.5 }}>
-                      <TextField
-                        select
-                        fullWidth
-                        label="เลือกการ์ดงาน (Task)*"
-                        value={targetTaskId}
-                        onChange={(e) => setTargetTaskId(e.target.value)}
-                        helperText="งานที่จะบันทึกเวลาทำงานย้อนหลังลงไป"
-                      >
-                        {backlogData?.tasks.map((task) => (
+                  {!selectedCell.day.allowEdit && (
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: '12px',
+                        bgcolor: 'rgba(239, 68, 68, 0.04)',
+                        border: '1px solid rgba(239, 68, 68, 0.1)',
+                      }}
+                    >
+                      <Typography variant="body2" color="error.main" sx={{ fontWeight: 700 }}>
+                        ไม่สามารถแก้ไขข้อมูลได้ (Read-Only)
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        สาเหตุ: {selectedCell.day.reason || 'รายงานถูกล็อกหรือเกินระยะเวลาที่กำหนด'}
+                      </Typography>
+                      {selectedCell.day.reason && !selectedCell.day.reason.includes('งวดค่าแรง') && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          กรุณาส่งคำขอปลดล็อกผ่านเมนู <strong>&quot;บันทึกรายงานประจำวัน&quot;</strong> เพื่อแก้ไขข้อมูลของวันที่เลือก
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+
+                  <Box sx={{ mb: 1.5 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="เลือกการ์ดงาน (Task)*"
+                      value={targetTaskId}
+                      onChange={(e) => setTargetTaskId(e.target.value)}
+                      helperText="งานที่จะบันทึกเวลาทำงานย้อนหลังลงไป"
+                      disabled={!selectedCell.day.allowEdit}
+                    >
+                      {(() => {
+                        const cellDateStr = selectedCell ? selectedCell.day.date : '';
+                        const availableTasks = (backlogData?.tasks || []).filter((task: any) => {
+                          if (selectedCell?.day.record?.taskId === task.taskId) {
+                            return true;
+                          }
+                          if (task.startDate && cellDateStr < task.startDate) {
+                            return false;
+                          }
+                          if (task.completionDate && cellDateStr > task.completionDate) {
+                            return false;
+                          }
+                          return true;
+                        });
+                        return availableTasks.map((task: any) => (
                           <MenuItem key={task.taskId} value={task.taskId}>
                             {task.taskName} {task.isSupportRequest && '(Support)'}
                           </MenuItem>
-                        ))}
-                      </TextField>
-                    </Box>
-                  )}
+                        ));
+                      })()}
+                    </TextField>
+                  </Box>
 
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
@@ -967,6 +1187,7 @@ export default function WorkRecordsPage() {
                               size="small"
                               checked={isNormalShift && recordType === 'regular'}
                               onChange={(e) => handleNormalShiftChange(e.target.checked)}
+                              disabled={!selectedCell.day.allowEdit}
                             />
                           }
                           label={
@@ -980,6 +1201,7 @@ export default function WorkRecordsPage() {
                           <TimeRangePicker
                             value={regTime}
                             onChange={(val) => setRegTime(val)}
+                            disabled={!selectedCell.day.allowEdit}
                           />
                         ) : (
                           <Typography variant="body2" color="#94a3b8" fontWeight={700}>
@@ -996,6 +1218,7 @@ export default function WorkRecordsPage() {
                               size="small"
                               checked={isOtMorning && recordType === 'regular'}
                               onChange={(e) => handleOtMorningChange(e.target.checked)}
+                              disabled={!selectedCell.day.allowEdit}
                             />
                           }
                           label={
@@ -1009,6 +1232,7 @@ export default function WorkRecordsPage() {
                           <TimeRangePicker
                             value={otMorningTime}
                             onChange={(val) => setOtMorningTime(val)}
+                            disabled={!selectedCell.day.allowEdit}
                           />
                         ) : (
                           <Typography variant="body2" color="#94a3b8" fontWeight={700}>
@@ -1025,6 +1249,7 @@ export default function WorkRecordsPage() {
                               size="small"
                               checked={isOtNoon && recordType === 'regular'}
                               onChange={(e) => handleOtNoonChange(e.target.checked)}
+                              disabled={!selectedCell.day.allowEdit}
                             />
                           }
                           label={
@@ -1081,6 +1306,7 @@ export default function WorkRecordsPage() {
                               size="small"
                               checked={isOtEvening && recordType === 'regular'}
                               onChange={(e) => handleOtEveningChange(e.target.checked)}
+                              disabled={!selectedCell.day.allowEdit}
                             />
                           }
                           label={
@@ -1094,6 +1320,7 @@ export default function WorkRecordsPage() {
                           <TimeRangePicker
                             value={otEveningTime}
                             onChange={(val) => setOtEveningTime(val)}
+                            disabled={!selectedCell.day.allowEdit}
                           />
                         ) : (
                           <Typography variant="body2" color="#94a3b8" fontWeight={700}>
@@ -1111,6 +1338,7 @@ export default function WorkRecordsPage() {
                                 size="small"
                                 checked={recordType === 'leave'}
                                 onChange={(e) => handleLeaveChange(e.target.checked)}
+                                disabled={!selectedCell.day.allowEdit}
                               />
                             }
                             label={
@@ -1125,6 +1353,7 @@ export default function WorkRecordsPage() {
                               <TimeRangePicker
                                 value={leaveTime}
                                 onChange={(val) => setLeaveTime(val)}
+                                disabled={!selectedCell.day.allowEdit}
                               />
                               <IconButton
                                 color={medCertFile || medCertUrl ? "success" : "default"}
@@ -1136,6 +1365,7 @@ export default function WorkRecordsPage() {
                                   p: 0.5,
                                   bgcolor: medCertFile || medCertUrl ? 'rgba(46, 125, 50, 0.08)' : 'background.paper',
                                 }}
+                                disabled={!selectedCell.day.allowEdit}
                               >
                                 <input
                                   type="file"
@@ -1162,6 +1392,7 @@ export default function WorkRecordsPage() {
                               value={leaveType}
                               onChange={(e) => setLeaveType(e.target.value)}
                               sx={{ minWidth: 120 }}
+                              disabled={!selectedCell.day.allowEdit}
                             >
                               <MenuItem value="Sick">ลาป่วย</MenuItem>
                               <MenuItem value="Personal">ลากิจ</MenuItem>
@@ -1202,7 +1433,7 @@ export default function WorkRecordsPage() {
                       }}
                     >
                       <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                        คำเตือน: การเปลี่ยนเป็นสถานะ "ขาดงาน"
+                        คำเตือน: การเปลี่ยนเป็นสถานะ &quot;ขาดงาน&quot;
                       </Typography>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                         ระบบจะลบข้อมูลเวลาทำงานปกติ, OT และบันทึกการลาเดิมทั้งหมดของพนักงานคนนี้ในวันที่ดังกล่าวออกจากระบบ
@@ -1222,7 +1453,7 @@ export default function WorkRecordsPage() {
                   <Button
                     variant="contained"
                     onClick={handleSave}
-                    disabled={isSaving}
+                    disabled={isSaving || !selectedCell.day.allowEdit}
                     startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : null}
                     sx={{ borderRadius: '12px', px: 4, fontWeight: 700 }}
                   >

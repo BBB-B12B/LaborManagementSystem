@@ -15,6 +15,11 @@ Orchestrator writes this file at **end of Phase 2 BEFORE user confirm**. Never c
 Created: <YYYY-MM-DD> | Last updated: <YYYY-MM-DD HH:MM>
 Status: in_progress | Budget: Used ~0k / Limit 50k
 
+## Cycles
+  Cycle 1: [S1, S2]
+  Cycle 2: [S3]
+  # S3 context-input: cycle_1_S1.json, cycle_1_S2.json
+
 ## Sections
 - [ ] S1: <task description>
       Skill: editor
@@ -51,6 +56,8 @@ B1 must check mece_plan.md after reading active_thread.md:
 
 ```bash
 pending=$(grep -cE "^\- \[[ /]\]" .sessions/mece_plan.md 2>/dev/null || echo "0")
+current_cycle=$(grep "^current_cycle:" .sessions/session_handoff.md 2>/dev/null | awk '{print $2}')
+# On resume: start from current_cycle, not from section 1
 ```
 
 | pending | phase | Boot action |
@@ -64,24 +71,19 @@ pending=$(grep -cE "^\- \[[ /]\]" .sessions/mece_plan.md 2>/dev/null || echo "0"
 ### 14c. Sub-agent Loop Logic
 
 ```
-FIND:
-  อ่าน mece_plan.md → หา section แรกที่เป็น [/] หรือ [ ]
-  ไม่มีเลย (ทุก [X]) → session_manager close flow
-
-EXECUTE:
-  Mark [/] ใน mece_plan.md (ก่อน tool call แรก)
-  โหลด Skill ตามที่ระบุใน section
-  อ่านเฉพาะ context_files ของ section นั้น
-  ทำงาน → verify DoD command
-  DoD pass → mark [X] → update Budget Used ใน mece_plan.md → write session_handoff.md → emit [loop] done
-
-TOKEN GATE (หลังทุก section):
-  remaining = 50k - Used
-  next_est  = Est ของ section ถัดไป (0 ถ้าไม่มี)
-
-  remaining > next_est AND pending > 0  →  ทำ section ถัดไปทันที
-  remaining ≤ next_est AND pending > 0  →  บอก user "เปิด chat ใหม่ + paste Continuation Prompt"
-  pending = 0                            →  session_manager close flow
+Cycle-aware loop:
+  1. FIND first Cycle with any [/] or [ ] section
+     ไม่มีเลย (ทุก [X]) → session_manager close flow
+  2. SPAWN all sections in that Cycle in parallel (one message)
+  3. Each agent writes .sessions/cycle_N_<section_id>.json
+  4. AWAIT all agents in Cycle N
+  5. CHECK: all status=done? → read results → build context → advance to Cycle N+1
+             any status=blocked? → HALT all pending Cycles → BLOCKED flow
+  6. TOKEN GATE: next_est = sum of Est for ALL sections in next Cycle
+     remaining > next_est AND pending > 0  →  spawn next Cycle immediately
+     remaining ≤ next_est AND pending > 0  →  บอก user "เปิด chat ใหม่ + paste Continuation Prompt"
+     pending = 0                            →  session_manager close flow
+  7. REPEAT from step 1 for next Cycle
 ```
 
 ---

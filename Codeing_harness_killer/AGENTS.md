@@ -17,31 +17,20 @@ You are operating inside the **Asset Plan** project. Rules apply to ALL agents r
 
 ## Boot Sequence (3 tool calls max)
 
-> This boot sequence mirrors **CLAUDE.md §Boot** exactly — if they ever differ, CLAUDE.md is authoritative.
-
 ```
-[B1] Bash: (phase=$(grep "^phase:" .sessions/active_thread.md 2>/dev/null | awk '{print $2}'); printf "SESSION_TOTAL: 0\n" > .sessions/session_tokens.md; cat .sessions/active_thread.md 2>/dev/null | tail -4; echo "---"; cat .sessions/session_tokens.md 2>/dev/null; echo "---"; grep -n "\[/\]" docs/master_roadmap.md 2>/dev/null | head -3)
-[B2] Read: .agents/skills/skill-manifest.json → match user intent to keywords[] → identify skill path · no match → default to 'editor' skill
-[B3] Read: .agents/skills/<skill_name>/SKILL.md → load sections[] and context_files into memory
+[B1] Bash: (phase=$(grep "^phase:" .sessions/active_thread.md 2>/dev/null | awk '{print $2}'); [ "$phase" != "in_progress" ] && printf "SESSION_TOTAL: 0\n" > .sessions/session_tokens.md; cat .sessions/active_thread.md 2>/dev/null | tail -4; echo "---"; cat .sessions/session_tokens.md 2>/dev/null; echo "---"; grep -n "\[/\]" docs/master_roadmap.md 2>/dev/null | head -3)
+[B2] Read: .agents/skills/skill-manifest.json → match user intent to keywords[] → identify skill_name
+[B3] Read: .agents/skills/<skill_name>/SKILL.md → load sections[] and context_files
 ```
 
 - B1 auto-resets SESSION_TOTAL to 0 when phase ≠ in_progress
 - If SESSION_TOTAL > 60k → warn user before proceeding
-- B3 "context_files" = note paths in memory ONLY — do NOT read during Boot. Read in Phase 1.
-- Boot ends after B3 — emit Reply line 1 immediately. No extra tool calls.
 
-Reply line 1 — emit verbatim (**[Boot]** bold and `<name>` backtick required):
-```
-**[Boot]** Thread: <done|in_progress> · Tasks: <N open> · Skill: `<name>` · Sections: <N> · Tokens: ~<N>k
-```
-❌ wrong output: [Boot] Thread: done · Skill: editor
-✅ correct output: **[Boot]** Thread: done · Skill: `editor`
+Reply line 1: `**[Boot]** Thread: <done|in_progress> · Tasks: <N open> · Skill: <name> · Sections: <N> · Tokens: ~<N>k`
 
 ---
 
 ## Per-Turn Routing (every user message)
-
-> Table below mirrors **CLAUDE.md §Per-Turn Routing** — if they differ, CLAUDE.md wins.
 
 | Situation | Action |
 |---|---|
@@ -56,15 +45,11 @@ Reply line 1 — emit verbatim (**[Boot]** bold and `<name>` backtick required):
 
 ## Loop Architecture
 
-**Dual-Mode:** Phase 2 ALWAYS writes `.sessions/mece_plan.md`. Mode A (spawn) passes plan to sub-agents. Mode B (single model) loops as sub-agent in same session or resumes via Continuation Prompt in new chat.
-
 | Phase | What happens |
 |---|---|
 | 1 Info Gather | Repeat: identify missing context → R5 index-first → assess → emit [✓ gather] |
-| 2 MECE Plan | Build plan → **write `.sessions/mece_plan.md`** (sections + DoD + Est) → user confirms → roadmap |
-| 3 Execution | REACT LOOP: **Mark Start** `[ ]`→`[/]` → Select → Execute → Observe → Verify → Token Gate → Decide (done: `[/]`→`[X]`) · See CLAUDE.md §Phase 3 for authoritative steps |
-
-On resume: emit Reply line 1 FIRST → then check mece_plan.md for `[/]` or `[ ]` sections → skip Phase 1+2 → jump to Phase 3.
+| 2 MECE Plan | Build plan (1:1 Skill sections) → Verify-N per section → user confirms → roadmap |
+| 3 Execution | REACT LOOP: Select → Execute → Observe → Verify → Decide |
 
 Completion Gate:
 ```
@@ -96,8 +81,23 @@ Check `backlinks[]` — every file listed imports the file you are about to edit
 | DB changes | INVARIANTS.md §I2 — emit [db-gate] and HALT |
 | Error protocol | R9: error_index → symbol_index → file_index (all 3 in order) |
 | Roadmap | Every task logged before execution. `[ ]` → `[/]` → `[X]` |
-| Manual close | "ปิด / close / done / finish / wrap up / end session / จบงาน / จบ session" → route `session_manager` — writes: `active_thread.md` · `session_tokens.md` · `session_handoff.md` · session JSON · `master_roadmap.md` → SESSION_TOTAL: 0 |
+| Manual close | "ปิด/close/done" → route `session_manager` §3 — 5 file writes + SESSION_TOTAL reset to 0 |
 | Topic switch | New task = new session JSON — never carry raw History across tasks |
+
+## Sub-agent Rules (R4)
+
+| Pattern | When to use |
+|---|---|
+| Explore | scope ≥ 5 files / ≥ 300 lines → summary only |
+| Execution | section > 8 steps + isolated output → structured result |
+| Parallel fan-out | ≥ 2 sections in same Cycle → spawn simultaneously → write `.sessions/cycle_N_*.json` |
+| Cycle transition | All sections in Cycle N done → read results → inject as context → spawn Cycle N+1 |
+
+**Limits:** Max depth = 1 · Output must be structured (write `.sessions/cycle_N_<id>.json`) · Tokens count toward SESSION_TOTAL
+**Before spawning:** emit `**[cycle N]** <spawn_tool> [<A>,<B>] → .sessions/cycle_N_*.json · depends-on: <none | cycle_N-1>`
+**Platform:** read `.agents/platform/detected.md` for spawn_tool · if `platform: unknown` → run B4 probe first
+**HALT rule:** Any section in Cycle N blocked → do NOT spawn Cycle N+1 → session_manager BLOCKED flow
+**Full rules:** `CLAUDE.md §R4`
 
 ---
 
@@ -105,10 +105,9 @@ Check `backlinks[]` — every file listed imports the file you are about to edit
 
 | File | Purpose |
 |---|---|
-| `INVARIANTS.md` | Destructive gates (I1) + DB hard stop (I2) + index sync (I3) + symbol check (I4) + roadmap gate (I5) |
+| `INVARIANTS.md` | Destructive gates (I1) + DB hard stop (I2) + symbol check (I4) |
 | `REPO_MAP.md` | Directory layers, protected zones, quick lookup commands |
-| `CODING_FAILURE_PATTERNS.md` | Known agent failure modes — format: `## CFP-NNN: <title>` with sections **Trigger** / **Root cause** / **Fix** / **Prevention** |
-| `TESTING.md` | Per-action verification matrix. **Load on-demand only** — when task involves API route, DB op, auth, CSV, or new component. See CLAUDE.md §R19 Reference Docs. |
+| `CODING_FAILURE_PATTERNS.md` | Known agent failure modes (CFP-001+) |
 | `knowledge/error_index.md` | ERR-XXX error log (search first before any debug) |
 | `docs/master_roadmap.md` | Task checklist |
 
@@ -116,7 +115,7 @@ Check `backlinks[]` — every file listed imports the file you are about to edit
 
 ## Critical Project-Specific Rules
 
-→ **See CLAUDE.md §Critical Project-Specific Rules** — authoritative source.
-
-Rules enforced: Miniflare D1 (ERR-007) · Edge Runtime (WebCrypto only) · CSV parsing (PapaParse)
+- **Miniflare D1 (local):** No `onConflictDoNothing()` or multi-row INSERT — silent failures. Use SELECT+filter+single-row-insert. (ERR-007)
+- **Edge Runtime:** No Node.js APIs. WebCrypto only.
+- **CSV parsing:** Always PapaParse — never `split(",")` manually.
 <!-- END:agent-orientation -->

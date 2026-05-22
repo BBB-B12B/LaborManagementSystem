@@ -25,6 +25,7 @@ import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { taskService, type Task } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
+import { useFeedbackStore } from '@/store/feedbackStore';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
@@ -36,6 +37,7 @@ const COLUMNS = [
 export default function WorkspacePage() {
   const { user } = useAuthStore();
   const taskCache = useTaskCacheStore();
+  const { showLoading, hideLoading } = useFeedbackStore();
 
   const [activeTab, setActiveTab] = useState('All Tasks');
   const [loading, setLoading] = useState(false);
@@ -90,8 +92,8 @@ export default function WorkspacePage() {
       taskCache.setLoading(true);
       try {
         const data = await taskService.getTasks();
+        taskCache.setTasks(data || []);
         const filtered = filterTasksByRole(data || []);
-        taskCache.setTasks(filtered);
         setTasks(filtered);
       } catch (error) {
         console.error('[WorkspacePage] Failed to fetch tasks', error);
@@ -112,13 +114,13 @@ export default function WorkspacePage() {
   const loadTasks = useCallback(
     async (forceRefresh = false) => {
       if (!forceRefresh && taskCache.isCacheValid() && taskCache.tasks.length > 0) {
-        setTasks(taskCache.tasks);
+        setTasks(filterTasksByRole(taskCache.tasks));
         setLoading(false);
         return;
       }
       await fetchFromAPI(forceRefresh);
     },
-    [taskCache, fetchFromAPI]
+    [taskCache, fetchFromAPI, filterTasksByRole]
   );
 
   // à¹‚à¸«à¸¥à¸”à¸„à¸£à¸±à¹‰à¸‡à¹à¸£à¸ + à¹€à¸¡à¸·à¹ˆà¸­ user à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™ â†’ invalidate cache
@@ -131,14 +133,19 @@ export default function WorkspacePage() {
     setLoading(true);
     loadTasks(false);
 
-    const handleSync = () => {
+    const handleSync = async () => {
+      showLoading();
       taskCache.invalidate();
-      fetchFromAPI(true);
+      try {
+        await fetchFromAPI(true);
+      } finally {
+        hideLoading();
+      }
     };
     window.addEventListener('globalSync', handleSync);
     return () => window.removeEventListener('globalSync', handleSync);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, showLoading, hideLoading, fetchFromAPI, loadTasks]);
 
 
   /** à¸«à¸¥à¸±à¸‡ Submit (Create/Edit) â†’ invalidate + silent refresh */

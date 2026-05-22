@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button, Backdrop, CircularProgress } from '@mui/material';
 import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon, Menu as MenuIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
@@ -7,7 +7,7 @@ import { useSnackbar } from 'notistack';
 import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';
 import { useAuthStore } from '@/store/authStore';
 import { dailyReportService } from '@/services/dailyReportService';
-
+import { taskService } from '@/services/taskService';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useUIStore } from '@/store/uiStore';
 
@@ -199,6 +199,24 @@ export const Layout: React.FC<LayoutProps> = ({
   disableTopGap = false,
 }) => {
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
+  const { isAuthenticated } = useAuthStore();
+  const taskCache = useTaskCacheStore();
+
+  useEffect(() => {
+    if (isAuthenticated && !taskCache.isCacheValid() && !taskCache.isLoading) {
+      taskCache.setLoading(true);
+      taskService.getTasks()
+        .then((tasks) => {
+          taskCache.setTasks(tasks || []);
+        })
+        .catch((err) => {
+          taskCache.setError(err?.message || 'Failed to preload tasks cache');
+        })
+        .finally(() => {
+          taskCache.setLoading(false);
+        });
+    }
+  }, [isAuthenticated]);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>

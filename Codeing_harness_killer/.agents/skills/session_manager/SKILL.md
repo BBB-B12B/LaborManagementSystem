@@ -18,7 +18,6 @@ description: Handles TOKEN PAUSE, BLOCKED halt, session rotation, and resume flo
     - "write SESSION_TOTAL to .sessions/session_tokens.md"
     - "write active_thread.md → phase: done"
     - "write session_handoff.md if task was in_progress"
-    - "archive + clear .sessions/mece_plan.md"
     - "confirm to user: list all files written"
 ```
 
@@ -78,8 +77,8 @@ Triggered from Loop Phase 3 when token threshold hit.
     ดำเนินการต่อไหมครับ?"
 5. On confirm:
    → Reload config (target Skill context_files)
-   → Read `.sessions/mece_plan.md` → find first [/] or [ ] section
-   → Reset loop to that section → continue Phase 3
+   → Check MECE plan: reuse if state unchanged, rebuild if scope changed
+   → Reset loop to pending section → continue Phase 3
 ```
 
 ### BLOCKED (step failed after 2× retry)
@@ -87,7 +86,9 @@ Triggered from Loop Phase 3 when verify or observe fails twice.
 
 ```
 1. HALT all remaining sections immediately
-2. Write .sessions/session_handoff.md with status "blocked"
+2. Write .sessions/session_handoff.md with status "blocked":
+   blocked_cycle: N
+   cycle_results_available: [.sessions/cycle_N_S1.json, ...]   ← list completed result files
 3. Show user:
    "ติดปัญหาที่: Section <S> step <name>
     สาเหตุ: <cause>
@@ -96,16 +97,18 @@ Triggered from Loop Phase 3 when verify or observe fails twice.
     แก้ก่อนดำเนินการต่อ หรือ skip section นี้?"
 4. Wait for user decision:
    → Fix: user resolves → reload → resume from blocked section
-   → Skip: mark section [X] with note "skipped: <reason>" → continue to next section
+   → Skip: mark section [/] with note → continue to next section
 ```
 
 ### Resume Flow
 ```
 1. Read .sessions/session_handoff.md → load sections_done + sections_pending + last_step
+1b. Read `.sessions/cycle_N_*.json` for the last completed Cycle (N = current_cycle from handoff)
+    → inject as `cycle_context:` before spawning Cycle N+1 agents
 2. Reload config: Read target Skill SKILL.md context_files
-3. MECE: read `.sessions/mece_plan.md` → find first [/] or [ ] section → reuse plan if valid · rebuild if scope changed
+3. MECE: load existing plan from handoff → reuse if valid · rebuild if scope changed
 4. Emit [resume] trace
-5. Open REACT LOOP at first pending section (Phase 3 step 0: mark `[ ]` → `[/]` before first tool call)
+5. Open REACT LOOP at first pending section
 ```
 
 ---
@@ -114,48 +117,9 @@ Triggered from Loop Phase 3 when verify or observe fails twice.
 
 **Trigger:** User explicitly requests session end — NOT a token pause or blocked state.
 
-**6 mandatory steps — do NOT summarize without completing all:**
+**5 mandatory file writes — do NOT summarize without completing all:**
 
 ```
-Step 0 — Early Phase Commit (FIRST — before anything else)
-  Write: .sessions/active_thread.md
-  Content (minimal — will be overwritten fully in Step 3):
-    task: closing session
-    phase: done
-    next: none
-  Purpose: ensures Boot B1 resets SESSION_TOTAL even if close is interrupted mid-way.
-
-Step 0.5 — R19 Self-Eval + CFP Flag Review
-  [A] Read .sessions/cfp_flags.md → any correction events this session?
-      If file exists and has entries:
-        → set new_pattern = true automatically
-        → present each flag to user:
-          "พบ correction event ในเซสชันนี้:
-           - <date> | skill: <X> | issue: <description>
-           บันทึกเป็น CFP ไหมครับ? (y/n)"
-        → y: write CFP draft → knowledge/cfp-proposals/CFP-draft-<YYYY-MM-DD>.md
-              present to user at Step 6 for final confirm
-        → n: delete cfp_flags.md entry only
-        → After review: delete .sessions/cfp_flags.md (clear for next session)
-
-  [B] Run standard R19 checks per CLAUDE.md §R19:
-  · routing_ok  — skill used matched skill-manifest.json for each section?
-  · budget_ok   — tool calls stayed ≤5 per turn?
-  · invariant_ok — no I1–I5 tripped unexpectedly?
-  · index_ok    — R8 Index Sync completed without error?
-  · new_pattern  — any failure absent from CODING_FAILURE_PATTERNS.md? (auto-true if cfp_flags.md had entries)
-
-  If routing_ok=false OR budget_ok=false:
-    Write: .agents/skill-patches/pending/<skill>-gap-<YYYY-MM-DD>.md (use _template.md)
-    Edit: registry.md → lower that skill's score by 0.5
-  If new_pattern=true:
-    Write: knowledge/cfp-proposals/CFP-draft-<YYYY-MM-DD>.md
-    Present draft details (Symptom, Root Cause, Correct Resolution) to user and ask:
-      "พบ failure pattern ใหม่ ต้องการตรวจสอบและยืนยันการเพิ่ม CFP บรรทึกเข้าระบบหรือไม่? (y/n)"
-    → y: เมื่อผู้ใช้เห็นชอบและคอนเฟิร์มรายละเอียดความถูกต้องเรียบร้อยแล้ว จึงบันทึกต่อท้าย (append) ลงใน CODING_FAILURE_PATTERNS.md
-    → n: ย้ายไฟล์ร่างไปไว้ในโฟลเดอร์ applied โดยตั้งสถานะเป็น declined ใน frontmatter
-  All pass → proceed immediately to Step 1
-
 Step 1 — Find and close current session JSON
   Bash: ls -t .sessions/session_*.json | head -1    → identify active session file
   Read: active session file
@@ -166,7 +130,7 @@ Step 2 — Reset session_tokens.md for next session
   Write: .sessions/session_tokens.md
   Content:
     SESSION_TOTAL: 0
-  Note: Final token count goes into session JSON summary_context (Step 1) — this file resets to 0 so the next session starts clean. Reset happens at session close only — never mid-session.
+  Note: Final token count goes into session JSON summary_context (Step 1) — this file resets to 0 so the next session starts clean
 
 Step 3 — Write active_thread.md
   Write: .sessions/active_thread.md
@@ -185,25 +149,13 @@ Step 4 — Write session_handoff.md (ALWAYS — even if task is complete)
     last_action: <final action taken>
     next_session_start: <what to do first next time>
 
-Step 5 — Archive and clear mece_plan.md
-  Read: .sessions/mece_plan.md
-  Append to Session Archive section:
-    ### Closed: <date>
-    Done: [S1, S2, ...] | Remaining: [S3, ...] | Summary: <one-line task summary>
-  Rewrite Sections block to empty template:
-    ## Sections
-    <!-- Orchestrator will write here at next Phase 2 -->
-  Note: Session Archive block is KEPT — only Sections block is cleared
-
-Step 6 — Confirm to user (list every file written)
+Step 5 — Confirm to user (list every file written)
   Reply format:
     ✅ Session ปิดแล้วครับ — ไฟล์ที่บันทึก:
     · .sessions/session_<NNN>_<topic>.json → status: completed
     · .sessions/session_tokens.md → SESSION_TOTAL: ~<N>k
     · .sessions/active_thread.md → phase: done
     · .sessions/session_handoff.md → next: <summary>
-    · .sessions/mece_plan.md → Sections cleared · Archive updated
-    · .sessions/cfp_flags.md → <N> flags reviewed · <N> CFP drafts created  (omit line if no corrections this session)
 ```
 
-**Never report "session closed" before all 6 steps are completed.** Summary text alone = incomplete close.
+**Never report "session closed" before all 4 files are written.** Summary text alone = incomplete close.

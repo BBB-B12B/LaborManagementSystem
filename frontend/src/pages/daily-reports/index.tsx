@@ -947,18 +947,8 @@ export default function DailyReportPage() {
   } = useQuery({
     queryKey: ['tasks', 'assigned', user?.id],
     queryFn: async () => {
-      // Check Cache first
-      if (isCacheValid() && tasksInCache.length > 0) {
-        console.log('[DailyReport] Using Cached Tasks');
-        return tasksInCache;
-      }
-
-      console.log('[DailyReport] Fetching fresh tasks from API');
-      setCacheLoading(true);
-      try {
-        const tasks = await taskService.getTasks();
+      const getFilteredTasks = (tasksList: any[]) => {
         const currentUser = user;
-
         if (!currentUser) return [];
 
         const uEmpId = String(currentUser.employeeId || '')
@@ -968,7 +958,7 @@ export default function DailyReportPage() {
           .toLowerCase()
           .trim();
 
-        const filtered = tasks.filter((t: any) => {
+        return tasksList.filter((t: any) => {
           const isActive = t.isActive !== false;
 
           const role = String(currentUser.roleCode || currentUser.roleId || '').toUpperCase();
@@ -1003,10 +993,21 @@ export default function DailyReportPage() {
           const isAssigned = taskRelatedIds.has(uEmpId) || taskRelatedIds.has(uId);
           return isActive && isAssigned;
         });
+      };
 
+      // Check Cache first
+      if (isCacheValid() && tasksInCache.length > 0) {
+        console.log('[DailyReport] Using Cached Tasks');
+        return getFilteredTasks(tasksInCache);
+      }
+
+      console.log('[DailyReport] Fetching fresh tasks from API');
+      setCacheLoading(true);
+      try {
+        const tasks = await taskService.getTasks();
         // Save to Cache
-        setTasksInCache(filtered);
-        return filtered;
+        setTasksInCache(tasks || []);
+        return getFilteredTasks(tasks || []);
       } finally {
         setCacheLoading(false);
       }
@@ -2057,7 +2058,8 @@ export default function DailyReportPage() {
       dailyReportService.clearCache(selectedTask.id);
     } catch (error) {
       console.error('Failed to submit report', error);
-      toast.error('เกิดข้อผิดพลาดในการบันทึกรายงาน: ' + (error as any).message);
+      const errorMsg = (error as any).response?.data?.error || (error as any).message || 'ไม่ทราบสาเหตุ';
+      toast.error('เกิดข้อผิดพลาดในการบันทึกรายงาน: ' + errorMsg);
     } finally {
       loadingSource.current = null;
       setIsSubmitting(false);
