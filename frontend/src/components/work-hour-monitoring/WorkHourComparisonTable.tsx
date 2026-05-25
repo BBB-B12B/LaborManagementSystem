@@ -177,7 +177,7 @@ const getStatusStyle = (statusType: string) => {
 const ActionButton = styled(Button, {
   shouldForwardProp: (prop) => prop !== 'actionType',
 })<{ actionType: string }>(({ actionType }) => {
-  let styles = {
+  const styles = {
     borderRadius: '8px',
     textTransform: 'none' as const,
     fontWeight: 800,
@@ -291,6 +291,7 @@ interface Props {
   onClearFilter?: () => void;
   onExport?: () => void;
   onRefresh?: () => void;
+  isLocked?: boolean;
 }
 
 const WorkHourComparisonTable: React.FC<Props> = ({
@@ -303,6 +304,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   onClearFilter,
   onExport,
   onRefresh,
+  isLocked = false,
 }) => {
   const { t } = useTranslation();
   const [page, setPage] = React.useState(0);
@@ -380,6 +382,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           normalCount:   (old.normalCount  ?? 0) + 1,
           matchedCount:  (old.matchedCount ?? 0) + 1,  // record กลายเป็น MATCHED
           resolvedCount: (old.resolvedCount ?? 0) + 1,  // เพิ่ม resolution count ทันที
+          resolvedMatchedCount: (old.resolvedMatchedCount ?? 0) + 1, // เพิ่ม resolved matched count ทันที
         };
       });
 
@@ -1188,9 +1191,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 0.5,
-                                backgroundColor: RECON_COLORS.PURPLE.bg,
-                                color: RECON_COLORS.PURPLE.text,
-                                border: `1px solid ${RECON_COLORS.PURPLE.border}`,
+                                backgroundColor: RECON_COLORS.ORANGE.bg,
+                                color: RECON_COLORS.ORANGE.text,
+                                border: `1px solid ${RECON_COLORS.ORANGE.border}`,
                                 borderRadius: '20px',
                                 px: 1,
                                 py: 0.25,
@@ -1223,10 +1226,10 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     <TableCell>
                       <ActionButton
                         variant="outlined"
-                        actionType={row.status === 'MATCHED' ? 'view' : 'check'}
+                        actionType={(isLocked || row.status === 'MATCHED') ? 'view' : 'check'}
                         onClick={() => handleOpenCheckDialog(row)}
                       >
-                        {row.status === 'MATCHED' ? 'ดูข้อมูล' : 'ตรวจสอบ'}
+                        {(isLocked || row.status === 'MATCHED') ? 'ดูข้อมูล' : 'ตรวจสอบ'}
                       </ActionButton>
                     </TableCell>
                   </TableRow>
@@ -1857,7 +1860,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     fullWidth
                     size="small"
                     label="เหตุผลการแก้ไข"
-                    required
                     placeholder="ระบุเหตุผลการแก้ไข (เช่น พนักงานลืมสแกนแต่มีรูปยืนยัน)"
                     value={scanEditReason}
                     onChange={(e) => setScanEditReason(e.target.value)}
@@ -1865,7 +1867,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                       mb: 2,
                       '& .MuiInputBase-input': { fontWeight: 600 },
                       '& .MuiInputLabel-root': { fontWeight: 700, color: '#475569' },
-                      '& .MuiFormLabel-asterisk': { color: '#ef4444' },
                     }}
                     InputLabelProps={{ shrink: true }}
                   />
@@ -1880,10 +1881,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     <Button
                       variant="contained"
                       onClick={() => {
-                        if (!scanEditReason) {
-                          toast.error('โปรดระบุเหตุผลการแก้ไข');
-                          return;
-                        }
                         updateScanMutation.mutate({
                           id: selectedRow.id,
                           punches: editingScanPunches.filter((p) => p.trim() !== ''),
@@ -1914,8 +1911,14 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
                   return (
                     <>
+                      {isLocked && (
+                        <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 800, alignSelf: 'center', mr: 'auto' }}>
+                          🔒 งวดงานนี้ถูกอนุมัติแล้ว ไม่สามารถแก้ไขข้อมูลการทำงานได้
+                        </Typography>
+                      )}
+
                       {/* กรณี CONFLICTED หรือ MISSING_SCAN ที่มีสแกนบางส่วน → แก้ไขสแกนนิ้ว */}
-                      {canEditScan && (
+                      {canEditScan && !isLocked && (
                         <Button
                           variant="outlined"
                           onClick={() => {
@@ -1937,7 +1940,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                       )}
 
                       {/* กรณี MISSING_SCAN ที่ไม่มีสแกนเลย → ยืนยันตาม Daily Report */}
-                      {canFillFromDaily && (
+                      {canFillFromDaily && !isLocked && (
                         <Button
                           variant="outlined"
                           onClick={() => setConfirmFillOpen(true)}
@@ -2012,7 +2015,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             คุณต้องการยืนยันการปรับข้อมูลสแกนนิ้วตาม Daily Report ใช่หรือไม่?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            ระบบจะทำการบันทึกเวลาจาก Daily Report ลงในสแกนนิ้วของพนักงาน และจะอัปเดตสถานะเป็น "ปกติ"
+            ระบบจะทำการบันทึกเวลาจาก Daily Report ลงในสแกนนิ้วของพนักงาน และจะอัปเดตสถานะเป็น &quot;ปกติ&quot;
             ทันที
           </Typography>
 

@@ -244,8 +244,8 @@ function classifyBySegments(params: ClassifyBySegmentsParams): PunchClassifyResu
   
   let isConflicted = false;
   let conflictNote = '';
-  let maxLateMinutes = 0;
-  let maxEarlyLeaveMinutes = 0;
+  let totalLateMinutes = 0;
+  let totalEarlyLeaveMinutes = 0;
   let penaltyOtMorning = 0;
   let penaltyOtEvening = 0;
 
@@ -321,11 +321,11 @@ function classifyBySegments(params: ClassifyBySegmentsParams): PunchClassifyResu
     }
 
     if (late > 0) {
-      maxLateMinutes = Math.max(maxLateMinutes, late);
+      totalLateMinutes += late;
       if (seg.type === 'otMorning') penaltyOtMorning += late;
     }
     if (early > 0) {
-      maxEarlyLeaveMinutes = Math.max(maxEarlyLeaveMinutes, early);
+      totalEarlyLeaveMinutes += early;
       if (seg.type === 'otEvening' || seg.type === 'combined_afternoon_evening') {
         penaltyOtEvening += early;
       }
@@ -345,10 +345,10 @@ function classifyBySegments(params: ClassifyBySegmentsParams): PunchClassifyResu
       approvedOtEvening: timesheetOtEvening ?? 0,
       totalApprovedHours: (timesheetNormalHours || 0) + (timesheetOtMorning || 0) + (timesheetOtNoon || 0) + (timesheetOtEvening || 0),
       approvalSource: 'daily_report',
-      lateMinutes: maxLateMinutes,
-      earlyLeaveMinutes: maxEarlyLeaveMinutes,
-      isLate: maxLateMinutes > 0,
-      isEarlyLeave: maxEarlyLeaveMinutes > 0,
+      lateMinutes: totalLateMinutes,
+      earlyLeaveMinutes: totalEarlyLeaveMinutes,
+      isLate: totalLateMinutes > 0,
+      isEarlyLeave: totalEarlyLeaveMinutes > 0,
       note: conflictNote
     };
   }
@@ -381,10 +381,10 @@ function classifyBySegments(params: ClassifyBySegmentsParams): PunchClassifyResu
     approvedOtEvening: approvedEvening,
     totalApprovedHours: totalApproved,
     approvalSource: 'daily_report',
-    lateMinutes: maxLateMinutes,
-    earlyLeaveMinutes: maxEarlyLeaveMinutes,
-    isLate: maxLateMinutes > 0,
-    isEarlyLeave: maxEarlyLeaveMinutes > 0,
+    lateMinutes: totalLateMinutes,
+    earlyLeaveMinutes: totalEarlyLeaveMinutes,
+    isLate: totalLateMinutes > 0,
+    isEarlyLeave: totalEarlyLeaveMinutes > 0,
     note: autoNote || null,
   };
 }

@@ -31,8 +31,8 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
 
   // แยก "ปกติตั้งแต่แรก" ออกจาก "แก้ไขแล้วจนปกติ"
   // matchedCount = MATCHED ทั้งหมดในปัจจุบัน (รวมทั้งที่ถูก resolve มาแล้ว)
-  // resolvedCount = รายการที่เคยผิดปกติแล้วถูกแก้ไขจนกลายเป็น MATCHED
-  const pureMatchedCount = Math.max(0, (stats?.matchedCount ?? 0) - (stats?.resolvedCount ?? 0));
+  // resolvedMatchedCount = รายการที่เคยผิดปกติแล้วถูกแก้ไขจนกลายเป็น MATCHED (เฉพาะ status: MATCHED)
+  const pureMatchedCount = Math.max(0, (stats?.matchedCount ?? 0) - (stats?.resolvedMatchedCount ?? 0));
 
   const items = [
     {
@@ -46,7 +46,9 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
     {
       id: 'leave',
       title: 'ลา',
-      description: 'พนักงานแจ้งลาหยุดในระบบ Daily Report',
+      description: stats?.resolvedLeaveCount && stats.resolvedLeaveCount > 0
+        ? `พนักงานแจ้งลาหยุดในระบบ (แก้ไขจากขาดงาน ${stats.resolvedLeaveCount} รายการ)`
+        : 'พนักงานแจ้งลาหยุดในระบบ Daily Report',
       icon: <LeaveIcon sx={{ fontSize: 28, color: RECON_COLORS.ORANGE.text }} />,
       colorTheme: 'orange' as const,
       count: stats?.leaveCount ?? 0,
@@ -57,7 +59,7 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
       description: 'รายการที่เคยผิดปกติ — Admin แก้ไขจนข้อมูลตรงกันแล้ว',
       icon: <TaskAltIcon sx={{ fontSize: 28, color: RECON_COLORS.BLUE.text }} />,
       colorTheme: 'blue' as const,
-      count: stats?.resolvedCount ?? 0,
+      count: stats?.resolvedMatchedCount ?? 0,
     },
   ];
 

@@ -1,0 +1,8 @@
+{
+  "session_id": "session_008_export_excel",
+  "associated_tasks": ["T-002"],
+  "status": "completed",
+  "estimated_tokens": 35000,
+  "summary_context": "T-002: ระบบ Export รายงานสำหรับโฟร์แมนแบบ Multi-sheet (v2+C+D)\n\nความสำเร็จในเซสชันนี้:\n1. รวมปุ่ม Export เป็นปุ่มเดี่ยว 'Export รายงาน (Excel)' โดยไม่มี dialog ป๊อปอัป\n2. ออกแบบไฟล์ Excel แบบ Multi-sheet ประกอบด้วย:\n   - Sheet 1 ('ภาพรวมทั้งหมด'): แสดงพนักงานทุกคน แยกกลุ่มและจัดเรียงตาม Foreman\n   - Sheet ถัดๆ ไป: แยกรายแผ่นงานตามโฟร์แมนแต่ละคน\n   - Sheet สุดท้าย ('ไม่ระบุโฟร์แมน'): สำหรับพนักงานที่ไม่มีโฟร์แมน\n3. ไฮไลต์เฉพาะ 4 สถานะผิดปกติที่โฟร์แมนต้องรับผิดชอบแก้ไข (ABSENT, MISSING_DAILY, CONFLICTED B1/B2, และ LEAVE_WITH_SCAN) ด้วยสีพื้นหลังส้มอ่อนและขอบส้มทราย ส่วนสถานะอื่น (เช่น MISSING_SCAN, conflict ปกติ, หรือปกติ) จะไม่มีการไฮไลต์\n4. ปรับปรุง Backend Controller และ Service (ReconciliationService.ts) เพื่อใช้ exceljs เจนไฟล์และจัดการชื่อ Sheet ให้ปลอดภัย\n5. ลบ route, frontend service และ Dialog ที่ซ้ำซ้อนออกทั้งหมด ทำให้โค้ดสะอาดหมดจด\n\nSession tokens: ~35k",
+  "History": []
+}

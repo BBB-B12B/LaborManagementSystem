@@ -346,8 +346,8 @@ export class ReconciliationService {
     
     let isConflicted = false;
     let conflictNote = '';
-    let maxLateMinutes = 0;
-    let maxEarlyLeaveMinutes = 0;
+    let totalLateMinutes = 0;
+    let totalEarlyLeaveMinutes = 0;
     let penaltyOtMorning = 0;
     let penaltyOtEvening = 0;
 
@@ -418,11 +418,11 @@ export class ReconciliationService {
       }
 
       if (late > 0) {
-        maxLateMinutes = Math.max(maxLateMinutes, late);
+        totalLateMinutes += late;
         if (seg.type === 'otMorning') penaltyOtMorning += late;
       }
       if (early > 0) {
-        maxEarlyLeaveMinutes = Math.max(maxEarlyLeaveMinutes, early);
+        totalEarlyLeaveMinutes += early;
         if (seg.type === 'otEvening' || seg.type === 'combined_afternoon_evening') {
           penaltyOtEvening += early;
         }
@@ -443,10 +443,10 @@ export class ReconciliationService {
         approvedOtEvening: timesheetOtEvening,
         totalApprovedHours: (timesheetNormalHours || 0) + (timesheetOtMorning || 0) + (timesheetOtNoon || 0) + (timesheetOtEvening || 0),
         approvalSource: 'daily_report',
-        lateMinutes: maxLateMinutes,
-        earlyLeaveMinutes: maxEarlyLeaveMinutes,
-        isLate: maxLateMinutes > 0,
-        isEarlyLeave: maxEarlyLeaveMinutes > 0,
+        lateMinutes: totalLateMinutes,
+        earlyLeaveMinutes: totalEarlyLeaveMinutes,
+        isLate: totalLateMinutes > 0,
+        isEarlyLeave: totalEarlyLeaveMinutes > 0,
         note: conflictNote
       };
     }
@@ -481,10 +481,10 @@ export class ReconciliationService {
       approvedOtEvening: approvedEvening,
       totalApprovedHours: totalApproved,
       approvalSource: 'daily_report',
-      lateMinutes: maxLateMinutes,
-      earlyLeaveMinutes: maxEarlyLeaveMinutes,
-      isLate: maxLateMinutes > 0,
-      isEarlyLeave: maxEarlyLeaveMinutes > 0,
+      lateMinutes: totalLateMinutes,
+      earlyLeaveMinutes: totalEarlyLeaveMinutes,
+      isLate: totalLateMinutes > 0,
+      isEarlyLeave: totalEarlyLeaveMinutes > 0,
       note: autoNote || null,
     };
   }
@@ -1825,6 +1825,8 @@ export class ReconciliationService {
     leaveCount: number;       // LEAVE เฉพาะ
     pendingCount: number;
     resolvedCount: number;
+    resolvedMatchedCount: number;
+    resolvedLeaveCount: number;
     missingDailyCount: number;
     missingScanCount: number;
     conflictedCount: number;
@@ -1861,6 +1863,8 @@ export class ReconciliationService {
       normalSnap,
       pendingSnap,
       resolvedSnap,
+      resolvedMatchedSnap,
+      resolvedLeaveSnap,
       missingDailySnap,
       missingScanSnap,
       conflictedSnap,
@@ -1874,6 +1878,8 @@ export class ReconciliationService {
       baseQ.where('status', '==', 'MATCHED').count().get(),
       baseQ.where('status', 'in', abnormalStatuses).count().get(),
       baseQ.where('resolvedAt', '>', new Date(0)).count().get(),
+      baseQ.where('status', '==', 'MATCHED').where('resolvedAt', '>', new Date(0)).count().get(),
+      baseQ.where('status', '==', 'LEAVE').where('resolvedAt', '>', new Date(0)).count().get(),
       baseQ.where('status', '==', 'MISSING_DAILY').count().get(),
       baseQ.where('status', '==', 'MISSING_SCAN').count().get(),
       baseQ.where('status', '==', 'CONFLICTED').count().get(),
@@ -1905,6 +1911,8 @@ export class ReconciliationService {
       leaveCount:         leaveSnap.data().count, // status=LEAVE เท่านั้น
       pendingCount:       pendingSnap.data().count,
       resolvedCount:      resolvedSnap.data().count,
+      resolvedMatchedCount: resolvedMatchedSnap.data().count,
+      resolvedLeaveCount: resolvedLeaveSnap.data().count,
       missingDailyCount:  missingDailySnap.data().count,
       missingScanCount:   missingScanSnap.data().count,
       conflictedCount:    conflictedSnap.data().count,

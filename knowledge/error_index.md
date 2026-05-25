@@ -44,3 +44,33 @@
   4. Combined and chronologically sorted all segments (OT, work, and leave) by their expected start time.
   5. Set `isThisSegmentLeave` purely based on `seg.isLeaveSegment` and prevented leave segments from consuming fingerprint punches.
 
+## ERR-006: Inconsistent Late/Early Leave Minutes due to Max Formula instead of Sum
+- **Task:** T-001-001-06 · **Session:** session_007
+- **File:** backend/src/services/reconciliation/ReconciliationService.ts & functions/src/index.ts · **Line:** 349, 421, 425 (Backend) & 247, 324, 328 (Cloud Functions)
+- **Symptom:** In the work hour tracking table, the late/early leave minutes display is inconsistent with the detail modal. For example, if a worker is late in multiple segments (afternoon segment by 5 minutes and evening OT segment by 15 minutes), the table displays `สาย 15 น.`, whereas it should display `สาย 20 น.` (the total sum of all late periods).
+- **Root Cause:** The segment-based classification logic in `ReconciliationService.classifyBySegments` and Cloud Functions `classifyBySegments` used `Math.max(maxLateMinutes, late)` and `Math.max(maxEarlyLeaveMinutes, early)` to compute the daily late/early leave minutes. This incorrect formula chose only the maximum late/early leave duration of a single segment instead of summing them up across all shifts/segments of the day.
+- **Resolution:**
+  1. Refactored the calculation in both backend and cloud function files to sum the late and early leave minutes across all segments of the day using `totalLateMinutes += late` and `totalEarlyLeaveMinutes += early`, and updated the respective variables to `totalLateMinutes` and `totalEarlyLeaveMinutes`.
+  2. Modified the frontend table component `WorkHourComparisonTable.tsx` to color-code the capsules differently: kept **LATE (สาย)** as `PURPLE` and updated **EARLY LEAVE (ออกก่อน)** to `ORANGE` for visual distinction, helping admins easily identify different attendance behaviors.
+
+## ERR-007: Mismatch in Summary Card Counts due to Leave Double Counting
+- **Task:** T-001-001-07 · **Session:** session_007_summarycard_bugfix
+- **File:** backend/src/services/reconciliation/ReconciliationService.ts & frontend/src/components/work-hour-monitoring/NormalBreakdown.tsx · **Line:** 1902 (Backend) & 35 (Frontend)
+- **Symptom:** In the work hours monitoring page, the parent "สถานะปกติ" (Normal) card shows a count that is inconsistent with the sum of its three sub-breakdown cards. For example, parent card shows 9, but sub-cards sum to 10 (0 directly matched + 6 leaves + 4 corrected).
+- **Root Cause:**
+  1. A reconciliation record resolved to a leave state has status `'LEAVE'` and a valid `resolvedAt` timestamp.
+  2. The breakdown cards calculated "ข้อมูลตรงกันตั้งแต่แรก" (pureMatchedCount) as `matchedCount - resolvedCount` (where `resolvedCount` is the total count of all records with `resolvedAt != null`). Since `resolvedCount` included resolved leave records, they were double-counted in both "ลา" and "แก้ไขแล้วจนปกติ", and also subtracted incorrectly from "ข้อมูลตรงกันตั้งแต่แรก".
+- **Resolution:**
+  1. Created a new backend statistic `resolvedMatchedCount` in `ReconciliationService.getStats` to query only corrected records currently having status `'MATCHED'`.
+  2. Mapped `'abnormal_fixed'` status queries to strictly filter by `['MATCHED']` in `reconciliationController.ts`.
+  3. Updated `NormalBreakdown.tsx` to calculate `pureMatchedCount` as `matchedCount - resolvedMatchedCount` and set the corrected card's count to `resolvedMatchedCount`, ensuring a mathematically perfect MECE partition where sub-cards always sum to the parent card's count.
+
+## ERR-008: 1-Day Timezone Shift Discrepancy in Wage Period Calculation Query
+- **Task:** T-003 · **Session:** session_007
+- **File:** backend/src/services/wage/WagePeriodService.ts · **Line:** 162-163
+- **Symptom:** During wage calculation for a period starting on e.g., April 27, 2026, the backend fetched reconciliation records starting from one day earlier (April 26) instead of the selected starting day.
+- **Root Cause:** The code used `period.startDate.toISOString().split('T')[0]` and `period.endDate.toISOString().split('T')[0]` which evaluates using UTC dates. Since `startDate` was stored at local midnight (`2026-04-27 00:00:00 UTC+7`), the UTC representation was `2026-04-26 17:00:00Z`. The split operation extracted the UTC day portion (`'2026-04-26'`), causing a 1-day shift.
+- **Resolution:** Replaced `.toISOString().split('T')[0]` with `.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })` which accurately extracts the local calendar day portion (`'2026-04-27'`) in the correct Bangkok timezone without any date shifting.
+
+
+

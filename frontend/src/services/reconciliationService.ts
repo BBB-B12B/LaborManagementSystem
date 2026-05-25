@@ -208,7 +208,7 @@ export const reconciliationService = {
   /**
    * Admin แก้ไขเวลาสแกนนิ้ว
    */
-  updateScanPunches: async (id: string, punches: string[], reason: string): Promise<void> => {
+  updateScanPunches: async (id: string, punches: string[], reason?: string): Promise<void> => {
     await apiClient.post(`/reconciliation/${id}/update-scan`, { punches, reason });
   },
 
@@ -280,6 +280,8 @@ export const reconciliationService = {
     leaveCount: number;
     pendingCount: number;
     resolvedCount: number;
+    resolvedMatchedCount: number;
+    resolvedLeaveCount: number;
     missingDailyCount: number;
     missingScanCount: number;
     conflictedCount: number;
@@ -297,6 +299,8 @@ export const reconciliationService = {
         leaveCount: number;
         pendingCount: number;
         resolvedCount: number;
+        resolvedMatchedCount: number;
+        resolvedLeaveCount: number;
         missingDailyCount: number;
         missingScanCount: number;
         conflictedCount: number;

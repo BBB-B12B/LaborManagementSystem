@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -28,7 +28,8 @@ import {
   KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { wageService, type WagePeriod } from '@/services/wageService';
 import { useToast } from '@/components/common';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { reconciliationService } from '@/services/reconciliationService';
@@ -61,6 +62,60 @@ export default function WorkHourMonitoringPage() {
   const [project, setProject] = useState('all');
   const [projectsList, setProjectsList] = useState<{id: string, code: string, name: string}[]>([]);
 
+  // Fetch wage periods
+  const { data: wagePeriodsData } = useQuery({
+    queryKey: ['wagePeriods'],
+    queryFn: () => wageService.getAllWagePeriods(),
+  });
+  const wagePeriods = wagePeriodsData?.wagePeriods || [];
+
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('custom');
+  const [hasSetDefaultPeriod, setHasSetDefaultPeriod] = useState(false);
+
+  // Filter wage periods based on selected project
+  const filteredPeriods = useMemo(() => {
+    if (project === 'all') return wagePeriods;
+    const selectedProjectObj = projectsList.find(p => p.id === project);
+    if (!selectedProjectObj) return wagePeriods;
+    return wagePeriods.filter(p => 
+      p.projectCode === selectedProjectObj.code ||
+      p.projectCode === selectedProjectObj.id ||
+      p.projectName === selectedProjectObj.name
+    );
+  }, [wagePeriods, project, projectsList]);
+
+  // Selected period and locked status
+  const selectedPeriod = useMemo(() => {
+    if (selectedPeriodId === 'custom') return null;
+    return wagePeriods.find(p => p.id === selectedPeriodId);
+  }, [wagePeriods, selectedPeriodId]);
+
+  const isLocked = useMemo(() => {
+    if (!selectedPeriod) return false;
+    return ['approved', 'paid', 'locked'].includes(selectedPeriod.status);
+  }, [selectedPeriod]);
+
+  // Set default period once wage periods load
+  useEffect(() => {
+    if (wagePeriods.length > 0 && !hasSetDefaultPeriod) {
+      const today = new Date();
+      const currentPeriod = wagePeriods.find(p => {
+        const start = new Date(p.startDate);
+        const end = new Date(p.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+      });
+
+      if (currentPeriod) {
+        setSelectedPeriodId(currentPeriod.id);
+        setStartDate(new Date(currentPeriod.startDate));
+        setEndDate(new Date(currentPeriod.endDate));
+      }
+      setHasSetDefaultPeriod(true);
+    }
+  }, [wagePeriods, hasSetDefaultPeriod]);
+
   // Breakdown Visibility
   const [showAbnormalBreakdown, setShowAbnormalBreakdown] = useState(false);
   const [showNormalBreakdown, setShowNormalBreakdown] = useState(false);
@@ -81,6 +136,61 @@ export default function WorkHourMonitoringPage() {
     };
     fetchProjects();
   }, []);
+
+  const handleProjectChange = (newProject: string) => {
+    setProject(newProject);
+    
+    // Automatically find and select the active period for the new project if there is one
+    const today = new Date();
+    const selectedProjectObj = projectsList.find(p => p.id === newProject);
+    const projectCode = selectedProjectObj ? selectedProjectObj.code : null;
+
+    const matchingPeriod = wagePeriods.find(p => {
+      if (newProject !== 'all' && p.projectCode !== projectCode) return false;
+      const start = new Date(p.startDate);
+      const end = new Date(p.endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return today >= start && today <= end;
+    });
+
+    if (matchingPeriod) {
+      setSelectedPeriodId(matchingPeriod.id);
+      setStartDate(new Date(matchingPeriod.startDate));
+      setEndDate(new Date(matchingPeriod.endDate));
+    } else {
+      setSelectedPeriodId('custom');
+    }
+  };
+
+  const handlePeriodChange = (periodId: string) => {
+    setSelectedPeriodId(periodId);
+    if (periodId === 'custom') return;
+    
+    const period = wagePeriods.find(p => p.id === periodId);
+    if (period) {
+      setStartDate(new Date(period.startDate));
+      setEndDate(new Date(period.endDate));
+    }
+  };
+
+  const handleStartDateChange = (date: Date | null) => {
+    setStartDate(date);
+    setSelectedPeriodId('custom');
+  };
+
+  const handleEndDateChange = (date: Date | null) => {
+    setEndDate(date);
+    setSelectedPeriodId('custom');
+  };
+
+  const formatPeriodOptionLabel = (period: WagePeriod) => {
+    const start = new Date(period.startDate);
+    const end = new Date(period.endDate);
+    const startStr = start.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+    const endStr = end.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${startStr} - ${endStr}`;
+  };
 
   const handleStatusClick = (status: string) => {
     setFilterStatus(status);
@@ -163,6 +273,27 @@ export default function WorkHourMonitoringPage() {
     setFilterStatus('all');
     setShowNormalBreakdown(false);
     setShowAbnormalBreakdown(false);
+    
+    // Reset period and dates
+    const today = new Date();
+    const currentPeriod = wagePeriods.find(p => {
+      const start = new Date(p.startDate);
+      const end = new Date(p.endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return today >= start && today <= end;
+    });
+
+    if (currentPeriod) {
+      setSelectedPeriodId(currentPeriod.id);
+      setStartDate(new Date(currentPeriod.startDate));
+      setEndDate(new Date(currentPeriod.endDate));
+    } else {
+      setSelectedPeriodId('custom');
+      setStartDate(new Date(today.getFullYear(), today.getMonth(), 1));
+      setEndDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+    }
+    
     handleCloseFilter();
   };
 
@@ -174,9 +305,41 @@ export default function WorkHourMonitoringPage() {
           {!isFullscreen && (
             <Box sx={{ p: 1, pb: 0.5 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                <Typography variant="subtitle1" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.NAVY, fontSize: '1.2rem' }}>
-                  ระบบติดตามและจัดการชั่วโมงทำงาน
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={1.5}>
+                  <Typography variant="subtitle1" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.NAVY, fontSize: '1.2rem' }}>
+                    ระบบติดตามและจัดการชั่วโมงทำงาน
+                  </Typography>
+                  {startDate && endDate && (
+                    <Box sx={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      bgcolor: '#eff6ff', 
+                      border: '1px solid #bfdbfe',
+                      px: 1.5, 
+                      py: 0.5, 
+                      borderRadius: '20px', 
+                    }}>
+                      <Typography variant="caption" sx={{ color: '#1e3a8a', fontWeight: 'bold', fontSize: '0.75rem' }}>
+                        ช่วงเวลา: {startDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} - {endDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </Typography>
+                    </Box>
+                  )}
+                  {isLocked && (
+                    <Box sx={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      bgcolor: '#fff1f2', 
+                      border: '1px solid #fecdd3',
+                      px: 1.5, 
+                      py: 0.5, 
+                      borderRadius: '20px', 
+                    }}>
+                      <Typography variant="caption" sx={{ color: '#be123c', fontWeight: 'bold', fontSize: '0.75rem' }}>
+                        🔒 งวดงานนี้ถูกอนุมัติแล้ว ไม่สามารถแก้ไขข้อมูลการทำงานได้
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
                 <Stack direction="row" spacing={1}>
                   <Button variant="outlined" size="small" onClick={() => setIsFullscreen(true)} startIcon={<FullscreenIcon />}>Full Screen</Button>
                   <Button variant="outlined" size="small" onClick={handleSync} startIcon={<SyncIcon />}>ประมวลผลใหม่</Button>
@@ -228,6 +391,7 @@ export default function WorkHourMonitoringPage() {
                 onClearFilter={() => handleStatusClick('all')}
                 onExport={handleExport}
                 onRefresh={() => queryClient.invalidateQueries({ queryKey: ['reconciliation'] })}
+                isLocked={isLocked}
               />
             </Paper>
           </Box>
@@ -245,14 +409,26 @@ export default function WorkHourMonitoringPage() {
             <Typography variant="subtitle2" sx={{ mb: 2 }}>ตัวกรองข้อมูลขั้นสูง</Typography>
             <Stack spacing={2}>
               <FormControl fullWidth size="small">
-                <Select value={project} onChange={(e) => setProject(e.target.value)}>
+                <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>โครงการ</Typography>
+                <Select value={project} onChange={(e) => handleProjectChange(e.target.value as string)}>
                   <MenuItem value="all">ทุกโครงการ</MenuItem>
                   {projectsList.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
                 </Select>
               </FormControl>
+              <FormControl fullWidth size="small">
+                <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>งวดงาน</Typography>
+                <Select value={selectedPeriodId} onChange={(e) => handlePeriodChange(e.target.value as string)}>
+                  <MenuItem value="custom">กำหนดช่วงเวลาเอง (Custom)</MenuItem>
+                  {filteredPeriods.map(p => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {formatPeriodOptionLabel(p)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <Stack direction="row" spacing={1}>
-                <DatePicker value={startDate} onChange={setStartDate} label="เริ่ม" />
-                <DatePicker value={endDate} onChange={setEndDate} label="สิ้นสุด" />
+                <DatePicker value={startDate} onChange={handleStartDateChange} label="เริ่ม" />
+                <DatePicker value={endDate} onChange={handleEndDateChange} label="สิ้นสุด" />
               </Stack>
               <Button variant="contained" fullWidth onClick={handleCloseFilter}>ค้นหา</Button>
               <Button size="small" onClick={handleResetFilter}>รีเซ็ต</Button>

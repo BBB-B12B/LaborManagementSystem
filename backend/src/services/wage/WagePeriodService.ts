@@ -159,8 +159,8 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const projectLocationId = projects.docs[0].id;
 
       // 1. Fetch all reconciliation records for the period and home project
-      const startStr = period.startDate.toISOString().split('T')[0];
-      const endStr = period.endDate.toISOString().split('T')[0];
+      const startStr = period.startDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+      const endStr = period.endDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
 
       const reconRecords = await collections.reconciliationRecords
         .where('homeProjectId', '==', projectLocationId)

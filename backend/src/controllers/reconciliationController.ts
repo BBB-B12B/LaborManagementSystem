@@ -46,8 +46,8 @@ function mapFilterStatusToStatuses(filterStatus: string): ReconciliationStatus[]
     case 'leave':
       return ['LEAVE'];
     case 'abnormal_fixed':
-      // ใช้ isResolved filter แทน — return undefined แล้ว controller จะ handle isResolved=true
-      return undefined;
+      // 'abnormal_fixed' จะกรองเฉพาะ status 'MATCHED' ร่วมกับ isResolved=true เพื่อไม่ให้นับซ้ำกับ ลา (LEAVE)
+      return ['MATCHED'];
     default:
       return undefined;
   }
@@ -520,17 +520,15 @@ export async function updateScanPunches(req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { punches, reason } = req.body as { punches: string[]; reason: string };
+    const { punches, reason } = req.body as { punches: string[]; reason?: string };
     if (!punches || !Array.isArray(punches)) {
       res.status(400).json({ success: false, error: 'punches array is required' });
       return;
     }
-    if (!reason) {
-      res.status(400).json({ success: false, error: 'reason is required' });
-      return;
-    }
 
-    await reconciliationService.updateScanPunches(id, adminId, punches, reason);
+    const finalReason = reason && reason.trim() !== '' ? reason : 'ปรับปรุงเวลาสแกนนิ้ว';
+
+    await reconciliationService.updateScanPunches(id, adminId, punches, finalReason);
     res.json({ success: true, message: 'Scan punches updated successfully' });
   } catch (error: any) {
     console.error('[reconciliation] updateScanPunches error:', error);

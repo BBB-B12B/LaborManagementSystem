@@ -28,8 +28,11 @@
 - [X] T-001-001-03: แก้ไขปัญหา assigneeName ของพนักงานรหัส 411435 เป็น null ใน Cloud Functions (→ ERR-003) · attempts: 1 · tool_calls: 14
 - [X] T-001-001-04: แก้ไขการแสดงรูปภาพของ Daily Report ในช่วงเวลาลางาน (Leave) บน Modal รายละเอียด (→ ERR-004) · attempts: 1 · tool_calls: 23
 - [X] T-001-001-05: แก้ไขการแสดงช่วงเวลาทำงานและลางานครึ่งวัน/ไม่เต็มวันใน Modal รายละเอียด (→ ERR-005) · attempts: 1 · tool_calls: 18
+- [X] T-001-001-06: แก้ไขการคำนวณเวลาสาย/ออกก่อนรวมของทุก Segment (เปลี่ยนจาก Max เป็น Sum) (→ ERR-006) · attempts: 1 · tool_calls: 16
+- [X] T-001-001-07: แก้ไขบั๊กตัวเลขการ์ดสรุปสะสมไม่ตรงกันจากการนับซ้ำของรายการที่ลาและแก้ไขแล้ว (→ ERR-007) · attempts: 1 · tool_calls: 11
 - [X] T-001-002-01: เพิ่มการบันทึก workLogs (subtaskName, taskName) จาก After-Sale ใน reconciliationRecords ทั้ง Cloud Functions และ Backend Service · attempts: 1
 - [X] T-002: ยุบปุ่มและปรับปรุงระบบ Export รายงานแบบ Multi-sheet (v2+C+D) · session_008
+- [X] T-003: เชื่อมโยงตัวกรองงวดงานในหน้าติดตามชั่วโมงการทำงาน และแก้ไขความคลาดเคลื่อนเขตเวลาตอนคำนวณค่าแรง (→ ERR-008) · attempts: 1 · tool_calls: 14
 
 
 ---
