@@ -1,0 +1,8 @@
+{
+  "session_id": "session_004_backlog_subtasks",
+  "associated_tasks": ["T-011-001-04", "T-011-002-01"],
+  "status": "completed",
+  "estimated_tokens": 17000,
+  "summary_context": "Fixed backend submitDailyReport leaveType mapping logic to save leaveType correctly. Integrated Backlog page with new subtasks database structure, updating GET /api/tasks/backlog and unlock/request-unlock APIs to support subtask composite IDs.",
+  "History": []
+}
