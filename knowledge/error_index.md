@@ -89,3 +89,11 @@ This catalog lists known errors and bug fix details.
 - **Symptom:** The leaveType (Paid/Unpaid) mapped in `submitDailyReport` was not being saved to Firestore (saved as empty or original unmapped values).
 - **Root Cause:** The leaveType mapping logic modified the request object `reportData.leave` instead of `finalReportData.leave`, while the final save payload was built using `finalReportData` (which was cloned before the mapping was applied).
 - **Resolution:** Updated the mapping in `TaskService.ts` to assign the mapped leave items directly to `finalReportData.leave` instead of `reportData.leave`.
+
+## ERR-012: Daily Report Unlock APIs failing to unlock subtask daily reports
+- **Task:** T-011-002-01 · **Session:** session_008
+- **File:** backend/src/services/TaskService.ts · **Line:** 1253, 1296
+- **Symptom:** Unlocking or requesting unlock of a daily report failed to make editing allowed on the frontend when using the subtasks database structure.
+- **Root Cause:** The `unlockDailyReport` and `requestDailyReportUnlock` methods parsed only the first 3 parts of the composite ID and hardcoded updates to parent tasks, which left the subtask document's `unlockedDates` unmodified.
+- **Resolution:** Modified both methods in `TaskService.ts` to use `resolveRefs(id)` so that they correctly update `unlockedDates` / `unlockRequests` on the subtask document (`subtaskRef`) if the ID refers to a subtask.
+

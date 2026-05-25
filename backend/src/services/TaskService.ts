@@ -1250,38 +1250,31 @@ export class TaskService {
    * Unlock daily report for a specific date
    */
   async unlockDailyReport(id: string, dateStr: string, days: number, updatedBy: string, isSupportReport: boolean = false): Promise<void> {
-    let taskRef: FirebaseFirestore.DocumentReference;
-    if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
-    } else {
-      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (querySnapshot.empty) throw new AppError('Task not found', 404);
-      taskRef = querySnapshot.docs[0].ref;
-    }
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
+    const targetRef = subtaskRef || taskRef;
 
     const until = new Date();
     until.setDate(until.getDate() + days);
 
-    const taskDoc = await taskRef.get();
-    if (!taskDoc.exists) throw new AppError('Task not found', 404);
+    const doc = await targetRef.get();
+    if (!doc.exists) throw new AppError('Task/Subtask not found', 404);
     
-    const taskData = taskDoc.data();
+    const docData = doc.data();
     const unlockedDatesField = isSupportReport ? 'supportUnlockedDates' : 'unlockedDates';
     const unlockRequestsField = isSupportReport ? 'supportUnlockRequests' : 'unlockRequests';
 
-    const unlockedDates = taskData?.[unlockedDatesField] || {};
+    const unlockedDates = docData?.[unlockedDatesField] || {};
     unlockedDates[dateStr] = {
       unlockedUntil: until,
       unlockedBy: updatedBy
     };
 
-    const unlockRequests = taskData?.[unlockRequestsField] || {};
+    const unlockRequests = docData?.[unlockRequestsField] || {};
     if (unlockRequests[dateStr]) {
       delete unlockRequests[dateStr];
     }
 
-    await taskRef.update({
+    await targetRef.update({
       [unlockedDatesField]: unlockedDates,
       [unlockRequestsField]: unlockRequests,
       updatedAt: new Date(),
@@ -1293,28 +1286,21 @@ export class TaskService {
    * Request daily report unlock for a specific date
    */
   async requestDailyReportUnlock(id: string, dateStr: string, requestedBy: string, isSupportReport: boolean = false): Promise<void> {
-    let taskRef: FirebaseFirestore.DocumentReference;
-    if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
-      taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
-    } else {
-      const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (querySnapshot.empty) throw new AppError('Task not found', 404);
-      taskRef = querySnapshot.docs[0].ref;
-    }
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
+    const targetRef = subtaskRef || taskRef;
 
-    const taskDoc = await taskRef.get();
-    if (!taskDoc.exists) throw new AppError('Task not found', 404);
+    const doc = await targetRef.get();
+    if (!doc.exists) throw new AppError('Task/Subtask not found', 404);
 
-    const taskData = taskDoc.data();
+    const docData = doc.data();
     const unlockRequestsField = isSupportReport ? 'supportUnlockRequests' : 'unlockRequests';
-    const unlockRequests = taskData?.[unlockRequestsField] || {};
+    const unlockRequests = docData?.[unlockRequestsField] || {};
     unlockRequests[dateStr] = {
       requestedAt: new Date(),
       requestedBy
     };
 
-    await taskRef.update({
+    await targetRef.update({
       [unlockRequestsField]: unlockRequests,
       updatedAt: new Date()
     });

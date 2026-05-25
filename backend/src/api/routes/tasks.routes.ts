@@ -77,20 +77,44 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
-    // 4. Fetch all tasks from afterSaleDb
+    // 4. Fetch all tasks and subtasks from afterSaleDb to map subtasks
     const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
-    let tasks = tasksSnapshot.docs.map(doc => {
-      const data = doc.data();
+    const tasksMap = new Map<string, any>();
+    tasksSnapshot.docs.forEach(doc => {
       const pathParts = doc.ref.path.split('/');
-      // Format: workOrders/{woId}/categories/{catId}/tasks/{taskId}
-      const compositeId = pathParts.length >= 6 ? `${pathParts[1]}__${pathParts[3]}__${pathParts[5]}` : data.taskId || doc.id;
-      return {
-        ...data,
-        id: compositeId,
-        taskId: compositeId,
+      const taskId = pathParts[5] || doc.id;
+      const tData = taskConverter.fromFirestore(doc);
+      tasksMap.set(taskId, {
+        ...tData,
         path: doc.ref.path
+      });
+    });
+
+    const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
+    let tasks = subtasksSnapshot.docs.map(doc => {
+      const data = doc.data() as any;
+      const parentPath = doc.ref.parent.parent?.path;
+      const parts = parentPath?.split('/') || [];
+      const woId = parts[1];
+      const catId = parts[3];
+      const taskId = parts[5];
+      const fullId = `${woId}__${catId}__${taskId}__${data.subtaskId}`;
+      
+      const parentTask = tasksMap.get(taskId) || {};
+      
+      return {
+        ...parentTask,
+        ...data,
+        id: fullId,
+        taskId: fullId,
+        path: doc.ref.path,
+        parentTaskId: taskId,
+        taskName: parentTask.taskName ? `${parentTask.taskName} > ${data.subtaskName}` : data.subtaskName,
+        dueDate: data.dueDate || parentTask.dueDate,
+        revisionCreatedAt: data.revisionCreatedAt || parentTask.revisionCreatedAt,
+        createdAt: data.createdAt || parentTask.createdAt,
       };
-    }) as any;
+    }) as any[];
 
     // Filter tasks if role is FM
     const userProjectIds = authReq.user?.projectLocationIds || [];
