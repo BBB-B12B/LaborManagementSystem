@@ -34,6 +34,12 @@
 - [X] T-001-001-08: แก้ไข Error Maximum update depth exceeded ที่หน้า workspace/index.tsx (→ ERR-007) · attempts: 1 · tool_calls: 5
 - [/] T-009: บันทึกรูปภาพจาก Site FM แนบใน Help Daily Report เมื่อมีการเปิดงาน Support
 - [X] T-010: ปรับปรุง UI หน้าต่างสร้างรายงาน งานย่อย (Subtasks) เป็น 1 แถวต่อ 1 งาน และซ่อน Scrollbar · attempts: 1 · tool_calls: 10
+- [X] T-011: แสดงรายการ Subtasks ใน Workspace ก่อนดู Daily Report Log · attempts: 1 · tool_calls: 8
+- [X] T-011-001-01: แก้ไข RangeError: Invalid time value ในหน้า Daily Report Sidebar (→ ERR-008) · attempts: 1 · tool_calls: 15
+- [X] T-011-001-02: แก้ไข RangeError: Invalid time value ใน CustomPickersDay ปฏิทิน Daily Report (→ ERR-009) · attempts: 1 · tool_calls: 14
+- [X] T-011-001-03: แก้ไขบักจุดแสดงสถานะสีปฏิทินและ Progress งานย่อย (Subtasks) FM แสดงผลไม่ถูกต้อง (→ ERR-010) · attempts: 1 · tool_calls: 12
+- [X] T-011-001-04: แก้ไข Logic การ Enforce leaveType ในหลังบ้าน submitDailyReport ให้ทำงานกับ finalReportData (→ ERR-011) · attempts: 1 · tool_calls: 36
+
 
 ---
 

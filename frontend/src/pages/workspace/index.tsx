@@ -22,7 +22,8 @@ import Layout from '@/components/layout/Layout';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
-import { taskService, type Task } from '@/services/taskService';
+import TaskSubtasksModal from './components/TaskSubtasksModal';
+import { taskService, type Task, type Subtask } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useFeedbackStore } from '@/store/feedbackStore';
@@ -51,6 +52,8 @@ export default function WorkspacePage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isSubtasksModalOpen, setIsSubtasksModalOpen] = useState(false);
+  const [selectedTaskForSubtasks, setSelectedTaskForSubtasks] = useState<Task | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
 
@@ -185,7 +188,29 @@ export default function WorkspacePage() {
   };
 
   const handleTaskClick = (task: Task) => {
-    setSelectedTaskForReport(task);
+    setSelectedTaskForSubtasks(task);
+    setIsSubtasksModalOpen(true);
+  };
+
+  const handleSubtaskSelect = (subtask: Subtask) => {
+    setIsSubtasksModalOpen(false);
+    
+    // Create a merged task object to pass to the report modal
+    const mergedTask: Task = {
+      ...selectedTaskForSubtasks!,
+      id: subtask.id,
+      taskId: subtask.subtaskId,
+      taskName: `${selectedTaskForSubtasks?.taskName} > ${subtask.subtaskName}`,
+      status: subtask.status,
+      dailyProgress: subtask.dailyProgress,
+      assignees: subtask.assignees,
+      createdAt: subtask.createdAt,
+      updatedAt: subtask.updatedAt,
+      currentRevision: subtask.currentRevision,
+      isSupportRequest: subtask.isSupportRequest ?? selectedTaskForSubtasks?.isSupportRequest,
+    };
+    
+    setSelectedTaskForReport(mergedTask);
     setIsReportModalOpen(true);
   };
 
@@ -445,6 +470,13 @@ export default function WorkspacePage() {
         }} 
         onSuccess={handleModalSuccess} 
         task={editingTask}
+      />
+
+      <TaskSubtasksModal
+        open={isSubtasksModalOpen}
+        onClose={() => setIsSubtasksModalOpen(false)}
+        task={selectedTaskForSubtasks}
+        onSubtaskSelect={handleSubtaskSelect}
       />
 
       <TaskDailyReportModal 

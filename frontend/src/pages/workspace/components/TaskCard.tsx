@@ -187,7 +187,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       {/* Title */}
       <Typography
         variant="subtitle1"
-        sx={{ fontWeight: 800, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.5 : 1, lineHeight: 1.3 }}
+        sx={{ fontWeight: 600, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.5 : 1, lineHeight: 1.3 }}
       >
         {isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName}
       </Typography>
@@ -267,7 +267,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           }}
         >
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', letterSpacing: 0.5 }}>
-            Due: {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            Due: {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
           </Typography>
         </Box>
       </Box>

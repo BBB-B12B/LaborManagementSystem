@@ -474,11 +474,11 @@
     },
     "UpdateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 67
+      "line": 70
     },
     "taskConverter": {
       "source": "backend/src/models/Task.ts",
-      "line": 101
+      "line": 149
     },
     "Department": {
       "source": "frontend/src/components/forms/DepartmentSelect.tsx",
@@ -698,7 +698,7 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 72
+      "line": 96
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -2010,7 +2010,7 @@
     },
     "DailyReportPage": {
       "source": "frontend/src/pages/daily-reports/index.tsx",
-      "line": 130
+      "line": 142
     },
     "WorkRecordsPage": {
       "source": "frontend/src/pages/daily-reports/list.tsx",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 37
+      "line": 38
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2102,7 +2102,7 @@
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 79
+      "line": 78
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
@@ -2530,6 +2530,22 @@
     },
     "ProtectedRoute": {
       "source": "frontend/src/components/layout/ProtectedRoute.tsx",
+      "line": 27
+    },
+    "Subtask": {
+      "source": "frontend/src/services/taskService.ts",
+      "line": 76
+    },
+    "AdvanceRequest": {
+      "source": "backend/src/models/Task.ts",
+      "line": 83
+    },
+    "AdvanceRequestInput": {
+      "source": "frontend/src/services/taskService.ts",
+      "line": 89
+    },
+    "TaskSubtasksModal": {
+      "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
       "line": 27
     }
   }

@@ -127,6 +127,18 @@ const getImageUrl = (url: string) => {
   return `${backendUrl}${cleanPath}`;
 };
 
+const parseSafeDate = (val: any): Date | null => {
+  if (!val) return null;
+  let d: Date;
+  if (typeof val === 'object' && ('_seconds' in val || 'seconds' in val)) {
+    const secs = val._seconds || val.seconds;
+    d = new Date(secs * 1000);
+  } else {
+    d = new Date(val);
+  }
+  return isNaN(d.getTime()) ? null : d;
+};
+
 export default function DailyReportPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -205,9 +217,11 @@ export default function DailyReportPage() {
 
     // Fallback if previousCompletionDate is not calculated (handled below)
     if (isActingAsSupport && selectedTask.supportCreatedAt) {
-      const d = new Date(selectedTask.supportCreatedAt);
-      d.setHours(0, 0, 0, 0);
-      return d;
+      const d = parseSafeDate(selectedTask.supportCreatedAt);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
     }
     if (
       !isActingAsSupport &&
@@ -215,9 +229,11 @@ export default function DailyReportPage() {
       selectedTask.revisionId &&
       selectedTask.revisionId !== 'rev00'
     ) {
-      const d = new Date(selectedTask.revisionCreatedAt);
-      d.setHours(0, 0, 0, 0);
-      return d;
+      const d = parseSafeDate(selectedTask.revisionCreatedAt);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
     }
     return null;
   }, [selectedTask, isActingAsSupport]);
@@ -337,20 +353,33 @@ export default function DailyReportPage() {
   const effectiveBoundaryDate = useMemo(() => {
     const dates: Date[] = [];
 
+    const addIfValid = (val: any) => {
+      const d = parseSafeDate(val);
+      if (d) {
+        dates.push(d);
+      }
+    };
+
     // 1. Revision Creation Date (The best boundary for "Per-Card" view)
     if (selectedTask?.revisionCreatedAt) {
-      dates.push(new Date(selectedTask.revisionCreatedAt));
+      addIfValid(selectedTask.revisionCreatedAt);
     } else if (boundaryDate) {
       // Fallback to original task boundary
-      dates.push(boundaryDate);
+      if (!isNaN(boundaryDate.getTime())) {
+        dates.push(boundaryDate);
+      }
     }
 
     // 2. Earliest Report Date (If reports exist before the creation record)
     if (earliestReportDateStr) {
-      dates.push(new Date(earliestReportDateStr));
+      addIfValid(earliestReportDateStr);
     }
 
-    if (dates.length === 0) return subDays(new Date(), 30);
+    if (dates.length === 0) {
+      const fallback = subDays(new Date(), 30);
+      fallback.setHours(0, 0, 0, 0);
+      return fallback;
+    }
 
     // For "แยกการ์ด ใครการ์ดมัน", we use the earliest available date for THIS revision
     const minTimestamp = Math.min(...dates.map((d) => d.getTime()));
@@ -360,7 +389,7 @@ export default function DailyReportPage() {
   }, [selectedTask, boundaryDate, earliestReportDateStr]);
 
   const calendarMinDate = useMemo(() => {
-    if (!effectiveBoundaryDate) return undefined;
+    if (!effectiveBoundaryDate || isNaN(effectiveBoundaryDate.getTime())) return undefined;
     let minD = new Date(effectiveBoundaryDate);
 
     const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
@@ -459,7 +488,7 @@ export default function DailyReportPage() {
       }
     }
 
-    if (effectiveBoundaryDate && !hasReport && !hasValidUnlock) {
+    if (effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) && !hasReport && !hasValidUnlock) {
       const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
       if (dateStr < boundDateStr) {
         return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
@@ -475,7 +504,7 @@ export default function DailyReportPage() {
     const todayStr = format(today, 'yyyy-MM-dd');
 
     const isPastOrToday = dateStr <= todayStr;
-    const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
+    const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
     const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
 
     // Retroactive Window: Today (13), Yesterday (12), Day-Before (11) -> Locked is < 11
@@ -1005,7 +1034,7 @@ export default function DailyReportPage() {
       console.log('[DailyReport] Fetching fresh tasks from API');
       setCacheLoading(true);
       try {
-        const tasks = await taskService.getTasks();
+        const tasks = await taskService.getAssignedSubtasks();
         // Save to Cache
         setTasksInCache(tasks || []);
         return getFilteredTasks(tasks || []);
@@ -2407,7 +2436,7 @@ export default function DailyReportPage() {
                                   today.setHours(0, 0, 0, 0);
                                   const isPast =
                                     isBefore(newValue, today) && !isSameDay(newValue, today);
-                                  const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
+                                  const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
                                   const dateStr = format(newValue, 'yyyy-MM-dd');
                                   const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
                                   const isLocked = (isPast && isBefore(newValue, subDays(today, 3))) || isBeforeBound;
@@ -3658,7 +3687,7 @@ function TaskSidebarCard({
           {getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}
         </Typography>
         <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>
-          Duedate : {format(new Date(task.dueDate), 'dd/MM/yyyy')}
+          Duedate : {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? format(new Date(task.dueDate), 'dd/MM/yyyy') : '-'}
         </Typography>
       </Box>
     </Box>

@@ -96,8 +96,7 @@ export interface AdvanceRequestInput {
 export const taskService = {
   getSubtasks: async (taskId: string): Promise<Subtask[]> => {
     try {
-      const response = await api.get(`/tasks/${taskId}/subtasks`);
-      return response.data.data;
+      return await api.get<Subtask[]>(`/tasks/${taskId}/subtasks`);
     } catch (error) {
       console.error(`Error fetching subtasks for task ${taskId}:`, error);
       throw error;
@@ -109,6 +108,13 @@ export const taskService = {
    */
   getTasks: async (filters?: { projectId?: string }): Promise<Task[]> => {
     return await api.get<Task[]>('/tasks', filters);
+  },
+
+  /**
+   * Fetch assigned subtasks with optional filters (used by Daily Reports)
+   */
+  getAssignedSubtasks: async (filters?: { projectId?: string }): Promise<Task[]> => {
+    return await api.get<Task[]>('/tasks/assigned-subtasks', filters);
   },
 
   /**

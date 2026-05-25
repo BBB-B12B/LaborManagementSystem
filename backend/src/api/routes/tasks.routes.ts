@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { taskService } from '../../services/TaskService';
+import { taskConverter } from '../../models/Task';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { db } from '../../config/firebase';
@@ -484,6 +485,87 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+
+// GET /api/tasks/assigned-subtasks
+router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = String(req.user?.uid || '').toLowerCase().trim();
+    const employeeId = String((req.user as any)?.employeeId || '').toLowerCase().trim();
+    const userRole = String((req.user as any)?.roleCode || req.user?.role || '').toUpperCase();
+    const { projectId } = req.query;
+
+    const parseFirestoreTimestamp = (val: any) => {
+      if (!val) return val;
+      if (typeof val.toDate === 'function') return val.toDate().toISOString();
+      if (typeof val === 'object' && ('_seconds' in val || 'seconds' in val)) {
+        const secs = val._seconds || val.seconds;
+        return new Date(secs * 1000).toISOString();
+      }
+      return val;
+    };
+
+    const snapshot = await afterSaleDb.collectionGroup('subtasks').get();
+    let subtasks = snapshot.docs.map(doc => {
+      const data = doc.data() as any;
+      const parentPath = doc.ref.parent.parent?.path;
+      const parts = parentPath?.split('/') || [];
+      const woId = parts[1];
+      const catId = parts[3];
+      const taskId = parts[5];
+      const fullId = `${woId}__${catId}__${taskId}__${data.subtaskId}`;
+      return {
+        ...data,
+        createdAt: parseFirestoreTimestamp(data.createdAt),
+        updatedAt: parseFirestoreTimestamp(data.updatedAt),
+        dueDate: parseFirestoreTimestamp(data.dueDate),
+        id: fullId,
+        taskId: data.subtaskId, // original subtaskId
+        parentTaskId: taskId, // the parent task's id
+      };
+    });
+
+    if (userRole === 'FM' || userRole === 'SE') {
+       subtasks = subtasks.filter(st => {
+           const stAssignees = Array.isArray(st.assignees) ? st.assignees : [];
+           const stHistorical = Array.isArray(st.historicalAssigneeIds) ? st.historicalAssigneeIds : [];
+           const stSupport = Array.isArray(st.supportAssignees) ? st.supportAssignees : [];
+
+           const matchEmployee = stAssignees.some((a: any) => String(a.employeeId || '').toLowerCase() === employeeId || String(a.id || '').toLowerCase() === userId);
+           const matchSupport = stSupport.some((a: any) => String(a.employeeId || '').toLowerCase() === employeeId || String(a.id || '').toLowerCase() === userId);
+           const matchHistorical = stHistorical.some((id: any) => String(id || '').toLowerCase() === employeeId || String(id || '').toLowerCase() === userId);
+           
+           return matchEmployee || matchSupport || matchHistorical || st.isSupportRequest === true;
+       });
+    }
+
+    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    const tasksMap = new Map();
+    tasksSnapshot.docs.forEach(doc => {
+       const pathParts = doc.ref.path.split('/');
+       const taskId = pathParts[5] || doc.id;
+       const tData = taskConverter.fromFirestore(doc);
+       tasksMap.set(taskId, tData);
+    });
+
+    const enrichedSubtasks = subtasks.map(st => {
+       const parentTask = tasksMap.get(st.parentTaskId) || {};
+       if (projectId && parentTask.projectId !== projectId) return null;
+       return {
+         ...parentTask,
+         ...st,
+         dueDate: st.dueDate || parentTask.dueDate,
+         taskName: `${parentTask.taskName || ''} > ${st.subtaskName}`,
+       };
+    }).filter(Boolean);
+
+    res.status(200).json({
+      success: true,
+      data: enrichedSubtasks,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // GET /api/tasks
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {

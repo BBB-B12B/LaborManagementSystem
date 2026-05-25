@@ -1,3 +1,2 @@
-task: Added multiple subtasks creation functionality in TaskCreateModal and TaskService. Updated workOrder schema documentation.
+task: ตรวจสอบและแก้ไขการบันทึก Dailyreport งานย่อยให้บันทึกใน labor และ leave แทน editHistory
 phase: done
-next: none

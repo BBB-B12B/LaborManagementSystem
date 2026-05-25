@@ -3578,7 +3578,7 @@ function TaskSidebarCard({
           {getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}
         </Typography>
         <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>
-          Duedate : {format(new Date(task.dueDate), 'dd/MM/yyyy')}
+          Duedate : {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? format(new Date(task.dueDate), 'dd/MM/yyyy') : '-'}
         </Typography>
       </Box>
     </Box>
