@@ -33,6 +33,7 @@
 - [X] T-001-002-01: เพิ่มการบันทึก workLogs (subtaskName, taskName) จาก After-Sale ใน reconciliationRecords ทั้ง Cloud Functions และ Backend Service · attempts: 1
 - [X] T-002: ยุบปุ่มและปรับปรุงระบบ Export รายงานแบบ Multi-sheet (v2+C+D) · session_008
 - [X] T-003: เชื่อมโยงตัวกรองงวดงานในหน้าติดตามชั่วโมงการทำงาน และแก้ไขความคลาดเคลื่อนเขตเวลาตอนคำนวณค่าแรง (→ ERR-008) · attempts: 1 · tool_calls: 14
+- [X] T-003-001-01: แก้ไขบั๊กตัวกรองงวดงานแสดงซ้ำกันเมื่อไม่ได้กรองโครงการในหน้าติดตามชั่วโมงการทำงาน (→ ERR-009) · attempts: 1 · tool_calls: 7
 
 
 ---

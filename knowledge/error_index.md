@@ -72,5 +72,17 @@
 - **Root Cause:** The code used `period.startDate.toISOString().split('T')[0]` and `period.endDate.toISOString().split('T')[0]` which evaluates using UTC dates. Since `startDate` was stored at local midnight (`2026-04-27 00:00:00 UTC+7`), the UTC representation was `2026-04-26 17:00:00Z`. The split operation extracted the UTC day portion (`'2026-04-26'`), causing a 1-day shift.
 - **Resolution:** Replaced `.toISOString().split('T')[0]` with `.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })` which accurately extracts the local calendar day portion (`'2026-04-27'`) in the correct Bangkok timezone without any date shifting.
 
+## ERR-009: Duplicate Wage Periods Filter Display in Work Hour Monitoring Page
+- **Task:** T-003-001-01 · **Session:** session_007
+- **File:** frontend/src/pages/work-hour-monitoring/index.tsx & frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx · **Line:** 76 (index.tsx) & 1229 (WorkHourComparisonTable.tsx)
+- **Symptom:** When filtering by "All Projects" in the work hours tracking page, duplicate wage period date options are displayed in the dropdown since wage periods are created per project. Furthermore, if a wage period for one project was locked but others were not, the global `isLocked` state was insufficient to handle individual row-level locking.
+- **Root Cause:**
+  1. The page filter logic returned all wage periods directly when no project was selected, resulting in duplicate options for identical date ranges.
+  2. The comparison table relied solely on the global `isLocked` prop instead of checking individual row-level locked status (`row.isLocked`).
+- **Resolution:**
+  1. Deduplicated wage period dropdown options by `startDate` + `endDate` when `project === 'all'`.
+  2. Upgraded comparison table edit actions and Dialogs to evaluate both global `isLocked` and row-level `row.isLocked` or `selectedRow?.isLocked`.
+
+
 
 

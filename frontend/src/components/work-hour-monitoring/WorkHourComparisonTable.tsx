@@ -1226,10 +1226,10 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     <TableCell>
                       <ActionButton
                         variant="outlined"
-                        actionType={(isLocked || row.status === 'MATCHED') ? 'view' : 'check'}
+                        actionType={(isLocked || row.isLocked || row.status === 'MATCHED') ? 'view' : 'check'}
                         onClick={() => handleOpenCheckDialog(row)}
                       >
-                        {(isLocked || row.status === 'MATCHED') ? 'ดูข้อมูล' : 'ตรวจสอบ'}
+                        {(isLocked || row.isLocked || row.status === 'MATCHED') ? 'ดูข้อมูล' : 'ตรวจสอบ'}
                       </ActionButton>
                     </TableCell>
                   </TableRow>
@@ -1911,14 +1911,14 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
                   return (
                     <>
-                      {isLocked && (
+                      {(isLocked || selectedRow?.isLocked) && (
                         <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 800, alignSelf: 'center', mr: 'auto' }}>
                           🔒 งวดงานนี้ถูกอนุมัติแล้ว ไม่สามารถแก้ไขข้อมูลการทำงานได้
                         </Typography>
                       )}
 
                       {/* กรณี CONFLICTED หรือ MISSING_SCAN ที่มีสแกนบางส่วน → แก้ไขสแกนนิ้ว */}
-                      {canEditScan && !isLocked && (
+                      {canEditScan && !(isLocked || selectedRow?.isLocked) && (
                         <Button
                           variant="outlined"
                           onClick={() => {
@@ -1940,7 +1940,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                       )}
 
                       {/* กรณี MISSING_SCAN ที่ไม่มีสแกนเลย → ยืนยันตาม Daily Report */}
-                      {canFillFromDaily && !isLocked && (
+                      {canFillFromDaily && !(isLocked || selectedRow?.isLocked) && (
                         <Button
                           variant="outlined"
                           onClick={() => setConfirmFillOpen(true)}

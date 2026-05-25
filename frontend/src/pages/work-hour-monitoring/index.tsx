@@ -74,14 +74,33 @@ export default function WorkHourMonitoringPage() {
 
   // Filter wage periods based on selected project
   const filteredPeriods = useMemo(() => {
-    if (project === 'all') return wagePeriods;
-    const selectedProjectObj = projectsList.find(p => p.id === project);
-    if (!selectedProjectObj) return wagePeriods;
-    return wagePeriods.filter(p => 
-      p.projectCode === selectedProjectObj.code ||
-      p.projectCode === selectedProjectObj.id ||
-      p.projectName === selectedProjectObj.name
-    );
+    let periods = wagePeriods;
+    if (project !== 'all') {
+      const selectedProjectObj = projectsList.find(p => p.id === project);
+      if (selectedProjectObj) {
+        periods = wagePeriods.filter(p => 
+          p.projectCode === selectedProjectObj.code ||
+          p.projectCode === selectedProjectObj.id ||
+          p.projectName === selectedProjectObj.name
+        );
+      }
+    }
+    
+    // Deduplicate periods by start and end date when project === 'all'
+    if (project === 'all') {
+      const seen = new Set<string>();
+      return periods.filter(p => {
+        if (!p.startDate || !p.endDate) return false;
+        const startStr = new Date(p.startDate).toISOString().split('T')[0];
+        const endStr = new Date(p.endDate).toISOString().split('T')[0];
+        const key = `${startStr}_${endStr}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+    
+    return periods;
   }, [wagePeriods, project, projectsList]);
 
   // Selected period and locked status
