@@ -97,6 +97,11 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
     employeeCount: statsData?.employeeCount ?? 0,
   };
 
+  const totalAnomalies = stats.pendingCount + stats.resolvedCount;
+  const resolutionRate = totalAnomalies > 0
+    ? ((stats.resolvedCount / totalAnomalies) * 100).toFixed(1)
+    : '0.0';
+
   return (
     <Box sx={{ mb: 2 }}>
       <Grid container spacing={2}>
@@ -228,29 +233,7 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
               </Box>
 
               <Stack spacing={0.75} sx={{ flex: 1.3 }}>
-                <Box 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStatusClick?.('abnormal_pending');
-                  }}
-                  sx={{ 
-                    p: 0.75, 
-                    borderRadius: '10px', 
-                    background: activeStatus === 'abnormal_pending' ? RECON_COLORS.ORANGE.bg : '#fff',
-                    border: '1px solid',
-                    borderColor: activeStatus === 'abnormal_pending' ? RECON_COLORS.ORANGE.activeBorder : RECON_COLORS.ORANGE.border,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    '&:hover': { transform: 'scale(1.02)', borderColor: RECON_COLORS.ORANGE.activeBorder }
-                  }}
-                >
-                  <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-                    <RocketIcon sx={{ fontSize: 10, color: RECON_COLORS.ORANGE.text }} />
-                    <Typography variant="caption" fontWeight="900" sx={{ color: RECON_COLORS.ORANGE.text, fontSize: '0.65rem' }}>รอแก้ไข</Typography>
-                  </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: RECON_COLORS.ORANGE.text, lineHeight: 1 }}>{isLoading ? '...' : stats.pendingCount}</Typography>
-                </Box>
-
+                {/* แก้ไขแล้ว box — คลิกเพื่อกรองตารางเฉพาะรายการที่แก้ไขแล้ว */}
                 <Box 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -271,7 +254,41 @@ const SummaryStats: React.FC<Props> = ({ onStatusClick, activeStatus, project, s
                     <SendIcon sx={{ fontSize: 10, color: RECON_COLORS.BLUE.text, transform: 'rotate(-45deg)' }} />
                     <Typography variant="caption" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.text, fontSize: '0.65rem' }}>แก้ไขแล้ว</Typography>
                   </Stack>
-                  <Typography variant="h6" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.text, lineHeight: 1 }}>{isLoading ? '...' : stats.resolvedCount}</Typography>
+                  <Typography variant="h6" fontWeight="900" sx={{ color: RECON_COLORS.BLUE.text, lineHeight: 1 }}>
+                    {isLoading ? '...' : stats.resolvedCount.toLocaleString()}
+                  </Typography>
+                </Box>
+
+                {/* Resolution Rate — วัดประสิทธิภาพการจัดการปัญหา */}
+                <Box sx={{
+                  p: 0.75,
+                  borderRadius: '10px',
+                  background: '#fff8f0',
+                  border: '1px solid #fecaca',
+                  textAlign: 'center',
+                }}>
+                  <Typography variant="caption" sx={{
+                    display: 'block',
+                    color: RECON_COLORS.NEUTRAL.textSecondary,
+                    fontSize: '0.55rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}>
+                    Resolution Rate
+                  </Typography>
+                  <Typography variant="body2" fontWeight="900" sx={{
+                    color: RECON_COLORS.RED.activeBorder,
+                    fontSize: '1rem',
+                    lineHeight: 1.2,
+                  }}>
+                    {isLoading ? '...' : `${resolutionRate}%`}
+                  </Typography>
+                  {!isLoading && (
+                    <Typography variant="caption" sx={{ display: 'block', color: RECON_COLORS.NEUTRAL.textTertiary, fontSize: '0.5rem' }}>
+                      {stats.resolvedCount.toLocaleString()} / {totalAnomalies.toLocaleString()} รายการ
+                    </Typography>
+                  )}
                 </Box>
               </Stack>
             </Stack>

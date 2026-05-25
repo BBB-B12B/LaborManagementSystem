@@ -25,6 +25,12 @@
 - [X] T-001: จัดการข้อมูลในระบบ Reconciliation (→ ERR-001) · attempts: 1 · tool_calls: 31
 - [X] T-001-001-01: แก้ไขปัญหา assigneeName เป็น null เนื่องจากฟังก์ชัน generateForEmployee ตรวจสอบชื่อไม่ครอบคลุม (→ ERR-001) · attempts: 1 · tool_calls: 31
 - [X] T-001-001-02: แก้ไข case-sensitivity ของฟิลด์คิวรีผู้ใช้และรัน backfill ข้อมูลเก่าที่มีค่าเป็น null (→ ERR-002) · attempts: 1 · tool_calls: 16
+- [X] T-001-001-03: แก้ไขปัญหา assigneeName ของพนักงานรหัส 411435 เป็น null ใน Cloud Functions (→ ERR-003) · attempts: 1 · tool_calls: 14
+- [X] T-001-001-04: แก้ไขการแสดงรูปภาพของ Daily Report ในช่วงเวลาลางาน (Leave) บน Modal รายละเอียด (→ ERR-004) · attempts: 1 · tool_calls: 23
+- [X] T-001-001-05: แก้ไขการแสดงช่วงเวลาทำงานและลางานครึ่งวัน/ไม่เต็มวันใน Modal รายละเอียด (→ ERR-005) · attempts: 1 · tool_calls: 18
+- [X] T-001-002-01: เพิ่มการบันทึก workLogs (subtaskName, taskName) จาก After-Sale ใน reconciliationRecords ทั้ง Cloud Functions และ Backend Service · attempts: 1
+- [X] T-002: ยุบปุ่มและปรับปรุงระบบ Export รายงานแบบ Multi-sheet (v2+C+D) · session_008
+
 
 ---
 

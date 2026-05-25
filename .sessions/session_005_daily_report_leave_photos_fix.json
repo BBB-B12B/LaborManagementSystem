@@ -1,0 +1,8 @@
+{
+  "session_id": "session_005_daily_report_leave_photos_fix",
+  "associated_tasks": ["T-001-001-04", "T-001-001-05"],
+  "status": "completed",
+  "estimated_tokens": 11400,
+  "summary_context": "1. Leave photo display on modal (T-001-001-04 / ERR-004): Prevented daily report work photos from leaking into leave history rows inside the Daily Report modal by forcing photoIn and photoOut to null for leave records.\n2. Hourly leave timeline and check-in photo rendering (T-001-001-05 / ERR-005): Solved the issue where hourly leave segments (e.g. morning leave 08:00-10:00 or afternoon leave 15:00-17:00) caused incorrect timeline labeling or photo matching. Refactored buildSegmentRows in WorkHourComparisonTable.tsx to decouple leave records from active work segment comparisons, introduced chronological sorting for leaves and work sessions, and implemented symmetric photo safety logic (showMorningPhotoIn, showAfternoonPhotoIn, showAfternoonPhotoOut) to automatically hide check-in/check-out photos during the hours the worker was on leave.",
+  "History": []
+}

@@ -3,6 +3,7 @@ import { Box, Grid } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
   EventBusy as LeaveIcon,
+  TaskAlt as TaskAltIcon,
 } from '@mui/icons-material';
 import { RECON_COLORS } from '../../constants/theme';
 import BreakdownCard from './BreakdownCard';
@@ -28,14 +29,19 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
     staleTime: 60000,
   });
 
+  // แยก "ปกติตั้งแต่แรก" ออกจาก "แก้ไขแล้วจนปกติ"
+  // matchedCount = MATCHED ทั้งหมดในปัจจุบัน (รวมทั้งที่ถูก resolve มาแล้ว)
+  // resolvedCount = รายการที่เคยผิดปกติแล้วถูกแก้ไขจนกลายเป็น MATCHED
+  const pureMatchedCount = Math.max(0, (stats?.matchedCount ?? 0) - (stats?.resolvedCount ?? 0));
+
   const items = [
     {
       id: 'normal',
-      title: 'ข้อมูลตรงกัน',
-      description: 'ชั่วโมงทำงานใน Daily Report ตรงกับสแกนนิ้ว',
+      title: 'ข้อมูลตรงกันตั้งแต่แรก',
+      description: 'Daily Report ตรงกับสแกนนิ้วโดยไม่ต้องแก้ไข',
       icon: <CheckCircleIcon sx={{ fontSize: 28, color: RECON_COLORS.GREEN.activeBorder }} />,
       colorTheme: 'green' as const,
-      count: stats?.matchedCount ?? 0,
+      count: pureMatchedCount,
     },
     {
       id: 'leave',
@@ -45,13 +51,21 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
       colorTheme: 'orange' as const,
       count: stats?.leaveCount ?? 0,
     },
+    {
+      id: 'abnormal_fixed',
+      title: 'แก้ไขแล้วจนปกติ',
+      description: 'รายการที่เคยผิดปกติ — Admin แก้ไขจนข้อมูลตรงกันแล้ว',
+      icon: <TaskAltIcon sx={{ fontSize: 28, color: RECON_COLORS.BLUE.text }} />,
+      colorTheme: 'blue' as const,
+      count: stats?.resolvedCount ?? 0,
+    },
   ];
 
   return (
     <Box sx={{ mb: 2 }}>
       <Grid container spacing={1.5}>
         {items.map((item) => (
-          <Grid item xs={12} sm={6} md={3} key={item.id}>
+          <Grid item xs={12} sm={6} md={2.4} key={item.id}>
             <BreakdownCard 
               active={activeId === item.id}
               colorTheme={item.colorTheme}

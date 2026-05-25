@@ -1,0 +1,8 @@
+{
+  "session_id": "session_003_realtime_reconciliation_fix",
+  "associated_tasks": ["none"],
+  "status": "completed",
+  "estimated_tokens": 16500,
+  "summary_context": "Investigated the real-time reconciliation issue where leave label ('ลางาน X ชม.') and medical certificate evidence button ('เปิดหลักฐาน') were missing on the UI upon real-time webhook sync (webhookTimesheetChanged), but appeared correctly after manual reprocessing. Discovered two bugs in Cloud Function reconcile() in functions/src/index.ts: (1) it did not save/update the 'hasLeave' boolean field, and (2) it parsed 'medCertFileUrl' at the root of timesheet instead of resolving both nested paths under 'leaveStatus' and root. Implemented surgical fixes to functions/src/index.ts to correctly read 'timesheet?.leaveStatus?.medCertFileUrl || timesheet?.medCertFileUrl' and set 'hasLeave: isLeave === true'. Built functions successfully with no errors, and verified with git commits.",
+  "History": []
+}

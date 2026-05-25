@@ -1117,6 +1117,7 @@ async function reconcile(
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
+      workLogs:             hasTimesheet ? (timesheet?.workLogs || []) : [],
       assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
       isHoliday,
       updatedAt: now,
@@ -1184,6 +1185,7 @@ async function reconcile(
       scanDataId:           scanDataId   ?? null,
       timesheetId:          hasTimesheet ? timesheetId     : null,
       dailyReportPhotos:    hasTimesheet ? dailyReportPhotos : null,
+      workLogs:             hasTimesheet ? (timesheet?.workLogs || []) : [],
       assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
       assigneeName:         null, // จะอัปเดตด้านล่าง
       isFallbackAssignee:   false, // จะอัปเดตด้านล่าง

@@ -984,6 +984,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             scanDataId: scanDataId ?? null,
             timesheetId: hasTimesheet ? timesheetId : null,
             dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
+            workLogs: hasTimesheet ? (timesheet?.workLogs || []) : [],
             assigneeId: hasTimesheet ? (timesheet?.AssigneesID || null) : null,
             isHoliday,
             updatedAt: now,
@@ -1049,6 +1050,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             scanDataId: scanDataId ?? null,
             timesheetId: hasTimesheet ? timesheetId : null,
             dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
+            workLogs: hasTimesheet ? (timesheet?.workLogs || []) : [],
             assigneeId: hasTimesheet ? (timesheet?.AssigneesID || null) : null,
             assigneeName: null, // จะอัปเดตด้านล่าง
             isFallbackAssignee: false, // จะอัปเดตด้านล่าง

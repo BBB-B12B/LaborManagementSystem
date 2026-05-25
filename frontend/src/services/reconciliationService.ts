@@ -91,6 +91,15 @@ export interface ReconciliationRecord {
   approvedOtEvening?: number;
   totalApprovedHours?: number;
   approvalSource?: ApprovalSource;
+
+  // --- Work Logs (บันทึกข้อมูลงานจาก Daily Report / After-Sale) ---
+  workLogs?: {
+    taskId?: string;
+    taskName?: string;
+    subtaskId?: string;
+    subtaskName?: string;
+    location?: string;
+  }[];
 }
 
 export interface ReconciliationFilter {
@@ -237,27 +246,7 @@ export const reconciliationService = {
     return response.data as Blob;
   },
 
-  /**
-   * Export รายการความผิดปกติสำหรับโฟร์แมน
-   * @param params homeProjectId, startDate, endDate, splitByForeman
-   * @returns Blob ของไฟล์ Excel หรือ ZIP
-   */
-  exportForemanReport: async (params: {
-    homeProjectId?: string;
-    projectLocationId?: string;
-    startDate?: string;
-    endDate?: string;
-    splitByForeman?: boolean;
-  }): Promise<Blob> => {
-    const response = await apiClient.get('/reconciliation/export-foreman', {
-      params: {
-        ...params,
-        splitByForeman: params.splitByForeman ? 'true' : 'false',
-      },
-      responseType: 'blob',
-    });
-    return response.data as Blob;
-  },
+
 
   /**
    * Helper: Trigger การดาวน์โหลดไฟล์ Excel จาก Blob

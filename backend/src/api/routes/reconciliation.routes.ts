@@ -18,7 +18,6 @@ import {
   deleteGhostScan,
   exportAnomalies,
   exportToExcel,
-  exportForemanReport,
   generateForProjectAuto,
   updateScanPunches,
 } from '../../controllers/reconciliationController';
@@ -39,9 +38,6 @@ router.get('/export', exportAnomalies);
 
 // GET  /api/reconciliation/export-excel — Export Excel (.xlsx) ตาม filterStatus (ต้องอยู่ก่อน /:id)
 router.get('/export-excel', exportToExcel);
-
-// GET  /api/reconciliation/export-foreman — Export Excel หรือ ZIP สำหรับโฟร์แมน
-router.get('/export-foreman', exportForemanReport);
 
 // POST /api/reconciliation/generate-auto — สร้าง/อัปเดต records สำหรับช่วงวันที่
 router.post('/generate-auto', generateForProjectAuto);

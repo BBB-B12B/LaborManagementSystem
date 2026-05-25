@@ -15,7 +15,6 @@
  */
 
 import { Request, Response } from 'express';
-import * as XLSX from 'xlsx';
 import { reconciliationService } from '../services/reconciliation/ReconciliationService';
 import type { ReconciliationStatus } from '../models/ReconciliationRecord';
 import { AuthRequest } from '../api/middleware/auth';
@@ -31,6 +30,7 @@ function mapFilterStatusToStatuses(filterStatus: string): ReconciliationStatus[]
     case 'normal':
       return ['MATCHED'];
     case 'all_abnormal':
+    case 'abnormal':          // คลิกการ์ดหลักสีแดง → แสดงรายการผิดปกติทั้งหมดที่ยังค้างอยู่
     case 'abnormal_pending':
       return ['CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE', 'ABSENT'];
     case 'missingDaily':
@@ -543,30 +543,13 @@ export async function updateScanPunches(req: Request, res: Response): Promise<vo
 // ---------------------------------------------------------------------------
 
 /**
- * แปลง ReconciliationStatus เป็นข้อความภาษาไทยสำหรับ Excel
- */
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    MATCHED: 'ข้อมูลตรงกัน',
-    CONFLICTED: 'ข้อมูลขัดแย้งกัน',
-    MISSING_SCAN: 'ขาดข้อมูลสแกนนิ้ว',
-    MISSING_DAILY: 'ขาดข้อมูล Daily Report',
-    ABSENT: 'ขาดงาน',
-    LEAVE: 'ลา',
-    HOLIDAY: 'วันหยุด',
-    UNREGISTERED_EMPLOYEE: 'ไม่มีข้อมูลในระบบ',
-  };
-  return labels[status] || status;
-}
-
-/**
  * Export ข้อมูล Reconciliation เป็นไฟล์ Excel (.xlsx)
- * Query params: filterStatus, homeProjectId/projectLocationId, startDate, endDate
+ * Query params: homeProjectId/projectLocationId, startDate, endDate
  */
 export async function exportToExcel(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthRequest;
-    const { homeProjectId, projectLocationId, startDate, endDate, filterStatus } = req.query;
+    const { homeProjectId, projectLocationId, startDate, endDate } = req.query;
 
     const targetProject = (homeProjectId || projectLocationId) as string | undefined;
     const userProjects = authReq.user?.projectLocationIds || [];
@@ -584,146 +567,29 @@ export async function exportToExcel(req: Request, res: Response): Promise<void> 
       }
     }
 
-    // Map filterStatus → status array (reuse existing helper)
-    const statusFilter: ReconciliationStatus[] | undefined = filterStatus
-      ? mapFilterStatusToStatuses(filterStatus as string)
-      : undefined;
-    const isResolved = filterStatus === 'abnormal_fixed' ? true : undefined;
-
+    // Map filterStatus → status array (not used anymore because we export ALL statuses)
     const result = await reconciliationService.getRecords({
       homeProjectId: targetProject,
       allowedHomeProjects: targetProject ? undefined : userProjects,
-      status: statusFilter,
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
-      isResolved,
       page: 0,
-      pageSize: 5000, // export ทั้งหมด ไม่ paginate
+      pageSize: 10000, // ดึงทั้งหมดเพื่อส่งออก
     });
 
-    // สร้าง rows สำหรับ Excel
-    const rows = result.records.map((r, idx) => ({
-      'ลำดับ': idx + 1,
-      'รหัสพนักงาน': r.employeeId,
-      'ชื่อ-นามสกุล': r.employeeName || '-',
-      'วันที่': r.workDate,
-      'โครงการ': r.projectName || r.projectLocationId || '-',
-      'สถานะ': statusLabel(r.status),
-      'ชั่วโมง Daily Report': r.dailyReportHours ?? '-',
-      'ชั่วโมงสแกนนิ้ว': r.scanDataHours ?? '-',
-      'ชั่วโมงปกติ (Daily)': r.timesheetNormalHours ?? '-',
-      'OT เช้า (Daily)': r.timesheetOtMorning ?? '-',
-      'OT กลางวัน (Daily)': r.timesheetOtNoon ?? '-',
-      'OT เย็น (Daily)': r.timesheetOtEvening ?? '-',
-      'ชั่วโมงที่อนุมัติ': r.totalApprovedHours ?? '-',
-      'โฟร์แมน': r.assigneeName || r.assigneeId || '-',
-      'หมายเหตุ': r.note || '-',
-      'แก้ไขแล้วเมื่อ': r.resolvedAt
-        ? (r.resolvedAt instanceof Date ? r.resolvedAt : new Date(r.resolvedAt as any))
-            .toLocaleDateString('th-TH')
-        : '-',
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-
-    // ปรับความกว้างคอลัมน์อัตโนมัติ
-    const colWidths = Object.keys(rows[0] || {}).map((key) => ({
-      wch: Math.max(key.length, 12),
-    }));
-    ws['!cols'] = colWidths;
-
-    const sheetName = 'Reconciliation';
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `Reconciliation_${filterStatus || 'all'}_${timestamp}.xlsx`;
+    const excelBuffer = await reconciliationService.generateForemanExcel(result.records);
+    
+    const dateRange = startDate && endDate ? `${startDate}_${endDate}` : new Date().toISOString().split('T')[0];
+    const excelFilename = `รายงานความผิดปกติ_${dateRange}.xlsx`;
 
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
-    res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(filename)}`);
-    res.send(buffer);
+    res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(excelFilename)}`);
+    res.send(excelBuffer);
   } catch (error: any) {
     console.error('[reconciliation] exportToExcel error:', error);
     res.status(500).json({ success: false, error: error.message || 'Export failed' });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// GET /api/reconciliation/export-foreman
-// ---------------------------------------------------------------------------
-
-/**
- * Export รายการความผิดปกติสำหรับโฟร์แมน
- * รองรับทั้งแบบไฟล์เดียว (.xlsx) หรือแยกไฟล์บีบอัด (.zip)
- * Query params: homeProjectId/projectLocationId, startDate, endDate, splitByForeman
- */
-export async function exportForemanReport(req: Request, res: Response): Promise<void> {
-  try {
-    const authReq = req as AuthRequest;
-    const { homeProjectId, projectLocationId, startDate, endDate, splitByForeman } = req.query;
-
-    const targetProject = (homeProjectId || projectLocationId) as string | undefined;
-    const userProjects = authReq.user?.projectLocationIds || [];
-
-    // RBAC
-    if (targetProject) {
-      if (!userProjects.includes(targetProject)) {
-        res.status(403).json({ success: false, error: 'Access denied for this project' });
-        return;
-      }
-    } else {
-      if (userProjects.length === 0) {
-        res.status(400).json({ success: false, error: 'No projects assigned to this user' });
-        return;
-      }
-    }
-
-    const records = await reconciliationService.getAnomaliesForForeman({
-      homeProjectId: targetProject,
-      allowedHomeProjects: targetProject ? undefined : userProjects,
-      startDate: startDate as string | undefined,
-      endDate: endDate as string | undefined,
-    });
-
-    const isSplit = splitByForeman === 'true';
-
-    if (isSplit) {
-      // Group records by foreman name
-      const foremanGroups = new Map<string, any[]>();
-      for (const r of records) {
-        const fName = r.assigneeName || 'ไม่ระบุโฟร์แมน';
-        if (!foremanGroups.has(fName)) {
-          foremanGroups.set(fName, []);
-        }
-        foremanGroups.get(fName)!.push(r);
-      }
-
-      const zipBuffer = await reconciliationService.generateForemanZip(
-        foremanGroups,
-        startDate as string,
-        endDate as string
-      );
-
-      const zipFilename = `รายงานความผิดปกติ_${startDate || ''}_${endDate || ''}.zip`;
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(zipFilename)}`);
-      res.send(zipBuffer);
-    } else {
-      const excelBuffer = await reconciliationService.generateForemanExcel(records);
-      const excelFilename = `รายงานความผิดปกติ_${startDate || ''}_${endDate || ''}.xlsx`;
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(excelFilename)}`);
-      res.send(excelBuffer);
-    }
-  } catch (error: any) {
-    console.error('[reconciliation] exportForemanReport error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Foreman export failed' });
   }
 }

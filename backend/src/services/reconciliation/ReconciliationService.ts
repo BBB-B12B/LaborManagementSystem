@@ -852,6 +852,7 @@ export class ReconciliationService {
       hasLeave:               effectiveIsLeave === true,
       assigneeId:             input.assigneeId    ?? existing.assigneeId,
       assigneeName:           input.assigneeName  ?? existing.assigneeName,
+      workLogs:               input.workLogs      ?? existing.workLogs,
     };
 
     if (input.isHoliday !== undefined) updates.isHoliday = input.isHoliday;
@@ -1143,6 +1144,7 @@ export class ReconciliationService {
         medCertFileUrl: summary.medCertFileUrl,
         assigneeId: summary.assigneeId,
         assigneeName: summary.assigneeId ? assigneeMap.get(summary.assigneeId) : undefined,
+        workLogs: summary.workLogs,
       };
 
       try {
@@ -1364,6 +1366,7 @@ export class ReconciliationService {
       assigneeId: assigneeId,
       assigneeName: assigneeName,
       isFallbackAssignee: isFallbackAssignee,
+      workLogs: summary?.workLogs,
     }, false, summary?.isLeave);
   }
 
@@ -2109,73 +2112,8 @@ export class ReconciliationService {
 
   async generateForemanExcel(records: ReconciliationRecord[]): Promise<ExcelJS.Buffer> {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('รายงานความผิดปกติ');
 
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-
-    worksheet.columns = [
-      { header: 'โฟร์แมน', key: 'foreman', width: 25 },
-      { header: 'ชื่อพนักงาน', key: 'employeeName', width: 25 },
-      { header: 'รหัสพนักงาน', key: 'employeeId', width: 15 },
-      { header: 'วันที่', key: 'workDate', width: 15 },
-      { header: 'สถานะ', key: 'status', width: 20 },
-      { header: 'เวลาตาม Daily Report', key: 'dailyReportTime', width: 25 },
-      { header: 'เวลาสแกนจริง', key: 'scanTime', width: 25 },
-      { header: 'หมายเหตุ', key: 'remark', width: 45 },
-    ];
-
-    const headerRow = worksheet.getRow(1);
-    headerRow.height = 30;
-    headerRow.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF374151' },
-      };
-      cell.font = {
-        name: 'Inter',
-        color: { argb: 'FFFFFFFF' },
-        bold: true,
-        size: 11,
-      };
-      cell.alignment = {
-        vertical: 'middle',
-        horizontal: 'center',
-      };
-      cell.border = {
-        bottom: { style: 'medium', color: { argb: 'FF1F2937' } }
-      };
-    });
-
-    const formatDateThai = (wDate: string) => {
-      if (!wDate || !wDate.includes('-')) return '-';
-      const [year, month, day] = wDate.split('-');
-      return `${day}/${month}/${year}`;
-    };
-
-    const getThaiStatusLabel = (status: string) => {
-      if (status === 'ABSENT') return 'ขาดงาน';
-      if (status === 'MISSING_DAILY') return 'ไม่มี Daily Report';
-      if (status === 'CONFLICTED') return 'ข้อมูลขัดแย้ง';
-      if (status === 'LEAVE' || (status as any) === 'LEAVE_WITH_SCAN') return 'ลาแต่มีสแกน';
-      return status;
-    };
-
-    const getSummaryText = (groupName: string, groupRecords: ReconciliationRecord[]) => {
-      const absent = groupRecords.filter(r => r.status === 'ABSENT').length;
-      const missingDaily = groupRecords.filter(r => r.status === 'MISSING_DAILY').length;
-      const conflicted = groupRecords.filter(r => r.status === 'CONFLICTED').length;
-      const leaveWithScan = groupRecords.filter(r => r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN').length;
-      const total = groupRecords.length;
-      return `สรุปกลุ่ม (${groupName}): ขาดงาน: ${absent} | ไม่มี Daily Report: ${missingDaily} | ข้อมูลขัดแย้ง: ${conflicted} | ลาแต่มีสแกน: ${leaveWithScan} | รวม: ${total} รายการ`;
-    };
-
-    const legendText = `* หมายเหตุสัญลักษณ์ (Legend):
-  - ขาดงาน = ไม่พบข้อมูล Daily Report และไม่พบข้อมูลการสแกนนิ้วในวันนี้
-  - ไม่มี Daily Report = พนักงานมีการสแกนนิ้วเข้างานจริง แต่ใน Daily Report ไม่พบรายชื่อพนักงานเข้างาน
-  - ข้อมูลขัดแย้ง = พนักงานมีข้อมูลทั้ง Daily Report และสแกนนิ้ว แต่สแกนเข้าสายหรือออกก่อนเกิน 30 นาที
-  - ลาแต่มีสแกน = พนักงานแจ้งเอกสารลางานในระบบ แต่พบข้อมูลสแกนนิ้วจริงในพื้นที่ช่วงเวลาที่ลา`;
-
+    // 1. Group records by foreman
     const foremanGroups = new Map<string, ReconciliationRecord[]>();
     for (const r of records) {
       const fName = r.assigneeName || 'ไม่ระบุโฟร์แมน';
@@ -2191,9 +2129,174 @@ export class ReconciliationService {
       return a[0].localeCompare(b[0], 'th');
     });
 
+    const formatDateThai = (wDate: string) => {
+      if (!wDate || !wDate.includes('-')) return '-';
+      const [year, month, day] = wDate.split('-');
+      return `${day}/${month}/${year}`;
+    };
+
+    const getThaiStatusLabel = (status: string, rec?: ReconciliationRecord) => {
+      if (status === 'ABSENT') return 'ขาดงาน';
+      if (status === 'MISSING_DAILY') return 'ไม่มี Daily Report';
+      if (status === 'MISSING_SCAN') return 'ไม่มีสแกนนิ้ว';
+      if (status === 'MATCHED') return 'ปกติ';
+      if (status === 'HOLIDAY') return 'วันหยุด';
+      if (status === 'CONFLICTED') return 'ข้อมูลขัดแย้ง';
+      if (status === 'LEAVE') {
+        if (rec && this.hasLeaveOverlapWithScan(rec)) return 'ลาแต่มีสแกน';
+        return 'ลา';
+      }
+      if (status === 'LEAVE_WITH_SCAN') return 'ลาแต่มีสแกน';
+      return status;
+    };
+
+    const getSummaryText = (groupName: string, groupRecords: ReconciliationRecord[]) => {
+      const absent = groupRecords.filter(r => r.status === 'ABSENT').length;
+      const missingDaily = groupRecords.filter(r => r.status === 'MISSING_DAILY').length;
+      const conflicted = groupRecords.filter(r => r.status === 'CONFLICTED').length;
+      const leaveWithScan = groupRecords.filter(r => r.status === 'LEAVE' && this.hasLeaveOverlapWithScan(r)).length;
+      const leave = groupRecords.filter(r => r.status === 'LEAVE' && !this.hasLeaveOverlapWithScan(r)).length;
+      const missingScan = groupRecords.filter(r => r.status === 'MISSING_SCAN').length;
+      const matched = groupRecords.filter(r => r.status === 'MATCHED').length;
+      const holiday = groupRecords.filter(r => r.status === 'HOLIDAY').length;
+      const total = groupRecords.length;
+
+      const parts = [
+        matched > 0 && `ปกติ: ${matched}`,
+        absent > 0 && `ขาดงาน: ${absent}`,
+        missingDaily > 0 && `ไม่มี Daily: ${missingDaily}`,
+        missingScan > 0 && `ไม่มีสแกนนิ้ว: ${missingScan}`,
+        conflicted > 0 && `ข้อมูลขัดแย้ง: ${conflicted}`,
+        leaveWithScan > 0 && `ลาแต่มีสแกน: ${leaveWithScan}`,
+        leave > 0 && `ลา: ${leave}`,
+        holiday > 0 && `วันหยุด: ${holiday}`,
+      ].filter(Boolean);
+
+      return `สรุปกลุ่ม (${groupName}): ${parts.join(' | ')} | รวมทั้งหมด: ${total} รายการ`;
+    };
+
+    const legendText = `* หมายเหตุสัญลักษณ์ (Legend):
+  - ขาดงาน = ไม่พบข้อมูล Daily Report และไม่พบข้อมูลการสแกนนิ้วในวันนี้
+  - ไม่มี Daily Report = พนักงานมีการสแกนนิ้วเข้างานจริง แต่ใน Daily Report ไม่พบรายชื่อพนักงานเข้างาน
+  - ข้อมูลขัดแย้ง = พนักงานมีข้อมูลทั้ง Daily Report และสแกนนิ้ว แต่สแกนเข้าสายหรือออกก่อนเกิน 30 นาที
+  - ลาแต่มีสแกน = พนักงานแจ้งเอกสารลางานในระบบ แต่พบข้อมูลสแกนนิ้วจริงในพื้นที่ช่วงเวลาที่ลา
+  - ไม่มีสแกนนิ้ว = มีรายชื่อใน Daily Report แต่ไม่สแกนนิ้วเลยในวันนั้น
+  - ปกติ = ข้อมูลสอดคล้องเรียบร้อยดี
+  - ลา = พนักงานแจ้งเอกสารลางานในระบบ และไม่พบการสแกนทับช่วงที่ลา
+  - วันหยุด = วันหยุดบริษัทหรือวันหยุดประจำสัปดาห์`;
+
+    const setupSheetColumnsAndHeader = (worksheet: ExcelJS.Worksheet) => {
+      worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+      worksheet.columns = [
+        { header: 'โฟร์แมน', key: 'foreman', width: 25 },
+        { header: 'ชื่อพนักงาน', key: 'employeeName', width: 25 },
+        { header: 'รหัสพนักงาน', key: 'employeeId', width: 15 },
+        { header: 'วันที่', key: 'workDate', width: 15 },
+        { header: 'สถานะ', key: 'status', width: 20 },
+        { header: 'เวลาตาม Daily Report', key: 'dailyReportTime', width: 25 },
+        { header: 'เวลาสแกนจริง', key: 'scanTime', width: 25 },
+        { header: 'หมายเหตุ', key: 'remark', width: 45 },
+      ];
+
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 30;
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF374151' },
+        };
+        cell.font = {
+          name: 'Inter',
+          color: { argb: 'FFFFFFFF' },
+          bold: true,
+          size: 11,
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: 'center',
+        };
+        cell.border = {
+          bottom: { style: 'medium', color: { argb: 'FF1F2937' } }
+        };
+      });
+    };
+
+    const addRecordRows = (worksheet: ExcelJS.Worksheet, rowsData: ReconciliationRecord[]) => {
+      let alternate = false;
+      for (const r of rowsData) {
+        const isLeaveOverlap = r.status === 'LEAVE' && this.hasLeaveOverlapWithScan(r);
+        const isLeaveOrConflicted = r.status === 'CONFLICTED' || r.status === 'LEAVE';
+        
+        // กรองหาเฉพาะ 4 แถวสถานะความผิดปกติที่โฟร์แมนต้องดำเนินการแก้ไขจริง
+        const isActionableForForeman = 
+          r.status === 'ABSENT' ||
+          r.status === 'MISSING_DAILY' ||
+          (r.status === 'CONFLICTED' && ((r.lateMinutes ?? 0) > 30 || (r.earlyLeaveMinutes ?? 0) > 30)) ||
+          isLeaveOverlap;
+
+        const row = worksheet.addRow({
+          foreman: r.assigneeName || 'ไม่ระบุโฟร์แมน',
+          employeeName: r.employeeName || '-',
+          employeeId: r.employeeId,
+          workDate: formatDateThai(r.workDate),
+          status: getThaiStatusLabel(r.status, r),
+          dailyReportTime: isLeaveOrConflicted ? this.getDailyReportTimeRange(r) : '',
+          scanTime: isLeaveOrConflicted ? this.getScanTimeRange(r) : '',
+          remark: isLeaveOverlap
+            ? 'มีสแกนนิ้วในช่วงที่ลา — ตรวจสอบ Daily Report'
+            : (r.note || ''),
+        });
+
+        row.height = 20;
+        
+        // กำหนดสีพื้นหลังและสีขอบของแถว: ปกติสลับขาว/เทาอ่อน, ผิดปกติใช้สีส้มสว่างพรีเมียม
+        let rowBgColor = alternate ? 'FFF9FAFB' : 'FFFFFFFF';
+        let borderColor = 'FFE5E7EB';
+        
+        if (isActionableForForeman) {
+          rowBgColor = 'FFFDF4E3'; // พื้นสีเหลืองส้มอ่อนพรีเมียม (Subtle Amber-Gold)
+          borderColor = 'FFF2D6B5'; // ขอบสีส้มทรายอ่อน (Subtle Sand-Orange Border)
+        }
+        
+        row.eachCell((cell) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: rowBgColor },
+          };
+          cell.font = {
+            name: 'Inter',
+            size: 10,
+            color: { argb: 'FF374151' },
+          };
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: 'center',
+          };
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: borderColor } },
+          };
+        });
+
+        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+        alternate = !alternate;
+      }
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHEET 1: ภาพรวมทั้งหมด (Overview Sheet)
+    // ─────────────────────────────────────────────────────────────────────────
+    const mainWorksheet = workbook.addWorksheet('ภาพรวมทั้งหมด');
+    setupSheetColumnsAndHeader(mainWorksheet);
+
     for (const [foremanName, groupRecords] of sortedGroups) {
-      const sectionRow = worksheet.addRow([`โฟร์แมน: ${foremanName}`]);
-      worksheet.mergeCells(sectionRow.number, 1, sectionRow.number, 8);
+      // Add Foreman section separator
+      const sectionRow = mainWorksheet.addRow([`โฟร์แมน: ${foremanName}`]);
+      mainWorksheet.mergeCells(sectionRow.number, 1, sectionRow.number, 8);
       sectionRow.height = 24;
       const sectionCell = sectionRow.getCell(1);
       sectionCell.fill = {
@@ -2213,53 +2316,12 @@ export class ReconciliationService {
         indent: 1,
       };
 
-      let alternate = false;
-      for (const r of groupRecords) {
-        const row = worksheet.addRow({
-          foreman: r.assigneeName || 'ไม่ระบุโฟร์แมน',
-          employeeName: r.employeeName || '-',
-          employeeId: r.employeeId,
-          workDate: formatDateThai(r.workDate),
-          status: getThaiStatusLabel(r.status),
-          dailyReportTime: (r.status === 'CONFLICTED' || r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN') ? this.getDailyReportTimeRange(r) : '',
-          scanTime: (r.status === 'CONFLICTED' || r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN') ? this.getScanTimeRange(r) : '',
-          remark: r.status === 'LEAVE' || (r.status as any) === 'LEAVE_WITH_SCAN'
-            ? 'มีสแกนนิ้วในช่วงที่ลา — ตรวจสอบ Daily Report'
-            : (r.note || ''),
-        });
+      // Add records for this foreman
+      addRecordRows(mainWorksheet, groupRecords);
 
-        row.height = 20;
-        const rowBgColor = alternate ? 'FFF9FAFB' : 'FFFFFFFF';
-        
-        row.eachCell((cell) => {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: rowBgColor },
-          };
-          cell.font = {
-            name: 'Inter',
-            size: 10,
-            color: { argb: 'FF374151' },
-          };
-          cell.alignment = {
-            vertical: 'middle',
-            horizontal: 'center',
-          };
-          cell.border = {
-            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          };
-        });
-
-        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-        row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-        row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-
-        alternate = !alternate;
-      }
-
-      const summaryRow = worksheet.addRow([getSummaryText(foremanName, groupRecords)]);
-      worksheet.mergeCells(summaryRow.number, 1, summaryRow.number, 8);
+      // Add Summary Row for this foreman group
+      const summaryRow = mainWorksheet.addRow([getSummaryText(foremanName, groupRecords)]);
+      mainWorksheet.mergeCells(summaryRow.number, 1, summaryRow.number, 8);
       summaryRow.height = 22;
       const summaryCell = summaryRow.getCell(1);
       summaryCell.fill = {
@@ -2286,9 +2348,10 @@ export class ReconciliationService {
       });
     }
 
-    const legendRow = worksheet.addRow([legendText]);
-    worksheet.mergeCells(legendRow.number, 1, legendRow.number, 8);
-    legendRow.height = 80;
+    // Add Legend Row to the main sheet
+    const legendRow = mainWorksheet.addRow([legendText]);
+    mainWorksheet.mergeCells(legendRow.number, 1, legendRow.number, 8);
+    legendRow.height = 110;
     const legendCell = legendRow.getCell(1);
     legendCell.font = {
       name: 'Inter',
@@ -2306,6 +2369,69 @@ export class ReconciliationService {
       pattern: 'solid',
       fgColor: { argb: 'FFFFFFFF' },
     };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SUBSEQUENT SHEETS: Separate Sheet per Foreman
+    // ─────────────────────────────────────────────────────────────────────────
+    for (const [foremanName, groupRecords] of sortedGroups) {
+      // Excel limits sheet names to 31 chars, and rejects some characters: \ / ? * : [ ]
+      const sanitizedSheetName = foremanName.replace(/[\\/:*?[\]]/g, '').substring(0, 30) || 'ไม่ระบุโฟร์แมน';
+      const foremanSheet = workbook.addWorksheet(sanitizedSheetName);
+      setupSheetColumnsAndHeader(foremanSheet);
+
+      // Add records
+      addRecordRows(foremanSheet, groupRecords);
+
+      // Add Summary Row
+      const summaryRow = foremanSheet.addRow([getSummaryText(foremanName, groupRecords)]);
+      foremanSheet.mergeCells(summaryRow.number, 1, summaryRow.number, 8);
+      summaryRow.height = 22;
+      const summaryCell = summaryRow.getCell(1);
+      summaryCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF9FAFB' },
+      };
+      summaryCell.font = {
+        name: 'Inter',
+        bold: true,
+        italic: true,
+        color: { argb: 'FF4B5563' },
+        size: 10,
+      };
+      summaryCell.alignment = {
+        vertical: 'middle',
+        horizontal: 'left',
+        indent: 1,
+      };
+      summaryRow.eachCell((cell) => {
+        cell.border = {
+          bottom: { style: 'double', color: { argb: 'FF9CA3AF' } }
+        };
+      });
+
+      // Add Legend Row
+      const foremanLegendRow = foremanSheet.addRow([legendText]);
+      foremanSheet.mergeCells(foremanLegendRow.number, 1, foremanLegendRow.number, 8);
+      foremanLegendRow.height = 110;
+      const foremanLegendCell = foremanLegendRow.getCell(1);
+      foremanLegendCell.font = {
+        name: 'Inter',
+        size: 9.5,
+        color: { argb: 'FF6B7280' },
+        italic: true,
+      };
+      foremanLegendCell.alignment = {
+        vertical: 'top',
+        horizontal: 'left',
+        wrapText: true,
+      };
+      foremanLegendCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFFFFF' },
+      };
+    }
 
     return await workbook.xlsx.writeBuffer();
   }

@@ -1,0 +1,8 @@
+{
+  "session_id": "session_006_worklogs_reconciliation",
+  "associated_tasks": ["T-001-002-01"],
+  "status": "completed",
+  "estimated_tokens": 22000,
+  "summary_context": "T-001-002-01: เพิ่มการบันทึก workLogs (subtaskName, taskName) จาก After-Sale ใน reconciliationRecords ทั้ง Cloud Functions path และ Backend Express path\n\nสิ่งที่ทำ (Backend/Functions):\n1. functions/src/index.ts — เพิ่ม workLogs ใน updates และ setObj ภายใน reconcile()\n2. backend/src/services/external/ProjectBDailyReportService.ts — เพิ่ม subtaskName, taskId, subtaskId ใน ProjectBWorkLog interface\n3. backend/src/models/ReconciliationRecord.ts — เพิ่ม workLogs?: any[] ใน interfaces + Firestore converter\n4. backend/src/services/reconciliation/ReconciliationService.ts — เพิ่ม workLogs mapping ใน mergeAndClassify()\n\nสิ่งที่ทำ (Frontend UI):\n5. frontend/src/services/reconciliationService.ts — เพิ่ม workLogs field ใน ReconciliationRecord interface\n6. frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx — แสดง taskName_subtaskName ใน modal header ต่อจากวันที่\n   - ใช้ regex /^[A-Z]{2,}-\\d{3,}/ กรอง entry ที่ taskName เป็น ID (เช่น DBD-0001-001) ออก\n   - Deduplicate ด้วย Set ป้องกันชื่อซ้ำ\n\nVerification:\n- TypeScript type-check frontend → PASSED\n- UI แสดงผล: 'วันที่ 2026-05-22 | Test DB_Test DB' ถูกต้อง\n- Session tokens: ~22k",
+  "History": []
+}

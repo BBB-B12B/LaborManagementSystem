@@ -43,6 +43,10 @@ export interface ProjectBWorkLog {
   otMorningTask?: string;
   otNoonTask?: string;
   otEveningTask?: string;
+  subtaskName?: string;
+  taskId?: string;
+  subtaskId?: string;
+  [key: string]: any;
 }
 
 /**
@@ -119,6 +123,7 @@ export interface DailyTimesheetSummary {
     otMorning?: string;
     otNoon?: string;
   };
+  workLogs?: ProjectBWorkLog[];
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +255,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     dailyReportPhotos,
     dailyReportPunches,
     shiftTimes: doc.shiftTimes,
+    workLogs: doc.workLogs || [],
   };
 }
 
