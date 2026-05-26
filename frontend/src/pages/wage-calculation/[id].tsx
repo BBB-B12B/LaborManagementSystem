@@ -24,14 +24,13 @@ import {
   Chip,
   Alert,
   Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Tabs,
   Tab,
+  Drawer,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
-import { ArrowBack, Download, Calculate, AccessTime, Add, CheckCircle, Payment, Visibility, VisibilityOff } from '@mui/icons-material';
+import { ArrowBack, Download, Calculate, AccessTime, Add, CheckCircle, Payment, Visibility, VisibilityOff, Close, InfoOutlined } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { wageService, type DCWageSummary } from '../../services/wageService';
@@ -225,6 +224,17 @@ export default function WageCalculationDetailsPage() {
       cellClassName: 'hours-column',
       valueFormatter: (params) => params.value?.toFixed(2) || '0.00',
     },
+    {
+      field: 'penaltyMinutes',
+      headerName: 'สาย/ออกก่อน (นาที)',
+      minWidth: 120,
+      flex: 0.7,
+      align: 'right',
+      headerAlign: 'right',
+      headerClassName: 'hours-column',
+      cellClassName: 'hours-column',
+      valueFormatter: (params) => params.value?.toString() || '0',
+    },
 
     // === กลุ่ม: รายได้ (สีเขียวอ่อน) ===
     {
@@ -261,6 +271,17 @@ export default function WageCalculationDetailsPage() {
       valueFormatter: (params) => params.value?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00',
     },
     {
+      field: 'phoneAllowance',
+      headerName: 'ค่าโทรศัพท์',
+      minWidth: 100,
+      flex: 0.7,
+      align: 'right',
+      headerAlign: 'right',
+      headerClassName: 'income-column',
+      cellClassName: 'income-column',
+      valueFormatter: (params) => params.value?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00',
+    },
+    {
       field: 'totalIncome',
       headerName: 'รายได้รวม',
       minWidth: 120,
@@ -285,26 +306,85 @@ export default function WageCalculationDetailsPage() {
       valueFormatter: (params) => params.value?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00',
     },
     {
-      field: 'phoneAllowance',
-      headerName: 'ค่าโทรศัพท์',
-      minWidth: 100,
-      flex: 0.7,
+      field: 'welfareDeductions',
+      headerName: 'หักอุปกรณ์/ผู้ติดตาม',
+      minWidth: 140,
+      flex: 0.8,
       align: 'right',
       headerAlign: 'right',
       headerClassName: 'expense-column',
       cellClassName: 'expense-column',
-      valueFormatter: (params) => params.value?.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00',
-    },
-    {
-      field: 'penaltyMinutes',
-      headerName: 'สาย/ออกก่อน (นาที)',
-      minWidth: 120,
-      flex: 0.7,
-      align: 'right',
-      headerAlign: 'right',
-      headerClassName: 'expense-column',
-      cellClassName: 'expense-column',
-      valueFormatter: (params) => params.value?.toString() || '0',
+      renderCell: (params: GridRenderCellParams) => {
+        const refrigerator = params.row.refrigeratorCost || 0;
+        const soundSystem = params.row.soundSystemCost || 0;
+        const tv = params.row.tvCost || 0;
+        const washingMachine = params.row.washingMachineCost || 0;
+        const portableAc = params.row.portableAcCost || 0;
+        const follower = params.row.followerAccommodation || 0;
+        
+        const totalWelfare = refrigerator + soundSystem + tv + washingMachine + portableAc + follower;
+
+        if (totalWelfare === 0) {
+          return <Typography variant="body2" color="text.secondary">0.00</Typography>;
+        }
+
+        const tooltipTitle = (
+          <Box sx={{ p: 1, minWidth: 180 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, borderBottom: '1px solid rgba(255,255,255,0.2)', pb: 0.5 }}>
+              รายละเอียดสวัสดิการเช่า
+            </Typography>
+            <Grid container spacing={0.5}>
+              {refrigerator > 0 && (
+                <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <span style={{ opacity: 0.9 }}>❄️ ค่าตู้เย็น:</span>
+                  <strong>{refrigerator.toLocaleString()} ฿</strong>
+                </Grid>
+              )}
+              {portableAc > 0 && (
+                <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <span style={{ opacity: 0.9 }}>❄️ ค่าแอร์เคลื่อนที่:</span>
+                  <strong>{portableAc.toLocaleString()} ฿</strong>
+                </Grid>
+              )}
+              {tv > 0 && (
+                <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <span style={{ opacity: 0.9 }}>📺 ค่าทีวี:</span>
+                  <strong>{tv.toLocaleString()} ฿</strong>
+                </Grid>
+              )}
+              {washingMachine > 0 && (
+                <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <span style={{ opacity: 0.9 }}>🌀 ค่าเครื่องซักผ้า:</span>
+                  <strong>{washingMachine.toLocaleString()} ฿</strong>
+                </Grid>
+              )}
+              {soundSystem > 0 && (
+                <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <span style={{ opacity: 0.9 }}>🔊 ค่าเครื่องเสียง:</span>
+                  <strong>{soundSystem.toLocaleString()} ฿</strong>
+                </Grid>
+              )}
+              {follower > 0 && (
+                <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <span style={{ opacity: 0.9 }}>👥 ค่าผู้ติดตาม:</span>
+                  <strong>{follower.toLocaleString()} ฿</strong>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        );
+
+        return (
+          <Tooltip title={tooltipTitle} arrow placement="left" enterDelay={100}>
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', borderBottom: '1px dotted', pb: 0.2 }}>
+              <InfoOutlined sx={{ fontSize: 13, color: 'text.secondary' }} />
+              <Typography variant="body2" fontWeight="bold">
+                {totalWelfare.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Box>
+          </Tooltip>
+        );
+      },
     },
     {
       field: 'lateDeductions',
@@ -548,7 +628,7 @@ export default function WageCalculationDetailsPage() {
           </Grid>
           <Grid item xs={12} md={3}>
             <Typography variant="body2">
-              ยกเว้น: รหัสพนักงานขึ้นต้น "9"
+              ยกเว้น: รหัสพนักงานขึ้นต้น &quot;9&quot;
             </Typography>
           </Grid>
         </Grid>
@@ -599,6 +679,7 @@ export default function WageCalculationDetailsPage() {
             professionalFees: showDetails,
             totalIncome: showDetails,
             accommodationCost: showDetails,
+            welfareDeductions: showDetails,
             phoneAllowance: showDetails,
             lateDeductions: showDetails,
             socialSecurityDeduction: showDetails,
@@ -644,8 +725,8 @@ export default function WageCalculationDetailsPage() {
         />
       </Paper>
 
-      {/* Additional Items Dialog */}
-      <AdditionalItemsDialog
+      {/* Additional Items Drawer */}
+      <AdditionalItemsDrawer
         open={openDialog}
         onClose={() => setOpenDialog(false)}
         dc={selectedDC}
@@ -785,9 +866,9 @@ export default function WageCalculationDetailsPage() {
 }
 
 /**
- * Dialog for managing additional income/expense
+ * Drawer for managing additional income/expense and showing detailed wage slips
  */
-function AdditionalItemsDialog({ open, onClose, dc, periodId, onUpdate }: any) {
+function AdditionalItemsDrawer({ open, onClose, dc, periodId, onUpdate }: any) {
   const [activeTab, setActiveTab] = React.useState(0);
   const { success: showSuccess, error: showError } = useToast();
 
@@ -824,44 +905,312 @@ function AdditionalItemsDialog({ open, onClose, dc, periodId, onUpdate }: any) {
 
   if (!dc) return null;
 
+  const refrigerator = dc.refrigeratorCost || 0;
+  const soundSystem = dc.soundSystemCost || 0;
+  const tv = dc.tvCost || 0;
+  const washingMachine = dc.washingMachineCost || 0;
+  const portableAc = dc.portableAcCost || 0;
+  const follower = dc.followerAccommodation || 0;
+  const totalWelfare = refrigerator + soundSystem + tv + washingMachine + portableAc + follower;
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>จัดการรายได้/รายจ่ายเพิ่มเติม - {dc.name}</DialogTitle>
-      <DialogContent dividers>
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      sx={{
+        '& .MuiDrawer-paper': {
+          width: { xs: '100%', sm: 550 },
+          boxSizing: 'border-box',
+          p: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+        },
+      }}
+    >
+      {/* Drawer Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+            รายละเอียดค่าแรงรายคน
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            รหัส DC: {dc.employeeId} | {dc.name}
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} color="error" size="medium">
+          <Close />
+        </IconButton>
+      </Box>
+
+      <Divider sx={{ mb: 2 }} />
+
+      {/* Main Drawer Content (Scrollable) */}
+      <Box sx={{ flex: 1, overflowY: 'auto', pr: 1, mb: 2 }}>
+        {/* Mock Payroll Slip Section */}
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 2,
+            mb: 3,
+            borderColor: '#e0e0e0',
+            borderRadius: '12px',
+            background: '#fafafa',
+          }}
+        >
+          <Typography
+            variant="subtitle2"
+            align="center"
+            sx={{ fontWeight: 'bold', letterSpacing: 1, color: 'text.secondary', mb: 2, textTransform: 'uppercase' }}
+          >
+            📋 ใบแจ้งรายละเอียดยอดค่าแรงจำลอง
+          </Typography>
+
+          <Grid container spacing={2}>
+            {/* 1. Columns for incomes (Green) */}
+            <Grid item xs={12} md={6}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  bgcolor: '#E8F5E9',
+                  borderRadius: '8px',
+                  height: '100%',
+                  borderLeft: '4px solid #4CAF50',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#2E7D32', mb: 1.5 }}>
+                  ➕ รายรับทั้งหมด
+                </Typography>
+                
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">ค่าแรงปกติ ({dc.regularDays.toFixed(2)} วัน):</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.regularWages.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">ค่าแรงโอที ({dc.totalOtHours.toFixed(2)} ชม.):</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.otWages.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">ค่าวิชาชีพ:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.professionalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">ค่าโทรศัพท์:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.phoneAllowance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                  {dc.additionalIncome > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">รายได้เสริมอื่น ๆ:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>+{dc.additionalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                  )}
+                  
+                  <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.06)' }} />
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1B5E20' }}>รวมรายได้:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1B5E20' }}>{dc.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Grid>
+
+            {/* 2. Columns for deductions (Orange/Red) */}
+            <Grid item xs={12} md={6}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  bgcolor: '#FFF3E0',
+                  borderRadius: '8px',
+                  height: '100%',
+                  borderLeft: '4px solid #FF9800',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#E65100', mb: 1.5 }}>
+                  ➖ รายจ่าย / รายการหัก
+                </Typography>
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">ค่าที่พัก:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.accommodationCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                  
+                  {/* Itemized Welfare/Appliance Rentals */}
+                  {totalWelfare > 0 && (
+                    <Box sx={{ bgcolor: 'rgba(0,0,0,0.02)', p: 1, borderRadius: '4px' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>หักเช่าอุปกรณ์/ผู้ติดตาม:</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{totalWelfare.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                      </Box>
+                      <Box sx={{ pl: 1, display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+                        {refrigerator > 0 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="caption" color="text.secondary">• ค่าตู้เย็น:</Typography>
+                            <Typography variant="caption">{refrigerator.toLocaleString()} ฿</Typography>
+                          </Box>
+                        )}
+                        {portableAc > 0 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="caption" color="text.secondary">• ค่าแอร์เคลื่อนที่:</Typography>
+                            <Typography variant="caption">{portableAc.toLocaleString()} ฿</Typography>
+                          </Box>
+                        )}
+                        {tv > 0 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="caption" color="text.secondary">• ค่าทีวี:</Typography>
+                            <Typography variant="caption">{tv.toLocaleString()} ฿</Typography>
+                          </Box>
+                        )}
+                        {washingMachine > 0 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="caption" color="text.secondary">• ค่าเครื่องซักผ้า:</Typography>
+                            <Typography variant="caption">{washingMachine.toLocaleString()} ฿</Typography>
+                          </Box>
+                        )}
+                        {soundSystem > 0 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="caption" color="text.secondary">• ค่าเครื่องเสียง:</Typography>
+                            <Typography variant="caption">{soundSystem.toLocaleString()} ฿</Typography>
+                          </Box>
+                        )}
+                        {follower > 0 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="caption" color="text.secondary">• ค่าผู้ติดตาม:</Typography>
+                            <Typography variant="caption">{follower.toLocaleString()} ฿</Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {dc.lateDeductions > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">หักมาสาย ({dc.penaltyMinutes} นาที):</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>-{dc.lateDeductions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">ประกันสังคม:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.socialSecurityDeduction.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                  {dc.additionalExpenses > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">รายจ่ายเพิ่มเติมอื่น ๆ:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>-{dc.additionalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                  )}
+
+                  <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.06)' }} />
+
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#E65100' }}>รวมรายจ่าย:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#E65100' }}>{dc.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
+
+          {/* 3. Highlighted Net Wages */}
+          <Box
+            sx={{
+              mt: 2,
+              p: 1.5,
+              bgcolor: dc.netWages >= 0 ? '#E1F5FE' : '#FFEBEE',
+              borderRadius: '8px',
+              textAlign: 'center',
+              border: '1px solid',
+              borderColor: dc.netWages >= 0 ? '#0288D1' : '#D32F2F',
+            }}
+          >
+            <Typography variant="caption" color="text.secondary" display="block">
+              💰 ค่าแรงสุทธิรับจริง
+            </Typography>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 'bold',
+                color: dc.netWages >= 0 ? '#0288D1' : '#D32F2F',
+                mt: 0.5,
+              }}
+            >
+              {dc.netWages.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿
+            </Typography>
+          </Box>
+        </Paper>
+
+        <Divider sx={{ mb: 2 }} />
+
+        {/* Management Tab for Additionals */}
+        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1.5 }}>
+          ⚙️ จัดการรายการเพิ่มเติมย้อนหลัง
+        </Typography>
+
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
           <Tab label="รายได้เพิ่มเติม" />
           <Tab label="รายจ่ายเพิ่มเติม" />
         </Tabs>
 
         {activeTab === 0 && (
-          <Box>
-            <Button variant="contained" startIcon={<Add />} onClick={() => handleAdd('income')} sx={{ mb: 2 }}>เพิ่มรายได้</Button>
-            <Typography variant="body2" color="text.secondary">หมายเลขรายการรายได้: {dc.additionalIncomeIds?.length || 0} รายการ</Typography>
+          <Box sx={{ p: 1 }}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleAdd('income')}
+              sx={{
+                mb: 2,
+                backgroundColor: '#2E7D32',
+                '&:hover': { backgroundColor: '#1B5E20' },
+              }}
+            >
+              เพิ่มรายได้
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              จำนวนรายการรายได้สะสม: {dc.additionalIncomeIds?.length || 0} รายการ
+            </Typography>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-              * รายการที่เพิ่มไว้จะถูกรวมในการคำนวณเมื่อกด "คำนวณใหม่"
+              * รายการรายได้เพิ่มเติมจะถูกคำนวณในการทำจ่ายยอดรวมเมื่องกด &quot;คำนวณใหม่&quot;
             </Typography>
           </Box>
         )}
         {activeTab === 1 && (
-          <Box>
-            <Button variant="contained" startIcon={<Add />} onClick={() => handleAdd('expense')} sx={{ mb: 2 }}>เพิ่มรายจ่าย</Button>
-            <Typography variant="body2" color="text.secondary">หมายเลขรายการรายจ่าย: {dc.additionalExpenseIds?.length || 0} รายการ</Typography>
+          <Box sx={{ p: 1 }}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleAdd('expense')}
+              sx={{
+                mb: 2,
+                backgroundColor: '#D84315',
+                '&:hover': { backgroundColor: '#BF360C' },
+              }}
+            >
+              เพิ่มรายจ่าย
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              จำนวนรายการรายจ่ายสะสม: {dc.additionalExpenseIds?.length || 0} รายการ
+            </Typography>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-              * รายการที่เพิ่มไว้จะถูกรวมในการคำนวณเมื่อกด "คำนวณใหม่"
+              * รายการหักรายจ่ายเพิ่มเติมจะถูกคำนวณในการทำจ่ายยอดรวมเมื่องกด &quot;คำนวณใหม่&quot;
             </Typography>
           </Box>
         )}
-      </DialogContent>
-      <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'flex-end', gap: 2 }}>
+      </Box>
+
+      {/* Footer Close Button */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 2, borderTop: '1px solid #e0e0e0' }}>
         <Button
           onClick={onClose}
           variant="outlined"
           color="error"
-          sx={{ borderRadius: '10px', px: 3 }}
+          sx={{ borderRadius: '8px', px: 4 }}
         >
           ปิด
         </Button>
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </Drawer>
   );
 }
