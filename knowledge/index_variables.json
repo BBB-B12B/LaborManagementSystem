@@ -2010,7 +2010,7 @@
     },
     "DailyReportPage": {
       "source": "frontend/src/pages/daily-reports/index.tsx",
-      "line": 142
+      "line": 145
     },
     "WorkRecordsPage": {
       "source": "frontend/src/pages/daily-reports/list.tsx",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 38
+      "line": 40
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2547,6 +2547,10 @@
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
       "line": 27
+    },
+    "WorkspaceRequestsPage": {
+      "source": "frontend/src/pages/workspace/requests.tsx",
+      "line": 94
     }
   }
 }

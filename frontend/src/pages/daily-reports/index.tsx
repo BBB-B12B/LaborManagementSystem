@@ -33,6 +33,9 @@ import {
   Paperclip,
   ChevronLeft,
   ChevronRight,
+  CalendarRange,
+  Info,
+  Lock,
 } from 'lucide-react';
 import {
   Box,
@@ -664,7 +667,18 @@ export default function DailyReportPage() {
         } catch (e) {}
       }
 
-      return { report, siteReport, supportReport, lastPrevProgress, lastNextProgress };
+      let advanceRequest = null;
+      try {
+        const reqs = await taskService.getAdvanceRequests(selectedTask.id);
+        advanceRequest = reqs.find((r: any) => {
+          const rDateStr = r.reportDate ? format(parseSafeDate(r.reportDate) || new Date(), 'yyyy-MM-dd') : r.requestId;
+          return rDateStr === dateStr && (isActingAsSupport ? r.isSupportReport === true : !r.isSupportReport);
+        }) || null;
+      } catch (e) {
+        console.error("Failed to fetch advance request:", e);
+      }
+
+      return { report, siteReport, supportReport, lastPrevProgress, lastNextProgress, advanceRequest };
     },
     enabled: !!selectedTask && !!dateStr,
     staleTime: remainingStaleTime,
@@ -674,14 +688,16 @@ export default function DailyReportPage() {
   const [siteReportData, setSiteReportData] = useState<any>(null);
   const [supportReportData, setSupportReportData] = useState<any>(null);
   const [selectedWorkers, setSelectedWorkers] = useState<any[]>([]);
+  const [isAutofilledFromRequest, setIsAutofilledFromRequest] = useState(false);
 
   useEffect(() => {
     if (reportDetailData) {
-      const { report, siteReport, supportReport, lastPrevProgress: lp, lastNextProgress: ln } = reportDetailData;
+      const { report, siteReport, supportReport, lastPrevProgress: lp, lastNextProgress: ln, advanceRequest } = reportDetailData;
       setPreviousProgress(lp);
       setNextProgress(ln ?? null);
       setSiteReportData(siteReport);
       setSupportReportData(supportReport);
+      setIsAutofilledFromRequest(false);
 
       if (report) {
         setProgress(report.progress || 0);
@@ -744,6 +760,51 @@ export default function DailyReportPage() {
         } else {
           setSelectedWorkers([]);
         }
+      } else if (advanceRequest) {
+        // [NEW] Smart Autofill from Advance Request if no actual daily report exists yet
+        setProgress(advanceRequest.progress || 0);
+        setNote(advanceRequest.note || '');
+        setExistingPhotos({ site: [], labor: INITIAL_EXISTING_SHIFT_PHOTOS });
+
+        if (advanceRequest.labor && Array.isArray(advanceRequest.labor)) {
+          const laborMap = new Map();
+          advanceRequest.labor.forEach((l: any) => laborMap.set(l.workerId, l));
+
+          const allWorkerIds = Array.from(laborMap.keys());
+          const mergedWorkers = allWorkerIds.map((wId) => {
+            const l = laborMap.get(wId);
+            return {
+              id: wId,
+              name: l?.workerName || '',
+              employeeId: l?.employeeId || '',
+              times: {
+                regular: l?.shifts?.normal || false,
+                regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+                otMorning: l?.shifts?.otMorning || false,
+                otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+                otNoon: l?.shifts?.otNoon || false,
+                otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+                otEvening: l?.shifts?.otEvening || false,
+                otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+              },
+              leave: {
+                active: false,
+                time: '08:00 - 17:00',
+                medCertFileUrl: '',
+                leaveType: 'Unpaid',
+              },
+            };
+          });
+          setSelectedWorkers(mergedWorkers);
+        } else {
+          setSelectedWorkers([]);
+        }
+
+        // Show auto-filled banner ONLY on reporting days (not future dates)
+        const isFuture = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+        if (!isFuture) {
+          setIsAutofilledFromRequest(true);
+        }
       } else {
         setProgress(lp || selectedTask.dailyProgress || 0);
         setNote('');
@@ -757,7 +818,7 @@ export default function DailyReportPage() {
         if (siteReport.note !== undefined) setNote(siteReport.note);
       }
     }
-  }, [reportDetailData, selectedTask, isActingAsSupport]);
+  }, [reportDetailData, selectedTask, isActingAsSupport, reportDate]);
 
   useEffect(() => {
     // Priority Guard: ถ้ามี source ที่สำคัญกว่า (submit/sync) เป็นเจ้าของ Spinner อยู่ ให้ข้ามไป
@@ -953,7 +1014,14 @@ export default function DailyReportPage() {
     return false;
   }, [reportDate]);
 
-  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion;
+  const requestLocked = useMemo(() => {
+    if (reportDetailData?.advanceRequest) {
+      return reportDetailData.advanceRequest.status !== 'pending';
+    }
+    return false;
+  }, [reportDetailData]);
+
+  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked;
   const isAdvanceRequestUI = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
@@ -2510,6 +2578,83 @@ export default function DailyReportPage() {
                             </Box>
                           ) : (
                             <>
+                              {isAdvanceRequestUI && (
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    mb: 3,
+                                    borderRadius: '12px',
+                                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                                    color: '#ffffff',
+                                    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1.5,
+                                  }}
+                                >
+                                  <CalendarRange size={24} />
+                                  <Box>
+                                    <Typography variant="subtitle2" fontWeight={800}>
+                                      โหมดวางแผนงานล่วงหน้า (Request Mode)
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                      คุณกำลังวางแผนกำลังพลและคาดการณ์ Progress สำหรับวันที่ {format(reportDate, 'dd/MM/yyyy')} (รูปถ่ายหน้างานและรูปกะจะถูกยกเว้นในโหมดนี้)
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              )}
+
+                              {requestLocked && (
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    mb: 3,
+                                    borderRadius: '12px',
+                                    bgcolor: '#fef2f2',
+                                    border: '1px solid #fca5a5',
+                                    color: '#991b1b',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1.5,
+                                  }}
+                                >
+                                  <Lock size={24} color="#ef4444" />
+                                  <Box>
+                                    <Typography variant="subtitle2" fontWeight={800}>
+                                      แผนงานล่วงหน้านี้ถูกล็อกแล้ว
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                      แผนงานได้รับการตรวจสอบหรือส่งออก (Export) โดยหัวหน้างานแล้ว จึงไม่สามารถแก้ไขข้อมูลได้อีก
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              )}
+
+                              {!isAdvanceRequestUI && isAutofilledFromRequest && (
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    mb: 3,
+                                    borderRadius: '12px',
+                                    bgcolor: '#ecfdf5',
+                                    border: '1px solid #a7f3d0',
+                                    color: '#065f46',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1.5,
+                                  }}
+                                >
+                                  <Info size={24} color="#10b981" />
+                                  <Box>
+                                    <Typography variant="subtitle2" fontWeight={800}>
+                                      ระบบดึงข้อมูลจากแผนงานล่วงหน้าที่ FM ลงไว้เมื่อวานสำเร็จ!
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                      รายชื่อแรงงาน DC ชั่วโมงกะ และ Progress ถูกดึงมาให้เรียบร้อยแล้ว กรุณาตรวจสอบความถูกต้องและแนบรูปถ่ายการทำงานจริงเพื่อส่งรายงานประจำวัน
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              )}
                               <Box sx={{ mb: 4 }}>
                                 <Box
                                   sx={{
@@ -3063,17 +3208,19 @@ export default function DailyReportPage() {
                           <Button
                             variant="contained"
                             sx={{
-                              bgcolor: '#10b981',
+                              bgcolor: isAdvanceRequestUI ? '#4f46e5' : '#10b981',
                               borderRadius: '10px',
                               px: 6,
                               fontWeight: 800,
-                              '&:hover': { bgcolor: '#059669' },
-                              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                              '&:hover': { bgcolor: isAdvanceRequestUI ? '#4338ca' : '#059669' },
+                              boxShadow: isAdvanceRequestUI 
+                                ? '0 4px 14px rgba(79, 70, 229, 0.4)' 
+                                : '0 4px 14px rgba(16, 185, 129, 0.4)',
                             }}
                             disabled={isFormDisabled || isSubmitting}
                             onClick={handleSubmit}
                           >
-                            บันทึกรายงาน
+                            {isAdvanceRequestUI ? 'บันทึกแผนงานล่วงหน้า' : 'บันทึกรายงาน'}
                           </Button>
                         </Box>
                       </>

@@ -686,7 +686,9 @@
     "frontend/src/services/projectService.ts": {
       "description": "Project Service (Frontend)",
       "associated_tasks": [],
-      "backlinks": []
+      "backlinks": [
+        "frontend/src/pages/workspace/requests.tsx"
+      ]
     },
     "frontend/src/services/salesSyncService.ts": {
       "description": "---------------------------------------------------------------------------",
@@ -714,7 +716,9 @@
     "frontend/src/services/taskService.ts": {
       "description": "Fetch tasks with optional filters",
       "associated_tasks": [],
-      "backlinks": []
+      "backlinks": [
+        "frontend/src/pages/workspace/requests.tsx"
+      ]
     },
     "frontend/src/services/wageService.ts": {
       "description": "Wage Calculation Service",
@@ -1044,6 +1048,11 @@
     },
     "frontend/src/pages/workspace/index.tsx": {
       "description": "กรอง Task ตาม Role ของ User",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/pages/workspace/requests.tsx": {
+      "description": "ตารางกำลังพลและแผนงาน (Labor & Plans Table Workspace) สำหรับหัวหน้างาน",
       "associated_tasks": [],
       "backlinks": []
     },

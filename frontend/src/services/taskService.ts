@@ -228,4 +228,25 @@ export const taskService = {
   getAdvanceRequests: async (id: string): Promise<any[]> => {
     return await api.get<any[]>(`/tasks/${id}/requests`);
   },
+
+  /**
+   * Update advance request status
+   */
+  updateAdvanceRequestStatus: async (id: string, dateStr: string, status: string, isSupportReport?: boolean): Promise<void> => {
+    await api.patch(`/tasks/${id}/requests/${dateStr}/status`, { status, isSupportReport });
+  },
+
+  /**
+   * Get all advance requests across projects and date range
+   */
+  getAdvanceRequestsAll: async (filters: { projectId?: string; startDate?: string; endDate?: string }): Promise<any[]> => {
+    return await api.get<any[]>('/tasks/requests-all', filters);
+  },
+
+  /**
+   * Get all daily reports across projects and date range
+   */
+  getDailyReportsAll: async (filters: { projectId?: string; startDate?: string; endDate?: string }): Promise<any[]> => {
+    return await api.get<any[]>('/tasks/reports-all', filters);
+  },
 };

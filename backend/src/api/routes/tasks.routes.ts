@@ -100,7 +100,12 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       const taskId = parts[5];
       const fullId = `${woId}__${catId}__${taskId}__${data.subtaskId}`;
       
-      const parentTask = tasksMap.get(taskId) || {};
+      const parentTask = tasksMap.get(taskId);
+      if (!parentTask) return null;
+      
+      // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+      const woCode = String(parentTask.workOrderCode || '').toUpperCase().trim();
+      if (woCode !== 'WOA' && woCode !== 'WOP') return null;
       
       return {
         ...parentTask,
@@ -114,7 +119,7 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
         revisionCreatedAt: data.revisionCreatedAt || parentTask.revisionCreatedAt,
         createdAt: data.createdAt || parentTask.createdAt,
       };
-    }) as any[];
+    }).filter(Boolean) as any[];
 
     // Filter tasks if role is FM
     const userProjectIds = authReq.user?.projectLocationIds || [];
@@ -572,7 +577,13 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
     });
 
     const enrichedSubtasks = subtasks.map(st => {
-       const parentTask = tasksMap.get(st.parentTaskId) || {};
+       const parentTask = tasksMap.get(st.parentTaskId);
+       if (!parentTask) return null;
+
+       // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+       const woCode = String(parentTask.workOrderCode || '').toUpperCase().trim();
+       if (woCode !== 'WOA' && woCode !== 'WOP') return null;
+
        if (projectId && parentTask.projectId !== projectId) return null;
        return {
          ...parentTask,
@@ -585,6 +596,224 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
     res.status(200).json({
       success: true,
       data: enrichedSubtasks,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/requests-all
+router.get('/requests-all', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, startDate, endDate } = req.query;
+    
+    // 1. Fetch all tasks to get projectId map
+    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    const tasksMap = new Map();
+    tasksSnapshot.docs.forEach(doc => {
+      const parts = doc.ref.path.split('/');
+      const taskId = parts[5];
+      tasksMap.set(taskId, {
+        id: doc.id,
+        taskId,
+        taskName: doc.data().taskName,
+        projectId: doc.data().projectId,
+        projectName: doc.data().projectName,
+        workOrderCode: doc.data().workOrderCode,
+      });
+    });
+
+    // Fetch all subtasks to get subtaskName map
+    const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
+    const subtasksMap = new Map();
+    subtasksSnapshot.docs.forEach(doc => {
+      subtasksMap.set(doc.id, doc.data().subtaskName);
+    });
+
+    // Fetch all users to map employeeId / uid / username to name
+    const usersSnapshot = await afterSaleDb.collection('users').get();
+    const usersMap = new Map();
+    usersSnapshot.docs.forEach(doc => {
+      const uData = doc.data();
+      if (doc.id) usersMap.set(doc.id, uData.name);
+      if (uData.employeeId) usersMap.set(uData.employeeId, uData.name);
+      if (uData.username) usersMap.set(uData.username, uData.name);
+    });
+
+    // 2. Fetch all requests
+    const snapshot = await afterSaleDb.collectionGroup('requests').get();
+    const allRequests: any[] = [];
+
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const path = doc.ref.path;
+      const parts = path.split('/');
+      
+      let taskId = '';
+      let subtaskId = '';
+      
+      if (parts.length === 10) {
+        taskId = parts[5];
+      } else if (parts.length === 12) {
+        taskId = parts[5];
+        subtaskId = parts[7];
+      } else {
+        return;
+      }
+      
+      const taskMeta = tasksMap.get(taskId);
+      if (!taskMeta) return;
+
+      // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+      const woCode = String(taskMeta.workOrderCode || '').toUpperCase().trim();
+      if (woCode !== 'WOA' && woCode !== 'WOP') return;
+
+      if (projectId && taskMeta.projectId !== projectId) return;
+
+      const rDateStr = doc.id;
+      if (startDate && rDateStr < startDate) return;
+      if (endDate && rDateStr > endDate) return;
+
+      let taskName = taskMeta.taskName;
+      if (subtaskId) {
+        const subtaskName = subtasksMap.get(subtaskId);
+        if (subtaskName) {
+          taskName = `${taskMeta.taskName} > ${subtaskName}`;
+        }
+      }
+
+      let reporterName = data.createdBy || 'ไม่ระบุ';
+      if (usersMap.has(data.createdBy)) {
+        reporterName = usersMap.get(data.createdBy);
+      } else if (usersMap.has(data.updatedBy)) {
+        reporterName = usersMap.get(data.updatedBy);
+      }
+
+      allRequests.push({
+        ...data,
+        id: doc.id,
+        dateStr: rDateStr,
+        taskId,
+        subtaskId,
+        taskName,
+        createdBy: reporterName,
+        projectId: taskMeta.projectId,
+        projectName: taskMeta.projectName,
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: allRequests,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/reports-all
+router.get('/reports-all', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, startDate, endDate } = req.query;
+    
+    // 1. Fetch all tasks to get projectId map
+    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    const tasksMap = new Map();
+    tasksSnapshot.docs.forEach(doc => {
+      const parts = doc.ref.path.split('/');
+      const taskId = parts[5];
+      tasksMap.set(taskId, {
+        id: doc.id,
+        taskId,
+        taskName: doc.data().taskName,
+        projectId: doc.data().projectId,
+        projectName: doc.data().projectName,
+        workOrderCode: doc.data().workOrderCode,
+      });
+    });
+
+    // Fetch all subtasks to get subtaskName map
+    const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
+    const subtasksMap = new Map();
+    subtasksSnapshot.docs.forEach(doc => {
+      subtasksMap.set(doc.id, doc.data().subtaskName);
+    });
+
+    // Fetch all users to map employeeId / uid / username to name
+    const usersSnapshot = await afterSaleDb.collection('users').get();
+    const usersMap = new Map();
+    usersSnapshot.docs.forEach(doc => {
+      const uData = doc.data();
+      if (doc.id) usersMap.set(doc.id, uData.name);
+      if (uData.employeeId) usersMap.set(uData.employeeId, uData.name);
+      if (uData.username) usersMap.set(uData.username, uData.name);
+    });
+
+    // 2. Fetch all dailyReports
+    const snapshot = await afterSaleDb.collectionGroup('dailyReports').get();
+    const allReports: any[] = [];
+
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const path = doc.ref.path;
+      const parts = path.split('/');
+      
+      let taskId = '';
+      let subtaskId = '';
+      
+      if (parts.length === 10) {
+        taskId = parts[5];
+      } else if (parts.length === 12) {
+        taskId = parts[5];
+        subtaskId = parts[7];
+      } else {
+        return;
+      }
+      
+      const taskMeta = tasksMap.get(taskId);
+      if (!taskMeta) return;
+
+      // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+      const woCode = String(taskMeta.workOrderCode || '').toUpperCase().trim();
+      if (woCode !== 'WOA' && woCode !== 'WOP') return;
+
+      if (projectId && taskMeta.projectId !== projectId) return;
+
+      const rDateStr = doc.id;
+      if (startDate && rDateStr < startDate) return;
+      if (endDate && rDateStr > endDate) return;
+
+      let taskName = taskMeta.taskName;
+      if (subtaskId) {
+        const subtaskName = subtasksMap.get(subtaskId);
+        if (subtaskName) {
+          taskName = `${taskMeta.taskName} > ${subtaskName}`;
+        }
+      }
+
+      let reporterName = data.createdBy || 'ไม่ระบุ';
+      if (usersMap.has(data.createdBy)) {
+        reporterName = usersMap.get(data.createdBy);
+      } else if (usersMap.has(data.updatedBy)) {
+        reporterName = usersMap.get(data.updatedBy);
+      }
+
+      allReports.push({
+        ...data,
+        id: doc.id,
+        dateStr: rDateStr,
+        taskId,
+        subtaskId,
+        taskName,
+        createdBy: reporterName,
+        projectId: taskMeta.projectId,
+        projectName: taskMeta.projectName,
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: allReports,
     });
   } catch (error) {
     next(error);
@@ -969,6 +1198,29 @@ router.get('/:id/requests', async (req: Request, res: Response, next: NextFuncti
     res.status(200).json({
       success: true,
       data: requests,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/tasks/:id/requests/:date/status
+router.patch('/:id/requests/:date/status', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id, date } = req.params;
+    const { status, isSupportReport } = req.body;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    if (!status) {
+      throw new AppError('status is required', 400);
+    }
+
+    await taskService.updateAdvanceRequestStatus(id, date, status, userId, isSupportReport === true);
+
+    res.status(200).json({
+      success: true,
+      message: 'อัปเดตสถานะแผนงานล่วงหน้าสำเร็จ',
     });
   } catch (error) {
     next(error);

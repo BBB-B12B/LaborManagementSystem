@@ -40,6 +40,17 @@
 - [X] T-011-001-03: แก้ไขบักจุดแสดงสถานะสีปฏิทินและ Progress งานย่อย (Subtasks) FM แสดงผลไม่ถูกต้อง (→ ERR-010) · attempts: 1 · tool_calls: 12
 - [X] T-011-001-04: แก้ไข Logic การ Enforce leaveType ในหลังบ้าน submitDailyReport ให้ทำงานกับ finalReportData (→ ERR-011) · attempts: 1 · tool_calls: 36
 - [X] T-011-002-01: ปรับปรุงหน้าประวัติย้อนหลัง (Backlog) และระบบปลดล็อกให้รองรับโครงสร้าง Subtasks (→ ERR-012) · attempts: 1 · tool_calls: 12
+- [X] T-012: ตารางกำลังพลและแผนงาน (Labor & Plans Table Workspace) สำหรับหัวหน้างาน · attempts: 1
+- [X] T-012-001-01: นำปุ่มส่งออกและล็อกแผนงานที่เลือกพร้อม checkbox/ตัวแปรที่ผูกออกเพื่อให้เป็นนอกระบบ · attempts: 1 · tool_calls: 4
+- [X] T-012-001-02: ปรับปรุง Filter โครงการเริ่มต้น เลือกโครงการที่รับผิดชอบ และเพิ่ม AutoComplete ผู้รายงาน (FM) กับชื่องาน (Task Name) · attempts: 1 · tool_calls: 3
+- [X] T-012-001-03: ปรับปรุง Filter ช่วงวันที่เริ่มต้นและสิ้นสุด ให้แสดงค่าเริ่มต้นเป็นวันปัจจุบันเพื่อตอบรับการใช้งานของหัวหน้างาน · attempts: 1 · tool_calls: 2
+- [X] T-012-001-04: ปรับปรุง Filter ผู้รายงาน (FM) และชื่องาน (Task Name) ให้เป็น Dropdown Autocomplete แบบ Multi-select พร้อมแสดง Checkbox · attempts: 1 · tool_calls: 2
+- [X] T-012-001-05: ปรับปรุงโครงสร้างตัวกรองให้มีขนาดเล็กกะทัดรัด (Single Row, Size Small) ย้ายปุ่มสลับประเภทข้อมูลไปใต้ปุ่ม Export และจัดแต่งรูปแบบ iOS Segment Control · attempts: 1 · tool_calls: 2
+- [X] T-012-002-01: แก้ไขปุ่ม "+ Newtasks" หายไปในหน้า Workspace บนอุปกรณ์มือถือ (→ ERR-013) · attempts: 1 · tool_calls: 2
+- [X] T-012-002-02: ปรับแต่งสีปุ่มสลับประเภทข้อมูลแผนงาน/รายงาน (dataType capsule) ให้เป็นสีขาวและข้อความสีขาวบนพื้นหลังเข้ม (→ ERR-014) · attempts: 1 · tool_calls: 2
+- [X] T-012-003-01: กรองงานในระบบเฉพาะที่มี workOrderCode เป็น 'WOA' หรือ 'WOP' (งานของ After-Sale) (→ ERR-015) · attempts: 1 · tool_calls: 5
+- [X] T-013: ตอบคำถามระบบ After-sale และอธิบายความแตกต่างเชิงโครงสร้าง (Q&A) · attempts: 1 · tool_calls: 14
+
 
 
 ---

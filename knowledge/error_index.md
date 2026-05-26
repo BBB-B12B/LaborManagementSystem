@@ -97,3 +97,23 @@ This catalog lists known errors and bug fix details.
 - **Root Cause:** The `unlockDailyReport` and `requestDailyReportUnlock` methods parsed only the first 3 parts of the composite ID and hardcoded updates to parent tasks, which left the subtask document's `unlockedDates` unmodified.
 - **Resolution:** Modified both methods in `TaskService.ts` to use `resolveRefs(id)` so that they correctly update `unlockedDates` / `unlockRequests` on the subtask document (`subtaskRef`) if the ID refers to a subtask.
 
+## ERR-013: Workspace "+ Newtasks" button hidden or off-screen on mobile devices
+- **Task:** T-012-002-01 · **Session:** session_008
+- **File:** frontend/src/pages/workspace/index.tsx · **Line:** 233
+- **Symptom:** In the mobile version of the workspace page, the "+ Newtasks" button disappears and is completely inaccessible to users.
+- **Root Cause:** The tabs capsule and "+ Newtasks" button were wrapped in a horizontal flex stack (`direction="row"`) that did not wrap. Because the tabs capsule was very wide, it pushed the adjacent button completely off the viewport on mobile devices.
+- **Resolution:** Modified the wrapper Stack to be responsive (`direction={{ xs: 'column', sm: 'row' }}` and `alignItems={{ xs: 'stretch', sm: 'center' }}`). Enabled horizontal scrolling on the tabs container capsule using `overflowX: 'auto'` (with scrollbar hidden via CSS rules) and set individual tabs to `flexShrink: 0`. Stretched the buttons to full width (`width: { xs: '100%', sm: 'auto' }`) on mobile screens to make them highly touch-friendly and visually cohesive.
+
+## ERR-014: Plan/Report data type capsule toggle switcher colors unaligned with dark theme
+- **Task:** T-012-002-02 · **Session:** session_008
+- **File:** frontend/src/pages/workspace/requests.tsx · **Line:** 361
+- **Symptom:** The supervisor requests/reports data type toggle switcher (capsule design) used a gray background with white text for active, which looked inconsistent and had styling issues on some viewports.
+- **Root Cause:** ToggleButtonGroup container used `#f3f4f6` (light gray) with `#fff` background and `#0f172a` text for the active toggle. The styling did not match the premium dark theme controls.
+- **Resolution:** Modified the ToggleButtonGroup's container background to `#1c1e2b` (dark). Configured the active ToggleButton background to `#ffffff` (white) with dark text (`#1c1e2b`). Configured the inactive ToggleButton text to white (`rgba(255, 255, 255, 0.7)`), creating a high-contrast, premium, dark-themed capsule switcher where active buttons are white and inactive labels are white/muted white.
+
+## ERR-015: Workspace displaying tasks from non-After-Sale systems
+- **Task:** T-012-003-01 · **Session:** session_008
+- **File:** backend/src/services/TaskService.ts, backend/src/api/routes/tasks.routes.ts · **Line:** 497 (TaskService), 94, 579, 663, 772 (tasks.routes)
+- **Symptom:** Workspace dashboard showing tasks and reports from other systems, cluttering the view for supervisors and foremen.
+- **Root Cause:** The database is shared with the After-Sale system, but the backend query/listing methods fetched all tasks and subtasks indiscriminately without filtering by their `workOrderCode` value.
+- **Resolution:** Added backend filters to restrict task and subtask lists to only return records where `workOrderCode` equals `'WOA'` or `'WOP'`. Applied this filter in the `getTasks` service method (affecting general workspace listings) and in the `GET /backlog`, `GET /assigned-subtasks`, `GET /requests-all`, and `GET /reports-all` API endpoints (affecting daily reports, backlog, supervisor requests, and actual daily report summaries).

@@ -1,3 +1,3 @@
-task: ตรวจสอบการบันทึก Dailyreport งานย่อยให้บันทึกใน labor และ leave แทน editHistory, เชื่อมโยง Backlog และระบบปลดล็อกให้รองรับโครงสร้าง Subtasks
+task: กรองงานในระบบเฉพาะที่มี workOrderCode เป็น 'WOA' หรือ 'WOP' (งานของ After-Sale) (T-012-003-01)
 phase: done
 next: none

@@ -16,8 +16,10 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
+  TableChart as TableChartIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import Layout from '@/components/layout/Layout';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
@@ -36,6 +38,7 @@ const COLUMNS = [
 ] as const;
 
 export default function WorkspacePage() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const tasksInCache = useTaskCacheStore((s) => s.tasks);
   const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
@@ -230,44 +233,56 @@ export default function WorkspacePage() {
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             justifyContent="space-between"
-            alignItems={{ xs: 'flex-start', md: 'center' }}
+            alignItems={{ xs: 'stretch', md: 'center' }}
             spacing={2}
+            sx={{ width: '100%' }}
           >
-            {/* Tabs */}
+            {/* Tabs & Newtasks Button */}
             <Stack
-              direction="row"
-              spacing={1}
-              sx={{
-                bgcolor: '#f1f3f6',
-                p: 0.5,
-                borderRadius: '999px',
-              }}
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+              sx={{ width: { xs: '100%', md: 'auto' } }}
             >
-              {['All Tasks', 'This Month', 'This Week', 'Today'].map((tab) => (
-                <Button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  sx={{
-                    px: 3,
-                    py: 1,
-                    borderRadius: '999px',
-                    textTransform: 'none',
-                    fontWeight: 700,
-                    color: activeTab === tab ? '#1c1e2b' : '#6b7280',
-                    bgcolor: activeTab === tab ? '#ffffff' : 'transparent',
-                    boxShadow: activeTab === tab ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
-                    '&:hover': {
-                      bgcolor: activeTab === tab ? '#ffffff' : 'rgba(255,255,255,0.5)',
-                    },
-                  }}
-                >
-                  {tab}
-                </Button>
-              ))}
-            </Stack>
-
-            {/* Actions */}
-            <Stack direction="row" spacing={2} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  bgcolor: '#f1f3f6',
+                  p: 0.5,
+                  borderRadius: '999px',
+                  overflowX: 'auto',
+                  whiteSpace: 'nowrap',
+                  scrollbarWidth: 'none',
+                  '&::-webkit-scrollbar': {
+                    display: 'none',
+                  },
+                  width: { xs: '100%', sm: 'auto' },
+                }}
+              >
+                {['All Tasks', 'This Month', 'This Week', 'Today'].map((tab) => (
+                  <Button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    sx={{
+                      px: 3,
+                      py: 1,
+                      borderRadius: '999px',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      color: activeTab === tab ? '#1c1e2b' : '#6b7280',
+                      bgcolor: activeTab === tab ? '#ffffff' : 'transparent',
+                      boxShadow: activeTab === tab ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                      '&:hover': {
+                        bgcolor: activeTab === tab ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                      },
+                      flexShrink: 0,
+                    }}
+                  >
+                    {tab}
+                  </Button>
+                ))}
+              </Stack>
 
               <Button
                 variant="contained"
@@ -278,27 +293,49 @@ export default function WorkspacePage() {
                   color: '#fff',
                   borderRadius: '999px',
                   px: 3,
-                  py: 1,
+                  py: 1.2,
                   textTransform: 'none',
                   fontWeight: 700,
                   boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
                   '&:hover': {
                     bgcolor: '#000000',
                   },
+                  width: { xs: '100%', sm: 'auto' },
                 }}
               >
-                Add New
+                Newtasks
               </Button>
+            </Stack>
 
-              {/* Quick Filters - Hidden for now (T-814)
+            {/* Actions */}
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              sx={{ width: { xs: '100%', md: 'auto' } }}
+            >
               <Button
                 variant="outlined"
-                startIcon={<TuneIcon />}
-                ...
+                startIcon={<TableChartIcon />}
+                onClick={() => router.push('/workspace/requests')}
+                sx={{
+                  borderColor: '#1c1e2b',
+                  color: '#1c1e2b',
+                  borderRadius: '999px',
+                  px: 3,
+                  py: 1.2,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                  '&:hover': {
+                    bgcolor: 'rgba(28, 30, 43, 0.05)',
+                    borderColor: '#000000',
+                  },
+                  width: { xs: '100%', md: 'auto' },
+                }}
               >
-                Quick Filters
+                ตรวจสอบกำลังพล & แผนงาน
               </Button>
-              */}
             </Stack>
           </Stack>
         </Box>

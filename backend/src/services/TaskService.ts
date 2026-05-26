@@ -497,6 +497,12 @@ export class TaskService {
     // กรอง isActive ใน Memory
     tasks = tasks.filter(task => task.isActive === true);
 
+    // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+    tasks = tasks.filter(task => {
+      const woCode = String(task.workOrderCode || '').toUpperCase().trim();
+      return woCode === 'WOA' || woCode === 'WOP';
+    });
+
     // กรอง projectId ใน Memory
     if (filters?.projectId) {
       tasks = tasks.filter(task => task.projectId === filters.projectId);
@@ -1341,6 +1347,14 @@ export class TaskService {
       requestRef = targetRef.collection('revisions').doc(currentRev).collection('requests').doc(dateStr);
     }
 
+    const existingSnap = await requestRef.get();
+    if (existingSnap.exists) {
+      const existingData = existingSnap.data();
+      if (existingData?.status && existingData.status !== 'pending') {
+        throw new AppError('ไม่สามารถแก้ไขแผนงานล่วงหน้าที่ถูกส่งออกหรือตรวจสอบแล้วได้ (Locked by Supervisor)', 403);
+      }
+    }
+
     const payload = {
         requestId: dateStr,
         ...requestData,
@@ -1385,6 +1399,33 @@ export class TaskService {
       }
     }
     return allRequests;
+  }
+
+  async updateAdvanceRequestStatus(id: string, dateStr: string, status: string, updatedBy: string, isSupportRequest: boolean = false): Promise<void> {
+    const { subtaskRef, taskRef } = await this.resolveRefs(id);
+    const targetRef = subtaskRef || taskRef;
+
+    const docSnap = await targetRef.get();
+    if (!docSnap.exists) throw new AppError('Task/Subtask not found', 404);
+    const docData = docSnap.data() as any;
+    const currentRev = docData.currentRevision || 'rev00';
+
+    let requestRef: FirebaseFirestore.DocumentReference;
+    if (isSupportRequest) {
+      const helpId = currentRev.replace('rev', 'help');
+      requestRef = targetRef.collection('help').doc(helpId).collection('requests').doc(dateStr);
+    } else {
+      requestRef = targetRef.collection('revisions').doc(currentRev).collection('requests').doc(dateStr);
+    }
+
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) throw new AppError('Request not found', 404);
+
+    await requestRef.update({
+      status,
+      updatedAt: new Date(),
+      updatedBy
+    });
   }
 
   private async resolveRefs(id: string) {
