@@ -46,6 +46,10 @@ export interface Task {
   supportCreatedAt?: string;
   unlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
   supportUnlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
+  subtasks?: Subtask[];
+  parentTaskId?: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface CreateTaskInput {
@@ -84,6 +88,12 @@ export interface Subtask {
   createdAt: string;
   updatedAt: string;
   isSupportRequest?: boolean;
+  isPickedUpBySupport?: boolean;
+  supportTaskName?: string;
+  supportDailyProgress?: number;
+  supportAssignees?: TaskAssignee[];
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface AdvanceRequestInput {
@@ -162,8 +172,8 @@ export const taskService = {
   /**
    * Support team joins an existing task
    */
-  joinSupportTask: async (id: string, supportTaskName: string, assignees: TaskAssignee[]): Promise<void> => {
-    await api.post(`/tasks/${id}/support`, { supportTaskName, assignees });
+  joinSupportTask: async (id: string, supportTaskName: string, assignees: TaskAssignee[], subtaskId?: string): Promise<void> => {
+    await api.post(`/tasks/${id}/support`, { supportTaskName, assignees, subtaskId });
   },
 
   /**

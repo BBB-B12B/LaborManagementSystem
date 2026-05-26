@@ -91,7 +91,12 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
   }, [open, task, reset]);
 
   const filteredFms = React.useMemo(() => {
-    const validFms = fmUsers.filter((u) => u.roleId !== 'GOD' && u.roleId === 'FM');
+    const validFms = fmUsers.filter((u) => 
+      u.roleId !== 'GOD' && 
+      u.roleId === 'FM' && 
+      (u as any).systemCode !== 'AS' && 
+      (u as any).SystemCode !== 'AS'
+    );
     if (!user?.projectLocationIds || user.projectLocationIds.length === 0) {
       return validFms;
     }

@@ -26,6 +26,7 @@ export interface User {
   createdBy: string;
   updatedBy: string;
   rawPassword?: string;
+  systemCode?: string;
 }
 
 /**
@@ -103,6 +104,7 @@ export const userConverter = {
       updatedAt: timestampOrDate(user.updatedAt),
       createdBy: user.createdBy,
       updatedBy: user.updatedBy,
+      systemCode: user.systemCode || null,
     };
   },
   fromFirestore: (snapshot: any): User => {
@@ -164,6 +166,7 @@ export const userConverter = {
       updatedAt: parseDate(updatedAtValue),
       createdBy: data.createdBy || data.CreatedBy || 'system',
       updatedBy: data.updatedBy || data.UpdatedBy || 'system',
+      systemCode: data.systemCode || data.SystemCode || undefined,
     };
   },
 };

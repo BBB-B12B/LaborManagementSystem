@@ -54,6 +54,7 @@ export interface Task {
   createdBy: string;
   updatedBy: string;
   historicalAssigneeIds?: string[]; // [NEW] Track all users who ever participated in this task
+  subtasks?: Subtask[];
 }
 
 export interface Subtask {

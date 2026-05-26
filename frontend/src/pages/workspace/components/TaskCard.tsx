@@ -11,6 +11,7 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
+  Tooltip,
 } from '@mui/material';
 import { 
   AttachFile as AttachFileIcon,
@@ -85,8 +86,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       elevation={0}
       onClick={() => onClick && onClick(task)}
       sx={{
-        p: 2.5,
-        mb: 2,
+        p: 1.5,
+        mb: 1.5,
         borderRadius: 4,
         backgroundColor: '#ffffff',
         border: 'none',
@@ -99,21 +100,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
         cursor: onClick ? 'pointer' : 'grab',
       }}
     >
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
           {/* Task Code Badge */}
           <Box
             sx={{
               display: 'inline-flex',
-              px: 1.5,
-              py: 0.5,
-              borderRadius: 2,
+              px: 1,
+              py: 0.25,
+              borderRadius: 1.5,
               backgroundColor: '#f1f3f6',
             }}
           >
             <Typography
               variant="caption"
-              sx={{ fontWeight: 700, color: '#6b7280', letterSpacing: 0.5 }}
+              sx={{ fontWeight: 700, color: '#6b7280', fontSize: '0.7rem', letterSpacing: 0.5 }}
             >
               {task.taskId}
             </Typography>
@@ -124,9 +125,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
             <Box
               sx={{
                 display: 'inline-flex',
-                px: 1.2,
-                py: 0.3,
-                borderRadius: '6px',
+                px: 0.8,
+                py: 0.2,
+                borderRadius: '4px',
                 backgroundColor: '#fef3c7',
                 border: '1px solid #fcd34d',
                 boxShadow: '0 2px 4px rgba(251, 191, 36, 0.1)',
@@ -137,7 +138,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                 sx={{ 
                   fontWeight: 800, 
                   color: '#92400e', 
-                  fontSize: '0.65rem',
+                  fontSize: '0.625rem',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}
@@ -186,8 +187,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
 
       {/* Title */}
       <Typography
-        variant="subtitle1"
-        sx={{ fontWeight: 600, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.5 : 1, lineHeight: 1.3 }}
+        variant="body2"
+        sx={{ fontWeight: 700, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.25 : 0.5, fontSize: '0.825rem', lineHeight: 1.2 }}
       >
         {isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName}
       </Typography>
@@ -200,8 +201,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
             display: 'block',
             fontWeight: 700, 
             color: '#ef4444', 
-            mb: 1.5,
-            fontSize: '0.7rem',
+            mb: 0.75,
+            fontSize: '0.65rem',
             letterSpacing: 0.3
           }}
         >
@@ -211,28 +212,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
 
       {/* Description */}
       <Typography
-        variant="body2"
+        variant="caption"
         sx={{
           color: '#6b7280',
-          mb: 3,
-          lineHeight: 1.5,
+          mb: 1.5,
+          lineHeight: 1.35,
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
+          fontSize: '0.725rem',
         }}
       >
         {task.description}
       </Typography>
       
       {/* Progress Section */}
-      <Box sx={{ mb: 3 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-          <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563' }}>
+      <Box sx={{ mb: 1.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563', fontSize: '0.7rem' }}>
             Progress
           </Typography>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: (task.dailyProgress || 0) >= 100 ? '#059669' : '#1c1e2b' }}>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: (task.dailyProgress || 0) >= 100 ? '#059669' : '#1c1e2b', fontSize: '0.7rem' }}>
             {task.dailyProgress || 0}%
           </Typography>
         </Stack>
@@ -240,11 +242,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           variant="determinate" 
           value={Math.min(100, Math.max(0, task.dailyProgress || 0))} 
           sx={{
-            height: 6,
-            borderRadius: 3,
+            height: 4,
+            borderRadius: 2,
             backgroundColor: '#f1f3f6',
             '& .MuiLinearProgress-bar': {
-              borderRadius: 3,
+              borderRadius: 2,
               background: (task.dailyProgress || 0) >= 100 
                 ? 'linear-gradient(90deg, #059669, #10b981)' 
                 : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
@@ -254,19 +256,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       </Box>
 
       {/* Due Date Badge */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 1.5 }}>
         <Box
           sx={{
             display: 'inline-flex',
             backgroundColor: '#1c1e2b',
             borderRadius: '999px',
-            px: 1.5,
-            py: 0.5,
+            px: 1,
+            py: 0.25,
             alignItems: 'center',
             boxShadow: '0 2px 6px rgba(28, 30, 43, 0.2)',
           }}
         >
-          <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', letterSpacing: 0.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', fontSize: '0.7rem', letterSpacing: 0.5 }}>
             Due: {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
           </Typography>
         </Box>
@@ -281,52 +283,37 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               : task.assignees || [];
             
             return displayAssignees && displayAssignees.length > 0 && (
-            <>
-              <Avatar 
-                alt={displayAssignees[0].name} 
-                src={displayAssignees[0].avatarUrl} 
-                sx={{ width: 28, height: 28, fontSize: 12, bgcolor: 'primary.main' }}
+              <AvatarGroup
+                max={4}
+                sx={{
+                  '& .MuiAvatar-root': {
+                    width: 24,
+                    height: 24,
+                    fontSize: 9,
+                    border: '2px solid #ffffff',
+                  },
+                }}
               >
-                {displayAssignees[0].name.substring(0, 2).toUpperCase()}
-              </Avatar>
-              <Typography variant="caption" sx={{ fontWeight: 600, color: '#374151', display: 'flex', alignItems: 'center' }}>
-                {displayAssignees[0].name}
-              </Typography>
-              
-              {displayAssignees.length > 1 && (
-                <AvatarGroup
-                  max={3}
-                  sx={{
-                    '& .MuiAvatar-root': {
-                      width: 24,
-                      height: 24,
-                      fontSize: 10,
-                      border: '2px solid #ffffff',
-                      marginLeft: '-6px',
-                    },
-                    ml: 0.5
-                  }}
-                >
-                  {displayAssignees.slice(1).map((assignee, idx) => (
+                {displayAssignees.map((assignee, idx) => (
+                  <Tooltip key={idx} title={assignee.name} arrow>
                     <Avatar 
-                      key={idx} 
                       alt={assignee.name} 
                       src={assignee.avatarUrl} 
+                      sx={{ bgcolor: 'primary.main' }}
                     >
                       {assignee.name.substring(0, 2).toUpperCase()}
                     </Avatar>
-                  ))}
-                </AvatarGroup>
-              )}
-            </>
-          );
+                  </Tooltip>
+                ))}
+              </AvatarGroup>
+            );
           })()}
         </Stack>
 
         {task.attachmentsCount > 0 && (
           <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#9ca3af' }}>
-            <AttachFileIcon sx={{ fontSize: 16, transform: 'rotate(45deg)' }} />
-            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+            <AttachFileIcon sx={{ fontSize: 14, transform: 'rotate(45deg)' }} />
+            <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>
               {task.attachmentsCount}
             </Typography>
           </Stack>

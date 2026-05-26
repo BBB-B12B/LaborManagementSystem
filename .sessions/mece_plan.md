@@ -1,47 +1,37 @@
-# MECE Plan - Supervisor requests & reports table workspace
+# MECE Plan - Subtask-Level Support Request Pick Up
 
 ## Goal
-Implement a table view for Supervisors to monitor work records and advance requests across their responsible sites, with filters, Excel export, and status locking actions. Update the workspace header buttons according to user layout instructions.
+Modify the support pickup flow so that the Support Team chooses a specific Subtask (rather than the parent Task) from the dropdown when helping. Update the backend transaction logic to mark only that specific Subtask as picked up and create the "help" revision solely under that Subtask, while rolling up the aggregated status and assignees to the parent Task.
 
 ---
 
 ## Plan Sections
 
-### Section 1: Backend API Support
-- **Task**: Create endpoints for fetching aggregated work records and requests.
+### Section 1: Backend Update for Subtask-Specific Join
+- **Task**:
+  - Update `joinSupportTask` in `backend/src/services/TaskService.ts` to support an optional `subtaskId?: string`.
+  - When `subtaskId` is provided, update `isPickedUpBySupport`, `supportTaskName`, and `supportAssignees` only on that Subtask document. Create the `help` collection doc (e.g. `help00`) under that specific Subtask instead of all subtasks.
+  - Roll up status (`isPickedUpBySupport: true`) and aggregate `supportAssignees` into the parent Task.
+  - Update `/api/tasks/:id/support` route in `backend/src/api/routes/tasks.routes.ts` to read `subtaskId` from the request body.
 - **DoD**:
-  - `GET /api/tasks/requests-all` fetches all requests across a date range and projects.
-  - `GET /api/tasks/reports-all` fetches all actual daily reports across a date range and projects.
-  - Both endpoints compile without errors.
+  - Backend transaction logic modified and tested via mock tasks or compile verification.
 - **Est**: 15 mins
 
-### Section 2: Frontend Service wrapper
-- **Task**: Add API client endpoints to `frontend/src/services/taskService.ts`.
+### Section 2: Frontend Service and Modal UI Update
+- **Task**:
+  - Update `joinSupportTask` in `frontend/src/services/taskService.ts` to accept and send `subtaskId` in the request body.
+  - Update `TaskCreateModal.tsx`:
+    - Fetch tasks and extract all subtasks with `isSupportRequest === true && !isPickedUpBySupport`.
+    - Render Autocomplete options with label format `[Parent Task] > [Subtask]`.
+    - On option select, save `supportOriginalSubtaskId` and auto-fill details (name, work order, category, etc.).
+    - Pass `supportOriginalSubtaskId` to the backend when saving the task join.
 - **DoD**:
-  - `getAdvanceRequestsAll(params)` and `getDailyReportsAll(params)` added and typed.
-- **Est**: 5 mins
+  - Dropdown options display properly and selecting a subtask autofills the modal.
+- **Est**: 15 mins
 
-### Section 3: Frontend Header UI Changes
-- **Task**: Modify `frontend/src/pages/workspace/index.tsx`.
+### Section 3: Verification & Compilation
+- **Task**: Run TypeScript compiler checks and sync symbols index.
 - **DoD**:
-  - Move `Add New` button next to the filters/tabs.
-  - Rename it to `+ Newtasks`.
-  - Place a new button `ตรวจสอบกำลังพล & แผนงาน` in the original button position on the right that routes to `/workspace/requests`.
-- **Est**: 10 mins
-
-### Section 4: Frontend Supervisor Requests Table Workspace
-- **Task**: Create `/workspace/requests` page (`frontend/src/pages/workspace/requests.tsx`).
-- **DoD**:
-  - Page has Filters: Date Range, Project Selection, Data Type Toggle (Requests vs Reports).
-  - Table shows: Date, Task, Foreman Name, Labor ID/Name, Shift Hours (Regular, OT Morning/Noon/Evening), Total Hours, Progress (Expected vs Actual), and Status.
-  - Actions:
-    - **Export to Excel**: Generate Excel sheet and trigger browser download.
-    - **Lock/Export Selected Requests**: Call backend PATCH status API to lock requests.
-- **Est**: 30 mins
-
-### Section 5: Verification
-- **Task**: Run TypeScript type checks and verify build and functionality.
-- **DoD**:
-  - Frontend type checks pass (`npm run type-check`).
-  - Backend type checks pass (`npm run type-check`).
+  - `npm run type-check` compiles without new errors.
+  - `python scripts/symbol_indexer.py` executed successfully.
 - **Est**: 10 mins

@@ -103,9 +103,9 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       const parentTask = tasksMap.get(taskId);
       if (!parentTask) return null;
       
-      // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+      // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
       const woCode = String(parentTask.workOrderCode || '').toUpperCase().trim();
-      if (woCode !== 'WOA' && woCode !== 'WOP') return null;
+      if (woCode === 'WOA' || woCode === 'WOP') return null;
       
       return {
         ...parentTask,
@@ -580,9 +580,9 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
        const parentTask = tasksMap.get(st.parentTaskId);
        if (!parentTask) return null;
 
-       // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+       // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
        const woCode = String(parentTask.workOrderCode || '').toUpperCase().trim();
-       if (woCode !== 'WOA' && woCode !== 'WOP') return null;
+       if (woCode === 'WOA' || woCode === 'WOP') return null;
 
        if (projectId && parentTask.projectId !== projectId) return null;
        return {
@@ -664,9 +664,9 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
       const taskMeta = tasksMap.get(taskId);
       if (!taskMeta) return;
 
-      // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+      // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
       const woCode = String(taskMeta.workOrderCode || '').toUpperCase().trim();
-      if (woCode !== 'WOA' && woCode !== 'WOP') return;
+      if (woCode === 'WOA' || woCode === 'WOP') return;
 
       if (projectId && taskMeta.projectId !== projectId) return;
 
@@ -773,9 +773,9 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
       const taskMeta = tasksMap.get(taskId);
       if (!taskMeta) return;
 
-      // กรองเฉพาะงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP')
+      // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
       const woCode = String(taskMeta.workOrderCode || '').toUpperCase().trim();
-      if (woCode !== 'WOA' && woCode !== 'WOP') return;
+      if (woCode === 'WOA' || woCode === 'WOP') return;
 
       if (projectId && taskMeta.projectId !== projectId) return;
 
@@ -1124,7 +1124,7 @@ router.post('/:id/approve', async (req: Request, res: Response, next: NextFuncti
 router.post('/:id/support', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { supportTaskName, assignees } = req.body;
+    const { supportTaskName, assignees, subtaskId } = req.body;
     
     if (!supportTaskName || !assignees || !Array.isArray(assignees) || assignees.length === 0) {
       throw new AppError('ข้อมูลไม่ครบถ้วน (supportTaskName และ assignees เป็นข้อมูลจำเป็น)', 400);
@@ -1135,7 +1135,7 @@ router.post('/:id/support', async (req: Request, res: Response, next: NextFuncti
       throw new AppError('Unauthorized', 401);
     }
 
-    await taskService.joinSupportTask(id, supportTaskName, assignees, userId);
+    await taskService.joinSupportTask(id, supportTaskName, assignees, userId, subtaskId);
 
     res.status(200).json({
       success: true,

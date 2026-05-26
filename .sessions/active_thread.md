@@ -1,3 +1,3 @@
-task: กรองงานในระบบเฉพาะที่มี workOrderCode เป็น 'WOA' หรือ 'WOP' (งานของ After-Sale) (T-012-003-01)
+task: ปรับปรุงโครงสร้างหน้า Workspace แสดงการ์ดเป็นราย Subtask และเพิ่มหน้าต่าง Structure Tree ด้านซ้ายพร้อมระบบแคช (T-012-005-01)
 phase: done
 next: none

@@ -49,10 +49,20 @@
 - [X] T-012-002-01: แก้ไขปุ่ม "+ Newtasks" หายไปในหน้า Workspace บนอุปกรณ์มือถือ (→ ERR-013) · attempts: 1 · tool_calls: 2
 - [X] T-012-002-02: ปรับแต่งสีปุ่มสลับประเภทข้อมูลแผนงาน/รายงาน (dataType capsule) ให้เป็นสีขาวและข้อความสีขาวบนพื้นหลังเข้ม (→ ERR-014) · attempts: 1 · tool_calls: 2
 - [X] T-012-003-01: กรองงานในระบบเฉพาะที่มี workOrderCode เป็น 'WOA' หรือ 'WOP' (งานของ After-Sale) (→ ERR-015) · attempts: 1 · tool_calls: 5
+- [X] T-012-003-02: แก้ไขปัญหา Docker build ของ frontend ติด peer dependencies conflict ด้วย --legacy-peer-deps (→ ERR-016) · attempts: 1 · tool_calls: 3
+- [X] T-012-003-03: ปรับปรุงเงื่อนไขการกรองงาน กรองงานที่มี workOrderCode เป็น 'WOA' หรือ 'WOP' ออกจากระบบ (แทนการเก็บไว้) (→ ERR-015) · attempts: 1 · tool_calls: 5
 - [X] T-013: ตอบคำถามระบบ After-sale และอธิบายความแตกต่างเชิงโครงสร้าง (Q&A) · attempts: 1 · tool_calls: 14
-
-
-
+- [X] T-012-004-01: ปรับปรุง Popup แสดงงาน Subtasks ให้คล้ายรูปที่ 2 และเปลี่ยนจาก duedate เป็นชื่อ FM ที่รับผิดชอบ (→ ERR-017) · attempts: 1 · tool_calls: 3
+- [X] T-012-004-02: ปรับปรุงส่วนแสดงผู้รับผิดชอบที่การ์ด Task หลัก โดยแสดงเฉพาะกลุ่ม Icon แบบซ้อนกัน และแสดงชื่อผ่าน Tooltip (→ ERR-018) · attempts: 1 · tool_calls: 3
+- [X] T-012-005-01: ปรับปรุงโครงสร้างหน้า Workspace แสดงการ์ดเป็นราย Subtask และเพิ่มหน้าต่าง Structure Tree ด้านซ้ายพร้อมระบบแคช
+- [X] T-012-006-01: แก้ไข UI/Logic Checkbox และปรับระบบรับงานช่วยเหลือเป็นระดับงานย่อย (Subtask) (→ ERR-019) · attempts: 2 · tool_calls: 7
+- [X] T-012-006-02: แก้ไขบั๊ก Subtask ที่ไม่ได้ติ๊กขอความช่วยเหลือแสดงผลเป็นงาน Support (→ ERR-020) · attempts: 1 · tool_calls: 3
+- [X] T-012-006-03: ปรับปรุง Layout และลดรูปฟอร์มระดับงานย่อย (Support Pickup Layout) ใน TaskCreateModal (→ ERR-021) · attempts: 1 · tool_calls: 5
+- [X] T-012-007-01: ปรับแก้ UI Kanban Board (ลดขนาดการ์ด, เอา scrollbar ออก, ลดขนาด Font ให้เท่ากับ Structure Tree, จัด Layout ป้องกันการ์ดหลุดจอ) (→ ERR-022) · attempts: 1 · tool_calls: 36
+- [X] T-012-008-01: ปรับปรุง Structure Tree (เพิ่มโฟลเดอร์ WorkOrder, แยกพื้นที่งาน Support, ใช้ฟิลด์ชื่อแสดงผล) และปรับปรุงระบบกรองสิทธิ์ดูงาน (→ ERR-023) · attempts: 1 · tool_calls: 10
+- [X] T-012-008-02: แก้ไขบั๊กข้อมูลงานช่วยเหลือค้างรับ (Pending Support) และงานปกติโครงการอื่นหลุดไปแสดงสำหรับทีม Support (→ ERR-024) · attempts: 1 · tool_calls: 5
+- [X] T-012-008-03: ปรับปรุงการซ่อน Structure Tree งานช่วยเหลือสำหรับผู้ใช้ที่ไม่ใช่ WH และนำงานขอ Support มาแสดงในงานหลัก (→ ERR-025) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-04: แก้ไขเงื่อนไขการ Bypass ตัวกรองสิทธิ์ของบทบาท AM ให้คัดกรองงานหากสังกัดแผนก WH (→ ERR-026) · attempts: 1 · tool_calls: 3
 ---
 
 

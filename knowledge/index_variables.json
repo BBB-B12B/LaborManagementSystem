@@ -470,15 +470,15 @@
     },
     "CreateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 51
+      "line": 55
     },
     "UpdateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 70
+      "line": 74
     },
     "taskConverter": {
       "source": "backend/src/models/Task.ts",
-      "line": 149
+      "line": 150
     },
     "Department": {
       "source": "frontend/src/components/forms/DepartmentSelect.tsx",
@@ -490,19 +490,19 @@
     },
     "UserDTO": {
       "source": "backend/src/models/User.ts",
-      "line": 34
+      "line": 35
     },
     "CreateUserInput": {
       "source": "backend/src/models/User.ts",
-      "line": 51
+      "line": 52
     },
     "UpdateUserInput": {
       "source": "backend/src/models/User.ts",
-      "line": 66
+      "line": 67
     },
     "userConverter": {
       "source": "backend/src/models/User.ts",
-      "line": 81
+      "line": 82
     },
     "PeriodStatus": {
       "source": "frontend/src/services/wageService.ts",
@@ -698,7 +698,7 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 96
+      "line": 106
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 40
+      "line": 47
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2098,7 +2098,7 @@
     },
     "TaskCard": {
       "source": "frontend/src/pages/workspace/components/TaskCard.tsx",
-      "line": 33
+      "line": 34
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
@@ -2534,23 +2534,27 @@
     },
     "Subtask": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 76
+      "line": 80
     },
     "AdvanceRequest": {
       "source": "backend/src/models/Task.ts",
-      "line": 83
+      "line": 84
     },
     "AdvanceRequestInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 89
+      "line": 99
     },
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
-      "line": 27
+      "line": 24
     },
     "WorkspaceRequestsPage": {
       "source": "frontend/src/pages/workspace/requests.tsx",
       "line": 94
+    },
+    "WorkspaceTree": {
+      "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
+      "line": 34
     }
   }
 }

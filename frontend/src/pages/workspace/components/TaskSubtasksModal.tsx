@@ -9,9 +9,6 @@ import {
   Box,
   CircularProgress,
   Paper,
-  Avatar,
-  AvatarGroup,
-  LinearProgress,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { taskService, type Task, type Subtask } from '@/services/taskService';
@@ -109,99 +106,116 @@ export default function TaskSubtasksModal({
             <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>
               เลือก Subtask เพื่อดูรายงาน
             </Typography>
-            {subtasks.map((subtask) => (
-              <Paper
-                key={subtask.id}
-                elevation={0}
-                onClick={() => onSubtaskSelect(subtask)}
-                sx={{
-                  p: 2,
-                  borderRadius: 3,
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #eef0f4',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    borderColor: 'primary.main',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                    transform: 'translateY(-2px)',
-                  },
-                }}
-              >
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#111827' }}>
-                    {subtask.subtaskId} : {subtask.subtaskName}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontWeight: 800,
-                      color: subtask.dailyProgress >= 100 ? '#059669' : '#1c1e2b',
-                    }}
-                  >
-                    {subtask.dailyProgress || 0}%
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(100, Math.max(0, subtask.dailyProgress || 0))}
+            {subtasks.map((subtask) => {
+              const fmNames = subtask.assignees && subtask.assignees.length > 0
+                ? subtask.assignees.map((a) => a.name).join(', ')
+                : 'ไม่ได้ระบุ';
+
+              return (
+                <Paper
+                  key={subtask.id}
+                  elevation={0}
+                  onClick={() => onSubtaskSelect(subtask)}
                   sx={{
-                    height: 6,
+                    p: 2.5,
                     borderRadius: 3,
-                    backgroundColor: '#f1f3f6',
-                    mb: 2,
-                    '& .MuiLinearProgress-bar': {
-                      borderRadius: 3,
-                      background:
-                        subtask.dailyProgress >= 100
-                          ? 'linear-gradient(90deg, #059669, #10b981)'
-                          : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #eef0f4',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      borderColor: '#3b82f6',
+                      backgroundColor: '#eff6ff',
+                      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)',
+                      transform: 'translateY(-2px)',
                     },
                   }}
-                />
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  {subtask.assignees && subtask.assignees.length > 0 ? (
-                    <>
-                      <Avatar
-                        alt={subtask.assignees[0].name}
-                        src={subtask.assignees[0].avatarUrl}
-                        sx={{ width: 24, height: 24, fontSize: 10, bgcolor: 'primary.main' }}
+                >
+                  <Stack direction="row" spacing={2.5} alignItems="center">
+                    {/* Left: Circular Progress */}
+                    <Box sx={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
+                      <CircularProgress
+                        variant="determinate"
+                        value={100}
+                        size={54}
+                        thickness={4.5}
+                        sx={{ color: '#f1f3f6' }}
+                      />
+                      <CircularProgress
+                        variant="determinate"
+                        value={subtask.dailyProgress || 0}
+                        size={54}
+                        thickness={4.5}
+                        sx={{
+                          color: '#10b981',
+                          position: 'absolute',
+                          left: 0,
+                          '& .MuiCircularProgress-circle': {
+                            strokeLinecap: 'round',
+                          },
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          top: 0,
+                          left: 0,
+                          bottom: 0,
+                          right: 0,
+                          position: 'absolute',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
                       >
-                        {subtask.assignees[0].name.substring(0, 2).toUpperCase()}
-                      </Avatar>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: '#374151' }}>
-                        {subtask.assignees[0].name}
-                      </Typography>
-                      {subtask.assignees.length > 1 && (
-                        <AvatarGroup
-                          max={3}
-                          sx={{
-                            '& .MuiAvatar-root': {
-                              width: 20,
-                              height: 20,
-                              fontSize: 9,
-                              border: '2px solid #ffffff',
-                              marginLeft: '-4px',
-                            },
-                            ml: 0.5,
-                          }}
+                        <Typography
+                          variant="caption"
+                          component="div"
+                          sx={{ fontWeight: 800, color: '#10b981', fontSize: '0.75rem' }}
                         >
-                          {subtask.assignees.slice(1).map((assignee, idx) => (
-                            <Avatar key={idx} alt={assignee.name} src={assignee.avatarUrl}>
-                              {assignee.name.substring(0, 2).toUpperCase()}
-                            </Avatar>
-                          ))}
-                        </AvatarGroup>
-                      )}
-                    </>
-                  ) : (
-                    <Typography variant="caption" sx={{ color: '#9ca3af', fontStyle: 'italic' }}>
-                      ไม่ได้ระบุผู้รับผิดชอบ
-                    </Typography>
-                  )}
-                </Stack>
-              </Paper>
-            ))}
+                          {`${subtask.dailyProgress || 0}%`}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Right: Subtask Details */}
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ fontWeight: 800, color: '#111827', mb: 0.5, fontSize: '0.9rem' }}
+                      >
+                        {subtask.subtaskId}
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 700, color: '#374151', mb: 0.5, fontSize: '0.875rem' }}
+                      >
+                        {task?.taskName} &gt; {subtask.subtaskName}
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          bgcolor: '#f3f4f6',
+                          borderRadius: '6px',
+                          px: 1.5,
+                          py: 0.5,
+                          mt: 1,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          sx={{ fontWeight: 700, color: '#4b5563', fontSize: '0.75rem' }}
+                        >
+                          ผู้รับผิดชอบ : {fmNames}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Stack>
+                </Paper>
+              );
+            })}
           </Stack>
         )}
       </DialogContent>
