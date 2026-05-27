@@ -474,11 +474,11 @@
     },
     "UpdateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 74
+      "line": 85
     },
     "taskConverter": {
       "source": "backend/src/models/Task.ts",
-      "line": 150
+      "line": 168
     },
     "Department": {
       "source": "frontend/src/components/forms/DepartmentSelect.tsx",
@@ -694,11 +694,11 @@
     },
     "TaskService": {
       "source": "backend/src/services/TaskService.ts",
-      "line": 11
+      "line": 12
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 106
+      "line": 131
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -1382,11 +1382,11 @@
     },
     "usePermissions": {
       "source": "frontend/src/utils/permissions.ts",
-      "line": 279
+      "line": 309
     },
     "withPermission": {
       "source": "frontend/src/utils/permissions.ts",
-      "line": 307
+      "line": 340
     },
     "isEmpty": {
       "source": "frontend/src/utils/validationUtils.ts",
@@ -2078,19 +2078,19 @@
     },
     "DiscrepancyDetailPage": {
       "source": "frontend/src/pages/scan-data-monitoring/[id].tsx",
-      "line": 88
+      "line": 89
     },
     "WageCalculationPage": {
       "source": "frontend/src/pages/wage-calculation/index.tsx",
-      "line": 72
+      "line": 74
     },
     "WageCalculationDetailsPage": {
       "source": "frontend/src/pages/wage-calculation/[id].tsx",
-      "line": 48
+      "line": 51
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 47
+      "line": 57
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2098,15 +2098,15 @@
     },
     "TaskCard": {
       "source": "frontend/src/pages/workspace/components/TaskCard.tsx",
-      "line": 34
+      "line": 35
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 78
+      "line": 81
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
-      "line": 91
+      "line": 92
     },
     "TaskRejectModal": {
       "source": "frontend/src/pages/workspace/components/TaskRejectModal.tsx",
@@ -2502,11 +2502,11 @@
     },
     "LayoutProps": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 14
+      "line": 16
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 195
+      "line": 336
     },
     "SIDEBAR_WIDTH": {
       "source": "frontend/src/components/layout/Navbar.tsx",
@@ -2534,15 +2534,15 @@
     },
     "Subtask": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 80
+      "line": 99
     },
     "AdvanceRequest": {
       "source": "backend/src/models/Task.ts",
-      "line": 84
+      "line": 100
     },
     "AdvanceRequestInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 99
+      "line": 124
     },
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
@@ -2554,7 +2554,31 @@
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 34
+      "line": 35
+    },
+    "EditHistoryRecord": {
+      "source": "frontend/src/services/taskService.ts",
+      "line": 75
+    },
+    "NotificationType": {
+      "source": "frontend/src/services/notificationService.ts",
+      "line": 3
+    },
+    "Notification": {
+      "source": "frontend/src/services/notificationService.ts",
+      "line": 5
+    },
+    "notificationService": {
+      "source": "frontend/src/services/notificationService.ts",
+      "line": 27
+    },
+    "NotificationState": {
+      "source": "frontend/src/store/notificationStore.ts",
+      "line": 4
+    },
+    "useNotificationStore": {
+      "source": "frontend/src/store/notificationStore.ts",
+      "line": 13
     }
   }
 }

@@ -29,9 +29,10 @@ interface TaskCardProps {
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onClick?: (task: Task) => void;
+  hasUnread?: boolean;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, hasUnread }) => {
   const theme = useTheme();
   const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -149,9 +150,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           )}
         </Stack>
 
-        <IconButton size="small" onClick={handleMenuClick} sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
+        {(onEdit || onDelete) && (
+          <IconButton size="small" onClick={handleMenuClick} sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}>
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        )}
         <Menu
           anchorEl={anchorEl}
           open={open}
@@ -310,14 +313,45 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           })()}
         </Stack>
 
-        {task.attachmentsCount > 0 && (
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#9ca3af' }}>
-            <AttachFileIcon sx={{ fontSize: 14, transform: 'rotate(45deg)' }} />
-            <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>
-              {task.attachmentsCount}
-            </Typography>
-          </Stack>
-        )}
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          {task.attachmentsCount > 0 && (
+            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#9ca3af' }}>
+              <AttachFileIcon sx={{ fontSize: 14, transform: 'rotate(45deg)' }} />
+              <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem' }}>
+                {task.attachmentsCount}
+              </Typography>
+            </Stack>
+          )}
+
+          {hasUnread && (
+            <Tooltip title="มีอัปเดตรายงานใหม่" arrow placement="top">
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: '#ef4444',
+                  boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
+                  animation: 'pulse-dot 1.5s infinite ease-in-out',
+                  '@keyframes pulse-dot': {
+                    '0%': {
+                      transform: 'scale(0.9)',
+                      boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
+                    },
+                    '70%': {
+                      transform: 'scale(1.1)',
+                      boxShadow: '0 0 0 6px rgba(239, 68, 68, 0)',
+                    },
+                    '100%': {
+                      transform: 'scale(0.9)',
+                      boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)',
+                    },
+                  },
+                }}
+              />
+            </Tooltip>
+          )}
+        </Stack>
       </Stack>
     </Paper>
   );

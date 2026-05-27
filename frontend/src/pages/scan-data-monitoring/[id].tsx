@@ -42,6 +42,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
+import { Layout, ProtectedRoute } from '@/components/layout';
 import {
   ArrowBack,
   CheckCircle,
@@ -162,34 +163,44 @@ export default function DiscrepancyDetailPage() {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-        <LoadingSpinner size="large" />
-      </Container>
+      <ProtectedRoute requiredRoles={['AM']}>
+        <Layout>
+          <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+            <LoadingSpinner size="large" />
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   if (error || !discrepancy) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="error">
-          <AlertTitle>เกิดข้อผิดพลาด</AlertTitle>
-          {error ? (error as Error).message : 'ไม่พบข้อมูลความผิดปกติ'}
-        </Alert>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={handleBack}
-          sx={{ mt: 2 }}
-        >
-          กลับ
-        </Button>
-      </Container>
+      <ProtectedRoute requiredRoles={['AM']}>
+        <Layout>
+          <Container maxWidth="lg" sx={{ mt: 4 }}>
+            <Alert severity="error">
+              <AlertTitle>เกิดข้อผิดพลาด</AlertTitle>
+              {error ? (error as Error).message : 'ไม่พบข้อมูลความผิดปกติ'}
+            </Alert>
+            <Button
+              startIcon={<ArrowBack />}
+              onClick={handleBack}
+              sx={{ mt: 2 }}
+            >
+              กลับ
+            </Button>
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   const isResolved = discrepancy.status !== 'pending';
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+    <ProtectedRoute requiredRoles={['AM']}>
+      <Layout>
+        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Button
@@ -724,6 +735,8 @@ export default function DiscrepancyDetailPage() {
         </form>
       </Dialog>
     </Container>
+      </Layout>
+    </ProtectedRoute>
   );
 }
 

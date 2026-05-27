@@ -43,9 +43,8 @@ const taskSchema = z.object({
   description: z.string().optional(),
   projectId: z.string().min(1, 'กรุณาเลือกโครงการ'),
   dueDate: z.date({
-    required_error: 'กรุณาเลือกวันที่ครบกำหนด',
     invalid_type_error: 'รูปแบบวันที่ไม่ถูกต้อง',
-  }),
+  }).optional().nullable(),
   workOrderCode: z.string().min(1, 'กรุณาเลือกหมวดหมู่งานหลัก'),
   categoryName: z.string().min(2, 'กรุณาระบุหมวดหมู่งานย่อย'),
   isSupportRequest: z.boolean().optional().default(false),
@@ -61,6 +60,10 @@ const taskSchema = z.object({
           roleId: z.string(),
         })
       ).min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน'),
+      dueDate: z.date({
+        required_error: 'กรุณาเลือกวันที่ครบกำหนดสำหรับงานย่อย',
+        invalid_type_error: 'รูปแบบวันที่ไม่ถูกต้อง',
+      }),
       isSupportRequest: z.boolean().optional().default(false),
     })
   ).optional().default([]),
@@ -131,7 +134,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       categoryName: '',
       dueDate: null as any,
       isSupportRequest: false,
-      subtasks: [{ subtaskName: '', assignees: [], isSupportRequest: false }],
+      subtasks: [{ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false }],
     },
   });
 
@@ -159,8 +162,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
               subtaskId: st.subtaskId,
               subtaskName: st.subtaskName,
               assignees: st.assignees || [],
+              dueDate: st.dueDate ? new Date(st.dueDate) : null as any,
               isSupportRequest: st.isSupportRequest || false,
-            })) : [{ subtaskName: '', assignees: [], isSupportRequest: false }]
+            })) : [{ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false }]
           });
         } catch (error) {
           console.error("Failed to load subtasks for task", task.id, error);
@@ -176,7 +180,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         categoryName: '',
         dueDate: null as any,
         isSupportRequest: false,
-        subtasks: [{ subtaskName: '', assignees: [], isSupportRequest: false }],
+        subtasks: [{ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false }],
       });
     }
   }, [open, task, reset]);
@@ -230,6 +234,22 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   const selectedProjectId = useWatch({ control, name: 'projectId' });
   const selectedWorkOrderCode = useWatch({ control, name: 'workOrderCode' });
   const selectedTaskName = useWatch({ control, name: 'taskName' });
+  const subtasksWatch = useWatch({ control, name: 'subtasks' }) || [];
+
+  const derivedDueDate = React.useMemo(() => {
+    let maxDate: Date | null = null;
+    subtasksWatch.forEach((st: any) => {
+      if (st?.dueDate) {
+        const date = new Date(st.dueDate);
+        if (!isNaN(date.getTime())) {
+          if (!maxDate || date.getTime() > maxDate.getTime()) {
+            maxDate = date;
+          }
+        }
+      }
+    });
+    return maxDate;
+  }, [subtasksWatch]);
 
   const isSupportPickup = !!(isHelperUser && selectedProjectId && selectedProjectId !== user?.projectLocationIds?.[0]);
 
@@ -286,6 +306,21 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   }, [selectedProjectId, selectedWorkOrderCode]);
 
   const onSubmit = (data: TaskFormData) => {
+    // Calculate parent task's dueDate from subtasks max dueDate
+    if (data.subtasks && data.subtasks.length > 0) {
+      let maxDate: Date | null = null;
+      data.subtasks.forEach(st => {
+        if (st.dueDate) {
+          const date = new Date(st.dueDate);
+          if (!isNaN(date.getTime())) {
+            if (!maxDate || date.getTime() > maxDate.getTime()) {
+              maxDate = date;
+            }
+          }
+        }
+      });
+      data.dueDate = maxDate;
+    }
     setConfirmData(data);
   };
 
@@ -293,14 +328,20 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     setIsConfirming(true);
     try {
       setSubmitError('');
+      
+      const mappedSubtasks = data.subtasks.map(st => ({
+        ...st,
+        dueDate: st.dueDate instanceof Date ? st.dueDate.toISOString() : st.dueDate
+      }));
+
       if (isEdit) {
         await taskService.updateTask(task.id, {
           taskName: data.taskName,
           description: data.description,
           categoryName: data.categoryName,
-          dueDate: data.dueDate.toISOString(),
+          dueDate: data.dueDate ? data.dueDate.toISOString() : undefined,
           isSupportRequest: data.subtasks.some(st => st.isSupportRequest),
-          subtasks: data.subtasks,
+          subtasks: mappedSubtasks,
         }, user?.id || 'system');
       } else {
         const selectedProject = projects.find(p => p.id === data.projectId);
@@ -328,9 +369,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             workOrderCode: data.workOrderCode,
             workOrderName: workOrders.find((w) => w.code === data.workOrderCode)?.name || 'General',
             categoryName: data.categoryName,
-            dueDate: data.dueDate.toISOString(),
+            dueDate: data.dueDate ? data.dueDate.toISOString() : undefined as any,
             status: 'upcoming',
-            subtasks: data.subtasks,
+            subtasks: mappedSubtasks,
           });
         }
       }
@@ -566,7 +607,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                   setValue('subtasks', [{ 
                                     subtaskName: newValue.subtaskName, 
                                     assignees: [], 
-                                    isSupportRequest: false 
+                                    isSupportRequest: false,
+                                    dueDate: newValue.dueDate ? new Date(newValue.dueDate) : (null as any)
                                   }], { shouldValidate: true });
                                 } else {
                                   setSupportOriginalTaskId(null);
@@ -575,7 +617,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                   setValue('workOrderCode', '');
                                   setValue('categoryName', '');
                                   setValue('dueDate', null as any);
-                                  setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false }], { shouldValidate: true });
+                                  setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
                                 }
                               }}
                               value={existingTasks.find(t => t.taskId === supportOriginalTaskId && t.subtaskId === supportOriginalSubtaskId) || null}
@@ -707,7 +749,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           <Box sx={inputStyles}>
                             <DatePicker
                               label="Due Date (วันที่ครบกำหนดดึงมาจาก Task หลัก) *"
-                              value={field.value}
+                              value={field.value || null}
                               onChange={field.onChange}
                               disabled={true}
                               variant="filled"
@@ -906,7 +948,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             <Tooltip title="เพิ่มงานย่อยใหม่" arrow placement="top">
                               <Button
                                 variant="outlined"
-                                onClick={() => append({ subtaskName: '', assignees: [], isSupportRequest: false })}
+                                onClick={() => append({ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any })}
                                 sx={{ 
                                   height: 52, 
                                   minWidth: 140, 
@@ -964,7 +1006,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         </Box>
 
                         <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6}>
+                          <Grid item xs={12} sm={4}>
                             <Controller
                               name={`subtasks.${index}.subtaskName`}
                               control={control}
@@ -984,7 +1026,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             />
                           </Grid>
 
-                          <Grid item xs={12} sm={6}>
+                          <Grid item xs={12} sm={4}>
                             <Controller
                               name={`subtasks.${index}.assignees`}
                               control={control}
@@ -1033,6 +1075,41 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             />
                           </Grid>
 
+                          <Grid item xs={12} sm={4}>
+                            <Controller
+                              name={`subtasks.${index}.dueDate`}
+                              control={control}
+                              render={({ field }) => (
+                                <Box sx={inputStyles}>
+                                  <DatePicker
+                                    label="วันที่ครบกำหนด *"
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={isSubmitting}
+                                    error={!!errors.subtasks?.[index]?.dueDate}
+                                    helperText={errors.subtasks?.[index]?.dueDate?.message as string}
+                                    variant="filled"
+                                    InputProps={{ 
+                                      disableUnderline: true,
+                                      sx: {
+                                        backgroundColor: '#F4F6F8 !important',
+                                        borderRadius: 2,
+                                        '&::before': { display: 'none !important' },
+                                        '&::after': { display: 'none !important' },
+                                        '&:hover': { backgroundColor: '#EAECEF !important' },
+                                        '&.Mui-disabled': {
+                                          backgroundColor: '#f5f7f9 !important',
+                                          '&::before': { display: 'none !important' }
+                                        }
+                                      }
+                                    }}
+                                    sx={inputStyles}
+                                  />
+                                </Box>
+                              )}
+                            />
+                          </Grid>
+
                           {!isHelperUser && (
                             <Grid item xs={12}>
                               <Controller
@@ -1070,40 +1147,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     ))}
                   </Grid>
 
-                  <Grid item xs={12}>
-                    <Controller
-                      name="dueDate"
-                      control={control}
-                      render={({ field }) => (
-                        <Box sx={inputStyles}>
-                          <DatePicker
-                            label="Due Date (วันที่ครบกำหนด) *"
-                            value={field.value}
-                            onChange={field.onChange}
-                            disabled={isSubmitting}
-                            error={!!errors.dueDate}
-                            helperText={errors.dueDate?.message as string}
-                            variant="filled"
-                            InputProps={{ 
-                              disableUnderline: true,
-                              sx: {
-                                backgroundColor: '#F4F6F8 !important',
-                                borderRadius: 2,
-                                '&::before': { display: 'none !important' },
-                                '&::after': { display: 'none !important' },
-                                '&:hover': { backgroundColor: '#EAECEF !important' },
-                                '&.Mui-disabled': {
-                                  backgroundColor: '#f5f7f9 !important',
-                                  '&::before': { display: 'none !important' }
-                                }
-                              }
-                            }}
-                            sx={inputStyles}
-                          />
-                        </Box>
-                      )}
-                    />
-                  </Grid>
+
 
                   <Grid item xs={12}>
                     <Controller

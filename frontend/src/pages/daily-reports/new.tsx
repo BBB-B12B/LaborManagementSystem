@@ -1186,7 +1186,7 @@ const DailyReport = () => {
 
 export default function WorkRecordComposerPage() {
   return (
-    <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM']}>
       <Layout>
         <DailyReport />
       </Layout>

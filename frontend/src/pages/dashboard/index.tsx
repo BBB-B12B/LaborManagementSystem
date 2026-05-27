@@ -167,7 +167,7 @@ function Dashboard() {
  */
 export default function DashboardPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Dashboard />
     </ProtectedRoute>
   );

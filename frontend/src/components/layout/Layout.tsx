@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button, Backdrop, CircularProgress } from '@mui/material';
-import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon, Menu as MenuIcon } from '@mui/icons-material';
+import { Avatar, Box, Container, IconButton, Menu, MenuItem, Stack, Typography, Button, Backdrop, CircularProgress, Badge, Popover, List, ListItem, Divider } from '@mui/material';
+import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Sync as SyncIcon, Menu as MenuIcon, Notifications as NotificationsIcon } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
@@ -10,6 +10,8 @@ import { dailyReportService } from '@/services/dailyReportService';
 import { taskService } from '@/services/taskService';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useUIStore } from '@/store/uiStore';
+import { notificationService, type Notification } from '@/services/notificationService';
+import { useNotificationStore } from '@/store';
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -29,6 +31,53 @@ const Topbar: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+
+  const { notifications, fetchNotifications, markAsRead, markAllAsRead } = useNotificationStore();
+  const [bellAnchorEl, setBellAnchorEl] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    fetchNotifications();
+
+    const handleSync = () => {
+      fetchNotifications();
+    };
+    window.addEventListener('globalSync', handleSync);
+    const interval = setInterval(fetchNotifications, 30000);
+
+    return () => {
+      window.removeEventListener('globalSync', handleSync);
+      clearInterval(interval);
+    };
+  }, [fetchNotifications]);
+
+  const unreadCount = useMemo(() => {
+    if (!user) return 0;
+    return notifications.filter((n) => !(n.readBy ?? []).includes(user.id)).length;
+  }, [notifications, user]);
+
+  const handleMarkAsRead = async (noti: Notification) => {
+    if (user && !(noti.readBy ?? []).includes(user.id)) {
+      await markAsRead(noti.id);
+    }
+    setBellAnchorEl(null);
+
+    // Navigate based on role and notification type
+    if (noti.type === 'unlock_granted' || user?.roleCode === 'FM') {
+      // FM: navigate to Daily Report list page
+      router.push('/daily-reports');
+    } else {
+      // Supervisors: navigate to Workspace
+      router.push('/workspace');
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (unreadCount > 0) {
+      await markAllAsRead();
+      enqueueSnackbar('อ่านการแจ้งเตือนทั้งหมดเรียบร้อยแล้ว', { variant: 'success' });
+    }
+    setBellAnchorEl(null);
+  };
 
   const handleGlobalSync = () => {
     // แค่ invalidate cache และยิง event
@@ -146,6 +195,98 @@ const Topbar: React.FC = () => {
               }} 
             />
           </IconButton>
+          {/* Notification Bell */}
+          <IconButton
+            onClick={(e) => setBellAnchorEl(e.currentTarget)}
+            sx={{
+              width: 38,
+              height: 38,
+              bgcolor: '#ffffff',
+              color: '#1c1e2b',
+              border: '1px solid #e5e7ed',
+              '&:hover': { bgcolor: '#f0f1f5' },
+            }}
+          >
+            <Badge badgeContent={unreadCount} color="error">
+              <NotificationsIcon fontSize="small" sx={{ color: '#64748b' }} />
+            </Badge>
+          </IconButton>
+
+          <Popover
+            anchorEl={bellAnchorEl}
+            open={Boolean(bellAnchorEl)}
+            onClose={() => setBellAnchorEl(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{
+              sx: {
+                width: 360,
+                maxHeight: 480,
+                borderRadius: '16px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                mt: 1,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }
+            }}
+          >
+            <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b' }}>
+                การแจ้งเตือนอัปเดตงาน
+              </Typography>
+              {unreadCount > 0 && (
+                <Button size="small" onClick={handleMarkAllAsRead} sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', p: 0.5 }}>
+                  อ่านทั้งหมด
+                </Button>
+              )}
+            </Box>
+            
+            <List sx={{ p: 0, overflowY: 'auto', flexGrow: 1, '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+              {notifications.length > 0 ? (
+                notifications.map((noti) => {
+                  const isUnread = user && !(noti.readBy ?? []).includes(user.id);
+                  return (
+                    <React.Fragment key={noti.id}>
+                      <ListItem
+                        onClick={() => handleMarkAsRead(noti)}
+                        sx={{
+                          px: 2,
+                          py: 1.5,
+                          cursor: 'pointer',
+                          bgcolor: isUnread ? '#eff6ff' : 'transparent',
+                          '&:hover': { bgcolor: isUnread ? '#dbeafe' : '#f8fafc' },
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 1.5,
+                        }}
+                      >
+                        {isUnread && (
+                          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#3b82f6', mt: 0.8, flexShrink: 0 }} />
+                        )}
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: isUnread ? 700 : 500, color: '#334155', fontSize: '0.8rem', lineHeight: 1.4 }}>
+                            {noti.message}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', display: 'block', mt: 0.5 }}>
+                            {new Date(noti.createdAt).toLocaleString('th-TH')}
+                          </Typography>
+                        </Box>
+                      </ListItem>
+                      <Divider sx={{ borderColor: '#f1f5f9' }} />
+                    </React.Fragment>
+                  );
+                })
+              ) : (
+                <Box sx={{ p: 4, textAlign: 'center' }}>
+                  <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                    ไม่มีรายการแจ้งเตือนใหม่
+                  </Typography>
+                </Box>
+              )}
+            </List>
+          </Popover>
+
           <IconButton
             onClick={(e) => setAnchorEl(e.currentTarget)}
             sx={{

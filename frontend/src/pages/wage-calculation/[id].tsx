@@ -38,6 +38,9 @@ import { wageService, type DCWageSummary } from '../../services/wageService';
 import { getLateRecords } from '../../services/scanDataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useToast } from '../../components/common/Toast';
+import { useAuthStore } from '@/store/authStore';
+import { usePermissions } from '@/utils/permissions';
+import { Layout, ProtectedRoute } from '@/components/layout';
 
 /**
  * Wage Calculation Details Page
@@ -50,6 +53,8 @@ export default function WageCalculationDetailsPage() {
   const { id } = router.query;
   const queryClient = useQueryClient();
   const { success: showSuccess, error: showError } = useToast();
+  const { user } = useAuthStore();
+  const { canEditWageCalculation } = usePermissions(user);
 
   // State for Manage Dialog
   const [openDialog, setOpenDialog] = React.useState(false);
@@ -334,47 +339,61 @@ export default function WageCalculationDetailsPage() {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '50vh',
-          }}
-        >
-          <LoadingSpinner size="large" />
-        </Box>
-      </Container>
+      <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+        <Layout>
+          <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '50vh',
+              }}
+            >
+              <LoadingSpinner size="large" />
+            </Box>
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="error">
-          เกิดข้อผิดพลาด: {(error as Error).message}
-        </Alert>
-        <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mt: 2 }}>
-          กลับไปรายการ
-        </Button>
-      </Container>
+      <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+        <Layout>
+          <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <Alert severity="error">
+              เกิดข้อผิดพลาด: {(error as Error).message}
+            </Alert>
+            <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mt: 2 }}>
+              กลับไปรายการ
+            </Button>
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   if (!period) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="warning">ไม่พบข้อมูลงวดค่าแรง</Alert>
-        <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mt: 2 }}>
-          กลับไปรายการ
-        </Button>
-      </Container>
+      <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+        <Layout>
+          <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <Alert severity="warning">ไม่พบข้อมูลงวดค่าแรง</Alert>
+            <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mt: 2 }}>
+              กลับไปรายการ
+            </Button>
+          </Container>
+        </Layout>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: { xs: 2, md: 4 } }}>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+      <Layout>
+        <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: { xs: 2, md: 4 } }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Button startIcon={<ArrowBack />} onClick={handleBack} sx={{ mb: 2 }}>
@@ -397,7 +416,7 @@ export default function WageCalculationDetailsPage() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            {(period.status === 'draft' || period.status === 'calculated') && (
+            {canEditWageCalculation && (period.status === 'draft' || period.status === 'calculated') && (
               <Button
                 variant="contained"
                 sx={{ 
@@ -411,7 +430,7 @@ export default function WageCalculationDetailsPage() {
                 {period.status === 'draft' ? 'คำนวณค่าแรง' : 'คำนวณใหม่'}
               </Button>
             )}
-            {period.status === 'calculated' && (
+            {canEditWageCalculation && period.status === 'calculated' && (
               <Button
                 variant="contained"
                 color="secondary"
@@ -422,7 +441,7 @@ export default function WageCalculationDetailsPage() {
                 อนุมัติ
               </Button>
             )}
-            {period.status === 'approved' && (
+            {canEditWageCalculation && period.status === 'approved' && (
               <Button
                 variant="contained"
                 color="warning"
@@ -528,28 +547,32 @@ export default function WageCalculationDetailsPage() {
         <Divider />
         <DataGrid
           rows={period.dcSummaries}
-          columns={[
-            ...columns,
-            {
-              field: 'actions',
-              headerName: 'จัดการ',
-              width: 120,
-              sortable: false,
-              renderCell: (params: GridRenderCellParams) => (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => {
-                    setSelectedDC(params.row);
-                    setOpenDialog(true);
-                  }}
-                  disabled={period.status === 'approved' || period.status === 'paid'}
-                >
-                  แก้ไข
-                </Button>
-              ),
-            },
-          ]}
+          columns={
+            canEditWageCalculation
+              ? [
+                  ...columns,
+                  {
+                    field: 'actions',
+                    headerName: 'จัดการ',
+                    width: 120,
+                    sortable: false,
+                    renderCell: (params: GridRenderCellParams) => (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setSelectedDC(params.row);
+                          setOpenDialog(true);
+                        }}
+                        disabled={period.status === 'approved' || period.status === 'paid'}
+                      >
+                        แก้ไข
+                      </Button>
+                    ),
+                  },
+                ]
+              : columns
+          }
           autoHeight
           disableSelectionOnClick
           getRowId={(row) => row.dailyContractorId}
@@ -725,6 +748,8 @@ export default function WageCalculationDetailsPage() {
         )}
       </Box>
     </Container>
+      </Layout>
+    </ProtectedRoute>
   );
 }
 

@@ -58,6 +58,8 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
+import { useAuthStore } from '@/store/authStore';
+import { usePermissions } from '@/utils/permissions';
 import { DatePicker } from '../../components/forms/DatePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
 
@@ -73,6 +75,8 @@ export default function WageCalculationPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { success: showSuccess, error: showError } = useToast();
+  const { user } = useAuthStore();
+  const { canEditWageCalculation } = usePermissions(user);
   const {
     confirmDelete: showDeleteConfirm,
     ConfirmDialog: DeleteConfirmDialog,
@@ -282,7 +286,7 @@ export default function WageCalculationPage() {
             </IconButton>
           </Tooltip>
 
-          {params.row.status === 'draft' && (
+          {canEditWageCalculation && params.row.status === 'draft' && (
             <Tooltip title="คำนวณค่าแรง">
               <IconButton
                 size="small"
@@ -318,7 +322,7 @@ export default function WageCalculationPage() {
             </Tooltip>
           )}
 
-          {(params.row.status === 'draft' || params.row.status === 'calculated') && (
+          {canEditWageCalculation && (params.row.status === 'draft' || params.row.status === 'calculated') && (
             <Tooltip title="ลบ">
               <IconButton
                 size="small"
@@ -372,20 +376,21 @@ export default function WageCalculationPage() {
             คำนวณค่าแรง
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-
-            <Button
-              variant="contained"
-              sx={{ 
-                backgroundColor: '#1976d2', // Blue color
-                '&:hover': {
-                  backgroundColor: '#115293',
-                }
-              }}
-              startIcon={<Add />}
-              onClick={() => setCreateDialogOpen(true)}
-            >
-              สร้างงวดใหม่
-            </Button>
+            {canEditWageCalculation && (
+              <Button
+                variant="contained"
+                sx={{ 
+                  backgroundColor: '#1976d2', // Blue color
+                  '&:hover': {
+                    backgroundColor: '#115293',
+                  }
+                }}
+                startIcon={<Add />}
+                onClick={() => setCreateDialogOpen(true)}
+              >
+                สร้างงวดใหม่
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -540,7 +545,7 @@ export default function WageCalculationPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
         <DeleteConfirmDialog />

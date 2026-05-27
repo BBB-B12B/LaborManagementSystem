@@ -64,7 +64,24 @@
 - [X] T-012-008-03: ปรับปรุงการซ่อน Structure Tree งานช่วยเหลือสำหรับผู้ใช้ที่ไม่ใช่ WH และนำงานขอ Support มาแสดงในงานหลัก (→ ERR-025) · attempts: 1 · tool_calls: 3
 - [X] T-012-008-04: แก้ไขเงื่อนไขการ Bypass ตัวกรองสิทธิ์ของบทบาท AM ให้คัดกรองงานหากสังกัดแผนก WH (→ ERR-026) · attempts: 1 · tool_calls: 3
 - [X] T-012-008-05: แก้ไขบั๊ก Logic การแสดงสถานะสีต่างๆ ในปฏิทิน Daily Report และจัดตำแหน่งจุดสถานะให้อยู่กึ่งกลางล่าง (→ ERR-027) · attempts: 1 · tool_calls: 42
+- [X] T-012-008-06: แก้ไขบั๊กข้อมูลรายงานย่อยไม่โหลดเนื่องจาก subtask.id เป็น raw id (→ ERR-028) · attempts: 2 · tool_calls: 18
+- [X] T-012-008-07: ปรับ Layout ปฏิทิน DatePicker ในหน้า Daily Report ให้อยู่ตรงกลาง (→ ERR-029) · attempts: 1 · tool_calls: 42
+- [X] T-012-008-08: แก้ไขบั๊กการคำนวณวันล็อคย้อนหลังในปฏิทินหน้า Daily Report คลาดเคลื่อนไป 1 วัน (→ ERR-030) · attempts: 1 · tool_calls: 24
+- [X] T-012-008-09: เพิ่ม Notification Badge แจ้งเตือนหัวหน้าใน TaskDailyReportModal เมื่อ FM ส่งคำขอปลดล็อคย้อนหลัง (→ ERR-031) · attempts: 1 · tool_calls: 24
+- [X] T-012-008-10: แก้ไขบั๊กปุ่มปลดล็อคสิทธิ์และปฏิทินจุดสีม่วงไม่แสดงสำหรับระดับงานย่อย (Subtasks) (→ ERR-032) · attempts: 1 · tool_calls: 23
+- [X] T-012-008-11: ปรับระยะขอบบน (padding-top) ของเนื้อหาในหน้าต่าง Daily Report Log เพื่อให้พ้นขอบหัวการ์ด (→ ERR-033) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-12: ปรับตำแหน่ง Grid container ในหน้าต่าง Daily Report Log โดยเพิ่ม mt: 1.5 เพื่อแก้ไขหัวตารางทับปุ่มปลดล็อค (→ ERR-034) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-13: แก้ไขข้อจำกัด Timestamp ใน API assigned-subtasks และ parse Date ในหน้า Daily Report เพื่อแก้ไขปัญหา FM ถูกล็อกแม้ได้รับสิทธิ์แล้ว (→ ERR-035) · attempts: 1 · tool_calls: 5
+- [X] T-012-008-14: บันทึกประวัติการแก้ไข Subtask (editHistory) ในระดับ subtasks collection (→ ERR-036) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-15: เพิ่มการแสดงความคืบหน้า (Progress) และไอคอนรูปคนเช็คสถานะ Assign ที่ระดับ Task ในหน้าโครงสร้างงาน (Structure Tree) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-16: พัฒนาระบบเก็บข้อมูลและ API แจ้งเตือนการอัปเดตงานประจำวัน (Notification Backend) · attempts: 1 · tool_calls: 5
+- [X] T-012-008-17: เพิ่มปุ่มกระดิ่งแจ้งเตือนพร้อม Popover แสดงรายการอัปเดตงานรายวันในส่วนหัวแถบเครื่องมือหลัก (Notification Bell UI) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-18: แสดงสถานะการอัปเดตรายงานด้วยจุดสีแดงกะพริบ (Pulsating Dot Indicator) บนการ์ด subtask และปิดสถานะเมื่อคลิกเปิดการ์ด · attempts: 1 · tool_calls: 10
+- [X] T-014: จัดการวันครบกำหนด (Due Date) ในระดับ Subtask และคำนวณวันครบกำหนดของ Task หลักอัตโนมัติ
+- [X] T-015: ปรับปรุงสิทธิ์การเข้าถึงเมนูและหน้าต่าง ๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection) (→ ERR-037) · attempts: 1 · tool_calls: 15
+
 ---
+
 
 
 

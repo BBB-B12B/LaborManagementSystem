@@ -474,6 +474,28 @@ export default function DailyReportPage() {
     return isAfterCompletion || isBeforePrevious || isBeforeBoundary;
   };
 
+  const reportsSummaryMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    if (!taskReportsData || !Array.isArray(taskReportsData)) return map;
+    taskReportsData.forEach((r: any) => {
+      let rDate: Date;
+      const rawDate = r.reportDate || r.id || r.date || r.reportDateId;
+      if (rawDate && typeof rawDate === 'object' && ('_seconds' in rawDate || 'seconds' in rawDate)) {
+        rDate = new Date((rawDate._seconds || rawDate.seconds) * 1000);
+      } else if (typeof rawDate === 'string' && rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [y, m, d] = rawDate.split('-').map(Number);
+        rDate = new Date(y, m - 1, d);
+      } else {
+        rDate = new Date(rawDate || new Date());
+      }
+      if (rDate instanceof Date && !isNaN(rDate.getTime())) {
+        const dateKey = format(rDate, 'yyyy-MM-dd');
+        map[dateKey] = r;
+      }
+    });
+    return map;
+  }, [taskReportsData]);
+
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateStr = format(day, 'yyyy-MM-dd');
@@ -485,7 +507,7 @@ export default function DailyReportPage() {
     const unlockedDates = selectedTask?.[unlockedDatesField];
     if (unlockedDates && unlockedDates[dateStr]) {
       const unlockInfo = unlockedDates[dateStr];
-      const unlockUntil = new Date(unlockInfo.unlockedUntil);
+      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
       if (unlockUntil > new Date()) {
         hasValidUnlock = true;
       }
@@ -504,81 +526,118 @@ export default function DailyReportPage() {
       }
     }
     const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
-
-    const isPastOrToday = dateStr <= todayStr;
+    today.setHours(0, 0, 0, 0);
+    const isPast = isBefore(day, today) && !isSameDay(day, today);
     const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
     const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
 
-    // Retroactive Window: Today (13), Yesterday (12), Day-Before (11) -> Locked is < 11
-    let isLocked = dateStr < format(subDays(today, 3), 'yyyy-MM-dd') || isBeforeBound;
-    if (hasValidUnlock) {
-      isLocked = false;
-    }
+    const isLocked = (isPast && isBefore(day, subDays(today, 3)) && !hasValidUnlock) || (isBeforeBound && !hasValidUnlock);
     const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
     const isRequested = selectedTask?.[requestsField] && selectedTask[requestsField][dateStr];
-    const isMissingReport = (isPastOrToday || isBeforeBound) && !hasReport && !outsideCurrentMonth;
+    const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
-    if (hasReport && !outsideCurrentMonth) {
-      badgeColor = '#10b981'; // Green: Data exists
-    } else if (isMissingReport) {
+    if (isMissingReport) {
       if (isRequested) {
         badgeColor = '#a855f7'; // Purple: Pending unlock request
       } else {
-        // If missing: RED if locked (> 3 days), YELLOW if editable (within 3 days)
-        badgeColor = isLocked ? '#ef4444' : '#f59e0b';
+        badgeColor = isLocked ? 'error.main' : 'warning.main';
       }
     }
 
+    const summary = reportsSummaryMap[dateStr];
+    const progress = summary ? (summary.progress ?? 0) : 0;
+    const isCompleted = progress === 100 || selectedTask?.status === 'completed';
+
     return (
-      <Badge
-        key={props.day.toString()}
-        overlap="circular"
-        badgeContent={
-          badgeColor ? (
-            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: badgeColor }} />
-          ) : null
-        }
-      >
-        <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />
-      </Badge>
+      <Box sx={{ position: 'relative', display: 'inline-flex' }} key={props.day.toString()}>
+        <PickersDay
+          {...other}
+          outsideCurrentMonth={outsideCurrentMonth}
+          day={day}
+          sx={{
+            ...(hasReport && !outsideCurrentMonth && {
+              fontWeight: 'bold',
+              '&:not(.Mui-selected)': {
+                ...(isCompleted ? {
+                  backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
+                  color: '#059669 !important',
+                  '&:hover': {
+                    backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
+                  },
+                } : {
+                  backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
+                  color: '#d97706 !important',
+                  '&:hover': {
+                    backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
+                  },
+                }),
+              },
+            }),
+          }}
+        />
+        {badgeColor && (
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 4,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 6,
+              height: 6,
+              bgcolor: badgeColor,
+              borderRadius: '50%',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+      </Box>
     );
   };
 
   const CustomActionBar = (props: PickersActionBarProps) => {
     return (
-      <Box
+      <Stack
         className={props.className}
+        spacing={1}
         sx={{
           p: 1.5,
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 2,
-          alignItems: 'center',
           borderTop: '1px solid #f1f5f9',
           bgcolor: '#ffffff',
+          alignItems: 'center',
+          width: 320,
+          boxSizing: 'border-box',
+          mx: 'auto'
         }}
       >
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{ width: 10, height: 10, bgcolor: '#10b981', borderRadius: '50%' }} />
-          <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-            มีข้อมูล
-          </Typography>
+        {/* Row 1: Reports Submitted (Background highlight) */}
+        <Stack direction="row" spacing={1.5} justifyContent="center" flexWrap="wrap">
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Box sx={{ width: 12, height: 12, bgcolor: 'rgba(5, 150, 105, 0.15)', border: '1px solid #059669', borderRadius: 0.5 }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ส่งแล้ว (ครบ 100%)</Typography>
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Box sx={{ width: 12, height: 12, bgcolor: 'rgba(217, 119, 6, 0.15)', border: '1px solid #d97706', borderRadius: 0.5 }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ส่งแล้ว (กำลังทำ)</Typography>
+          </Stack>
         </Stack>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{ width: 10, height: 10, bgcolor: '#f59e0b', borderRadius: '50%' }} />
-          <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-            ยังไม่ได้ลง
-          </Typography>
+
+        {/* Row 2: Missing Reports (Bottom Status Dots) */}
+        <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Box sx={{ width: 6, height: 6, bgcolor: 'warning.main', borderRadius: '50%' }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ยังไม่ได้ลง (ส่งได้)</Typography>
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Box sx={{ width: 6, height: 6, bgcolor: 'error.main', borderRadius: '50%' }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ไม่มีข้อมูล (ล็อค)</Typography>
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Box sx={{ width: 6, height: 6, bgcolor: '#a855f7', borderRadius: '50%' }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ขอปลดล็อคลงย้อนหลัง</Typography>
+          </Stack>
         </Stack>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{ width: 10, height: 10, bgcolor: '#ef4444', borderRadius: '50%' }} />
-          <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-            ไม่มีข้อมูล
-          </Typography>
-        </Stack>
-      </Box>
+      </Stack>
     );
   };
 
@@ -991,7 +1050,7 @@ export default function DailyReportPage() {
     const unlockedDates = selectedTask?.[unlockedDatesField];
     if (unlockedDates && unlockedDates[dateStr]) {
       const unlockInfo = unlockedDates[dateStr];
-      const unlockUntil = new Date(unlockInfo.unlockedUntil);
+      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
       if (unlockUntil > new Date()) {
         return false; // It's unlocked, so it's not locked
       }
@@ -2178,7 +2237,7 @@ export default function DailyReportPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRoles={['SE', 'FM']}>
       <LocalizationProvider dateAdapter={AdapterDateFnsV2} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box
@@ -2516,7 +2575,7 @@ export default function DailyReportPage() {
                                   const unlockedDates = selectedTask?.[unlockedDatesField];
                                   if (unlockedDates && unlockedDates[dateStr]) {
                                     const unlockInfo = unlockedDates[dateStr];
-                                    const unlockUntil = new Date(unlockInfo.unlockedUntil);
+                                    const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
                                     if (unlockUntil > new Date()) {
                                       hasValidUnlock = true;
                                     }
@@ -2545,6 +2604,14 @@ export default function DailyReportPage() {
                                   sx: { width: 150 },
                                   error: isDateLockedByWagePeriod,
                                   helperText: isDateLockedByWagePeriod ? 'งวดค่าแรงถูกปิดแล้ว' : '',
+                                },
+                                layout: {
+                                  sx: {
+                                    '& .MuiPickersLayout-contentWrapper': {
+                                      display: 'flex',
+                                      justifyContent: 'center',
+                                    },
+                                  },
                                 },
                               }}
                               disabled={isSubmitting}

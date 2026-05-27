@@ -39,17 +39,18 @@ export class Permissions {
    */
   static canAccessDashboard(role?: UserRole): boolean {
     if (role === 'GOD') return true;
-    return !!role;
+    if (!role) return false;
+    return ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'].includes(role);
   }
 
   /**
    * Check if user can create daily reports
-   * Allowed: SE, OE, PE, PM, PD, AM
+   * Allowed: SE, FM
    */
   static canCreateDailyReport(role?: UserRole): boolean {
     if (role === 'GOD') return true;
     if (!role) return false;
-    return ['SE', 'OE', 'PE', 'PM', 'PD', 'AM'].includes(role);
+    return ['SE', 'FM'].includes(role);
   }
 
   /**
@@ -86,7 +87,8 @@ export class Permissions {
    */
   static canAccessMemberManagement(role?: UserRole): boolean {
     if (role === 'GOD') return true;
-    return role === 'AM';
+    if (!role) return false;
+    return ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'].includes(role);
   }
 
   /**
@@ -101,12 +103,21 @@ export class Permissions {
 
   /**
    * Check if user can access wage calculation
-   * Allowed: Admin, PM, PD, MD (FR-A-006)
+   * Allowed: AM, OE, PE, PM, PD, MD (GOD, MD, PD, PM, PE, OE can view, AM can edit)
    */
   static canAccessWageCalculation(role?: UserRole): boolean {
     if (role === 'GOD') return true;
     if (!role) return false;
-    return ['AM', 'PM', 'PD', 'MD'].includes(role);
+    return ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'].includes(role);
+  }
+
+  /**
+   * Check if user can edit/calculate wages
+   * Allowed: AM, GOD
+   */
+  static canEditWageCalculation(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
+    return role === 'AM';
   }
 
   /**
@@ -130,12 +141,31 @@ export class Permissions {
 
   /**
    * Check if user can access scan data monitoring
-   * Allowed: Admin, PM, PD, MD
+   * Allowed: Admin only
    */
   static canAccessScanDataMonitoring(role?: UserRole): boolean {
     if (role === 'GOD') return true;
+    return role === 'AM';
+  }
+
+  /**
+   * Check if user can access Workspace
+   * Allowed: GOD, MD, PD, PM, PE, OE, AM
+   */
+  static canAccessWorkspace(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
     if (!role) return false;
-    return ['AM', 'PM', 'PD', 'MD'].includes(role);
+    return ['MD', 'PD', 'PM', 'PE', 'OE', 'AM'].includes(role);
+  }
+
+  /**
+   * Check if user can edit/write inside Workspace
+   * Allowed: GOD, MD, PD, PM, PE, OE (AM is read-only)
+   */
+  static canEditWorkspace(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
+    if (!role) return false;
+    return ['MD', 'PD', 'PM', 'PE', 'OE'].includes(role);
   }
 
   /**
@@ -288,9 +318,12 @@ export function usePermissions(user: User | null | undefined) {
     canAccessMemberManagement: Permissions.canAccessMemberManagement(role),
     canAccessDCManagement: Permissions.canAccessDCManagement(role),
     canAccessWageCalculation: Permissions.canAccessWageCalculation(role),
+    canEditWageCalculation: Permissions.canEditWageCalculation(role),
     canUploadScanData: Permissions.canUploadScanData(role),
     canAccessScanDataMonitoring: Permissions.canAccessScanDataMonitoring(role),
     canAccessSSOManagement: Permissions.canAccessSSOManagement(role),
+    canAccessWorkspace: Permissions.canAccessWorkspace(role),
+    canEditWorkspace: Permissions.canEditWorkspace(role),
     canAccessAllProjects: Permissions.canAccessAllProjects(role),
     isDepartmentRestricted: Permissions.isDepartmentRestricted(role),
     canAccessProject: (projectId: string) =>

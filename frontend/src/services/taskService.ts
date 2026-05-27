@@ -62,19 +62,38 @@ export interface CreateTaskInput {
   workOrderName?: string;
   categoryId?: string;
   categoryName: string;
-  dueDate: string; // ISO string
+  dueDate?: string; // ISO string
   status?: TaskStatus;
   subtasks: {
     subtaskName: string;
     assignees: TaskAssignee[];
     isSupportRequest?: boolean;
+    dueDate: string | Date;
   }[];
 }
 
-export interface UpdateTaskInput extends Partial<CreateTaskInput> {
+export interface EditHistoryRecord {
+  updatedAt: string | Date;
+  updatedBy: string;
+  changes: {
+    field: string;
+    oldValue: any;
+    newValue: any;
+  }[];
+}
+
+export interface UpdateTaskInput extends Omit<Partial<CreateTaskInput>, 'subtasks'> {
   isSupportRequest?: boolean;
   dailyProgress?: number;
   supportedRevisionIds?: string[];
+  subtasks?: {
+    id?: string;
+    subtaskId?: string;
+    subtaskName: string;
+    assignees: TaskAssignee[];
+    isSupportRequest?: boolean;
+    dueDate?: string | Date;
+  }[];
 }
 
 export interface Subtask {
@@ -92,6 +111,12 @@ export interface Subtask {
   supportTaskName?: string;
   supportDailyProgress?: number;
   supportAssignees?: TaskAssignee[];
+  unlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
+  supportUnlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
+  unlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
+  supportUnlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
+  dueDate: string | Date;
+  editHistory?: EditHistoryRecord[];
   createdBy?: string;
   updatedBy?: string;
 }
@@ -179,9 +204,27 @@ export const taskService = {
   /**
    * Unlock daily report access for past dates
    */
-  unlockTaskReport: async (id: string, dateStr: string, daysToUnlock: number, isSupportReport?: boolean): Promise<void> => {
-    await api.post(`/tasks/${id}/unlock-report`, { dateStr, daysToUnlock, isSupportReport });
+  unlockTaskReport: async (
+    id: string,
+    dateStr: string,
+    daysToUnlock: number,
+    isSupportReport?: boolean,
+    taskContext?: {
+      projectId?: string;
+      projectName?: string;
+      workOrderId?: string;
+      workOrderName?: string;
+      categoryId?: string;
+      categoryName?: string;
+      taskId?: string;
+      taskName?: string;
+      subtaskId?: string;
+      subtaskName?: string;
+    }
+  ): Promise<void> => {
+    await api.post(`/tasks/${id}/unlock-report`, { dateStr, daysToUnlock, isSupportReport, taskContext });
   },
+
 
   /**
    * Request daily report unlock for a specific past date
@@ -221,8 +264,8 @@ export const taskService = {
   /**
    * Create a new subtask
    */
-  createSubtask: async (id: string, subtaskName: string, assignees: TaskAssignee[]): Promise<Subtask> => {
-    return await api.post<Subtask>(`/tasks/${id}/subtasks`, { subtaskName, assignees });
+  createSubtask: async (id: string, subtaskName: string, assignees: TaskAssignee[], dueDate?: string | Date): Promise<Subtask> => {
+    return await api.post<Subtask>(`/tasks/${id}/subtasks`, { subtaskName, assignees, dueDate });
   },
 
   /**

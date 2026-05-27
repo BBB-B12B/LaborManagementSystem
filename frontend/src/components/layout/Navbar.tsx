@@ -45,13 +45,13 @@ export const Navbar: React.FC = () => {
       label: t('nav.dashboard'),
       path: '/dashboard',
       icon: <DashboardIcon />,
-      roles: ['AM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
     {
       label: t('nav.dailyReport'),
       path: '/daily-reports',
       icon: <DescriptionIcon />,
-      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['SE', 'FM'],
     },
     {
       label: t('nav.management', 'การจัดการ'),
@@ -63,19 +63,19 @@ export const Navbar: React.FC = () => {
       label: t('nav.wageCalculation'),
       path: '/wage-calculation',
       icon: <CalculateIcon />,
-      roles: ['AM', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
     {
       label: t('nav.scanData'),
       path: '/scan-data-monitoring',
       icon: <FingerprintIcon />,
-      roles: ['AM', 'PM', 'PD', 'MD'],
+      roles: ['AM'],
     },
     {
       label: t('nav.workspace', 'Workspace'),
       path: '/workspace',
       icon: <ViewKanbanIcon />,
-      roles: ['AM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
   ];
 

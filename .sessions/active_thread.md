@@ -1,3 +1,3 @@
-task: ปรับปรุงโครงสร้างหน้า Workspace แสดงการ์ดเป็นราย Subtask และเพิ่มหน้าต่าง Structure Tree ด้านซ้ายพร้อมระบบแคช (T-012-005-01)
+task: ปรับสิทธิ์การเข้าถึงเมนูและหน้าต่างๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection)
 phase: done
 next: none

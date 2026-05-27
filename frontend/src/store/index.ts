@@ -9,8 +9,10 @@
 export { useAuthStore } from './authStore';
 export { useUIStore } from './uiStore';
 export { useTaskCacheStore } from './taskCacheStore';
+export { useNotificationStore } from './notificationStore';
 
 // Export types
 export type { AuthState } from './authStore';
 export type { UIState } from './uiStore';
 export type { TaskCacheState } from './taskCacheStore';
+export type { NotificationState } from './notificationStore';

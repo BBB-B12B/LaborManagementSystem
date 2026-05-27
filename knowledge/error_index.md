@@ -237,3 +237,90 @@ This catalog lists known errors and bug fix details.
   3. Defined `isCompleted` checking both `progress === 100` and `task?.status === 'completed'`.
   4. Styled the day cell with `!important` color/background and used `&:not(.Mui-selected)` to prevent selected date styling conflicts, highlighting green (emerald light) for completed/100% days and yellow (amber light) for in-progress days.
   5. Replaced the MUI `Badge` wrapper with a custom relative `Box` containing an absolute positioned dot (`bottom: 4`, `left: '50%'`, `transform: 'translateX(-50%)'`). This centers the status dots perfectly at the bottom of the date circle.
+
+## ERR-028: Subtask Daily Reports show empty and API throws FAILED_PRECONDITION
+- **Task:** T-012-008-06 · **Session:** session_011
+- **File:** backend/src/services/TaskService.ts · **Line:** 757
+- **Symptom:** Clicking a subtask card in the Workspace board shows "ไม่มีข้อมูลรายงานการทำงาน" (No work report data) in the Daily Report Modal calendar log for dates that already have submitted daily reports. The backend logs show an unhandled `FAILED_PRECONDITION` error stating that a collection group index for `subtasks` on the `subtaskId` field is required.
+- **Root Cause:**
+  1. The backend `getTasks()` API mapped subtasks using their raw document IDs instead of the composite ID format (e.g., `WH-2026-DBD-0001__DBD-0001__DBD-0001-001__DBD-0001-001-0001`).
+  2. Because the frontend received and used the raw subtask ID, API endpoints like `/api/tasks/:id/reports` were called with the raw ID. This forced the backend to use `collectionGroup('subtasks').where('subtaskId', '==', id)` to locate the subtask. This query failed since the required collection group index was missing in the Firestore project.
+- **Resolution:**
+  Modified `backend/src/services/TaskService.ts` inside `getTasks()` to correctly return the composite ID (`subData.id || \`${woId}__\${catId}__\${taskId}__\${subDoc.id}\``) in the subtask `id` field. Using the composite ID allows the backend's `resolveRefs()` and `getAllDailyReports()` to directly construct the collection paths and perform fast, index-free document reference lookups, completely avoiding the collection group query.
+
+## ERR-029: Calendar dates grid inside DatePicker popover and DateCalendar inside TaskDailyReportModal are not centered
+- **Task:** T-012-008-07 · **Session:** session_011
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 2604
+- **Symptom:** In the Daily Reports page, the calendar dates and day headers inside the DatePicker popover are shifted to the left and uncentered. In TaskDailyReportModal, the calendar grid can similarly become left-aligned if the column box expands.
+- **Root Cause:** MUI X DatePicker/DateCalendar components default to a fixed width of 320px for the day grid and navigation controls. If the popover container (Paper) or dialog box is wider (due to the wide custom legend or flex grids), the calendar wrapper remains left-aligned inside the layout container.
+- **Resolution:** Centered the calendar horizontally:
+  1. For the DatePicker popovers in `index.tsx` and `daily_report_ui_aftersale_reference.tsx`, added `layout` slot styling overrides (`& .MuiPickersLayout-contentWrapper`: `{ display: 'flex', justifyContent: 'center' }`) in `slotProps`.
+  2. For the static DateCalendar inside `TaskDailyReportModal.tsx`, restricted its max width to `320px` and set horizontal auto margins (`maxWidth: '320px', mx: 'auto'`) inside its `sx` overrides to align it at the center of the left-hand column box.
+
+## ERR-030: Mismatch in calendar day lock evaluation (date offset by 1 day) in Daily Reports page
+- **Task:** T-012-008-08 · **Session:** session_011
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 528
+- **Symptom:** In the Daily Reports page, the calendar popover displays the 3rd past day (e.g. May 24th when today is May 27th) as locked (red dot) instead of unlocked (yellow dot), whereas the Workspace Daily Report modal shows it correctly as unlocked (yellow dot).
+- **Root Cause:** In `CustomPickersDay` inside `index.tsx` and `daily_report_ui_aftersale_reference.tsx`, the `today` variable was instantiated as `new Date()`, which retains the current time component. When subtracting 3 days via `subDays(today, 3)`, the resulting date is `24th [CurrentTime]`. Since the calendar day `day` has a time of `24th 00:00:00`, `isBefore(day, subDays(today, 3))` evaluated to `true`, incorrectly marking the 3rd past day as locked.
+- **Resolution:** Cleared the time component for `today` inside `CustomPickersDay` in both `index.tsx` and `daily_report_ui_aftersale_reference.tsx` by adding `today.setHours(0, 0, 0, 0)` immediately after instantiation. This aligns the date locking logic exactly with `TaskDailyReportModal.tsx` which uses `startOfDay`.
+
+## ERR-031: Supervisor has no indication of pending FM unlock requests in TaskDailyReportModal
+- **Task:** T-012-008-09 · **Session:** session_011
+- **File:** frontend/src/pages/workspace/components/TaskDailyReportModal.tsx · **Line:** 600
+- **Symptom:** When an FM submits an unlock request for a past date, the supervisor opens TaskDailyReportModal and sees no indication that there are pending unlock requests. The supervisor must manually click on each past date in the calendar to find the "ปลดล็อคสิทธิ์" button. There is no global notification or visual indicator.
+- **Root Cause:** The `TaskDailyReportModal` only renders the unlock button when `task.unlockRequests[selectedDateStr]` exists, meaning a supervisor must already know which date to click. There was no computed list of all pending unlock dates nor any notification UI element shown globally.
+- **Resolution:**
+  1. Added `pendingUnlockDates` useMemo that computes a sorted array of all date strings from `task.unlockRequests` (or `task.supportUnlockRequests` for support mode) that have not yet been approved (no valid active `unlockedDates` entry).
+  2. Added `handleJumpToFirstUnlockRequest()` function that updates `selectedDate` to the first pending date in the list.
+  3. Added a yellow notification badge (`NotificationsActiveIcon` with MUI `Badge`) in the `DialogTitle` header row. The badge shows the count of pending requests and triggers `handleJumpToFirstUnlockRequest` when clicked, instantly setting the selected date so the unlock button appears and the supervisor can act immediately.
+
+## ERR-032: Subtask Unlock Requests and Unlocked Dates not showing on Workspace board
+- **Task:** T-012-008-10 · **Session:** session_011
+- **File:** backend/src/services/TaskService.ts, frontend/src/pages/workspace/index.tsx · **Line:** 771 (backend), 283, 370 (frontend)
+- **Symptom:** When a Foreman requests a backdated unlock for a subtask, the supervisor does not see the purple indicator dot on the calendar in TaskDailyReportModal from the Workspace Kanban board or Left Structure Tree, and the "Unlock" button is not visible.
+- **Root Cause:** The backend `getTasks()` service fetched subtasks from Firestore but omitted the `unlockRequests`, `supportUnlockRequests`, `unlockedDates`, and `supportUnlockedDates` fields in the returned subtask payload. Furthermore, the frontend Workspace page mapped the subtasks into merged task cards and tree nodes, but did not copy these unlock fields from the subtasks onto the merged task objects.
+## ERR-033: Daily Report Log modal content overlapping card header border
+- **Task:** T-012-008-11 · **Session:** session_011
+- **File:** frontend/src/pages/workspace/components/TaskDailyReportModal.tsx · **Line:** 674
+- **Symptom:** In the Daily Report modal, the headers of the left and right columns ("Daily Report Log" and "สรุปข้อมูลวันที่...") are positioned too close to the bottom border of the DialogTitle header.
+- **Root Cause:** The `DialogContent` had a top padding `pt` of `3` (24px). Because the dialog header has a bottom border, 24px of top padding does not provide enough visual separation (breathing room), making the layout look cramped and visually overlapping.
+- **Resolution:** Increased `pt` on the `<DialogContent>` wrapper from `3` (24px) to `5` (40px) in `TaskDailyReportModal.tsx`. This shifts the entire layout grid of the modal down by 16px, cleanly separating the content columns from the dialog title border.
+
+## ERR-034: MUI Grid negative top margin pulls modal header columns into the DialogTitle border
+- **Task:** T-012-008-12 · **Session:** session_011
+- **File:** frontend/src/pages/workspace/components/TaskDailyReportModal.tsx · **Line:** 680
+- **Symptom:** Even when padding-top of DialogContent was increased, the "Daily Report Log" header row (specifically the yellow unlock button) was still touching the bottom border of the DialogTitle header bar and looked compressed.
+- **Root Cause:** Material-UI `<Grid container spacing={4}>` applies a negative margin-top (`mt: -32px`) to offset spacing inside items. Since the header row contains the very first components inside the grid items, this negative margin pulled the entire row 32px upward, nullifying the DialogContent padding-top.
+- **Resolution:** Override the negative top margin by adding `sx={{ mt: 1.5 }}` (12px top margin) directly to `<Grid container spacing={4}>` in `TaskDailyReportModal.tsx`, and reverted DialogContent `pt` to `3` (24px). The net top space is now `24px (pt) + 12px (mt) + 32px (item padding) = 68px`, which positions the header row cleanly below the DialogTitle divider without overlapping.
+
+## ERR-035: FM locked out of subtasks daily reports even after supervisor unlock approval
+- **Task:** T-012-008-13 · **Session:** session_011
+- **File:** backend/src/api/routes/tasks.routes.ts, frontend/src/pages/daily-reports/index.tsx · **Line:** 546 (backend), 509, 1053, 2577 (frontend)
+- **Symptom:** After the supervisor approves an unlock request for a subtask, the Foreman (FM) still gets the backdated request dialog when attempting to click on or edit that date in the Daily Reports page, and is unable to submit the report.
+- **Root Cause:**
+  1. In the backend endpoint `/tasks/assigned-subtasks`, the subtask documents are fetched from Firestore and returned directly as JSON without using `taskConverter.fromFirestore` or parsing Timestamp objects in fields like `unlockedDates` and `unlockRequests`. Thus, `unlockedUntil` is serialized to JSON as `{ _seconds, _nanoseconds }`.
+  2. In the frontend `daily-reports/index.tsx`, the checks for `unlockUntil` used `new Date(unlockInfo.unlockedUntil)`. When given the raw `{ _seconds, _nanoseconds }` object, `new Date()` results in `Invalid Date`, which fails the `unlockUntil > new Date()` comparison, making the client think the date is locked.
+- **Resolution:**
+  1. Updated the backend `/tasks/assigned-subtasks` mapping function to parse Firestore timestamps inside subtask `unlockedDates`, `unlockRequests`, `supportUnlockedDates`, and `supportUnlockRequests` using `parseFirestoreTimestamp` into ISO strings.
+  2. Updated the frontend `daily-reports/index.tsx` file to parse `unlockedUntil` using the existing `parseSafeDate` utility (which handles both string ISO dates and raw timestamp objects) instead of calling `new Date(...)` directly.
+
+## ERR-036: Subtask fields modifications not tracked or audited (Lack of edit history logs in subtasks collection)
+- **Task:** T-012-008-14 · **Session:** session_012
+- **File:** backend/src/models/Task.ts, backend/src/services/TaskService.ts · **Line:** 57 (Task.ts), 911 (TaskService.ts)
+- **Symptom:** Modifications to subtasks (such as `subtaskName`, `assignees`, `dueDate`, or `isSupportRequest`) by supervisors are not audited or tracked, making it impossible for administrators to check the edit history of subtasks.
+- **Root Cause:** The subtask update code inside the `TaskService.updateTask()` transaction block simply updated the fields in Firestore without comparing the differences with the existing subtask document or writing audit records. Subtask models also lacked type support for `dueDate` and `editHistory` fields.
+- **Resolution:**
+  1. Updated `Task.ts` model interface to add `EditHistoryRecord` and include optional `dueDate` and `editHistory` in `Subtask` and `UpdateTaskInput`.
+  2. Implemented `compareDates` and `compareAssignees` helper methods in `TaskService.ts`.
+  3. Modified the transaction update block in `TaskService.updateTask()` to query the existing subtask document, compare its fields with the updated payload, and construct a list of differences.
+  4. Appended the edit history record to the `editHistory` array on the subtask document using `admin.firestore.FieldValue.arrayUnion`.
+  5. Updated the subtask document reading logic in `TaskService.getSubtasks()` and `TaskService.getTasks()` to safely deserialize Firestore Timestamps inside `dueDate` and the `editHistory` changes array back to JavaScript Dates.
+
+## ERR-037: Unrestricted route access bypass on dashboard, daily reports, wage calculation, scan data, and workspace pages
+- **Task:** T-015 · **Session:** session_013
+- **File:** frontend/src/pages/dashboard/index.tsx, frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/list.tsx, frontend/src/pages/daily-reports/new.tsx, frontend/src/pages/daily-reports/[id]/edit.tsx, frontend/src/pages/daily-reports/[id]/history.tsx, frontend/src/pages/management/index.tsx, frontend/src/pages/wage-calculation/index.tsx, frontend/src/pages/wage-calculation/[id].tsx, frontend/src/pages/scan-data-monitoring/index.tsx, frontend/src/pages/scan-data-monitoring/[id].tsx, frontend/src/pages/workspace/index.tsx, frontend/src/pages/workspace/requests.tsx
+- **Symptom:** Users with unauthorized roles could bypass navigation menu restrictions by typing page URLs directly (e.g. site engineers could access the Workspace board or Wage Calculation, and office engineers could access Daily Reports).
+- **Root Cause:** Page components did not specify `requiredRoles` on their `<ProtectedRoute>` wrappers or did not use `<ProtectedRoute>` wrappers at all, allowing any authenticated user to load the pages directly via the address bar.
+- **Resolution:** Enforced strict route-level access checks by wrapping all specified page components with `<ProtectedRoute requiredRoles={...}>` and `<Layout>` components containing matching role access rules, redirecting unauthorized users to `/unauthorized`.
+
+

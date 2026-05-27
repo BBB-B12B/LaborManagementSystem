@@ -533,6 +533,30 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
       return val;
     };
 
+    const parseUnlockDates = (dates: any) => {
+      if (!dates) return {};
+      const res: any = {};
+      Object.keys(dates).forEach(key => {
+        res[key] = {
+          ...dates[key],
+          unlockedUntil: parseFirestoreTimestamp(dates[key].unlockedUntil)
+        };
+      });
+      return res;
+    };
+
+    const parseUnlockRequests = (reqs: any) => {
+      if (!reqs) return {};
+      const res: any = {};
+      Object.keys(reqs).forEach(key => {
+        res[key] = {
+          ...reqs[key],
+          requestedAt: parseFirestoreTimestamp(reqs[key].requestedAt)
+        };
+      });
+      return res;
+    };
+
     const snapshot = await afterSaleDb.collectionGroup('subtasks').get();
     let subtasks = snapshot.docs.map(doc => {
       const data = doc.data() as any;
@@ -547,6 +571,10 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
         createdAt: parseFirestoreTimestamp(data.createdAt),
         updatedAt: parseFirestoreTimestamp(data.updatedAt),
         dueDate: parseFirestoreTimestamp(data.dueDate),
+        unlockedDates: parseUnlockDates(data.unlockedDates),
+        unlockRequests: parseUnlockRequests(data.unlockRequests),
+        supportUnlockedDates: parseUnlockDates(data.supportUnlockedDates),
+        supportUnlockRequests: parseUnlockRequests(data.supportUnlockRequests),
         id: fullId,
         taskId: data.subtaskId, // original subtaskId
         parentTaskId: taskId, // the parent task's id
@@ -853,8 +881,14 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { taskName, projectId, projectName, workOrderId, workOrderCode, workOrderName, categoryId, categoryName, subtasks, dueDate, status } = req.body;
     
-    if (!taskName || !projectId || !workOrderCode || !categoryName || !dueDate || !subtasks || subtasks.length === 0) {
-      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Subtasks, DueDate are required)', 400);
+    if (!taskName || !projectId || !workOrderCode || !categoryName || !subtasks || subtasks.length === 0) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Subtasks are required)', 400);
+    }
+
+    // Validate that each subtask has a dueDate
+    const hasInvalidSubtaskDueDate = subtasks.some((st: any) => !st.dueDate || isNaN(new Date(st.dueDate).getTime()));
+    if (hasInvalidSubtaskDueDate) {
+      throw new AppError('กรุณาระบุวันที่ครบกำหนดของทุกงานย่อยให้ถูกต้อง (Subtask due dates are required)', 400);
     }
 
     const validatedData = {
@@ -868,7 +902,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       categoryId,
       categoryName,
       subtasks,
-      dueDate: new Date(dueDate),
+      dueDate: dueDate ? new Date(dueDate) : undefined,
       status,
     };
 
@@ -989,12 +1023,91 @@ router.post('/:id/unlock-report', async (req: Request, res: Response, next: Next
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
-    const { dateStr, daysToUnlock, isSupportReport } = req.body;
+    const { dateStr, daysToUnlock, isSupportReport, taskContext } = req.body;
     if (!dateStr || !daysToUnlock) {
       throw new AppError('dateStr and daysToUnlock are required', 400);
     }
 
     await taskService.unlockDailyReport(id, dateStr, daysToUnlock, userId, isSupportReport === true);
+
+    // --- Create 'unlock_granted' notification for the FM ---
+    try {
+      const unlockRequestsField = isSupportReport === true ? 'supportUnlockRequests' : 'unlockRequests';
+      let targetFmUid: string | undefined;
+      let subtaskDocData: any = null;
+
+      // Resolve the subtask ref to get the unlock request (who requested the unlock)
+      let idParts = id.split('__');
+      let subtaskRawId: string | undefined;
+      if (idParts.length >= 4) {
+        const [woId, catId, taskId, subtaskId] = idParts;
+        const subtaskRef = afterSaleDb
+          .collection('workOrders').doc(woId)
+          .collection('categories').doc(catId)
+          .collection('tasks').doc(taskId)
+          .collection('subtasks').doc(subtaskId);
+        const subtaskSnap = await subtaskRef.get();
+        subtaskDocData = subtaskSnap.data();
+        subtaskRawId = subtaskId;
+      }
+
+      if (subtaskDocData) {
+        const unlockRequests = subtaskDocData[unlockRequestsField] || {};
+        const requestInfo = unlockRequests[dateStr];
+        const requestedByUid = requestInfo?.requestedBy;
+        if (requestedByUid) {
+          // Resolve FM user record
+          const userDoc = await db.collection('users').doc(requestedByUid).get();
+          if (userDoc.exists) {
+            targetFmUid = requestedByUid;
+            // name resolved via approverName below
+          } else {
+            // Try searching by uid
+            const userByUid = await db.collection('users').where('uid', '==', requestedByUid).limit(1).get();
+            if (!userByUid.empty) {
+              targetFmUid = requestedByUid;
+            }
+          }
+        }
+      }
+
+      // Resolve approver name
+      let approverName = 'หัวหน้างาน';
+      const approverDoc = await db.collection('users').doc(userId).get();
+      if (approverDoc.exists) {
+        const approverData = approverDoc.data();
+        approverName = approverData?.name || approverData?.username || 'หัวหน้างาน';
+      }
+
+      // Fallback taskContext from request body (passed by frontend)
+      const ctx = taskContext || {};
+
+      const notificationData: any = {
+        type: 'unlock_granted',
+        projectId: ctx.projectId || '',
+        projectName: ctx.projectName || '',
+        workOrderId: ctx.workOrderId || '',
+        workOrderName: ctx.workOrderName || '',
+        categoryId: ctx.categoryId || '',
+        categoryName: ctx.categoryName || '',
+        taskId: ctx.taskId || '',
+        taskName: ctx.taskName || '',
+        subtaskId: subtaskRawId || '',
+        subtaskName: ctx.subtaskName || subtaskDocData?.subtaskName || '',
+        reportDate: dateStr,
+        message: `${approverName} ได้ปลดล็อคสิทธิ์ให้คุณแก้ข้อมูลย้อนหลังวันที่ ${dateStr}`,
+        createdAt: new Date(),
+        createdBy: userId,
+        createdByName: approverName,
+        readBy: [],
+        targetUserId: targetFmUid || '',
+      };
+
+      await afterSaleDb.collection('notifications').add(notificationData);
+      console.log(`[tasks.routes] Created unlock_granted notification for FM: ${targetFmUid}`);
+    } catch (notiErr: any) {
+      console.error('[tasks.routes] Failed to create unlock_granted notification:', notiErr.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -1153,7 +1266,15 @@ router.post('/:id/subtasks', async (req: Request, res: Response, next: NextFunct
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
-    const subtask = await taskService.createSubtask(id, req.body, userId);
+    const { subtaskName, assignees, dueDate } = req.body;
+    if (!subtaskName || !assignees || assignees.length === 0 || !dueDate) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (subtaskName, assignees, และ dueDate เป็นฟิลด์ที่จำเป็น)', 400);
+    }
+    if (isNaN(new Date(dueDate).getTime())) {
+      throw new AppError('รูปแบบวันที่ครบกำหนดไม่ถูกต้อง', 400);
+    }
+
+    const subtask = await taskService.createSubtask(id, { subtaskName, assignees, dueDate }, userId);
     res.status(201).json({
       success: true,
       message: 'สร้าง Subtask สำเร็จ',

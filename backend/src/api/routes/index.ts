@@ -18,6 +18,7 @@ import scanDataRoutes from './scanData.routes';
 import socialSecurityRulesRoutes from './socialSecurityRules.routes';
 import taskRoutes from './tasks.routes';
 import mediaRoutes from './media.routes';
+import notificationRoutes from './notifications.routes';
 
 const router = Router();
 
@@ -56,5 +57,8 @@ router.use('/tasks', taskRoutes);
 
 // Media routes
 router.use('/media', mediaRoutes);
+
+// Notification routes
+router.use('/notifications', notificationRoutes);
 
 export default router;

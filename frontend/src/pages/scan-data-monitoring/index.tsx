@@ -592,7 +592,7 @@ export default function ScanDataMonitoringPage() {
 
   if (error) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['AM']}>
         <Layout maxWidth={false} disablePadding>
           <Container maxWidth="lg" sx={{ mt: 4 }}>
             <Typography color="error">
@@ -605,7 +605,7 @@ export default function ScanDataMonitoringPage() {
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRoles={['AM']}>
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
         <ScanDataUploadDialog

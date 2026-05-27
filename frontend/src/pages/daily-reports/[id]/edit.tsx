@@ -55,7 +55,7 @@ export default function DailyReportEditPage() {
 
   if (isLoading) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['SE', 'FM']}>
         <Layout>
           <LoadingSpinner message="กำลังโหลดข้อมูล..." />
         </Layout>
@@ -65,7 +65,7 @@ export default function DailyReportEditPage() {
 
   if (error || !report) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['SE', 'FM']}>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
             <Alert severity="error">
@@ -78,7 +78,7 @@ export default function DailyReportEditPage() {
   }
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
           <Paper elevation={2} sx={{ p: 4 }}>

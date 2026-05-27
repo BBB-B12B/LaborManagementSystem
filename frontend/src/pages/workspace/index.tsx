@@ -27,26 +27,37 @@ import {
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Layout from '@/components/layout/Layout';
+import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
 import { taskService, type Task, type Subtask, type TaskAssignee } from '@/services/taskService';
+import { DatePicker } from '@/components/forms/DatePicker';
 import { memberService } from '@/services/memberService';
+import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/store/authStore';
+import { usePermissions } from '@/utils/permissions';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useFeedbackStore } from '@/store/feedbackStore';
+import { useNotificationStore } from '@/store';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
-  { id: 'in-progress', label: 'In Progress', color: '#5b5ce6' },
-  { id: 'for-checking', label: 'For Checking', color: '#f59e0b' },
-  { id: 'completed', label: 'Completed', color: '#00b87c' },
+  { id: 'in-progress', label: 'In Progress', color: '#5c7cff' },
+  { id: 'for-checking', label: 'For Checking', color: '#ffaa00' },
+  { id: 'completed', label: 'Completed', color: '#00aa5c' },
 ] as const;
+
+const isNotificationForSubtask = (notiSubtaskId: string | undefined, cardId: string) => {
+  if (!notiSubtaskId || !cardId) return false;
+  return notiSubtaskId === cardId || cardId.endsWith('__' + notiSubtaskId);
+};
 
 export default function WorkspacePage() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { notifications, markSubtaskAsRead } = useNotificationStore();
   const tasksInCache = useTaskCacheStore((s) => s.tasks);
   const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
   const invalidateCache = useTaskCacheStore((s) => s.invalidate);
@@ -54,6 +65,8 @@ export default function WorkspacePage() {
   const setCacheLoading = useTaskCacheStore((s) => s.setLoading);
   const setCacheError = useTaskCacheStore((s) => s.setError);
   const { showLoading, hideLoading } = useFeedbackStore();
+  const toast = useToast();
+  const { canEditWorkspace } = usePermissions(user);
 
   const [activeTab, setActiveTab] = useState('All Tasks');
   const [loading, setLoading] = useState(false);
@@ -74,6 +87,7 @@ export default function WorkspacePage() {
   const [quickCreateTaskId, setQuickCreateTaskId] = useState<string | null>(null);
   const [quickSubtaskName, setQuickSubtaskName] = useState('');
   const [quickAssignees, setQuickAssignees] = useState<TaskAssignee[]>([]);
+  const [quickDueDate, setQuickDueDate] = useState<Date | null>(null);
   const [fmUsers, setFmUsers] = useState<any[]>([]);
   const [fetchingFms, setFetchingFms] = useState(false);
   const [quickCreateError, setQuickCreateError] = useState('');
@@ -283,6 +297,10 @@ export default function WorkspacePage() {
           currentRevision: subtask.currentRevision,
           isSupportRequest: isSubtaskSupport,
           isPickedUpBySupport: isSubtaskPickedUp,
+          unlockedDates: subtask.unlockedDates || {},
+          unlockRequests: subtask.unlockRequests || {},
+          supportUnlockedDates: subtask.supportUnlockedDates || {},
+          supportUnlockRequests: subtask.supportUnlockRequests || {},
           // Custom parent task reference ID
           parentTaskId: task.id,
         };
@@ -349,6 +367,15 @@ export default function WorkspacePage() {
   const handleSubtaskCardClick = (subtaskCard: Task) => {
     setSelectedTaskForReport(subtaskCard);
     setIsReportModalOpen(true);
+
+    if (user) {
+      const hasUnread = notifications.some(
+        (n) => isNotificationForSubtask(n.subtaskId, subtaskCard.id) && !n.readBy.includes(user.id)
+      );
+      if (hasUnread) {
+        markSubtaskAsRead(subtaskCard.id);
+      }
+    }
   };
 
   // Tree click handler (directly launches Daily Report modal)
@@ -365,10 +392,23 @@ export default function WorkspacePage() {
       updatedAt: subtask.updatedAt,
       currentRevision: subtask.currentRevision,
       isSupportRequest: subtask.isSupportRequest ?? task.isSupportRequest,
+      unlockedDates: subtask.unlockedDates || {},
+      unlockRequests: subtask.unlockRequests || {},
+      supportUnlockedDates: subtask.supportUnlockedDates || {},
+      supportUnlockRequests: subtask.supportUnlockRequests || {},
       parentTaskId: task.id,
     };
     setSelectedTaskForReport(mergedTask);
     setIsReportModalOpen(true);
+
+    if (user) {
+      const hasUnread = notifications.some(
+        (n) => isNotificationForSubtask(n.subtaskId, subtask.id) && !n.readBy.includes(user.id)
+      );
+      if (hasUnread) {
+        markSubtaskAsRead(subtask.id);
+      }
+    }
   };
 
   // Quick create subtask handler
@@ -376,6 +416,7 @@ export default function WorkspacePage() {
     setQuickCreateTaskId(taskId);
     setQuickSubtaskName('');
     setQuickAssignees([]);
+    setQuickDueDate(null);
     setQuickCreateError('');
     setIsQuickCreateOpen(true);
   };
@@ -424,15 +465,21 @@ export default function WorkspacePage() {
       setQuickCreateError('กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน');
       return;
     }
+    if (!quickDueDate) {
+      setQuickCreateError('กรุณาเลือกวันที่ครบกำหนดสำหรับงานย่อย');
+      return;
+    }
 
     try {
       showLoading();
-      await taskService.createSubtask(quickCreateTaskId, quickSubtaskName.trim(), quickAssignees);
+      await taskService.createSubtask(quickCreateTaskId, quickSubtaskName.trim(), quickAssignees, quickDueDate);
       setIsQuickCreateOpen(false);
       setQuickSubtaskName('');
       setQuickAssignees([]);
+      setQuickDueDate(null);
       setQuickCreateError('');
       invalidateCache();
+      toast.success('สร้างรายการงานย่อยสำเร็จแล้ว');
       await fetchFromAPI(true);
     } catch (err: any) {
       console.error('Failed to quick-create subtask', err);
@@ -443,7 +490,8 @@ export default function WorkspacePage() {
   };
 
   return (
-    <Layout disablePadding disableTopGap maxWidth={false}>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+      <Layout disablePadding disableTopGap maxWidth={false}>
       <Head>
         <title>Workspace | Labor Manager</title>
       </Head>
@@ -473,7 +521,7 @@ export default function WorkspacePage() {
               selectedNode={selectedNode}
               onSelectNode={setSelectedNode}
               onSubtaskClick={handleSubtaskClickInTree}
-              onQuickCreateSubtask={handleQuickCreateSubtaskClick}
+              onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
             />
           </Box>
         </Box>
@@ -550,6 +598,33 @@ export default function WorkspacePage() {
                   ))}
                 </Stack>
 
+                {canEditWorkspace && (
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setIsModalOpen(true)}
+                    sx={{
+                      bgcolor: '#1c1e2b',
+                      color: '#fff',
+                      borderRadius: '999px',
+                      px: 3,
+                      py: 1.2,
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
+                      '&:hover': {
+                        bgcolor: '#000000',
+                      },
+                      display: { xs: 'none', sm: 'flex' },
+                    }}
+                  >
+                    Newtasks
+                  </Button>
+                )}
+              </Stack>
+
+              {/* Mobile Newtasks fallback */}
+              {canEditWorkspace && (
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
@@ -566,36 +641,13 @@ export default function WorkspacePage() {
                     '&:hover': {
                       bgcolor: '#000000',
                     },
-                    display: { xs: 'none', sm: 'flex' },
+                    display: { xs: 'flex', sm: 'none' },
+                    width: '100%',
                   }}
                 >
                   Newtasks
                 </Button>
-              </Stack>
-
-              {/* Mobile Newtasks fallback */}
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setIsModalOpen(true)}
-                sx={{
-                  bgcolor: '#1c1e2b',
-                  color: '#fff',
-                  borderRadius: '999px',
-                  px: 3,
-                  py: 1.2,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
-                  '&:hover': {
-                    bgcolor: '#000000',
-                  },
-                  display: { xs: 'flex', sm: 'none' },
-                  width: '100%',
-                }}
-              >
-                Newtasks
-              </Button>
+              )}
 
               {/* Actions */}
               <Stack
@@ -727,15 +779,21 @@ export default function WorkspacePage() {
                         />
                       ))
                     ) : columnTasks.length > 0 ? (
-                      columnTasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onEdit={handleEdit}
-                          onDelete={handleDeleteClick}
-                          onClick={handleSubtaskCardClick}
-                        />
-                      ))
+                      columnTasks.map((task) => {
+                        const hasUnread = user && notifications.some(
+                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !n.readBy.includes(user.id)
+                        );
+                        return (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onEdit={canEditWorkspace ? handleEdit : undefined}
+                            onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                            onClick={handleSubtaskCardClick}
+                            hasUnread={!!hasUnread}
+                          />
+                        );
+                      })
                     ) : (
                       <Box
                         sx={{
@@ -779,10 +837,10 @@ export default function WorkspacePage() {
               handleSubtaskClickInTree(t, st);
               setMobileDrawerOpen(false);
             }}
-            onQuickCreateSubtask={(taskId) => {
+            onQuickCreateSubtask={canEditWorkspace ? (taskId) => {
               handleQuickCreateSubtaskClick(taskId);
               setMobileDrawerOpen(false);
-            }}
+            } : undefined}
           />
         </Box>
       </Drawer>
@@ -870,6 +928,29 @@ export default function WorkspacePage() {
                 )}
               />
             )}
+
+            <DatePicker
+              label="วันที่ครบกำหนด *"
+              value={quickDueDate}
+              onChange={(date) => setQuickDueDate(date)}
+              variant="filled"
+              InputProps={{
+                disableUnderline: true,
+                sx: {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none !important' },
+                }
+              }}
+              sx={{
+                width: '100%',
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -946,6 +1027,7 @@ export default function WorkspacePage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Layout>
+      </Layout>
+    </ProtectedRoute>
   );
 }

@@ -72,7 +72,7 @@ export default function ManagementHubPage() {
   );
 
   return (
-    <ProtectedRoute requiredRoles={['AM', 'FM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
 

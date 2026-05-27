@@ -57,6 +57,16 @@ export interface Task {
   subtasks?: Subtask[];
 }
 
+export interface EditHistoryRecord {
+  updatedAt: Date;
+  updatedBy: string;
+  changes: {
+    field: string;
+    oldValue: any;
+    newValue: any;
+  }[];
+}
+
 export interface Subtask {
   id: string;
   subtaskId: string;
@@ -74,6 +84,12 @@ export interface Subtask {
   supportAssignees?: TaskAssignee[];
   supportCreatedAt?: Date;
   supportedRevisionIds?: string[];
+  unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
+  unlockRequests?: Record<string, { requestedAt: Date; requestedBy: string }>;
+  supportUnlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
+  supportUnlockRequests?: Record<string, { requestedAt: Date; requestedBy: string }>;
+  dueDate: Date; // Required due date for subtask
+  editHistory?: EditHistoryRecord[]; // [NEW] Track edit history of subtask fields
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -105,12 +121,13 @@ export interface CreateTaskInput {
   workOrderName?: string;
   categoryId?: string;
   categoryName: string;
-  dueDate: Date;
+  dueDate?: Date;
   status?: TaskStatus;
   subtasks: {
     subtaskName: string;
     assignees: TaskAssignee[];
     isSupportRequest?: boolean;
+    dueDate: Date | string;
   }[];
 }
 
@@ -138,12 +155,13 @@ export interface UpdateTaskInput {
   supportedRevisionIds?: string[]; // [NEW] Revisions that had support team
   unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
   isSupportRequest?: boolean;
-  subtasks?: {
+    subtasks?: {
     id?: string;
     subtaskId?: string;
     subtaskName: string;
     assignees: TaskAssignee[];
     isSupportRequest?: boolean;
+    dueDate?: Date | string;
   }[];
 }
 

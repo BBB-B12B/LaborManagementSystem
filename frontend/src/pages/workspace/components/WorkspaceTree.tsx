@@ -18,6 +18,7 @@ import {
   Add as AddIcon,
   FormatListBulleted as ListIcon,
   Circle,
+  Person,
 } from '@mui/icons-material';
 import type { Task, Subtask } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
@@ -28,7 +29,7 @@ interface WorkspaceTreeProps {
   selectedNode: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null;
   onSelectNode: (node: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null) => void;
   onSubtaskClick: (task: Task, subtask: Subtask) => void;
-  onQuickCreateSubtask: (taskId: string) => void;
+  onQuickCreateSubtask?: (taskId: string) => void;
 }
 
 export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
@@ -286,6 +287,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                   {isTaskExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
                                 </IconButton>
                                 <Assignment sx={{ fontSize: 14, mr: 0.75, color: isTaskSelected ? '#22c55e' : '#6b7280' }} />
+                                {tItem.task.assignees && tItem.task.assignees.length > 0 && (
+                                  <Tooltip title={`ผู้รับผิดชอบ: ${tItem.task.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
+                                    <Person sx={{ fontSize: 14, color: '#3b82f6', mr: 0.5 }} />
+                                  </Tooltip>
+                                )}
                                 <Typography
                                   variant="body2"
                                   noWrap
@@ -297,10 +303,30 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                 >
                                   {tItem.name}
                                 </Typography>
+                                {(() => {
+                                  const taskProgress = isSupportTree ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
+                                  return (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        color: taskProgress >= 100 ? '#10b981' : '#6366f1',
+                                        bgcolor: taskProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
+                                        px: 0.6,
+                                        py: 0.05,
+                                        borderRadius: '3px',
+                                        mr: 1,
+                                      }}
+                                    >
+                                      {taskProgress}%
+                                    </Typography>
+                                  );
+                                })()}
                                 
                                 <Stack direction="row" alignItems="center" spacing={0.5}>
                                   {/* Quick Add Subtask Button */}
-                                  {!isSupportTree && (
+                                  {!isSupportTree && onQuickCreateSubtask && (
                                     <Tooltip title="สร้างงานย่อยด่วน" arrow>
                                       <IconButton
                                         size="small"

@@ -34,6 +34,7 @@ import {
   Sync as SyncIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
+  NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
@@ -294,7 +295,16 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
     if (isConfirmed) {
       try {
-        await taskService.unlockTaskReport(task.id, dateStr, days, isActingAsSupport);
+        await taskService.unlockTaskReport(task.id, dateStr, days, isActingAsSupport, {
+          projectId: task.projectId,
+          projectName: task.projectName,
+          workOrderId: task.workOrderId,
+          workOrderName: task.workOrderName,
+          categoryId: task.categoryId,
+          categoryName: task.categoryName,
+          taskId: task.taskId,
+          taskName: task.taskName,
+        });
         enqueueSnackbar('ปลดล็อคสิทธิ์เรียบร้อยแล้ว', { variant: 'success' });
         
         const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
@@ -443,6 +453,31 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     return isBefore(new Date(), currentUnlockedUntil);
   }, [currentUnlockedUntil]);
 
+  // Pending unlock requests from FM (dates awaiting supervisor approval)
+  const pendingUnlockDates = useMemo(() => {
+    if (!task) return [];
+    const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+    const requests = task[requestsField] || {};
+    // Return sorted list of dates that have requests but NOT yet been unlocked
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = task[unlockedDatesField] || {};
+    return Object.keys(requests)
+      .filter(dateStr => {
+        // Only include dates that are still pending (not yet unlocked or unlock expired)
+        const unlockData = unlockedDates[dateStr];
+        if (!unlockData) return true;
+        return !isBefore(new Date(), new Date(unlockData.unlockedUntil));
+      })
+      .sort();
+  }, [task, isActingAsSupport]);
+
+  const handleJumpToFirstUnlockRequest = () => {
+    if (pendingUnlockDates.length > 0) {
+      const firstDate = new Date(pendingUnlockDates[0] + 'T00:00:00');
+      setSelectedDate(firstDate);
+    }
+  };
+
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateStr = format(day, 'yyyy-MM-dd');
@@ -469,7 +504,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     }
 
     const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
-    const isRequested = task?.[requestsField] && task[requestsField][dateStr];
+    const isRequested = !!(task?.[requestsField] && task[requestsField][dateStr]);
     const isPast = isBefore(day, today) && !isSameDay(day, today);
     
     const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
@@ -479,12 +514,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
-    if (isMissingReport) {
-      if (isRequested) {
-        badgeColor = '#a855f7'; // Purple dot for supervisor to indicate requested unlock
-      } else {
-        badgeColor = isLocked ? 'error.main' : 'warning.main';
-      }
+    // Purple dot = FM has sent an unlock request (always shown regardless of report status)
+    if (isRequested) {
+      badgeColor = '#a855f7';
+    } else if (isMissingReport) {
+      badgeColor = isLocked ? 'error.main' : 'warning.main';
     }
 
     const summary = reportData[dateStr];
@@ -571,6 +605,33 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             </Stack>
           </Box>
           <Stack direction="row" spacing={1.5} alignItems="center">
+            {pendingUnlockDates.length > 0 && (
+              <Box
+                onClick={handleJumpToFirstUnlockRequest}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  bgcolor: '#fef9c3',
+                  color: '#92400e',
+                  border: '1.5px solid #fde047',
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  '&:hover': { bgcolor: '#fef08a' },
+                }}
+              >
+                <Badge badgeContent={pendingUnlockDates.length} color="warning" sx={{ '& .MuiBadge-badge': { fontWeight: 700 } }}>
+                  <NotificationsActiveIcon sx={{ fontSize: 20 }} />
+                </Badge>
+                <Typography variant="caption" sx={{ fontWeight: 700, ml: 1, whiteSpace: 'nowrap' }}>
+                  คำขอปลดล็อค {pendingUnlockDates.length} รายการ — กดดูคำขอ
+                </Typography>
+              </Box>
+            )}
+
             {isActingAsSupport && task?.status === 'for-checking' && (
               <Box sx={{ bgcolor: '#fef3c7', color: '#d97706', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #fde68a' }}>
                 <InfoIcon sx={{ fontSize: 18, mr: 1 }} />
@@ -625,10 +686,10 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             <CircularProgress />
           </Box>
         ) : (
-          <Grid container spacing={4}>
+          <Grid container spacing={4} sx={{ mt: 1.5 }}>
             <Grid item xs={12} md={5}>
-              <Box sx={{ border: '1px solid #eef0f4', borderRadius: 4, p: 2, height: '100%' }}>
-                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '32px' }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
                     Daily Report Log
                   </Typography>
@@ -650,66 +711,86 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   })()}
                 </Box>
 
-                <Menu
-                  anchorEl={unlockAnchorEl}
-                  open={Boolean(unlockAnchorEl)}
-                  onClose={handleUnlockClose}
-                  PaperProps={{ sx: { borderRadius: 2, mt: 1, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' } }}
-                >
-                  <MenuItem onClick={() => handleUnlock(1)}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 1 วัน</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => handleUnlock(3)}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 3 วัน</Typography>
-                  </MenuItem>
-                </Menu>
+                <Box sx={{ border: '1px solid #eef0f4', borderRadius: 4, p: 2, flexGrow: 1 }}>
+                  <Menu
+                    anchorEl={unlockAnchorEl}
+                    open={Boolean(unlockAnchorEl)}
+                    onClose={handleUnlockClose}
+                    PaperProps={{ sx: { borderRadius: 2, mt: 1, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' } }}
+                  >
+                    <MenuItem onClick={() => handleUnlock(1)}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 1 วัน</Typography>
+                    </MenuItem>
+                    <MenuItem onClick={() => handleUnlock(3)}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 3 วัน</Typography>
+                    </MenuItem>
+                  </Menu>
 
-                {isWagePeriodClosed && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: 'error.50', borderRadius: 2, color: 'error.700' }}>
-                    <InfoIcon fontSize="small" />
-                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                      รอบค่าแรงปิดแล้ว ค่อยผูกสิทธิ์ภายหลัง
-                    </Typography>
-                  </Box>
-                )}
+                  {isWagePeriodClosed && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: 'error.50', borderRadius: 2, color: 'error.700' }}>
+                      <InfoIcon fontSize="small" />
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                        รอบค่าแรงปิดแล้ว ค่อยผูกสิทธิ์ภายหลัง
+                      </Typography>
+                    </Box>
+                  )}
 
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={th}>
-                  <DateCalendar
-                    value={selectedDate}
-                    onChange={(newDate) => setSelectedDate(newDate)}
-                    slots={{ day: CustomPickersDay }}
-                    sx={{
-                      width: '100%',
-                      margin: 0,
-                      '& .MuiPickersDay-root': { fontWeight: 600 },
-                      '& .MuiPickersDay-today': { borderColor: 'primary.main' },
-                      '& .Mui-selected': { backgroundColor: 'primary.main', color: '#fff', '&:hover': { backgroundColor: 'primary.dark' } },
-                    }}
-                  />
-                </LocalizationProvider>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={th}>
+                    <DateCalendar
+                      value={selectedDate}
+                      onChange={(newDate) => setSelectedDate(newDate)}
+                      slots={{ day: CustomPickersDay }}
+                      sx={{
+                        width: '100%',
+                        maxWidth: '320px',
+                        mx: 'auto',
+                        '& .MuiPickersDay-root': { fontWeight: 600 },
+                        '& .MuiPickersDay-today': { borderColor: 'primary.main' },
+                        '& .Mui-selected': { backgroundColor: 'primary.main', color: '#fff', '&:hover': { backgroundColor: 'primary.dark' } },
+                      }}
+                    />
+                  </LocalizationProvider>
 
-                <Stack direction="row" spacing={3} sx={{ mt: 2, justifyContent: 'center' }}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'rgba(5, 150, 105, 0.2)', borderRadius: '50%' }} />
-                    <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>มีข้อมูล</Typography>
+                  <Stack spacing={1.5} sx={{ mt: 3, px: 2 }}>
+                    {/* Row 1: Reports Submitted (Background highlight) */}
+                    <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Box sx={{ width: 14, height: 14, bgcolor: 'rgba(5, 150, 105, 0.15)', border: '1px solid #059669', borderRadius: 0.5 }} />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ส่งแล้ว (ครบ 100%)</Typography>
+                      </Stack>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Box sx={{ width: 14, height: 14, bgcolor: 'rgba(217, 119, 6, 0.15)', border: '1px solid #d97706', borderRadius: 0.5 }} />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ส่งแล้ว (กำลังทำ)</Typography>
+                      </Stack>
+                    </Stack>
+
+                    {/* Row 2: Missing Reports (Bottom Status Dots) */}
+                    <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Box sx={{ width: 8, height: 8, bgcolor: 'warning.main', borderRadius: '50%' }} />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ยังไม่ได้ลง (ส่งได้)</Typography>
+                      </Stack>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Box sx={{ width: 8, height: 8, bgcolor: 'error.main', borderRadius: '50%' }} />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ไม่มีข้อมูล (ล็อค)</Typography>
+                      </Stack>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Box sx={{ width: 8, height: 8, bgcolor: '#a855f7', borderRadius: '50%' }} />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ขอปลดล็อคลงย้อนหลัง</Typography>
+                      </Stack>
+                    </Stack>
                   </Stack>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'warning.main', borderRadius: '50%' }} />
-                    <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ยังไม่ได้ลง</Typography>
-                  </Stack>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'error.main', borderRadius: '50%' }} />
-                    <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ไม่มีข้อมูล</Typography>
-                  </Stack>
-                </Stack>
+                </Box>
               </Box>
             </Grid>
 
             <Grid item xs={12} md={7}>
               <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  สรุปข้อมูลวันที่ {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: th }) : ''}
-                </Typography>
+                <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', height: '32px' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    สรุปข้อมูลวันที่ {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: th }) : ''}
+                  </Typography>
+                </Box>
 
                 {selectedSummary ? (
                   <Stack spacing={3} sx={{ flexGrow: 1 }}>

@@ -2,6 +2,7 @@ import { db } from '../config/firebase';
 import admin from 'firebase-admin';
 import { afterSaleDb } from '../config/firebaseProjectB';
 import { Task, CreateTaskInput, UpdateTaskInput, taskConverter, TaskAssignee, TaskStatus } from '../models/Task';
+import { Notification } from '../models/Notification';
 import { AppError } from '../api/middleware/errorHandler';
 import axios from 'axios';
 
@@ -154,6 +155,9 @@ export class TaskService {
       }
       const allAssignees = Array.from(allAssigneesMap.values());
 
+      // Calculate max dueDate from subtasks, fallback to input.dueDate or now
+      const maxDueDate = this.calculateMaxDueDate(input.subtasks) || (input.dueDate ? new Date(input.dueDate) : now);
+
       const newTaskData: Omit<Task, 'id'> = {
         taskId: taskId,
         taskName: input.taskName,
@@ -167,7 +171,7 @@ export class TaskService {
         categoryId: catId,
         categoryName: input.categoryName || 'General',
         assignees: allAssignees,
-        dueDate: input.dueDate,
+        dueDate: maxDueDate,
         status: input.status || 'upcoming',
         currentRevision: isNewTask ? 'rev00' : (existingTaskData?.currentRevision || 'rev00'),
         revisionId: isNewTask ? 'rev00' : (existingTaskData?.revisionId || 'rev00'),
@@ -204,6 +208,8 @@ export class TaskService {
             dailyProgress: 0,
             currentRevision: 'rev00',
             isSupportRequest: st.isSupportRequest || false,
+            dueDate: st.dueDate ? new Date(st.dueDate) : null,
+            editHistory: [],
             createdAt: createdAtDate,
             updatedAt: now,
             createdBy: createdBy,
@@ -596,7 +602,30 @@ export class TaskService {
     }
     
     const snapshot = await taskRef.collection('subtasks').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => {
+      const subData = doc.data();
+      const safeDate = (val: any): Date => {
+        if (!val) return new Date();
+        if (typeof val.toDate === 'function') return val.toDate();
+        if (typeof val === 'string') return new Date(val);
+        return val;
+      };
+      return {
+        ...subData,
+        dueDate: subData.dueDate ? safeDate(subData.dueDate) : safeDate(subData.createdAt || new Date()),
+        editHistory: subData.editHistory ? subData.editHistory.map((h: any) => ({
+          ...h,
+          updatedAt: safeDate(h.updatedAt),
+          changes: Array.isArray(h.changes) ? h.changes.map((c: any) => ({
+            ...c,
+            oldValue: c.field === 'dueDate' && c.oldValue ? safeDate(c.oldValue) : c.oldValue,
+            newValue: c.field === 'dueDate' && c.newValue ? safeDate(c.newValue) : c.newValue,
+          })) : []
+        })) : [],
+        createdAt: safeDate(subData.createdAt),
+        updatedAt: safeDate(subData.updatedAt),
+      };
+    });
   }
 
   /**
@@ -604,10 +633,10 @@ export class TaskService {
    */
   async createSubtask(
     taskId: string,
-    input: { subtaskName: string; assignees: TaskAssignee[] },
+    input: { subtaskName: string; assignees: TaskAssignee[]; dueDate?: Date | string },
     createdBy: string
   ): Promise<any> {
-    const { subtaskName, assignees } = input;
+    const { subtaskName, assignees, dueDate } = input;
     let taskRef: FirebaseFirestore.DocumentReference;
     let woId = '';
     let catId = '';
@@ -657,6 +686,8 @@ export class TaskService {
         dailyProgress: 0,
         currentRevision: 'rev00',
         isSupportRequest: false,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        editHistory: [],
         createdAt: now,
         updatedAt: now,
         createdBy: createdBy,
@@ -691,12 +722,13 @@ export class TaskService {
         ...assignees.map(a => a.employeeId),
       ]));
 
-      // 6. Recalculate average progress for parent task
+      // 6. Recalculate average progress for parent task and compute max dueDate
       const allSubtasks = subtasksQuery.docs.map(d => d.data());
       // Add the new subtask to the calculation
       allSubtasks.push(subtaskData);
       const totalProgress = allSubtasks.reduce((sum, st) => sum + (st.dailyProgress || 0), 0);
       const averageProgress = Math.round(totalProgress / allSubtasks.length);
+      const maxDueDate = this.calculateMaxDueDate(allSubtasks);
 
       // Determine parent status
       let parentStatus = taskData?.status || 'upcoming';
@@ -709,14 +741,19 @@ export class TaskService {
         parentStatus = 'in-progress';
       }
 
-      transaction.update(taskRef, {
+      const taskUpdates: any = {
         assignees: updatedAssignees,
         historicalAssigneeIds: historicalIds,
         dailyProgress: averageProgress,
         status: parentStatus,
         updatedAt: now,
         updatedBy: createdBy
-      });
+      };
+      if (maxDueDate) {
+        taskUpdates.dueDate = maxDueDate;
+      }
+
+      transaction.update(taskRef, taskUpdates);
 
       return subtaskData;
     });
@@ -739,6 +776,11 @@ export class TaskService {
       }
 
       // Fetch all subtasks for this task
+      const pathParts = doc.ref.path.split('/');
+      const woId = pathParts[1];
+      const catId = pathParts[3];
+      const taskId = pathParts[5];
+
       const subtasksSnapshot = await doc.ref.collection('subtasks').get();
       data.subtasks = subtasksSnapshot.docs.map(subDoc => {
         const subData = subDoc.data();
@@ -749,7 +791,7 @@ export class TaskService {
           return val;
         };
         return {
-          id: subDoc.id,
+          id: subData.id || `${woId}__${catId}__${taskId}__${subDoc.id}`,
           subtaskId: subData.subtaskId || '',
           subtaskName: subData.subtaskName || '',
           status: subData.status || 'upcoming',
@@ -766,6 +808,44 @@ export class TaskService {
           supportAssignees: subData.supportAssignees || [],
           supportCreatedAt: subData.supportCreatedAt ? safeDate(subData.supportCreatedAt) : safeDate(subData.createdAt),
           supportedRevisionIds: subData.supportedRevisionIds || [],
+          unlockedDates: subData.unlockedDates ? Object.keys(subData.unlockedDates).reduce((acc, key) => {
+            acc[key] = {
+              ...subData.unlockedDates[key],
+              unlockedUntil: safeDate(subData.unlockedDates[key].unlockedUntil),
+            };
+            return acc;
+          }, {} as Record<string, any>) : {},
+          unlockRequests: subData.unlockRequests ? Object.keys(subData.unlockRequests).reduce((acc, key) => {
+            acc[key] = {
+              ...subData.unlockRequests[key],
+              requestedAt: safeDate(subData.unlockRequests[key].requestedAt),
+            };
+            return acc;
+          }, {} as Record<string, any>) : {},
+          supportUnlockedDates: subData.supportUnlockedDates ? Object.keys(subData.supportUnlockedDates).reduce((acc, key) => {
+            acc[key] = {
+              ...subData.supportUnlockedDates[key],
+              unlockedUntil: safeDate(subData.supportUnlockedDates[key].unlockedUntil),
+            };
+            return acc;
+          }, {} as Record<string, any>) : {},
+          supportUnlockRequests: subData.supportUnlockRequests ? Object.keys(subData.supportUnlockRequests).reduce((acc, key) => {
+            acc[key] = {
+              ...subData.supportUnlockRequests[key],
+              requestedAt: safeDate(subData.supportUnlockRequests[key].requestedAt),
+            };
+            return acc;
+          }, {} as Record<string, any>) : {},
+          dueDate: subData.dueDate ? safeDate(subData.dueDate) : safeDate(data.dueDate || new Date()),
+          editHistory: subData.editHistory ? subData.editHistory.map((h: any) => ({
+            ...h,
+            updatedAt: safeDate(h.updatedAt),
+            changes: Array.isArray(h.changes) ? h.changes.map((c: any) => ({
+              ...c,
+              oldValue: c.field === 'dueDate' && c.oldValue ? safeDate(c.oldValue) : c.oldValue,
+              newValue: c.field === 'dueDate' && c.newValue ? safeDate(c.newValue) : c.newValue,
+            })) : []
+          })) : [],
           createdAt: safeDate(subData.createdAt),
           updatedAt: safeDate(subData.updatedAt),
           createdBy: subData.createdBy || '',
@@ -858,6 +938,36 @@ export class TaskService {
         }
         const allAssignees = Array.from(allAssigneesMap.values());
 
+        // Calculate final subtask list for dueDate aggregation
+        let maxDueDate = oldData.dueDate ? (oldData.dueDate.toDate ? oldData.dueDate.toDate() : new Date(oldData.dueDate)) : null;
+        if (input.subtasks) {
+          const finalSubtasks: any[] = [];
+          existingSubtasks.forEach(oldSt => {
+            const updatedSt = input.subtasks!.find(x => x.subtaskId === oldSt.subtaskId);
+            if (updatedSt) {
+              finalSubtasks.push({
+                ...oldSt,
+                dueDate: updatedSt.dueDate ? new Date(updatedSt.dueDate) : null
+              });
+            } else {
+              finalSubtasks.push(oldSt);
+            }
+          });
+          // Add new subtasks
+          input.subtasks.forEach(stInput => {
+            if (!stInput.subtaskId) {
+              finalSubtasks.push({
+                dueDate: stInput.dueDate ? new Date(stInput.dueDate) : null
+              });
+            }
+          });
+          
+          const calculatedMaxDueDate = this.calculateMaxDueDate(finalSubtasks);
+          if (calculatedMaxDueDate) {
+            maxDueDate = calculatedMaxDueDate;
+          }
+        }
+
         // Sanitize input: Remove undefined values and subtasks
         const sanitizedInput = Object.keys(input).reduce((obj: any, key) => {
           const val = (input as any)[key];
@@ -888,6 +998,7 @@ export class TaskService {
             newData.assignees = allAssignees;
             newData.historicalAssigneeIds = Array.from(new Set([...(oldData.historicalAssigneeIds || []), ...allAssignees.map(a => a.employeeId)]));
             newData.isSupportRequest = hasSupportRequest;
+            newData.dueDate = maxDueDate;
           }
           transaction.set(activeTaskRef, newData);
           transaction.delete(taskRef);
@@ -902,6 +1013,7 @@ export class TaskService {
             updates.assignees = allAssignees;
             updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...allAssignees.map(a => a.employeeId));
             updates.isSupportRequest = hasSupportRequest;
+            updates.dueDate = maxDueDate;
           }
           transaction.update(activeTaskRef, updates);
         }
@@ -911,14 +1023,66 @@ export class TaskService {
           input.subtasks.forEach(stInput => {
             if (stInput.subtaskId) {
               const stRef = activeTaskRef.collection('subtasks').doc(stInput.subtaskId);
-              transaction.update(stRef, {
+              const oldSt = existingSubtasks.find(x => x.subtaskId === stInput.subtaskId) || {};
+              const changes: any[] = [];
+
+              if (stInput.subtaskName !== undefined && oldSt.subtaskName !== stInput.subtaskName) {
+                changes.push({
+                  field: 'subtaskName',
+                  oldValue: oldSt.subtaskName || '',
+                  newValue: stInput.subtaskName
+                });
+              }
+
+              if (stInput.assignees !== undefined && !this.compareAssignees(oldSt.assignees, stInput.assignees)) {
+                changes.push({
+                  field: 'assignees',
+                  oldValue: oldSt.assignees || [],
+                  newValue: stInput.assignees
+                });
+              }
+
+              if (stInput.dueDate !== undefined && !this.compareDates(oldSt.dueDate, stInput.dueDate)) {
+                changes.push({
+                  field: 'dueDate',
+                  oldValue: oldSt.dueDate ? (oldSt.dueDate.toDate ? oldSt.dueDate.toDate() : new Date(oldSt.dueDate)) : null,
+                  newValue: stInput.dueDate ? new Date(stInput.dueDate) : null
+                });
+              }
+
+              const newIsSupport = stInput.isSupportRequest || false;
+              const oldIsSupport = oldSt.isSupportRequest || false;
+              if (newIsSupport !== oldIsSupport) {
+                changes.push({
+                  field: 'isSupportRequest',
+                  oldValue: oldIsSupport,
+                  newValue: newIsSupport
+                });
+              }
+
+              const subtaskUpdates: any = {
                 subtaskName: stInput.subtaskName,
                 assignees: stInput.assignees,
-                isSupportRequest: stInput.isSupportRequest || false,
+                isSupportRequest: newIsSupport,
                 updatedAt: now,
                 updatedBy: updatedBy,
                 historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(...stInput.assignees.map(a => a.employeeId))
-              });
+              };
+
+              if (stInput.dueDate !== undefined) {
+                subtaskUpdates.dueDate = stInput.dueDate ? new Date(stInput.dueDate) : null;
+              }
+
+              if (changes.length > 0) {
+                const historyRecord = {
+                  updatedAt: now,
+                  updatedBy: updatedBy,
+                  changes: changes
+                };
+                subtaskUpdates.editHistory = admin.firestore.FieldValue.arrayUnion(historyRecord);
+              }
+
+              transaction.update(stRef, subtaskUpdates);
             } else {
               const subtaskNum = (currentSubtaskRun++).toString().padStart(4, '0');
               const subtaskId = `${oldTaskId}-${subtaskNum}`;
@@ -932,6 +1096,8 @@ export class TaskService {
                 dailyProgress: 0,
                 currentRevision: 'rev00',
                 isSupportRequest: stInput.isSupportRequest || false,
+                dueDate: stInput.dueDate ? new Date(stInput.dueDate) : null,
+                editHistory: [],
                 createdAt: now,
                 updatedAt: now,
                 createdBy: updatedBy,
@@ -988,6 +1154,36 @@ export class TaskService {
    */
   private recordHistory = async (_taskRef: FirebaseFirestore.DocumentReference, _type: string, _oldData: any, _newData: any, _userId: string) => {
     // No-op
+  };
+
+  private compareDates = (d1: any, d2: any): boolean => {
+    if (!d1 && !d2) return true;
+    if (!d1 || !d2) return false;
+    const date1 = d1.toDate ? d1.toDate() : new Date(d1);
+    const date2 = d2.toDate ? d2.toDate() : new Date(d2);
+    return date1.getTime() === date2.getTime();
+  };
+
+  private calculateMaxDueDate = (subtasks: any[]): Date | null => {
+    let maxDate: Date | null = null;
+    (subtasks || []).forEach(st => {
+      if (st.dueDate) {
+        const date = st.dueDate.toDate ? st.dueDate.toDate() : new Date(st.dueDate);
+        if (!isNaN(date.getTime())) {
+          if (!maxDate || date.getTime() > maxDate.getTime()) {
+            maxDate = date;
+          }
+        }
+      }
+    });
+    return maxDate;
+  };
+
+  private compareAssignees = (a1: any[], a2: any[]): boolean => {
+    const list1 = (a1 || []).map(a => String(a.employeeId || a.id || '').trim().toLowerCase()).sort();
+    const list2 = (a2 || []).map(a => String(a.employeeId || a.id || '').trim().toLowerCase()).sort();
+    if (list1.length !== list2.length) return false;
+    return list1.every((val, index) => val === list2[index]);
   };
 
   /**
@@ -1198,10 +1394,12 @@ export class TaskService {
     }
 
 
+    let taskData: any = null;
     await afterSaleDb.runTransaction(async (transaction) => {
       // 1. ALL READS
       const taskDoc = await transaction.get(taskRef);
       if (!taskDoc.exists) throw new AppError('Task not found', 404);
+      taskData = taskDoc.data();
 
       const dailyReportDoc = await transaction.get(dailyReportRef);
       let editHistory: any[] = [];
@@ -1423,6 +1621,54 @@ export class TaskService {
       }
     } catch (err: any) {
       console.error('Failed to process foremanUsage for submitted report:', err.message);
+    }
+
+    // -------------------------------------------------------------
+    // Create notification in Firestore
+    // -------------------------------------------------------------
+    try {
+      if (taskData) {
+        let userEmployeeId = 'unknown';
+        let userFullName = 'Unknown User';
+
+        const userDoc = await db.collection('users').doc(updatedBy).get();
+        if (userDoc.exists) {
+          const uData = userDoc.data();
+          userEmployeeId = uData?.employeeId || updatedBy;
+          userFullName = uData?.name || uData?.username || 'Unknown User';
+        } else {
+          const userQuery = await db.collection('users').where('employeeId', '==', updatedBy).limit(1).get();
+          if (!userQuery.empty) {
+            const uData = userQuery.docs[0].data();
+            userEmployeeId = uData.employeeId;
+            userFullName = uData.name || uData.username || 'Unknown User';
+          }
+        }
+
+        const notificationData: Notification = {
+          type: 'daily_report_submit',
+          projectId: taskData.projectId || '',
+          projectName: taskData.projectName || '',
+          workOrderId: taskData.workOrderId || '',
+          workOrderName: taskData.workOrderName || '',
+          categoryId: taskData.categoryId || '',
+          categoryName: taskData.categoryName || '',
+          taskId: taskData.taskId || '',
+          taskName: taskData.taskName || '',
+          subtaskId: subtaskRef ? subtaskRef.id : '',
+          subtaskName: subtaskRef ? (dataForRev.subtaskName || '') : '',
+          reportDate: dateStr,
+          message: `${userFullName} ได้ลงรายงานประจำวันของงาน "${taskData.taskName}"${subtaskRef ? ` > "${dataForRev.subtaskName}"` : ''} สำหรับวันที่ ${dateStr}`,
+          createdAt: new Date(),
+          createdBy: userEmployeeId,
+          createdByName: userFullName,
+          readBy: []
+        };
+        await afterSaleDb.collection('notifications').add(notificationData);
+        console.log(`[TaskService] Created notification for daily report submission: ${notificationData.message}`);
+      }
+    } catch (notiError: any) {
+      console.error('Failed to create notification for daily report submission:', notiError.message);
     }
 
     // -------------------------------------------------------------
