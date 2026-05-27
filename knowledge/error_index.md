@@ -220,3 +220,20 @@ This catalog lists known errors and bug fix details.
 - **Symptom:** Warehouse (WH) users with the Area Manager (`AM`) role saw regular construction tasks of other projects (e.g. `STR-0001-001-0002` - เทปูนเสา GL.H) on their board and in their sidebar's "งานหลัก" tree list.
 - **Root Cause:** In `filterTasksByRole` inside `index.tsx`, any user with the `AM` role was treated as a general admin (`isAdmin = true`) and bypassed the task filtering logic entirely, returning `allTasks` without applying project-based or WH support-based visibility rules.
 - **Resolution:** Refactored the role bypass condition so that Area Managers (`AM`) only bypass the filter if they do NOT belong to the WH department (`(role === 'AM' && !isWH)`). WH Area Managers now correctly go through the WH filtering rules, hiding regular tasks of other projects while preserving access to their own projects and accepted support requests.
+
+## ERR-027: Calendar dots shifted and progress colors missing in Subtask Daily Report popup
+- **Task:** T-012-008-05 · **Session:** session_010
+- **File:** frontend/src/pages/workspace/components/TaskDailyReportModal.tsx · **Line:** 106, 485
+- **Symptom:** In the Subtask Daily Report modal calendar, dates with submitted reports did not display highlight colors, and missing report status dots (red/orange) were offset and overlapped adjacent days. Additionally, WH supervisors saw their own project's local tasks as missing reports (red dots) even though reports had been submitted.
+- **Root Cause:** 
+  1. Incorrect `isActingAsSupport` Evaluation: In `TaskDailyReportModal.tsx`, `isActingAsSupport` defaulted to `true` for all support tasks if the user's department was `WH`, ignoring whether the task belonged to their own project. This caused the calendar to search for support reports (`supportReports`) instead of site reports (`siteReports`) for local WH tasks.
+  2. The daily progress value was only set on days with site reports, resetting to 0% on days with only support reports.
+  3. The task status was not checked, meaning completed tasks did not show green for all report days.
+  4. The custom calendar day component (`CustomPickersDay`) colored all report dates in green unconditionally, and the styling was overridden by default MUI styles.
+  5. The custom component returned a `PickersDay` wrapped inside MUI's `Badge`, which positioned the badge content at the top-right corner. The relative alignment caused the dots to shift and overlap the row above.
+- **Resolution:**
+  1. Updated `isActingAsSupport` to match `index.tsx` logic: a user is acting as support only if they are explicitly in `supportAssignees` or if it is a cross-project task (`isViewingCrossProject === true`). This fixes the local WH tasks report visibility issue.
+  2. Modified `fetchReports` to calculate progress via a chronological `runningProgress` value that is carried forward to days without site reports.
+  3. Defined `isCompleted` checking both `progress === 100` and `task?.status === 'completed'`.
+  4. Styled the day cell with `!important` color/background and used `&:not(.Mui-selected)` to prevent selected date styling conflicts, highlighting green (emerald light) for completed/100% days and yellow (amber light) for in-progress days.
+  5. Replaced the MUI `Badge` wrapper with a custom relative `Box` containing an absolute positioned dot (`bottom: 4`, `left: '50%'`, `transform: 'translateX(-50%)'`). This centers the status dots perfectly at the bottom of the date circle.

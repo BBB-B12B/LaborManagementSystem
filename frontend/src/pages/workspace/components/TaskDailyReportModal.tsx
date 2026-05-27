@@ -106,8 +106,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const isActingAsSupport = useMemo(() => {
     if (!task || !user) return false;
     if (!task.isSupportRequest) return false;
-    if (user.department === 'WH') return true;
 
+    // 1. Explicit assignee check
     const uEmpId = String(user.employeeId || user.id || '').toLowerCase().trim();
     const uId = String(user.id || '').toLowerCase().trim();
     const isSupportAssignee = task.supportAssignees?.some((a: any) => {
@@ -116,8 +116,9 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     });
     if (isSupportAssignee) return true;
 
+    // 2. Cross-project + Support Request check
     const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
-    return isViewingCrossProject && task.isPickedUpBySupport;
+    return isViewingCrossProject;
   }, [task, user]);
 
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -217,20 +218,24 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
       // Sort dates chronologically to calculate progress added correctly
       const sortedDates = Array.from(availableDatesSet).sort();
       let previousProgress = 0;
+      let runningProgress = 0;
 
       sortedDates.forEach(dateStr => {
         const entry = combinedReportsMap.get(dateStr)!;
         const siteStats = calculateLaborStats(entry.site);
         const supportStats = calculateLaborStats(entry.support);
 
-        const currentProgress = entry.site?.progress || 0;
-        const progressAdded = Math.max(0, currentProgress - previousProgress);
+        if (entry.site && entry.site.progress !== undefined) {
+          runningProgress = entry.site.progress;
+        }
+
+        const progressAdded = Math.max(0, runningProgress - previousProgress);
 
         newData[dateStr] = {
           hasSiteReport: !!entry.site,
           hasSupportReport: !!entry.support,
           progressAdded,
-          totalProgress: currentProgress,
+          totalProgress: runningProgress,
           pastProgress: previousProgress,
           siteWorkerCount: siteStats.count,
           supportWorkerCount: supportStats.count,
@@ -249,7 +254,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         };
         
         if (entry.site && entry.site.progress !== undefined) {
-          previousProgress = currentProgress;
+          previousProgress = runningProgress;
         }
       });
 
@@ -482,25 +487,53 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
       }
     }
 
+    const summary = reportData[dateStr];
+    const progress = summary ? (summary.totalProgress ?? 0) : 0;
+    const isCompleted = progress === 100 || task?.status === 'completed';
+
     return (
-      <Badge
-        key={props.day.toString()}
-        overlap="circular"
-        badgeContent={badgeColor ? <Box sx={{ width: 6, height: 6, bgcolor: badgeColor, borderRadius: '50%' }} /> : undefined}
-      >
+      <Box sx={{ position: 'relative', display: 'inline-flex' }} key={props.day.toString()}>
         <PickersDay
           {...other}
           outsideCurrentMonth={outsideCurrentMonth}
           day={day}
           sx={{
             ...(hasReport && !outsideCurrentMonth && {
-              backgroundColor: 'rgba(5, 150, 105, 0.1)',
-              color: '#059669',
               fontWeight: 'bold',
+              '&:not(.Mui-selected)': {
+                ...(isCompleted ? {
+                  backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
+                  color: '#059669 !important',
+                  '&:hover': {
+                    backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
+                  },
+                } : {
+                  backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
+                  color: '#d97706 !important',
+                  '&:hover': {
+                    backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
+                  },
+                }),
+              },
             }),
           }}
         />
-      </Badge>
+        {badgeColor && (
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 4,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 6,
+              height: 6,
+              bgcolor: badgeColor,
+              borderRadius: '50%',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+      </Box>
     );
   };
 
