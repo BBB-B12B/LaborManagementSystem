@@ -19,6 +19,8 @@ import {
   FormatListBulleted as ListIcon,
   Circle,
   Person,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { Task, Subtask } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
@@ -30,6 +32,10 @@ interface WorkspaceTreeProps {
   onSelectNode: (node: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null) => void;
   onSubtaskClick: (task: Task, subtask: Subtask) => void;
   onQuickCreateSubtask?: (taskId: string) => void;
+  onEditWorkOrder?: (woId: string, currentName: string) => void;
+  onDeleteWorkOrder?: (woId: string, currentName: string) => void;
+  onEditCategory?: (catId: string, currentName: string) => void;
+  onDeleteCategory?: (catId: string, currentName: string) => void;
 }
 
 export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
@@ -38,6 +44,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   onSelectNode,
   onSubtaskClick,
   onQuickCreateSubtask,
+  onEditWorkOrder,
+  onDeleteWorkOrder,
+  onEditCategory,
+  onDeleteCategory,
 }) => {
   const { user } = useAuthStore();
   const isWH = user?.department === 'WH';
@@ -52,7 +62,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
     const woMap = new Map<string, { id: string; name: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
 
     tasks.forEach((task) => {
-      const subtasks = (task.subtasks || []).filter(subtaskFilter);
+      const subtasks = (task.subtasks || []).filter(sub => sub.isActive !== false && subtaskFilter(sub));
       if (subtasks.length === 0) return;
 
       const woId = task.workOrderId || 'general-wo';
@@ -144,6 +154,9 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
               color: isWoSelected ? '#1d4ed8' : '#334155',
               '&:hover': {
                 bgcolor: isWoSelected ? '#eff6ff' : '#f8fafc',
+                '& .hover-actions': {
+                  opacity: 1,
+                },
               },
             }}
           >
@@ -166,6 +179,43 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
               {wo.name}
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
+            {/* Hover Actions */}
+            {(onEditWorkOrder || onDeleteWorkOrder) && (
+              <Stack
+                className="hover-actions"
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  mr: 1,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {onEditWorkOrder && (
+                  <Tooltip title="แก้ไขชื่อ WorkOrder" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => onEditWorkOrder(wo.id, wo.name)}
+                      sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                    >
+                      <EditIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {onDeleteWorkOrder && (
+                  <Tooltip title="ลบ WorkOrder" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => onDeleteWorkOrder(wo.id, wo.name)}
+                      sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Stack>
+            )}
             <Box
               sx={{
                 px: 0.8,
@@ -208,6 +258,9 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                         color: isCatSelected ? '#1d4ed8' : '#475569',
                         '&:hover': {
                           bgcolor: isCatSelected ? '#eff6ff' : '#f8fafc',
+                          '& .hover-actions': {
+                            opacity: 1,
+                          },
                         },
                       }}
                     >
@@ -230,6 +283,43 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                         {category.name}
                       </Typography>
                       <Box sx={{ flexGrow: 1 }} />
+                      {/* Hover Actions for Category */}
+                      {(onEditCategory || onDeleteCategory) && (
+                        <Stack
+                          className="hover-actions"
+                          direction="row"
+                          spacing={0.5}
+                          sx={{
+                            opacity: 0,
+                            transition: 'opacity 0.2s',
+                            mr: 1,
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {onEditCategory && (
+                            <Tooltip title="แก้ไขชื่อหมวดหมู่" arrow>
+                              <IconButton
+                                size="small"
+                                onClick={() => onEditCategory(category.id, category.name)}
+                                sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                              >
+                                <EditIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {onDeleteCategory && (
+                            <Tooltip title="ลบหมวดหมู่" arrow>
+                              <IconButton
+                                size="small"
+                                onClick={() => onDeleteCategory(category.id, category.name)}
+                                sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
+                              >
+                                <DeleteIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Stack>
+                      )}
                       <Box
                         sx={{
                           px: 0.8,

@@ -252,11 +252,25 @@ export class TaskService {
     const admin = require('firebase-admin');
 
     await afterSaleDb.runTransaction(async (transaction) => {
+      // ─── READS FIRST (Firestore transaction rule) ───────────────────────────
       // 1. อ่านข้อมูล Task ปัจจุบัน
       const doc = await transaction.get(taskRef);
       if (!doc.exists) throw new AppError('Task not found', 404);
       const taskData = doc.data() as Task;
 
+      // Read subtask (if rejecting a specific subtask)
+      let subtaskData: any = null;
+      if (subtaskRef) {
+        const subtaskDoc = await transaction.get(subtaskRef);
+        if (!subtaskDoc.exists) throw new AppError('Subtask not found', 404);
+        subtaskData = subtaskDoc.data();
+        if (!subtaskData) throw new AppError('Subtask data is empty', 404);
+      }
+
+      // Read all sibling subtasks (needed for both cases)
+      const subtasksQuery = await transaction.get(taskRef.collection('subtasks'));
+
+      // ─── COMPUTE (no Firestore calls) ───────────────────────────────────────
       // 2. คำนวณ Revision ใหม่
       const currentRev = taskData.currentRevision || 'rev00';
       const revNum = parseInt(currentRev.replace('rev', ''), 10);
@@ -272,25 +286,22 @@ export class TaskService {
         }
       }
 
-      if (subtaskRef) {
-        // Reject specific subtask
-        const subtaskDoc = await transaction.get(subtaskRef);
-        if (!subtaskDoc.exists) throw new AppError('Subtask not found', 404);
-        const subtaskData = subtaskDoc.data();
-        if (!subtaskData) throw new AppError('Subtask data is empty', 404);
+      // ─── WRITES (all reads are done above) ──────────────────────────────────
+      if (subtaskRef && subtaskData) {
+        // ── Case A: Reject specific subtask ──
 
-        // 1. Create next revision for this subtask only
+        // A1. Create next revision for this subtask
         const nextRevRef = subtaskRef.collection('revisions').doc(nextRevId);
         transaction.set(nextRevRef, {
           revisionId: nextRevId,
           revisionName: revisionName,
           taskName: subtaskData.subtaskName,
-          assignees: newAssignees, 
+          assignees: newAssignees,
           createdAt: now,
           createdBy: updatedBy,
         });
 
-        // 2. Update subtask document (reset progress, bump revision, set status rework)
+        // A2. Update subtask document (reset progress, bump revision, status → rework)
         transaction.update(subtaskRef, {
           currentRevision: nextRevId,
           dailyProgress: 0,
@@ -300,8 +311,7 @@ export class TaskService {
           updatedBy: updatedBy
         });
 
-        // 3. Recalculate average progress for parent task
-        const subtasksQuery = await transaction.get(taskRef.collection('subtasks'));
+        // A3. Recalculate average progress for parent task (using already-read subtasksQuery)
         const allSubtasks = subtasksQuery.docs.map(d => {
           if (d.id === subtaskRef.id) {
             return { ...d.data(), dailyProgress: 0, status: 'rework' };
@@ -309,15 +319,16 @@ export class TaskService {
           return d.data();
         });
         const totalProgress = allSubtasks.reduce((sum, st) => sum + (st.dailyProgress || 0), 0);
-        const averageProgress = Math.round(totalProgress / allSubtasks.length);
+        const averageProgress = allSubtasks.length > 0 ? Math.round(totalProgress / allSubtasks.length) : 0;
 
-        // Update parent task revision and status
+        // A4. Update parent task — status depends on averageProgress
+        const parentStatus: string = averageProgress >= 100 ? 'for-checking' : averageProgress > 0 ? 'in-progress' : 'upcoming';
         const taskUpdates = {
           currentRevision: nextRevId,
           revisionId: nextRevId,
           revisionName: revisionName,
           dailyProgress: averageProgress,
-          status: 'in-progress' as any,
+          status: parentStatus as any,
           assignees: mergedAssignees,
           updatedAt: now,
           updatedBy: updatedBy,
@@ -327,7 +338,8 @@ export class TaskService {
         transaction.update(taskRef, taskUpdates);
         await this.recordHistory(taskRef, 'reject_subtask', taskData, { subtaskId: subtaskRef.id, ...taskUpdates }, updatedBy);
       } else {
-        // Reject parent task directly
+        // ── Case B: Reject parent task directly ──
+
         const taskUpdates = {
           currentRevision: nextRevId,
           revisionId: nextRevId,
@@ -347,20 +359,19 @@ export class TaskService {
         };
         transaction.update(taskRef, taskUpdates);
 
-        // สร้างเอกสาร Revision ใหม่ ภายใต้ "ทุก Subtasks" ของงานนี้
-        const subtasksSnap = await transaction.get(taskRef.collection('subtasks'));
-        subtasksSnap.docs.forEach(doc => {
-          const nextRevRef = doc.ref.collection('revisions').doc(nextRevId);
+        // B2. สร้างเอกสาร Revision ใหม่ ภายใต้ทุก Subtasks (using already-read subtasksQuery)
+        subtasksQuery.docs.forEach(stDoc => {
+          const nextRevRef = stDoc.ref.collection('revisions').doc(nextRevId);
           transaction.set(nextRevRef, {
             revisionId: nextRevId,
             revisionName: revisionName,
-            taskName: doc.data().subtaskName || taskData.taskName,
-            assignees: doc.data().assignees || newAssignees, 
+            taskName: stDoc.data().subtaskName || taskData.taskName,
+            assignees: stDoc.data().assignees || newAssignees,
             createdAt: now,
             createdBy: updatedBy,
           });
 
-          transaction.update(doc.ref, {
+          transaction.update(stDoc.ref, {
             currentRevision: nextRevId,
             dailyProgress: 0,
             status: 'upcoming',
@@ -373,6 +384,7 @@ export class TaskService {
       }
     });
   }
+
 
   /**
    * Approve งานที่ For Checking
@@ -449,8 +461,9 @@ export class TaskService {
   async joinSupportTask(id: string, supportTaskName: string, supportAssignees: any[], updatedBy: string, subtaskId?: string): Promise<void> {
     console.log(`[TaskService] joinSupportTask called for id: ${id}, subtaskId: ${subtaskId}`);
     let taskRef: FirebaseFirestore.DocumentReference;
-    if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
+    const compositeParts = this.parseCompositeId(id);
+    if (compositeParts.length >= 3) {
+      const [woId, catId, taskId] = compositeParts;
       taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
       console.log(`[TaskService] Resolved taskRef using composite ID: ${taskRef.path}`);
     } else {
@@ -592,8 +605,9 @@ export class TaskService {
    */
   async getSubtasks(taskId: string): Promise<any[]> {
     let taskRef: FirebaseFirestore.DocumentReference;
-    if (taskId.includes('__')) {
-      const [woId, catId, id] = taskId.split('__');
+    const compositeParts = this.parseCompositeId(taskId);
+    if (compositeParts.length >= 3) {
+      const [woId, catId, id] = compositeParts;
       taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(id);
     } else {
       const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', taskId).limit(1).get();
@@ -642,8 +656,9 @@ export class TaskService {
     let catId = '';
     let tId = '';
     
-    if (taskId.includes('__')) {
-      const parts = taskId.split('__');
+    const compositeParts = this.parseCompositeId(taskId);
+    if (compositeParts.length >= 3) {
+      const parts = compositeParts;
       woId = parts[0];
       catId = parts[1];
       tId = parts[2];
@@ -898,8 +913,9 @@ export class TaskService {
       let taskRef: FirebaseFirestore.DocumentReference;
       let oldWoId: string = '', oldCatId: string = '', oldTaskId: string = '';
 
-      if (id.includes('__')) {
-        [oldWoId, oldCatId, oldTaskId] = id.split('__');
+      const compositeParts = this.parseCompositeId(id);
+      if (compositeParts.length >= 3) {
+        [oldWoId, oldCatId, oldTaskId] = compositeParts;
         taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories').doc(oldCatId).collection('tasks').doc(oldTaskId);
       } else {
         const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
@@ -1129,8 +1145,9 @@ export class TaskService {
    */
   async softDeleteTask(id: string, userId: string): Promise<void> {
     let taskRef;
-    if (id.includes('__')) {
-      const [woId, catId, taskId] = id.split('__');
+    const compositeParts = this.parseCompositeId(id);
+    if (compositeParts.length >= 3) {
+      const [woId, catId, taskId] = compositeParts;
       taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
     } else {
       const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
@@ -1144,8 +1161,173 @@ export class TaskService {
     const oldData = doc.data();
     const updates = { isActive: false, updatedAt: new Date(), updatedBy: userId };
     
-    await taskRef.update(updates);
+    // Batch update to soft-delete the task and all subtasks under it
+    const batch = afterSaleDb.batch();
+    batch.update(taskRef, updates);
+
+    const subtasksSnap = await taskRef.collection('subtasks').get();
+    subtasksSnap.docs.forEach((stDoc) => {
+      batch.update(stDoc.ref, { isActive: false, updatedAt: new Date(), updatedBy: userId });
+    });
+
+    await batch.commit();
     await this.recordHistory(taskRef, 'delete', oldData, updates, userId);
+  }
+
+  /**
+   * Update Subtask Details
+   */
+  async updateSubtask(id: string, subtaskId: string, subtaskData: any, userId: string): Promise<void> {
+    let lookupId: string;
+    const subtaskParts = this.parseCompositeId(subtaskId);
+    if (subtaskParts.length >= 4) {
+      lookupId = subtaskId;
+    } else {
+      const parentParts = this.parseCompositeId(id);
+      if (parentParts.length >= 3) {
+        lookupId = id.includes('__') ? `${id}__${subtaskId}` : `${id}_${subtaskId}`;
+      } else {
+        lookupId = subtaskId;
+      }
+    }
+    const { taskRef, subtaskRef } = await this.resolveRefs(lookupId);
+    if (!subtaskRef) throw new AppError('Subtask not found', 404);
+
+    const doc = await subtaskRef.get();
+    if (!doc.exists) throw new AppError('Subtask not found', 404);
+
+    const oldData = doc.data() as any;
+    const now = new Date();
+    
+    const updates: any = {
+      updatedAt: now,
+      updatedBy: userId
+    };
+
+    if (subtaskData.subtaskName !== undefined) {
+      if (!subtaskData.subtaskName.trim()) throw new AppError('ชื่อ Subtask ไม่สามารถเป็นค่าว่างได้', 400);
+      updates.subtaskName = subtaskData.subtaskName.trim();
+    }
+    if (subtaskData.dueDate !== undefined) {
+      updates.dueDate = subtaskData.dueDate ? new Date(subtaskData.dueDate) : null;
+    }
+    if (subtaskData.assignees !== undefined) {
+      updates.assignees = subtaskData.assignees || [];
+    }
+
+    const changes = Object.keys(updates)
+      .filter(k => k !== 'updatedAt' && k !== 'updatedBy')
+      .map(k => ({
+        field: k,
+        oldValue: oldData[k] || null,
+        newValue: updates[k]
+      }));
+
+    if (changes.length > 0) {
+      const editHistoryRecord = {
+        updatedAt: now,
+        updatedBy: userId,
+        changes
+      };
+      updates.editHistory = admin.firestore.FieldValue.arrayUnion(editHistoryRecord);
+    }
+
+    await subtaskRef.update(updates);
+
+    // Recalculate and update parent task's aggregates
+    await this.updateParentTaskAggregates(taskRef, now, userId);
+  }
+
+  /**
+   * Delete Subtask (with Safety Check: Soft Delete if has reports, else Hard Delete)
+   */
+  async deleteSubtask(id: string, subtaskId: string, userId: string): Promise<void> {
+    let lookupId: string;
+    const subtaskParts = this.parseCompositeId(subtaskId);
+    if (subtaskParts.length >= 4) {
+      lookupId = subtaskId;
+    } else {
+      const parentParts = this.parseCompositeId(id);
+      if (parentParts.length >= 3) {
+        lookupId = id.includes('__') ? `${id}__${subtaskId}` : `${id}_${subtaskId}`;
+      } else {
+        lookupId = subtaskId;
+      }
+    }
+    const { taskRef, subtaskRef } = await this.resolveRefs(lookupId);
+    if (!subtaskRef) throw new AppError('Subtask not found', 404);
+
+    const doc = await subtaskRef.get();
+    if (!doc.exists) throw new AppError('Subtask not found', 404);
+
+    const subtaskData = doc.data() as any;
+    const now = new Date();
+
+    // Check if daily progress is > 0 OR if any daily reports exist in revisions or help collections
+    let hasDailyReports = false;
+    if ((subtaskData.dailyProgress || 0) > 0) {
+      hasDailyReports = true;
+    } else {
+      // Check revisions subcollection -> dailyReports
+      const revisionsSnap = await subtaskRef.collection('revisions').get();
+      for (const revDoc of revisionsSnap.docs) {
+        const reportsSnap = await revDoc.ref.collection('dailyReports').limit(1).get();
+        if (!reportsSnap.empty) {
+          hasDailyReports = true;
+          break;
+        }
+      }
+
+      // Check help subcollection -> dailyReports
+      if (!hasDailyReports) {
+        const helpSnap = await subtaskRef.collection('help').get();
+        for (const helpDoc of helpSnap.docs) {
+          const reportsSnap = await helpDoc.ref.collection('dailyReports').limit(1).get();
+          if (!reportsSnap.empty) {
+            hasDailyReports = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (hasDailyReports) {
+      // Perform Soft Delete
+      await subtaskRef.update({
+        isActive: false,
+        updatedAt: now,
+        updatedBy: userId
+      });
+      console.log(`[TaskService] Soft deleted subtask ${subtaskId} (daily reports exist)`);
+    } else {
+      // Perform Hard Delete: Delete nested subcollections first
+      const batch = afterSaleDb.batch();
+
+      // 1. Delete revisions and their dailyReports
+      const revisionsSnap = await subtaskRef.collection('revisions').get();
+      for (const revDoc of revisionsSnap.docs) {
+        const reportsSnap = await revDoc.ref.collection('dailyReports').get();
+        reportsSnap.docs.forEach(rDoc => batch.delete(rDoc.ref));
+        batch.delete(revDoc.ref);
+      }
+
+      // 2. Delete help and their dailyReports
+      const helpSnap = await subtaskRef.collection('help').get();
+      for (const helpDoc of helpSnap.docs) {
+        const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
+        reportsSnap.docs.forEach(rDoc => batch.delete(rDoc.ref));
+        batch.delete(helpDoc.ref);
+      }
+
+      // 3. Delete the subtask document itself
+      batch.delete(subtaskRef);
+
+      await batch.commit();
+      console.log(`[TaskService] Hard deleted subtask ${subtaskId} (no daily reports)`);
+    }
+
+    // Recalculate and update parent task's aggregates
+    await this.updateParentTaskAggregates(taskRef, now, userId);
   }
 
   /**
@@ -1178,6 +1360,49 @@ export class TaskService {
     });
     return maxDate;
   };
+
+  private async updateParentTaskAggregates(taskRef: FirebaseFirestore.DocumentReference, now: Date, userId: string): Promise<void> {
+    const subtasksSnap = await taskRef.collection('subtasks').get();
+    const activeSubtasks = subtasksSnap.docs
+      .map(d => d.data())
+      .filter(st => st.isActive !== false);
+
+    const taskUpdates: any = {
+      updatedAt: now,
+      updatedBy: userId
+    };
+
+    const admin = require('firebase-admin');
+
+    if (activeSubtasks.length > 0) {
+      // 1. Recalculate dailyProgress (average)
+      const totalProgress = activeSubtasks.reduce((sum, st) => sum + (st.dailyProgress || 0), 0);
+      const averageProgress = Math.round(totalProgress / activeSubtasks.length);
+      taskUpdates.dailyProgress = averageProgress;
+
+      // 2. Recalculate status
+      const hasInProgress = activeSubtasks.some(st => st.status === 'in-progress' || st.status === 'rework' || st.status === 'for-checking');
+      const allCompleted = activeSubtasks.every(st => st.status === 'completed');
+      let parentStatus = 'upcoming';
+      if (allCompleted) {
+        parentStatus = 'completed';
+      } else if (hasInProgress || averageProgress > 0) {
+        parentStatus = 'in-progress';
+      }
+      taskUpdates.status = parentStatus;
+
+      // 3. Recalculate max dueDate
+      const maxDueDate = this.calculateMaxDueDate(activeSubtasks);
+      if (maxDueDate) {
+        taskUpdates.dueDate = maxDueDate;
+      }
+    } else {
+      taskUpdates.dailyProgress = 0;
+      taskUpdates.status = 'upcoming';
+    }
+
+    await taskRef.update(taskUpdates);
+  }
 
   private compareAssignees = (a1: any[], a2: any[]): boolean => {
     const list1 = (a1 || []).map(a => String(a.employeeId || a.id || '').trim().toLowerCase()).sort();
@@ -1662,7 +1887,8 @@ export class TaskService {
           createdAt: new Date(),
           createdBy: userEmployeeId,
           createdByName: userFullName,
-          readBy: []
+          readBy: [],
+          isSupportReport: isSupportReport
         };
         await afterSaleDb.collection('notifications').add(notificationData);
         console.log(`[TaskService] Created notification for daily report submission: ${notificationData.message}`);
@@ -1960,8 +2186,9 @@ export class TaskService {
   private async resolveRefs(id: string) {
     let taskRef: FirebaseFirestore.DocumentReference;
     let subtaskRef: FirebaseFirestore.DocumentReference | undefined = undefined;
-    if (id.includes('__')) {
-      const parts = id.split('__');
+    const compositeParts = this.parseCompositeId(id);
+    if (compositeParts.length >= 3) {
+      const parts = compositeParts;
       if (parts.length >= 4) {
         const [woId, catId, taskId, subtaskId] = parts;
         taskRef = afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId);
@@ -1985,6 +2212,19 @@ export class TaskService {
       }
     }
     return { taskRef, subtaskRef };
+  }
+
+  private parseCompositeId(id: string): string[] {
+    if (id.includes('__')) {
+      return id.split('__');
+    }
+    if (id.includes('_')) {
+      const parts = id.split('_');
+      if (parts.length >= 3) {
+        return parts;
+      }
+    }
+    return [];
   }
 
 

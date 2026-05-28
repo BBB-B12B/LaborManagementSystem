@@ -55,6 +55,7 @@ interface TaskDailyReportModalProps {
   onClose: () => void;
   task: Task | null;
   onTaskUpdated?: () => void;
+  initialDate?: Date | null;
 }
 
 interface DailySummary {
@@ -89,11 +90,21 @@ const getImageUrl = (url: string) => {
   return url;
 };
 
-export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdated }: TaskDailyReportModalProps) {
+export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdated, initialDate }: TaskDailyReportModalProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useAuthStore();
   
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
+
+  useEffect(() => {
+    if (open) {
+      if (initialDate) {
+        setSelectedDate(startOfDay(initialDate));
+      } else {
+        setSelectedDate(today);
+      }
+    }
+  }, [open, initialDate]);
   const [unlockAnchorEl, setUnlockAnchorEl] = useState<null | HTMLElement>(null);
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<Record<string, DailySummary>>({});
@@ -587,7 +598,16 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             </Typography>
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 0.5 }}>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
-                {task?.taskId} : {isActingAsSupport && task?.supportTaskName ? task.supportTaskName : task?.taskName}
+                {task?.taskId}
+                {task?.revisionId && task.revisionId !== 'rev00' && (
+                  <Box component="span" sx={{ color: '#ef4444' }}>
+                    -{task.revisionId}
+                  </Box>
+                )}
+                {' : '}
+                {isActingAsSupport && task?.supportTaskName 
+                  ? task.supportTaskName 
+                  : (task?.subtaskName ? `${task.taskName} > ${task.subtaskName}` : task?.taskName)}
               </Typography>
               
               <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '99px' }}>

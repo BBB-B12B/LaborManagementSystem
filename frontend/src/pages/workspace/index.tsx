@@ -33,6 +33,7 @@ import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
 import { taskService, type Task, type Subtask, type TaskAssignee } from '@/services/taskService';
+import { projectConfigService } from '@/services/projectConfigService';
 import { DatePicker } from '@/components/forms/DatePicker';
 import { memberService } from '@/services/memberService';
 import { useToast } from '@/components/common/Toast';
@@ -77,6 +78,7 @@ export default function WorkspacePage() {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
+  const [selectedReportDate, setSelectedReportDate] = useState<Date | null>(null);
 
   // Left Tree Filter state
   const [selectedNode, setSelectedNode] = useState<{ type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null>(null);
@@ -91,6 +93,46 @@ export default function WorkspacePage() {
   const [fmUsers, setFmUsers] = useState<any[]>([]);
   const [fetchingFms, setFetchingFms] = useState(false);
   const [quickCreateError, setQuickCreateError] = useState('');
+
+  // Subtask Edit state
+  const [isSubtaskEditOpen, setIsSubtaskEditOpen] = useState(false);
+  const [editingSubtaskCard, setEditingSubtaskCard] = useState<Task | null>(null);
+  const [subtaskEditName, setSubtaskEditName] = useState('');
+  const [subtaskEditDueDate, setSubtaskEditDueDate] = useState<Date | null>(null);
+  const [subtaskEditAssignees, setSubtaskEditAssignees] = useState<TaskAssignee[]>([]);
+  const [subtaskEditError, setSubtaskEditError] = useState('');
+  const [subtaskEditSubmitting, setSubtaskEditSubmitting] = useState(false);
+
+  // Subtask Delete state
+  const [isSubtaskDeleteOpen, setIsSubtaskDeleteOpen] = useState(false);
+  const [subtaskToDeleteCard, setSubtaskToDeleteCard] = useState<Task | null>(null);
+  const [subtaskDeleteSubmitting, setSubtaskDeleteSubmitting] = useState(false);
+
+  // WorkOrder Edit/Delete state
+  const [isWoEditOpen, setIsWoEditOpen] = useState(false);
+  const [editingWo, setEditingWo] = useState<{ id: string; name: string } | null>(null);
+  const [woEditName, setWoEditName] = useState('');
+  const [woEditSubmitting, setWoEditSubmitting] = useState(false);
+  const [woEditError, setWoEditError] = useState('');
+
+  const [isWoDeleteOpen, setIsWoDeleteOpen] = useState(false);
+  const [woToDelete, setWoToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [woDeleteSubmitting, setWoDeleteSubmitting] = useState(false);
+
+  // Category Edit/Delete state
+  const [isCatEditOpen, setIsCatEditOpen] = useState(false);
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
+  const [catEditName, setCatEditName] = useState('');
+  const [catEditSubmitting, setCatEditSubmitting] = useState(false);
+  const [catEditError, setCatEditError] = useState('');
+
+  const [isCatDeleteOpen, setIsCatDeleteOpen] = useState(false);
+  const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [catDeleteSubmitting, setCatDeleteSubmitting] = useState(false);
+
+  // Blocked delete alert
+  const [isBlockDeleteAlertOpen, setIsBlockDeleteAlertOpen] = useState(false);
+  const [blockDeleteAlertMessage, setBlockDeleteAlertMessage] = useState('');
 
   // Track the user ID to detect user-switch and force refetch
   const prevUserIdRef = useRef<string | null>(null);
@@ -244,20 +286,23 @@ export default function WorkspacePage() {
   };
 
   const handleEdit = (subtaskCard: Task) => {
-    // Find parent task to edit
     const parentTask = tasks.find((t) => t.id === subtaskCard.parentTaskId);
     if (parentTask) {
-      setEditingTask(parentTask);
-      setIsModalOpen(true);
+      const subtask = parentTask.subtasks?.find((s) => s.id === subtaskCard.id);
+      if (subtask) {
+        setEditingSubtaskCard(subtaskCard);
+        setSubtaskEditName(subtask.subtaskName);
+        setSubtaskEditDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
+        setSubtaskEditAssignees(subtask.assignees || []);
+        setSubtaskEditError('');
+        setIsSubtaskEditOpen(true);
+      }
     }
   };
 
   const handleDeleteClick = (subtaskCard: Task) => {
-    const parentTask = tasks.find((t) => t.id === subtaskCard.parentTaskId);
-    if (parentTask) {
-      setTaskToDelete(parentTask);
-      setIsDeleteDialogOpen(true);
-    }
+    setSubtaskToDeleteCard(subtaskCard);
+    setIsSubtaskDeleteOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -273,6 +318,218 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleSubtaskEditSubmit = async () => {
+    if (!editingSubtaskCard) return;
+    const parentTaskId = editingSubtaskCard.parentTaskId;
+    if (!parentTaskId) {
+      setSubtaskEditError('ไม่พบข้อมูลงานหลัก');
+      return;
+    }
+    if (!subtaskEditName.trim()) {
+      setSubtaskEditError('กรุณากรอกชื่องานย่อย');
+      return;
+    }
+    if (subtaskEditAssignees.length === 0) {
+      setSubtaskEditError('กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน');
+      return;
+    }
+    setSubtaskEditSubmitting(true);
+    try {
+      await taskService.updateSubtask(
+        parentTaskId,
+        editingSubtaskCard.id,
+        {
+          subtaskName: subtaskEditName.trim(),
+          assignees: subtaskEditAssignees,
+          dueDate: subtaskEditDueDate,
+        }
+      );
+      toast.show('แก้ไขงานย่อยสำเร็จ', 'success');
+      setIsSubtaskEditOpen(false);
+      setEditingSubtaskCard(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to update subtask', error);
+      setSubtaskEditError(error.message || 'ไม่สามารถแก้ไขงานย่อยได้');
+    } finally {
+      setSubtaskEditSubmitting(false);
+    }
+  };
+
+  const handleSubtaskDeleteConfirm = async () => {
+    if (!subtaskToDeleteCard) return;
+    const parentTaskId = subtaskToDeleteCard.parentTaskId;
+    if (!parentTaskId) {
+      toast.show('ไม่พบข้อมูลงานหลัก', 'error');
+      return;
+    }
+    setSubtaskDeleteSubmitting(true);
+    try {
+      const result = await taskService.deleteSubtask(
+        parentTaskId,
+        subtaskToDeleteCard.id
+      );
+      toast.show(
+        result.type === 'soft'
+          ? 'ทำการปิดการทำงานชั่วคราว (Soft Delete) เนื่องจากมีรายงานผลงานแล้ว'
+          : 'ลบงานย่อยออกจากระบบถาวรสำเร็จ',
+        'success'
+      );
+      setIsSubtaskDeleteOpen(false);
+      setSubtaskToDeleteCard(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to delete subtask', error);
+      toast.show(error.message || 'ไม่สามารถลบงานย่อยได้', 'error');
+    } finally {
+      setSubtaskDeleteSubmitting(false);
+    }
+  };
+
+  const handleEditWorkOrderOpen = (woId: string, currentName: string) => {
+    setEditingWo({ id: woId, name: currentName });
+    setWoEditName(currentName);
+    setWoEditError('');
+    setIsWoEditOpen(true);
+  };
+
+  const handleEditWorkOrderSubmit = async () => {
+    if (!editingWo) return;
+    if (!woEditName.trim()) {
+      setWoEditError('กรุณากรอกชื่อ WorkOrder');
+      return;
+    }
+    setWoEditSubmitting(true);
+    try {
+      const parentTask = tasks.find((t) => t.workOrderId === editingWo.id);
+      const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+      
+      if (!projectId) {
+        throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
+      }
+
+      await projectConfigService.updateWorkOrder(projectId, editingWo.id, { name: woEditName.trim() });
+      toast.show('แก้ไขชื่อ WorkOrder สำเร็จ', 'success');
+      setIsWoEditOpen(false);
+      setEditingWo(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to update work order', error);
+      setWoEditError(error.message || 'ไม่สามารถแก้ไขชื่อ WorkOrder ได้');
+    } finally {
+      setWoEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteWorkOrderOpen = (woId: string, currentName: string) => {
+    setWoToDelete({ id: woId, name: currentName });
+    setIsWoDeleteOpen(true);
+  };
+
+  const handleDeleteWorkOrderConfirm = async () => {
+    if (!woToDelete) return;
+    setWoDeleteSubmitting(true);
+    try {
+      const parentTask = tasks.find((t) => t.workOrderId === woToDelete.id);
+      const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+      
+      if (!projectId) {
+        throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
+      }
+
+      await projectConfigService.deleteWorkOrder(projectId, woToDelete.id);
+      toast.show('ลบ WorkOrder สำเร็จ', 'success');
+      setIsWoDeleteOpen(false);
+      setWoToDelete(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to delete work order', error);
+      setIsWoDeleteOpen(false);
+      setWoToDelete(null);
+      setBlockDeleteAlertMessage(
+        `ไม่สามารถลบ WorkOrder "${woToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้ WorkOrder นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
+      );
+      setIsBlockDeleteAlertOpen(true);
+    } finally {
+      setWoDeleteSubmitting(false);
+    }
+  };
+
+  const handleEditCategoryOpen = (catId: string, currentName: string) => {
+    setEditingCat({ id: catId, name: currentName });
+    setCatEditName(currentName);
+    setCatEditError('');
+    setIsCatEditOpen(true);
+  };
+
+  const handleEditCategorySubmit = async () => {
+    if (!editingCat) return;
+    if (!catEditName.trim()) {
+      setCatEditError('กรุณากรอกชื่อหมวดหมู่ย่อย');
+      return;
+    }
+    setCatEditSubmitting(true);
+    try {
+      const parentTask = tasks.find((t) => t.categoryId === editingCat.id);
+      const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+      
+      if (!projectId) {
+        throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
+      }
+
+      await projectConfigService.updateCategory(projectId, editingCat.id, { name: catEditName.trim() });
+      toast.show('แก้ไขหมวดหมู่ย่อยสำเร็จ', 'success');
+      setIsCatEditOpen(false);
+      setEditingCat(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to update category', error);
+      setCatEditError(error.message || 'ไม่สามารถแก้ไขหมวดหมู่ย่อยได้');
+    } finally {
+      setCatEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteCategoryOpen = (catId: string, currentName: string) => {
+    setCatToDelete({ id: catId, name: currentName });
+    setIsCatDeleteOpen(true);
+  };
+
+  const handleDeleteCategoryConfirm = async () => {
+    if (!catToDelete) return;
+    setCatDeleteSubmitting(true);
+    try {
+      const parentTask = tasks.find((t) => t.categoryId === catToDelete.id);
+      const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+      
+      if (!projectId) {
+        throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
+      }
+
+      await projectConfigService.deleteCategory(projectId, catToDelete.id);
+      toast.show('ลบหมวดหมู่ย่อยสำเร็จ', 'success');
+      setIsCatDeleteOpen(false);
+      setCatToDelete(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to delete category', error);
+      setIsCatDeleteOpen(false);
+      setCatToDelete(null);
+      setBlockDeleteAlertMessage(
+        `ไม่สามารถลบหมวดหมู่ย่อย "${catToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้หมวดหมู่นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
+      );
+      setIsBlockDeleteAlertOpen(true);
+    } finally {
+      setCatDeleteSubmitting(false);
+    }
+  };
+
   // Convert tasks to subtask cards
   const subtaskCards = useMemo(() => {
     const cards: Task[] = [];
@@ -283,12 +540,13 @@ export default function WorkspacePage() {
       subtasks.forEach((subtask) => {
         const isSubtaskSupport = subtask.isSupportRequest || false;
         const isSubtaskPickedUp = subtask.isPickedUpBySupport || false;
-
         const mergedTask: Task = {
           ...task,
-          id: subtask.id, // e.g. "woId__catId__taskId__subtaskId"
-          taskId: subtask.subtaskId, // e.g. "DBD-0001-001-0001"
-          taskName: `${task.taskName} > ${subtask.subtaskName}`,
+          id: subtask.id,
+          dueDate: subtask.dueDate,
+          taskId: subtask.subtaskId,
+          taskName: task.taskName,
+          subtaskName: subtask.subtaskName,
           status: subtask.status,
           dailyProgress: subtask.dailyProgress,
           assignees: subtask.assignees,
@@ -303,12 +561,52 @@ export default function WorkspacePage() {
           supportUnlockRequests: subtask.supportUnlockRequests || {},
           // Custom parent task reference ID
           parentTaskId: task.id,
+          isActive: subtask.isActive !== false,
         };
         cards.push(mergedTask);
       });
     });
     return cards;
   }, [tasks]);
+
+  // Auto-open Daily Report modal if query params are present (routing from Notification)
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const { subtaskId: querySubtaskId, date: queryDate } = router.query;
+
+    if (querySubtaskId && typeof querySubtaskId === 'string' && subtaskCards.length > 0) {
+      const foundCard = subtaskCards.find((card) => card.id === querySubtaskId);
+      if (foundCard) {
+        setSelectedTaskForReport(foundCard);
+        setIsReportModalOpen(true);
+
+        if (queryDate && typeof queryDate === 'string') {
+          const parsedDate = new Date(queryDate);
+          if (!isNaN(parsedDate.getTime())) {
+            setSelectedReportDate(parsedDate);
+          } else {
+            setSelectedReportDate(null);
+          }
+        } else {
+          setSelectedReportDate(null);
+        }
+
+        if (user) {
+          // Mark notifications for this subtask as read
+          const hasUnread = notifications.some(
+            (n) => isNotificationForSubtask(n.subtaskId, foundCard.id) && !(n.readBy ?? []).includes(user.id)
+          );
+          if (hasUnread) {
+            markSubtaskAsRead(foundCard.id);
+          }
+        }
+
+        // Clean query parameters from URL bar
+        router.replace('/workspace', undefined, { shallow: true });
+      }
+    }
+  }, [router.isReady, router.query, subtaskCards, user, notifications, markSubtaskAsRead]);
 
   // Filter subtasks by tab & Structure Tree selection
   const filteredSubtasks = useMemo(() => {
@@ -325,7 +623,7 @@ export default function WorkspacePage() {
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     endOfMonth.setHours(23, 59, 59, 999);
 
-    let filtered = subtaskCards;
+    let filtered = subtaskCards.filter((card) => card.isActive !== false);
 
     // 1. Filter by tabs (Today, This Week, This Month)
     filtered = filtered.filter((card) => {
@@ -370,7 +668,7 @@ export default function WorkspacePage() {
 
     if (user) {
       const hasUnread = notifications.some(
-        (n) => isNotificationForSubtask(n.subtaskId, subtaskCard.id) && !n.readBy.includes(user.id)
+        (n) => isNotificationForSubtask(n.subtaskId, subtaskCard.id) && !(n.readBy ?? []).includes(user.id)
       );
       if (hasUnread) {
         markSubtaskAsRead(subtaskCard.id);
@@ -383,8 +681,10 @@ export default function WorkspacePage() {
     const mergedTask: Task = {
       ...task,
       id: subtask.id,
+      dueDate: subtask.dueDate,
       taskId: subtask.subtaskId,
-      taskName: `${task.taskName} > ${subtask.subtaskName}`,
+      taskName: task.taskName,
+      subtaskName: subtask.subtaskName,
       status: subtask.status,
       dailyProgress: subtask.dailyProgress,
       assignees: subtask.assignees,
@@ -403,7 +703,7 @@ export default function WorkspacePage() {
 
     if (user) {
       const hasUnread = notifications.some(
-        (n) => isNotificationForSubtask(n.subtaskId, subtask.id) && !n.readBy.includes(user.id)
+        (n) => isNotificationForSubtask(n.subtaskId, subtask.id) && !(n.readBy ?? []).includes(user.id)
       );
       if (hasUnread) {
         markSubtaskAsRead(subtask.id);
@@ -421,23 +721,23 @@ export default function WorkspacePage() {
     setIsQuickCreateOpen(true);
   };
 
-  // Fetch FM users for quick subtask creation
+  // Fetch FM users for quick subtask creation or subtask edit
   useEffect(() => {
-    if (isQuickCreateOpen) {
+    if (isQuickCreateOpen || isSubtaskEditOpen) {
       const fetchFms = async () => {
         setFetchingFms(true);
         try {
           const res = await memberService.getAllUsers({ roleId: 'FM' });
           setFmUsers(res.users || []);
         } catch (err) {
-          console.error('Failed to fetch FM users for quick-create', err);
+          console.error('Failed to fetch FM users', err);
         } finally {
           setFetchingFms(false);
         }
       };
       fetchFms();
     }
-  }, [isQuickCreateOpen]);
+  }, [isQuickCreateOpen, isSubtaskEditOpen]);
 
   // Filter FMs strictly by the parent task's project
   const filteredFms = useMemo(() => {
@@ -454,6 +754,23 @@ export default function WorkspacePage() {
       fm.projectLocationIds?.includes(parentTask.projectId)
     );
   }, [fmUsers, quickCreateTaskId, tasks]);
+
+  // Filter FMs strictly by the parent task's project for editing subtask
+  const editFilteredFms = useMemo(() => {
+    const validFms = fmUsers.filter((u) => 
+      u.roleId !== 'GOD' && 
+      u.roleId === 'FM' && 
+      (u as any).systemCode !== 'AS' && 
+      (u as any).SystemCode !== 'AS'
+    );
+    if (!editingSubtaskCard) return validFms;
+    const parentTask = tasks.find((t) => t.id === editingSubtaskCard.parentTaskId);
+    if (!parentTask) return validFms;
+
+    return validFms.filter((fm) =>
+      fm.projectLocationIds?.includes(parentTask.projectId)
+    );
+  }, [fmUsers, editingSubtaskCard, tasks]);
 
   const handleQuickCreateSubmit = async () => {
     if (!quickCreateTaskId) return;
@@ -522,6 +839,10 @@ export default function WorkspacePage() {
               onSelectNode={setSelectedNode}
               onSubtaskClick={handleSubtaskClickInTree}
               onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
+              onEditWorkOrder={canEditWorkspace ? handleEditWorkOrderOpen : undefined}
+              onDeleteWorkOrder={canEditWorkspace ? handleDeleteWorkOrderOpen : undefined}
+              onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
+              onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
             />
           </Box>
         </Box>
@@ -712,9 +1033,15 @@ export default function WorkspacePage() {
                     effectiveStatus = 'for-checking';
                   } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
                     effectiveStatus = 'in-progress';
+                  } else if (effectiveStatus === 'rework' && progress === 0) {
+                    // Rejected subtask with 0 progress → show in Upcoming
+                    effectiveStatus = 'upcoming';
+                  } else if (effectiveStatus === 'rework' && progress > 0) {
+                    // Rejected subtask with some progress → show in In Progress
+                    effectiveStatus = 'in-progress';
                   }
 
-                  if (column.id === 'in-progress') return effectiveStatus === 'in-progress' || effectiveStatus === 'rework';
+                  if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
                   return effectiveStatus === column.id;
                 })
                 .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
@@ -729,7 +1056,7 @@ export default function WorkspacePage() {
                     display: 'flex',
                     flexDirection: 'column',
                     bgcolor: '#f1f5f9',
-                    borderRadius: 4,
+                    borderRadius: '8px',
                     p: 1.5,
                     mt: 2,
                     maxHeight: 'calc(100vh - 200px)',
@@ -775,13 +1102,13 @@ export default function WorkspacePage() {
                           key={idx}
                           variant="rounded"
                           height={160}
-                          sx={{ mb: 2, borderRadius: 3 }}
+                          sx={{ mb: 2, borderRadius: '8px' }}
                         />
                       ))
                     ) : columnTasks.length > 0 ? (
                       columnTasks.map((task) => {
                         const hasUnread = user && notifications.some(
-                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !n.readBy.includes(user.id)
+                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
                         );
                         return (
                           <TaskCard
@@ -988,8 +1315,12 @@ export default function WorkspacePage() {
       {/* Task Daily Progress Report Modal */}
       <TaskDailyReportModal
         open={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setSelectedReportDate(null);
+        }}
         task={selectedTaskForReport}
+        initialDate={selectedReportDate}
         onTaskUpdated={() => {
           invalidateCache();
           fetchFromAPI(true);
@@ -1024,6 +1355,447 @@ export default function WorkspacePage() {
             sx={{ fontWeight: 700, borderRadius: 2, px: 3 }}
           >
             ยืนยันการลบ
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Subtask Dialog */}
+      <Dialog
+        open={isSubtaskEditOpen}
+        onClose={() => setIsSubtaskEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 4, p: 1 },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขงานย่อย (Edit Subtask)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {subtaskEditError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {subtaskEditError}
+              </Typography>
+            )}
+
+            <TextField
+              label="ชื่องานย่อย *"
+              variant="filled"
+              fullWidth
+              value={subtaskEditName}
+              onChange={(e) => setSubtaskEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            {fetchingFms ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Autocomplete
+                multiple
+                options={editFilteredFms}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.employeeId}
+                value={subtaskEditAssignees.map(
+                  (a) => editFilteredFms.find((f) => f.id === a.employeeId) || { id: a.employeeId, name: a.name, roleId: 'FM' }
+                )}
+                onChange={(_, newValue) => {
+                  setSubtaskEditAssignees(
+                    newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                  );
+                }}
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props as any;
+                  return (
+                    <li key={key || option.id} {...otherProps}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
+                          {option.name.substring(0, 2).toUpperCase()}
+                        </Avatar>
+                        <Typography variant="body2">{option.name}</Typography>
+                      </Box>
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="ผู้รับผิดชอบ *"
+                    variant="filled"
+                    InputProps={{ ...params.InputProps, disableUnderline: true }}
+                    sx={{
+                      '& .MuiFilledInput-root': {
+                        borderRadius: 2,
+                        bgcolor: '#f1f5f9',
+                        '&::before, &::after': { display: 'none' },
+                      },
+                    }}
+                  />
+                )}
+              />
+            )}
+
+            <DatePicker
+              label="วันที่ครบกำหนด"
+              value={subtaskEditDueDate}
+              onChange={(date) => setSubtaskEditDueDate(date)}
+              variant="filled"
+              InputProps={{
+                disableUnderline: true,
+                sx: {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none !important' },
+                  '&:hover': { bgcolor: '#e2e8f0 !important' },
+                }
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsSubtaskEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleSubtaskEditSubmit}
+            variant="contained"
+            disabled={subtaskEditSubmitting}
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {subtaskEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Subtask Confirmation Dialog */}
+      <Dialog
+        open={isSubtaskDeleteOpen}
+        onClose={() => setIsSubtaskDeleteOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงานย่อย</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบงานย่อย "{subtaskToDeleteCard?.taskName?.split(' > ')?.[1] || subtaskToDeleteCard?.taskName}"?
+            <br />
+            <br />
+            {subtaskToDeleteCard && subtaskToDeleteCard.dailyProgress > 0 ? (
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2.5,
+                  bgcolor: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  color: '#b45309',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                }}
+              >
+                ⚠️ <b>ประเภทการลบ: ซอฟต์ดีลีท (Soft Delete)</b>
+                <br />
+                เนื่องจากงานย่อยนี้มีบันทึกรายงานผลงาน/ความคืบหน้าแล้ว เพื่อป้องกันไม่ให้ข้อมูลประวัติและระบบคำนวณค่าจ้างพัง ระบบจะทำการซ่อนงานนี้จากการ์ดบอร์ดแต่จะคงข้อมูลไว้ในฐานข้อมูลเพื่อความปลอดภัย
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2.5,
+                  bgcolor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#b91c1c',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                }}
+              >
+                ⚠️ <b>ประเภทการลบ: ลบถาวร (Hard Delete)</b>
+                <br />
+                เนื่องจากงานย่อยนี้ยังไม่มีรายงานผลงานเข้ามา ระบบจะลบข้อมูลงานย่อยนี้ รวมถึงประวัติการแก้ไขและความช่วยเหลือทั้งหมดออกจากระบบอย่างถาวร
+              </Box>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsSubtaskDeleteOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleSubtaskDeleteConfirm}
+            variant="contained"
+            color="error"
+            disabled={subtaskDeleteSubmitting}
+            sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
+          >
+            {subtaskDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* WorkOrder Edit Dialog */}
+      <Dialog
+        open={isWoEditOpen}
+        onClose={() => setIsWoEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่อหมวดหมู่หลัก (WorkOrder)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {woEditError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {woEditError}
+              </Typography>
+            )}
+
+            <TextField
+              label="รหัส WorkOrder (แก้ไขไม่ได้)"
+              variant="filled"
+              fullWidth
+              value={editingWo?.id || ''}
+              disabled
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            <TextField
+              label="ชื่อ WorkOrder *"
+              variant="filled"
+              fullWidth
+              value={woEditName}
+              onChange={(e) => setWoEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsWoEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleEditWorkOrderSubmit}
+            variant="contained"
+            disabled={woEditSubmitting}
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {woEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* WorkOrder Delete Dialog */}
+      <Dialog
+        open={isWoDeleteOpen}
+        onClose={() => setIsWoDeleteOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบ WorkOrder</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบ WorkOrder "{woToDelete?.name}"?
+            <br />
+            <br />
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 2.5,
+                bgcolor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+              }}
+            >
+              ⚠️ การลบนี้จะทำการตรวจสอบความปลอดภัย หากพบว่ามีงานย่อยใดๆ ใน WorkOrder นี้มีรายงานผลงานหรือความคืบหน้า ระบบจะไม่อนุญาตให้ลบ เพื่อป้องกันข้อมูลระบบพัง
+            </Box>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsWoDeleteOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleDeleteWorkOrderConfirm}
+            variant="contained"
+            color="error"
+            disabled={woDeleteSubmitting}
+            sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
+          >
+            {woDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Category Edit Dialog */}
+      <Dialog
+        open={isCatEditOpen}
+        onClose={() => setIsCatEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่อหมวดหมู่ย่อย (Category)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {catEditError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {catEditError}
+              </Typography>
+            )}
+
+            <TextField
+              label="ชื่อหมวดหมู่ย่อย *"
+              variant="filled"
+              fullWidth
+              value={catEditName}
+              onChange={(e) => setCatEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsCatEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleEditCategorySubmit}
+            variant="contained"
+            disabled={catEditSubmitting}
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {catEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Category Delete Dialog */}
+      <Dialog
+        open={isCatDeleteOpen}
+        onClose={() => setIsCatDeleteOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบหมวดหมู่ย่อย</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่ย่อย "{catToDelete?.name}"?
+            <br />
+            <br />
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 2.5,
+                bgcolor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+              }}
+            >
+              ⚠️ การลบนี้จะทำการตรวจสอบความปลอดภัย หากพบว่ามีงานย่อยใดๆ ในหมวดหมู่ย่อยนี้มีรายงานผลงานหรือความคืบหน้า ระบบจะไม่อนุญาตให้ลบ เพื่อป้องกันข้อมูลระบบพัง
+            </Box>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsCatDeleteOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleDeleteCategoryConfirm}
+            variant="contained"
+            color="error"
+            disabled={catDeleteSubmitting}
+            sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
+          >
+            {catDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Blocked Delete Alert Dialog */}
+      <Dialog
+        open={isBlockDeleteAlertOpen}
+        onClose={() => setIsBlockDeleteAlertOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1.5, maxWidth: 460 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#d32f2f', display: 'flex', alignItems: 'center', gap: 1 }}>
+          ❌ การลบถูกระงับ (Deletion Blocked)
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: 'text.primary', whiteSpace: 'pre-line', mt: 1 }}>
+            {blockDeleteAlertMessage}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsBlockDeleteAlertOpen(false)}
+            variant="contained"
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            รับทราบ
           </Button>
         </DialogActions>
       </Dialog>

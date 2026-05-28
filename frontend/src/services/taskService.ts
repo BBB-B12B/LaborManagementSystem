@@ -50,6 +50,7 @@ export interface Task {
   parentTaskId?: string;
   createdBy?: string;
   updatedBy?: string;
+  subtaskName?: string;
 }
 
 export interface CreateTaskInput {
@@ -119,6 +120,7 @@ export interface Subtask {
   editHistory?: EditHistoryRecord[];
   createdBy?: string;
   updatedBy?: string;
+  isActive?: boolean;
 }
 
 export interface AdvanceRequestInput {
@@ -301,5 +303,19 @@ export const taskService = {
    */
   getDailyReportsAll: async (filters: { projectId?: string; startDate?: string; endDate?: string }): Promise<any[]> => {
     return await api.get<any[]>('/tasks/reports-all', filters);
+  },
+
+  /**
+   * Update a subtask
+   */
+  updateSubtask: async (id: string, subtaskId: string, subtaskData: { subtaskName: string; assignees: TaskAssignee[]; dueDate?: string | Date | null }): Promise<Subtask> => {
+    return await api.patch<Subtask>(`/tasks/${id}/subtasks/${subtaskId}`, subtaskData);
+  },
+
+  /**
+   * Delete a subtask
+   */
+  deleteSubtask: async (id: string, subtaskId: string): Promise<{ message: string; type: 'soft' | 'hard' }> => {
+    return await api.delete<{ message: string; type: 'soft' | 'hard' }>(`/tasks/${id}/subtasks/${subtaskId}`);
   },
 };

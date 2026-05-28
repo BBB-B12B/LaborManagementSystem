@@ -78,6 +78,32 @@ export class ProjectConfigService {
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: userId,
     });
+
+    // Cascade update workOrderName in tasks
+    if (data.name) {
+      const nameTrimmed = data.name.trim();
+      const woSnapshot = await afterSaleDb.collection('workOrders').where('projectId', '==', projectId).get();
+      const matchingWoDocs = woSnapshot.docs.filter(d => d.data().workOrderCode === code);
+      const batch = afterSaleDb.batch();
+      let updateNeeded = false;
+
+      for (const woDoc of matchingWoDocs) {
+        batch.update(woDoc.ref, { workOrderName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
+        
+        const catsSnapshot = await woDoc.ref.collection('categories').get();
+        for (const catDoc of catsSnapshot.docs) {
+          const tasksSnapshot = await catDoc.ref.collection('tasks').get();
+          for (const taskDoc of tasksSnapshot.docs) {
+            batch.update(taskDoc.ref, { workOrderName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
+            updateNeeded = true;
+          }
+        }
+      }
+
+      if (updateNeeded || matchingWoDocs.length > 0) {
+        await batch.commit();
+      }
+    }
   }
 
   async deleteWorkOrder(projectId: string, code: string): Promise<void> {
@@ -85,7 +111,6 @@ export class ProjectConfigService {
     const doc = await ref.get();
     if (!doc.exists) throw new AppError('ไม่พบ Work Order ที่ต้องการลบ', 404);
 
-    // Safety check in After-Sale DB (Bypass composite index by using hierarchical query)
     const woSnapshot = await afterSaleDb
       .collection('workOrders')
       .where('projectId', '==', projectId)
@@ -93,6 +118,8 @@ export class ProjectConfigService {
       
     const matchingWoDocs = woSnapshot.docs.filter(doc => doc.data().workOrderCode === code);
     const tasksToDelete: FirebaseFirestore.DocumentReference[] = [];
+    const subtasksToDelete: FirebaseFirestore.DocumentReference[] = [];
+    const nestedDocsToDelete: FirebaseFirestore.DocumentReference[] = [];
 
     for (const woDoc of matchingWoDocs) {
       const catsSnapshot = await woDoc.ref.collection('categories').get();
@@ -101,12 +128,38 @@ export class ProjectConfigService {
         for (const taskDoc of tasksSnapshot.docs) {
           const taskData = taskDoc.data();
           if ((taskData.dailyProgress || 0) > 0) {
-             throw new AppError(`ไม่สามารถลบได้ เนื่องจากหมวดหมู่นี้มีการเริ่มงานไปแล้ว (Progress > 0) หากต้องการยกเลิกให้ใช้การแก้ไขชื่อแทน`, 400);
+             throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานหลักที่เริ่มงานไปแล้ว (Progress > 0)`, 400);
           }
           
-          const dailyReports = await taskDoc.ref.collection('dailyReports').limit(1).get();
-          if (!dailyReports.empty) {
-             throw new AppError(`ไม่สามารถลบได้ เนื่องจากหมวดหมู่นี้ถูกบันทึก Daily Report ไปแล้ว หากต้องการยกเลิกให้ใช้การแก้ไขชื่อแทน`, 400);
+          // Get subtasks under this task
+          const subtasksSnapshot = await taskDoc.ref.collection('subtasks').get();
+          for (const subtaskDoc of subtasksSnapshot.docs) {
+            const subtaskData = subtaskDoc.data();
+            if ((subtaskData.dailyProgress || 0) > 0) {
+              throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานย่อย "${subtaskData.subtaskName}" เริ่มงานไปแล้ว`, 400);
+            }
+            
+            // Check dailyReports under subtask revisions
+            const revisionsSnap = await subtaskDoc.ref.collection('revisions').get();
+            for (const revDoc of revisionsSnap.docs) {
+              const reportsSnap = await revDoc.ref.collection('dailyReports').limit(1).get();
+              if (!reportsSnap.empty) {
+                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" ถูกบันทึก Daily Report ไปแล้ว`, 400);
+              }
+              nestedDocsToDelete.push(revDoc.ref);
+            }
+
+            // Check dailyReports under subtask help
+            const helpSnap = await subtaskDoc.ref.collection('help').get();
+            for (const helpDoc of helpSnap.docs) {
+              const reportsSnap = await helpDoc.ref.collection('dailyReports').limit(1).get();
+              if (!reportsSnap.empty) {
+                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" มีรายงานขอความช่วยเหลือไปแล้ว`, 400);
+              }
+              nestedDocsToDelete.push(helpDoc.ref);
+            }
+
+            subtasksToDelete.push(subtaskDoc.ref);
           }
           
           tasksToDelete.push(taskDoc.ref);
@@ -114,11 +167,12 @@ export class ProjectConfigService {
       }
     }
 
-    // Delete allowed: Delete empty tasks first
+    // Delete allowed: Delete empty subtasks first, then tasks
     const batch = afterSaleDb.batch();
-    tasksToDelete.forEach(taskRef => {
-      batch.delete(taskRef);
-    });
+    nestedDocsToDelete.forEach(ref => batch.delete(ref));
+    subtasksToDelete.forEach(ref => batch.delete(ref));
+    tasksToDelete.forEach(taskRef => batch.delete(taskRef));
+    matchingWoDocs.forEach(woDoc => batch.delete(woDoc.ref));
     
     // Check categories under this Work Order in Labor DB
     const catsSnapshot = await db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs')
@@ -186,11 +240,41 @@ export class ProjectConfigService {
       throw new AppError('ชื่อไม่สามารถเป็นค่าว่างได้', 400);
     }
 
+    const oldName = doc.data()?.name;
+    const woCode = doc.data()?.workOrderCode;
+
     await ref.update({
       ...(data.name ? { name: data.name.trim() } : {}),
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: userId,
     });
+
+    // Cascade update categoryName in tasks
+    if (data.name && oldName && woCode) {
+      const nameTrimmed = data.name.trim();
+      const woSnapshot = await afterSaleDb.collection('workOrders').where('projectId', '==', projectId).get();
+      const matchingWoDocs = woSnapshot.docs.filter(d => d.data().workOrderCode === woCode);
+      const batch = afterSaleDb.batch();
+      let updateNeeded = false;
+
+      for (const woDoc of matchingWoDocs) {
+        const catsSnapshot = await woDoc.ref.collection('categories').get();
+        const matchingCatDocs = catsSnapshot.docs.filter(d => d.data().catName === oldName);
+        for (const catDoc of matchingCatDocs) {
+          batch.update(catDoc.ref, { catName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
+          
+          const tasksSnapshot = await catDoc.ref.collection('tasks').get();
+          for (const taskDoc of tasksSnapshot.docs) {
+            batch.update(taskDoc.ref, { categoryName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
+            updateNeeded = true;
+          }
+        }
+      }
+
+      if (updateNeeded || matchingWoDocs.length > 0) {
+        await batch.commit();
+      }
+    }
   }
 
   async deleteCategory(projectId: string, id: string): Promise<void> {
@@ -207,6 +291,9 @@ export class ProjectConfigService {
       
     const matchingWoDocs = woSnapshot.docs.filter(doc => doc.data().workOrderCode === catData.workOrderCode);
     const tasksToDelete: FirebaseFirestore.DocumentReference[] = [];
+    const subtasksToDelete: FirebaseFirestore.DocumentReference[] = [];
+    const nestedDocsToDelete: FirebaseFirestore.DocumentReference[] = [];
+    const categoriesToDelete: FirebaseFirestore.DocumentReference[] = [];
 
     for (const woDoc of matchingWoDocs) {
       const catsSnapshot = await woDoc.ref.collection('categories').get();
@@ -217,24 +304,54 @@ export class ProjectConfigService {
         for (const taskDoc of tasksSnapshot.docs) {
           const taskData = taskDoc.data();
           if ((taskData.dailyProgress || 0) > 0) {
-             throw new AppError(`ไม่สามารถลบได้ เนื่องจากหมวดหมู่นี้มีการเริ่มงานไปแล้ว หากต้องการยกเลิกให้ใช้การแก้ไขชื่อแทน`, 400);
+             throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานหลักที่เริ่มงานไปแล้ว (Progress > 0)`, 400);
           }
           
-          const dailyReports = await taskDoc.ref.collection('dailyReports').limit(1).get();
-          if (!dailyReports.empty) {
-             throw new AppError(`ไม่สามารถลบได้ เนื่องจากหมวดหมู่นี้ถูกบันทึก Daily Report ไปแล้ว หากต้องการยกเลิกให้ใช้การแก้ไขชื่อแทน`, 400);
+          // Get subtasks under this task
+          const subtasksSnapshot = await taskDoc.ref.collection('subtasks').get();
+          for (const subtaskDoc of subtasksSnapshot.docs) {
+            const subtaskData = subtaskDoc.data();
+            if ((subtaskData.dailyProgress || 0) > 0) {
+              throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานย่อย "${subtaskData.subtaskName}" เริ่มงานไปแล้ว`, 400);
+            }
+            
+            // Check dailyReports under subtask revisions
+            const revisionsSnap = await subtaskDoc.ref.collection('revisions').get();
+            for (const revDoc of revisionsSnap.docs) {
+              const reportsSnap = await revDoc.ref.collection('dailyReports').limit(1).get();
+              if (!reportsSnap.empty) {
+                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" ถูกบันทึก Daily Report ไปแล้ว`, 400);
+              }
+              nestedDocsToDelete.push(revDoc.ref);
+            }
+
+            // Check dailyReports under subtask help
+            const helpSnap = await subtaskDoc.ref.collection('help').get();
+            for (const helpDoc of helpSnap.docs) {
+              const reportsSnap = await helpDoc.ref.collection('dailyReports').limit(1).get();
+              if (!reportsSnap.empty) {
+                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" มีรายงานขอความช่วยเหลือไปแล้ว`, 400);
+              }
+              nestedDocsToDelete.push(helpDoc.ref);
+            }
+
+            subtasksToDelete.push(subtaskDoc.ref);
           }
           
           tasksToDelete.push(taskDoc.ref);
         }
+        categoriesToDelete.push(catDoc.ref);
       }
     }
 
     const batch = afterSaleDb.batch();
+    nestedDocsToDelete.forEach(ref => batch.delete(ref));
+    subtasksToDelete.forEach(ref => batch.delete(ref));
     tasksToDelete.forEach(taskRef => batch.delete(taskRef));
+    categoriesToDelete.forEach(catRef => batch.delete(catRef));
 
     await Promise.all([
-      tasksToDelete.length > 0 ? batch.commit() : Promise.resolve(),
+      (tasksToDelete.length > 0 || subtasksToDelete.length > 0 || categoriesToDelete.length > 0) ? batch.commit() : Promise.resolve(),
       ref.delete()
     ]);
   }

@@ -470,11 +470,11 @@
     },
     "CreateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 55
+      "line": 56
     },
     "UpdateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 85
+      "line": 86
     },
     "taskConverter": {
       "source": "backend/src/models/Task.ts",
@@ -698,7 +698,7 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 131
+      "line": 135
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 57
+      "line": 58
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2098,7 +2098,7 @@
     },
     "TaskCard": {
       "source": "frontend/src/pages/workspace/components/TaskCard.tsx",
-      "line": 35
+      "line": 36
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
@@ -2106,11 +2106,11 @@
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
-      "line": 92
+      "line": 93
     },
     "TaskRejectModal": {
       "source": "frontend/src/pages/workspace/components/TaskRejectModal.tsx",
-      "line": 47
+      "line": 39
     },
     "WorkOrderConfigModal": {
       "source": "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx",
@@ -2506,7 +2506,7 @@
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 336
+      "line": 349
     },
     "SIDEBAR_WIDTH": {
       "source": "frontend/src/components/layout/Navbar.tsx",
@@ -2534,7 +2534,7 @@
     },
     "Subtask": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 99
+      "line": 100
     },
     "AdvanceRequest": {
       "source": "backend/src/models/Task.ts",
@@ -2542,7 +2542,7 @@
     },
     "AdvanceRequestInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 124
+      "line": 128
     },
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
@@ -2554,11 +2554,11 @@
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 35
+      "line": 41
     },
     "EditHistoryRecord": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 75
+      "line": 76
     },
     "NotificationType": {
       "source": "frontend/src/services/notificationService.ts",
@@ -2570,7 +2570,7 @@
     },
     "notificationService": {
       "source": "frontend/src/services/notificationService.ts",
-      "line": 27
+      "line": 28
     },
     "NotificationState": {
       "source": "frontend/src/store/notificationStore.ts",

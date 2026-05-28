@@ -18,6 +18,7 @@ import {
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material';
 import { LinearProgress } from '@mui/material';
 import type { Task } from '@/services/taskService';
@@ -37,6 +38,50 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
   const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+
+  const getDueDateColor = () => {
+    if (!task.dueDate) return '#1c1e2b';
+    const dueDateObj = new Date(task.dueDate);
+    if (isNaN(dueDateObj.getTime())) return '#1c1e2b';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    const diffTime = dueDateObj.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 7) {
+      return '#3b82f6'; // Blue
+    } else if (diffDays > 3) {
+      return '#f97316'; // Orange
+    } else {
+      return '#ef4444'; // Red
+    }
+  };
+
+  const getDueDateTooltip = () => {
+    if (!task.dueDate) return 'ไม่ระบุวันครบกำหนด';
+    const dueDateObj = new Date(task.dueDate);
+    if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุวันครบกำหนด';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    const diffTime = dueDateObj.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 7) {
+      return `เหลือเวลามากกว่า 7 วัน (${diffDays} วัน)`;
+    } else if (diffDays > 3) {
+      return `เหลือเวลา 4 - 7 วัน (${diffDays} วัน)`;
+    } else if (diffDays >= 0) {
+      return `เหลือเวลา 3 วัน หรือน้อยกว่า (${diffDays} วัน)`;
+    } else {
+      return `เกินกำหนดแล้ว ${Math.abs(diffDays)} วัน`;
+    }
+  };
 
   // A user is acting as support if:
   // 1. Their department is 'WH' (Support) AND it is a support request
@@ -89,7 +134,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
       sx={{
         p: 1.5,
         mb: 1.5,
-        borderRadius: 4,
+        borderRadius: '8px',
         backgroundColor: '#ffffff',
         border: 'none',
         boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
@@ -118,6 +163,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               sx={{ fontWeight: 700, color: '#6b7280', fontSize: '0.7rem', letterSpacing: 0.5 }}
             >
               {task.taskId}
+              {task.revisionId && task.revisionId !== 'rev00' && (
+                <Box component="span" sx={{ color: '#ef4444' }}>
+                  -{task.revisionId}
+                </Box>
+              )}
             </Typography>
           </Box>
 
@@ -188,28 +238,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
         </Menu>
       </Stack>
 
-      {/* Title */}
+      {/* Title (Task Name) */}
       <Typography
         variant="body2"
-        sx={{ fontWeight: 700, color: '#111827', mb: task.revisionId && task.revisionId !== 'rev00' ? 0.25 : 0.5, fontSize: '0.825rem', lineHeight: 1.2 }}
+        sx={{ fontWeight: 700, color: '#111827', mb: 0.5, fontSize: '0.825rem', lineHeight: 1.2 }}
       >
         {isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName}
       </Typography>
 
-      {/* Revision Info - Only show if not rev00 */}
-      {task.revisionId && task.revisionId !== 'rev00' && (
+      {/* Subtask Name */}
+      {task.subtaskName && (
         <Typography
           variant="caption"
-          sx={{ 
-            display: 'block',
-            fontWeight: 700, 
-            color: '#ef4444', 
-            mb: 0.75,
-            fontSize: '0.65rem',
-            letterSpacing: 0.3
-          }}
+          sx={{ display: 'block', color: '#6b7280', mb: 1, fontSize: '0.75rem', lineHeight: 1.3 }}
         >
-          {task.revisionId} : "{task.revisionName || 'แก้ไขงาน'}"
+          {task.subtaskName}
         </Typography>
       )}
 
@@ -258,24 +301,64 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
         />
       </Box>
 
-      {/* Due Date Badge */}
-      <Box sx={{ mb: 1.5 }}>
-        <Box
-          sx={{
-            display: 'inline-flex',
-            backgroundColor: '#1c1e2b',
-            borderRadius: '999px',
-            px: 1,
-            py: 0.25,
-            alignItems: 'center',
-            boxShadow: '0 2px 6px rgba(28, 30, 43, 0.2)',
-          }}
-        >
-          <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', fontSize: '0.7rem', letterSpacing: 0.5 }}>
-            Due: {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
-          </Typography>
-        </Box>
-      </Box>
+      {/* Due Date & Unread Notification Row */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+        <Tooltip title={getDueDateTooltip()} arrow placement="top">
+          <Box
+            sx={{
+              display: 'inline-flex',
+              backgroundColor: getDueDateColor(),
+              borderRadius: '999px',
+              px: 1,
+              py: 0.25,
+              alignItems: 'center',
+              boxShadow: '0 2px 6px rgba(28, 30, 43, 0.2)',
+              cursor: 'default',
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', fontSize: '0.7rem', letterSpacing: 0.5 }}>
+              Due: {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+            </Typography>
+          </Box>
+        </Tooltip>
+
+        {hasUnread && (
+          <Tooltip title="มีอัปเดตรายงานใหม่" arrow placement="top">
+            <Box
+              sx={{
+                display: 'inline-flex',
+                color: '#ef4444',
+                animation: 'pulse-bell 1.5s infinite ease-in-out',
+                '@keyframes pulse-bell': {
+                  '0%': {
+                    transform: 'scale(0.9)',
+                    opacity: 0.8,
+                  },
+                  '50%': {
+                    transform: 'scale(1.15)',
+                    opacity: 1,
+                    filter: 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.6))',
+                  },
+                  '100%': {
+                    transform: 'scale(0.9)',
+                    opacity: 0.8,
+                  },
+                },
+              }}
+            >
+              <NotificationsIcon sx={{ fontSize: 18 }} />
+            </Box>
+          </Tooltip>
+        )}
+      </Stack>
+
+      {/* Dashed Separator Line */}
+      <Box sx={{ borderTop: '1px dashed #cbd5e1', my: 1.25 }} />
+
+      {/* Assigned to Label */}
+      <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, fontSize: '0.7rem' }}>
+        Assigned to:
+      </Typography>
 
       {/* Footer: Assignees & Attachments */}
       <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -321,35 +404,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                 {task.attachmentsCount}
               </Typography>
             </Stack>
-          )}
-
-          {hasUnread && (
-            <Tooltip title="มีอัปเดตรายงานใหม่" arrow placement="top">
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  bgcolor: '#ef4444',
-                  boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
-                  animation: 'pulse-dot 1.5s infinite ease-in-out',
-                  '@keyframes pulse-dot': {
-                    '0%': {
-                      transform: 'scale(0.9)',
-                      boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
-                    },
-                    '70%': {
-                      transform: 'scale(1.1)',
-                      boxShadow: '0 0 0 6px rgba(239, 68, 68, 0)',
-                    },
-                    '100%': {
-                      transform: 'scale(0.9)',
-                      boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)',
-                    },
-                  },
-                }}
-              />
-            </Tooltip>
           )}
         </Stack>
       </Stack>

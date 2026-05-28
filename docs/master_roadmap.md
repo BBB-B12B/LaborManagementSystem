@@ -77,7 +77,11 @@
 - [X] T-012-008-16: พัฒนาระบบเก็บข้อมูลและ API แจ้งเตือนการอัปเดตงานประจำวัน (Notification Backend) · attempts: 1 · tool_calls: 5
 - [X] T-012-008-17: เพิ่มปุ่มกระดิ่งแจ้งเตือนพร้อม Popover แสดงรายการอัปเดตงานรายวันในส่วนหัวแถบเครื่องมือหลัก (Notification Bell UI) · attempts: 1 · tool_calls: 3
 - [X] T-012-008-18: แสดงสถานะการอัปเดตรายงานด้วยจุดสีแดงกะพริบ (Pulsating Dot Indicator) บนการ์ด subtask และปิดสถานะเมื่อคลิกเปิดการ์ด · attempts: 1 · tool_calls: 10
-- [X] T-014: จัดการวันครบกำหนด (Due Date) ในระดับ Subtask และคำนวณวันครบกำหนดของ Task หลักอัตโนมัติ
+- [X] T-012-008-19: แก้ไขบักการแจ้งเตือนรายงานของงาน Support ไม่แจ้งเตือนไปยังหัวหน้าทีม Support (WH) (→ ERR-038) · attempts: 1 · tool_calls: 11
+- [X] T-012-008-20: เพิ่ม Flow นำทางผู้ใช้จากข้อความแจ้งเตือน Navbar ไปยังหน้าข้อมูลงานและเปิด Popup Daily Report อัตโนมัติ · attempts: 1 · tool_calls: 15
+- [X] T-012-008-21: พัฒนาระบบแก้ไข/ลบการ์ดงานย่อย (Subtasks) และโครงสร้างงานหลัก (Tasks & WorkOrders) อย่างปลอดภัย · attempts: 1 · tool_calls: 10
+- [X] T-014: จัดการวันครบกำหนด (Due Date) ในระดับ Subtask และคำนวณวันครบกำหนด of Task หลักอัตโนมัติ
+- [X] T-014-001-01: เปลี่ยนคำอธิบายสี Due Date ให้แสดงผ่าน Tooltip บนปุ่ม Due Date ของการ์ดงาน · attempts: 1 · tool_calls: 5
 - [X] T-015: ปรับปรุงสิทธิ์การเข้าถึงเมนูและหน้าต่าง ๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection) (→ ERR-037) · attempts: 1 · tool_calls: 15
 
 ---
@@ -91,3 +95,8 @@
 
 ---
 > **Status:** `[ ]` (ยังไม่เริ่ม) → `[/]` (กำลังทำ/รอตรวจ) → `[X]` (เสร็จ/ตรวจผ่าน)
+- [X] T-014-002-01: แก้ไข rejectTask Transaction reads-before-writes violation → 500 error (→ ERR-040) · attempts: 1 · tool_calls: 8
+- [X] T-014-003-01: ????? Reject subtask card ?????? In Progress ??? Upcoming ????? Progress = 0 (-> ERR-041) * attempts: 1 * tool_calls: 6
+- [X] T-014-004-01: แก้ไข updateSubtask และ deleteSubtask 404 (Not Found) เนื่องจาก resolveRefs ตีความ id ผิดพลาด (→ ERR-042) · attempts: 1 · tool_calls: 54
+- [X] T-014-004-02: แก้ไขโครงสร้างการแยกไอดีงานของ TaskService ให้รองรับทั้ง single/double underscore (→ ERR-043) · attempts: 2 · tool_calls: 5
+- [X] T-014-004-03: ปรับปรุงการคำนวณและอัปเดต dueDate บน Task หลักอัตโนมัติเมื่ออัปเดตหรือลบ subtask (→ ERR-044) · attempts: 1 · tool_calls: 25

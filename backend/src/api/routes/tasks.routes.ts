@@ -996,6 +996,44 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+// PATCH /api/tasks/:id/subtasks/:subtaskId
+router.patch('/:id/subtasks/:subtaskId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id, subtaskId } = req.params;
+    console.log('[tasks.routes.ts] PATCH subtask - id:', id, 'subtaskId:', subtaskId);
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    await taskService.updateSubtask(id, subtaskId, req.body, userId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Subtask updated successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/tasks/:id/subtasks/:subtaskId
+router.delete('/:id/subtasks/:subtaskId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id, subtaskId } = req.params;
+    console.log('[tasks.routes.ts] DELETE subtask - id:', id, 'subtaskId:', subtaskId);
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    await taskService.deleteSubtask(id, subtaskId, userId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Subtask deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/tasks/:id/reports
 router.post('/:id/reports', async (req: Request, res: Response, next: NextFunction) => {
   try {

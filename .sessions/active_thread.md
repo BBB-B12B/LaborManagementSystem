@@ -1,3 +1,3 @@
-task: ปรับสิทธิ์การเข้าถึงเมนูและหน้าต่างๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection)
+task: T-014-004-03: ปรับปรุงการคำนวณและอัปเดต dueDate บน Task หลักอัตโนมัติเมื่ออัปเดตหรือลบ subtask (→ ERR-044)
 phase: done
 next: none

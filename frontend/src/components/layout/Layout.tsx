@@ -67,7 +67,20 @@ const Topbar: React.FC = () => {
       router.push('/daily-reports');
     } else {
       // Supervisors: navigate to Workspace
-      router.push('/workspace');
+      if (noti.workOrderId && noti.categoryId && noti.taskId) {
+        const compositeSubtaskId = noti.subtaskId
+          ? `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}__${noti.subtaskId}`
+          : `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}`;
+        router.push({
+          pathname: '/workspace',
+          query: {
+            subtaskId: compositeSubtaskId,
+            date: noti.reportDate || '',
+          },
+        });
+      } else {
+        router.push('/workspace');
+      }
     }
   };
 
