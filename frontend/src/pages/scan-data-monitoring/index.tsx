@@ -277,7 +277,9 @@ export default function ScanDataMonitoringPage() {
         const d = new Date(dateVal);
         dateStr = d.toISOString().substring(0, 10);
       }
-    } catch (e) {}
+    } catch (e) {
+      /* ignore */
+    }
 
     await confirmDelete(
       `ข้อมูลสแกนของพนักงาน ${empNo} วันที่ ${dateStr}`,
@@ -306,7 +308,9 @@ export default function ScanDataMonitoringPage() {
         const d = new Date(dateVal);
         dateStr = d.toISOString().substring(0, 10);
       }
-    } catch (e) {}
+    } catch (e) {
+      /* ignore */
+    }
 
     if (window.confirm(`คุณต้องการกู้คืนข้อมูลของพนักงาน ${empNo} วันที่ ${dateStr} กลับมาแสดงในตารางหลักใช่หรือไม่?`)) {
       try {

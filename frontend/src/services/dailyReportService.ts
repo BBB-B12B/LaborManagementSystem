@@ -15,8 +15,10 @@ export interface DailyReportEntry {
   taskId?: string; // [T-400] เชื่อมโยงกับ Task ID
   taskName: string;
   workType: WorkType;
-  hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
+  hours?: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
   notes?: string;
+  startTime?: string;
+  endTime?: string;
   createdAt: string; // ISO String
 }
 
@@ -53,6 +55,7 @@ export interface DailyReport {
   summary: DailyReportSummary; // [CACHE] ข้อมูลสรุปภาพรวม
   notes?: string;
   importFileUrls?: string[];
+  entries?: any[];
   createdAt: string;
   updatedAt: string;
   createdBy: string;

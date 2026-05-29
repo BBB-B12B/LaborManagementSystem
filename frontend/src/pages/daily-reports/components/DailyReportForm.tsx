@@ -385,7 +385,7 @@ export const DailyReportForm: React.FC<DailyReportFormProps> = ({
                 {...field}
                 label="อัปโหลดรูปภาพ (ถ้ามี)"
                 accept="image/*"
-                // @ts-ignore - Prop multiple might be strictly defined in some versions
+                // @ts-expect-error - Prop multiple might be strictly defined in some versions
                 multiple
                 maxFiles={5}
                 helperText="อัปโหลดรูปภาพได้สูงสุด 5 รูป (ขนาดไม่เกิน 5 MB ต่อรูป)"

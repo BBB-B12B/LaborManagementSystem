@@ -462,7 +462,7 @@ const DailyReport = () => {
             if (l.id !== id) return l;
             const currentShifts = l.shifts || { normal: false, otMorning: false, otNoon: false, otEvening: false };
             const isActive = !currentShifts[shiftKey];
-            let newShiftTimes = { ...(l.shiftTimes || {}) };
+            const newShiftTimes = { ...(l.shiftTimes || {}) };
             if (isActive && l.membership === 'Internal') {
                 if (shiftKey === 'otMorning' && !newShiftTimes.otMorning) newShiftTimes.otMorning = '06:00 - 08:00';
                 if (shiftKey === 'otNoon' && !newShiftTimes.otNoon) newShiftTimes.otNoon = '12:00 - 13:00';
@@ -947,7 +947,7 @@ const DailyReport = () => {
                                             ))}
                                         </div>
                                     </div>
-                                    {progress === 100 && <div style={{ marginTop: '1rem', padding: '12px', background: '#eff6ff', borderRadius: '12px', fontSize: '0.75rem', color: '#1e40af', fontWeight: 700, display: 'flex', gap: '8px' }}><Info size={14} /> <span>ยืนยันที่ 100% ระบบจะใช้รูปภาพเป็นรูป "หลังซ่อม"</span></div>}
+                                    {progress === 100 && <div style={{ marginTop: '1rem', padding: '12px', background: '#eff6ff', borderRadius: '12px', fontSize: '0.75rem', color: '#1e40af', fontWeight: 700, display: 'flex', gap: '8px' }}><Info size={14} /> <span>ยืนยันที่ 100% ระบบจะใช้รูปภาพเป็นรูป &quot;หลังซ่อม&quot;</span></div>}
                                 </div>
                                 <div>
                                     <h3 style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0f172a', margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}><Camera size={20} color="#3b82f6" /> รูปภาพหน้างาน</h3>

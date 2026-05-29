@@ -205,19 +205,13 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
         entriesToSave.forEach(({ type, state }) => {
             if (state.enabled && state.workerIds.length > 0 && state.startTime && state.endTime && state.taskName) {
                 state.workerIds.forEach(workerId => {
-                    const start = state.startTime!;
-                    const end = state.endTime!;
-                    let hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-                    if (type === 'regular') {
-                        hours = Math.max(0, hours - 1);
-                    }
                     onSave({
                         dailyContractorId: workerId,
                         taskId: state.taskId,
                         taskName: state.taskName,
                         workType: type,
-                        hours: Number(hours.toFixed(2)),
-                        notes: '',
+                        startTime: state.startTime!.toISOString(),
+                        endTime: state.endTime!.toISOString(),
                     });
                 });
             }
@@ -577,5 +571,3 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
         </Dialog>
     );
 };
-
-export default DailyReportEntryModal;
