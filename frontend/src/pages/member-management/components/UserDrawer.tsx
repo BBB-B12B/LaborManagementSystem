@@ -8,6 +8,7 @@ import {
   DialogContent,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+
 import { UserForm, type UserFormProps } from './UserForm';
 
 export interface UserDrawerProps extends Omit<UserFormProps, 'onCancel'> {
@@ -61,9 +62,7 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
       </Box>
       <DialogContent sx={{ p: { xs: 2.5, md: 4 }, overflow: 'visible' }}>
         {loading ? (
-          <Box
-            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}
-          >
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
             <CircularProgress />
           </Box>
         ) : (

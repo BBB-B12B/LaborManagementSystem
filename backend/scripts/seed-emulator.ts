@@ -23,7 +23,7 @@ const seedActor = 'seed-script';
 
 const COLLECTIONS = {
   ROLES: 'roles',
-  USERS: 'users',
+  USERS: 'User',
   SKILLS: 'skills',
 
   PROJECT_LOCATIONS: 'Project',
@@ -274,17 +274,28 @@ async function seedUsers(db: admin.firestore.Firestore) {
   for (const user of users) {
     const now = new Date();
     const passwordHash = await hashPassword(user.password);
-    await db.collection(COLLECTIONS.USERS).doc(user.id).set({
+    const normalizedUsername = user.username.toLowerCase();
+    await db.collection(COLLECTIONS.USERS).doc(user.employeeId).set({
       employeeId: user.employeeId,
-      username: user.username,
+      Employeeid: user.employeeId,
+      username: normalizedUsername,
+      Username: normalizedUsername,
+      UsernameLower: normalizedUsername,
       passwordHash,
+      Password: user.password,
       name: user.name,
+      Fullname: user.name,
+      Fullnameen: user.name,
       roleId: user.roleId,
+      Role: user.roleId,
       department: user.department,
+      Department: user.department,
       dateOfBirth: null,
       startDate: resolveDate(user.startDate),
       projectLocationIds: user.projectLocationIds,
+      projectLocation: user.projectLocationIds,
       isActive: true,
+      Active: 'On',
       createdAt: now,
       updatedAt: now,
       createdBy: seedActor,

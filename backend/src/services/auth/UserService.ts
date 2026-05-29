@@ -23,9 +23,19 @@ export class UserService extends BaseCrudService<User> {
    */
   async findByUsername(username: string): Promise<User | null> {
     const normalizedUsername = username.trim().toLowerCase();
-    const users = await this.query([
+    
+    // 1. Try modern username field
+    let users = await this.query([
       { field: 'username', operator: '==', value: normalizedUsername }
     ]);
+    
+    // 2. Fallback to legacy UsernameLower field
+    if (users.length === 0) {
+      users = await this.query([
+        { field: 'UsernameLower', operator: '==', value: normalizedUsername }
+      ]);
+    }
+    
     return users.length > 0 ? users[0] : null;
   }
 
@@ -46,10 +56,19 @@ export class UserService extends BaseCrudService<User> {
    */
   async verifyPassword(userId: string, plainPassword: string): Promise<boolean> {
     const user = await this.getById(userId);
-    if (!user || !user.passwordHash) {
-      return false;
+    if (!user) return false;
+
+    // Check with modern bcrypt hash
+    if (user.passwordHash) {
+      return bcrypt.compare(plainPassword, user.passwordHash);
     }
-    return bcrypt.compare(plainPassword, user.passwordHash);
+    
+    // Legacy support: plain text password comparison
+    if ((user as any).Password) {
+      return (user as any).Password === plainPassword;
+    }
+
+    return false;
   }
 
   /**

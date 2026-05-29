@@ -106,7 +106,24 @@ async function createOrUpdateUser() {
       updatedBy: 'script:create-user',
     };
 
-    await db.collection('users').doc(authUser.uid).set(userDoc, { merge: true });
+    const normalizedUsername = username.toLowerCase();
+
+    await db.collection('User').doc(employeeId).set(
+      {
+        ...userDoc,
+        Employeeid: employeeId,
+        Username: normalizedUsername,
+        UsernameLower: normalizedUsername,
+        Fullname: displayName,
+        Fullnameen: displayName,
+        Role: roleId,
+        Department: department,
+        Password: password,
+        projectLocation: projectLocationIds,
+        Active: userDoc.isActive ? 'On' : 'Off',
+      },
+      { merge: true }
+    );
 
     console.log(`\n[create-user] User created/updated successfully`);
     console.log(`  Username : ${username}`);

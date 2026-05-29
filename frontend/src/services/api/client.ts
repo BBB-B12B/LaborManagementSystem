@@ -203,6 +203,14 @@ export const api = {
     throw new Error(response.data.error || 'Request failed');
   },
 
+  patch: async <T = any>(url: string, data?: any): Promise<T> => {
+    const response = await apiClient.patch<APIResponse<T>>(url, data);
+    if (response.data.success && response.data.data !== undefined) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Request failed');
+  },
+
   upload: async <T = any>(url: string, formData: FormData): Promise<T> => {
     const response = await apiClient.post<APIResponse<T>>(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

@@ -167,16 +167,14 @@
 
 ### Feature ID: F-011
 **Name**: Daily Report UI (Unified)
-**Status**: [ ] Planned
+**Status**: 🔄 In Progress (Lift & Shift Mock Phase)
 #### 1. User Flow
 *   Foreman selects Date & Project.
 *   Adds work entries (Task, Time, Workers).
-*   **Unified Experience**: Same UI for Mobile and Desktop.
-*   **Logic**: 1 Doc per Project-Day (Aggregated).
-*   **Constraint**: Noon OT locked to 1 hour.
+*   **External Integration (Current Mode)**: Lift & Shift ทดสอบการเรนเดอร์ UI จากระบบ Post-Sale (Mock Phase)
 #### 2. Architecture
-*   **UI**: `pages/daily-reports/new.tsx` (Wraps `MobileDailyReportView`)
-*   **Data**: `DailyReport` (Aggregated Schema)
+*   **UI**: `pages/daily-reports/new.tsx` (ประกอบด้วยคอมโพเนนต์ Lift & Shift แบบเต็มรูปแบบ)
+*   **Data**: สร้างการจำลอง Context ด้วย `WorkOrderContext` และ `AuthContext` เพื่อ Bypass การเช็คสิทธิ์ Next.js และ Firebase ชั่วคราว
 
 ---
 

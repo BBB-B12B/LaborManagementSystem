@@ -75,7 +75,7 @@ export class AuthService {
         employeeId: user.employeeId,
         username: user.username,
         name: user.name,
-        fullNameEn: user.name,
+        fullNameEn: user.fullNameEn || user.name,
         roleId: user.roleId,
         roleCode: user.roleId,
         department: user.department,

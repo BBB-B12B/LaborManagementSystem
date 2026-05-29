@@ -35,7 +35,7 @@ import { useToast } from '../../components/common/Toast';
 import { RoleSelect } from '../../components/forms/RoleSelect';
 import { DepartmentSelect } from '../../components/forms/DepartmentSelect';
 import { UserDrawer } from './components/UserDrawer';
-import type { UserCreateInput, UserEditInput } from '../../validation/userSchema';
+import type { UserCreateFormData as UserCreateInput, UserUpdateFormData as UserEditInput } from '@/validation/userManagementSchema';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { UserImportDialog } from './components/UserImportDialog';
 
@@ -183,7 +183,6 @@ export default function MemberManagementPage() {
       setDrawerInitialValues({
         ...detail,
         projectLocationIds: detail.projectLocationIds || [],
-        dateOfBirth: detail.dateOfBirth ? new Date(detail.dateOfBirth) : undefined,
         startDate: detail.startDate ? new Date(detail.startDate) : undefined,
       });
     } catch (error: any) {
@@ -241,7 +240,6 @@ export default function MemberManagementPage() {
       headerName: 'Role',
       width: 120,
       renderCell: (params: GridRenderCellParams) => {
-        // TODO: Map roleId to role name
         return <Chip label={params.value} size="small" />;
       },
     },

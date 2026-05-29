@@ -130,9 +130,8 @@ export default function EditUserPage() {
           name: user.name,
           roleId: user.roleId,
           department: user.department,
-          dateOfBirth: user.dateOfBirth,
-          startDate: user.startDate,
-          projectLocationIds: user.projectLocationIds,
+          startDate: user.startDate ? new Date(user.startDate) : undefined,
+          projectLocationIds: user.projectLocationIds || [],
           isActive: user.isActive,
         }}
         onSubmit={handleSubmit}

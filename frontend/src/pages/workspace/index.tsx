@@ -1,0 +1,263 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Typography,
+  Stack,
+  Button,
+  Chip,
+  Skeleton,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Tune as TuneIcon,
+} from '@mui/icons-material';
+import Head from 'next/head';
+import Layout from '@/components/layout/Layout';
+import TaskCard from './components/TaskCard';
+import TaskCreateModal from './components/TaskCreateModal';
+import { taskService, type Task } from '@/services/taskService';
+
+const COLUMNS = [
+  { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
+  { id: 'in-progress', label: 'In Progress', color: '#5b5ce6' },
+  { id: 'completed', label: 'Completed', color: '#00b87c' },
+] as const;
+
+export default function WorkspacePage() {
+  const [activeTab, setActiveTab] = useState('All Tasks');
+  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchTasks = async () => {
+    setLoading(true);
+    try {
+      const data = await taskService.getTasks();
+      setTasks(data || []);
+    } catch (error) {
+      console.error('Failed to fetch tasks', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const handleModalSuccess = () => {
+    setIsModalOpen(false);
+    fetchTasks();
+  };
+
+  return (
+    <Layout disablePadding>
+      <Head>
+        <title>Workspace | Labor Manager</title>
+      </Head>
+
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#fbfcfd' }}>
+        {/* Header Section */}
+        <Box sx={{ px: 4, pt: 4, pb: 3 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, color: '#1c1e2b', mb: 3 }}>
+            Your Tasks
+          </Typography>
+
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+            spacing={2}
+          >
+            {/* Tabs */}
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                bgcolor: '#f1f3f6',
+                p: 0.5,
+                borderRadius: '999px',
+              }}
+            >
+              {['All Tasks', 'This Week', 'Today', 'Backlog'].map((tab) => (
+                <Button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  sx={{
+                    px: 3,
+                    py: 1,
+                    borderRadius: '999px',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    color: activeTab === tab ? '#1c1e2b' : '#6b7280',
+                    bgcolor: activeTab === tab ? '#ffffff' : 'transparent',
+                    boxShadow: activeTab === tab ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                    '&:hover': {
+                      bgcolor: activeTab === tab ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                    },
+                  }}
+                >
+                  {tab}
+                </Button>
+              ))}
+            </Stack>
+
+            {/* Actions */}
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setIsModalOpen(true)}
+                sx={{
+                  bgcolor: '#1c1e2b',
+                  color: '#fff',
+                  borderRadius: '999px',
+                  px: 3,
+                  py: 1,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
+                  '&:hover': {
+                    bgcolor: '#000000',
+                  },
+                }}
+              >
+                Add New
+              </Button>
+
+              <Button
+                variant="outlined"
+                startIcon={<TuneIcon />}
+                sx={{
+                  bgcolor: '#f1f3f6',
+                  color: '#1c1e2b',
+                  borderColor: 'transparent',
+                  borderRadius: '999px',
+                  px: 2,
+                  py: 1,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  '&:hover': {
+                    bgcolor: '#e5e7eb',
+                    borderColor: 'transparent',
+                  },
+                }}
+              >
+                Quick Filters
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+
+        {/* Board Section */}
+        <Box
+          sx={{
+            flexGrow: 1,
+            px: 4,
+            pb: 4,
+            overflowX: 'auto',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 3,
+          }}
+        >
+          {COLUMNS.map((column) => {
+            const columnTasks = tasks.filter((t) => t.status === column.id);
+
+            return (
+              <Box
+                key={column.id}
+                sx={{
+                  minWidth: 320,
+                  width: 320,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  bgcolor: '#ffffff',
+                  borderRadius: 4,
+                  p: 2,
+                  border: '1px solid #eef0f4',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                }}
+              >
+                {/* Column Header */}
+                <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
+                  <Box
+                    sx={{
+                      width: 4,
+                      height: 18,
+                      bgcolor: column.color,
+                      borderRadius: 2,
+                    }}
+                  />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
+                    {column.label}
+                  </Typography>
+                  <Chip
+                    label={columnTasks.length}
+                    size="small"
+                    sx={{
+                      bgcolor: '#f1f3f6',
+                      color: '#6b7280',
+                      fontWeight: 700,
+                      height: 24,
+                      '& .MuiChip-label': { px: 1.5 },
+                    }}
+                  />
+                </Stack>
+
+                {/* Column Content */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 100,
+                    bgcolor: '#f8fafc',
+                    borderRadius: 3,
+                    p: 1.5,
+                  }}
+                >
+                  {loading ? (
+                    // Loading Skeletons
+                    Array.from(new Array(2)).map((_, idx) => (
+                      <Skeleton
+                        key={idx}
+                        variant="rounded"
+                        height={180}
+                        sx={{ mb: 2, borderRadius: 3 }}
+                      />
+                    ))
+                  ) : columnTasks.length > 0 ? (
+                    // Task Cards
+                    columnTasks.map((task) => <TaskCard key={task.id} task={task} />)
+                  ) : (
+                    // Empty State
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        py: 4,
+                        opacity: 0.5,
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        No Tasks
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+
+      <TaskCreateModal 
+        open={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSuccess={handleModalSuccess} 
+      />
+    </Layout>
+  );
+}

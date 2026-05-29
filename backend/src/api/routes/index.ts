@@ -19,6 +19,7 @@ import socialSecurityRulesRoutes from './socialSecurityRules.routes';
 import importedWageSystemRoutes from './labor/importedWageSystem.routes';
 import companyHolidaysRoutes from './companyHolidays.routes';
 import reconciliationRoutes from './reconciliation.routes';
+import taskRoutes from './tasks.routes';
 
 const router = Router();
 
@@ -58,5 +59,8 @@ router.use('/company-holidays', companyHolidaysRoutes);
 
 // Reconciliation routes (Daily Report ↔ Scan Data)
 router.use('/reconciliation', reconciliationRoutes);
+
+// Task routes
+router.use('/tasks', taskRoutes);
 
 export default router;

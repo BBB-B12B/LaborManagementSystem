@@ -62,9 +62,6 @@ export const userCreateSchema = z
     // Accessible Projects (multi-select, array of project IDs)
     projectLocationIds: baseArray(z.string()).default([]),
 
-    // Birth Date (optional)
-    birthDate: optionalDate,
-
     // Start Date (optional)
     startDate: optionalDate,
 
@@ -107,9 +104,6 @@ export const userUpdateSchema = z
 
     // Accessible Projects (multi-select, array of project IDs)
     projectLocationIds: baseArray(z.string()).default([]),
-
-    // Birth Date (optional)
-    birthDate: optionalDate,
 
     // Start Date (optional)
     startDate: optionalDate,

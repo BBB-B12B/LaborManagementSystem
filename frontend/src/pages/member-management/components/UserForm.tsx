@@ -1,3 +1,4 @@
+'use client';
 /**
  * User Form Component
  * Create / Edit user with validation
@@ -14,27 +15,29 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  FormControlLabel,
-  Switch,
   InputAdornment,
   IconButton,
+  MenuItem,
   Paper,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
+import { DatePicker } from '@/components/forms/DatePicker';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+
 import {
   userCreateSchema,
-  userEditSchema,
-  type UserCreateInput,
-  type UserEditInput,
-} from '../../../validation/userSchema';
-import { DatePicker } from '../../../components/forms/DatePicker';
-import { RoleSelect } from '../../../components/forms/RoleSelect';
-import { DepartmentSelect } from '../../../components/forms/DepartmentSelect';
-import { ProjectSelect } from '../../../components/forms/ProjectSelect';
+  userUpdateSchema,
+  type UserCreateFormData,
+  type UserUpdateFormData,
+} from '@/validation/userManagementSchema';
+import { RoleSelect } from '@/components/forms/RoleSelect';
+import { DepartmentSelect } from '@/components/forms/DepartmentSelect';
+import { ProjectSelect } from '@/components/forms/ProjectSelect';
 
 export interface UserFormProps {
-  defaultValues?: Partial<UserEditInput>;
-  onSubmit: (data: UserCreateInput | UserEditInput) => Promise<void>;
+  defaultValues?: Partial<UserUpdateFormData>;
+  onSubmit: (data: UserCreateFormData | UserUpdateFormData) => Promise<void>;
   onCancel: () => void;
   mode: 'create' | 'edit';
   isLoading?: boolean;
@@ -51,12 +54,16 @@ export function UserForm({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const schema = mode === 'create' ? userCreateSchema : userEditSchema;
+  const schema = mode === 'create' ? userCreateSchema : userUpdateSchema;
 
   const initialValues = useMemo(
     () => ({
+      employeeId: '',
+      username: '',
+      password: '',
+      name: '',
+      projectLocationIds: [] as string[],
       isActive: true,
-      projectLocationIds: [],
       ...defaultValues,
     }),
     [defaultValues]
@@ -67,7 +74,7 @@ export function UserForm({
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<UserCreateInput | UserEditInput>({
+  } = useForm<UserCreateFormData | UserUpdateFormData>({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
   });
@@ -76,7 +83,7 @@ export function UserForm({
     reset(initialValues);
   }, [initialValues, reset]);
 
-  const handleFormSubmit = async (data: UserCreateInput | UserEditInput) => {
+  const handleFormSubmit = async (data: UserCreateFormData | UserUpdateFormData) => {
     try {
       setSubmitError(null);
       await onSubmit(data);
@@ -131,7 +138,7 @@ export function UserForm({
                   fullWidth
                   error={!!errors.employeeId}
                   helperText={errors.employeeId?.message}
-                  disabled={isLoading || isSubmitting}
+                  disabled={isLoading || isSubmitting || mode === 'edit'}
                 />
               )}
             />
@@ -170,6 +177,7 @@ export function UserForm({
                   error={!!errors.username}
                   helperText={errors.username?.message || 'ไม่สามารถมีช่องว่างและต้องไม่ซ้ำ'}
                   disabled={isLoading || isSubmitting}
+                  onChange={(event) => field.onChange(event.target.value.toLowerCase())}
                 />
               )}
             />
@@ -255,8 +263,8 @@ export function UserForm({
               control={control}
               render={({ field }) => (
                 <RoleSelect
-                  value={field.value}
-                  onChange={field.onChange}
+                  {...field}
+                  label="Role"
                   error={!!errors.roleId}
                   helperText={errors.roleId?.message}
                   disabled={isLoading || isSubmitting}
@@ -272,8 +280,8 @@ export function UserForm({
               control={control}
               render={({ field }) => (
                 <DepartmentSelect
-                  value={field.value}
-                  onChange={field.onChange}
+                  {...field}
+                  label="Department"
                   error={!!errors.department}
                   helperText={errors.department?.message}
                   disabled={isLoading || isSubmitting}
@@ -285,26 +293,8 @@ export function UserForm({
 
           <Grid item xs={12}>
             <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-              วันที่
+              วันที่เริ่มงาน
             </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Controller
-              name="dateOfBirth"
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label="วันเกิด"
-                  value={field.value ?? null}
-                  onChange={field.onChange}
-                  error={!!errors.dateOfBirth}
-                  helperText={errors.dateOfBirth?.message}
-                  disabled={isLoading || isSubmitting}
-                  maxDate={new Date()}
-                />
-              )}
-            />
           </Grid>
 
           <Grid item xs={12} md={6}>
@@ -314,13 +304,13 @@ export function UserForm({
               render={({ field }) => (
                 <DatePicker
                   label="วันที่เริ่มงาน *"
-                  value={field.value}
-                  onChange={field.onChange}
+                  value={field.value ? new Date(field.value as string | Date) : null}
+                  onChange={(date) => field.onChange(date)}
+                  disabled={isLoading || isSubmitting}
+                  maxDate={new Date()}
                   error={!!errors.startDate}
                   helperText={errors.startDate?.message}
-                  disabled={isLoading || isSubmitting}
                   required
-                  maxDate={new Date()}
                 />
               )}
             />
@@ -414,3 +404,5 @@ export function UserForm({
     </Paper>
   );
 }
+
+export default UserForm;
