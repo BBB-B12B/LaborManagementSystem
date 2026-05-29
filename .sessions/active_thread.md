@@ -1,3 +1,3 @@
-task: DevicePunches + EditHistory Audit Trail Integrity + Noon OT Punch Behavior Fix
+task: T-005: รวมสาขาโค้ด integration และ dailyReport พร้อมกับลบฟิลด์ dateOfBirth ออกอย่างสมบูรณ์
 phase: done
-next: none — ทุกส่วนงานการบันทึกประวัติ ออดิต และพฤติกรรมการแสกนของกะโอเที่ยงเสร็จสมบูรณ์เรียบร้อยแล้ว
+next: none — การรวมกิ่งโค้ดและการตรวจสอบแก้ไขเสร็จเรียบร้อยและพุชขึ้นต้นทางเรียบร้อยแล้ว
