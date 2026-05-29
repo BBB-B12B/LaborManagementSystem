@@ -58,6 +58,8 @@
 - [X] T-012-006-01: แก้ไข UI/Logic Checkbox และปรับระบบรับงานช่วยเหลือเป็นระดับงานย่อย (Subtask) (→ ERR-019) · attempts: 2 · tool_calls: 7
 - [X] T-012-006-02: แก้ไขบั๊ก Subtask ที่ไม่ได้ติ๊กขอความช่วยเหลือแสดงผลเป็นงาน Support (→ ERR-020) · attempts: 1 · tool_calls: 3
 - [X] T-012-006-03: ปรับปรุง Layout และลดรูปฟอร์มระดับงานย่อย (Support Pickup Layout) ใน TaskCreateModal (→ ERR-021) · attempts: 1 · tool_calls: 5
+- [X] T-012-006-04: เพิ่ม Checkbox ขอความช่วยเหลือในหน้าต่างแก้ไขงานย่อย และแสดงงานในดรอปดาวน์ช่วยเหลือทีม Support · attempts: 1 · tool_calls: 14
+- [X] T-012-006-05: แก้ไขบั๊กข้อมูลการ์ดงาน Support และข้อมูล Daily Report ของ Support FM ไม่ถูกรีเซ็ตเมื่อโดน Reject · attempts: 1 · tool_calls: 5
 - [X] T-012-007-01: ปรับแก้ UI Kanban Board (ลดขนาดการ์ด, เอา scrollbar ออก, ลดขนาด Font ให้เท่ากับ Structure Tree, จัด Layout ป้องกันการ์ดหลุดจอ) (→ ERR-022) · attempts: 1 · tool_calls: 36
 - [X] T-012-008-01: ปรับปรุง Structure Tree (เพิ่มโฟลเดอร์ WorkOrder, แยกพื้นที่งาน Support, ใช้ฟิลด์ชื่อแสดงผล) และปรับปรุงระบบกรองสิทธิ์ดูงาน (→ ERR-023) · attempts: 1 · tool_calls: 10
 - [X] T-012-008-02: แก้ไขบั๊กข้อมูลงานช่วยเหลือค้างรับ (Pending Support) และงานปกติโครงการอื่นหลุดไปแสดงสำหรับทีม Support (→ ERR-024) · attempts: 1 · tool_calls: 5
@@ -83,6 +85,7 @@
 - [X] T-014: จัดการวันครบกำหนด (Due Date) ในระดับ Subtask และคำนวณวันครบกำหนด of Task หลักอัตโนมัติ
 - [X] T-014-001-01: เปลี่ยนคำอธิบายสี Due Date ให้แสดงผ่าน Tooltip บนปุ่ม Due Date ของการ์ดงาน · attempts: 1 · tool_calls: 5
 - [X] T-015: ปรับปรุงสิทธิ์การเข้าถึงเมนูและหน้าต่าง ๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection) (→ ERR-037) · attempts: 1 · tool_calls: 15
+- [X] T-012-009-01: ปรับปรุงตารางกำลังพลและแผนงาน (Labor & Plans Table UI, Dashboard & Subtask History Modal) · attempts: 1 · tool_calls: 12
 
 ---
 
@@ -100,3 +103,10 @@
 - [X] T-014-004-01: แก้ไข updateSubtask และ deleteSubtask 404 (Not Found) เนื่องจาก resolveRefs ตีความ id ผิดพลาด (→ ERR-042) · attempts: 1 · tool_calls: 54
 - [X] T-014-004-02: แก้ไขโครงสร้างการแยกไอดีงานของ TaskService ให้รองรับทั้ง single/double underscore (→ ERR-043) · attempts: 2 · tool_calls: 5
 - [X] T-014-004-03: ปรับปรุงการคำนวณและอัปเดต dueDate บน Task หลักอัตโนมัติเมื่ออัปเดตหรือลบ subtask (→ ERR-044) · attempts: 1 · tool_calls: 25
+- [X] T-012-009-02: ปรับดีไซน์ตารางกำลังพลและแดชบอร์ดให้เรียบหรู มินิมอล ทันสมัย · attempts: 1 · tool_calls: 29
+- [X] T-012-009-03: ปรับปรุงแยกแดชบอร์ดชั่วโมงโอทีย่อย และแสดงประวัติแก้ไขรายงานกำลังพลอย่างโปร่งใส · attempts: 1 · tool_calls: 10
+- [X] T-012-009-04: แก้ไข Error 500 เมื่อเรียกดูประวัติ subtask (AxiosError 500 ใน getSubtasks) (→ ERR-046) · attempts: 1 · tool_calls: 93
+- [X] T-012-009-05: ปรับปรุงหน้าต่างแสดงประวัติการแก้ไขรายงานให้แสดงผลเปรียบเทียบก่อนและหลังการแก้ไข (Diff UI) · attempts: 1 · tool_calls: 37
+
+
+

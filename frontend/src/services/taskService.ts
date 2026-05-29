@@ -308,7 +308,7 @@ export const taskService = {
   /**
    * Update a subtask
    */
-  updateSubtask: async (id: string, subtaskId: string, subtaskData: { subtaskName: string; assignees: TaskAssignee[]; dueDate?: string | Date | null }): Promise<Subtask> => {
+  updateSubtask: async (id: string, subtaskId: string, subtaskData: { subtaskName: string; assignees: TaskAssignee[]; dueDate?: string | Date | null; isSupportRequest?: boolean }): Promise<Subtask> => {
     return await api.patch<Subtask>(`/tasks/${id}/subtasks/${subtaskId}`, subtaskData);
   },
 

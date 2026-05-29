@@ -1,3 +1,3 @@
-task: T-014-004-03: ปรับปรุงการคำนวณและอัปเดต dueDate บน Task หลักอัตโนมัติเมื่ออัปเดตหรือลบ subtask (→ ERR-044)
+task: Redesign Labor & Plans table page (requests.tsx) with premium UI, dashboard summary cards, and a subtask edit history timeline popup
 phase: done
 next: none

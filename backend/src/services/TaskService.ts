@@ -301,25 +301,31 @@ export class TaskService {
           createdBy: updatedBy,
         });
 
-        // A2. Update subtask document (reset progress, bump revision, status → rework)
+        // A2. Update subtask document (reset progress, bump revision, status → rework, reset support fields)
         transaction.update(subtaskRef, {
           currentRevision: nextRevId,
           dailyProgress: 0,
           status: 'rework',
           assignees: newAssignees,
+          isSupportRequest: false,
+          isPickedUpBySupport: false,
+          supportTaskName: null,
+          supportDailyProgress: 0,
+          supportAssignees: [],
           updatedAt: now,
           updatedBy: updatedBy
         });
 
-        // A3. Recalculate average progress for parent task (using already-read subtasksQuery)
+        // A3. Recalculate average progress and support status for parent task (using already-read subtasksQuery)
         const allSubtasks = subtasksQuery.docs.map(d => {
           if (d.id === subtaskRef.id) {
-            return { ...d.data(), dailyProgress: 0, status: 'rework' };
+            return { ...d.data(), dailyProgress: 0, status: 'rework', isSupportRequest: false };
           }
           return d.data();
         });
         const totalProgress = allSubtasks.reduce((sum, st) => sum + (st.dailyProgress || 0), 0);
         const averageProgress = allSubtasks.length > 0 ? Math.round(totalProgress / allSubtasks.length) : 0;
+        const hasSupportRequest = allSubtasks.some(st => st.isSupportRequest === true);
 
         // A4. Update parent task — status depends on averageProgress
         const parentStatus: string = averageProgress >= 100 ? 'for-checking' : averageProgress > 0 ? 'in-progress' : 'upcoming';
@@ -330,6 +336,7 @@ export class TaskService {
           dailyProgress: averageProgress,
           status: parentStatus as any,
           assignees: mergedAssignees,
+          isSupportRequest: hasSupportRequest,
           updatedAt: now,
           updatedBy: updatedBy,
           revisionCreatedAt: now,
@@ -1214,6 +1221,9 @@ export class TaskService {
     if (subtaskData.assignees !== undefined) {
       updates.assignees = subtaskData.assignees || [];
     }
+    if (subtaskData.isSupportRequest !== undefined) {
+      updates.isSupportRequest = !!subtaskData.isSupportRequest;
+    }
 
     const changes = Object.keys(updates)
       .filter(k => k !== 'updatedAt' && k !== 'updatedBy')
@@ -1372,8 +1382,6 @@ export class TaskService {
       updatedBy: userId
     };
 
-    const admin = require('firebase-admin');
-
     if (activeSubtasks.length > 0) {
       // 1. Recalculate dailyProgress (average)
       const totalProgress = activeSubtasks.reduce((sum, st) => sum + (st.dailyProgress || 0), 0);
@@ -1396,9 +1404,13 @@ export class TaskService {
       if (maxDueDate) {
         taskUpdates.dueDate = maxDueDate;
       }
+
+      // 4. Recalculate isSupportRequest
+      taskUpdates.isSupportRequest = activeSubtasks.some(st => st.isSupportRequest === true);
     } else {
       taskUpdates.dailyProgress = 0;
       taskUpdates.status = 'upcoming';
+      taskUpdates.isSupportRequest = false;
     }
 
     await taskRef.update(taskUpdates);

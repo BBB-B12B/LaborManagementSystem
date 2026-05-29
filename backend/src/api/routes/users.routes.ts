@@ -120,7 +120,7 @@ router.get(
   authorize(['AM', 'PM', 'PD', 'SE', 'FM', 'PE', 'OE', 'MD']),
   [
     query('page').optional().isInt({ min: 1 }),
-    query('pageSize').optional().isInt({ min: 1, max: 100 }),
+    query('pageSize').optional().isInt({ min: 1, max: 1000 }),
   ],
   async (req: Request, res: Response) => {
     try {

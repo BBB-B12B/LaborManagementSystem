@@ -71,6 +71,7 @@ export interface Subtask {
   id: string;
   subtaskId: string;
   subtaskName: string;
+  isSupportRequest?: boolean;
   status: TaskStatus;
   assignees: TaskAssignee[];
   dailyProgress: number;

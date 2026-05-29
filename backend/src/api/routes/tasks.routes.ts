@@ -641,13 +641,16 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
     tasksSnapshot.docs.forEach(doc => {
       const parts = doc.ref.path.split('/');
       const taskId = parts[5];
+      const taskData = doc.data();
       tasksMap.set(taskId, {
         id: doc.id,
         taskId,
-        taskName: doc.data().taskName,
-        projectId: doc.data().projectId,
-        projectName: doc.data().projectName,
-        workOrderCode: doc.data().workOrderCode,
+        taskName: taskData.taskName,
+        projectId: taskData.projectId,
+        projectName: taskData.projectName,
+        workOrderCode: taskData.workOrderCode,
+        createdBy: taskData.createdBy || 'ไม่ระบุ',
+        createdAt: taskData.createdAt ? (typeof taskData.createdAt.toDate === 'function' ? taskData.createdAt.toDate() : taskData.createdAt) : null,
       });
     });
 
@@ -659,7 +662,7 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
     });
 
     // Fetch all users to map employeeId / uid / username to name
-    const usersSnapshot = await afterSaleDb.collection('users').get();
+    const usersSnapshot = await db.collection('users').get();
     const usersMap = new Map();
     usersSnapshot.docs.forEach(doc => {
       const uData = doc.data();
@@ -717,16 +720,23 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
         reporterName = usersMap.get(data.updatedBy);
       }
 
+      let taskCreatorName = taskMeta.createdBy;
+      if (usersMap.has(taskMeta.createdBy)) {
+        taskCreatorName = usersMap.get(taskMeta.createdBy);
+      }
+
       allRequests.push({
         ...data,
         id: doc.id,
         dateStr: rDateStr,
-        taskId,
+        taskId: `${parts[1]}__${parts[3]}__${parts[5]}`,
         subtaskId,
         taskName,
         createdBy: reporterName,
         projectId: taskMeta.projectId,
         projectName: taskMeta.projectName,
+        taskCreatedBy: taskCreatorName,
+        taskCreatedAt: taskMeta.createdAt,
       });
     });
 
@@ -750,13 +760,16 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
     tasksSnapshot.docs.forEach(doc => {
       const parts = doc.ref.path.split('/');
       const taskId = parts[5];
+      const taskData = doc.data();
       tasksMap.set(taskId, {
         id: doc.id,
         taskId,
-        taskName: doc.data().taskName,
-        projectId: doc.data().projectId,
-        projectName: doc.data().projectName,
-        workOrderCode: doc.data().workOrderCode,
+        taskName: taskData.taskName,
+        projectId: taskData.projectId,
+        projectName: taskData.projectName,
+        workOrderCode: taskData.workOrderCode,
+        createdBy: taskData.createdBy || 'ไม่ระบุ',
+        createdAt: taskData.createdAt ? (typeof taskData.createdAt.toDate === 'function' ? taskData.createdAt.toDate() : taskData.createdAt) : null,
       });
     });
 
@@ -768,7 +781,7 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
     });
 
     // Fetch all users to map employeeId / uid / username to name
-    const usersSnapshot = await afterSaleDb.collection('users').get();
+    const usersSnapshot = await db.collection('users').get();
     const usersMap = new Map();
     usersSnapshot.docs.forEach(doc => {
       const uData = doc.data();
@@ -826,16 +839,23 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
         reporterName = usersMap.get(data.updatedBy);
       }
 
+      let taskCreatorName = taskMeta.createdBy;
+      if (usersMap.has(taskMeta.createdBy)) {
+        taskCreatorName = usersMap.get(taskMeta.createdBy);
+      }
+
       allReports.push({
         ...data,
         id: doc.id,
         dateStr: rDateStr,
-        taskId,
+        taskId: `${parts[1]}__${parts[3]}__${parts[5]}`,
         subtaskId,
         taskName,
         createdBy: reporterName,
         projectId: taskMeta.projectId,
         projectName: taskMeta.projectName,
+        taskCreatedBy: taskCreatorName,
+        taskCreatedAt: taskMeta.createdAt,
       });
     });
 

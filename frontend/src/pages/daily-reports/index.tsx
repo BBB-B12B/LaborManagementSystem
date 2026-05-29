@@ -1295,7 +1295,7 @@ export default function DailyReportPage() {
       const isHistorical = user.employeeId
         ? task.historicalAssigneeIds?.includes(user.employeeId)
         : false;
-      const isSupportRequest = task.isSupportRequest === true;
+      const isSupportRequest = task.isSupportRequest === true && task.isPickedUpBySupport === true;
 
       // 1. Current Revision (Show if participant, support request, or historical)
       // also show if status is completed to ensure visibility in Finish tab

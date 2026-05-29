@@ -1,14 +1,7 @@
 status: completed
-session_id: session_012_page_route_protection
+session_id: session_013_uxui_workspace
 tasks_done:
-  - จำกัดสิทธิ์การเข้าถึงหน้า Dashboard ให้เฉพาะ GOD, MD, PD, PM, PE, OE, AM
-  - จำกัดสิทธิ์การเข้าถึงหน้า Daily Reports ให้เฉพาะ GOD, SE, FM
-  - จำกัดสิทธิ์การเข้าถึงหน้า Management ให้เฉพาะ GOD, MD, PD, PM, PE, OE, AM
-  - จำกัดสิทธิ์การเข้าถึงหน้า Wage Calculation ให้เฉพาะ GOD, MD, PD, PM, PE, OE, AM
-  - จำกัดสิทธิ์การเข้าถึงหน้า Scan Data ให้เฉพาะ GOD, AM
-  - จำกัดสิทธิ์การเข้าถึงหน้า Workspace ให้เฉพาะ GOD, MD, PD, PM, PE, OE, AM
-  - ตรวจจับสิทธิ์ในการแสดงผลของ Sidebar และ Navbar ให้ตรงตามสิทธิ์การเข้าถึง
-  - แก้ไข compilation errors จากการ import ซ้ำซ้อนและ layout wrapping ในรายละเอียดของ Wage Calculation และ Scan Data
+  - T-016 (UX/UI Workspace — DueDate Tooltip, Reject Fix, Subtask Edit Fix)
 tasks_pending: none
-last_action: staging files and indexing variables/errors
-next_session_start: เริ่มงานใหม่ในวันถัดไปตาม roadmap ของระบบ หรือรับฟีดแบคจากผู้ใช้
+last_action: Git push branch dailyReport — commit "UX/UI workspace" (33 files changed)
+next_session_start: ตรวจสอบระบบ Workspace และเริ่ม Feature ถัดไปตาม master_roadmap.md

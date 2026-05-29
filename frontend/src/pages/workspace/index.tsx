@@ -18,11 +18,14 @@ import {
   Autocomplete,
   Avatar,
   CircularProgress,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
   TableChart as TableChartIcon,
   Menu as MenuIcon,
+  HelpOutline as HelpOutlineIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -34,6 +37,7 @@ import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
 import { taskService, type Task, type Subtask, type TaskAssignee } from '@/services/taskService';
 import { projectConfigService } from '@/services/projectConfigService';
+import { projectService } from '@/services/projectService';
 import { DatePicker } from '@/components/forms/DatePicker';
 import { memberService } from '@/services/memberService';
 import { useToast } from '@/components/common/Toast';
@@ -55,6 +59,22 @@ const isNotificationForSubtask = (notiSubtaskId: string | undefined, cardId: str
   return notiSubtaskId === cardId || cardId.endsWith('__' + notiSubtaskId);
 };
 
+const getEffectiveSubtaskStatus = (st: any) => {
+  if (!st) return 'upcoming';
+  let effectiveStatus = st.status;
+  const progress = st.dailyProgress || 0;
+  if (progress >= 100 && effectiveStatus !== 'completed') {
+    return 'for-checking';
+  } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
+    return 'in-progress';
+  } else if (effectiveStatus === 'rework' && progress === 0) {
+    return 'upcoming';
+  } else if (effectiveStatus === 'rework' && progress > 0) {
+    return 'in-progress';
+  }
+  return effectiveStatus;
+};
+
 export default function WorkspacePage() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -68,6 +88,14 @@ export default function WorkspacePage() {
   const { showLoading, hideLoading } = useFeedbackStore();
   const toast = useToast();
   const { canEditWorkspace } = usePermissions(user);
+
+  const [projects, setProjects] = useState<any[]>([]);
+
+  useEffect(() => {
+    projectService.getActive()
+      .then(setProjects)
+      .catch((err) => console.error('Failed to load projects', err));
+  }, []);
 
   const [activeTab, setActiveTab] = useState('All Tasks');
   const [loading, setLoading] = useState(false);
@@ -102,6 +130,7 @@ export default function WorkspacePage() {
   const [subtaskEditAssignees, setSubtaskEditAssignees] = useState<TaskAssignee[]>([]);
   const [subtaskEditError, setSubtaskEditError] = useState('');
   const [subtaskEditSubmitting, setSubtaskEditSubmitting] = useState(false);
+  const [subtaskEditIsSupportRequest, setSubtaskEditIsSupportRequest] = useState(false);
 
   // Subtask Delete state
   const [isSubtaskDeleteOpen, setIsSubtaskDeleteOpen] = useState(false);
@@ -294,6 +323,7 @@ export default function WorkspacePage() {
         setSubtaskEditName(subtask.subtaskName);
         setSubtaskEditDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
         setSubtaskEditAssignees(subtask.assignees || []);
+        setSubtaskEditIsSupportRequest(subtask.isSupportRequest || false);
         setSubtaskEditError('');
         setIsSubtaskEditOpen(true);
       }
@@ -342,6 +372,7 @@ export default function WorkspacePage() {
           subtaskName: subtaskEditName.trim(),
           assignees: subtaskEditAssignees,
           dueDate: subtaskEditDueDate,
+          isSupportRequest: subtaskEditIsSupportRequest,
         }
       );
       toast.show('แก้ไขงานย่อยสำเร็จ', 'success');
@@ -543,7 +574,7 @@ export default function WorkspacePage() {
         const mergedTask: Task = {
           ...task,
           id: subtask.id,
-          dueDate: subtask.dueDate,
+          dueDate: subtask.dueDate instanceof Date ? subtask.dueDate.toISOString() : String(subtask.dueDate || ''),
           taskId: subtask.subtaskId,
           taskName: task.taskName,
           subtaskName: subtask.subtaskName,
@@ -681,7 +712,7 @@ export default function WorkspacePage() {
     const mergedTask: Task = {
       ...task,
       id: subtask.id,
-      dueDate: subtask.dueDate,
+      dueDate: subtask.dueDate instanceof Date ? subtask.dueDate.toISOString() : String(subtask.dueDate || ''),
       taskId: subtask.subtaskId,
       taskName: task.taskName,
       subtaskName: subtask.subtaskName,
@@ -805,6 +836,18 @@ export default function WorkspacePage() {
       hideLoading();
     }
   };
+
+  const shouldShowHelpCheckbox = useMemo(() => {
+    if (!editingSubtaskCard) return false;
+    const isHelperUser = projects.some(p => 
+      user?.projectLocationIds?.includes(p.id) && 
+      (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+    );
+    if (isHelperUser) return false;
+
+    const effectiveStatus = getEffectiveSubtaskStatus(editingSubtaskCard);
+    return effectiveStatus !== 'for-checking' && effectiveStatus !== 'completed';
+  }, [editingSubtaskCard, projects, user]);
 
   return (
     <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
@@ -1458,6 +1501,30 @@ export default function WorkspacePage() {
                 }
               }}
             />
+
+            {shouldShowHelpCheckbox && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Tooltip title="ขอความช่วยเหลือจากทีม Support ในงานย่อยนี้" arrow placement="top">
+                  <HelpOutlineIcon sx={{ color: '#94a3b8', fontSize: 18, cursor: 'help' }} />
+                </Tooltip>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={subtaskEditIsSupportRequest}
+                      onChange={(e) => setSubtaskEditIsSupportRequest(e.target.checked)}
+                      disabled={subtaskEditSubmitting}
+                      sx={{ color: '#94a3b8', '&.Mui-checked': { color: 'primary.main' } }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: subtaskEditIsSupportRequest ? 'primary.main' : '#64748b' }}>
+                      ขอความช่วยเหลือจากทีม Support
+                    </Typography>
+                  }
+                  sx={{ m: 0 }}
+                />
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

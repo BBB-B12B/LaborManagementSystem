@@ -66,8 +66,10 @@
       "backlinks": [
         "backend/src/check_backlog.ts",
         "backend/src/config/storage.ts",
+        "backend/src/scratch/test_subtask_history.ts",
         "backend/src/services/ProjectConfigService.ts",
         "backend/src/services/TaskService.ts",
+        "backend/src/api/routes/notifications.routes.ts",
         "backend/src/api/routes/tasks.routes.ts"
       ]
     },
@@ -183,6 +185,13 @@
         "backend/src/services/scanData/LateRecordService.ts"
       ]
     },
+    "backend/src/models/Notification.ts": {
+      "description": "Module: Notification.ts",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/services/TaskService.ts"
+      ]
+    },
     "backend/src/models/ProjectLocation.ts": {
       "description": "Module: ProjectLocation.ts",
       "associated_tasks": [],
@@ -231,7 +240,9 @@
       "description": "Module: Task.ts",
       "associated_tasks": [],
       "backlinks": [
-        "backend/src/services/TaskService.ts"
+        "backend/src/scratch/test_subtask_history.ts",
+        "backend/src/services/TaskService.ts",
+        "backend/src/api/routes/tasks.routes.ts"
       ]
     },
     "backend/src/models/User.ts": {
@@ -258,6 +269,11 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/scratch/test_subtask_history.ts": {
+      "description": "Module: test_subtask_history.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/scripts/migrateDCIds.ts": {
       "description": "Migration Script: Migrate DC IDs and Schema",
       "associated_tasks": [],
@@ -279,6 +295,11 @@
       "backlinks": [
         "backend/src/scripts/runMigration.ts"
       ]
+    },
+    "backend/src/scripts/migrate_tasks_to_subtasks.ts": {
+      "description": "Module: migrate_tasks_to_subtasks.ts",
+      "associated_tasks": [],
+      "backlinks": []
     },
     "backend/src/scripts/runMigration.ts": {
       "description": "Module: runMigration.ts",
@@ -311,6 +332,7 @@
       "description": "สร้าง Task ใหม่ พร้อม Running Number (เช่น WH-2026-0001)",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/scratch/test_subtask_history.ts",
         "backend/src/api/routes/tasks.routes.ts"
       ]
     },
@@ -489,6 +511,7 @@
         "backend/src/api/routes/dailyContractors.routes.ts",
         "backend/src/api/routes/dailyReports.routes.ts",
         "backend/src/api/routes/media.routes.ts",
+        "backend/src/api/routes/notifications.routes.ts",
         "backend/src/api/routes/overtime.routes.ts",
         "backend/src/api/routes/project.routes.ts",
         "backend/src/api/routes/projectConfigs.routes.ts",
@@ -533,6 +556,7 @@
         "backend/src/api/middleware/auth.ts",
         "backend/src/api/routes/auth.routes.ts",
         "backend/src/api/routes/dailyContractors.routes.ts",
+        "backend/src/api/routes/notifications.routes.ts",
         "backend/src/api/routes/projectConfigs.routes.ts",
         "backend/src/api/routes/projects.routes.ts",
         "backend/src/api/routes/scanData.routes.ts",
@@ -567,6 +591,11 @@
     },
     "backend/src/api/routes/media.routes.ts": {
       "description": "Upload single file",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/api/routes/notifications.routes.ts": {
+      "description": "Module: notifications.routes.ts",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -673,6 +702,11 @@
         "frontend/src/pages/member-management/[id]/edit.tsx"
       ]
     },
+    "frontend/src/services/notificationService.ts": {
+      "description": "Module: notificationService.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "frontend/src/services/overtimeService.ts": {
       "description": "Overtime Service",
       "associated_tasks": [],
@@ -686,9 +720,7 @@
     "frontend/src/services/projectService.ts": {
       "description": "Project Service (Frontend)",
       "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/requests.tsx"
-      ]
+      "backlinks": []
     },
     "frontend/src/services/salesSyncService.ts": {
       "description": "---------------------------------------------------------------------------",
@@ -716,9 +748,7 @@
     "frontend/src/services/taskService.ts": {
       "description": "Fetch tasks with optional filters",
       "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/requests.tsx"
-      ]
+      "backlinks": []
     },
     "frontend/src/services/wageService.ts": {
       "description": "Wage Calculation Service",
@@ -741,6 +771,11 @@
     },
     "frontend/src/store/index.ts": {
       "description": "Zustand Store Index",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/store/notificationStore.ts": {
+      "description": "Module: notificationStore.ts",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -867,6 +902,7 @@
         "frontend/src/services/dailyReportService.ts",
         "frontend/src/services/dcService.ts",
         "frontend/src/services/memberService.ts",
+        "frontend/src/services/notificationService.ts",
         "frontend/src/services/overtimeService.ts",
         "frontend/src/services/projectConfigService.ts",
         "frontend/src/services/projectService.ts",
@@ -1052,7 +1088,7 @@
       "backlinks": []
     },
     "frontend/src/pages/workspace/requests.tsx": {
-      "description": "ตารางกำลังพลและแผนงาน (Labor & Plans Table Workspace) สำหรับหัวหน้างาน",
+      "description": "requests.tsx",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1091,11 +1127,23 @@
         "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx"
       ]
     },
+    "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx": {
+      "description": "Module: TaskSubtasksModal.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx": {
       "description": "Module: WorkOrderConfigModal.tsx",
       "associated_tasks": [],
       "backlinks": [
         "frontend/src/pages/workspace/components/TaskCreateModal.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/WorkspaceTree.tsx": {
+      "description": "Module: WorkspaceTree.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
       ]
     },
     "frontend/src/pages/scan-data-monitoring/components/ScanDataUploadDialog.tsx": {

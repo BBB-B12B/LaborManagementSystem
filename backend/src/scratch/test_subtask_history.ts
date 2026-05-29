@@ -1,6 +1,11 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+// Connect directly to Cloud Firebase
+delete process.env.FIRESTORE_EMULATOR_HOST;
+delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+delete process.env.FIREBASE_EMULATOR_HOST;
+
 import { TaskService } from '../services/TaskService';
 import { CreateTaskInput, UpdateTaskInput } from '../models/Task';
 import { afterSaleDb } from '../config/firebaseProjectB';
