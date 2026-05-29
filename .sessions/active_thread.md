@@ -1,3 +1,3 @@
-task: Wage UI Enhancements (Option 1 & 2) in Wage Calculation details
+task: DevicePunches + EditHistory Audit Trail Integrity + Noon OT Punch Behavior Fix
 phase: done
-next: none
+next: none — ทุกส่วนงานการบันทึกประวัติ ออดิต และพฤติกรรมการแสกนของกะโอเที่ยงเสร็จสมบูรณ์เรียบร้อยแล้ว

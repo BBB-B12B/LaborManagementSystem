@@ -29,12 +29,14 @@ import {
   Drawer,
   Tooltip,
   IconButton,
+  Stack,
 } from '@mui/material';
-import { ArrowBack, Download, Calculate, AccessTime, Add, CheckCircle, Payment, Visibility, VisibilityOff, Close, InfoOutlined } from '@mui/icons-material';
+import { ArrowBack, Download, Calculate, AccessTime, Add, CheckCircle, Payment, Visibility, VisibilityOff, Close, InfoOutlined, History } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { wageService, type DCWageSummary } from '../../services/wageService';
 import { getLateRecords } from '../../services/scanDataService';
+import { reconciliationService } from '../../services/reconciliationService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useToast } from '../../components/common/Toast';
 
@@ -730,7 +732,7 @@ export default function WageCalculationDetailsPage() {
         open={openDialog}
         onClose={() => setOpenDialog(false)}
         dc={selectedDC}
-        periodId={period.id}
+        period={period}
         onUpdate={() => queryClient.invalidateQueries({ queryKey: ['wagePeriod', id] })}
       />
 
@@ -868,9 +870,46 @@ export default function WageCalculationDetailsPage() {
 /**
  * Drawer for managing additional income/expense and showing detailed wage slips
  */
-function AdditionalItemsDrawer({ open, onClose, dc, periodId, onUpdate }: any) {
+function AdditionalItemsDrawer({ open, onClose, dc, period, onUpdate }: any) {
+  const periodId = period?.id;
   const [activeTab, setActiveTab] = React.useState(0);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+
+  // เมื่อ Drawer แม่ปิดลง ให้ปิด Drawer ลูก (History Drawer) ตามไปด้วยแบบแม่ลูก
+  React.useEffect(() => {
+    if (!open) {
+      setHistoryOpen(false);
+    }
+  }, [open]);
+
   const { success: showSuccess, error: showError } = useToast();
+
+  // Fetch reconciliation records for this employee within the period dates to get daily report edit histories
+  const { data: reconHistory, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ['reconciliationHistory', dc?.employeeId, period?.id],
+    queryFn: async () => {
+      if (!dc?.employeeId || !period) return [];
+      const start = period.startDate instanceof Date ? period.startDate.toISOString().split('T')[0] : String(period.startDate).split('T')[0];
+      const end = period.endDate instanceof Date ? period.endDate.toISOString().split('T')[0] : String(period.endDate).split('T')[0];
+      const res = await reconciliationService.getRecords({
+        employeeId: dc.employeeId,
+        startDate: start,
+        endDate: end,
+        pageSize: 100,
+      });
+      return res.records || [];
+    },
+    enabled: open && !!dc?.employeeId && !!period,
+  });
+
+  // Filter records that have edit history
+  const historyRecords = React.useMemo(() => {
+    if (!reconHistory) return [];
+    return reconHistory.filter((rec: any) => 
+      (rec.dailyReportHistory && rec.dailyReportHistory.length > 0) ||
+      (rec.statusHistory && rec.statusHistory.length > 0)
+    );
+  }, [reconHistory]);
 
   const handleAdd = async (type: 'income' | 'expense') => {
     const desc = prompt(type === 'income' ? 'ระบุรายละเอียดรายได้:' : 'ระบุรายละเอียดรายจ่าย:');
@@ -914,303 +953,783 @@ function AdditionalItemsDrawer({ open, onClose, dc, periodId, onUpdate }: any) {
   const totalWelfare = refrigerator + soundSystem + tv + washingMachine + portableAc + follower;
 
   return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      sx={{
-        '& .MuiDrawer-paper': {
-          width: { xs: '100%', sm: 550 },
-          boxSizing: 'border-box',
-          p: 3,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-        },
-      }}
-    >
-      {/* Drawer Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-            รายละเอียดค่าแรงรายคน
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            รหัส DC: {dc.employeeId} | {dc.name}
-          </Typography>
-        </Box>
-        <IconButton onClick={onClose} color="error" size="medium">
-          <Close />
-        </IconButton>
-      </Box>
-
-      <Divider sx={{ mb: 2 }} />
-
-      {/* Main Drawer Content (Scrollable) */}
-      <Box sx={{ flex: 1, overflowY: 'auto', pr: 1, mb: 2 }}>
-        {/* Mock Payroll Slip Section */}
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            mb: 3,
-            borderColor: '#e0e0e0',
-            borderRadius: '12px',
-            background: '#fafafa',
-          }}
-        >
-          <Typography
-            variant="subtitle2"
-            align="center"
-            sx={{ fontWeight: 'bold', letterSpacing: 1, color: 'text.secondary', mb: 2, textTransform: 'uppercase' }}
-          >
-            📋 ใบแจ้งรายละเอียดยอดค่าแรงจำลอง
-          </Typography>
-
-          <Grid container spacing={2}>
-            {/* 1. Columns for incomes (Green) */}
-            <Grid item xs={12} md={6}>
-              <Box
-                sx={{
-                  p: 1.5,
-                  bgcolor: '#E8F5E9',
-                  borderRadius: '8px',
-                  height: '100%',
-                  borderLeft: '4px solid #4CAF50',
-                }}
-              >
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#2E7D32', mb: 1.5 }}>
-                  ➕ รายรับทั้งหมด
-                </Typography>
-                
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">ค่าแรงปกติ ({dc.regularDays.toFixed(2)} วัน):</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.regularWages.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">ค่าแรงโอที ({dc.totalOtHours.toFixed(2)} ชม.):</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.otWages.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">ค่าวิชาชีพ:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.professionalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">ค่าโทรศัพท์:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.phoneAllowance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                  {dc.additionalIncome > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">รายได้เสริมอื่น ๆ:</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>+{dc.additionalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                    </Box>
-                  )}
-                  
-                  <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.06)' }} />
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1B5E20' }}>รวมรายได้:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1B5E20' }}>{dc.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Grid>
-
-            {/* 2. Columns for deductions (Orange/Red) */}
-            <Grid item xs={12} md={6}>
-              <Box
-                sx={{
-                  p: 1.5,
-                  bgcolor: '#FFF3E0',
-                  borderRadius: '8px',
-                  height: '100%',
-                  borderLeft: '4px solid #FF9800',
-                }}
-              >
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#E65100', mb: 1.5 }}>
-                  ➖ รายจ่าย / รายการหัก
-                </Typography>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">ค่าที่พัก:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.accommodationCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                  
-                  {/* Itemized Welfare/Appliance Rentals */}
-                  {totalWelfare > 0 && (
-                    <Box sx={{ bgcolor: 'rgba(0,0,0,0.02)', p: 1, borderRadius: '4px' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>หักเช่าอุปกรณ์/ผู้ติดตาม:</Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{totalWelfare.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                      </Box>
-                      <Box sx={{ pl: 1, display: 'flex', flexDirection: 'column', gap: 0.2 }}>
-                        {refrigerator > 0 && (
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="caption" color="text.secondary">• ค่าตู้เย็น:</Typography>
-                            <Typography variant="caption">{refrigerator.toLocaleString()} ฿</Typography>
-                          </Box>
-                        )}
-                        {portableAc > 0 && (
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="caption" color="text.secondary">• ค่าแอร์เคลื่อนที่:</Typography>
-                            <Typography variant="caption">{portableAc.toLocaleString()} ฿</Typography>
-                          </Box>
-                        )}
-                        {tv > 0 && (
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="caption" color="text.secondary">• ค่าทีวี:</Typography>
-                            <Typography variant="caption">{tv.toLocaleString()} ฿</Typography>
-                          </Box>
-                        )}
-                        {washingMachine > 0 && (
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="caption" color="text.secondary">• ค่าเครื่องซักผ้า:</Typography>
-                            <Typography variant="caption">{washingMachine.toLocaleString()} ฿</Typography>
-                          </Box>
-                        )}
-                        {soundSystem > 0 && (
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="caption" color="text.secondary">• ค่าเครื่องเสียง:</Typography>
-                            <Typography variant="caption">{soundSystem.toLocaleString()} ฿</Typography>
-                          </Box>
-                        )}
-                        {follower > 0 && (
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="caption" color="text.secondary">• ค่าผู้ติดตาม:</Typography>
-                            <Typography variant="caption">{follower.toLocaleString()} ฿</Typography>
-                          </Box>
-                        )}
-                      </Box>
-                    </Box>
-                  )}
-
-                  {dc.lateDeductions > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">หักมาสาย ({dc.penaltyMinutes} นาที):</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>-{dc.lateDeductions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                    </Box>
-                  )}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" color="text.secondary">ประกันสังคม:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.socialSecurityDeduction.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                  {dc.additionalExpenses > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">รายจ่ายเพิ่มเติมอื่น ๆ:</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>-{dc.additionalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                    </Box>
-                  )}
-
-                  <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.06)' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#E65100' }}>รวมรายจ่าย:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#E65100' }}>{dc.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Grid>
-          </Grid>
-
-          {/* 3. Highlighted Net Wages */}
-          <Box
-            sx={{
-              mt: 2,
-              p: 1.5,
-              bgcolor: dc.netWages >= 0 ? '#E1F5FE' : '#FFEBEE',
-              borderRadius: '8px',
-              textAlign: 'center',
-              border: '1px solid',
-              borderColor: dc.netWages >= 0 ? '#0288D1' : '#D32F2F',
-            }}
-          >
-            <Typography variant="caption" color="text.secondary" display="block">
-              💰 ค่าแรงสุทธิรับจริง
+    <>
+      <Drawer
+        anchor="right"
+        open={open}
+        onClose={onClose}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: { xs: '100%', sm: 550 },
+            boxSizing: 'border-box',
+            p: 3,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          },
+        }}
+      >
+        {/* Drawer Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+              รายละเอียดค่าแรงรายคน
             </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 'bold',
-                color: dc.netWages >= 0 ? '#0288D1' : '#D32F2F',
-                mt: 0.5,
-              }}
-            >
-              {dc.netWages.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿
+            <Typography variant="body2" color="text.secondary">
+              รหัส DC: {dc.employeeId} | {dc.name}
             </Typography>
           </Box>
-        </Paper>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <IconButton
+              onClick={() => setHistoryOpen(!historyOpen)}
+              sx={{
+                color: 'primary.main',
+                backgroundColor: historyOpen ? 'rgba(25, 118, 210, 0.15)' : 'rgba(0, 0, 0, 0.04)',
+                border: '1px solid rgba(25, 118, 210, 0.25)',
+                '&:hover': {
+                  backgroundColor: 'rgba(25, 118, 210, 0.25)',
+                },
+                width: 40,
+                height: 40,
+                borderRadius: '8px',
+                transition: 'all 0.2s',
+              }}
+              title="ประวัติการแก้ไข Daily Report"
+            >
+              <History sx={{ fontSize: 22 }} />
+            </IconButton>
+            <IconButton onClick={onClose} color="error" size="medium">
+              <Close />
+            </IconButton>
+          </Stack>
+        </Box>
 
         <Divider sx={{ mb: 2 }} />
 
-        {/* Management Tab for Additionals */}
-        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1.5 }}>
-          ⚙️ จัดการรายการเพิ่มเติมย้อนหลัง
-        </Typography>
+        {/* Main Drawer Content (Scrollable) */}
+        <Box sx={{ flex: 1, overflowY: 'auto', pr: 1, mb: 2 }}>
+          {/* Mock Payroll Slip Section */}
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              mb: 3,
+              borderColor: '#e0e0e0',
+              borderRadius: '12px',
+              background: '#fafafa',
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              align="center"
+              sx={{ fontWeight: 'bold', letterSpacing: 1, color: 'text.secondary', mb: 2, textTransform: 'uppercase' }}
+            >
+              📋 ใบแจ้งรายละเอียดยอดค่าแรงจำลอง
+            </Typography>
 
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
-          <Tab label="รายได้เพิ่มเติม" />
-          <Tab label="รายจ่ายเพิ่มเติม" />
-        </Tabs>
+            <Grid container spacing={2}>
+              {/* 1. Columns for incomes (Green) */}
+              <Grid item xs={12} md={6}>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    bgcolor: '#E8F5E9',
+                    borderRadius: '8px',
+                    height: '100%',
+                    borderLeft: '4px solid #4CAF50',
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#2E7D32', mb: 1.5 }}>
+                    ➕ รายรับทั้งหมด
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">ค่าแรงปกติ ({dc.regularDays.toFixed(2)} วัน):</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.regularWages.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">ค่าแรงโอที ({dc.totalOtHours.toFixed(2)} ชม.):</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.otWages.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">ค่าวิชาชีพ:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.professionalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">ค่าโทรศัพท์:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.phoneAllowance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                    {dc.additionalIncome > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">รายได้เสริมอื่น ๆ:</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>+{dc.additionalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                      </Box>
+                    )}
+                    
+                    <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.06)' }} />
+                    
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1B5E20' }}>รวมรายได้:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1B5E20' }}>{dc.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Grid>
 
-        {activeTab === 0 && (
-          <Box sx={{ p: 1 }}>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => handleAdd('income')}
+              {/* 2. Columns for deductions (Orange/Red) */}
+              <Grid item xs={12} md={6}>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    bgcolor: '#FFF3E0',
+                    borderRadius: '8px',
+                    height: '100%',
+                    borderLeft: '4px solid #FF9800',
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#E65100', mb: 1.5 }}>
+                    ➖ รายจ่าย / รายการหัก
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">ค่าที่พัก:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.accommodationCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                    
+                    {/* Itemized Welfare/Appliance Rentals */}
+                    {totalWelfare > 0 && (
+                      <Box sx={{ bgcolor: 'rgba(0,0,0,0.02)', p: 1, borderRadius: '4px' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>หักเช่าอุปกรณ์/ผู้ติดตาม:</Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{totalWelfare.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                        </Box>
+                        <Box sx={{ pl: 1, display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+                          {refrigerator > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">• ค่าตู้เย็น:</Typography>
+                              <Typography variant="caption">{refrigerator.toLocaleString()} ฿</Typography>
+                            </Box>
+                          )}
+                          {portableAc > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">• ค่าแอร์เคลื่อนที่:</Typography>
+                              <Typography variant="caption">{portableAc.toLocaleString()} ฿</Typography>
+                            </Box>
+                          )}
+                          {tv > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">• ค่าทีวี:</Typography>
+                              <Typography variant="caption">{tv.toLocaleString()} ฿</Typography>
+                            </Box>
+                          )}
+                          {washingMachine > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">• ค่าเครื่องซักผ้า:</Typography>
+                              <Typography variant="caption">{washingMachine.toLocaleString()} ฿</Typography>
+                            </Box>
+                          )}
+                          {soundSystem > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">• ค่าเครื่องเสียง:</Typography>
+                              <Typography variant="caption">{soundSystem.toLocaleString()} ฿</Typography>
+                            </Box>
+                          )}
+                          {follower > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="caption" color="text.secondary">• ค่าผู้ติดตาม:</Typography>
+                              <Typography variant="caption">{follower.toLocaleString()} ฿</Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+
+                    {dc.lateDeductions > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">หักมาสาย ({dc.penaltyMinutes} นาที):</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>-{dc.lateDeductions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                      </Box>
+                    )}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" color="text.secondary">ประกันสังคม:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{dc.socialSecurityDeduction.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                    {dc.additionalExpenses > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">รายจ่ายเพิ่มเติมอื่น ๆ:</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'error.main' }}>-{dc.additionalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                      </Box>
+                    )}
+
+                    <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.06)' }} />
+
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#E65100' }}>รวมรายจ่าย:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#E65100' }}>{dc.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Grid>
+            </Grid>
+
+            {/* 3. Highlighted Net Wages */}
+            <Box
               sx={{
-                mb: 2,
-                backgroundColor: '#2E7D32',
-                '&:hover': { backgroundColor: '#1B5E20' },
+                mt: 2,
+                p: 1.5,
+                bgcolor: dc.netWages >= 0 ? '#E1F5FE' : '#FFEBEE',
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid',
+                borderColor: dc.netWages >= 0 ? '#0288D1' : '#D32F2F',
               }}
             >
-              เพิ่มรายได้
-            </Button>
-            <Typography variant="body2" color="text.secondary">
-              จำนวนรายการรายได้สะสม: {dc.additionalIncomeIds?.length || 0} รายการ
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-              * รายการรายได้เพิ่มเติมจะถูกคำนวณในการทำจ่ายยอดรวมเมื่องกด &quot;คำนวณใหม่&quot;
-            </Typography>
-          </Box>
-        )}
-        {activeTab === 1 && (
-          <Box sx={{ p: 1 }}>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => handleAdd('expense')}
-              sx={{
-                mb: 2,
-                backgroundColor: '#D84315',
-                '&:hover': { backgroundColor: '#BF360C' },
-              }}
-            >
-              เพิ่มรายจ่าย
-            </Button>
-            <Typography variant="body2" color="text.secondary">
-              จำนวนรายการรายจ่ายสะสม: {dc.additionalExpenseIds?.length || 0} รายการ
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-              * รายการหักรายจ่ายเพิ่มเติมจะถูกคำนวณในการทำจ่ายยอดรวมเมื่องกด &quot;คำนวณใหม่&quot;
-            </Typography>
-          </Box>
-        )}
-      </Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                💰 ค่าแรงสุทธิรับจริง
+              </Typography>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 'bold',
+                  color: dc.netWages >= 0 ? '#0288D1' : '#D32F2F',
+                  mt: 0.5,
+                }}
+              >
+                {dc.netWages.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿
+              </Typography>
+            </Box>
+          </Paper>
 
-      {/* Footer Close Button */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 2, borderTop: '1px solid #e0e0e0' }}>
-        <Button
-          onClick={onClose}
-          variant="outlined"
-          color="error"
-          sx={{ borderRadius: '8px', px: 4 }}
+          <Divider sx={{ mb: 2 }} />
+
+          {/* Management Tab for Additionals */}
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1.5 }}>
+            ⚙️ จัดการรายการเพิ่มเติมย้อนหลัง
+          </Typography>
+
+          <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
+            <Tab label="รายได้เพิ่มเติม" />
+            <Tab label="รายจ่ายเพิ่มเติม" />
+          </Tabs>
+
+          {activeTab === 0 && (
+            <Box sx={{ p: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => handleAdd('income')}
+                sx={{
+                  mb: 2,
+                  backgroundColor: '#2E7D32',
+                  '&:hover': { backgroundColor: '#1B5E20' },
+                }}
+              >
+                เพิ่มรายได้
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                จำนวนรายการรายได้สะสม: {dc.additionalIncomeIds?.length || 0} รายการ
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                * รายการรายได้เพิ่มเติมจะถูกคำนวณในการทำจ่ายยอดรวมเมื่องกด &quot;คำนวณใหม่&quot;
+              </Typography>
+            </Box>
+          )}
+          {activeTab === 1 && (
+            <Box sx={{ p: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => handleAdd('expense')}
+                sx={{
+                  mb: 2,
+                  backgroundColor: '#D84315',
+                  '&:hover': { backgroundColor: '#BF360C' },
+                }}
+              >
+                เพิ่มรายจ่าย
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                จำนวนรายการรายจ่ายสะสม: {dc.additionalExpenseIds?.length || 0} รายการ
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                * รายการหักรายจ่ายเพิ่มเติมจะถูกคำนวณในการทำจ่ายยอดรวมเมื่องกด &quot;คำนวณใหม่&quot;
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* Footer Close Button */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 2, borderTop: '1px solid #e0e0e0' }}>
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            color="error"
+            sx={{ borderRadius: '8px', px: 4 }}
+          >
+            ปิด
+          </Button>
+        </Box>
+      </Drawer>
+
+      {/* ประวัติการแก้ไข Daily Report Drawer */}
+      <Drawer
+        anchor="right"
+        open={historyOpen && open && !!dc}
+        onClose={() => setHistoryOpen(false)}
+        hideBackdrop={true}
+        variant="temporary"
+        sx={{
+          zIndex: 1400,
+          pointerEvents: 'none',
+        }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 480 },
+            borderRadius: '16px 0 0 16px',
+            boxShadow: '-10px 0 40px -10px rgba(0, 0, 0, 0.15)',
+            borderLeft: '1px solid #cbd5e1',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#fff',
+            right: { xs: 0, sm: 550 }, // Position it side-by-side with the main drawer
+            height: '100%',
+            pointerEvents: 'auto',
+          },
+        }}
+        ModalProps={{
+          disableEnforceFocus: true,
+          disableAutoFocus: true,
+          disableScrollLock: true,
+        }}
+      >
+        {/* Drawer Header */}
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+            p: 3,
+            color: '#fff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
         >
-          ปิด
-        </Button>
-      </Box>
-    </Drawer>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={900}>
+              🕒 ประวัติการแก้ไข Daily Report
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+              รหัส: {dc?.employeeId} — {dc?.name}
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setHistoryOpen(false)} sx={{ color: '#fff' }}>
+            <Close />
+          </IconButton>
+        </Box>
+
+        {/* Drawer Content */}
+        <Box sx={{ p: 3, flex: 1, overflowY: 'auto' }}>
+          {isHistoryLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <LoadingSpinner />
+            </Box>
+          ) : historyRecords && historyRecords.length > 0 ? (
+            <Stack spacing={4}>
+              {historyRecords.map((rec: any, recIdx: number) => {
+                const formattedWorkDate = new Date(rec.workDate).toLocaleDateString('th-TH', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                });
+                return (
+                  <Box key={recIdx} sx={{ border: '1px solid #e2e8f0', borderRadius: '12px', p: 2, bgcolor: '#f8fafc' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      📅 วันทำงาน: {formattedWorkDate}
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+                    <Stack spacing={3}>
+                      {(() => {
+                        const getStatusLabel = (status: string) => {
+                          switch (status) {
+                            case 'MISSING_SCAN':
+                              return { text: 'ขาดสแกนนิ้ว ❌', color: '#ef4444', bgColor: '#fef2f2', borderColor: '#fee2e2' };
+                            case 'DISCREPANCY':
+                              return { text: 'ชั่วโมงไม่ตรงกัน ⚠️', color: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fef3c7' };
+                            case 'MATCHED':
+                              return { text: 'ข้อมูลตรงกัน ✅', color: '#10b981', bgColor: '#ecfdf5', borderColor: '#d1fae5' };
+                            case 'ABSENT':
+                              return { text: 'ขาดงาน ❌', color: '#6b7280', bgColor: '#f3f4f6', borderColor: '#e5e7eb' };
+                            case 'NO_DAILY_REPORT':
+                              return { text: 'ไม่มีรายงานประจำวัน ⚠️', color: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fef3c7' };
+                            default:
+                              return { text: status, color: '#6b7280', bgColor: '#f3f4f6', borderColor: '#e5e7eb' };
+                          }
+                        };
+
+                        const getAuditDetails = (currentEntry: any, prevEntry: any, record: any) => {
+                          const currentStatus = currentEntry.status;
+                          const prevStatus = prevEntry ? prevEntry.status : null;
+                          const reason = currentEntry.reason || '';
+                          const note = currentEntry.note || '';
+
+                          let beforeTitle = 'ไม่พบข้อมูลสถานะก่อนหน้า';
+                          let beforeDesc = 'รายการประมวลผลเริ่มต้นโดยระบบ';
+                          let afterTitle = 'ประมวลผลสำเร็จ';
+                          let afterDesc = 'ระบบทำการประเมินสถานะความถูกต้อง';
+
+                          if (!prevEntry) {
+                            beforeTitle = 'ข้อมูลก่อนการตรวจสอบ';
+                            if (currentStatus === 'MISSING_SCAN') {
+                              beforeDesc = 'ตรวจพบพนักงานมีชั่วโมงใน Daily Report แต่ไม่มีเวลาสแกนนิ้วรูดบัตร (ขาดสแกนนิ้ว)';
+                            } else if (currentStatus === 'DISCREPANCY') {
+                              beforeDesc = `ตรวจพบชั่วโมงการทำงานขัดแย้งกันระหว่าง Daily Report (${record?.dailyReportHours || 0} ชม.) และสแกนนิ้ว (${record?.scanDataHours || 0} ชม.)`;
+                            } else if (currentStatus === 'NO_DAILY_REPORT') {
+                              beforeDesc = `ตรวจพบข้อมูลการสแกนนิ้ว (${record?.scanDataHours || 0} ชม.) แต่โฟร์แมนไม่ได้ลงบันทึกใน Daily Report`;
+                            } else if (currentStatus === 'ABSENT') {
+                              beforeDesc = 'ไม่มีทั้งข้อมูลการสแกนนิ้วและ Daily Report ในระบบ';
+                            } else {
+                              beforeDesc = 'ระบบเริ่มต้นประมวลผลตรวจสอบความถูกต้องข้อมูลการลงเวลา';
+                            }
+
+                            afterTitle = 'สถานะเริ่มต้นระบบ';
+                            afterDesc = `ตั้งค่าสถานะอัตโนมัติเป็น [${getStatusLabel(currentStatus).text}] เพื่อรอการตรวจสอบและจัดการ`;
+                            return { beforeTitle, beforeDesc, afterTitle, afterDesc };
+                          }
+
+                          if (reason.includes('Admin ยืนยันตาม Daily Report')) {
+                            beforeTitle = 'ก่อนแก้ไข: ขาดเวลารูดบัตร';
+                            beforeDesc = 'พนักงานไม่ได้สแกนนิ้ว/ลืมสแกน แต่มีหลักฐานยืนยันการปฏิบัติงานจริงในใบลงเวลา (Daily Report)';
+                            afterTitle = 'หลังแก้ไข: เติมสแกนนิ้วและอนุมัติ';
+                            afterDesc = `อนุมัติชั่วโมงทำงานตามข้อมูล Daily Report (${record?.dailyReportHours || 0} ชม.) และจำลอง/เติมเวลาสแกนนิ้วให้อัตโนมัติในประวัติเพื่อใช้ในการคิดเงิน`;
+                          } else if (reason.includes('Admin แก้ไขชั่วโมงด้วยตนเอง')) {
+                            beforeTitle = 'ก่อนแก้ไข: ชั่วโมงทำงานไม่สอดคล้องกัน';
+                            beforeDesc = `ข้อมูลชั่วโมงสแกนนิ้วจริงและรายงานของโฟร์แมนไม่ตรงกัน (Daily: ${record?.dailyReportHours || 0} ชม. vs Scan: ${record?.scanDataHours || 0} ชม.)`;
+                            afterTitle = 'หลังแก้ไข: ปรับชั่วโมงอนุมัติจริง';
+                            const totalApp = record?.totalApprovedHours || 0;
+                            const norm = record?.approvedNormalHours || 0;
+                            const otM = record?.approvedOtMorning || 0;
+                            const otN = record?.approvedOtNoon || 0;
+                            const otE = record?.approvedOtEvening || 0;
+                            const otTotal = otM + otN + otE;
+                            afterDesc = `แอดมินพิจารณาปรับยอดชั่วโมงอนุมัติจริงทั้งหมดเป็น ${totalApp} ชม. (ปกติ: ${norm} ชม., OT: ${otTotal} ชม.)`;
+                          } else if (reason.includes('Admin ลบ Ghost Scan')) {
+                            beforeTitle = 'ก่อนแก้ไข: มีข้อมูลรูดบัตรต้องสงสัย';
+                            beforeDesc = `มีข้อมูลรูดบัตร (${record?.scanDataHours || 0} ชม.) แต่ตรวจพบว่าไม่ได้มาปฏิบัติงานจริงในพื้นที่โครงการ (Ghost Scan)`;
+                            afterTitle = 'หลังแก้ไข: ลบสแกนนิ้วและลงขาดงาน';
+                            afterDesc = 'ระบบทำการลบประวัติการสแกนนิ้วที่ผิดพลาดออกทั้งหมดตามคำสั่งแอดมิน และทำรายการบันทึกเป็นขาดงาน (ABSENT) ❌';
+                          } else if (currentEntry.changedBy === 'system') {
+                            beforeTitle = `ก่อนแก้ไข: สถานะเดิม [${getStatusLabel(prevStatus).text}]`;
+                            beforeDesc = 'ระบบจัดเก็บสถานะรอความถูกต้องของข้อมูลจากแหล่งต้นทาง';
+                            afterTitle = 'หลังแก้ไข: ประมวลผลสถานะใหม่';
+                            afterDesc = `ระบบอัปเดตและจำแนกสถานะเป็น [${getStatusLabel(currentStatus).text}] อัตโนมัติจากการนำเข้าข้อมูลใหม่`;
+                          } else {
+                            beforeTitle = `ก่อนแก้ไข: [${getStatusLabel(prevStatus).text}]`;
+                            beforeDesc = 'มีประวัติความขัดแย้ง/สถานะเก่าอยู่ในระบบ';
+                            afterTitle = `หลังแก้ไข: [${getStatusLabel(currentStatus).text}]`;
+                            afterDesc = `ได้รับการแก้ไขปรับปรุงสถานะเรียบร้อยแล้ว (${reason || note || 'ยืนยันความถูกต้อง'})`;
+                          }
+
+                          return { beforeTitle, beforeDesc, afterTitle, afterDesc };
+                        };
+
+                        const events: any[] = [];
+
+                        // 1. Foreman edits
+                        if (rec.dailyReportHistory) {
+                          rec.dailyReportHistory.forEach((hist: any) => {
+                            events.push({
+                              type: 'foreman_edit',
+                              timestamp: new Date(hist.editedAt),
+                              by: hist.editedBy,
+                              data: hist,
+                            });
+                          });
+                        }
+
+                        // 2. Admin / system status updates
+                        if (rec.statusHistory) {
+                          rec.statusHistory.forEach((hist: any) => {
+                            events.push({
+                              type: 'admin_status',
+                              timestamp: new Date(hist.changedAt),
+                              by: hist.changedBy,
+                              data: hist,
+                            });
+                          });
+                        }
+
+                        // Sort chronologically (newest first)
+                        const sortedEvents = events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+                        if (sortedEvents.length === 0) return null;
+
+                        return sortedEvents.map((event: any, index: number) => {
+                          const formattedDate = event.timestamp.toLocaleString('th-TH', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          });
+
+                          if (event.type === 'foreman_edit') {
+                            const hist = event.data;
+                            return (
+                              <Box
+                                key={index}
+                                sx={{
+                                  borderLeft: '2px solid #0288d1',
+                                  pl: 2.5,
+                                  pb: 0.5,
+                                  position: 'relative',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    position: 'absolute',
+                                    left: -6,
+                                    top: 4,
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    backgroundColor: '#0288d1',
+                                  }}
+                                />
+                                <Typography variant="body2" fontWeight={800} sx={{ color: '#1e293b', mb: 0.5, fontSize: '0.8rem' }}>
+                                  [{formattedDate}] แก้ไขโดย Foreman รหัส: {event.by}
+                                </Typography>
+                                
+                                <Box sx={{ bgcolor: '#fff', p: 1.5, borderRadius: '8px', border: '1px solid #e2e8f0', mt: 1 }}>
+                                  <Typography variant="caption" fontWeight={750} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                    ชั่วโมงทำงานดิบในอดีต (Snapshot ก่อนแก้ไข):
+                                  </Typography>
+                                  <Box sx={{ pl: 1 }}>
+                                    {(() => {
+                                      const filteredLabor = (hist.snapshot?.labor || []).filter((lab: any) => {
+                                        return (
+                                          lab.employeeId === dc.employeeId ||
+                                          lab.workerId === `DC-${dc.employeeId}` ||
+                                          lab.workerId === dc.employeeId
+                                        );
+                                      });
+
+                                      if (filteredLabor.length > 0) {
+                                        return filteredLabor.map((lab: any, lIdx: number) => {
+                                          const showNormal = lab.shifts?.normal ? `ปกติ (${lab.shiftTimes?.day || '08:00 - 17:00'})` : null;
+                                          const showOtMorning = lab.shifts?.otMorning ? `OT เช้า (${lab.shiftTimes?.otMorning || '05:00 - 08:00'})` : null;
+                                          const showOtNoon = lab.shifts?.otNoon ? `OT กลางวัน (${lab.shiftTimes?.otNoon || '12:00 - 13:00'})` : null;
+                                          const showOtEvening = lab.shifts?.otEvening ? `OT เย็น (${lab.shiftTimes?.otEvening || '18:00 - 21:00'})` : null;
+
+                                          const shiftDetails = [showNormal, showOtMorning, showOtNoon, showOtEvening].filter(Boolean).join(', ');
+
+                                          return (
+                                            <Typography key={lIdx} variant="caption" sx={{ display: 'block', fontWeight: 650, color: '#334155', fontSize: '0.75rem', mb: 0.5 }}>
+                                              • {lab.workerName || lab.employeeId}: {shiftDetails || 'ไม่มีการลงเวลากะทำงาน'}
+                                            </Typography>
+                                          );
+                                        });
+                                      } else {
+                                        const hasOtherLabor = hist.snapshot?.labor && hist.snapshot.labor.length > 0;
+                                        return (
+                                          <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontWeight: 600 }}>
+                                            {hasOtherLabor
+                                              ? '• พนักงานท่านนี้ยังไม่มีชื่อในระบบก่อนการแก้ไข (เพิ่งถูกเพิ่มชื่อเข้าทำงานใหม่)'
+                                              : '• ไม่มีข้อมูล Snapshot ของพนักงาน'}
+                                          </Typography>
+                                        );
+                                      }
+                                    })()}
+
+                                    {hist.snapshot?.leave && hist.snapshot.leave.length > 0 && hist.snapshot.leave
+                                      .filter((lv: any) => {
+                                        return (
+                                          lv.employeeId === dc.employeeId ||
+                                          lv.workerId === `DC-${dc.employeeId}` ||
+                                          lv.workerId === dc.employeeId
+                                        );
+                                      })
+                                      .map((lv: any, lvIdx: number) => {
+                                        return (
+                                          <Typography key={lvIdx} variant="caption" sx={{ display: 'block', fontWeight: 650, color: '#b45309', fontSize: '0.75rem' }}>
+                                            • แจ้งลา ({lv.leaveType || 'ลางาน'}): {lv.leaveTimes?.custom || '08:00 - 17:00'} {lv.medCertFileUrl ? '(แนบใบรับรองแพทย์ 📄)' : ''}
+                                          </Typography>
+                                        );
+                                      })}
+                                  </Box>
+                                </Box>
+                              </Box>
+                            );
+                          } else {
+                            // Admin / System status change
+                            const hist = event.data;
+                            const isSystem = event.by === 'system';
+                            const histIndex = rec?.statusHistory ? rec.statusHistory.indexOf(hist) : -1;
+                            const prevEntry = histIndex > 0 ? rec.statusHistory[histIndex - 1] : null;
+                            const prevStatus = prevEntry ? prevEntry.status : null;
+                            const currentStatus = hist.status;
+                            const audit = getAuditDetails(hist, prevEntry, rec);
+                            
+                            const statusLabelBefore = prevStatus ? getStatusLabel(prevStatus) : null;
+                            const statusLabelAfter = getStatusLabel(currentStatus);
+
+                            return (
+                              <Box
+                                key={index}
+                                sx={{
+                                  borderLeft: `2px solid ${isSystem ? '#64748b' : '#2e7d32'}`,
+                                  pl: 2.5,
+                                  pb: 0.5,
+                                  position: 'relative',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    position: 'absolute',
+                                    left: -6,
+                                    top: 4,
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    backgroundColor: isSystem ? '#64748b' : '#2e7d32',
+                                  }}
+                                />
+                                <Typography variant="body2" fontWeight={800} sx={{ color: isSystem ? '#64748b' : '#2e7d32', mb: 0.5, fontSize: '0.8rem' }}>
+                                  [{formattedDate}] {isSystem ? 'ประมวลผลโดย ระบบ (System)' : `ยืนยัน/แก้ไขสถานะโดย Admin รหัส: ${event.by}`}
+                                </Typography>
+                                
+                                <Box sx={{ bgcolor: isSystem ? '#f8fafc' : '#f4fbf7', p: 2, borderRadius: '12px', border: `1px solid ${isSystem ? '#e2e8f0' : '#e8f5e9'}`, mt: 1 }}>
+                                  <Typography variant="caption" fontWeight={750} color={isSystem ? 'text.secondary' : '#1b5e20'} sx={{ display: 'block', mb: 1, fontSize: '0.8rem' }}>
+                                    ⚙️ การบันทึกและประเมินผลการทำ Audit:
+                                  </Typography>
+
+                                  {/* Status Transition Badge Flow */}
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, my: 1, flexWrap: 'wrap' }}>
+                                    <Typography variant="caption" fontWeight={750} color="text.secondary">
+                                      เส้นทางสถานะ:
+                                    </Typography>
+                                    {statusLabelBefore ? (
+                                      <Box sx={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: 0.5, 
+                                        px: 1, 
+                                        py: 0.25, 
+                                        borderRadius: '4px', 
+                                        bgcolor: statusLabelBefore.bgColor,
+                                        color: statusLabelBefore.color,
+                                        border: `1px solid ${statusLabelBefore.borderColor}`,
+                                        fontSize: '0.7rem',
+                                        fontWeight: 800
+                                      }}>
+                                        {statusLabelBefore.text}
+                                      </Box>
+                                    ) : (
+                                      <Box sx={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: 0.5, 
+                                        px: 1, 
+                                        py: 0.25, 
+                                        borderRadius: '4px', 
+                                        bgcolor: '#f3f4f6',
+                                        color: '#6b7280',
+                                        border: '1px solid #e5e7eb',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 800
+                                      }}>
+                                        เริ่มต้น
+                                      </Box>
+                                    )}
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900 }}>
+                                      ➔
+                                    </Typography>
+                                    <Box sx={{ 
+                                      display: 'inline-flex', 
+                                      alignItems: 'center', 
+                                      gap: 0.5, 
+                                      px: 1, 
+                                      py: 0.25, 
+                                      borderRadius: '4px', 
+                                      bgcolor: statusLabelAfter.bgColor,
+                                      color: statusLabelAfter.color,
+                                      border: `1px solid ${statusLabelAfter.borderColor}`,
+                                      fontSize: '0.7rem',
+                                      fontWeight: 800
+                                    }}>
+                                      {statusLabelAfter.text}
+                                    </Box>
+                                  </Box>
+
+                                  {/* Side-by-Side Audit Card Diff */}
+                                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 1.5 }}>
+                                    {/* Before State */}
+                                    <Box sx={{
+                                      p: 1.5,
+                                      borderRadius: '8px',
+                                      border: '1px solid #fef3c7',
+                                      background: '#fffbeb',
+                                      borderLeft: '4px solid #d97706'
+                                    }}>
+                                      <Typography variant="caption" fontWeight={850} color="#b45309" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5, fontSize: '0.72rem' }}>
+                                        ⏪ {audit.beforeTitle}
+                                      </Typography>
+                                      <Typography variant="caption" color="#78350f" sx={{ display: 'block', fontWeight: 650, fontSize: '0.75rem', lineHeight: 1.4 }}>
+                                        {audit.beforeDesc}
+                                      </Typography>
+                                    </Box>
+
+                                    {/* After State */}
+                                    <Box sx={{
+                                      p: 1.5,
+                                      borderRadius: '8px',
+                                      border: '1px solid #d1fae5',
+                                      background: '#ecfdf5',
+                                      borderLeft: '4px solid #059669'
+                                    }}>
+                                      <Typography variant="caption" fontWeight={850} color="#047857" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5, fontSize: '0.72rem' }}>
+                                        ⏩ {audit.afterTitle}
+                                      </Typography>
+                                      <Typography variant="caption" color="#065f46" sx={{ display: 'block', fontWeight: 650, fontSize: '0.75rem', lineHeight: 1.4 }}>
+                                        {audit.afterDesc}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+
+                                  {/* Additional System Notes */}
+                                  {(hist.note || hist.reason) && (
+                                    <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px dashed rgba(0,0,0,0.06)' }}>
+                                      {hist.reason && (
+                                        <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontSize: '0.7rem' }}>
+                                          เหตุผลประกอบ: {hist.reason}
+                                        </Typography>
+                                      )}
+                                      {hist.note && (
+                                        <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#475569', fontSize: '0.7rem', fontWeight: 600, mt: 0.5 }}>
+                                          บันทึกเพิ่มเติม: {hist.note}
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  )}
+                                </Box>
+                              </Box>
+                            );
+                          }
+                        });
+                      })()}
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </Stack>
+          ) : (
+            <Typography variant="body2" sx={{ color: '#64748b', py: 2, fontStyle: 'italic', fontWeight: 600 }}>
+              ยังไม่มีการบันทึกประวัติการแก้ไขข้อมูล Daily Report ย้อนหลังจากระบบ Aftersale สำหรับพนักงานคนนี้ในงวดเวลานี้
+            </Typography>
+          )}
+        </Box>
+      </Drawer>
+    </>
   );
 }

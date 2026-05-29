@@ -55,6 +55,8 @@ export interface ScanData {
   hasDiscrepancy: boolean;
   notes?: string;
   rawData?: any;
+  punches?: string[];
+  devicePunches?: string[]; // เวลาสแกนดิบจากเครื่องสแกนนิ้ว (ห้ามแก้ไข)
 }
 
 

@@ -40,6 +40,33 @@ export interface StatusHistoryEntry {
   note?: string | null;        // โน้ตเพิ่มเติม (เช่น "daily report ถูกเพิ่มโดย user_05")
 }
 
+export interface DailyReportHistoryEntry {
+  editedAt: Date;
+  editedBy: string;
+  snapshot: {
+    labor: any[];
+    leave?: any[];
+  };
+}
+
+export interface ScanEditHistoryEntry {
+  editedAt: Date;
+  editedBy: string;
+  action: 'manual_fill' | 'manual_create' | 'delete_ghost' | 'modify';
+  reason: string;
+  reconciliationRecordId?: string;
+  snapshot: {
+    punches: string[];
+    firstIn?: string | null;
+    lastOut?: string | null;
+    regularHours?: number;
+    otMorningHours?: number;
+    otEveningHours?: number;
+  };
+}
+
+
+
 // ---------------------------------------------------------------------------
 // Main Interface
 // ---------------------------------------------------------------------------
@@ -124,6 +151,9 @@ export interface ReconciliationRecord {
 
   // --- Audit Trail ---
   statusHistory: StatusHistoryEntry[];
+  dailyReportHistory?: DailyReportHistoryEntry[];
+  scanEditHistory?: ScanEditHistoryEntry[];
+
 
   // --- Metadata ---
   assigneeId?: string;               // รหัสโฟร์แมนที่รับผิดชอบ (AssigneesID จาก After-Sale)
@@ -186,6 +216,7 @@ export interface CreateReconciliationRecordInput {
   assigneeName?: string;
   isFallbackAssignee?: boolean;
   workLogs?: any[];
+  dailyReportHistory?: any[];
 }
 
 // ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
@@ -251,6 +282,24 @@ export const reconciliationRecordConverter = {
         return cleanEntry;
       });
     }
+    if (record.dailyReportHistory !== undefined) {
+      data.dailyReportHistory = record.dailyReportHistory.map((entry) => ({
+        editedAt: entry.editedAt,
+        editedBy: entry.editedBy,
+        snapshot: entry.snapshot,
+      }));
+    }
+    if (record.scanEditHistory !== undefined) {
+      data.scanEditHistory = record.scanEditHistory.map((entry) => ({
+        editedAt: entry.editedAt,
+        editedBy: entry.editedBy,
+        action: entry.action,
+        reason: entry.reason,
+        reconciliationRecordId: entry.reconciliationRecordId,
+        snapshot: entry.snapshot,
+      }));
+    }
+
     if (record.createdAt !== undefined) data.createdAt = record.createdAt;
     if (record.updatedAt !== undefined) data.updatedAt = record.updatedAt;
     if (record.assigneeId !== undefined) data.assigneeId = record.assigneeId;
@@ -291,6 +340,24 @@ export const reconciliationRecordConverter = {
         note: h.note,
       }));
 
+    const parseDailyReportHistory = (arr: any[]): DailyReportHistoryEntry[] =>
+      (arr || []).map((h) => ({
+        editedAt: toDate(h.editedAt),
+        editedBy: h.editedBy,
+        snapshot: h.snapshot || { labor: [], leave: [] },
+      }));
+
+    const parseScanEditHistory = (arr: any[]): ScanEditHistoryEntry[] =>
+      (arr || []).map((h) => ({
+        editedAt: toDate(h.editedAt),
+        editedBy: h.editedBy,
+        action: h.action,
+        reason: h.reason,
+        reconciliationRecordId: h.reconciliationRecordId,
+        snapshot: h.snapshot || { punches: [] },
+      }));
+
+
     return {
       id: snapshot.id,
       employeeId: data.employeeId,
@@ -328,7 +395,10 @@ export const reconciliationRecordConverter = {
       resolvedAt: data.resolvedAt ? toDate(data.resolvedAt) : undefined,
       resolvedBy: data.resolvedBy,
       statusHistory: parseHistory(data.statusHistory),
+      dailyReportHistory: parseDailyReportHistory(data.dailyReportHistory),
+      scanEditHistory: parseScanEditHistory(data.scanEditHistory),
       createdAt: toDate(data.createdAt),
+
       updatedAt: toDate(data.updatedAt),
       assigneeId: data.assigneeId,
       assigneeName: data.assigneeName,

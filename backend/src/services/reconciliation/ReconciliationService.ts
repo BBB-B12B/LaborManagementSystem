@@ -754,6 +754,7 @@ export class ReconciliationService {
         hasLeave: (isLeaveCalculated ?? isLeave) === true,
         assigneeId: input.assigneeId,
         assigneeName: input.assigneeName,
+        dailyReportHistory: input.dailyReportHistory ?? [],
       };
     }
 
@@ -853,6 +854,7 @@ export class ReconciliationService {
       assigneeId:             input.assigneeId    ?? existing.assigneeId,
       assigneeName:           input.assigneeName  ?? existing.assigneeName,
       workLogs:               input.workLogs      ?? existing.workLogs,
+      dailyReportHistory:     input.dailyReportHistory ?? existing.dailyReportHistory ?? [],
     };
 
     if (input.isHoliday !== undefined) updates.isHoliday = input.isHoliday;
@@ -1145,6 +1147,7 @@ export class ReconciliationService {
         assigneeId: summary.assigneeId,
         assigneeName: summary.assigneeId ? assigneeMap.get(summary.assigneeId) : undefined,
         workLogs: summary.workLogs,
+        dailyReportHistory: summary.dailyReportHistory,
       };
 
       try {
@@ -1367,6 +1370,7 @@ export class ReconciliationService {
       assigneeName: assigneeName,
       isFallbackAssignee: isFallbackAssignee,
       workLogs: summary?.workLogs,
+      dailyReportHistory: summary?.dailyReportHistory,
     }, false, summary?.isLeave);
   }
 
@@ -1486,71 +1490,52 @@ export class ReconciliationService {
     }
 
     const now = new Date();
+    let scanEditEntryToLog: ScanEditEntry | null = null;
+    const scanId = record.scanDataId || generateScanDocId(record.employeeId, record.workDate);
 
-    // อัปเดต Scan Data — เติม editHistory
-    if (record.scanDataId) {
-      const scanRef = this.db.collection(SCAN_COLLECTION).doc(record.scanDataId);
-      const scanSnap = await scanRef.get();
+    // 1. ดึงข้อมูล ScanData เก่าก่อนโดนเขียนทับ (เพื่อใช้ทำ Snapshot ใน scanEditHistory)
+    const scanRef = this.db.collection(SCAN_COLLECTION).doc(scanId);
+    const scanSnap = await scanRef.get();
 
-      if (scanSnap.exists) {
-        const scanData = scanDataConverter.fromFirestore(scanSnap);
-        const editEntry: ScanEditEntry = {
-          editedAt: now,
-          editedBy: adminId,
-          action: 'manual_fill',
-          reason,
-          reconciliationRecordId: recordId,
-          snapshot: {
-            punches: scanData.punches || [],
-            firstIn: scanData.firstIn,
-            lastOut: scanData.lastOut,
-            regularHours: scanData.regularHours,
-            otMorningHours: scanData.otMorningHours,
-            otEveningHours: scanData.otEveningHours,
-          },
-        };
-
-        await scanRef.update({
-          isManuallyEdited: true,
-          updatedAt: Timestamp.fromDate(now),
-          editHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(editEntry)),
-        });
-      }
+    if (scanSnap.exists) {
+      const scanData = scanDataConverter.fromFirestore(scanSnap);
+      const editEntry: ScanEditEntry = {
+        editedAt: now,
+        editedBy: adminId,
+        action: 'manual_fill',
+        reason,
+        reconciliationRecordId: recordId,
+        snapshot: {
+          punches: scanData.punches || [],
+          firstIn: scanData.firstIn,
+          lastOut: scanData.lastOut,
+          regularHours: scanData.regularHours,
+          otMorningHours: scanData.otMorningHours,
+          otEveningHours: scanData.otEveningHours,
+        },
+      };
+      scanEditEntryToLog = editEntry;
     } else {
-      // ไม่มี scan record เลย — สร้างใหม่เป็น manual entry
-      const scanId = generateScanDocId(record.employeeId, record.workDate);
-      const scanRef = this.db.collection(SCAN_COLLECTION).doc(scanId);
       const editEntry: ScanEditEntry = {
         editedAt: now,
         editedBy: adminId,
         action: 'manual_create',
         reason,
         reconciliationRecordId: recordId,
-        snapshot: { punches: [] }, // ไม่มีข้อมูลเดิม
+        snapshot: { punches: [] },
       };
-
-      await scanRef.set({
-        employeeId: record.employeeId,
-        workDate: new Date(record.workDate),
-        scanDate: record.workDate,
-        projectLocationId: record.projectLocationId,
-        regularHours: record.dailyReportHours,
-        isManualEntry: true,
-        isManuallyEdited: false,
-        editHistory: [this.toFirestoreScanEditEntry(editEntry)],
-        createdAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now),
-        importedAt: Timestamp.fromDate(now),
-        importedBy: adminId,
-        importSource: 'manual_reconciliation',
-        hasDiscrepancy: false,
-        isLate: false,
-        lateMinutes: 0,
-        isDeleted: false,
-      });
+      scanEditEntryToLog = editEntry;
     }
 
-    // อัปเดต ReconciliationRecord → re-classify
+    // 2. เรียกใช้ scanDataService.fillFromDailyReport เพื่อคำนวณกะและบันทึกเวลาสแกนนิ้วพร้อม punches อย่างถูกต้อง!
+    await scanDataService.fillFromDailyReport(
+      record.employeeId,
+      record.workDate,
+      record.projectLocationId,
+      adminId
+    );
+
+    // 3. อัปเดต ReconciliationRecord (บันทึก resolvedAt, status และ scanEditHistory)
     const historyEntry: StatusHistoryEntry = {
       status: 'MATCHED',
       changedAt: now,
@@ -1572,7 +1557,11 @@ export class ReconciliationService {
       resolvedAt: Timestamp.fromDate(now),
       resolvedBy: adminId,
       updatedAt: Timestamp.fromDate(now),
+      scanDataId: scanId, // รับประกันว่าผูก ID ถูกต้อง
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
+      ...(scanEditEntryToLog && {
+        scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
+      }),
     });
   }
 
@@ -1596,6 +1585,7 @@ export class ReconciliationService {
     if (!snap.exists) throw new Error(`ReconciliationRecord ${recordId} not found`);
 
     const now = new Date();
+    const record = reconciliationRecordConverter.fromFirestore(snap);
     const total = (payload.normalHours ?? 0) + (payload.otMorning ?? 0) + (payload.otNoon ?? 0) + (payload.otEvening ?? 0);
 
     const historyEntry: StatusHistoryEntry = {
@@ -1604,6 +1594,22 @@ export class ReconciliationService {
       changedBy: adminId,
       reason: `Admin แก้ไขชั่วโมงด้วยตนเอง: ${payload.reason || 'ปรับปรุงข้อมูลให้ถูกต้อง'}`,
       note: `ปรับยอดรวมเป็น ${total} ชม. (เดิม Daily: ${snap.data()?.dailyReportHours || 0} ชม.)`,
+    };
+
+    const editEntry: ScanEditEntry = {
+      editedAt: now,
+      editedBy: adminId,
+      action: 'modify',
+      reason: payload.reason || 'ปรับปรุงข้อมูลให้ถูกต้อง',
+      reconciliationRecordId: recordId,
+      snapshot: {
+        punches: record.scanPunches || [],
+        firstIn: record.scanPunches?.[0] || null,
+        lastOut: record.scanPunches?.[record.scanPunches.length - 1] || null,
+        regularHours: record.scanNormalHours,
+        otMorningHours: record.scanOtMorningHours,
+        otEveningHours: record.scanOtEveningHours,
+      },
     };
 
     await ref.update({
@@ -1618,6 +1624,7 @@ export class ReconciliationService {
       resolvedBy: adminId,
       updatedAt: Timestamp.fromDate(now),
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
+      scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(editEntry)),
     });
   }
 
@@ -1635,6 +1642,7 @@ export class ReconciliationService {
 
     const record = reconciliationRecordConverter.fromFirestore(snap);
     const now = new Date();
+    let scanEditEntryToLog: ScanEditEntry | null = null;
 
     if (record.scanDataId) {
       const scanRef = this.db.collection(SCAN_COLLECTION).doc(record.scanDataId);
@@ -1655,20 +1663,11 @@ export class ReconciliationService {
             regularHours: scanData.regularHours,
           },
         };
-
-        // Soft delete scan + บันทึก editHistory
-        await scanRef.update({
-          isDeleted: true,
-          deletedAt: Timestamp.fromDate(now),
-          deletedBy: adminId,
-          isManuallyEdited: true,
-          updatedAt: Timestamp.fromDate(now),
-          editHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(editEntry)),
-        });
+        scanEditEntryToLog = editEntry;
       }
     }
 
-    // Re-classify เป็น ABSENT
+    // Re-classify เป็น ABSENT (Update ReconciliationRecord FIRST)
     const historyEntry: StatusHistoryEntry = {
       status: 'ABSENT',
       changedAt: now,
@@ -1683,7 +1682,23 @@ export class ReconciliationService {
       suggestedHours: 0,
       updatedAt: Timestamp.fromDate(now),
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
+      ...(scanEditEntryToLog && {
+        scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
+      }),
     });
+
+    // Soft delete scan SECOND (triggers onScanDataChanged which will see resolvedAt != null)
+    if (record.scanDataId && scanEditEntryToLog) {
+      const scanRef = this.db.collection(SCAN_COLLECTION).doc(record.scanDataId);
+      await scanRef.update({
+        isDeleted: true,
+        deletedAt: Timestamp.fromDate(now),
+        deletedBy: adminId,
+        isManuallyEdited: true,
+        updatedAt: Timestamp.fromDate(now),
+        editHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
+      });
+    }
   }
 
   /**
@@ -1735,19 +1750,34 @@ export class ReconciliationService {
     }
     const totalScanHours = scanNormal + scanOtMorning + scanOtNoon + scanOtEvening;
 
-    // 2. อัปเดต ScanData document (ถ้ามี)
+    // 2. เตรียมข้อมูลอัปเดต ScanData (แต่ยังไม่บันทึก)
+    let scanEditEntryToLog: ScanEditEntry | null = null;
+    let existingDevicePunches: any[] = [];
     if (record.scanDataId) {
       const scanRef = this.db.collection(SCAN_COLLECTION).doc(record.scanDataId);
-      await scanRef.update({
-        punches,
-        allScans: timeScans.map(s => s.toTimeString().split(' ')[0]),
-        regularHours: scanNormal,
-        otMorningHours: scanOtMorning,
-        otEveningHours: scanOtEvening,
-        otNoonHours: scanOtNoon,
-        isManuallyEdited: true,
-        updatedAt: Timestamp.fromDate(now),
-      });
+      const scanSnap = await scanRef.get();
+      const existingScanData = scanSnap.exists ? scanSnap.data() : {};
+
+      // รักษา devicePunches (เวลาดิบจากเครื่องสแกน) ไว้ตลอด — ห้ามเขียนทับ
+      existingDevicePunches = existingScanData?.devicePunches || existingScanData?.punches || [];
+
+      // สร้าง Audit Entry สำหรับเก็บประวัติการแก้ไขของ Admin
+      const scanEditEntry: ScanEditEntry = {
+        editedAt: now,
+        editedBy: adminId,
+        action: 'modify',
+        reason,
+        reconciliationRecordId: recordId,
+        snapshot: {
+          punches: existingScanData?.punches || [],
+          firstIn: existingScanData?.firstIn || null,
+          lastOut: existingScanData?.lastOut || null,
+          regularHours: existingScanData?.regularHours || 0,
+          otMorningHours: existingScanData?.otMorningHours || 0,
+          otEveningHours: existingScanData?.otEveningHours || 0,
+        },
+      };
+      scanEditEntryToLog = scanEditEntry;
     }
 
     // 3. Re-classify record
@@ -1771,7 +1801,7 @@ export class ReconciliationService {
       note: `Punches ใหม่: [${punches.join(', ')}] -> ${classified.status}`,
     };
 
-    // 4. บันทึก ReconciliationRecord
+    // 4. บันทึก ReconciliationRecord FIRST (เพื่อให้ Cloud Function reconcile ใน background เห็น resolvedAt ก่อน!)
     await ref.update({
       scanPunches: punches,
       scanDataHours: totalScanHours,
@@ -1795,7 +1825,27 @@ export class ReconciliationService {
       resolvedBy: adminId,
       updatedAt: Timestamp.fromDate(now),
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
+      ...(scanEditEntryToLog && {
+        scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
+      }),
     });
+
+    // 5. บันทึก ScanData SECOND (จะไป trigger onScanDataChanged ภายหลัง)
+    if (record.scanDataId && scanEditEntryToLog) {
+      const scanRef = this.db.collection(SCAN_COLLECTION).doc(record.scanDataId);
+      await scanRef.update({
+        punches,
+        allScans: timeScans.map(s => s.toTimeString().split(' ')[0]),
+        devicePunches: existingDevicePunches,      // คงเวลาสแกนดิบจากเครื่องไว้ตลอด
+        regularHours: scanNormal,
+        otMorningHours: scanOtMorning,
+        otEveningHours: scanOtEvening,
+        otNoonHours: scanOtNoon,
+        isManuallyEdited: true,
+        updatedAt: Timestamp.fromDate(now),
+        editHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)), // บันทึกประวัติของ Admin
+      });
+    }
   }
 
   // ลบ markAsExported ออกแล้ว — Admin Export ใช้ getAnomaliesForExport แล้ว Export เอง

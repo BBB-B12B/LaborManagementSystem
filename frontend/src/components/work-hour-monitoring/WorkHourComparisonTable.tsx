@@ -17,6 +17,7 @@ import {
   Grid,
   IconButton,
   TextField,
+  Drawer,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { styled, alpha } from '@mui/material/styles';
@@ -26,7 +27,6 @@ import {
   ReconciliationRecord,
   PaginatedReconciliationResponse,
 } from '../../services/reconciliationService';
-import { fillFromDailyReport } from '../../services/scanDataService';
 import { format } from 'date-fns';
 import {
   Info as InfoIcon,
@@ -35,6 +35,7 @@ import {
   ArrowForwardIos as NextIcon,
   FileDownload as FileDownloadIcon,
   Refresh as RefreshIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { useToast } from '@/components/common';
 import { TimePicker } from '../../components/forms/TimePicker';
@@ -311,6 +312,14 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const [rowsPerPage, setRowsPerPage] = React.useState(100);
   const [checkDialogOpen, setCheckDialogOpen] = React.useState(false);
   const [selectedRow, setSelectedRow] = React.useState<any>(null);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+
+  // เมื่อ Modal ปิดลง ให้ปิด History Drawer ตามไปด้วยแบบแม่ลูก
+  React.useEffect(() => {
+    if (!checkDialogOpen) {
+      setHistoryOpen(false);
+    }
+  }, [checkDialogOpen]);
 
   // --- Manual Resolve States ---
   const [isManualMode, setIsManualMode] = React.useState(false);
@@ -354,7 +363,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   const fillMutation = useMutation({
     mutationFn: (row: any) =>
-      fillFromDailyReport(row.employeeId, row.workDate, row.projectLocationId),
+      reconciliationService.confirmByDailyReport(row.id, 'ยืนยันข้อมูลปรับตาม Daily Report'),
 
     // Step 1: อัปเดต UI ทันที (ก่อน API ตอบกลับ)
     onMutate: async (row: any) => {
@@ -516,6 +525,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     setIsManualMode(false);
     setResolveReason('');
     setCheckDialogOpen(true);
+    setHistoryOpen(false);
   };
 
   const handleCloseCheckDialog = () => {
@@ -523,6 +533,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     setSelectedRow(null);
     setIsManualMode(false);
     setIsEditingScan(false);
+    setHistoryOpen(false);
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -1274,13 +1285,23 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       <Dialog
         open={checkDialogOpen}
         onClose={handleCloseCheckDialog}
-        maxWidth="lg"
+        maxWidth={historyOpen ? false : 'lg'}
         fullWidth
         PaperProps={{
           sx: {
             borderRadius: '16px',
             border: '1px solid #e2e8f0',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            width: historyOpen ? 'calc(100% - 480px - 64px)' : '100%',
+            maxWidth: historyOpen ? '1400px' : undefined,
+          },
+        }}
+        sx={{
+          '& .MuiDialog-container': {
+            justifyContent: historyOpen ? 'flex-start' : 'center',
+            pl: historyOpen ? { xs: 0, md: 4 } : 0,
+            transition: 'justify-content 0.3s ease, padding 0.3s ease',
           },
         }}
       >
@@ -1345,9 +1366,32 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 })()}
               </Typography>
             </Box>
-            <Box sx={getStatusStyle(selectedRow?.status || 'ALL')}>
-              {getStatusLabel(selectedRow?.status)}
-            </Box>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {((selectedRow?.dailyReportHistory && selectedRow.dailyReportHistory.length > 0) ||
+                (selectedRow?.scanEditHistory && selectedRow.scanEditHistory.length > 0)) && (
+                <IconButton
+                  onClick={() => setHistoryOpen(!historyOpen)}
+                  sx={{
+                    color: '#fff',
+                    backgroundColor: historyOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                    },
+                    width: 36,
+                    height: 36,
+                    borderRadius: '8px',
+                    transition: 'all 0.2s',
+                  }}
+                  title="ประวัติการแก้ไขและตรวจสอบข้อมูล (Audit Trail)"
+                >
+                  <HistoryIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              )}
+              <Box sx={getStatusStyle(selectedRow?.status || 'ALL')}>
+                {getStatusLabel(selectedRow?.status)}
+              </Box>
+            </Stack>
           </Box>
 
           <Box sx={{ p: 4 }}>
@@ -1844,6 +1888,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                       </Button>
                     </Box>
                   )}
+
                 </Box>
               );
             })()}
@@ -2144,6 +2189,373 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           </Box>
         )}
       </Dialog>
+
+      {/* ประวัติการแก้ไข Daily Report Drawer */}
+      <Drawer
+        anchor="right"
+        open={historyOpen && !!selectedRow}
+        onClose={() => setHistoryOpen(false)}
+        hideBackdrop={true}
+        variant="temporary"
+        sx={{
+          zIndex: 1400,
+          pointerEvents: 'none',
+        }}
+        PaperProps={{
+          sx: {
+            width: 480,
+            borderRadius: '16px 0 0 16px',
+            boxShadow: '-10px 0 40px -10px rgba(0, 0, 0, 0.15)',
+            borderLeft: '1px solid #cbd5e1',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#fff',
+            pointerEvents: 'auto',
+          },
+        }}
+        ModalProps={{
+          disableEnforceFocus: true,
+          disableAutoFocus: true,
+          disableScrollLock: true,
+        }}
+      >
+        {/* Drawer Header */}
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+            p: 3,
+            color: '#fff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <Box>
+            <Typography variant="subtitle1" fontWeight={900}>
+              🔍 ประวัติการแก้ไขและตรวจสอบข้อมูล (Audit Trail)
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+              รหัส: {selectedRow?.employeeId} — {selectedRow?.employeeName}
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setHistoryOpen(false)} sx={{ color: '#fff' }}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        {/* Drawer Content */}
+        <Box sx={{ p: 3, flex: 1, overflowY: 'auto' }}>
+          {(() => {
+            const getStatusLabel = (status: string) => {
+              switch (status) {
+                case 'MISSING_SCAN':
+                  return { text: 'ขาดสแกนนิ้ว ❌', color: '#ef4444', bgColor: '#fef2f2', borderColor: '#fee2e2' };
+                case 'DISCREPANCY':
+                  return { text: 'ชั่วโมงไม่ตรงกัน ⚠️', color: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fef3c7' };
+                case 'MATCHED':
+                  return { text: 'ข้อมูลตรงกัน ✅', color: '#10b981', bgColor: '#ecfdf5', borderColor: '#d1fae5' };
+                case 'ABSENT':
+                  return { text: 'ขาดงาน ❌', color: '#6b7280', bgColor: '#f3f4f6', borderColor: '#e5e7eb' };
+                case 'NO_DAILY_REPORT':
+                  return { text: 'ไม่มีรายงานประจำวัน ⚠️', color: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fef3c7' };
+                default:
+                  return { text: status, color: '#6b7280', bgColor: '#f3f4f6', borderColor: '#e5e7eb' };
+              }
+            };
+
+            const getAuditDetails = (currentEntry: any, prevEntry: any, record: any) => {
+              const currentStatus = currentEntry.status;
+              const prevStatus = prevEntry ? prevEntry.status : null;
+              const reason = currentEntry.reason || '';
+              const note = currentEntry.note || '';
+
+              let beforeTitle = 'ไม่พบข้อมูลสถานะก่อนหน้า';
+              let beforeDesc = 'รายการประมวลผลเริ่มต้นโดยระบบ';
+              let afterTitle = 'ประมวลผลสำเร็จ';
+              let afterDesc = 'ระบบทำการประเมินสถานะความถูกต้อง';
+
+              if (!prevEntry) {
+                beforeTitle = 'ข้อมูลก่อนการตรวจสอบ';
+                if (currentStatus === 'MISSING_SCAN') {
+                  beforeDesc = 'ตรวจพบพนักงานมีชั่วโมงใน Daily Report แต่ไม่มีเวลาสแกนนิ้วรูดบัตร (ขาดสแกนนิ้ว)';
+                } else if (currentStatus === 'DISCREPANCY') {
+                  beforeDesc = `ตรวจพบชั่วโมงการทำงานขัดแย้งกันระหว่าง Daily Report (${record?.dailyReportHours || 0} ชม.) และสแกนนิ้ว (${record?.scanDataHours || 0} ชม.)`;
+                } else if (currentStatus === 'NO_DAILY_REPORT') {
+                  beforeDesc = `ตรวจพบข้อมูลการสแกนนิ้ว (${record?.scanDataHours || 0} ชม.) แต่โฟร์แมนไม่ได้ลงบันทึกใน Daily Report`;
+                } else if (currentStatus === 'ABSENT') {
+                  beforeDesc = 'ไม่มีทั้งข้อมูลการสแกนนิ้วและ Daily Report ในระบบ';
+                } else {
+                  beforeDesc = 'ระบบเริ่มต้นประมวลผลตรวจสอบความถูกต้องข้อมูลการลงเวลา';
+                }
+
+                afterTitle = 'สถานะเริ่มต้นระบบ';
+                afterDesc = `ตั้งค่าสถานะอัตโนมัติเป็น [${getStatusLabel(currentStatus).text}] เพื่อรอการตรวจสอบและจัดการ`;
+                return { beforeTitle, beforeDesc, afterTitle, afterDesc };
+              }
+
+              if (reason.includes('Admin ยืนยันตาม Daily Report')) {
+                beforeTitle = 'ก่อนแก้ไข: ขาดเวลารูดบัตร';
+                beforeDesc = 'พนักงานไม่ได้สแกนนิ้ว/ลืมสแกน แต่มีหลักฐานยืนยันการปฏิบัติงานจริงในใบลงเวลา (Daily Report)';
+                afterTitle = 'หลังแก้ไข: เติมสแกนนิ้วและอนุมัติ';
+                afterDesc = `อนุมัติชั่วโมงทำงานตามข้อมูล Daily Report (${record?.dailyReportHours || 0} ชม.) และจำลอง/เติมเวลาสแกนนิ้วให้อัตโนมัติในประวัติเพื่อใช้ในการคิดเงิน`;
+              } else if (reason.includes('Admin แก้ไขชั่วโมงด้วยตนเอง')) {
+                beforeTitle = 'ก่อนแก้ไข: ชั่วโมงทำงานไม่สอดคล้องกัน';
+                beforeDesc = `ข้อมูลชั่วโมงสแกนนิ้วจริงและรายงานของโฟร์แมนไม่ตรงกัน (Daily: ${record?.dailyReportHours || 0} ชม. vs Scan: ${record?.scanDataHours || 0} ชม.)`;
+                afterTitle = 'หลังแก้ไข: ปรับชั่วโมงอนุมัติจริง';
+                const totalApp = record?.totalApprovedHours || 0;
+                const norm = record?.approvedNormalHours || 0;
+                const otM = record?.approvedOtMorning || 0;
+                const otN = record?.approvedOtNoon || 0;
+                const otE = record?.approvedOtEvening || 0;
+                const otTotal = otM + otN + otE;
+                afterDesc = `แอดมินพิจารณาปรับยอดชั่วโมงอนุมัติจริงทั้งหมดเป็น ${totalApp} ชม. (ปกติ: ${norm} ชม., OT: ${otTotal} ชม.)`;
+              } else if (reason.includes('Admin ลบ Ghost Scan')) {
+                beforeTitle = 'ก่อนแก้ไข: มีข้อมูลรูดบัตรต้องสงสัย';
+                beforeDesc = `มีข้อมูลรูดบัตร (${record?.scanDataHours || 0} ชม.) แต่ตรวจพบว่าไม่ได้มาปฏิบัติงานจริงในพื้นที่โครงการ (Ghost Scan)`;
+                afterTitle = 'หลังแก้ไข: ลบสแกนนิ้วและลงขาดงาน';
+                afterDesc = 'ระบบทำการลบประวัติการสแกนนิ้วที่ผิดพลาดออกทั้งหมดตามคำสั่งแอดมิน และทำรายการบันทึกเป็นขาดงาน (ABSENT) ❌';
+              } else if (currentEntry.changedBy === 'system') {
+                beforeTitle = `ก่อนแก้ไข: สถานะเดิม [${getStatusLabel(prevStatus).text}]`;
+                beforeDesc = 'ระบบจัดเก็บสถานะรอความถูกต้องของข้อมูลจากแหล่งต้นทาง';
+                afterTitle = 'หลังแก้ไข: ประมวลผลสถานะใหม่';
+                afterDesc = `ระบบอัปเดตและจำแนกสถานะเป็น [${getStatusLabel(currentStatus).text}] อัตโนมัติจากการนำเข้าข้อมูลใหม่`;
+              } else {
+                beforeTitle = `ก่อนแก้ไข: [${getStatusLabel(prevStatus).text}]`;
+                beforeDesc = 'มีประวัติความขัดแย้ง/สถานะเก่าอยู่ในระบบ';
+                afterTitle = `หลังแก้ไข: [${getStatusLabel(currentStatus).text}]`;
+                afterDesc = `ได้รับการแก้ไขปรับปรุงสถานะเรียบร้อยแล้ว (${reason || note || 'ยืนยันความถูกต้อง'})`;
+              }
+
+              return { beforeTitle, beforeDesc, afterTitle, afterDesc };
+            };
+
+            const events: any[] = [];
+
+            // 1. Add foreman edits from dailyReportHistory
+            if (selectedRow?.dailyReportHistory) {
+              selectedRow.dailyReportHistory.forEach((hist: any) => {
+                events.push({
+                  type: 'foreman_edit',
+                  timestamp: new Date(hist.editedAt),
+                  by: hist.editedBy,
+                  data: hist,
+                });
+              });
+            }
+
+            // 2. Add Admin scan edits from scanEditHistory
+            if (selectedRow?.scanEditHistory) {
+              selectedRow.scanEditHistory.forEach((hist: any) => {
+                events.push({
+                  type: 'scan_edit',
+                  timestamp: new Date(hist.editedAt),
+                  by: hist.editedBy,
+                  data: hist,
+                });
+              });
+            }
+
+            // Sort newest first
+            const sortedEvents = events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+            if (sortedEvents.length === 0) {
+              return (
+                <Typography variant="body2" sx={{ color: '#64748b', py: 2, fontStyle: 'italic', fontWeight: 600 }}>
+                  ยังไม่มีการบันทึกประวัติการแก้ไขข้อมูล Daily Report หรือการยืนยันเวลาสำหรับพนักงานคนนี้
+                </Typography>
+              );
+            }
+
+            return (
+              <Stack spacing={3}>
+                {sortedEvents.map((event: any, index: number) => {
+                  const formattedDate = event.timestamp.toLocaleString('th-TH', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  });
+
+                  if (event.type === 'foreman_edit') {
+                    const hist = event.data;
+                    return (
+                      <Box
+                        key={index}
+                        sx={{
+                          borderLeft: '2px solid #0288d1', // High-end blue dot timeline for foreman
+                          pl: 3,
+                          pb: 1,
+                          position: 'relative',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            left: -6,
+                            top: 4,
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            backgroundColor: '#0288d1',
+                          }}
+                        />
+                        <Typography variant="body2" fontWeight={800} sx={{ color: '#1e293b', mb: 0.5 }}>
+                          [ {formattedDate} ] แก้ไขโดย Foreman รหัส: {event.by}
+                        </Typography>
+                        
+                        <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: '8px', border: '1px solid #e2e8f0', mt: 1 }}>
+                          <Typography variant="caption" fontWeight={750} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                            ชั่วโมงทำงานดิบในอดีต (Snapshot ก่อนแก้ไข):
+                          </Typography>
+                          <Box sx={{ pl: 1 }}>
+                            {(() => {
+                              const filteredLabor = (hist.snapshot?.labor || []).filter((lab: any) => {
+                                return (
+                                  lab.employeeId === selectedRow.employeeId ||
+                                  lab.workerId === `DC-${selectedRow.employeeId}` ||
+                                  lab.workerId === selectedRow.employeeId
+                                );
+                              });
+
+                              if (filteredLabor.length > 0) {
+                                return filteredLabor.map((lab: any, lIdx: number) => {
+                                  const showNormal = lab.shifts?.normal ? `ปกติ (${lab.shiftTimes?.day || '08:00 - 17:00'})` : null;
+                                  const showOtOtMorning = lab.shifts?.otMorning ? `OT เช้า (${lab.shiftTimes?.otMorning || '05:00 - 08:00'})` : null;
+                                  const showOtOtNoon = lab.shifts?.otNoon ? `OT กลางวัน (${lab.shiftTimes?.otNoon || '12:00 - 13:00'})` : null;
+                                  const showOtOtEvening = lab.shifts?.otEvening ? `OT เย็น (${lab.shiftTimes?.otEvening || '18:00 - 21:00'})` : null;
+
+                                  const shiftDetails = [showNormal, showOtOtMorning, showOtOtNoon, showOtOtEvening].filter(Boolean).join(', ');
+
+                                  return (
+                                    <Typography key={lIdx} variant="caption" sx={{ display: 'block', fontWeight: 650, color: '#334155', fontSize: '0.75rem', mb: 0.5 }}>
+                                      • {lab.workerName || lab.employeeId}: {shiftDetails || 'ไม่มีการลงเวลากะทำงาน'}
+                                    </Typography>
+                                  );
+                                });
+                              } else {
+                                const hasOtherLabor = hist.snapshot?.labor && hist.snapshot.labor.length > 0;
+                                return (
+                                  <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontWeight: 600 }}>
+                                    {hasOtherLabor
+                                      ? '• พนักงานท่านนี้ยังไม่มีชื่อในระบบก่อนการแก้ไข (เพิ่งถูกเพิ่มชื่อเข้าทำงานใหม่)'
+                                      : '• ไม่มีข้อมูล Snapshot ของพนักงาน'}
+                                  </Typography>
+                                );
+                              }
+                            })()}
+
+                            {hist.snapshot?.leave && hist.snapshot.leave.length > 0 && hist.snapshot.leave
+                              .filter((lv: any) => {
+                                return (
+                                  lv.employeeId === selectedRow.employeeId ||
+                                  lv.workerId === `DC-${selectedRow.employeeId}` ||
+                                  lv.workerId === selectedRow.employeeId
+                                );
+                              })
+                              .map((lv: any, lvIdx: number) => {
+                                return (
+                                  <Typography key={lvIdx} variant="caption" sx={{ display: 'block', fontWeight: 650, color: RECON_COLORS.ORANGE.text, fontSize: '0.75rem' }}>
+                                    • แจ้งลา ({lv.leaveType || 'ลางาน'}): {lv.leaveTimes?.custom || '08:00 - 17:00'} {lv.medCertFileUrl ? '(แนบใบรับรองแพทย์ 📄)' : ''}
+                                  </Typography>
+                                );
+                              })}
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  } else if (event.type === 'scan_edit') {
+                    const hist = event.data;
+                    const actionLabel = {
+                      manual_fill: { text: 'เติมสแกนนิ้ว (Admin)', color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
+                      manual_create: { text: 'สร้างสแกนนิ้วใหม่ (Admin)', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
+                      delete_ghost: { text: 'ลบ Ghost Scan (Admin)', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+                      modify: { text: 'แก้ไขสแกนนิ้ว (Admin)', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
+                    }[hist.action as 'manual_fill' | 'manual_create' | 'delete_ghost' | 'modify'] || { text: hist.action, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' };
+
+                    return (
+                      <Box
+                        key={index}
+                        sx={{
+                          borderLeft: '2px solid #f97316',
+                          pl: 3,
+                          pb: 1,
+                          position: 'relative',
+                        }}
+                      >
+                        {/* dot */}
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            left: -6,
+                            top: 4,
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            backgroundColor: '#f97316',
+                          }}
+                        />
+                        <Typography variant="body2" fontWeight={800} sx={{ color: '#ea580c', mb: 0.5 }}>
+                          [ {formattedDate} ] แก้ไขสแกนนิ้วโดย Admin รหัส: {event.by}
+                        </Typography>
+                        <Box sx={{ bgcolor: '#fff7ed', p: 2, borderRadius: '12px', border: '1px solid #fed7aa', mt: 1 }}>
+                          {/* action badge */}
+                          <Box
+                            sx={{
+                              display: 'inline-flex',
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: '6px',
+                              bgcolor: actionLabel.bg,
+                              color: actionLabel.color,
+                              border: `1px solid ${actionLabel.border}`,
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              mb: 1.5,
+                            }}
+                          >
+                            {actionLabel.text}
+                          </Box>
+                          
+                          {/* snapshot punches before */}
+                          {hist.snapshot?.punches && hist.snapshot.punches.length > 0 && (
+                            <Box sx={{ mb: 1 }}>
+                              <Typography variant="caption" fontWeight={750} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                ⏱ เวลาสแกนนิ้วก่อนแก้ไข (Snapshot):
+                              </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#7c3aed', fontSize: '0.8rem' }}>
+                                {hist.snapshot.punches.join(' → ')}
+                              </Typography>
+                              {hist.snapshot.regularHours !== undefined && (
+                                <Typography variant="caption" sx={{ display: 'block', color: '#64748b', fontSize: '0.72rem', mt: 0.25 }}>
+                                  ชั่วโมงเดิม: ปกติ {hist.snapshot.regularHours} ชม. · OT เช้า {hist.snapshot.otMorningHours || 0} ชม. · OT เย็น {hist.snapshot.otEveningHours || 0} ชม.
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                          {(!hist.snapshot?.punches || hist.snapshot.punches.length === 0) && (
+                            <Typography variant="caption" sx={{ display: 'block', color: '#64748b', fontStyle: 'italic', mb: 1 }}>
+                              ไม่มีข้อมูลสแกนนิ้วก่อนหน้า
+                            </Typography>
+                          )}
+                          
+                          {/* reason */}
+                          <Box sx={{ pt: 1, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
+                            <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontSize: '0.7rem' }}>
+                              เหตุผล: {hist.reason}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  }
+                })}
+              </Stack>
+            );
+          })()}
+        </Box>
+      </Drawer>
     </Box>
   );
 };

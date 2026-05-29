@@ -23,6 +23,23 @@ export interface StatusHistoryEntry {
   note?: string;
 }
 
+export interface ScanEditHistoryEntry {
+  editedAt: string;
+  editedBy: string;
+  action: 'manual_fill' | 'manual_create' | 'delete_ghost' | 'modify';
+  reason: string;
+  reconciliationRecordId?: string;
+  snapshot: {
+    punches: string[];
+    firstIn?: string | null;
+    lastOut?: string | null;
+    regularHours?: number;
+    otMorningHours?: number;
+    otEveningHours?: number;
+  };
+}
+
+
 export interface ReconciliationRecord {
   id: string;
   employeeId: string;
@@ -100,7 +117,17 @@ export interface ReconciliationRecord {
     subtaskName?: string;
     location?: string;
   }[];
+  dailyReportHistory?: {
+    editedAt: string;
+    editedBy: string;
+    snapshot: {
+      labor: any[];
+      leave?: any[];
+    };
+  }[];
+  scanEditHistory?: ScanEditHistoryEntry[];
 }
+
 
 export interface ReconciliationFilter {
   projectLocationId?: string;   // กรองตาม work location (fallback)

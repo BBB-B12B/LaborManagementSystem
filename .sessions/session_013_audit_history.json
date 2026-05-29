@@ -1,0 +1,8 @@
+{
+  "session_id": "session_013_audit_history",
+  "associated_tasks": ["Audit-friendly-History-Display", "DevicePunches-AuditTrail-Integrity"],
+  "status": "completed",
+  "estimated_tokens": 28000,
+  "summary_context": "Audit-friendly History Display + Audit Trail Integrity:\n\n1. Audit-friendly History Display (เสร็จสมบูรณ์ก่อนหน้า):\n- ออกแบบหน้าต่างประวัติการแก้ไขใหม่ใน Work Hour Monitoring และ Wage Calculation\n- แสดง Before/After box เปรียบเทียบข้อมูลก่อนและหลังแก้ไขสวยงามแบบ premium\n\n2. DevicePunches + EditHistory Audit Trail (เสร็จสมบูรณ์ใน session นี้):\n- เพิ่ม field devicePunches ใน ScanData model (backend + frontend)\n  · backend/src/models/ScanData.ts\n  · frontend/src/services/scanDataService.ts\n- ปรับ ScanDataService.ts:\n  · importScanData: เขียน devicePunches เมื่อนำเข้าข้อมูลสแกนนิ้วครั้งแรก\n  · bulkImport: populate devicePunches จาก punches เดิม\n  · fillFromDailyReport: รักษา devicePunches ไว้ไม่ถูกเขียนทับ\n- ปรับ ReconciliationService.updateScanPunches:\n  · อ่าน snapshot ก่อนบันทึก\n  · เขียน devicePunches กลับเสมอโดยไม่เปลี่ยนค่า\n  · append editHistory entry พร้อม admin identity, snapshot, action, reason\n- ผ่านการทดสอบจริงทั้ง 2 กรณี:\n  · Manual Edit: devicePunches = สแกนดิบเดิม, editHistory.editedBy = adminId\n  · Daily Report Fill: devicePunches = [], editHistory.action = manual_create\n\n3. Noon OT (โอเที่ยง) Punch Behavior Fix (แก้ไขปัญหาเติมสแกนเที่ยง):\n- ปรับปรุง ScanDataService.ts ให้ bypass การดึงสแกนของกะโอเที่ยง (hasOtNoon)\n- ป้องกันไม่ให้ระบบเติมเวลาสแกน 12:00 และ 13:00 น. โดยไม่มีการสแกนจริง ซึ่งตรงกับพฤติกรรมจริงของพนักงานหน้างานทำงานต่อเนื่องในชั่วโมงพัก\n- ยืนยันการทำงานร่วมกับระบบคำนวณชั่วโมงทำงานได้อย่างไร้รอยต่อ\n\nSession tokens: ~28k",
+  "History": []
+}

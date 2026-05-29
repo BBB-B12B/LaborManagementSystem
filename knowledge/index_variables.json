@@ -206,7 +206,7 @@
     },
     "ApprovedTimesheet": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 124
+      "line": 151
     },
     "CreateApprovedTimesheetInput": {
       "source": "backend/src/models/ApprovedTimesheet.ts",
@@ -386,7 +386,7 @@
     },
     "LateRecord": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 64
+      "line": 66
     },
     "CreateLateRecordInput": {
       "source": "backend/src/models/LateRecord.ts",
@@ -434,19 +434,19 @@
     },
     "ReconciliationRecord": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 26
+      "line": 43
     },
     "CreateReconciliationRecordInput": {
       "source": "backend/src/models/ReconciliationRecord.ts",
-      "line": 141
+      "line": 171
     },
     "generateReconciliationId": {
       "source": "backend/src/models/ReconciliationRecord.ts",
-      "line": 198
+      "line": 229
     },
     "reconciliationRecordConverter": {
       "source": "backend/src/models/ReconciliationRecord.ts",
-      "line": 209
+      "line": 240
     },
     "RoleCode": {
       "source": "backend/src/models/Role.ts",
@@ -486,7 +486,7 @@
     },
     "CreateScanDataInput": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 109
+      "line": 110
     },
     "roundDownToFiveMinutes": {
       "source": "frontend/src/utils/dateUtils.ts",
@@ -494,15 +494,15 @@
     },
     "classifyScanBehavior": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 131
+      "line": 132
     },
     "generateScanDocId": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 172
+      "line": 173
     },
     "scanDataConverter": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 179
+      "line": 180
     },
     "SocialSecurityCalculation": {
       "source": "backend/src/models/SocialSecurityCalculation.ts",
@@ -834,15 +834,15 @@
     },
     "DailyTimesheetSummary": {
       "source": "backend/src/services/external/ProjectBDailyReportService.ts",
-      "line": 98
+      "line": 99
     },
     "toTimesheetSummary": {
       "source": "backend/src/services/external/ProjectBDailyReportService.ts",
-      "line": 137
+      "line": 139
     },
     "projectBDailyReportService": {
       "source": "backend/src/services/external/ProjectBDailyReportService.ts",
-      "line": 466
+      "line": 469
     },
     "projectLocationService": {
       "source": "backend/src/services/project/ProjectLocationService.ts",
@@ -850,7 +850,7 @@
     },
     "ReconciliationFilter": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 105
+      "line": 132
     },
     "PaginatedReconciliationResult": {
       "source": "backend/src/services/reconciliation/ReconciliationService.ts",
@@ -866,7 +866,7 @@
     },
     "reconciliationService": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 131
+      "line": 158
     },
     "lateRecordService": {
       "source": "backend/src/services/scanData/LateRecordService.ts",
@@ -918,7 +918,7 @@
     },
     "scanDataService": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 1404
+      "line": 1407
     },
     "additionalExpenseService": {
       "source": "backend/src/services/wage/AdditionalExpenseService.ts",
@@ -1146,71 +1146,71 @@
     },
     "PaginatedReconciliationResponse": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 117
+      "line": 144
     },
     "ImportResult": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 87
+      "line": 89
     },
     "uploadScanDataFile": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 113
+      "line": 115
     },
     "uploadScanDataExcel": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 141
+      "line": 143
     },
     "getAllScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 146
+      "line": 148
     },
     "getScanDataById": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 195
+      "line": 197
     },
     "deleteScanDataBatch": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 205
+      "line": 207
     },
     "deleteScanDataBulk": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 216
+      "line": 218
     },
     "getLateRecords": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 237
+      "line": 239
     },
     "softDeleteScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 285
+      "line": 287
     },
     "addManualScan": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 293
+      "line": 295
     },
     "updateScanDataRecord": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 309
+      "line": 311
     },
     "fillFromDailyReport": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 323
+      "line": 325
     },
     "updateDailyPunches": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 343
+      "line": 345
     },
     "exportScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 365
+      "line": 367
     },
     "deleteScanDataById": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 399
+      "line": 401
     },
     "restoreScanDataById": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 409
+      "line": 411
     },
     "WagePeriodListResponse": {
       "source": "frontend/src/services/wageService.ts",
@@ -2362,7 +2362,7 @@
     },
     "WageCalculationDetailsPage": {
       "source": "frontend/src/pages/wage-calculation/[id].tsx",
-      "line": 48
+      "line": 49
     },
     "WorkHourMonitoringPage": {
       "source": "frontend/src/pages/work-hour-monitoring/index.tsx",
@@ -2515,6 +2515,14 @@
     "ScanDataEditDialog": {
       "source": "frontend/src/pages/scan-data-monitoring/components/ScanDataEditDialog.tsx",
       "line": 27
+    },
+    "DailyReportHistoryEntry": {
+      "source": "backend/src/models/ReconciliationRecord.ts",
+      "line": 43
+    },
+    "ScanEditHistoryEntry": {
+      "source": "frontend/src/services/reconciliationService.ts",
+      "line": 26
     }
   }
 }

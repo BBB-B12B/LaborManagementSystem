@@ -90,6 +90,7 @@ export interface DailyEmployeeTimesheet {
   };
   AssigneesID?: string;
   lastUpdated?: string;            // ISO string
+  editHistory?: any[];
 }
 
 /**
@@ -124,6 +125,7 @@ export interface DailyTimesheetSummary {
     otNoon?: string;
   };
   workLogs?: ProjectBWorkLog[];
+  dailyReportHistory?: any[];
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +258,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     dailyReportPunches,
     shiftTimes: doc.shiftTimes,
     workLogs: doc.workLogs || [],
+    dailyReportHistory: doc.editHistory || [],
   };
 }
 

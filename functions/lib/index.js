@@ -158,8 +158,8 @@ function classifyBySegments(params) {
     const sortedScans = scanPunches.map(p => punchToMinutes(p)).sort((a, b) => a - b);
     let isConflicted = false;
     let conflictNote = '';
-    let maxLateMinutes = 0;
-    let maxEarlyLeaveMinutes = 0;
+    let totalLateMinutes = 0;
+    let totalEarlyLeaveMinutes = 0;
     let penaltyOtMorning = 0;
     let penaltyOtEvening = 0;
     const formatTime = (mins) => {
@@ -236,12 +236,12 @@ function classifyBySegments(params) {
             conflictNotes.push(`สแกนออกก่อนเกิน 30 นาทีในรอบ ${formatTime(seg.end)} (${early} นาที)`);
         }
         if (late > 0) {
-            maxLateMinutes = Math.max(maxLateMinutes, late);
+            totalLateMinutes += late;
             if (seg.type === 'otMorning')
                 penaltyOtMorning += late;
         }
         if (early > 0) {
-            maxEarlyLeaveMinutes = Math.max(maxEarlyLeaveMinutes, early);
+            totalEarlyLeaveMinutes += early;
             if (seg.type === 'otEvening' || seg.type === 'combined_afternoon_evening') {
                 penaltyOtEvening += early;
             }
@@ -259,10 +259,10 @@ function classifyBySegments(params) {
             approvedOtEvening: timesheetOtEvening ?? 0,
             totalApprovedHours: (timesheetNormalHours || 0) + (timesheetOtMorning || 0) + (timesheetOtNoon || 0) + (timesheetOtEvening || 0),
             approvalSource: 'daily_report',
-            lateMinutes: maxLateMinutes,
-            earlyLeaveMinutes: maxEarlyLeaveMinutes,
-            isLate: maxLateMinutes > 0,
-            isEarlyLeave: maxEarlyLeaveMinutes > 0,
+            lateMinutes: totalLateMinutes,
+            earlyLeaveMinutes: totalEarlyLeaveMinutes,
+            isLate: totalLateMinutes > 0,
+            isEarlyLeave: totalEarlyLeaveMinutes > 0,
             note: conflictNote
         };
     }
@@ -290,10 +290,10 @@ function classifyBySegments(params) {
         approvedOtEvening: approvedEvening,
         totalApprovedHours: totalApproved,
         approvalSource: 'daily_report',
-        lateMinutes: maxLateMinutes,
-        earlyLeaveMinutes: maxEarlyLeaveMinutes,
-        isLate: maxLateMinutes > 0,
-        isEarlyLeave: maxEarlyLeaveMinutes > 0,
+        lateMinutes: totalLateMinutes,
+        earlyLeaveMinutes: totalEarlyLeaveMinutes,
+        isLate: totalLateMinutes > 0,
+        isEarlyLeave: totalEarlyLeaveMinutes > 0,
         note: autoNote || null,
     };
 }
@@ -986,6 +986,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             dailyReportPhotos: hasTimesheet ? dailyReportPhotos : null,
             workLogs: hasTimesheet ? (timesheet?.workLogs || []) : [],
             assigneeId: hasTimesheet ? (timesheet?.AssigneesID || null) : null,
+            dailyReportHistory: hasTimesheet ? (timesheet?.editHistory || []) : [],
             isHoliday,
             updatedAt: now,
             ...updatesObj,
@@ -1054,6 +1055,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             assigneeId: hasTimesheet ? (timesheet?.AssigneesID || null) : null,
             assigneeName: null, // จะอัปเดตด้านล่าง
             isFallbackAssignee: false, // จะอัปเดตด้านล่าง
+            dailyReportHistory: hasTimesheet ? (timesheet?.editHistory || []) : [],
             isHoliday,
             status,
             statusHistory: [newStatusEntry],
