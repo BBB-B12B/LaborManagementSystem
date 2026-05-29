@@ -40,47 +40,84 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
   const open = Boolean(anchorEl);
 
   const getDueDateColor = () => {
-    if (!task.dueDate) return '#1c1e2b';
+    if (!task.dueDate) return task.dailyProgress === 100 ? '#10b981' : '#9ca3af';
     const dueDateObj = new Date(task.dueDate);
-    if (isNaN(dueDateObj.getTime())) return '#1c1e2b';
+    if (isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? '#10b981' : '#9ca3af';
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     dueDateObj.setHours(0, 0, 0, 0);
 
+    // If progress is 100, compare completion date (updatedAt) with dueDate
+    if (task.dailyProgress === 100) {
+      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+      return diffDaysCompleted >= 0 ? '#10b981' : '#ef4444'; // Green for early/on-plan, Red for late
+    }
+
     const diffTime = dueDateObj.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays > 7) {
-      return '#3b82f6'; // Blue
-    } else if (diffDays > 3) {
-      return '#f97316'; // Orange
+    if (diffDays < 0) {
+      return '#ef4444'; // Red = Overdue
+    } else if (diffDays <= 3) {
+      return '#f97316'; // Orange = Within 3 days
+    } else if (diffDays <= 7) {
+      return '#eab308'; // Yellow = Within 7 days
+    } else if (
+      dueDateObj.getFullYear() === today.getFullYear() &&
+      dueDateObj.getMonth() === today.getMonth()
+    ) {
+      return '#3b82f6'; // Blue = Within the current month
     } else {
-      return '#ef4444'; // Red
+      return '#9ca3af'; // Grey = Outside conditions
     }
   };
 
   const getDueDateTooltip = () => {
-    if (!task.dueDate) return 'ไม่ระบุวันครบกำหนด';
+    if (!task.dueDate) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
     const dueDateObj = new Date(task.dueDate);
-    if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุวันครบกำหนด';
+    if (isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     dueDateObj.setHours(0, 0, 0, 0);
 
-    const diffTime = dueDateObj.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // If progress is 100, describe completion relative to dueDate
+    if (task.dailyProgress === 100) {
+      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
 
-    if (diffDays > 7) {
-      return `เหลือเวลามากกว่า 7 วัน (${diffDays} วัน)`;
-    } else if (diffDays > 3) {
-      return `เหลือเวลา 4 - 7 วัน (${diffDays} วัน)`;
-    } else if (diffDays >= 0) {
-      return `เหลือเวลา 3 วัน หรือน้อยกว่า (${diffDays} วัน)`;
-    } else {
-      return `เกินกำหนดแล้ว ${Math.abs(diffDays)} วัน`;
+      const formattedDueDate = dueDateObj.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      const formattedCompletionDate = completionDate.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+
+      if (diffDaysCompleted > 0) {
+        return `เสร็จสิ้นก่อนกำหนด ${diffDaysCompleted} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+      } else if (diffDaysCompleted === 0) {
+        return `เสร็จสิ้นตรงตามแผนงาน (วันที่: ${formattedDueDate})`;
+      } else {
+        return `เสร็จสิ้นล่าช้ากว่ากำหนด ${Math.abs(diffDaysCompleted)} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+      }
     }
+
+    // Default for pending tasks: show the exact due date formatted in en-GB
+    return `Due: ${dueDateObj.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })}`;
   };
 
   // A user is acting as support if:
@@ -316,8 +353,58 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               cursor: 'default',
             }}
           >
-            <Typography variant="caption" sx={{ fontWeight: 700, color: '#ffffff', fontSize: '0.7rem', letterSpacing: 0.5 }}>
-              Due: {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                color: getDueDateColor() === '#eab308' ? '#1c1e2b' : '#ffffff',
+                fontSize: '0.7rem',
+                letterSpacing: 0.5,
+              }}
+            >
+              {(() => {
+                if (task.dailyProgress === 100) {
+                  if (!task.dueDate) return 'ตรงตามแผน';
+                  const dueDateObj = new Date(task.dueDate);
+                  if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+
+                  const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+                  completionDate.setHours(0, 0, 0, 0);
+                  dueDateObj.setHours(0, 0, 0, 0);
+
+                  const diff = dueDateObj.getTime() - completionDate.getTime();
+                  const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+                  if (diffDaysCompleted > 0) {
+                    return `เสร็จก่อนแผน ${diffDaysCompleted} วัน`;
+                  } else if (diffDaysCompleted === 0) {
+                    return 'ตรงตามแผน';
+                  } else {
+                    return `เลยกำหนด ${Math.abs(diffDaysCompleted)} วัน`;
+                  }
+                }
+
+                if (!task.dueDate) return 'ไม่ระบุ';
+                const dueDateObj = new Date(task.dueDate);
+                if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                dueDateObj.setHours(0, 0, 0, 0);
+
+                const diffTime = dueDateObj.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays < 0) {
+                  return `เลยกำหนดส่ง ${Math.abs(diffDays)} วัน`;
+                } else if (diffDays <= 3) {
+                  return `ใกล้ถึงใน ${diffDays} วัน`;
+                } else if (diffDays <= 7) {
+                  return `ใกล้ถึงใน ${diffDays} วัน`;
+                } else {
+                  return `เหลือ ${diffDays} วัน`;
+                }
+              })()}
             </Typography>
           </Box>
         </Tooltip>

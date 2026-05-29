@@ -399,3 +399,24 @@ This catalog lists known errors and bug fix details.
 - **Symptom:** Clicking the history icon on a daily report or request row in workspace/requests.tsx triggers a 500 FAILED_PRECONDITION error: "The query requires a COLLECTION_GROUP_ASC index for collection tasks and field taskId".
 - **Root Cause:** The `/requests-all` and `/reports-all` API endpoints returned the short `taskId` (e.g. `DBD-0001-001`). When the frontend clicked history, it called `getSubtasks(row.taskId)` using this short ID, forcing the backend's `getSubtasks()` method to fallback to an unindexed collectionGroup query: `afterSaleDb.collectionGroup('tasks').where('taskId', '==', taskId)`.
 - **Resolution:** Modified the `/requests-all` and `/reports-all` endpoints in `tasks.routes.ts` to return the composite task ID (`workOrderId__categoryId__taskId`) as `taskId`: `taskId: \`\${parts[1]}__\${parts[3]}__\${parts[5]}\``. Since this composite ID contains `__`, the backend's `getSubtasks()` resolves it by a direct document path reference, bypassing the collection group query and resolving the 500 error.
+
+## ERR-047: Inconsistent or basic status color indicators and tooltips on task due date badges
+- **Task:** T-014-005-01 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCard.tsx · **Line:** 42, 73
+- **Symptom:** Task card due date badges did not distinguish between overdue and within-3-days, lacked yellow color indicators for within-7-days, lacked blue color for other dates within the current month, and lacked slate grey fallback for outside conditions. White text on yellow badges was also unreadable.
+- **Root Cause:** The `getDueDateColor` and `getDueDateTooltip` helpers grouped all dates <= 3 days (including overdue dates) into the red badge category and colored all dates > 7 days in blue regardless of the month, which did not align with workspace management expectations. The Typography text color was hardcoded to `#ffffff`.
+- **Resolution:** Restructured `getDueDateColor` and `getDueDateTooltip` in `TaskCard.tsx` to explicitly check: `diffDays < 0` for Red (Overdue), `diffDays <= 3` for Orange (within 3 days), `diffDays <= 7` for Yellow (within 7 days), same month/year as today for Blue (current month), and `#9ca3af` for Grey (comfort zone / no conditions). Configured dynamic text coloring inside the due date Badge wrapper: using dark `#1c1e2b` text for Yellow background, and white `#ffffff` text for other backgrounds.
+
+## ERR-048: Standard due date badge styling remains unchanged when subtask reaches 100% progress
+- **Task:** T-014-005-02 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCard.tsx · **Line:** 48, 79, 382
+- **Symptom:** When a task card is 100% completed (e.g. inside the Completed column), the due date badge continues to render as 'Due: DD/MM/YYYY' and uses the standard remaining days status colors (Red/Orange/Yellow/Blue/Grey), which fails to display actual scheduling outcomes.
+- **Root Cause:** There was no custom logic checking if `task.dailyProgress === 100` within `getDueDateColor`, `getDueDateTooltip`, or the Typography render blocks.
+- **Resolution:** Modified `getDueDateColor`, `getDueDateTooltip`, and Typography rendering inside `TaskCard.tsx` to handle `task.dailyProgress === 100`: comparing the completion date (subtask `updatedAt`) relative to the `dueDate`. If completed before/on due date, colors green (`#10b981`) and labels as "เสร็จก่อนแผน X วัน" or "ตรงตามแผน". If completed late, colors red (`#ef4444`) and labels as "เลยกำหนด X วัน". Tooltip updated to present detailed comparison metrics.
+
+## ERR-049: Workspace task cards display exact due date instead of relative status messaging, hiding date in tooltip
+- **Task:** T-014-005-03 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCard.tsx · **Line:** 114, 386
+- **Symptom:** Task card due date badges display the absolute due date (e.g. 'Due: 31/05/2026') for non-completed cards, which does not convey scheduling urgency at first glance, and tooltips repeat redundant date explanation instead of showing the clean absolute due date.
+- **Root Cause:** The `getDueDateTooltip` method rendered descriptive texts like 'เหลือเวลา 4 - 7 วัน' for pending tasks, and the Typography JSX returned `Due: DD/MM/YYYY` directly on the card, rather than showing relative day counts on the card and the absolute date inside the tooltip.
+- **Resolution:** Modified `getDueDateTooltip` in `TaskCard.tsx` to return `Due: DD/MM/YYYY` for non-completed subtasks. Modified Typography rendering logic in `TaskCard.tsx` JSX to display relative messages: "เลยกำหนดส่ง X วัน" (Red), "ใกล้ถึงใน X วัน" (Orange/Yellow), "เหลือ X วัน" (Blue/Grey), or "ไม่ระบุ" if no due date.

@@ -1,3 +1,3 @@
-task: Redesign Labor & Plans table page (requests.tsx) with premium UI, dashboard summary cards, and a subtask edit history timeline popup
+task: ปรับปรุงการแสดงข้อความปุ่ม Due Date เป็นจำนวนวัน และย้ายวันที่ไปยัง Tooltip สำหรับงานที่ยังไม่เสร็จ
 phase: done
 next: none
