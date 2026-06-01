@@ -470,11 +470,11 @@
     },
     "CreateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 56
+      "line": 57
     },
     "UpdateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 86
+      "line": 87
     },
     "taskConverter": {
       "source": "backend/src/models/Task.ts",
@@ -698,7 +698,7 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 133
+      "line": 134
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 78
+      "line": 94
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2098,11 +2098,11 @@
     },
     "TaskCard": {
       "source": "frontend/src/pages/workspace/components/TaskCard.tsx",
-      "line": 36
+      "line": 38
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 81
+      "line": 82
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
@@ -2534,7 +2534,7 @@
     },
     "Subtask": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 100
+      "line": 101
     },
     "AdvanceRequest": {
       "source": "backend/src/models/Task.ts",
@@ -2542,7 +2542,7 @@
     },
     "AdvanceRequestInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 126
+      "line": 127
     },
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
@@ -2554,11 +2554,11 @@
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 41
+      "line": 43
     },
     "EditHistoryRecord": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 76
+      "line": 77
     },
     "NotificationType": {
       "source": "frontend/src/services/notificationService.ts",

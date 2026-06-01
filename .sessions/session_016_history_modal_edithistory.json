@@ -1,0 +1,8 @@
+{
+  "session_id": "session_016_history_modal_edithistory",
+  "associated_tasks": ["T-012-009-07", "T-012-009-08"],
+  "status": "completed",
+  "estimated_tokens": 50000,
+  "summary_context": "History Modal & EditHistory Refactor Session (T-012-009-07, T-012-009-08):\n\n1. [LaborSummaryPanel] สร้าง component แยก LaborSummaryPanel แสดงรายชื่อกำลังพลทั้งหมดในวันนั้นแบบ collapsible พร้อมกะทำงานครบ (ปกติ | OT เช้า | OT เที่ยง | OT เย็น)\n2. [ReportEditHistoryPanel] สร้าง component ใหม่ดึงข้อมูลจาก dailyReport.editHistory[] โดยตรง — reconstruct timeline before/after labor สำหรับแต่ละการแก้ไข แสดงชื่อผู้แก้ + เวลา + diff กำลังพล (เพิ่ม/ลบ/เปลี่ยนกะ) + ใบลา\n3. [Remove date-to-date diff] ลบ section renderLaborDiff และ renderLeaveDiff (date-to-date comparison) ออกจาก History modal ทั้งหมด เพื่อความโปร่งใส — ตอนนี้ History แสดงเฉพาะ editHistory จริงจาก Firestore เท่านั้น\n4. [Header Info] เพิ่มข้อมูล Accordion header: เวลาบันทึก (HH:mm น.) + จำนวนกำลังพล (N คน)\n5. [Hooks Fix] แก้ไข Rules of Hooks violation — เปลี่ยนจาก IIFE useState ใน render เป็น proper React component\n6. [Logic Clarification] ยืนยันและอธิบาย Logic ให้ user เข้าใจว่า editHistory ใน backend push snapshot ก่อนแก้ทุกครั้ง ทำให้ reconstruct before/after ได้ถูกต้อง\n\nFiles edited:\n- frontend/src/pages/workspace/index.tsx (AccordionDetails, LaborSummaryPanel component, ReportEditHistoryPanel component)\n- docs/master_roadmap.md (T-012-009-07, T-012-009-08 marked [X])\n\nSession tokens: ~50k",
+  "History": []
+}

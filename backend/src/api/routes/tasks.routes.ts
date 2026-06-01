@@ -901,12 +901,14 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { taskName, projectId, projectName, workOrderId, workOrderCode, workOrderName, categoryId, categoryName, subtasks, dueDate, status } = req.body;
     
-    if (!taskName || !projectId || !workOrderCode || !categoryName || !subtasks || subtasks.length === 0) {
-      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName, Subtasks are required)', 400);
+    if (!taskName || !projectId || !workOrderCode || !categoryName) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName are required)', 400);
     }
 
+    const subtasksArray = Array.isArray(subtasks) ? subtasks : [];
+
     // Validate that each subtask has a dueDate
-    const hasInvalidSubtaskDueDate = subtasks.some((st: any) => !st.dueDate || isNaN(new Date(st.dueDate).getTime()));
+    const hasInvalidSubtaskDueDate = subtasksArray.some((st: any) => !st.dueDate || isNaN(new Date(st.dueDate).getTime()));
     if (hasInvalidSubtaskDueDate) {
       throw new AppError('กรุณาระบุวันที่ครบกำหนดของทุกงานย่อยให้ถูกต้อง (Subtask due dates are required)', 400);
     }
@@ -921,7 +923,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       workOrderName,
       categoryId,
       categoryName,
-      subtasks,
+      subtasks: subtasksArray,
       dueDate: dueDate ? new Date(dueDate) : undefined,
       status,
     };
@@ -1325,14 +1327,15 @@ router.post('/:id/subtasks', async (req: Request, res: Response, next: NextFunct
     if (!userId) throw new AppError('Unauthorized', 401);
 
     const { subtaskName, assignees, dueDate } = req.body;
-    if (!subtaskName || !assignees || assignees.length === 0 || !dueDate) {
-      throw new AppError('ข้อมูลไม่ครบถ้วน (subtaskName, assignees, และ dueDate เป็นฟิลด์ที่จำเป็น)', 400);
+    if (!subtaskName || !dueDate) {
+      throw new AppError('ข้อมูลไม่ครบถ้วน (subtaskName และ dueDate เป็นฟิลด์ที่จำเป็น)', 400);
     }
     if (isNaN(new Date(dueDate).getTime())) {
       throw new AppError('รูปแบบวันที่ครบกำหนดไม่ถูกต้อง', 400);
     }
 
-    const subtask = await taskService.createSubtask(id, { subtaskName, assignees, dueDate }, userId);
+    const assigneesArray = Array.isArray(assignees) ? assignees : [];
+    const subtask = await taskService.createSubtask(id, { subtaskName, assignees: assigneesArray, dueDate }, userId);
     res.status(201).json({
       success: true,
       message: 'สร้าง Subtask สำเร็จ',

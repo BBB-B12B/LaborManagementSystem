@@ -420,3 +420,87 @@ This catalog lists known errors and bug fix details.
 - **Symptom:** Task card due date badges display the absolute due date (e.g. 'Due: 31/05/2026') for non-completed cards, which does not convey scheduling urgency at first glance, and tooltips repeat redundant date explanation instead of showing the clean absolute due date.
 - **Root Cause:** The `getDueDateTooltip` method rendered descriptive texts like 'เหลือเวลา 4 - 7 วัน' for pending tasks, and the Typography JSX returned `Due: DD/MM/YYYY` directly on the card, rather than showing relative day counts on the card and the absolute date inside the tooltip.
 - **Resolution:** Modified `getDueDateTooltip` in `TaskCard.tsx` to return `Due: DD/MM/YYYY` for non-completed subtasks. Modified Typography rendering logic in `TaskCard.tsx` JSX to display relative messages: "เลยกำหนดส่ง X วัน" (Red), "ใกล้ถึงใน X วัน" (Orange/Yellow), "เหลือ X วัน" (Blue/Grey), or "ไม่ระบุ" if no due date.
+
+## ERR-050: React Unhandled Runtime Error: Rendered fewer hooks than expected
+- **Task:** T-016-001-01 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 1056, 1088
+- **Symptom:** Unhandled Runtime Error: Rendered fewer hooks than expected. This may be caused by an accidental early return statement.
+- **Root Cause:** Conditional calls of the `useWatch` hook were introduced inside JSX conditional path blocks (e.g. `{!isSupportPickup && !isEdit && useWatch(...) === 'subtask' && (...)` and `{(isEdit || useWatch(...) === 'task') && (...)`). When JS short-circuiting evaluated to false, the hooks were not run, violating React's Rules of Hooks (hooks must be called at the top level of the component and in the exact same order on every render).
+- **Resolution:** Declared a single `createModeWatch = useWatch({ control, name: 'createMode' })` hook at the level of `TaskCreateModal.tsx` adjacent to other hook declarations, and referenced `createModeWatch` inside the conditional JSX rendering logic instead of calling the inline hook directly.
+
+## ERR-051: Subtasks section visible and throwing validation errors in Task creation mode
+- **Task:** T-016-001-02 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 170, 220, 619, 1110
+- **Symptom:** When the user selects "สร้างงานหลัก (Tasks)" mode inside the task creation modal, the "รายการงานย่อย (Subtasks)" section is still visible and displays form validation errors ("กรุณาระบุชื่องานย่อย", "กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน", "รูปแบบวันที่ไม่ถูกต้อง") preventing form submission.
+- **Root Cause:** The subtasks container Grid was rendered unconditionally in JSX. Additionally, the form defaults and toggle switch initialized the `subtasks` array with one empty subtask object (`[{ subtaskName: '', assignees: [], dueDate: null, isSupportRequest: false }]`). Since the array was not empty, Zod validated the empty subtask element, which failed validation.
+- **Resolution:** Wrapped the subtasks grid in a conditional block to only render when `(isEdit || createModeWatch === 'subtask' || isSupportPickup)`. Changed the default form values and toggle onChange reset logic to set `subtasks` to an empty array `[]` when `createMode` is `'task'`.
+
+## ERR-052: Task creation confirmation popup displays empty due date row
+- **Task:** T-016-001-03 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 1465
+- **Symptom:** The confirmation modal dialog displays a "ครบกำหนด" (Due Date) row showing "-" when submitting a new Task creation, which is unnecessary and confusing as main Tasks are created with no due date initially.
+- **Root Cause:** The confirmation dialog JSX rendered the "ครบกำหนด" row unconditionally inside the main task info rendering block.
+- **Resolution:** Removed the "ครบกำหนด" row from the confirmation dialog's main task detail view in `TaskCreateModal.tsx`.
+
+## ERR-053: Standard/Outlined MUI buttons next to selectors and titles lacked premium feel
+- **Task:** T-016-001-04 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 492, 986, 1064, 1126
+- **Symptom:** The add buttons ("สร้างหมวดหมู่หลัก", "สร้างหมวดหมู่ย่อย", "เพิ่มงานย่อย") in the task creation modal looked basic, lacking a premium feel, consistent elevation, and micro-interactions matching the Figma/Reference design.
+- **Root Cause:** The buttons were styled with default MUI outlined styles, standard grey/blue colors, and small border radiuses with no shadows or transition effects.
+- **Resolution:** Defined a custom `addButtonStyle` in `TaskCreateModal.tsx` specifying white background, rounded corners (border-radius: 12px), slate dark typography, thin border `#e2e8f0`, soft drop shadow `0 2px 6px rgba(0,0,0,0.04)`, and smooth translation scale transition on hover and active. Applied this style to the three add buttons.
+
+## ERR-054: Form inputs and selectors border radius unaligned with premium buttons styling
+- **Task:** T-016-001-05 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 473, 821, 915, 1255
+- **Symptom:** The form inputs (Location selector, Work Order selector, Category selector, Task Name textfield, and description textarea) in the task creation modal had a smaller border radius (`borderRadius: 2` which maps to 8px), making them look inconsistent next to the new premium 12px rounded buttons.
+- **Root Cause:** Border radius on general inputs was configured with standard MUI theme multiplier value `2` under `inputStyles`, and inner DatePicker layouts explicitly set `borderRadius: 2`.
+- **Resolution:** Modified `borderRadius` properties to `'12px'` in the central `inputStyles` config, DatePicker inner `InputProps.sx` styles, and the task name editing support button to establish visual consistency.
+
+## ERR-055: DatePicker input fields show bottom underline and sharp bottom corners
+- **Task:** T-016-001-06 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 473, 899, 1238
+- **Symptom:** The DatePicker input field (Due Date) in the task creation modal shows a grey bottom underline and sharp bottom corners, which does not match the clean, fully-rounded (12px), flat appearance of other form fields.
+- **Root Cause:** The DatePicker component used a custom `InputProps` definition with inline styles that conflicted with the main `inputStyles` config, and MUI X's internal input merger ignored the nested `InputProps.sx` styles, leaving the default MUI FilledInput underline and sharp corners active.
+- **Resolution:** Removed the conflicting `InputProps` overrides from both DatePicker elements to let them inherit the main `inputStyles` directly. Added explicit corner rules (`borderBottomLeftRadius`, etc.) with `!important` to the central `inputStyles` definition to guarantee rounding over MUI's default overrides.
+
+## ERR-056: Delete subtask button is hidden for newly added subtask rows during task creation
+- **Task:** T-016-001-07 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 1136
+- **Symptom:** In the task creation modal, after clicking "เพิ่มงานย่อย" (Add Subtask) multiple times, no delete (X) button is displayed next to any of the subtask rows, making it impossible for the user to delete any added rows.
+- **Root Cause:** The visibility of the delete button was conditioned on `!item.id`. However, in `react-hook-form`'s `useFieldArray`, `item.id` is an auto-generated unique ID for key rendering which is ALWAYS defined on the client side. Thus, the check evaluated to `false` for every row.
+- **Resolution:** Modified the visibility condition of the delete button to check `!item.subtaskId` instead of `!item.id`. Since database-persisted subtasks have `subtaskId` and newly added client-side subtasks do not, this correctly renders the delete button for all newly added subtasks.
+
+## ERR-057: Subtasks not deleted from Firestore database during task editing
+- **Task:** T-016-001-08 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 141, 172, 394
+- **Symptom:** Subtasks removed from the UI inside the task edit modal were not deleted from the Firestore database, remaining present on the board after the task was saved.
+- **Root Cause:** The subtask deletion logic only updated the local react-hook-form state array using `remove(index)`. The modal lacked any database integration or tracking of deleted subtask IDs, so the backend API was never notified to delete the documents.
+- **Resolution:** Added a `subtasksToDelete` state in `TaskCreateModal.tsx` to collect subtask IDs removed in Edit mode. Updated `onConfirmSubmit` to sequentially call `taskService.deleteSubtask` for each accumulated ID in `subtasksToDelete` before submitting the task updates.
+
+## ERR-058: Missing taskName and Switch toggle with broken layout due to corrupted replace block in TaskCreateModal.tsx
+- **Task:** T-016-001-09 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 929-1367
+- **Symptom:** The task edit/create modal failed to compile due to broken JSX tags, the main "ชื่องาน *" text field was missing in the normal workflow, and the toggle switch for subtasks had disappeared.
+- **Root Cause:** A corrupted replacement block in the previous turn failed to close the `renderOption` callback in the `categoryName` Autocomplete component and duplicated elements at the bottom of the form, while deleting the `taskName` field entirely.
+- **Resolution:** Repaired the layout by cleanly rebuilding the Normal Workflow Layout in `TaskCreateModal.tsx`. Restored `taskName` Controller, properly closed `categoryName` Autocomplete, positioned the iOS-styled toggle Switch below `description`, and arranged the subtask card layout so `ชื่องานย่อย` and `วันที่ครบกำหนด` are side-by-side on Row 1, and `ผู้รับผิดชอบ` takes the full width on Row 2 with consistent curvature (24px) and height (40px) across all elements.
+
+## ERR-059: Tasks without subtasks hidden in Structure Tree and unable to select existing tasks to add subtasks under
+- **Task:** T-016-001-10 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/WorkspaceTree.tsx, frontend/src/pages/workspace/index.tsx, frontend/src/pages/workspace/components/TaskCreateModal.tsx
+- **Symptom:** 1) Tasks created without subtasks did not show up in the folder structure (Workspace Structure Tree). 2) Toggling 'เพิ่มงานย่อย (Subtasks)' in the task creation dialog required typing a new task name instead of choosing an existing task, which made it impossible to add subtasks to pre-existing tasks from the creation form.
+- **Root Cause:** 1) WorkspaceTree.tsx's buildTree logic returned early if subtasks.length === 0, and the categories and work orders filters required subtaskCount > 0. Additionally, filterTasksByRole in index.tsx discarded all tasks with 0 subtasks. 2) TaskCreateModal.tsx rendered a text field instead of a dropdown for taskName when adding subtasks, and always created a new task instead of calling updateTask with the new subtasks list.
+- **Resolution:** 1) Modified buildTree in WorkspaceTree.tsx to include tasks with 0 subtasks if they match the department/support view, and updated grouping filters to check cat.tasks.length > 0 and wo.categories.length > 0. Updated filterTasksByRole in index.tsx to retain tasks with 0 subtasks that meet user project permissions. 2) Added state and effects to load project tasks in TaskCreateModal.tsx, watched categoryName, and rendered taskName as an Autocomplete dropdown of tasks in the chosen category. When selected, it locks the name, fetches its existing subtasks, and submits via taskService.updateTask to append the new subtasks.
+
+## ERR-060: Left-side Workspace Structure Tree does not filter dynamically when selecting top workspace filter tabs
+- **Task:** T-012-008-22 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/WorkspaceTree.tsx, frontend/src/pages/workspace/index.tsx · **Line:** 36, 47, 59-135 (WorkspaceTree.tsx), 909, 1235 (index.tsx)
+- **Symptom:** Selecting top date filter tabs ("This Month", "This Week", "Today") filters the Kanban board cards successfully, but the left-side Workspace Structure Tree (showing Work Orders, Categories, Tasks, and Subtasks) remains static and does not reflect the selected date filters.
+- **Root Cause:** The `WorkspaceTree` component received only the raw list of `tasks` and had no reference to the `activeTab` filter state, so its internal `buildTree` logic always rendered all active tasks/subtasks regardless of the selected time range.
+- **Resolution:** Modified `WorkspaceTreeProps` to accept `activeTab?: string`. Added a `checkDateMatch` helper function inside `WorkspaceTree.tsx` that replicates the date filtering logic used by the Kanban board columns. Integrated this date check inside the `buildTree` logic to exclude non-matching subtasks, and to hide empty tasks unless they have 0 subtasks and their own due date matches the filter. Finally, updated the dependency arrays of `mainTree` and `supportTree` memoization blocks to include `activeTab`, and passed the `activeTab` state from `index.tsx` into both the desktop and mobile instances of the `WorkspaceTree` component.
+
+## ERR-061: Subtask submission forces users to select an assignee (assignees) even if they don't know who to assign yet
+- **Task:** T-012-008-23 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx, backend/src/api/routes/tasks.routes.ts, backend/src/services/TaskService.ts, frontend/src/pages/workspace/components/TaskCard.tsx · **Line:** 57, 829, 1403 (TaskCreateModal), 1330 (tasks.routes.ts), 957, 1086-1135 (TaskService.ts), 456 (TaskCard)
+- **Symptom:** When creating or editing subtasks, the form forces users to assign at least one worker/foreman. If they submit the form without selecting an assignee, it displays a validation error ("กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน") and prevents submission. In addition, the backend routes throw a 400 error if `assignees` is missing or empty on single subtask creation.
+- **Root Cause:** 1) The Zod validation schema in `TaskCreateModal.tsx` explicitly specified `.min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน')` on the `assignees` array. 2) The backend route `POST /api/tasks/:id/subtasks` validated `assignees.length === 0` and rejected it. 3) The `updateTask` Firestore service code looped over `st.assignees` and used Firestore's `FieldValue.arrayUnion` spreading the assignees array, which would crash at runtime when the list was empty or undefined.
+- **Resolution:** 1) Changed `assignees` validation schema in `TaskCreateModal.tsx` to `.optional().default([])` and removed the required asterisks (`*`) from the assignee input labels in JSX. 2) Removed the non-empty assignee checks from the `POST /api/tasks/:id/subtasks` backend route and mapped missing assignees to `[]`. 3) Guarded the assignee loops and Firestore `arrayUnion` calls in `TaskService.ts` to check if `assignees` is defined and contains elements before spreading it into `arrayUnion`. 4) Updated the UI of `TaskCard.tsx` to render an italicized placeholder `"ยังไม่ได้มอบหมาย"` (Unassigned) in grey color instead of rendering a blank area when the subtask has no assignees.

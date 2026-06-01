@@ -156,7 +156,7 @@ export class TaskService {
       const allAssignees = Array.from(allAssigneesMap.values());
 
       // Calculate max dueDate from subtasks, fallback to input.dueDate or now
-      const maxDueDate = this.calculateMaxDueDate(input.subtasks) || (input.dueDate ? new Date(input.dueDate) : now);
+      const maxDueDate = this.calculateMaxDueDate(input.subtasks || []) || (input.dueDate ? new Date(input.dueDate) : now);
 
       const newTaskData: Omit<Task, 'id'> = {
         taskId: taskId,
@@ -954,7 +954,7 @@ export class TaskService {
         if (input.subtasks) {
           hasSupportRequest = input.subtasks.some(st => st.isSupportRequest) || false;
           input.subtasks.forEach(st => {
-            st.assignees.forEach(a => {
+            (st.assignees || []).forEach(a => {
               allAssigneesMap.set(a.employeeId, a);
             });
           });
@@ -1083,14 +1083,18 @@ export class TaskService {
                 });
               }
 
+              const newAssignees = stInput.assignees || [];
               const subtaskUpdates: any = {
                 subtaskName: stInput.subtaskName,
-                assignees: stInput.assignees,
+                assignees: newAssignees,
                 isSupportRequest: newIsSupport,
                 updatedAt: now,
                 updatedBy: updatedBy,
-                historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(...stInput.assignees.map(a => a.employeeId))
               };
+
+              if (newAssignees.length > 0) {
+                subtaskUpdates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...newAssignees.map(a => a.employeeId));
+              }
 
               if (stInput.dueDate !== undefined) {
                 subtaskUpdates.dueDate = stInput.dueDate ? new Date(stInput.dueDate) : null;
@@ -1110,12 +1114,13 @@ export class TaskService {
               const subtaskNum = (currentSubtaskRun++).toString().padStart(4, '0');
               const subtaskId = `${oldTaskId}-${subtaskNum}`;
               const stRef = activeTaskRef.collection('subtasks').doc(subtaskId);
+              const newAssignees = stInput.assignees || [];
               transaction.set(stRef, {
                 id: `${oldWoId}__${activeTaskRef.parent.parent?.id}__${oldTaskId}__${subtaskId}`,
                 subtaskId: subtaskId,
                 subtaskName: stInput.subtaskName,
                 status: 'upcoming',
-                assignees: stInput.assignees,
+                assignees: newAssignees,
                 dailyProgress: 0,
                 currentRevision: 'rev00',
                 isSupportRequest: stInput.isSupportRequest || false,
@@ -1125,14 +1130,14 @@ export class TaskService {
                 updatedAt: now,
                 createdBy: updatedBy,
                 updatedBy: updatedBy,
-                historicalAssigneeIds: Array.from(new Set([...stInput.assignees.map(a => a.employeeId), updatedBy]))
+                historicalAssigneeIds: Array.from(new Set([...newAssignees.map(a => a.employeeId), updatedBy]))
               });
               const rev00Ref = stRef.collection('revisions').doc('rev00');
               transaction.set(rev00Ref, {
                 revisionId: 'rev00',
                 revisionName: stInput.subtaskName,
                 taskName: stInput.subtaskName,
-                assignees: stInput.assignees,
+                assignees: newAssignees,
                 createdAt: now,
                 createdBy: updatedBy,
               });

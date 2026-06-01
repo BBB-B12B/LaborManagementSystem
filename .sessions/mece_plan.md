@@ -1,11 +1,14 @@
-# MECE Plan - Labor & Plans Table Redesign
-
-**[✓ MECE]** Goal: Redesign Labor & Plans table page (requests.tsx) with premium UI, dashboard summary cards, and a subtask edit history timeline popup.
+# MECE Plan
 
 ## Sections
 <!-- Orchestrator will write here at next Phase 2 -->
 
+---
+
 ## Session Archive
 
-### Closed: 2026-05-29
-Done: [Section 1, Section 2, Section 3] | Remaining: [] | Summary: Redesign Labor & Plans table requests.tsx with history diffs, names resolution, wider width and collapsible lists.
+### Closed: 2026-06-01 (session_015)
+Done: [S1, S2, S3] | Remaining: none | Summary: Filtering Structure Tree by Workspace Tabs — filter subtasks/tasks by activeTab (All/Month/Week/Today) in WorkspaceTree
+
+### Closed: 2026-06-01 (session_016)
+Done: [S1, S2] | Remaining: none | Summary: History Modal editHistory refactor — LaborSummaryPanel, ReportEditHistoryPanel (direct editHistory), removed date-to-date diff

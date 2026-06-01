@@ -51,6 +51,7 @@ export interface Task {
   createdBy?: string;
   updatedBy?: string;
   subtaskName?: string;
+  editHistory?: EditHistoryRecord[];
 }
 
 export interface CreateTaskInput {
@@ -65,7 +66,7 @@ export interface CreateTaskInput {
   categoryName: string;
   dueDate?: string; // ISO string
   status?: TaskStatus;
-  subtasks: {
+  subtasks?: {
     subtaskName: string;
     assignees: TaskAssignee[];
     isSupportRequest?: boolean;
@@ -303,6 +304,13 @@ export const taskService = {
    */
   getDailyReportsAll: async (filters: { projectId?: string; startDate?: string; endDate?: string }): Promise<any[]> => {
     return await api.get<any[]>('/tasks/reports-all', filters);
+  },
+
+  /**
+   * Get all daily reports for a specific task or subtask
+   */
+  getAllDailyReports: async (id: string, isSupportReport?: boolean): Promise<any[]> => {
+    return await api.get<any[]>(`/tasks/${id}/reports`, { isSupportReport });
   },
 
   /**

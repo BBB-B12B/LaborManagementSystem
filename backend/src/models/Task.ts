@@ -124,7 +124,7 @@ export interface CreateTaskInput {
   categoryName: string;
   dueDate?: Date;
   status?: TaskStatus;
-  subtasks: {
+  subtasks?: {
     subtaskName: string;
     assignees: TaskAssignee[];
     isSupportRequest?: boolean;

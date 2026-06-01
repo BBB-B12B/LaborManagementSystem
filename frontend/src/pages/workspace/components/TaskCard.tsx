@@ -19,6 +19,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Notifications as NotificationsIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { LinearProgress } from '@mui/material';
 import type { Task } from '@/services/taskService';
@@ -30,10 +31,11 @@ interface TaskCardProps {
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onClick?: (task: Task) => void;
+  onViewHistory?: (task: Task) => void;
   hasUnread?: boolean;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, hasUnread }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, hasUnread }) => {
   const theme = useTheme();
   const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -164,6 +166,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
     else console.log('Delete task:', task.id);
   };
 
+  const handleViewHistory = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    if (onViewHistory) onViewHistory(task);
+  };
+
   return (
     <Paper
       elevation={0}
@@ -237,7 +245,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           )}
         </Stack>
 
-        {(onEdit || onDelete) && (
+        {(onEdit || onDelete || onViewHistory) && (
           <IconButton size="small" onClick={handleMenuClick} sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}>
             <MoreVertIcon fontSize="small" />
           </IconButton>
@@ -260,18 +268,30 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           transformOrigin={{ horizontal: 'right', vertical: 'top' }}
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
-          <MenuItem onClick={handleEdit}>
-            <ListItemIcon>
-              <EditIcon fontSize="small" />
-            </ListItemIcon>
-            <Typography variant="body2">Edit</Typography>
-          </MenuItem>
-          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" color="error" />
-            </ListItemIcon>
-            <Typography variant="body2" color="error">Delete</Typography>
-          </MenuItem>
+          {onViewHistory && (
+            <MenuItem onClick={handleViewHistory}>
+              <ListItemIcon>
+                <VisibilityIcon fontSize="small" />
+              </ListItemIcon>
+              <Typography variant="body2">History</Typography>
+            </MenuItem>
+          )}
+          {onEdit && (
+            <MenuItem onClick={handleEdit}>
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <Typography variant="body2">Edit</Typography>
+            </MenuItem>
+          )}
+          {onDelete && (
+            <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+              <ListItemIcon>
+                <DeleteIcon fontSize="small" color="error" />
+              </ListItemIcon>
+              <Typography variant="body2" color="error">Delete</Typography>
+            </MenuItem>
+          )}
         </Menu>
       </Stack>
 
@@ -455,7 +475,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               ? task.supportAssignees
               : task.assignees || [];
             
-            return displayAssignees && displayAssignees.length > 0 && (
+            return displayAssignees && displayAssignees.length > 0 ? (
               <AvatarGroup
                 max={4}
                 sx={{
@@ -479,6 +499,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                   </Tooltip>
                 ))}
               </AvatarGroup>
+            ) : (
+              <Typography
+                variant="caption"
+                sx={{ fontStyle: 'italic', color: '#9ca3af', fontSize: '0.725rem' }}
+              >
+                ยังไม่ได้มอบหมาย
+              </Typography>
             );
           })()}
         </Stack>

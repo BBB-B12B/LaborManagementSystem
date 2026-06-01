@@ -82,10 +82,25 @@
 - [X] T-012-008-19: แก้ไขบักการแจ้งเตือนรายงานของงาน Support ไม่แจ้งเตือนไปยังหัวหน้าทีม Support (WH) (→ ERR-038) · attempts: 1 · tool_calls: 11
 - [X] T-012-008-20: เพิ่ม Flow นำทางผู้ใช้จากข้อความแจ้งเตือน Navbar ไปยังหน้าข้อมูลงานและเปิด Popup Daily Report อัตโนมัติ · attempts: 1 · tool_calls: 15
 - [X] T-012-008-21: พัฒนาระบบแก้ไข/ลบการ์ดงานย่อย (Subtasks) และโครงสร้างงานหลัก (Tasks & WorkOrders) อย่างปลอดภัย · attempts: 1 · tool_calls: 10
+- [X] T-012-008-22: พัฒนาตัวกรองด้านบนให้สามารถกรอง Structure Tree ไปด้วยตามที่ผู้ใช้เลือก (→ ERR-060) · attempts: 1 · tool_calls: 20
+- [X] T-012-008-23: ปรับปรุงแบบฟอร์มการสร้างงานย่อย (Subtask) ให้ไม่บังคับการเลือกผู้รับผิดชอบ (Optional Assignee) (→ ERR-061) · attempts: 1 · tool_calls: 15
 - [X] T-014: จัดการวันครบกำหนด (Due Date) ในระดับ Subtask และคำนวณวันครบกำหนด of Task หลักอัตโนมัติ
 - [X] T-014-001-01: เปลี่ยนคำอธิบายสี Due Date ให้แสดงผ่าน Tooltip บนปุ่ม Due Date ของการ์ดงาน · attempts: 1 · tool_calls: 5
 - [X] T-015: ปรับปรุงสิทธิ์การเข้าถึงเมนูและหน้าต่าง ๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection) (→ ERR-037) · attempts: 1 · tool_calls: 15
 - [X] T-012-009-01: ปรับปรุงตารางกำลังพลและแผนงาน (Labor & Plans Table UI, Dashboard & Subtask History Modal) · attempts: 1 · tool_calls: 12
+- [X] T-016: ปรับปรุงโครงสร้างการสร้างงานในระบบ Model "Newtasks" ให้รองรับการแยกสร้าง งาน (Tasks) และ งานย่อย (Subtasks) · attempts: 1 · tool_calls: 31
+- [X] T-016-001-01: แก้ไข React runtime error: Rendered fewer hooks than expected ใน TaskCreateModal.tsx (→ ERR-050) · attempts: 1 · tool_calls: 25
+- [X] T-016-001-02: ซ่อนและปิดการตรวจสอบ Subtasks ในโหมดสร้างงานหลัก (Tasks) (→ ERR-051) · attempts: 1 · tool_calls: 29
+- [X] T-016-001-03: ตัดแถววันครบกำหนด (Due Date) ออกจากป๊อปอัพยืนยันการสร้าง Task (→ ERR-052) · attempts: 1 · tool_calls: 10
+- [X] T-016-001-04: ปรับปรุงสไตล์ปุ่มเพิ่มต่างๆ ให้สวยงามและพรีเมียมตามแบบรูปที่ 1 (→ ERR-053) · attempts: 1 · tool_calls: 24
+- [X] T-016-001-05: ปรับปรุงความโค้งมนของช่องข้อมูลต่างๆ ให้สวยงามและเข้ากับดีไซน์ของปุ่ม (borderRadius: '12px') (→ ERR-054) · attempts: 1 · tool_calls: 13
+- [X] T-016-001-06: ปรับปรุงสไตล์ช่องวันครบกำหนด (DatePicker) และช่องข้อมูลอื่นๆ ให้โค้งมนสวยงามเสมอกันและไม่มีขีดล่าง (→ ERR-055) · attempts: 1 · tool_calls: 15
+- [X] T-016-001-07: แก้ไขเงื่อนไขการแสดงปุ่มลบงานย่อย (!item.subtaskId) เพื่อให้สามารถลบแถว Subtasks ในโหมดสร้างงานได้ (→ ERR-056) · attempts: 1 · tool_calls: 10
+- [X] T-016-001-08: พัฒนาระบบปุ่มลบแถว Subtasks ในทุกโหมด และลบข้อมูลออกจากฐานข้อมูลอย่างถูกต้องเมื่อมีการแก้ไขบันทึก (→ ERR-057) · attempts: 1 · tool_calls: 15
+- [X] T-016-001-09: ปรับปรุงโครงสร้างสวิตช์ปิด/เปิด และจัดวางฟิลด์ Due Date ในแถวเดียวกับชื่องานย่อยแบบการ์ดการกรอกข้อมูล (→ ERR-058) · attempts: 1 · tool_calls: 12
+- [X] T-016-001-10: แสดงโครงสร้างงานกรณีไม่มี Subtask และปรับปรุงให้สามารถเลือกงานที่มีอยู่แล้วเมื่อติ๊กเพิ่มงานย่อย (→ ERR-059) · attempts: 1 · tool_calls: 61
+- [X] T-016-001-11: ปรับปรุงโครงสร้างงานและฟังก์ชันมอบหมายงานย่อยด่วน (Quick Assign Subtask) · attempts: 1 · tool_calls: 18
+- [X] T-012-009-06: เพิ่มฟังก์ชันตรวจสอบประวัติการบันทึก/แก้ไขย้อนหลังในการ์ด Subtask บนบอร์ด Workspace · attempts: 1 · tool_calls: 18
 
 ---
 
@@ -110,3 +125,8 @@
 - [X] T-014-005-01: พัฒนา Logic แสดงสีบอกสถานะวันครบกำหนด (Due Date) ตามเงื่อนไขใหม่ (→ ERR-047) · attempts: 1 · tool_calls: 16
 - [X] T-014-005-02: ปรับปรุงการแสดงผลปุ่ม Due Date เมื่อ Progress = 100% (เสร็จก่อนแผน/เลยกำหนด/ตรงตามแผน) (→ ERR-048) · attempts: 1 · tool_calls: 18
 - [X] T-014-005-03: ปรับปรุงการแสดงข้อความปุ่ม Due Date เป็นจำนวนวัน และย้ายวันที่ไปยัง Tooltip สำหรับงานที่ยังไม่เสร็จ (→ ERR-049) · attempts: 1 · tool_calls: 13
+- [X] T-012-009-07: เพิ่มข้อมูลละเอียดใน History Modal — แสดงชื่อกำลังพลที่เพิ่มเข้ามา, เวลาบันทึกรายงาน และรายชื่อสรุปทั้งหมดพร้อมกะ · attempts: 1 · tool_calls: 22
+- [X] T-012-009-08: เพิ่ม ReportEditHistoryPanel — แสดงประวัติการแก้ไขรายงานวันเดิม (FM บันทึกแล้วกลับมาแก้) พร้อม before/after diff กำลังพลและใบลา · attempts: 1 · tool_calls: 10
+
+
+

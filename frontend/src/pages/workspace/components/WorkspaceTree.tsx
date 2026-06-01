@@ -32,10 +32,12 @@ interface WorkspaceTreeProps {
   onSelectNode: (node: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null) => void;
   onSubtaskClick: (task: Task, subtask: Subtask) => void;
   onQuickCreateSubtask?: (taskId: string) => void;
+  onQuickAssignSubtask?: (task: Task, subtask: Subtask) => void;
   onEditWorkOrder?: (woId: string, currentName: string) => void;
   onDeleteWorkOrder?: (woId: string, currentName: string) => void;
   onEditCategory?: (catId: string, currentName: string) => void;
   onDeleteCategory?: (catId: string, currentName: string) => void;
+  activeTab?: string;
 }
 
 export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
@@ -44,10 +46,12 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   onSelectNode,
   onSubtaskClick,
   onQuickCreateSubtask,
+  onQuickAssignSubtask,
   onEditWorkOrder,
   onDeleteWorkOrder,
   onEditCategory,
   onDeleteCategory,
+  activeTab = 'All Tasks',
 }) => {
   const { user } = useAuthStore();
   const isWH = user?.department === 'WH';
@@ -57,13 +61,60 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
+  // Helper to check if a due date matches the active tab's criteria
+  const checkDateMatch = (dueDateVal: string | Date | undefined | null) => {
+    if (activeTab === 'All Tasks') return true;
+    if (!dueDateVal) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    endOfMonth.setHours(23, 59, 59, 999);
+
+    const dueDate = new Date(dueDateVal);
+    dueDate.setHours(0, 0, 0, 0);
+
+    if (activeTab === 'Today') {
+      return dueDate.getTime() === today.getTime();
+    }
+
+    if (activeTab === 'This Week') {
+      return dueDate >= startOfWeek && dueDate <= endOfWeek;
+    }
+
+    if (activeTab === 'This Month') {
+      return dueDate >= startOfMonth && dueDate <= endOfMonth;
+    }
+
+    return true;
+  };
+
   // Helper to build hierarchy based on a subtask filter
-  const buildTree = (subtaskFilter: (sub: Subtask) => boolean) => {
+  const buildTree = (subtaskFilter: (sub: Subtask) => boolean, checkTask: (t: Task) => boolean) => {
     const woMap = new Map<string, { id: string; name: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
 
     tasks.forEach((task) => {
-      const subtasks = (task.subtasks || []).filter(sub => sub.isActive !== false && subtaskFilter(sub));
-      if (subtasks.length === 0) return;
+      const activeSubtasks = (task.subtasks || []).filter(sub => sub.isActive !== false);
+      const hasActiveSubtasks = activeSubtasks.length > 0;
+      
+      let subtasks: Subtask[] = [];
+      if (hasActiveSubtasks) {
+        subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
+        // If the task has active subtasks, but none match the filter, do not show this task
+        if (subtasks.length === 0) return;
+      } else {
+        // If the task has no active subtasks, only show it if the task itself matches the filter criteria
+        if (!checkTask(task) || !checkDateMatch(task.dueDate)) return;
+      }
 
       const woId = task.workOrderId || 'general-wo';
       const woName = task.workOrderName || task.workOrderCode || 'งานทั่วไป';
@@ -94,37 +145,74 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
           subtasks: tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName))
         })).sort((a, b) => a.name.localeCompare(b.name));
 
-        const subtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
+        const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
+        const assignedSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.filter(sub => sub.assignees && sub.assignees.length > 0).length, 0);
         return {
           id: cat.id,
           name: cat.name,
           tasks: tasksArray,
-          subtaskCount
+          totalSubtaskCount,
+          assignedSubtaskCount
         };
-      }).filter(cat => cat.subtaskCount > 0).sort((a, b) => a.name.localeCompare(b.name));
+      }).filter(cat => cat.tasks.length > 0).sort((a, b) => a.name.localeCompare(b.name));
 
-      const subtaskCount = categoriesArray.reduce((sum, c) => sum + c.subtaskCount, 0);
+      const totalSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.totalSubtaskCount, 0);
+      const assignedSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.assignedSubtaskCount, 0);
       return {
         id: wo.id,
         name: wo.name,
         categories: categoriesArray,
-        subtaskCount
+        totalSubtaskCount,
+        assignedSubtaskCount
       };
-    }).filter(wo => wo.subtaskCount > 0).sort((a, b) => a.name.localeCompare(b.name));
+    }).filter(wo => wo.categories.length > 0).sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const mainTree = useMemo(() => {
     if (!isWH) {
       // สำหรับผู้ใช้ที่ไม่ใช่ WH (เช่น Site User) แสดงงานย่อยทั้งหมดรวมถึงงานช่วยเหลือในหมวดหลัก
-      return buildTree(() => true);
+      return buildTree(() => true, () => true);
     }
-    return buildTree(sub => !sub.isSupportRequest);
-  }, [tasks, isWH]);
+    return buildTree(sub => !sub.isSupportRequest, task => !task.isSupportRequest);
+  }, [tasks, isWH, activeTab]);
 
   const supportTree = useMemo(() => {
     if (!isWH) return [];
-    return buildTree(sub => !!sub.isSupportRequest);
-  }, [tasks, isWH]);
+    return buildTree(sub => !!sub.isSupportRequest, task => !!task.isSupportRequest);
+  }, [tasks, isWH, activeTab]);
+
+  const totalAll = useMemo(() => {
+    let total = 0;
+    let assigned = 0;
+    
+    mainTree.forEach(wo => {
+      wo.categories.forEach(cat => {
+        cat.tasks.forEach(t => {
+          t.subtasks.forEach(sub => {
+            total++;
+            if (sub.assignees && sub.assignees.length > 0) {
+              assigned++;
+            }
+          });
+        });
+      });
+    });
+
+    supportTree.forEach(wo => {
+      wo.categories.forEach(cat => {
+        cat.tasks.forEach(t => {
+          t.subtasks.forEach(sub => {
+            total++;
+            if (sub.assignees && sub.assignees.length > 0) {
+              assigned++;
+            }
+          });
+        });
+      });
+    });
+    
+    return { assigned, total };
+  }, [mainTree, supportTree]);
 
 
   const isAllSelected = selectedNode === null || selectedNode.type === 'all';
@@ -227,7 +315,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                 fontWeight: 700,
               }}
             >
-              {wo.subtaskCount}
+              {`${wo.assignedSubtaskCount}/${wo.totalSubtaskCount}`}
             </Box>
           </Box>
 
@@ -331,7 +419,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                           fontWeight: 700,
                         }}
                       >
-                        {category.subtaskCount}
+                        {`${category.assignedSubtaskCount}/${category.totalSubtaskCount}`}
                       </Box>
                     </Box>
 
@@ -377,11 +465,6 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                   {isTaskExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
                                 </IconButton>
                                 <Assignment sx={{ fontSize: 14, mr: 0.75, color: isTaskSelected ? '#22c55e' : '#6b7280' }} />
-                                {tItem.task.assignees && tItem.task.assignees.length > 0 && (
-                                  <Tooltip title={`ผู้รับผิดชอบ: ${tItem.task.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
-                                    <Person sx={{ fontSize: 14, color: '#3b82f6', mr: 0.5 }} />
-                                  </Tooltip>
-                                )}
                                 <Typography
                                   variant="body2"
                                   noWrap
@@ -446,7 +529,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                       fontWeight: 700,
                                     }}
                                   >
-                                    {subtasks.length}
+                                    {`${subtasks.filter((sub: Subtask) => sub.assignees && sub.assignees.length > 0).length}/${subtasks.length}`}
                                   </Box>
                                 </Stack>
                               </Box>
@@ -474,6 +557,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                       }}
                                     >
                                       <Circle sx={{ fontSize: 5, mr: 1, color: '#94a3b8' }} />
+                                      {subtask.assignees && subtask.assignees.length > 0 && (
+                                        <Tooltip title={`ผู้รับผิดชอบ: ${subtask.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
+                                          <Person sx={{ fontSize: 13, color: '#3b82f6', mr: 0.5 }} />
+                                        </Tooltip>
+                                      )}
                                       <Typography
                                         variant="caption"
                                         noWrap
@@ -485,22 +573,44 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                       >
                                         {subtask.subtaskName}
                                       </Typography>
-                                      {subtask.dailyProgress > 0 && (
-                                        <Typography
-                                          variant="caption"
-                                          sx={{
-                                            fontSize: '0.6rem',
-                                            fontWeight: 700,
-                                            color: subtask.dailyProgress >= 100 ? '#10b981' : '#6366f1',
-                                            bgcolor: subtask.dailyProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
-                                            px: 0.6,
-                                            py: 0.05,
-                                            borderRadius: '3px',
-                                          }}
-                                        >
-                                          {subtask.dailyProgress}%
-                                        </Typography>
-                                      )}
+
+                                      <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        {(!subtask.assignees || subtask.assignees.length === 0) && onQuickAssignSubtask && (
+                                          <Tooltip title="มอบหมายงานย่อยด่วน" arrow>
+                                            <IconButton
+                                              size="small"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onQuickAssignSubtask(tItem.task, subtask);
+                                              }}
+                                              sx={{
+                                                p: 0.1,
+                                                color: '#3b82f6',
+                                                '&:hover': { bgcolor: '#eff6ff' },
+                                              }}
+                                            >
+                                              <AddIcon sx={{ fontSize: 13 }} />
+                                            </IconButton>
+                                          </Tooltip>
+                                        )}
+
+                                        {subtask.dailyProgress > 0 && (
+                                          <Typography
+                                            variant="caption"
+                                            sx={{
+                                              fontSize: '0.6rem',
+                                              fontWeight: 700,
+                                              color: subtask.dailyProgress >= 100 ? '#10b981' : '#6366f1',
+                                              bgcolor: subtask.dailyProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
+                                              px: 0.6,
+                                              py: 0.05,
+                                              borderRadius: '3px',
+                                            }}
+                                          >
+                                            {subtask.dailyProgress}%
+                                          </Typography>
+                                        )}
+                                      </Stack>
                                     </Box>
                                   ))}
                                   {subtasks.length === 0 && (
@@ -582,7 +692,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
               fontWeight: 700,
             }}
           >
-            {tasks.reduce((sum, t) => sum + (t.subtasks?.length || 0), 0)}
+            {`${totalAll.assigned}/${totalAll.total}`}
           </Box>
         </Box>
 

@@ -20,22 +20,38 @@ import {
   CircularProgress,
   Checkbox,
   FormControlLabel,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  ToggleButton,
+  ToggleButtonGroup,
+  Divider,
+  Grid,
+  Paper,
 } from '@mui/material';
 import {
   Add as AddIcon,
   TableChart as TableChartIcon,
   Menu as MenuIcon,
   HelpOutline as HelpOutlineIcon,
+  ArrowForward as ArrowForwardIcon,
+  History as HistoryIcon,
+  ExpandMore as ExpandMoreIcon,
+  Visibility as VisibilityIcon,
+  Schedule as ScheduleIcon,
+  AccessTime as AccessTimeIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { format, isValid } from 'date-fns';
 import Layout from '@/components/layout/Layout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
-import { taskService, type Task, type Subtask, type TaskAssignee } from '@/services/taskService';
+import { taskService, type Task, type Subtask, type TaskAssignee, type EditHistoryRecord } from '@/services/taskService';
 import { projectConfigService } from '@/services/projectConfigService';
 import { projectService } from '@/services/projectService';
 import { DatePicker } from '@/components/forms/DatePicker';
@@ -121,6 +137,16 @@ export default function WorkspacePage() {
   const [fmUsers, setFmUsers] = useState<any[]>([]);
   const [fetchingFms, setFetchingFms] = useState(false);
   const [quickCreateError, setQuickCreateError] = useState('');
+  const [quickAssignSubtask, setQuickAssignSubtask] = useState<Subtask | null>(null);
+  const [isQuickAssignMode, setIsQuickAssignMode] = useState(false);
+
+  // Subtask History modal state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historySubtaskCard, setHistorySubtaskCard] = useState<Task | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [subtaskReports, setSubtaskReports] = useState<any[]>([]);
+  const [activeHistoryTab, setActiveHistoryTab] = useState<'report' | 'settings'>('report');
+  const [usersMap, setUsersMap] = useState<Record<string, string>>({});
 
   // Subtask Edit state
   const [isSubtaskEditOpen, setIsSubtaskEditOpen] = useState(false);
@@ -234,8 +260,31 @@ export default function WorkspacePage() {
             subtasks: allowedSubtasks,
           };
         })
-        // กรองเอาเฉพาะ Task ที่ยังมี subtasks เหลืออยู่หลังจากกรองสิทธิ์แล้ว
-        .filter((t) => t.subtasks && t.subtasks.length > 0);
+        // กรองเอาเฉพาะ Task ที่ได้รับสิทธิ์เข้าถึงตามบทบาท (รองรับงานที่ไม่มี subtask)
+        .filter((t) => {
+          const isMyProject = userProjectIds.includes(t.projectId);
+          
+          // ตรวจสอบว่า Task ดั้งเดิมมี subtask หรือไม่
+          const originalTask = allTasks.find(x => x.id === t.id);
+          const hadSubtasks = originalTask && originalTask.subtasks && originalTask.subtasks.length > 0;
+          
+          if (hadSubtasks) {
+            // ถ้าดั้งเดิมมี subtask ต้องมี allowedSubtasks เหลืออยู่ถึงจะแสดง
+            return t.subtasks && t.subtasks.length > 0;
+          }
+          
+          // ถ้าดั้งเดิมไม่มี subtask เลย
+          // ให้ใช้สิทธิ์การเห็นที่ระดับตัว Task เอง
+          if (!isWH) {
+            // 1. Site User
+            if (isMyProject) return true;
+            return t.createdBy === user?.id || t.createdBy === user?.employeeId;
+          } else {
+            // 2. WH User
+            if (isMyProject) return true;
+            return !!t.isSupportRequest;
+          }
+        });
     },
     [user]
   );
@@ -749,6 +798,20 @@ export default function WorkspacePage() {
     setQuickAssignees([]);
     setQuickDueDate(null);
     setQuickCreateError('');
+    setQuickAssignSubtask(null);
+    setIsQuickAssignMode(false);
+    setIsQuickCreateOpen(true);
+  };
+
+  // Quick assign subtask handler
+  const handleQuickAssignSubtaskClick = (task: Task, subtask: Subtask) => {
+    setQuickCreateTaskId(task.id);
+    setQuickSubtaskName(subtask.subtaskName);
+    setQuickAssignees(subtask.assignees || []);
+    setQuickDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
+    setQuickCreateError('');
+    setQuickAssignSubtask(subtask);
+    setIsQuickAssignMode(true);
     setIsQuickCreateOpen(true);
   };
 
@@ -769,6 +832,27 @@ export default function WorkspacePage() {
       fetchFms();
     }
   }, [isQuickCreateOpen, isSubtaskEditOpen]);
+
+  // Fetch all users to resolve names in edit history
+  useEffect(() => {
+    if (isHistoryOpen && Object.keys(usersMap).length === 0) {
+      const fetchUsers = async () => {
+        try {
+          const res = await memberService.getAllUsers({ pageSize: 1000 });
+          const mapping: Record<string, string> = {};
+          if (res && res.users) {
+            res.users.forEach((u: any) => {
+              mapping[u.id] = u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || u.id;
+            });
+          }
+          setUsersMap(mapping);
+        } catch (err) {
+          console.error('Failed to fetch users for history mapping', err);
+        }
+      };
+      fetchUsers();
+    }
+  }, [isHistoryOpen, usersMap]);
 
   // Filter FMs strictly by the parent task's project
   const filteredFms = useMemo(() => {
@@ -809,10 +893,6 @@ export default function WorkspacePage() {
       setQuickCreateError('กรุณากรอกชื่องานย่อย');
       return;
     }
-    if (quickAssignees.length === 0) {
-      setQuickCreateError('กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน');
-      return;
-    }
     if (!quickDueDate) {
       setQuickCreateError('กรุณาเลือกวันที่ครบกำหนดสำหรับงานย่อย');
       return;
@@ -820,20 +900,57 @@ export default function WorkspacePage() {
 
     try {
       showLoading();
-      await taskService.createSubtask(quickCreateTaskId, quickSubtaskName.trim(), quickAssignees, quickDueDate);
+      if (isQuickAssignMode && quickAssignSubtask) {
+        await taskService.updateSubtask(
+          quickCreateTaskId,
+          quickAssignSubtask.id,
+          {
+            subtaskName: quickSubtaskName.trim(),
+            assignees: quickAssignees,
+            dueDate: quickDueDate,
+            isSupportRequest: quickAssignSubtask.isSupportRequest,
+          }
+        );
+        toast.success('มอบหมายงานย่อยสำเร็จแล้ว');
+      } else {
+        await taskService.createSubtask(quickCreateTaskId, quickSubtaskName.trim(), quickAssignees, quickDueDate);
+        toast.success('สร้างรายการงานย่อยสำเร็จแล้ว');
+      }
       setIsQuickCreateOpen(false);
       setQuickSubtaskName('');
       setQuickAssignees([]);
       setQuickDueDate(null);
       setQuickCreateError('');
+      setQuickAssignSubtask(null);
+      setIsQuickAssignMode(false);
       invalidateCache();
-      toast.success('สร้างรายการงานย่อยสำเร็จแล้ว');
       await fetchFromAPI(true);
     } catch (err: any) {
-      console.error('Failed to quick-create subtask', err);
-      setQuickCreateError(err.response?.data?.message || 'ไม่สามารถสร้างงานย่อยได้');
+      console.error('Failed to quick-create/assign subtask', err);
+      setQuickCreateError(err.response?.data?.message || 'ไม่สามารถบันทึกข้อมูลได้');
     } finally {
       hideLoading();
+    }
+  };
+
+  // Subtask history handler
+  const handleViewHistoryClick = async (subtaskCard: Task) => {
+    setHistorySubtaskCard(subtaskCard);
+    setIsHistoryOpen(true);
+    setHistoryLoading(true);
+    setActiveHistoryTab('report');
+    try {
+      const isWH = user?.department === 'WH';
+      const isSupportCard = !!subtaskCard.isSupportRequest || !!subtaskCard.isPickedUpBySupport;
+      const querySupport = isSupportCard ? isWH : false;
+      const reports = await taskService.getAllDailyReports(subtaskCard.id, querySupport);
+      setSubtaskReports(reports || []);
+    } catch (err) {
+      console.error('Failed to fetch subtask daily reports history', err);
+      toast.show('ไม่สามารถดึงข้อมูลรายงานความคืบหน้าย้อนหลังได้', 'error');
+      setSubtaskReports([]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -882,10 +999,12 @@ export default function WorkspacePage() {
               onSelectNode={setSelectedNode}
               onSubtaskClick={handleSubtaskClickInTree}
               onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
+              onQuickAssignSubtask={canEditWorkspace ? handleQuickAssignSubtaskClick : undefined}
               onEditWorkOrder={canEditWorkspace ? handleEditWorkOrderOpen : undefined}
               onDeleteWorkOrder={canEditWorkspace ? handleDeleteWorkOrderOpen : undefined}
               onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
               onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
+              activeTab={activeTab}
             />
           </Box>
         </Box>
@@ -1021,26 +1140,26 @@ export default function WorkspacePage() {
                 sx={{ width: { xs: '100%', md: 'auto' } }}
               >
                 <Button
-                  variant="outlined"
-                  startIcon={<TableChartIcon />}
+                  variant="contained"
+                  endIcon={<ArrowForwardIcon />}
                   onClick={() => router.push('/workspace/requests')}
                   sx={{
-                    borderColor: '#1c1e2b',
-                    color: '#1c1e2b',
+                    bgcolor: '#1c1e2b',
+                    color: '#fff',
                     borderRadius: '999px',
-                    px: 3,
+                    px: 3.5,
                     py: 1.2,
                     textTransform: 'none',
                     fontWeight: 700,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                    boxShadow: '0 4px 14px rgba(28, 30, 43, 0.25)',
                     '&:hover': {
-                      bgcolor: 'rgba(28, 30, 43, 0.05)',
-                      borderColor: '#000000',
+                      bgcolor: '#000000',
+                      boxShadow: '0 6px 20px rgba(0, 0, 0, 0.3)',
                     },
                     width: '100%',
                   }}
                 >
-                  ตรวจสอบกำลังพล & แผนงาน
+                  กำลังพล & แผนงาน
                 </Button>
               </Stack>
             </Stack>
@@ -1159,6 +1278,7 @@ export default function WorkspacePage() {
                             task={task}
                             onEdit={canEditWorkspace ? handleEdit : undefined}
                             onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                            onViewHistory={handleViewHistoryClick}
                             onClick={handleSubtaskCardClick}
                             hasUnread={!!hasUnread}
                           />
@@ -1211,6 +1331,11 @@ export default function WorkspacePage() {
               handleQuickCreateSubtaskClick(taskId);
               setMobileDrawerOpen(false);
             } : undefined}
+            onQuickAssignSubtask={canEditWorkspace ? (t, st) => {
+              handleQuickAssignSubtaskClick(t, st);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            activeTab={activeTab}
           />
         </Box>
       </Drawer>
@@ -1218,14 +1343,20 @@ export default function WorkspacePage() {
       {/* Quick Create Subtask Dialog */}
       <Dialog
         open={isQuickCreateOpen}
-        onClose={() => setIsQuickCreateOpen(false)}
+        onClose={() => {
+          setIsQuickCreateOpen(false);
+          setQuickAssignSubtask(null);
+          setIsQuickAssignMode(false);
+        }}
         maxWidth="xs"
         fullWidth
         PaperProps={{
           sx: { borderRadius: 4, p: 1 },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800 }}>สร้างงานย่อยด่วน (Quick Subtask)</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          {isQuickAssignMode ? 'มอบหมายงานย่อย (Assign Subtask)' : 'สร้างงานย่อยด่วน (Quick Subtask)'}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
             {quickCreateError && (
@@ -1240,8 +1371,33 @@ export default function WorkspacePage() {
               fullWidth
               value={quickSubtaskName}
               onChange={(e) => setQuickSubtaskName(e.target.value)}
+              disabled={isQuickAssignMode}
               InputProps={{ disableUnderline: true }}
               sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            <DatePicker
+              label="วันที่ครบกำหนด *"
+              value={quickDueDate}
+              onChange={(date) => setQuickDueDate(date)}
+              disabled={isQuickAssignMode}
+              variant="filled"
+              InputProps={{
+                disableUnderline: true,
+                sx: {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none !important' },
+                }
+              }}
+              sx={{
+                width: '100%',
                 '& .MuiFilledInput-root': {
                   borderRadius: 2,
                   bgcolor: '#f1f5f9',
@@ -1284,7 +1440,7 @@ export default function WorkspacePage() {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="ผู้รับผิดชอบ *"
+                    label="ผู้รับผิดชอบ"
                     variant="filled"
                     InputProps={{ ...params.InputProps, disableUnderline: true }}
                     sx={{
@@ -1298,33 +1454,17 @@ export default function WorkspacePage() {
                 )}
               />
             )}
-
-            <DatePicker
-              label="วันที่ครบกำหนด *"
-              value={quickDueDate}
-              onChange={(date) => setQuickDueDate(date)}
-              variant="filled"
-              InputProps={{
-                disableUnderline: true,
-                sx: {
-                  borderRadius: 2,
-                  bgcolor: '#f1f5f9',
-                  '&::before, &::after': { display: 'none !important' },
-                }
-              }}
-              sx={{
-                width: '100%',
-                '& .MuiFilledInput-root': {
-                  borderRadius: 2,
-                  bgcolor: '#f1f5f9',
-                  '&::before, &::after': { display: 'none' },
-                },
-              }}
-            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setIsQuickCreateOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+          <Button
+            onClick={() => {
+              setIsQuickCreateOpen(false);
+              setQuickAssignSubtask(null);
+              setIsQuickAssignMode(false);
+            }}
+            sx={{ color: 'text.secondary', fontWeight: 700 }}
+          >
             ยกเลิก
           </Button>
           <Button
@@ -1339,7 +1479,343 @@ export default function WorkspacePage() {
               '&:hover': { bgcolor: '#000000' },
             }}
           >
-            สร้างงานย่อย
+            {isQuickAssignMode ? 'บันทึก' : 'สร้างงานย่อย'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Subtask History Dialog */}
+      <Dialog
+        open={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: '20px', bgcolor: '#1c1e2b', color: '#fff', p: 2 },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff' }}>
+              ประวัติการบันทึก/แก้ไข
+            </Typography>
+            <IconButton onClick={() => setIsHistoryOpen(false)} sx={{ color: 'rgba(255,255,255,0.6)' }}>
+              ✕
+            </IconButton>
+          </Stack>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
+            {historySubtaskCard?.subtaskName}
+          </Typography>
+        </DialogTitle>
+        <Divider sx={{ my: 1.5, bgcolor: 'rgba(255,255,255,0.1)' }} />
+        <DialogContent sx={{ pt: 1, maxHeight: '60vh', overflowY: 'auto' }}>
+          <ToggleButtonGroup
+            value={activeHistoryTab}
+            exclusive
+            onChange={(_, val) => val && setActiveHistoryTab(val)}
+            sx={{
+              width: '100%',
+              mb: 3,
+              bgcolor: 'rgba(255,255,255,0.05)',
+              borderRadius: '12px',
+              p: 0.5,
+              '& .MuiToggleButton-root': {
+                flex: 1,
+                border: 'none',
+                color: 'rgba(255,255,255,0.6)',
+                borderRadius: '8px',
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 700,
+                '&.Mui-selected': {
+                  bgcolor: '#3b82f6',
+                  color: '#fff',
+                  '&:hover': {
+                    bgcolor: '#2563eb',
+                  },
+                },
+              },
+            }}
+          >
+            <ToggleButton value="report">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <HistoryIcon sx={{ fontSize: 18 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>ประวัติรายงานความคืบหน้า</Typography>
+              </Stack>
+            </ToggleButton>
+            <ToggleButton value="settings">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <VisibilityIcon sx={{ fontSize: 18 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>ประวัติการแก้ไขตั้งค่า</Typography>
+              </Stack>
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          {historyLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress sx={{ color: '#3b82f6' }} />
+            </Box>
+          ) : activeHistoryTab === 'report' ? (
+            // Tab 1: Daily Reports History
+            (!subtaskReports || subtaskReports.length === 0) ? (
+              <Box sx={{ textAlign: 'center', py: 8, color: 'rgba(255,255,255,0.4)' }}>
+                <HistoryIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5, display: 'block', margin: '0 auto' }} />
+                <Typography variant="body2">ไม่มีประวัติรายงานความคืบหน้า</Typography>
+              </Box>
+            ) : (
+              <Stack spacing={0.5}>
+                {subtaskReports
+                  .slice()
+                  .sort((a: any, b: any) => {
+                    const dateA = parseSafeDate(a.reportDate)?.getTime() || 0;
+                    const dateB = parseSafeDate(b.reportDate)?.getTime() || 0;
+                    return dateB - dateA;
+                  })
+                  .map((report: any, index: number) => {
+                    const reportDate = parseSafeDate(report.reportDate);
+                    const dateStr = reportDate && isValid(reportDate) ? format(reportDate, 'dd/MM/yyyy') : 'ไม่ระบุวันที่';
+                    const reporterName = report.createdBy ? (usersMap[report.createdBy] || report.createdBy) : 'ไม่ระบุผู้รายงาน';
+                    const progressPercent = report.progress ?? 0;
+                    // เวลาบันทึก/อัปเดตรายงาน
+                    const recordedAt = parseSafeDate(report.updatedAt || report.createdAt);
+                    const recordedTimeStr = recordedAt && isValid(recordedAt) ? format(recordedAt, 'dd/MM/yyyy HH:mm') : null;
+                    const laborCount = Array.isArray(report.labor) ? report.labor.length : 0;
+
+                    return (
+                      <Accordion
+                        key={report.id || index}
+                        sx={{
+                          mb: 1.5,
+                          bgcolor: 'rgba(255, 255, 255, 0.03)',
+                          color: '#fff',
+                          borderRadius: '12px !important',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          boxShadow: 'none',
+                          '&::before': { display: 'none' },
+                          '&.Mui-expanded': {
+                            bgcolor: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                          },
+                        }}
+                      >
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreIcon sx={{ color: 'rgba(255,255,255,0.7)' }} />}
+                          sx={{
+                            px: 2.5,
+                            py: 1,
+                            '& .MuiAccordionSummary-content': {
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: 1,
+                            },
+                          }}
+                        >
+                          <Stack spacing={0.5}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#fff' }}>
+                              📅 {dateStr}
+                            </Typography>
+                            <Stack direction="row" spacing={1.5} flexWrap="wrap" gap={0.5}>
+                              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <PeopleIcon sx={{ fontSize: 12 }} />
+                                ผู้รายงาน: <strong style={{ color: 'rgba(255,255,255,0.8)' }}>{reporterName}</strong>
+                              </Typography>
+                              {recordedTimeStr && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <ScheduleIcon sx={{ fontSize: 11 }} />
+                                  บันทึกเมื่อ: {recordedTimeStr} น.
+                                </Typography>
+                              )}
+                              {laborCount > 0 && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  👷 กำลังพล: {laborCount} คน
+                                </Typography>
+                              )}
+                            </Stack>
+                          </Stack>
+                          <Chip
+                            label={`ความคืบหน้า: ${progressPercent}%`}
+                            size="small"
+                            sx={{
+                              bgcolor: progressPercent === 100 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                              color: progressPercent === 100 ? '#10b981' : '#3b82f6',
+                              fontWeight: 700,
+                              border: '1px solid currentColor',
+                            }}
+                          />
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 1, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <Stack spacing={2}>
+                            {report.notes && (
+                              <Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                  📝 รายละเอียดงาน / บันทึกเพิ่มเติม
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#e2e8f0', bgcolor: 'rgba(0,0,0,0.15)', p: 1.5, borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
+                                  {report.notes}
+                                </Typography>
+                              </Box>
+                            )}
+
+                            {(report.otHours !== undefined || report.otMorningHours !== undefined || report.otEveningHours !== undefined) && (
+                              <Box sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '8px' }}>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                  ⏰ ชั่วโมงการทำงานล่วงเวลา (OT)
+                                </Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={4}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>OT เช้า</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{report.otMorningHours || 0} ชม.</Typography>
+                                  </Grid>
+                                  <Grid item xs={4}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>OT เย็น</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{report.otEveningHours || 0} ชม.</Typography>
+                                  </Grid>
+                                  <Grid item xs={4}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>OT เที่ยง</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{report.otHours || 0} ชม.</Typography>
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            )}
+
+                            {/* รายชื่อกำลังพลทั้งหมดในวันนั้น */}
+                            {Array.isArray(report.labor) && report.labor.length > 0 && (
+                              <LaborSummaryPanel labor={report.labor} />
+                            )}
+                            {/* ประวัติการแก้ไขรายงานวันนี้ */}
+                            {Array.isArray(report.editHistory) && report.editHistory.length > 0 && (
+                              <ReportEditHistoryPanel
+                                editHistory={report.editHistory}
+                                currentLabor={report.labor || []}
+                                currentLeave={report.leave || []}
+                                usersMap={usersMap}
+                              />
+                            )}
+                            {Array.isArray(report.attachments) && report.attachments.length > 0 && (
+                              <Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                  📎 ไฟล์แนบ ({report.attachments.length})
+                                </Typography>
+                                <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                                  {report.attachments.map((url: string, uIdx: number) => (
+                                    <Button
+                                      key={uIdx}
+                                      variant="outlined"
+                                      size="small"
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      sx={{
+                                        color: '#3b82f6',
+                                        borderColor: '#3b82f6',
+                                        textTransform: 'none',
+                                        borderRadius: '8px',
+                                        px: 1.5,
+                                        '&:hover': {
+                                          borderColor: '#2563eb',
+                                          bgcolor: 'rgba(59, 130, 246, 0.05)',
+                                        },
+                                      }}
+                                    >
+                                      ดูไฟล์แนบ #{uIdx + 1}
+                                    </Button>
+                                  ))}
+                                </Stack>
+                              </Box>
+                            )}
+                          </Stack>
+                        </AccordionDetails>
+                      </Accordion>
+                    );
+                  })}
+              </Stack>
+            )
+          ) : (
+            // Tab 2: Settings Revisions
+            (!historySubtaskCard?.editHistory || historySubtaskCard.editHistory.length === 0) ? (
+              <Box sx={{ textAlign: 'center', py: 8, color: 'rgba(255,255,255,0.4)' }}>
+                <VisibilityIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5, display: 'block', margin: '0 auto' }} />
+                <Typography variant="body2">ไม่มีประวัติการแก้ไขตั้งค่า</Typography>
+              </Box>
+            ) : (
+              <Stack spacing={2}>
+                {historySubtaskCard.editHistory
+                  .slice()
+                  .sort((a: EditHistoryRecord, b: EditHistoryRecord) => {
+                    const timeA = parseSafeDate(a.updatedAt)?.getTime() || 0;
+                    const timeB = parseSafeDate(b.updatedAt)?.getTime() || 0;
+                    return timeB - timeA;
+                  })
+                  .map((edit: EditHistoryRecord, idx: number) => {
+                    const editTime = parseSafeDate(edit.updatedAt);
+                    const timeStr = editTime && isValid(editTime) ? format(editTime, 'dd/MM/yyyy HH:mm') : 'ไม่ระบุเวลา';
+                    const editorName = edit.updatedBy ? (usersMap[edit.updatedBy] || edit.updatedBy) : 'ไม่ระบุผู้แก้ไข';
+                    
+                    return (
+                      <Paper
+                        key={idx}
+                        sx={{
+                          p: 2,
+                          bgcolor: 'rgba(255, 255, 255, 0.03)',
+                          color: '#fff',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                        }}
+                      >
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <ScheduleIcon sx={{ fontSize: 12 }} />
+                            {timeStr}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#3b82f6', fontWeight: 700 }}>
+                            ผู้แก้ไข: {editorName}
+                          </Typography>
+                        </Stack>
+                        
+                        <Stack spacing={1}>
+                          {(edit.changes || []).map((change: any, cidx: number) => {
+                            const label = getFieldNameThai(change.field);
+                            const oldText = formatFieldChange(change.field, change.oldValue, (uid) => usersMap[uid] || uid);
+                            const newText = formatFieldChange(change.field, change.newValue, (uid) => usersMap[uid] || uid);
+                            
+                            return (
+                              <Box key={cidx} sx={{ borderLeft: '3px solid #3b82f6', pl: 1.5, py: 0.5 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: 'rgba(255,255,255,0.8)', display: 'block' }}>
+                                  {label}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', fontSize: '0.7rem' }}>
+                                  จาก: {oldText}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#3b82f6', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>
+                                  เป็น: {newText}
+                                </Typography>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
+              </Stack>
+            )
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
+          <Button
+            onClick={() => setIsHistoryOpen(false)}
+            variant="contained"
+            sx={{
+              bgcolor: '#3b82f6',
+              color: '#fff',
+              fontWeight: 700,
+              px: 4,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#2563eb' },
+            }}
+          >
+            ปิดหน้าต่าง
           </Button>
         </DialogActions>
       </Dialog>
@@ -1868,5 +2344,633 @@ export default function WorkspacePage() {
       </Dialog>
       </Layout>
     </ProtectedRoute>
+  );
+}
+
+/**
+ * LaborSummaryPanel — collapsible panel showing all workers and their shifts
+ * for a given daily report. Uses its own state so hooks rules are respected.
+ */
+function LaborSummaryPanel({ labor }: { labor: any[] }) {
+  const [expanded, setExpanded] = React.useState(false);
+  return (
+    <Box
+      sx={{
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '10px',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Toggle header */}
+      <Box
+        onClick={() => setExpanded(prev => !prev)}
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          px: 2,
+          py: 1.25,
+          bgcolor: 'rgba(255,255,255,0.04)',
+          cursor: 'pointer',
+          userSelect: 'none',
+          '&:hover': { bgcolor: 'rgba(255,255,255,0.07)' },
+          transition: 'background 0.15s',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Box component="span" sx={{ fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+            👥
+          </Box>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
+            รายชื่อทั้งหมด ({labor.length} คน)
+          </Typography>
+        </Box>
+        <Box
+          component="span"
+          sx={{
+            fontSize: 18,
+            color: 'rgba(255,255,255,0.5)',
+            display: 'inline-flex',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s ease',
+          }}
+        >
+          ▾
+        </Box>
+      </Box>
+
+      {/* Worker list */}
+      {expanded && (
+        <Box sx={{ bgcolor: 'rgba(0,0,0,0.18)' }}>
+          {labor.map((w: any, wi: number) => {
+            const workerName = w.name || w.workerName || `แรงงาน #${wi + 1}`;
+            const shifts: string[] = [];
+            if (w.shiftTimes?.day) shifts.push(`ปกติ (${w.shiftTimes.day})`);
+            if (w.shiftTimes?.otMorning) shifts.push(`OT เช้า (${w.shiftTimes.otMorning})`);
+            if (w.shiftTimes?.otNoon) shifts.push(`OT เที่ยง (${w.shiftTimes.otNoon})`);
+            if (w.shiftTimes?.otEvening) shifts.push(`OT เย็น (${w.shiftTimes.otEvening})`);
+            const shiftStr = shifts.length > 0 ? shifts.join(' | ') : 'ไม่ได้ระบุเวลา';
+            return (
+              <Box
+                key={wi}
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  px: 2,
+                  py: 0.9,
+                  gap: 2,
+                  borderTop: wi === 0 ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.04)',
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 600, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.74rem' }}
+                >
+                  {workerName}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ color: 'rgba(255,255,255,0.45)', textAlign: 'right', fontSize: '0.68rem', lineHeight: 1.6 }}
+                >
+                  {shiftStr}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// Helper functions for Subtask History diffing and formatting
+const parseSafeDate = (val: any): Date | null => {
+  if (!val) return null;
+  let d: Date;
+  if (typeof val === 'object' && ('_seconds' in val || 'seconds' in val)) {
+    const secs = val._seconds || val.seconds;
+    d = new Date(secs * 1000);
+  } else {
+    d = new Date(val);
+  }
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const formatFieldChange = (field: string, val: any, resolveUser?: (uid: string) => string): string => {
+  if (val === null || val === undefined || val === '') return 'ไม่มีข้อมูล';
+  if (field === 'dueDate') {
+    const d = parseSafeDate(val);
+    if (d && isValid(d)) {
+      return format(d, 'dd/MM/yyyy');
+    }
+    return String(val);
+  }
+  if (field === 'isSupportRequest') {
+    return val ? 'เปิดขอความช่วยเหลือ (Support)' : 'ปิดการขอความช่วยเหลือ';
+  }
+  if (field === 'assignees') {
+    if (Array.isArray(val)) {
+      if (val.length === 0) return 'ไม่มีผู้รับผิดชอบ';
+      return val.map((a: any) => {
+        const id = typeof a === 'string' ? a : (a.userId || a.username || a.name || '');
+        if (resolveUser && id) {
+          return resolveUser(id);
+        }
+        return a.name || a.userId || a.username || 'ไม่ระบุ';
+      }).join(', ');
+    }
+    return String(val);
+  }
+  return String(val);
+};
+
+const getFieldNameThai = (field: string): string => {
+  const names: Record<string, string> = {
+    subtaskName: 'ชื่อภารกิจย่อย',
+    dueDate: 'วันครบกำหนด (Due Date)',
+    assignees: 'ผู้รับผิดชอบ (Assignees)',
+    isSupportRequest: 'สถานะขอความช่วยเหลือ (Support)',
+    progress: 'ความคืบหน้า (%)',
+    status: 'สถานะงาน',
+  };
+  return names[field] || field;
+};
+
+const getShiftText = (shiftTimes: any): string => {
+  if (!shiftTimes) return 'ไม่ได้ระบุเวลา';
+  const shifts: string[] = [];
+  if (shiftTimes.day) shifts.push(`ปกติ (${shiftTimes.day})`);
+  if (shiftTimes.otMorning) shifts.push(`OT เช้า (${shiftTimes.otMorning})`);
+  if (shiftTimes.otNoon) shifts.push(`OT เที่ยง (${shiftTimes.otNoon})`);
+  if (shiftTimes.otEvening) shifts.push(`OT เย็น (${shiftTimes.otEvening})`);
+  return shifts.length > 0 ? shifts.join(' | ') : 'ไม่ได้ระบุเวลา';
+};
+
+const getLeaveText = (lv: any): string => {
+  if (!lv) return '';
+  const labelMap: Record<string, string> = {
+    Sick: 'ลาป่วย',
+    Business: 'ลากิจ',
+    Vacation: 'ลาพักร้อน',
+    Unpaid: 'ลาไม่รับค่าจ้าง',
+    Paid: 'ลาได้รับค่าจ้าง'
+  };
+  return labelMap[lv.leaveType] || lv.leaveType || 'ไม่ระบุประเภท';
+};
+
+const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
+  // ฟังก์ชัน render worker card แบบละเอียด
+  const renderWorkerCard = (w: any, colorScheme: 'green' | 'red' | 'neutral') => {
+    const colors = {
+      green:   { bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.25)', name: '#a7f3d0', shift: 'rgba(167,243,208,0.75)' },
+      red:     { bg: 'rgba(239, 68, 68, 0.08)',   border: 'rgba(239, 68, 68, 0.25)',   name: '#fca5a5', shift: 'rgba(252,165,165,0.75)' },
+      neutral: { bg: 'rgba(255,255,255,0.04)',     border: 'rgba(255,255,255,0.1)',     name: 'rgba(255,255,255,0.85)', shift: 'rgba(255,255,255,0.55)' },
+    }[colorScheme];
+    const name = w.name || w.workerName || 'ไม่ระบุชื่อ';
+    const shiftStr = getShiftText(w.shiftTimes);
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '8px', px: 1.5, py: 0.75 }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: colors.name, fontSize: '0.75rem' }}>
+          👷 {name}
+        </Typography>
+        <Typography variant="caption" sx={{ color: colors.shift, fontSize: '0.68rem', textAlign: 'right', ml: 1 }}>
+          ⏱ {shiftStr}
+        </Typography>
+      </Box>
+    );
+  };
+
+  if (!prevLabor) {
+    // รายงานครั้งแรก — แสดงรายชื่อกำลังพลทั้งหมดพร้อมกะ
+    return (
+      <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(16, 185, 129, 0.07)', borderRadius: '8px', border: '1px dashed rgba(16,185,129,0.4)' }}>
+        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: currentLabor.length > 0 ? 1 : 0 }}>
+          📝 บันทึกรายงานกำลังพลเริ่มต้น — {currentLabor.length} คน
+        </Typography>
+        {currentLabor.length > 0 ? (
+          <Stack spacing={0.5}>
+            {currentLabor.map((w: any, i: number) => renderWorkerCard(w, 'green'))}
+          </Stack>
+        ) : (
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontStyle: 'italic' }}>
+            ไม่มีข้อมูลกำลังพล
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+
+  const currentMap = new Map<string, any>();
+  currentLabor.forEach(w => {
+    const name = w.name || w.workerName || '';
+    if (name) currentMap.set(name, w);
+  });
+
+  const prevMap = new Map<string, any>();
+  prevLabor.forEach(w => {
+    const name = w.name || w.workerName || '';
+    if (name) prevMap.set(name, w);
+  });
+
+  const added: any[] = [];
+  const removed: any[] = [];
+  const modified: { name: string; prevShifts: string; currShifts: string }[] = [];
+
+  currentMap.forEach((currWorker, name) => {
+    const prevWorker = prevMap.get(name);
+    if (!prevWorker) {
+      added.push(currWorker);
+    } else {
+      const prevShifts = getShiftText(prevWorker.shiftTimes);
+      const currShifts = getShiftText(currWorker.shiftTimes);
+      if (prevShifts !== currShifts) {
+        modified.push({ name, prevShifts, currShifts });
+      }
+    }
+  });
+
+  prevMap.forEach((prevWorker, name) => {
+    if (!currentMap.has(name)) {
+      removed.push(prevWorker);
+    }
+  });
+
+  const hasChanges = added.length > 0 || removed.length > 0 || modified.length > 0;
+
+  if (!hasChanges) {
+    return (
+      <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', fontStyle: 'italic' }}>
+          ไม่มีการเปลี่ยนแปลงข้อมูลกำลังพล (แก้ไขส่วนอื่น เช่น รายละเอียดงาน หรือใบแนบ)
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Stack spacing={1} sx={{ mt: 1 }}>
+      {added.length > 0 && (
+        <Box sx={{ p: 1.5, bgcolor: 'rgba(16, 185, 129, 0.07)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+          <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            ➕ เพิ่มกำลังพล ({added.length} คน)
+          </Typography>
+          <Stack spacing={0.5}>
+            {added.map((w, i) => <React.Fragment key={i}>{renderWorkerCard(w, 'green')}</React.Fragment>)}
+          </Stack>
+        </Box>
+      )}
+
+      {removed.length > 0 && (
+        <Box sx={{ p: 1.5, bgcolor: 'rgba(239, 68, 68, 0.07)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+          <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            ➖ ลบกำลังพลออก ({removed.length} คน)
+          </Typography>
+          <Stack spacing={0.5}>
+            {removed.map((w, i) => <React.Fragment key={i}>{renderWorkerCard(w, 'red')}</React.Fragment>)}
+          </Stack>
+        </Box>
+      )}
+
+      {modified.length > 0 && (
+        <Box sx={{ p: 1.5, bgcolor: 'rgba(245, 158, 11, 0.07)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+          <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.75 }}>
+            📝 แก้ไขเวลาทำงาน ({modified.length} คน)
+          </Typography>
+          <Stack spacing={1}>
+            {modified.map((w, i) => (
+              <Box key={i} sx={{ bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px', px: 1.5, py: 1 }}>
+                <Typography variant="caption" sx={{ color: '#fef3c7', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                  👷 {w.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(252,211,77,0.7)', display: 'block', fontSize: '0.68rem' }}>
+                  จาก: {w.prevShifts}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', fontSize: '0.68rem', fontWeight: 600 }}>
+                  เป็น: {w.currShifts}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </Stack>
+  );
+};
+
+const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
+  if (!Array.isArray(currentLeave)) return null;
+  const prevList = Array.isArray(prevLeave) ? prevLeave : [];
+
+  const currentMap = new Map<string, any>();
+  currentLeave.forEach(lv => {
+    const name = lv.name || lv.workerName || '';
+    if (name) currentMap.set(name, lv);
+  });
+
+  const prevMap = new Map<string, any>();
+  prevList.forEach(lv => {
+    const name = lv.name || lv.workerName || '';
+    if (name) prevMap.set(name, lv);
+  });
+
+  const added: any[] = [];
+  const removed: any[] = [];
+  const modified: { name: string; prevType: string; currType: string }[] = [];
+
+  currentMap.forEach((currLeave, name) => {
+    const prevLeaveItem = prevMap.get(name);
+    if (!prevLeaveItem) {
+      added.push(currLeave);
+    } else if (currLeave.leaveType !== prevLeaveItem.leaveType) {
+      modified.push({
+        name,
+        prevType: getLeaveText(prevLeaveItem),
+        currType: getLeaveText(currLeave)
+      });
+    }
+  });
+
+  prevMap.forEach((prevLeaveItem, name) => {
+    if (!currentMap.has(name)) {
+      removed.push(prevLeaveItem);
+    }
+  });
+
+  if (added.length === 0 && removed.length === 0 && modified.length === 0) return null;
+
+  return (
+    <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+      <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+        ℹ️ การขอลาหยุด ({added.length + removed.length + modified.length} รายการ)
+      </Typography>
+      <Stack spacing={0.5}>
+        {added.map((lv, i) => (
+          <Typography key={i} variant="caption" sx={{ color: '#ddd6fe', display: 'block' }}>
+            • เพิ่มลาหยุด: <strong>{lv.name || lv.workerName}</strong> ({getLeaveText(lv)})
+          </Typography>
+        ))}
+        {removed.map((lv, i) => (
+          <Typography key={i} variant="caption" sx={{ color: '#c4b5fd', display: 'block' }}>
+            • ยกเลิกลาหยุด: <strong>{lv.name || lv.workerName}</strong> (เดิม: {getLeaveText(lv)})
+          </Typography>
+        ))}
+        {modified.map((lv, i) => (
+          <Typography key={i} variant="caption" sx={{ color: '#c4b5fd', display: 'block' }}>
+            • เปลี่ยนประเภทลา: <strong>{lv.name}</strong> จาก {lv.prevType} เป็น {lv.currType}
+          </Typography>
+        ))}
+      </Stack>
+    </Box>
+  );
+};
+
+/**
+ * ReportEditHistoryPanel
+ * แสดงประวัติการแก้ไขรายงานประจำวัน (กรณี FM บันทึกแล้วกลับมาแก้ไขวันเดิม)
+ * ใช้ข้อมูลจาก dailyReport.editHistory[] ซึ่ง backend push snapshot ก่อนแก้ทุกครั้ง
+ *
+ * Timeline (เก่า→ใหม่):
+ *   editHistory[0].snapshot = สภาพ labor ก่อนแก้ครั้งที่ 1
+ *   editHistory[N].snapshot = สภาพ labor ก่อนแก้ครั้งสุดท้าย → หลัง = currentLabor
+ */
+function ReportEditHistoryPanel({
+  editHistory,
+  currentLabor,
+  currentLeave,
+  usersMap,
+}: {
+  editHistory: any[];
+  currentLabor: any[];
+  currentLeave: any[];
+  usersMap: Record<string, string>;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  // เรียง editHistory จากเก่า→ใหม่ก่อน เพื่อคำนวณ before/after
+  const sorted = [...editHistory].sort((a, b) => {
+    const toTs = (v: any) => {
+      if (!v) return 0;
+      if (typeof v === 'object' && ('_seconds' in v || 'seconds' in v)) return (v._seconds ?? v.seconds) * 1000;
+      return new Date(v).getTime();
+    };
+    return toTs(a.editedAt) - toTs(b.editedAt);
+  });
+
+  const parseTs = (v: any): Date | null => {
+    if (!v) return null;
+    if (typeof v === 'object' && ('_seconds' in v || 'seconds' in v)) return new Date((v._seconds ?? v.seconds) * 1000);
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // สร้าง timeline entries
+  const entries = sorted.map((entry, i) => {
+    const beforeLabor: any[] = entry.snapshot?.labor || [];
+    const beforeLeave: any[] = entry.snapshot?.leave || [];
+    const afterLabor: any[] = i < sorted.length - 1 ? (sorted[i + 1].snapshot?.labor || []) : currentLabor;
+    const afterLeave: any[] = i < sorted.length - 1 ? (sorted[i + 1].snapshot?.leave || []) : currentLeave;
+
+    const d = parseTs(entry.editedAt);
+    const timeStr = d ? format(d, 'dd/MM/yyyy HH:mm') : 'ไม่ระบุเวลา';
+    const editorName = entry.editedBy ? (usersMap[entry.editedBy] || entry.editedBy) : 'ไม่ระบุผู้แก้ไข';
+    return { timeStr, editorName, beforeLabor, afterLabor, beforeLeave, afterLeave, round: i + 1 };
+  });
+
+  // แสดงใหม่สุดก่อน
+  const displayEntries = [...entries].reverse();
+
+  const calcLaborDiff = (after: any[], before: any[]) => {
+    const bMap = new Map<string, any>();
+    before.forEach(w => { const n = w.name || w.workerName || ''; if (n) bMap.set(n, w); });
+    const aMap = new Map<string, any>();
+    after.forEach(w => { const n = w.name || w.workerName || ''; if (n) aMap.set(n, w); });
+    const added: any[] = [], removed: any[] = [], modified: { name: string; from: string; to: string }[] = [];
+    aMap.forEach((w, name) => {
+      if (!bMap.has(name)) { added.push(w); }
+      else {
+        const shiftFn = (st: any) => {
+          if (!st) return 'ไม่ได้ระบุเวลา';
+          const parts: string[] = [];
+          if (st.day) parts.push(`ปกติ (${st.day})`);
+          if (st.otMorning) parts.push(`OT เช้า (${st.otMorning})`);
+          if (st.otNoon) parts.push(`OT เที่ยง (${st.otNoon})`);
+          if (st.otEvening) parts.push(`OT เย็น (${st.otEvening})`);
+          return parts.length > 0 ? parts.join(' | ') : 'ไม่ได้ระบุเวลา';
+        };
+        const fromStr = shiftFn(bMap.get(name)?.shiftTimes);
+        const toStr = shiftFn(w.shiftTimes);
+        if (fromStr !== toStr) modified.push({ name, from: fromStr, to: toStr });
+      }
+    });
+    bMap.forEach((w, name) => { if (!aMap.has(name)) removed.push(w); });
+    return { added, removed, modified };
+  };
+
+  const calcLeaveChanges = (after: any[], before: any[]) => {
+    const leaveLabel = (t: string) => ({ Sick: 'ลาป่วย', Business: 'ลากิจ', Vacation: 'ลาพักร้อน', Unpaid: 'ลาไม่รับค่าจ้าง', Paid: 'ลาได้รับค่าจ้าง' }[t] || t);
+    const bMap = new Map<string, any>();
+    before.forEach(lv => { const n = lv.name || lv.workerName || ''; if (n) bMap.set(n, lv); });
+    const aMap = new Map<string, any>();
+    after.forEach(lv => { const n = lv.name || lv.workerName || ''; if (n) aMap.set(n, lv); });
+    const changes: string[] = [];
+    aMap.forEach((lv, name) => { if (!bMap.has(name)) changes.push(`➕ ${name} (${leaveLabel(lv.leaveType)})`); });
+    bMap.forEach((lv, name) => { if (!aMap.has(name)) changes.push(`➖ ${name} (${leaveLabel(lv.leaveType)})`); });
+    return changes;
+  };
+
+  return (
+    <Box sx={{ border: '1px solid rgba(251,191,36,0.25)', borderRadius: '10px', overflow: 'hidden' }}>
+      {/* Toggle header */}
+      <Box
+        onClick={() => setExpanded(p => !p)}
+        sx={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          px: 2, py: 1.25, cursor: 'pointer', userSelect: 'none',
+          bgcolor: 'rgba(251,191,36,0.07)',
+          '&:hover': { bgcolor: 'rgba(251,191,36,0.13)' },
+          transition: 'background 0.15s',
+        }}
+      >
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box component="span" sx={{ fontSize: 14 }}>⏱</Box>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#fbbf24' }}>
+            ประวัติการแก้ไขรายงานวันนี้ ({editHistory.length} ครั้ง)
+          </Typography>
+        </Stack>
+        <Box
+          component="span"
+          sx={{
+            fontSize: 16, color: 'rgba(251,191,36,0.6)',
+            transform: expanded ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.2s', display: 'inline-flex',
+          }}
+        >
+          ▾
+        </Box>
+      </Box>
+
+      {/* Edit entries */}
+      {expanded && (
+        <Stack divider={<Box sx={{ borderTop: '1px solid rgba(255,255,255,0.05)' }} />}>
+          {displayEntries.map((entry, idx) => {
+            const { added, removed, modified } = calcLaborDiff(entry.afterLabor, entry.beforeLabor);
+            const leaveChanges = calcLeaveChanges(entry.afterLeave, entry.beforeLeave);
+            const hasChanges = added.length + removed.length + modified.length + leaveChanges.length > 0;
+
+            return (
+              <Box key={idx} sx={{ px: 2, py: 1.5, bgcolor: 'rgba(0,0,0,0.12)' }}>
+                {/* Header row */}
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: hasChanges ? 1.25 : 0 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    {/* Round badge */}
+                    <Box sx={{
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      bgcolor: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1 }}>
+                        {displayEntries.length - idx}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'rgba(255,255,255,0.9)', display: 'block', fontSize: '0.74rem' }}>
+                        {entry.editorName}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.67rem' }}>
+                        ⏱ {entry.timeStr} น.
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  {!hasChanges && (
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', fontSize: '0.67rem' }}>
+                      ไม่มีการเปลี่ยนแปลงกำลังพล
+                    </Typography>
+                  )}
+                </Stack>
+
+                {/* Labor diffs */}
+                {hasChanges && (
+                  <Stack spacing={0.5}>
+                    {added.length > 0 && (
+                      <Box sx={{ p: 1, bgcolor: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                          ➕ เพิ่มกำลังพล ({added.length} คน)
+                        </Typography>
+                        <Stack spacing={0.4}>
+                          {added.map((w, wi) => (
+                            <Box key={wi} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: '#a7f3d0', fontWeight: 600, fontSize: '0.72rem', flexShrink: 0 }}>
+                                👷 {w.name || w.workerName}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'rgba(167,243,208,0.65)', fontSize: '0.67rem', textAlign: 'right' }}>
+                                {w.shiftTimes?.day ? `ปกติ (${w.shiftTimes.day})` : ''}{w.shiftTimes?.otEvening ? ` | OT เย็น (${w.shiftTimes.otEvening})` : ''}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+                    {removed.length > 0 && (
+                      <Box sx={{ p: 1, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                          ➖ ลบกำลังพลออก ({removed.length} คน)
+                        </Typography>
+                        <Stack spacing={0.4}>
+                          {removed.map((w, wi) => (
+                            <Box key={wi} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: '#fca5a5', fontWeight: 600, fontSize: '0.72rem', flexShrink: 0 }}>
+                                👷 {w.name || w.workerName}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'rgba(252,165,165,0.65)', fontSize: '0.67rem', textAlign: 'right' }}>
+                                {w.shiftTimes?.day ? `ปกติ (${w.shiftTimes.day})` : ''}{w.shiftTimes?.otEvening ? ` | OT เย็น (${w.shiftTimes.otEvening})` : ''}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+                    {modified.length > 0 && (
+                      <Box sx={{ p: 1, bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                          📝 เปลี่ยนเวลาทำงาน ({modified.length} คน)
+                        </Typography>
+                        <Stack spacing={0.75}>
+                          {modified.map((w, wi) => (
+                            <Box key={wi} sx={{ borderLeft: '2px solid rgba(245,158,11,0.5)', pl: 1 }}>
+                              <Typography variant="caption" sx={{ color: '#fef3c7', fontWeight: 700, display: 'block', fontSize: '0.72rem' }}>
+                                👷 {w.name}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'rgba(252,211,77,0.6)', display: 'block', fontSize: '0.67rem' }}>
+                                จาก: {w.from}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', fontSize: '0.67rem', fontWeight: 600 }}>
+                                เป็น: {w.to}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+                    {leaveChanges.length > 0 && (
+                      <Box sx={{ p: 1, bgcolor: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                          ℹ️ การเปลี่ยนแปลงใบลา
+                        </Typography>
+                        {leaveChanges.map((c, ci) => (
+                          <Typography key={ci} variant="caption" sx={{ color: '#ddd6fe', display: 'block', fontSize: '0.7rem' }}>
+                            {c}
+                          </Typography>
+                        ))}
+                      </Box>
+                    )}
+                  </Stack>
+                )}
+              </Box>
+            );
+          })}
+        </Stack>
+      )}
+    </Box>
   );
 }

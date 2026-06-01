@@ -1,3 +1,3 @@
-task: ปรับปรุงการแสดงข้อความปุ่ม Due Date เป็นจำนวนวัน และย้ายวันที่ไปยัง Tooltip สำหรับงานที่ยังไม่เสร็จ
+task: History Modal — ปรับ Logic ดึงข้อมูลจาก editHistory โดยตรง, เพิ่ม LaborSummaryPanel และ ReportEditHistoryPanel, ลบ date-to-date diff ออก
 phase: done
 next: none
