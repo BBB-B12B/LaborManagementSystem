@@ -52,6 +52,7 @@ export interface Task {
   updatedBy?: string;
   subtaskName?: string;
   editHistory?: EditHistoryRecord[];
+  isDeletable?: boolean;
 }
 
 export interface CreateTaskInput {
@@ -122,6 +123,7 @@ export interface Subtask {
   createdBy?: string;
   updatedBy?: string;
   isActive?: boolean;
+  isDeletable?: boolean;
 }
 
 export interface AdvanceRequestInput {

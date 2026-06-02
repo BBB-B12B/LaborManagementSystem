@@ -37,6 +37,7 @@ interface WorkspaceTreeProps {
   onDeleteWorkOrder?: (woId: string, currentName: string) => void;
   onEditCategory?: (catId: string, currentName: string) => void;
   onDeleteCategory?: (catId: string, currentName: string) => void;
+  onEditTask?: (taskId: string, currentName: string) => void;
   activeTab?: string;
 }
 
@@ -51,10 +52,161 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   onDeleteWorkOrder,
   onEditCategory,
   onDeleteCategory,
+  onEditTask,
   activeTab = 'All Tasks',
 }) => {
   const { user } = useAuthStore();
   const isWH = user?.department === 'WH';
+
+  const isWorkOrderDeletable = (woId: string) => {
+    const woTasks = tasks.filter(t => t.workOrderId === woId || (woId === 'general-wo' && !t.workOrderId));
+    for (const t of woTasks) {
+      const activeSubtasks = (t.subtasks || []).filter(sub => sub.isActive !== false);
+      for (const sub of activeSubtasks) {
+        if (sub.isDeletable === false || (sub.dailyProgress || 0) > 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const isCategoryDeletable = (catId: string) => {
+    const catTasks = tasks.filter(t => t.categoryId === catId || (catId === 'general-cat' && !t.categoryId));
+    for (const t of catTasks) {
+      const activeSubtasks = (t.subtasks || []).filter(sub => sub.isActive !== false);
+      for (const sub of activeSubtasks) {
+        if (sub.isDeletable === false || (sub.dailyProgress || 0) > 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const getSubtaskDueDateColor = (subtask: Subtask) => {
+    if (!subtask.dueDate) return subtask.dailyProgress === 100 ? '#10b981' : '#9ca3af';
+    const dueDateObj = new Date(subtask.dueDate);
+    if (isNaN(dueDateObj.getTime())) return subtask.dailyProgress === 100 ? '#10b981' : '#9ca3af';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    // If progress is 100, compare completion date (updatedAt) with dueDate
+    if (subtask.dailyProgress === 100) {
+      const completionDate = subtask.updatedAt ? new Date(subtask.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+      return diffDaysCompleted >= 0 ? '#10b981' : '#ef4444'; // Green for early/on-plan, Red for late
+    }
+
+    const diffTime = dueDateObj.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return '#ef4444'; // Red = Overdue
+    } else if (diffDays <= 3) {
+      return '#f97316'; // Orange = Within 3 days
+    } else if (diffDays <= 7) {
+      return '#eab308'; // Yellow = Within 7 days
+    } else if (
+      dueDateObj.getFullYear() === today.getFullYear() &&
+      dueDateObj.getMonth() === today.getMonth()
+    ) {
+      return '#3b82f6'; // Blue = Within the current month
+    } else {
+      return '#9ca3af'; // Grey = Outside conditions
+    }
+  };
+
+  const getNodeDueDateStatus = (subtasks: Subtask[], taskDueDate?: string | Date, taskProgress: number = 0) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let hasOverdue = false;
+    let hasCurrentMonth = false;
+
+    const activeSubtasks = (subtasks || []).filter(sub => sub.isActive !== false);
+
+    if (activeSubtasks.length > 0) {
+      activeSubtasks.forEach(sub => {
+        // Only focus on incomplete subtasks
+        if ((sub.dailyProgress || 0) === 100) return;
+        if (!sub.dueDate) return;
+
+        const dueDateObj = new Date(sub.dueDate);
+        if (isNaN(dueDateObj.getTime())) return;
+        dueDateObj.setHours(0, 0, 0, 0);
+
+        const diffTime = dueDateObj.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          hasOverdue = true;
+        } else if (
+          dueDateObj.getFullYear() === today.getFullYear() &&
+          dueDateObj.getMonth() === today.getMonth()
+        ) {
+          hasCurrentMonth = true;
+        }
+      });
+    } else if (taskDueDate && taskProgress < 100) {
+      const dueDateObj = new Date(taskDueDate);
+      if (!isNaN(dueDateObj.getTime())) {
+        dueDateObj.setHours(0, 0, 0, 0);
+        const diffTime = dueDateObj.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          hasOverdue = true;
+        } else if (
+          dueDateObj.getFullYear() === today.getFullYear() &&
+          dueDateObj.getMonth() === today.getMonth()
+        ) {
+          hasCurrentMonth = true;
+        }
+      }
+    }
+
+    if (hasOverdue) return 'red';
+    if (hasCurrentMonth) return 'blue';
+    return 'none';
+  };
+
+  const getCategoryDueDateStatus = (categoryTasks: any[]) => {
+    let hasOverdue = false;
+    let hasCurrentMonth = false;
+
+    categoryTasks.forEach(tItem => {
+      if (tItem.dueDateStatus === 'red') {
+        hasOverdue = true;
+      } else if (tItem.dueDateStatus === 'blue') {
+        hasCurrentMonth = true;
+      }
+    });
+
+    if (hasOverdue) return 'red';
+    if (hasCurrentMonth) return 'blue';
+    return 'none';
+  };
+
+  const renderBadge = (status: 'red' | 'blue' | 'none') => {
+    if (status === 'none') return null;
+    return (
+      <Box
+        sx={{
+          width: 14,
+          height: 14,
+          borderRadius: '3px',
+          bgcolor: status === 'red' ? '#ef4444' : '#3b82f6',
+          mr: 0.5,
+          flexShrink: 0,
+        }}
+      />
+    );
+  };
 
   const [expandedWOs, setExpandedWOs] = useState<Record<string, boolean>>({});
 
@@ -140,19 +292,27 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
 
     return Array.from(woMap.values()).map(wo => {
       const categoriesArray = Array.from(wo.categories.values()).map(cat => {
-        const tasksArray = Array.from(cat.tasks.values()).map(tItem => ({
-          ...tItem,
-          subtasks: tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName))
-        })).sort((a, b) => a.name.localeCompare(b.name));
+        const tasksArray = Array.from(cat.tasks.values()).map(tItem => {
+          const sortedSubtasks = tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName));
+          const taskProgress = tItem.task.supportDailyProgress !== undefined ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
+          const dueDateStatus = getNodeDueDateStatus(sortedSubtasks, tItem.task.dueDate, taskProgress);
+          return {
+            ...tItem,
+            subtasks: sortedSubtasks,
+            dueDateStatus
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name));
 
         const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
         const assignedSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.filter(sub => sub.assignees && sub.assignees.length > 0).length, 0);
+        const catDueDateStatus = getCategoryDueDateStatus(tasksArray);
         return {
           id: cat.id,
           name: cat.name,
           tasks: tasksArray,
           totalSubtaskCount,
-          assignedSubtaskCount
+          assignedSubtaskCount,
+          dueDateStatus: catDueDateStatus
         };
       }).filter(cat => cat.tasks.length > 0).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -291,7 +451,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                     </IconButton>
                   </Tooltip>
                 )}
-                {onDeleteWorkOrder && (
+                {onDeleteWorkOrder && isWorkOrderDeletable(wo.id) && (
                   <Tooltip title="ลบ WorkOrder" arrow>
                     <IconButton
                       size="small"
@@ -352,6 +512,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                         },
                       }}
                     >
+                      {renderBadge(category.dueDateStatus)}
                       <IconButton
                         size="small"
                         onClick={(e) => {
@@ -395,12 +556,12 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                               </IconButton>
                             </Tooltip>
                           )}
-                          {onDeleteCategory && (
+                          {onDeleteCategory && isCategoryDeletable(category.id) && (
                             <Tooltip title="ลบหมวดหมู่" arrow>
                               <IconButton
                                 size="small"
                                 onClick={() => onDeleteCategory(category.id, category.name)}
-                                sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
+                                  sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
                               >
                                 <DeleteIcon sx={{ fontSize: 14 }} />
                               </IconButton>
@@ -451,9 +612,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                   color: isTaskSelected ? '#15803d' : '#475569',
                                   '&:hover': {
                                     bgcolor: isTaskSelected ? '#f0fdf4' : '#f8fafc',
+                                    '& .hover-actions': { opacity: 1 },
                                   },
                                 }}
                               >
+                                {renderBadge(tItem.dueDateStatus)}
                                 <IconButton
                                   size="small"
                                   onClick={(e) => {
@@ -476,6 +639,31 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                 >
                                   {tItem.name}
                                 </Typography>
+
+                                {/* Hover Actions for Task */}
+                                {!isSupportTree && onEditTask && (
+                                  <Stack
+                                    className="hover-actions"
+                                    direction="row"
+                                    spacing={0.5}
+                                    sx={{
+                                      opacity: 0,
+                                      transition: 'opacity 0.2s',
+                                      mr: 1,
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Tooltip title="แก้ไขชื่องานหลัก" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => onEditTask(tItem.id, tItem.name)}
+                                        sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                                      >
+                                        <EditIcon sx={{ fontSize: 14 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Stack>
+                                )}
                                 {(() => {
                                   const taskProgress = isSupportTree ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
                                   return (
@@ -556,7 +744,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                         },
                                       }}
                                     >
-                                      <Circle sx={{ fontSize: 5, mr: 1, color: '#94a3b8' }} />
+                                      <Circle sx={{ fontSize: 5, mr: 1, color: getSubtaskDueDateColor(subtask) }} />
                                       {subtask.assignees && subtask.assignees.length > 0 && (
                                         <Tooltip title={`ผู้รับผิดชอบ: ${subtask.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
                                           <Person sx={{ fontSize: 13, color: '#3b82f6', mr: 0.5 }} />

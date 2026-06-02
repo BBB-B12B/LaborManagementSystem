@@ -259,7 +259,7 @@ export const departmentEnum = createEnum(['PD01', 'PD02', 'PD03', 'PD04', 'PD05'
 /**
  * Role enum (8 roles)
  */
-export const roleEnum = createEnum(['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'], 'บทบาท');
+export const roleEnum = createEnum(['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'], 'บทบาท');
 
 /**
  * Project status enum (Thai values)

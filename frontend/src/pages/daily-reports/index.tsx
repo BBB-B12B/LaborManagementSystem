@@ -2237,7 +2237,7 @@ export default function DailyReportPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
       <LocalizationProvider dateAdapter={AdapterDateFnsV2} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Grid, Typography, CircularProgress, IconButton, Box
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Grid, Typography, CircularProgress, IconButton, Box, Autocomplete, Chip
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useForm, Controller } from 'react-hook-form';
@@ -9,10 +9,12 @@ import { z } from 'zod';
 import { projectConfigService, WorkOrderConfig } from '@/services/projectConfigService';
 import { useSnackbar } from 'notistack';
 import { useConfirmDialog } from '@/components/common/ConfirmDialog';
+import { memberService, User } from '@/services/memberService';
 
 const schema = z.object({
   code: z.string().min(1, 'กรุณาระบุรหัสหมวดหมู่งานหลัก (เช่น STR, ARC)'),
   name: z.string().min(2, 'กรุณาระบุชื่อหมวดหมู่งานหลัก'),
+  leaderIds: z.array(z.string()).optional().default([]),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -30,20 +32,39 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const confirmDialog = useConfirmDialog();
+  const [leaders, setLeaders] = useState<User[]>([]);
+  const [loadingLeaders, setLoadingLeaders] = useState(false);
 
   const { control, handleSubmit, reset, formState: { errors, isValid } } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: 'onChange',
-    defaultValues: { code: '', name: '' },
+    defaultValues: { code: '', name: '', leaderIds: [] },
   });
 
   useEffect(() => {
     if (open) {
       if (editData) {
-        reset({ code: editData.code, name: editData.name });
+        reset({
+          code: editData.code,
+          name: editData.name,
+          leaderIds: editData.leaderIds || (editData.leaderId ? [editData.leaderId] : [])
+        });
       } else {
-        reset({ code: '', name: '' });
+        reset({ code: '', name: '', leaderIds: [] });
       }
+
+      const fetchLeaders = async () => {
+        setLoadingLeaders(true);
+        try {
+          const res = await memberService.getAllUsers({ roleId: 'LD', pageSize: 1000 });
+          setLeaders(res.users || []);
+        } catch (error) {
+          console.error('Failed to fetch leaders', error);
+        } finally {
+          setLoadingLeaders(false);
+        }
+      };
+      fetchLeaders();
     }
   }, [open, editData, reset]);
 
@@ -51,11 +72,25 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
     if (!projectId) return;
     setLoading(true);
     try {
+      const selectedLeaders = leaders.filter(u => (data.leaderIds || []).includes(u.id));
+      const leaderNames = selectedLeaders.map(u => u.name);
+      
+      const submitData = {
+        name: data.name,
+        leaderId: selectedLeaders.length > 0 ? selectedLeaders[0].id : null,
+        leaderName: selectedLeaders.length > 0 ? selectedLeaders[0].name : null,
+        leaderIds: data.leaderIds || [],
+        leaderNames: leaderNames
+      };
+
       if (editData) {
-        await projectConfigService.updateWorkOrder(projectId, editData.code, { name: data.name });
+        await projectConfigService.updateWorkOrder(projectId, editData.code, submitData);
         enqueueSnackbar('แก้ไขหมวดหมู่งานหลักสำเร็จ', { variant: 'success' });
       } else {
-        await projectConfigService.createWorkOrder(projectId, data);
+        await projectConfigService.createWorkOrder(projectId, {
+          code: data.code,
+          ...submitData
+        });
         enqueueSnackbar('สร้างหมวดหมู่งานหลักสำเร็จ', { variant: 'success' });
       }
       onSuccess(data);
@@ -193,6 +228,45 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
                     helperText={errors.name?.message || 'เช่น งานโครงสร้าง, งานสถาปัตยกรรม'}
                     InputProps={{ disableUnderline: true }}
                     sx={inputStyles}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Controller
+                name="leaderIds"
+                control={control}
+                render={({ field: { value, onChange } }) => (
+                  <Autocomplete
+                    multiple
+                    options={leaders}
+                    getOptionLabel={(option) => `${option.name} ${option.employeeId ? `(${option.employeeId})` : ''}`}
+                    isOptionEqualToValue={(option, val) => option.id === val.id}
+                    value={leaders.filter(u => (value || []).includes(u.id))}
+                    onChange={(_event, newValue) => {
+                      onChange(newValue.map(u => u.id));
+                    }}
+                    disabled={loading || deleting || loadingLeaders}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        variant="filled"
+                        label="หัวหน้ากลุ่มงาน (Leader)"
+                        placeholder={value && value.length > 0 ? '' : 'เลือกหัวหน้ากลุ่มงาน'}
+                        error={!!errors.leaderIds}
+                        helperText={errors.leaderIds?.message || 'ระบุหัวหน้ากลุ่มงานที่รับผิดชอบหลัก'}
+                        InputProps={{
+                          ...params.InputProps,
+                          disableUnderline: true,
+                        }}
+                        sx={inputStyles}
+                      />
+                    )}
+                    sx={{
+                      '& .MuiFilledInput-root': {
+                        paddingTop: '20px',
+                      }
+                    }}
                   />
                 )}
               />

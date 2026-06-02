@@ -117,7 +117,7 @@ const toProjectIds = (value: string): string[] => {
  */
 router.get(
   '/',
-  authorize(['AM', 'PM', 'PD', 'SE', 'FM', 'PE', 'OE', 'MD']),
+  authorize(['AM', 'PM', 'PD', 'SE', 'FM', 'PE', 'OE', 'MD', 'LD']),
   [
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 1000 }),
@@ -309,7 +309,7 @@ router.post('/import', authorize(['AM']), upload.single('file'), async (req: Req
 
       const roleId = roleIdRaw.toUpperCase();
       const department = departmentRaw.toUpperCase();
-      if (!['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'].includes(roleId)) {
+      if (!['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'].includes(roleId)) {
         summary.failed += 1;
         logger.warn('User import skipped: invalid role', { rowNumber, employeeId, roleId });
         continue;

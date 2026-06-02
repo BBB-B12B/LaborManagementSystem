@@ -13,7 +13,7 @@ export interface User {
   name: string;
   fullNameEn?: string;
   roleId: string;
-  roleCode?: 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD'; // User role code (AM, FM, SE, OE, PE, PM, PD, MD, GOD)
+  roleCode?: 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD' | 'LD'; // User role code (AM, FM, SE, OE, PE, PM, PD, MD, GOD, LD)
   department: string;
   departmentCode?: string; // Department code (PD01-PD05)
   projectLocationIds: string[];

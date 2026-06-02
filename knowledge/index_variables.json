@@ -470,11 +470,11 @@
     },
     "CreateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 57
+      "line": 58
     },
     "UpdateTaskInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 87
+      "line": 88
     },
     "taskConverter": {
       "source": "backend/src/models/Task.ts",
@@ -646,15 +646,15 @@
     },
     "CategoryConfig": {
       "source": "frontend/src/services/projectConfigService.ts",
-      "line": 9
+      "line": 13
     },
     "ProjectConfigService": {
       "source": "backend/src/services/ProjectConfigService.ts",
-      "line": 30
+      "line": 34
     },
     "projectConfigService": {
       "source": "frontend/src/services/projectConfigService.ts",
-      "line": 15
+      "line": 19
     },
     "ProjectData": {
       "source": "backend/src/services/projectService.ts",
@@ -698,7 +698,7 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 134
+      "line": 136
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -1382,11 +1382,11 @@
     },
     "usePermissions": {
       "source": "frontend/src/utils/permissions.ts",
-      "line": 309
+      "line": 311
     },
     "withPermission": {
       "source": "frontend/src/utils/permissions.ts",
-      "line": 340
+      "line": 342
     },
     "isEmpty": {
       "source": "frontend/src/utils/validationUtils.ts",
@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 94
+      "line": 95
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2114,7 +2114,7 @@
     },
     "WorkOrderConfigModal": {
       "source": "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx",
-      "line": 28
+      "line": 30
     },
     "ProjectCreateModalProps": {
       "source": "frontend/src/pages/project-management/components/ProjectCreateModal.tsx",
@@ -2466,15 +2466,15 @@
     },
     "RoleSelect": {
       "source": "frontend/src/components/forms/RoleSelect.tsx",
-      "line": 107
+      "line": 114
     },
     "getRoleByCode": {
       "source": "frontend/src/components/forms/RoleSelect.tsx",
-      "line": 176
+      "line": 183
     },
     "getRoleName": {
       "source": "frontend/src/components/forms/RoleSelect.tsx",
-      "line": 183
+      "line": 190
     },
     "SkillSelectProps": {
       "source": "frontend/src/components/forms/SkillSelect.tsx",
@@ -2534,7 +2534,7 @@
     },
     "Subtask": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 101
+      "line": 102
     },
     "AdvanceRequest": {
       "source": "backend/src/models/Task.ts",
@@ -2542,7 +2542,7 @@
     },
     "AdvanceRequestInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 127
+      "line": 129
     },
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
@@ -2554,11 +2554,11 @@
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 43
+      "line": 44
     },
     "EditHistoryRecord": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 77
+      "line": 78
     },
     "NotificationType": {
       "source": "frontend/src/services/notificationService.ts",

@@ -12,6 +12,52 @@ const router = Router();
 // Apply authentication to all routes
 router.use(authenticate);
 
+async function validateLeaderAccess(userId: string, projectId: string, workOrderCode: string): Promise<boolean> {
+  if (!projectId || !workOrderCode) return false;
+  const doc = await db
+    .collection('Project')
+    .doc(projectId)
+    .collection('workOrderConfigs')
+    .doc(workOrderCode.trim().toUpperCase())
+    .get();
+  
+  if (!doc.exists) return false;
+  const data = doc.data();
+  if (!data) return false;
+  return data.leaderId === userId || (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(userId));
+}
+
+async function checkTaskLeaderAccess(req: Request, taskId: string): Promise<void> {
+  const authReq = req as AuthRequest;
+  const userRole = authReq.user?.roleCode;
+  if (userRole !== 'LD') return;
+
+  let taskDoc;
+  const parts = taskId.split('__');
+  if (parts.length >= 3) {
+    const [woId, catId, idOnly] = parts;
+    taskDoc = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(idOnly).get();
+  } else {
+    const querySnapshot = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', taskId).limit(1).get();
+    if (!querySnapshot.empty) {
+      taskDoc = querySnapshot.docs[0];
+    }
+  }
+
+  if (!taskDoc || !taskDoc.exists) {
+    throw new AppError('ไม่พบงานที่ต้องการเข้าถึง', 404);
+  }
+
+  const taskData = taskDoc.data() as any;
+  const projectId = taskData.projectId;
+  const workOrderCode = taskData.workOrderCode;
+
+  const isAssigned = await validateLeaderAccess(authReq.user!.id, projectId, workOrderCode);
+  if (!isAssigned) {
+    throw new AppError('คุณไม่มีสิทธิ์เข้าถึงหรือจัดการงานในหมวดงานนี้ (Access denied for this Work Order)', 403);
+  }
+}
+
 // GET /api/tasks/backlog
 router.get('/backlog', async (req: Request, res: Response, next: NextFunction) => {
   const authReq = req as AuthRequest;
@@ -871,8 +917,9 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
 // GET /api/tasks
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userRole = req.user?.role;
-    const userId = req.user?.uid;
+    const authReq = req as AuthRequest;
+    const userRole = authReq.user?.roleCode;
+    const userId = authReq.user?.uid;
     const { projectId } = req.query;
 
     const filters: any = {};
@@ -887,9 +934,38 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const tasks = await taskService.getTasks(filters);
+    
+    let filteredTasks = tasks;
+    if (userRole === 'LD' && authReq.user) {
+      const userProjects = projectId ? [projectId as string] : (authReq.user.projectLocationIds || []);
+      const leaderWorkOrderCodes = new Set<string>();
+
+      for (const pId of userProjects) {
+        const woSnapshot = await db
+          .collection('Project')
+          .doc(pId)
+          .collection('workOrderConfigs')
+          .get();
+        
+        woSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const isLeader = data.leaderId === authReq.user!.id || (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(authReq.user!.id));
+          const code = data.code;
+          if (isLeader && code) {
+            leaderWorkOrderCodes.add(code.trim().toUpperCase());
+          }
+        });
+      }
+
+      filteredTasks = tasks.filter((t) => {
+        const code = (t.workOrderCode || '').trim().toUpperCase();
+        return leaderWorkOrderCodes.has(code);
+      });
+    }
+
     res.status(200).json({
       success: true,
-      data: tasks,
+      data: filteredTasks,
     });
   } catch (error) {
     next(error);
@@ -903,6 +979,18 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     
     if (!taskName || !projectId || !workOrderCode || !categoryName) {
       throw new AppError('ข้อมูลไม่ครบถ้วน (TaskName, ProjectId, WorkOrderCode, CategoryName are required)', 400);
+    }
+
+    const authReq = req as AuthRequest;
+    if (!authReq.user) {
+      throw new AppError('Unauthorized', 401);
+    }
+    const userRole = authReq.user.roleCode;
+    if (userRole === 'LD') {
+      const isAssigned = await validateLeaderAccess(authReq.user.id, projectId, workOrderCode);
+      if (!isAssigned) {
+        throw new AppError('คุณไม่มีสิทธิ์สร้างงานในหมวดงานนี้ (Access denied to create tasks for this Work Order)', 403);
+      }
     }
 
     const subtasksArray = Array.isArray(subtasks) ? subtasks : [];
@@ -928,11 +1016,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       status,
     };
 
-    const userId = req.user?.uid;
-    if (!userId) {
-      throw new AppError('Unauthorized', 401);
-    }
-
+    const userId = authReq.user.id;
     const newTask = await taskService.createTask(validatedData, userId);
     
     res.status(201).json({
@@ -953,6 +1037,8 @@ router.patch('/:id/status', async (req: Request, res: Response, next: NextFuncti
     if (!userId) {
       throw new AppError('Unauthorized', 401);
     }
+
+    await checkTaskLeaderAccess(req, id);
 
     if (!['upcoming', 'in-progress', 'completed'].includes(status)) {
       throw new AppError('Invalid status', 400);
@@ -976,6 +1062,8 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
     const { id } = req.params;
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
+
+    await checkTaskLeaderAccess(req, id);
 
     const input = { ...req.body };
     if (input.dueDate) {
@@ -1006,6 +1094,8 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
+    await checkTaskLeaderAccess(req, id);
+
     await taskService.softDeleteTask(id, userId);
     
     res.status(200).json({
@@ -1026,6 +1116,8 @@ router.patch('/:id/subtasks/:subtaskId', async (req: Request, res: Response, nex
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
+    await checkTaskLeaderAccess(req, id);
+
     await taskService.updateSubtask(id, subtaskId, req.body, userId);
     
     res.status(200).json({
@@ -1044,6 +1136,8 @@ router.delete('/:id/subtasks/:subtaskId', async (req: Request, res: Response, ne
     console.log('[tasks.routes.ts] DELETE subtask - id:', id, 'subtaskId:', subtaskId);
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
+
+    await checkTaskLeaderAccess(req, id);
 
     await taskService.deleteSubtask(id, subtaskId, userId);
     

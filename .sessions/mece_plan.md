@@ -1,14 +1,15 @@
 # MECE Plan
 
 ## Sections
-<!-- Orchestrator will write here at next Phase 2 -->
-
----
-
-## Session Archive
-
-### Closed: 2026-06-01 (session_015)
-Done: [S1, S2, S3] | Remaining: none | Summary: Filtering Structure Tree by Workspace Tabs — filter subtasks/tasks by activeTab (All/Month/Week/Today) in WorkspaceTree
-
-### Closed: 2026-06-01 (session_016)
-Done: [S1, S2] | Remaining: none | Summary: History Modal editHistory refactor — LaborSummaryPanel, ReportEditHistoryPanel (direct editHistory), removed date-to-date diff
+- id: S1
+  name: "Frontend UI Autocomplete"
+  DoD: "Modify projectConfigService.ts to include leaderIds/leaderNames, and WorkOrderConfigModal.tsx to use MUI Autocomplete with multi-select."
+  Est: "15 mins"
+- id: S2
+  name: "Backend DB & API Routes"
+  DoD: "Modify backend ProjectConfigService.ts to store leaderIds/leaderNames, and projectConfigs.routes.ts + tasks.routes.ts to check leaderIds array."
+  Est: "15 mins"
+- id: S3
+  name: "Verification"
+  DoD: "Run frontend & backend type checks and verify Work Order Leader selection manually."
+  Est: "10 mins"

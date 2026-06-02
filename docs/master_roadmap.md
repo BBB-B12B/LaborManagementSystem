@@ -82,6 +82,11 @@
 - [X] T-012-008-19: แก้ไขบักการแจ้งเตือนรายงานของงาน Support ไม่แจ้งเตือนไปยังหัวหน้าทีม Support (WH) (→ ERR-038) · attempts: 1 · tool_calls: 11
 - [X] T-012-008-20: เพิ่ม Flow นำทางผู้ใช้จากข้อความแจ้งเตือน Navbar ไปยังหน้าข้อมูลงานและเปิด Popup Daily Report อัตโนมัติ · attempts: 1 · tool_calls: 15
 - [X] T-012-008-21: พัฒนาระบบแก้ไข/ลบการ์ดงานย่อย (Subtasks) และโครงสร้างงานหลัก (Tasks & WorkOrders) อย่างปลอดภัย · attempts: 1 · tool_calls: 10
+- [X] T-012-008-21-02: แก้ไข Error 404 เมื่อลบ Category หรือ WorkOrder ที่ไม่มี Config Document ใน Firebase A (→ ERR-062) · attempts: 1 · tool_calls: 11
+- [X] T-012-008-21-03: พัฒนาระบบแก้ไขชื่อของงานหลัก (Task) ใน Structure Tree และซิงค์แสดงผลแบบไดนามิก · attempts: 1 · tool_calls: 12
+- [X] T-012-008-21-04: เพิ่มแทบสีแสดงสถานะ Due Date ในหน้าต่าง Structure Tree (สีน้ำเงิน/สีแดง) · attempts: 1 · tool_calls: 7
+- [X] T-012-008-21-05: ปรับปรุงดีไซน์แทบเมนูด้านซ้ายและเปลี่ยนไฮไลท์ปุ่มใช้งานเป็นสีส้มพรีเมียม (#FF7F32) · attempts: 1 · tool_calls: 3
+- [X] T-012-008-21-06: เพิ่มบทบาทหัวหน้ากลุ่มงาน (Leader) และกรอง Workspace ตาม Work Order ที่ได้รับมอบหมาย · attempts: 1 · tool_calls: 15
 - [X] T-012-008-22: พัฒนาตัวกรองด้านบนให้สามารถกรอง Structure Tree ไปด้วยตามที่ผู้ใช้เลือก (→ ERR-060) · attempts: 1 · tool_calls: 20
 - [X] T-012-008-23: ปรับปรุงแบบฟอร์มการสร้างงานย่อย (Subtask) ให้ไม่บังคับการเลือกผู้รับผิดชอบ (Optional Assignee) (→ ERR-061) · attempts: 1 · tool_calls: 15
 - [X] T-014: จัดการวันครบกำหนด (Due Date) ในระดับ Subtask และคำนวณวันครบกำหนด of Task หลักอัตโนมัติ
@@ -101,6 +106,8 @@
 - [X] T-016-001-10: แสดงโครงสร้างงานกรณีไม่มี Subtask และปรับปรุงให้สามารถเลือกงานที่มีอยู่แล้วเมื่อติ๊กเพิ่มงานย่อย (→ ERR-059) · attempts: 1 · tool_calls: 61
 - [X] T-016-001-11: ปรับปรุงโครงสร้างงานและฟังก์ชันมอบหมายงานย่อยด่วน (Quick Assign Subtask) · attempts: 1 · tool_calls: 18
 - [X] T-012-009-06: เพิ่มฟังก์ชันตรวจสอบประวัติการบันทึก/แก้ไขย้อนหลังในการ์ด Subtask บนบอร์ด Workspace · attempts: 1 · tool_calls: 18
+- [X] T-012-008-21-07: สิทธิ์การเข้าถึงเมนูและหน้า Workspace กับ Daily Report สำหรับบทบาท LD (Leader) · attempts: 1 · tool_calls: 18
+- [X] T-012-008-21-08: ปรับปรุงการเลือกหัวหน้ากลุ่มงาน (Leader Selection) ให้สามารถระบุได้มากกว่า 1 คนและแก้ไขข้อความซ้อนทับ · attempts: 1 · tool_calls: 12
 
 ---
 

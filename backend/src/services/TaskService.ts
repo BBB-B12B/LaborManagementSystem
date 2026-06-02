@@ -645,6 +645,7 @@ export class TaskService {
         })) : [],
         createdAt: safeDate(subData.createdAt),
         updatedAt: safeDate(subData.updatedAt),
+        isDeletable: subData.isDeletable !== undefined ? subData.isDeletable : ((subData.dailyProgress || 0) === 0),
       };
     });
   }
@@ -873,6 +874,7 @@ export class TaskService {
           createdBy: subData.createdBy || '',
           updatedBy: subData.updatedBy || '',
           historicalAssigneeIds: subData.historicalAssigneeIds || [],
+          isDeletable: subData.isDeletable !== undefined ? subData.isDeletable : ((subData.dailyProgress || 0) === 0),
         };
       });
 
@@ -934,13 +936,168 @@ export class TaskService {
         oldCatId = pathParts[3];
       }
 
-      await afterSaleDb.runTransaction(async (transaction) => {
-        const doc = await transaction.get(taskRef);
-        if (!doc.exists) throw new AppError('ไม่พบข้อมูลงานที่ต้องการแก้ไข (Task not found)', 404);
-        
-        const oldData = doc.data() as any;
-        const now = new Date();
+      const doc = await taskRef.get();
+      if (!doc.exists) throw new AppError('ไม่พบข้อมูลงานที่ต้องการแก้ไข (Task not found)', 404);
+      
+      const oldData = doc.data() as any;
+      const now = new Date();
+      const admin = require('firebase-admin');
 
+      // Category Migration check
+      if (input.categoryName && input.categoryName !== oldData.categoryName) {
+        const newCategoryRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
+        const catQuery = await newCategoryRef.where('catName', '==', input.categoryName).limit(1).get();
+        let targetCatId = '';
+        
+        if (!catQuery.empty) {
+          targetCatId = catQuery.docs[0].id;
+        } else {
+          targetCatId = `CAT-${now.getTime()}`;
+          await newCategoryRef.doc(targetCatId).set({ catId: targetCatId, catName: input.categoryName }, { merge: true });
+        }
+
+        const activeTaskRef = newCategoryRef.doc(targetCatId).collection('tasks').doc(oldTaskId);
+        
+        // Prepare subtask list and aggregate values
+        const subtasksRef = taskRef.collection('subtasks');
+        const existingSubtasksSnap = await subtasksRef.get();
+        const existingSubtasks = existingSubtasksSnap.docs.map(d => d.data());
+        
+        const allAssigneesMap = new Map<string, any>();
+        let hasSupportRequest = false;
+
+        // Merge subtasks array from input
+        const finalSubtasks: any[] = [];
+        let currentSubtaskRun = existingSubtasks.length + 1;
+
+        if (input.subtasks) {
+          hasSupportRequest = input.subtasks.some(st => st.isSupportRequest) || false;
+          input.subtasks.forEach(stInput => {
+            if (stInput.subtaskId) {
+              const oldSt = existingSubtasks.find(x => x.subtaskId === stInput.subtaskId) || {};
+              const newAssignees = stInput.assignees || [];
+              newAssignees.forEach(a => allAssigneesMap.set(a.employeeId, a));
+              
+              // We construct the updated subtask document
+              const changes: any[] = [];
+              if (stInput.subtaskName !== undefined && oldSt.subtaskName !== stInput.subtaskName) {
+                changes.push({ field: 'subtaskName', oldValue: oldSt.subtaskName || '', newValue: stInput.subtaskName });
+              }
+              if (stInput.assignees !== undefined && !this.compareAssignees(oldSt.assignees, stInput.assignees)) {
+                changes.push({ field: 'assignees', oldValue: oldSt.assignees || [], newValue: stInput.assignees });
+              }
+              if (stInput.dueDate !== undefined && !this.compareDates(oldSt.dueDate, stInput.dueDate)) {
+                changes.push({ field: 'dueDate', oldValue: oldSt.dueDate ? (oldSt.dueDate.toDate ? oldSt.dueDate.toDate() : new Date(oldSt.dueDate)) : null, newValue: stInput.dueDate ? new Date(stInput.dueDate) : null });
+              }
+              const newIsSupport = stInput.isSupportRequest || false;
+              const oldIsSupport = oldSt.isSupportRequest || false;
+              if (newIsSupport !== oldIsSupport) {
+                changes.push({ field: 'isSupportRequest', oldValue: oldIsSupport, newValue: newIsSupport });
+              }
+
+              const subtaskUpdates: any = {
+                ...oldSt,
+                subtaskName: stInput.subtaskName !== undefined ? stInput.subtaskName : oldSt.subtaskName,
+                assignees: newAssignees,
+                isSupportRequest: newIsSupport,
+                updatedAt: now,
+                updatedBy: updatedBy,
+              };
+              if (stInput.dueDate !== undefined) {
+                subtaskUpdates.dueDate = stInput.dueDate ? new Date(stInput.dueDate) : null;
+              }
+              if (newAssignees.length > 0) {
+                const histIds = new Set<string>([
+                  ...(oldSt.historicalAssigneeIds || []),
+                  ...newAssignees.map(a => a.employeeId)
+                ]);
+                subtaskUpdates.historicalAssigneeIds = Array.from(histIds);
+              }
+              if (changes.length > 0) {
+                const historyRecord = {
+                  updatedAt: now,
+                  updatedBy: updatedBy,
+                  changes: changes
+                };
+                subtaskUpdates.editHistory = [
+                  ...(oldSt.editHistory || []),
+                  historyRecord
+                ];
+              }
+
+              finalSubtasks.push(subtaskUpdates);
+            } else {
+              // New Subtask
+              const subtaskId = `${oldTaskId}-${(currentSubtaskRun++).toString().padStart(4, '0')}`;
+              const newAssignees = stInput.assignees || [];
+              newAssignees.forEach(a => allAssigneesMap.set(a.employeeId, a));
+
+              finalSubtasks.push({
+                id: `${oldWoId}__${targetCatId}__${oldTaskId}__${subtaskId}`,
+                subtaskId: subtaskId,
+                subtaskName: stInput.subtaskName,
+                status: 'upcoming',
+                assignees: newAssignees,
+                dailyProgress: 0,
+                currentRevision: 'rev00',
+                isSupportRequest: stInput.isSupportRequest || false,
+                dueDate: stInput.dueDate ? new Date(stInput.dueDate) : null,
+                editHistory: [],
+                createdAt: now,
+                updatedAt: now,
+                createdBy: updatedBy,
+                updatedBy: updatedBy,
+                historicalAssigneeIds: Array.from(new Set([...newAssignees.map(a => a.employeeId), updatedBy]))
+              });
+            }
+          });
+          
+          // Also add subtasks that were not edited
+          existingSubtasks.forEach(oldSt => {
+            if (!finalSubtasks.some(x => x.subtaskId === oldSt.subtaskId)) {
+              finalSubtasks.push(oldSt);
+              (oldSt.assignees || []).forEach((a: any) => allAssigneesMap.set(a.employeeId, a));
+              if (oldSt.isSupportRequest) hasSupportRequest = true;
+            }
+          });
+        } else {
+          // No subtasks input, just copy existing subtasks
+          existingSubtasks.forEach(oldSt => {
+            finalSubtasks.push(oldSt);
+          });
+        }
+
+        const allAssignees = Array.from(allAssigneesMap.values());
+        const calculatedMaxDueDate = this.calculateMaxDueDate(finalSubtasks);
+        const maxDueDate = calculatedMaxDueDate || (input.dueDate ? new Date(input.dueDate) : (oldData.dueDate ? (oldData.dueDate.toDate ? oldData.dueDate.toDate() : new Date(oldData.dueDate)) : null));
+
+        // Sanitize input: Remove undefined values and subtasks
+        const sanitizedInput = Object.keys(input).reduce((obj: any, key) => {
+          const val = (input as any)[key];
+          if (val !== undefined && key !== 'subtasks') obj[key] = val;
+          return obj;
+        }, {});
+
+        const newData = {
+          ...oldData,
+          ...sanitizedInput,
+          categoryId: targetCatId,
+          updatedAt: now,
+          updatedBy,
+          assignees: allAssignees,
+          historicalAssigneeIds: Array.from(new Set([...(oldData.historicalAssigneeIds || []), ...allAssignees.map(a => a.employeeId)])),
+          isSupportRequest: hasSupportRequest,
+          dueDate: maxDueDate
+        };
+
+        // Run the atomic migration (writes new task, moves subtasks, deletes old task)
+        await this.migrateTaskData(taskRef, activeTaskRef, newData, finalSubtasks);
+        console.log(`[TaskService] updateTask Category Migration completed successfully`);
+        return;
+      }
+
+      // Normal path (no Category change)
+      await afterSaleDb.runTransaction(async (transaction) => {
         // Process Subtasks (Aggregate assignees)
         const allAssigneesMap = new Map<string, any>();
         let hasSupportRequest = false;
@@ -998,54 +1155,20 @@ export class TaskService {
           return obj;
         }, {});
 
-        // Category Migration
-        let activeTaskRef = taskRef;
-        if (input.categoryName && input.categoryName !== oldData.categoryName) {
-          const newCategoryRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(oldWoId).collection('categories');
-          const catQuery = await newCategoryRef.where('catName', '==', input.categoryName).limit(1).get();
-          let targetCatId = '';
-          
-          if (!catQuery.empty) {
-            targetCatId = catQuery.docs[0].id;
-          } else {
-            // Note: Cannot easily create counters safely inside this transaction if we don't read them first.
-            // For simplicity in this fix, we assume we just reuse a generic fallback or generate a random ID if not found.
-            // To be safe, we'll just throw an error or use a timestamp for category ID if it's new.
-            targetCatId = `CAT-${now.getTime()}`;
-            transaction.set(newCategoryRef.doc(targetCatId), { catId: targetCatId, catName: input.categoryName }, { merge: true });
-          }
-
-          activeTaskRef = newCategoryRef.doc(targetCatId).collection('tasks').doc(oldTaskId);
-          const newData = { ...oldData, ...sanitizedInput, categoryId: targetCatId, updatedAt: now, updatedBy };
-          if (input.subtasks) {
-            newData.assignees = allAssignees;
-            newData.historicalAssigneeIds = Array.from(new Set([...(oldData.historicalAssigneeIds || []), ...allAssignees.map(a => a.employeeId)]));
-            newData.isSupportRequest = hasSupportRequest;
-            newData.dueDate = maxDueDate;
-          }
-          transaction.set(activeTaskRef, newData);
-          transaction.delete(taskRef);
-          
-          // Move existing subtasks to new path (simplified for migration)
-          existingSubtasks.forEach(st => {
-            transaction.set(activeTaskRef.collection('subtasks').doc(st.subtaskId), st);
-          });
-        } else {
-          const updates: any = { ...sanitizedInput, updatedAt: now, updatedBy };
-          if (input.subtasks) {
-            updates.assignees = allAssignees;
-            updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...allAssignees.map(a => a.employeeId));
-            updates.isSupportRequest = hasSupportRequest;
-            updates.dueDate = maxDueDate;
-          }
-          transaction.update(activeTaskRef, updates);
+        const updates: any = { ...sanitizedInput, updatedAt: now, updatedBy };
+        if (input.subtasks) {
+          updates.assignees = allAssignees;
+          updates.historicalAssigneeIds = admin.firestore.FieldValue.arrayUnion(...allAssignees.map(a => a.employeeId));
+          updates.isSupportRequest = hasSupportRequest;
+          updates.dueDate = maxDueDate;
         }
+        transaction.update(taskRef, updates);
         
         // Update Subtasks
         if (input.subtasks) {
           input.subtasks.forEach(stInput => {
             if (stInput.subtaskId) {
-              const stRef = activeTaskRef.collection('subtasks').doc(stInput.subtaskId);
+              const stRef = taskRef.collection('subtasks').doc(stInput.subtaskId);
               const oldSt = existingSubtasks.find(x => x.subtaskId === stInput.subtaskId) || {};
               const changes: any[] = [];
 
@@ -1113,10 +1236,10 @@ export class TaskService {
             } else {
               const subtaskNum = (currentSubtaskRun++).toString().padStart(4, '0');
               const subtaskId = `${oldTaskId}-${subtaskNum}`;
-              const stRef = activeTaskRef.collection('subtasks').doc(subtaskId);
+              const stRef = taskRef.collection('subtasks').doc(subtaskId);
               const newAssignees = stInput.assignees || [];
               transaction.set(stRef, {
-                id: `${oldWoId}__${activeTaskRef.parent.parent?.id}__${oldTaskId}__${subtaskId}`,
+                id: `${oldWoId}__${oldCatId}__${oldTaskId}__${subtaskId}`,
                 subtaskId: subtaskId,
                 subtaskName: stInput.subtaskName,
                 status: 'upcoming',
@@ -1171,13 +1294,25 @@ export class TaskService {
     if (!doc.exists) throw new AppError('Task not found', 404);
 
     const oldData = doc.data();
+
+    // Verify deletability of all child subtasks
+    const subtasksSnap = await taskRef.collection('subtasks').get();
+    for (const stDoc of subtasksSnap.docs) {
+      const stData = stDoc.data();
+      if (stData.isActive !== false) {
+        const isDeletable = await this.updateSubtaskDeletability(stDoc.ref, stData.subtaskId || stDoc.id);
+        if (!isDeletable) {
+          throw new AppError(`ไม่สามารถลบงานหลักได้ เนื่องจากมีงานย่อย "${stData.subtaskName}" ที่มีบันทึกความคืบหน้าหรือชั่วโมงทำงานแล้ว`, 400);
+        }
+      }
+    }
+
     const updates = { isActive: false, updatedAt: new Date(), updatedBy: userId };
     
     // Batch update to soft-delete the task and all subtasks under it
     const batch = afterSaleDb.batch();
     batch.update(taskRef, updates);
 
-    const subtasksSnap = await taskRef.collection('subtasks').get();
     subtasksSnap.docs.forEach((stDoc) => {
       batch.update(stDoc.ref, { isActive: false, updatedAt: new Date(), updatedBy: userId });
     });
@@ -1256,7 +1391,7 @@ export class TaskService {
   /**
    * Delete Subtask (with Safety Check: Soft Delete if has reports, else Hard Delete)
    */
-  async deleteSubtask(id: string, subtaskId: string, userId: string): Promise<void> {
+  async deleteSubtask(id: string, subtaskId: string, userId: string): Promise<{ type: 'hard' }> {
     let lookupId: string;
     const subtaskParts = this.parseCompositeId(subtaskId);
     if (subtaskParts.length >= 4) {
@@ -1276,73 +1411,45 @@ export class TaskService {
     if (!doc.exists) throw new AppError('Subtask not found', 404);
 
     const subtaskData = doc.data() as any;
+    const actualSubtaskId = subtaskData.subtaskId || subtaskId;
+
+    // Check deletability using helper method
+    const isDeletable = await this.updateSubtaskDeletability(subtaskRef, actualSubtaskId);
+    if (!isDeletable) {
+      throw new AppError('ไม่สามารถลบงานย่อยนี้ได้ เนื่องจากเริ่มงานไปแล้วหรือมีชั่วโมงการทำงาน/OT บันทึกอยู่', 400);
+    }
+
     const now = new Date();
 
-    // Check if daily progress is > 0 OR if any daily reports exist in revisions or help collections
-    let hasDailyReports = false;
-    if ((subtaskData.dailyProgress || 0) > 0) {
-      hasDailyReports = true;
-    } else {
-      // Check revisions subcollection -> dailyReports
-      const revisionsSnap = await subtaskRef.collection('revisions').get();
-      for (const revDoc of revisionsSnap.docs) {
-        const reportsSnap = await revDoc.ref.collection('dailyReports').limit(1).get();
-        if (!reportsSnap.empty) {
-          hasDailyReports = true;
-          break;
-        }
-      }
+    // Perform Hard Delete (delete revisions, help, dailyReports, and the subtask document)
+    const batch = afterSaleDb.batch();
 
-      // Check help subcollection -> dailyReports
-      if (!hasDailyReports) {
-        const helpSnap = await subtaskRef.collection('help').get();
-        for (const helpDoc of helpSnap.docs) {
-          const reportsSnap = await helpDoc.ref.collection('dailyReports').limit(1).get();
-          if (!reportsSnap.empty) {
-            hasDailyReports = true;
-            break;
-          }
-        }
-      }
+    // 1. Delete revisions and their dailyReports
+    const revisionsSnap = await subtaskRef.collection('revisions').get();
+    for (const revDoc of revisionsSnap.docs) {
+      const reportsSnap = await revDoc.ref.collection('dailyReports').get();
+      reportsSnap.docs.forEach(rDoc => batch.delete(rDoc.ref));
+      batch.delete(revDoc.ref);
     }
 
-    if (hasDailyReports) {
-      // Perform Soft Delete
-      await subtaskRef.update({
-        isActive: false,
-        updatedAt: now,
-        updatedBy: userId
-      });
-      console.log(`[TaskService] Soft deleted subtask ${subtaskId} (daily reports exist)`);
-    } else {
-      // Perform Hard Delete: Delete nested subcollections first
-      const batch = afterSaleDb.batch();
-
-      // 1. Delete revisions and their dailyReports
-      const revisionsSnap = await subtaskRef.collection('revisions').get();
-      for (const revDoc of revisionsSnap.docs) {
-        const reportsSnap = await revDoc.ref.collection('dailyReports').get();
-        reportsSnap.docs.forEach(rDoc => batch.delete(rDoc.ref));
-        batch.delete(revDoc.ref);
-      }
-
-      // 2. Delete help and their dailyReports
-      const helpSnap = await subtaskRef.collection('help').get();
-      for (const helpDoc of helpSnap.docs) {
-        const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
-        reportsSnap.docs.forEach(rDoc => batch.delete(rDoc.ref));
-        batch.delete(helpDoc.ref);
-      }
-
-      // 3. Delete the subtask document itself
-      batch.delete(subtaskRef);
-
-      await batch.commit();
-      console.log(`[TaskService] Hard deleted subtask ${subtaskId} (no daily reports)`);
+    // 2. Delete help and their dailyReports
+    const helpSnap = await subtaskRef.collection('help').get();
+    for (const helpDoc of helpSnap.docs) {
+      const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
+      reportsSnap.docs.forEach(rDoc => batch.delete(rDoc.ref));
+      batch.delete(helpDoc.ref);
     }
+
+    // 3. Delete the subtask document itself
+    batch.delete(subtaskRef);
+
+    await batch.commit();
+    console.log(`[TaskService] Hard deleted subtask ${actualSubtaskId} (qualified)`);
 
     // Recalculate and update parent task's aggregates
     await this.updateParentTaskAggregates(taskRef, now, userId);
+
+    return { type: 'hard' };
   }
 
   /**
@@ -1807,10 +1914,13 @@ export class TaskService {
         });
       }
 
-      // บันทึก History
-      
       await this.recordHistory(taskRef, 'daily_report_submit', oldData, historyUpdateData, updatedBy);
     });
+
+    if (subtaskRef) {
+      const actualSubtaskId = docForRev.data()?.subtaskId || id;
+      await this.updateSubtaskDeletability(subtaskRef, actualSubtaskId);
+    }
 
     // -------------------------------------------------------------
     // Update foremanUsage count for selected workers in Labor DB
@@ -2244,8 +2354,144 @@ export class TaskService {
     return [];
   }
 
+  async updateSubtaskDeletability(subtaskRef: FirebaseFirestore.DocumentReference, subtaskId: string): Promise<boolean> {
+    const doc = await subtaskRef.get();
+    if (!doc.exists) return false;
+    const subtaskData = doc.data() as any;
 
+    let isDeletable = true;
 
+    // 1. Current progress check
+    if ((subtaskData.dailyProgress || 0) > 0) {
+      isDeletable = false;
+    }
+
+    // 2. Query all daily reports in revisions and help collections
+    if (isDeletable) {
+      const revisionsSnap = await subtaskRef.collection('revisions').get();
+      for (const revDoc of revisionsSnap.docs) {
+        const reportsSnap = await revDoc.ref.collection('dailyReports').get();
+        for (const repDoc of reportsSnap.docs) {
+          const report = repDoc.data();
+          const hasLabor = Array.isArray(report.labor) && report.labor.length > 0;
+          const hasOt = (report.otHours || 0) > 0 || (report.otMorningHours || 0) > 0 || (report.otEveningHours || 0) > 0;
+          const progress = report.progress || 0;
+
+          if (progress > 0 || hasLabor || hasOt) {
+            isDeletable = false;
+            break;
+          }
+        }
+        if (!isDeletable) break;
+      }
+    }
+
+    if (isDeletable) {
+      const helpSnap = await subtaskRef.collection('help').get();
+      for (const helpDoc of helpSnap.docs) {
+        const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
+        for (const repDoc of reportsSnap.docs) {
+          const report = repDoc.data();
+          const hasLabor = Array.isArray(report.labor) && report.labor.length > 0;
+          const hasOt = (report.otHours || 0) > 0 || (report.otMorningHours || 0) > 0 || (report.otEveningHours || 0) > 0;
+          const progress = report.progress || 0;
+
+          if (progress > 0 || hasLabor || hasOt) {
+            isDeletable = false;
+            break;
+          }
+        }
+        if (!isDeletable) break;
+      }
+    }
+
+    // 3. Query global daily_reports collection
+    if (isDeletable) {
+      const globalReportsSnap = await db.collection('daily_reports')
+        .where('taskId', '==', subtaskId)
+        .where('isDeleted', '==', false)
+        .get();
+      
+      if (!globalReportsSnap.empty) {
+        for (const repDoc of globalReportsSnap.docs) {
+          const report = repDoc.data();
+          const hours = report.netHours || 0;
+          if (hours > 0) {
+            isDeletable = false;
+            break;
+          }
+        }
+      }
+    }
+
+    // Update the subtask document with the computed flag
+    if (subtaskData.isDeletable !== isDeletable) {
+      await subtaskRef.update({ isDeletable });
+    }
+
+    return isDeletable;
+  }
+
+  private async migrateTaskData(
+    oldTaskRef: FirebaseFirestore.DocumentReference,
+    newTaskRef: FirebaseFirestore.DocumentReference,
+    taskData: any,
+    finalSubtasks: any[]
+  ): Promise<void> {
+    console.log(`[TaskService] Migrating task data with ${finalSubtasks?.length || 0} subtasks.`);
+    const batch = afterSaleDb.batch();
+    
+    // 1. Write the new task document
+    batch.set(newTaskRef, taskData);
+    
+    // 2. Move subtasks, revisions, help, and dailyReports
+    const subtasksSnap = await oldTaskRef.collection('subtasks').get();
+    for (const subDoc of subtasksSnap.docs) {
+      const stData = subDoc.data();
+      const newSubtaskRef = newTaskRef.collection('subtasks').doc(subDoc.id);
+      
+      // Copy subtask document
+      batch.set(newSubtaskRef, stData);
+      batch.delete(subDoc.ref);
+      
+      // Copy revisions
+      const revisionsSnap = await subDoc.ref.collection('revisions').get();
+      for (const revDoc of revisionsSnap.docs) {
+        const newRevRef = newSubtaskRef.collection('revisions').doc(revDoc.id);
+        batch.set(newRevRef, revDoc.data());
+        batch.delete(revDoc.ref);
+        
+        // Copy dailyReports under revision
+        const reportsSnap = await revDoc.ref.collection('dailyReports').get();
+        for (const repDoc of reportsSnap.docs) {
+          const newRepRef = newRevRef.collection('dailyReports').doc(repDoc.id);
+          batch.set(newRepRef, repDoc.data());
+          batch.delete(repDoc.ref);
+        }
+      }
+      
+      // Copy help
+      const helpSnap = await subDoc.ref.collection('help').get();
+      for (const helpDoc of helpSnap.docs) {
+        const newHelpRef = newSubtaskRef.collection('help').doc(helpDoc.id);
+        batch.set(newHelpRef, helpDoc.data());
+        batch.delete(helpDoc.ref);
+        
+        // Copy dailyReports under help
+        const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
+        for (const repDoc of reportsSnap.docs) {
+          const newRepRef = newHelpRef.collection('dailyReports').doc(repDoc.id);
+          batch.set(newRepRef, repDoc.data());
+          batch.delete(repDoc.ref);
+        }
+      }
+    }
+    
+    // 3. Delete old task document
+    batch.delete(oldTaskRef);
+    
+    await batch.commit();
+  }
 
 }
 

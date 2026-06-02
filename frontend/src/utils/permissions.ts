@@ -15,7 +15,7 @@ import React from 'react';
  * 8. AM (Admin) - Level 8 - All management features
  */
 
-export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD';
+export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD' | 'LD';
 
 export interface User {
   id: string;
@@ -45,12 +45,12 @@ export class Permissions {
 
   /**
    * Check if user can create daily reports
-   * Allowed: SE, FM
+   * Allowed: SE, FM, LD
    */
   static canCreateDailyReport(role?: UserRole): boolean {
     if (role === 'GOD') return true;
     if (!role) return false;
-    return ['SE', 'FM'].includes(role);
+    return ['SE', 'FM', 'LD'].includes(role);
   }
 
   /**
@@ -155,7 +155,7 @@ export class Permissions {
   static canAccessWorkspace(role?: UserRole): boolean {
     if (role === 'GOD') return true;
     if (!role) return false;
-    return ['MD', 'PD', 'PM', 'PE', 'OE', 'AM'].includes(role);
+    return ['MD', 'PD', 'PM', 'PE', 'OE', 'AM', 'LD'].includes(role);
   }
 
   /**
@@ -165,7 +165,7 @@ export class Permissions {
   static canEditWorkspace(role?: UserRole): boolean {
     if (role === 'GOD') return true;
     if (!role) return false;
-    return ['MD', 'PD', 'PM', 'PE', 'OE'].includes(role);
+    return ['MD', 'PD', 'PM', 'PE', 'OE', 'LD'].includes(role);
   }
 
   /**
@@ -270,6 +270,7 @@ export class Permissions {
       SE: 'วิศวกรประจำหน้างาน',
       FM: 'หัวหน้างาน',
       AM: 'ผู้ดูแลระบบ',
+      LD: 'หัวหน้ากลุ่มงาน (Leader)',
     };
     return roleNames[roleCode] || roleCode;
   }
@@ -285,6 +286,7 @@ export class Permissions {
       PM: 3,
       PE: 4,
       OE: 5,
+      LD: 5.5,
       SE: 6,
       FM: 7,
       AM: 8,

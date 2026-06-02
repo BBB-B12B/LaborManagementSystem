@@ -7,6 +7,7 @@ import { db } from '../config/firebase';
 import { afterSaleDb } from '../config/firebaseProjectB';
 import { FieldValue } from 'firebase-admin/firestore';
 import { AppError } from '../api/middleware/errorHandler';
+import { taskService } from './TaskService';
 
 export interface WorkOrderConfig {
   id?: string;
@@ -14,6 +15,10 @@ export interface WorkOrderConfig {
   name: string;
   createdAt?: Date;
   createdBy?: string;
+  leaderId?: string | null;
+  leaderName?: string | null;
+  leaderIds?: string[];
+  leaderNames?: string[];
 }
 
 export interface CategoryConfig {
@@ -25,7 +30,6 @@ export interface CategoryConfig {
 }
 
 const PROJECT_COLLECTION = 'Project';
-const TASKS_GROUP = 'tasks';
 
 export class ProjectConfigService {
 
@@ -58,6 +62,10 @@ export class ProjectConfigService {
       name: data.name.trim(),
       createdAt: FieldValue.serverTimestamp(),
       createdBy: userId,
+      leaderId: data.leaderId || null,
+      leaderName: data.leaderName || null,
+      leaderIds: data.leaderIds || [],
+      leaderNames: data.leaderNames || [],
     };
 
     await ref.set(payload);
@@ -69,15 +77,17 @@ export class ProjectConfigService {
     const doc = await ref.get();
     if (!doc.exists) throw new AppError('ไม่พบ Work Order ที่ต้องการแก้ไข', 404);
 
-    if (data.name && !data.name.trim()) {
-      throw new AppError('ชื่อไม่สามารถเป็นค่าว่างได้', 400);
-    }
-
-    await ref.update({
-      ...(data.name ? { name: data.name.trim() } : {}),
+    const updatePayload: any = {
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: userId,
-    });
+    };
+    if (data.name) updatePayload.name = data.name.trim();
+    if (data.leaderId !== undefined) updatePayload.leaderId = data.leaderId;
+    if (data.leaderName !== undefined) updatePayload.leaderName = data.leaderName;
+    if (data.leaderIds !== undefined) updatePayload.leaderIds = data.leaderIds;
+    if (data.leaderNames !== undefined) updatePayload.leaderNames = data.leaderNames;
+
+    await ref.update(updatePayload);
 
     // Cascade update workOrderName in tasks
     if (data.name) {
@@ -109,7 +119,7 @@ export class ProjectConfigService {
   async deleteWorkOrder(projectId: string, code: string): Promise<void> {
     const ref = db.collection(PROJECT_COLLECTION).doc(projectId).collection('workOrderConfigs').doc(code);
     const doc = await ref.get();
-    if (!doc.exists) throw new AppError('ไม่พบ Work Order ที่ต้องการลบ', 404);
+    const configExists = doc.exists;
 
     const woSnapshot = await afterSaleDb
       .collection('workOrders')
@@ -117,45 +127,45 @@ export class ProjectConfigService {
       .get();
       
     const matchingWoDocs = woSnapshot.docs.filter(doc => doc.data().workOrderCode === code);
+
+    if (!configExists && matchingWoDocs.length === 0) {
+      throw new AppError('ไม่พบ Work Order ที่ต้องการลบ', 404);
+    }
+
     const tasksToDelete: FirebaseFirestore.DocumentReference[] = [];
     const subtasksToDelete: FirebaseFirestore.DocumentReference[] = [];
     const nestedDocsToDelete: FirebaseFirestore.DocumentReference[] = [];
+    const categoriesToDelete: FirebaseFirestore.DocumentReference[] = [];
 
     for (const woDoc of matchingWoDocs) {
       const catsSnapshot = await woDoc.ref.collection('categories').get();
       for (const catDoc of catsSnapshot.docs) {
+        categoriesToDelete.push(catDoc.ref);
         const tasksSnapshot = await catDoc.ref.collection('tasks').get();
         for (const taskDoc of tasksSnapshot.docs) {
-          const taskData = taskDoc.data();
-          if ((taskData.dailyProgress || 0) > 0) {
-             throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานหลักที่เริ่มงานไปแล้ว (Progress > 0)`, 400);
-          }
-          
           // Get subtasks under this task
           const subtasksSnapshot = await taskDoc.ref.collection('subtasks').get();
           for (const subtaskDoc of subtasksSnapshot.docs) {
             const subtaskData = subtaskDoc.data();
-            if ((subtaskData.dailyProgress || 0) > 0) {
-              throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานย่อย "${subtaskData.subtaskName}" เริ่มงานไปแล้ว`, 400);
+            
+            // Check deletability using taskService
+            const isDeletable = await taskService.updateSubtaskDeletability(subtaskDoc.ref, subtaskData.subtaskId || subtaskDoc.id);
+            if (!isDeletable) {
+              throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีชั่วโมงการทำงาน/OT บันทึกอยู่ หรือเริ่มงานไปแล้วในงานย่อย "${subtaskData.subtaskName}"`, 400);
             }
             
-            // Check dailyReports under subtask revisions
+            // Collect nested docs to delete (revisions dailyReports and help dailyReports)
             const revisionsSnap = await subtaskDoc.ref.collection('revisions').get();
             for (const revDoc of revisionsSnap.docs) {
-              const reportsSnap = await revDoc.ref.collection('dailyReports').limit(1).get();
-              if (!reportsSnap.empty) {
-                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" ถูกบันทึก Daily Report ไปแล้ว`, 400);
-              }
+              const reportsSnap = await revDoc.ref.collection('dailyReports').get();
+              reportsSnap.docs.forEach(rDoc => nestedDocsToDelete.push(rDoc.ref));
               nestedDocsToDelete.push(revDoc.ref);
             }
 
-            // Check dailyReports under subtask help
             const helpSnap = await subtaskDoc.ref.collection('help').get();
             for (const helpDoc of helpSnap.docs) {
-              const reportsSnap = await helpDoc.ref.collection('dailyReports').limit(1).get();
-              if (!reportsSnap.empty) {
-                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" มีรายงานขอความช่วยเหลือไปแล้ว`, 400);
-              }
+              const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
+              reportsSnap.docs.forEach(rDoc => nestedDocsToDelete.push(rDoc.ref));
               nestedDocsToDelete.push(helpDoc.ref);
             }
 
@@ -167,23 +177,26 @@ export class ProjectConfigService {
       }
     }
 
-    // Delete allowed: Delete empty subtasks first, then tasks
+    // Delete allowed: Delete empty subtasks first, then tasks, categories and work orders
     const batch = afterSaleDb.batch();
     nestedDocsToDelete.forEach(ref => batch.delete(ref));
     subtasksToDelete.forEach(ref => batch.delete(ref));
     tasksToDelete.forEach(taskRef => batch.delete(taskRef));
+    categoriesToDelete.forEach(catRef => batch.delete(catRef));
     matchingWoDocs.forEach(woDoc => batch.delete(woDoc.ref));
     
     // Check categories under this Work Order in Labor DB
-    const catsSnapshot = await db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs')
-      .where('workOrderCode', '==', code).get();
-    
     const laborBatch = db.batch();
-    catsSnapshot.docs.forEach(catDoc => laborBatch.delete(catDoc.ref));
-    laborBatch.delete(ref);
+    if (configExists) {
+      const catsSnapshot = await db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs')
+        .where('workOrderCode', '==', code).get();
+      
+      catsSnapshot.docs.forEach(catDoc => laborBatch.delete(catDoc.ref));
+      laborBatch.delete(ref);
+    }
 
     await Promise.all([
-      tasksToDelete.length > 0 ? batch.commit() : Promise.resolve(),
+      (tasksToDelete.length > 0 || subtasksToDelete.length > 0 || categoriesToDelete.length > 0 || matchingWoDocs.length > 0) ? batch.commit() : Promise.resolve(),
       laborBatch.commit()
     ]);
   }
@@ -232,8 +245,7 @@ export class ProjectConfigService {
   }
 
   async updateCategory(projectId: string, id: string, data: Partial<CategoryConfig>, userId: string): Promise<void> {
-    const ref = db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs').doc(id);
-    const doc = await ref.get();
+    const { ref, doc } = await this.resolveCategoryConfig(projectId, id);
     if (!doc.exists) throw new AppError('ไม่พบ Category ที่ต้องการแก้ไข', 404);
 
     if (data.name && !data.name.trim()) {
@@ -278,10 +290,33 @@ export class ProjectConfigService {
   }
 
   async deleteCategory(projectId: string, id: string): Promise<void> {
-    const ref = db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs').doc(id);
-    const doc = await ref.get();
-    if (!doc.exists) throw new AppError('ไม่พบ Category ที่ต้องการลบ', 404);
-    const catData = doc.data() as CategoryConfig;
+    const { ref, doc } = await this.resolveCategoryConfig(projectId, id);
+    let catData: { name: string; workOrderCode: string } | null = null;
+    let configExists = doc.exists;
+
+    if (configExists) {
+      const data = doc.data() as CategoryConfig;
+      catData = { name: data.name, workOrderCode: data.workOrderCode };
+    } else {
+      // Look up in B-database (afterSaleDb) to resolve name and workOrderCode
+      const catQuery = await afterSaleDb.collectionGroup('categories').get();
+      const matchingCatDoc = catQuery.docs.find(d => d.id === id);
+      if (matchingCatDoc) {
+        const catName = matchingCatDoc.data()?.catName;
+        const woDocRef = matchingCatDoc.ref.parent.parent;
+        if (woDocRef) {
+          const woSnap = await woDocRef.get();
+          const workOrderCode = woSnap.data()?.workOrderCode;
+          if (catName && workOrderCode) {
+            catData = { name: catName, workOrderCode };
+          }
+        }
+      }
+    }
+
+    if (!catData) {
+      throw new AppError('ไม่พบ Category ที่ต้องการลบ', 404);
+    }
 
     // Safety check
     const woSnapshot = await afterSaleDb
@@ -289,7 +324,7 @@ export class ProjectConfigService {
       .where('projectId', '==', projectId)
       .get();
       
-    const matchingWoDocs = woSnapshot.docs.filter(doc => doc.data().workOrderCode === catData.workOrderCode);
+    const matchingWoDocs = woSnapshot.docs.filter(doc => doc.data().workOrderCode === catData!.workOrderCode);
     const tasksToDelete: FirebaseFirestore.DocumentReference[] = [];
     const subtasksToDelete: FirebaseFirestore.DocumentReference[] = [];
     const nestedDocsToDelete: FirebaseFirestore.DocumentReference[] = [];
@@ -297,41 +332,34 @@ export class ProjectConfigService {
 
     for (const woDoc of matchingWoDocs) {
       const catsSnapshot = await woDoc.ref.collection('categories').get();
-      const matchingCatDocs = catsSnapshot.docs.filter(doc => doc.data().catName === catData.name);
+      const matchingCatDocs = catsSnapshot.docs.filter(doc => doc.data().catName === catData!.name);
       
       for (const catDoc of matchingCatDocs) {
         const tasksSnapshot = await catDoc.ref.collection('tasks').get();
         for (const taskDoc of tasksSnapshot.docs) {
-          const taskData = taskDoc.data();
-          if ((taskData.dailyProgress || 0) > 0) {
-             throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานหลักที่เริ่มงานไปแล้ว (Progress > 0)`, 400);
-          }
-          
           // Get subtasks under this task
           const subtasksSnapshot = await taskDoc.ref.collection('subtasks').get();
           for (const subtaskDoc of subtasksSnapshot.docs) {
             const subtaskData = subtaskDoc.data();
-            if ((subtaskData.dailyProgress || 0) > 0) {
-              throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีงานย่อย "${subtaskData.subtaskName}" เริ่มงานไปแล้ว`, 400);
+            
+            // Check deletability using taskService
+            const isDeletable = await taskService.updateSubtaskDeletability(subtaskDoc.ref, subtaskData.subtaskId || subtaskDoc.id);
+            if (!isDeletable) {
+              throw new AppError(`ไม่สามารถลบได้ เนื่องจากมีชั่วโมงการทำงาน/OT บันทึกอยู่ หรือเริ่มงานไปแล้วในงานย่อย "${subtaskData.subtaskName}"`, 400);
             }
             
-            // Check dailyReports under subtask revisions
+            // Collect nested docs to delete
             const revisionsSnap = await subtaskDoc.ref.collection('revisions').get();
             for (const revDoc of revisionsSnap.docs) {
-              const reportsSnap = await revDoc.ref.collection('dailyReports').limit(1).get();
-              if (!reportsSnap.empty) {
-                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" ถูกบันทึก Daily Report ไปแล้ว`, 400);
-              }
+              const reportsSnap = await revDoc.ref.collection('dailyReports').get();
+              reportsSnap.docs.forEach(rDoc => nestedDocsToDelete.push(rDoc.ref));
               nestedDocsToDelete.push(revDoc.ref);
             }
 
-            // Check dailyReports under subtask help
             const helpSnap = await subtaskDoc.ref.collection('help').get();
             for (const helpDoc of helpSnap.docs) {
-              const reportsSnap = await helpDoc.ref.collection('dailyReports').limit(1).get();
-              if (!reportsSnap.empty) {
-                throw new AppError(`ไม่สามารถลบได้ เนื่องจากงานย่อย "${subtaskData.subtaskName}" มีรายงานขอความช่วยเหลือไปแล้ว`, 400);
-              }
+              const reportsSnap = await helpDoc.ref.collection('dailyReports').get();
+              reportsSnap.docs.forEach(rDoc => nestedDocsToDelete.push(rDoc.ref));
               nestedDocsToDelete.push(helpDoc.ref);
             }
 
@@ -352,8 +380,43 @@ export class ProjectConfigService {
 
     await Promise.all([
       (tasksToDelete.length > 0 || subtasksToDelete.length > 0 || categoriesToDelete.length > 0) ? batch.commit() : Promise.resolve(),
-      ref.delete()
+      configExists ? ref.delete() : Promise.resolve()
     ]);
+  }
+
+  private async resolveCategoryConfig(projectId: string, id: string): Promise<{ ref: FirebaseFirestore.DocumentReference; doc: FirebaseFirestore.DocumentSnapshot }> {
+    let ref = db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs').doc(id);
+    let doc = await ref.get();
+
+    if (!doc.exists) {
+      // Look up category in afterSaleDb categories subcollection (Firebase B)
+      const catQuery = await afterSaleDb.collectionGroup('categories').get();
+      const matchingCatDoc = catQuery.docs.find(d => d.id === id);
+      
+      if (matchingCatDoc) {
+        const catName = matchingCatDoc.data()?.catName;
+        const woDocRef = matchingCatDoc.ref.parent.parent;
+        if (woDocRef) {
+          const woSnap = await woDocRef.get();
+          const workOrderCode = woSnap.data()?.workOrderCode;
+          
+          if (workOrderCode && catName) {
+            const configSnap = await db.collection(PROJECT_COLLECTION).doc(projectId).collection('categoryConfigs')
+              .where('workOrderCode', '==', workOrderCode)
+              .where('name', '==', catName)
+              .limit(1)
+              .get();
+              
+            if (!configSnap.empty) {
+              ref = configSnap.docs[0].ref;
+              doc = configSnap.docs[0];
+            }
+          }
+        }
+      }
+    }
+    
+    return { ref, doc };
   }
 }
 

@@ -4,6 +4,10 @@ export interface WorkOrderConfig {
   id: string;
   code: string;
   name: string;
+  leaderId?: string;
+  leaderName?: string;
+  leaderIds?: string[];
+  leaderNames?: string[];
 }
 
 export interface CategoryConfig {
@@ -19,11 +23,11 @@ export const projectConfigService = {
     return await api.get(`/projects/${projectId}/configs/work-orders`);
   },
 
-  createWorkOrder: async (projectId: string, data: { code: string; name: string }): Promise<WorkOrderConfig> => {
+  createWorkOrder: async (projectId: string, data: { code: string; name: string; leaderId?: string | null; leaderName?: string | null; leaderIds?: string[]; leaderNames?: string[] }): Promise<WorkOrderConfig> => {
     return await api.post(`/projects/${projectId}/configs/work-orders`, data);
   },
 
-  updateWorkOrder: async (projectId: string, code: string, data: { name: string }): Promise<void> => {
+  updateWorkOrder: async (projectId: string, code: string, data: { name?: string; leaderId?: string | null; leaderName?: string | null; leaderIds?: string[]; leaderNames?: string[] }): Promise<void> => {
     return await api.put(`/projects/${projectId}/configs/work-orders/${code}`, data);
   },
 

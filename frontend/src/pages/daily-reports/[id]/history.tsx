@@ -53,7 +53,7 @@ export default function DailyReportHistoryPage() {
 
   if (isLoading) {
     return (
-      <ProtectedRoute requiredRoles={['SE', 'FM']}>
+      <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
         <Layout>
           <LoadingSpinner message="กำลังโหลดประวัติการแก้ไข..." />
         </Layout>
@@ -63,7 +63,7 @@ export default function DailyReportHistoryPage() {
 
   if (error || !history) {
     return (
-      <ProtectedRoute requiredRoles={['SE', 'FM']}>
+      <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
             <Alert severity="error">
@@ -113,7 +113,7 @@ export default function DailyReportHistoryPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
           {/* Header */}

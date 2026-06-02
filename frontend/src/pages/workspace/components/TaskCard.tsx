@@ -284,7 +284,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               <Typography variant="body2">Edit</Typography>
             </MenuItem>
           )}
-          {onDelete && (
+          {onDelete && task.isDeletable !== false && (
             <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
               <ListItemIcon>
                 <DeleteIcon fontSize="small" color="error" />

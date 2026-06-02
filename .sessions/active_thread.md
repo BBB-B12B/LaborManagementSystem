@@ -1,3 +1,3 @@
-task: History Modal — ปรับ Logic ดึงข้อมูลจาก editHistory โดยตรง, เพิ่ม LaborSummaryPanel และ ReportEditHistoryPanel, ลบ date-to-date diff ออก
+task: ปรับปรุงการเลือกหัวหน้ากลุ่มงาน (Leader Selection) ให้สามารถระบุได้มากกว่า 1 คนและแก้ไขข้อความซ้อนทับ
 phase: done
 next: none

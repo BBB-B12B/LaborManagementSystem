@@ -907,7 +907,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               renderOption={(props, option) => (
                                 <li {...props} key={option.code}>
                                   <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
-                                  {!isEdit && (
+                                  {!isEdit && user?.roleCode !== 'LD' && (
                                     <IconButton 
                                       size="small" 
                                       onClick={(e) => { e.stopPropagation(); setEditWO(option); setOpenWOModal(true); }}
@@ -926,7 +926,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           </Box>
                         )}
                       />
-                      {!isEdit && selectedProjectId && (
+                      {!isEdit && selectedProjectId && user?.roleCode !== 'LD' && (
                         <Button 
                           variant="outlined" 
                           onClick={() => { setEditWO(null); setOpenWOModal(true); }}

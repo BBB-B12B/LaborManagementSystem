@@ -24,8 +24,8 @@ interface NavMenuItem {
 
 export const GRADIENT_BG = 'linear-gradient(180deg, #2c2437 0%, #201b2b 100%)';
 export const NAV_TEXT = '#f5f5f8';
-const activeBg = 'rgba(255, 255, 255, 0.08)';
-const accent = '#d62828';
+const activeBg = '#FF7F32';
+const accent = '#FF7F32';
 
 import { useUIStore } from '@/store/uiStore';
 
@@ -51,7 +51,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.dailyReport'),
       path: '/daily-reports',
       icon: <DescriptionIcon />,
-      roles: ['SE', 'FM'],
+      roles: ['SE', 'FM', 'LD'],
     },
     {
       label: t('nav.management', 'การจัดการ'),
@@ -75,7 +75,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.workspace', 'Workspace'),
       path: '/workspace',
       icon: <ViewKanbanIcon />,
-      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'],
     },
   ];
 
@@ -152,20 +152,22 @@ export const Navbar: React.FC = () => {
               key={item.path}
               onClick={() => handleNavigate(item.path)}
               sx={{
-                borderRadius: 12,
+                borderRadius: '24px',
                 bgcolor: isActive ? activeBg : 'transparent',
-                color: NAV_TEXT,
+                color: isActive ? '#ffffff' : NAV_TEXT,
                 border: isActive ? `1px solid ${accent}` : '1px solid transparent',
-                boxShadow: isActive ? '0 10px 30px rgba(0,0,0,0.15)' : 'none',
+                boxShadow: isActive ? '0 4px 20px rgba(255, 127, 50, 0.3)' : 'none',
                 transition: 'all 0.2s ease',
+                px: 2.25,
+                py: 1,
                 '&:hover': {
-                  bgcolor: 'rgba(255,255,255,0.06)',
+                  bgcolor: isActive ? '#e66a25' : 'rgba(255,255,255,0.06)',
                 },
               }}
             >
               <ListItemIcon
                 sx={{
-                  color: NAV_TEXT,
+                  color: isActive ? '#ffffff' : NAV_TEXT,
                   minWidth: 38,
                   '& svg': { fontSize: 20 },
                 }}
@@ -174,7 +176,7 @@ export const Navbar: React.FC = () => {
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Typography variant="body1" sx={{ fontWeight: isActive ? 700 : 500 }}>
+                  <Typography variant="body1" sx={{ fontWeight: isActive ? 700 : 500, fontSize: '0.9rem' }}>
                     {item.label}
                   </Typography>
                 }

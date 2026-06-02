@@ -1856,7 +1856,7 @@ export default function WorkspaceRequestsPage() {
   );
 
   return (
-    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD']}>
       <Layout maxWidth={false} disablePadding>{pageContent}</Layout>
     </ProtectedRoute>
   );

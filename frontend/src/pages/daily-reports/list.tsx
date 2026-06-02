@@ -695,7 +695,7 @@ export default function WorkRecordsPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
       <Layout maxWidth={false} disablePadding>
         <Box sx={{ p: 4 }}>
           {/* Header */}

@@ -41,6 +41,7 @@ import {
   Schedule as ScheduleIcon,
   AccessTime as AccessTimeIcon,
   People as PeopleIcon,
+  FilterAltOff as FilterAltOffIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -119,6 +120,10 @@ export default function WorkspacePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isTaskEditOpen, setIsTaskEditOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState<{ id: string; name: string } | null>(null);
+  const [taskEditName, setTaskEditName] = useState('');
+  const [taskEditSubmitting, setTaskEditSubmitting] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
@@ -485,12 +490,13 @@ export default function WorkspacePage() {
     try {
       const parentTask = tasks.find((t) => t.workOrderId === editingWo.id);
       const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+      const workOrderCode = parentTask?.workOrderCode || editingWo.id;
       
       if (!projectId) {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
 
-      await projectConfigService.updateWorkOrder(projectId, editingWo.id, { name: woEditName.trim() });
+      await projectConfigService.updateWorkOrder(projectId, workOrderCode, { name: woEditName.trim() });
       toast.show('แก้ไขชื่อ WorkOrder สำเร็จ', 'success');
       setIsWoEditOpen(false);
       setEditingWo(null);
@@ -515,12 +521,13 @@ export default function WorkspacePage() {
     try {
       const parentTask = tasks.find((t) => t.workOrderId === woToDelete.id);
       const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+      const workOrderCode = parentTask?.workOrderCode || woToDelete.id;
       
       if (!projectId) {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
 
-      await projectConfigService.deleteWorkOrder(projectId, woToDelete.id);
+      await projectConfigService.deleteWorkOrder(projectId, workOrderCode);
       toast.show('ลบ WorkOrder สำเร็จ', 'success');
       setIsWoDeleteOpen(false);
       setWoToDelete(null);
@@ -531,7 +538,7 @@ export default function WorkspacePage() {
       setIsWoDeleteOpen(false);
       setWoToDelete(null);
       setBlockDeleteAlertMessage(
-        `ไม่สามารถลบ WorkOrder "${woToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้ WorkOrder นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
+        error.message || `ไม่สามารถลบ WorkOrder "${woToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้ WorkOrder นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
       );
       setIsBlockDeleteAlertOpen(true);
     } finally {
@@ -575,6 +582,43 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleEditTaskOpen = (taskId: string, currentName: string) => {
+    setTaskToEdit({ id: taskId, name: currentName });
+    setTaskEditName(currentName);
+    setIsTaskEditOpen(true);
+  };
+
+  const handleEditTaskSubmit = async () => {
+    if (!taskToEdit) return;
+    if (!taskEditName.trim()) {
+      toast.show('กรุณากรอกชื่องานหลัก', 'error');
+      return;
+    }
+    setTaskEditSubmitting(true);
+    try {
+      await taskService.updateTask(
+        taskToEdit.id,
+        { taskName: taskEditName.trim() },
+        user?.id || ''
+      );
+      toast.show('แก้ไขชื่องานหลักสำเร็จ', 'success');
+      setIsTaskEditOpen(false);
+      setTaskToEdit(null);
+      invalidateCache();
+      fetchFromAPI(true);
+    } catch (error: any) {
+      console.error('Failed to update task name', error);
+      toast.show(error.message || 'ไม่สามารถแก้ไขชื่องานหลักได้', 'error');
+    } finally {
+      setTaskEditSubmitting(false);
+    }
+  };
+
+  const handleResetFilters = () => {
+    setActiveTab('All Tasks');
+    setSelectedNode(null);
+  };
+
   const handleDeleteCategoryOpen = (catId: string, currentName: string) => {
     setCatToDelete({ id: catId, name: currentName });
     setIsCatDeleteOpen(true);
@@ -602,7 +646,7 @@ export default function WorkspacePage() {
       setIsCatDeleteOpen(false);
       setCatToDelete(null);
       setBlockDeleteAlertMessage(
-        `ไม่สามารถลบหมวดหมู่ย่อย "${catToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้หมวดหมู่นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
+        error.message || `ไม่สามารถลบหมวดหมู่ย่อย "${catToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้หมวดหมู่นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
       );
       setIsBlockDeleteAlertOpen(true);
     } finally {
@@ -967,7 +1011,7 @@ export default function WorkspacePage() {
   }, [editingSubtaskCard, projects, user]);
 
   return (
-    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD']}>
       <Layout disablePadding disableTopGap maxWidth={false}>
       <Head>
         <title>Workspace | Labor Manager</title>
@@ -1000,10 +1044,11 @@ export default function WorkspacePage() {
               onSubtaskClick={handleSubtaskClickInTree}
               onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
               onQuickAssignSubtask={canEditWorkspace ? handleQuickAssignSubtaskClick : undefined}
-              onEditWorkOrder={canEditWorkspace ? handleEditWorkOrderOpen : undefined}
-              onDeleteWorkOrder={canEditWorkspace ? handleDeleteWorkOrderOpen : undefined}
+              onEditWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleEditWorkOrderOpen : undefined}
+              onDeleteWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleDeleteWorkOrderOpen : undefined}
               onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
               onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
+              onEditTask={canEditWorkspace ? handleEditTaskOpen : undefined}
               activeTab={activeTab}
             />
           </Box>
@@ -1067,11 +1112,11 @@ export default function WorkspacePage() {
                         borderRadius: '999px',
                         textTransform: 'none',
                         fontWeight: 700,
-                        color: activeTab === tab ? '#1c1e2b' : '#6b7280',
-                        bgcolor: activeTab === tab ? '#ffffff' : 'transparent',
-                        boxShadow: activeTab === tab ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                        color: activeTab === tab ? '#ffffff' : '#6b7280',
+                        bgcolor: activeTab === tab ? '#FF7F32' : 'transparent',
+                        boxShadow: activeTab === tab ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
                         '&:hover': {
-                          bgcolor: activeTab === tab ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                          bgcolor: activeTab === tab ? '#e66a25' : 'rgba(0,0,0,0.04)',
                         },
                         flexShrink: 0,
                       }}
@@ -1080,6 +1125,34 @@ export default function WorkspacePage() {
                     </Button>
                   ))}
                 </Stack>
+
+                {/* Reset Filters button next to the tabs */}
+                {(activeTab !== 'All Tasks' || selectedNode !== null) && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<FilterAltOffIcon sx={{ fontSize: 16 }} />}
+                    onClick={handleResetFilters}
+                    sx={{
+                      borderRadius: '999px',
+                      color: '#ef4444',
+                      borderColor: '#fecaca',
+                      bgcolor: '#fef2f2',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      px: 2.5,
+                      py: 1,
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)',
+                      '&:hover': {
+                        borderColor: '#ef4444',
+                        bgcolor: '#fee2e2',
+                      },
+                      flexShrink: 0,
+                    }}
+                  >
+                    ล้างตัวกรอง
+                  </Button>
+                )}
 
                 {canEditWorkspace && (
                   <Button
@@ -1333,6 +1406,26 @@ export default function WorkspacePage() {
             } : undefined}
             onQuickAssignSubtask={canEditWorkspace ? (t, st) => {
               handleQuickAssignSubtaskClick(t, st);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onEditWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? (wId, wName) => {
+              handleEditWorkOrderOpen(wId, wName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onDeleteWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? (wId, wName) => {
+              handleDeleteWorkOrderOpen(wId, wName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onEditCategory={canEditWorkspace ? (cId, cName) => {
+              handleEditCategoryOpen(cId, cName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onDeleteCategory={canEditWorkspace ? (cId, cName) => {
+              handleDeleteCategoryOpen(cId, cName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onEditTask={canEditWorkspace ? (tId, tName) => {
+              handleEditTaskOpen(tId, tName);
               setMobileDrawerOpen(false);
             } : undefined}
             activeTab={activeTab}
@@ -2339,6 +2432,56 @@ export default function WorkspacePage() {
             }}
           >
             รับทราบ
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Task Edit Dialog */}
+      <Dialog
+        open={isTaskEditOpen}
+        onClose={() => setIsTaskEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่องานหลัก (Task)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            <TextField
+              label="ชื่องานหลัก *"
+              variant="filled"
+              fullWidth
+              value={taskEditName}
+              onChange={(e) => setTaskEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsTaskEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleEditTaskSubmit}
+            variant="contained"
+            disabled={taskEditSubmitting}
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {taskEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
           </Button>
         </DialogActions>
       </Dialog>
