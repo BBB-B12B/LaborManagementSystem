@@ -117,10 +117,10 @@ const toProjectIds = (value: string): string[] => {
  */
 router.get(
   '/',
-  authorize(['AM', 'PM', 'PD', 'SE']),
+  authorize(['AM', 'PM', 'PD', 'SE', 'FM', 'PE', 'OE', 'MD', 'LD']),
   [
     query('page').optional().isInt({ min: 1 }),
-    query('pageSize').optional().isInt({ min: 1, max: 100 }),
+    query('pageSize').optional().isInt({ min: 1, max: 1000 }),
   ],
   async (req: Request, res: Response) => {
     try {
@@ -200,12 +200,11 @@ router.post(
     body('roleId').notEmpty().withMessage('Role ID is required'),
     body('department').isIn(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH']).withMessage('Invalid department'),
     body('projectLocationIds').isArray().withMessage('Project location IDs must be an array'),
-    body('startDate').notEmpty().withMessage('Start date is required'),
-    body('startDate').isISO8601().withMessage('Start date must be a valid ISO8601 date'),
-    body('dateOfBirth')
+    body('startDate')
       .optional()
       .isISO8601()
-      .withMessage('Date of birth must be a valid ISO8601 date'),
+      .withMessage('Start date must be a valid ISO8601 date'),
+
   ],
   async (req: Request, res: Response) => {
     try {
@@ -219,19 +218,12 @@ router.post(
         throw new AppError('Unauthorized - Missing user context', 401);
       }
 
-      const startDate = new Date(req.body.startDate);
+      const startDate = req.body.startDate ? new Date(req.body.startDate) : new Date();
       if (Number.isNaN(startDate.getTime())) {
         throw new AppError('Invalid start date', 400);
       }
 
-      const dateOfBirth =
-        req.body.dateOfBirth !== undefined && req.body.dateOfBirth !== null
-          ? new Date(req.body.dateOfBirth)
-          : undefined;
 
-      if (dateOfBirth && Number.isNaN(dateOfBirth.getTime())) {
-        throw new AppError('Invalid date of birth', 400);
-      }
 
       const payload: CreateUserInput = {
         username: req.body.username,
@@ -241,7 +233,7 @@ router.post(
         roleId: req.body.roleId,
         department: req.body.department,
         startDate,
-        dateOfBirth,
+
         projectLocationIds: Array.isArray(req.body.projectLocationIds)
           ? req.body.projectLocationIds
           : [],
@@ -302,7 +294,7 @@ router.post('/import', authorize(['AM']), upload.single('file'), async (req: Req
       const departmentRaw = getValue(row, 'Department');
       const projectIdsRaw = getValue(row, 'Project Location IDs (comma-separated)');
       const startDateValue = getValue(row, 'Start Date (YYYY-MM-DD)');
-      const birthDateValue = getValue(row, 'Date of Birth (YYYY-MM-DD)');
+
       const isActive = toBoolean(getValue(row, 'Is Active (TRUE/FALSE)'));
 
       const requiredMissing = [employeeId, username, password, fullName, roleIdRaw, departmentRaw, startDateValue].some(
@@ -317,7 +309,7 @@ router.post('/import', authorize(['AM']), upload.single('file'), async (req: Req
 
       const roleId = roleIdRaw.toUpperCase();
       const department = departmentRaw.toUpperCase();
-      if (!['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'].includes(roleId)) {
+      if (!['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'].includes(roleId)) {
         summary.failed += 1;
         logger.warn('User import skipped: invalid role', { rowNumber, employeeId, roleId });
         continue;
@@ -335,7 +327,6 @@ router.post('/import', authorize(['AM']), upload.single('file'), async (req: Req
         continue;
       }
 
-      const dateOfBirth = toDate(birthDateValue);
 
       const payload: CreateUserInput = {
         employeeId,
@@ -346,7 +337,7 @@ router.post('/import', authorize(['AM']), upload.single('file'), async (req: Req
         department: department as CreateUserInput['department'],
         projectLocationIds: toProjectIds(projectIdsRaw),
         startDate,
-        dateOfBirth,
+
         isActive,
       };
 

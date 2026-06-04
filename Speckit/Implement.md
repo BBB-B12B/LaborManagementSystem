@@ -77,146 +77,182 @@
 - [x] [Investigation Checklist](file:///d:/Labor%20Management%20System/Speckit/skills/refs/investigation-checklist.md) : Checklist สำหรับ E2E Troubleshooter (Evidence / Connectivity / Logic / Missing Link)
 - [x] [UX Audit Framework](file:///d:/Labor%20Management%20System/Speckit/skills/refs/ux-audit-framework.md) : กรอบตรวจสอบ UX ก่อนส่งมอบงาน (5 มิติ)
 
-### Step 2.5: Implementation (ลงมือทำ) **[EXECUTION MODE]**
-- **GATEKEEPER CHECK**:
-  - [ ] implementation_plan.md Approved?
-  - [ ] task.md Updated?
-  - [ ] traceability.md Updated?
-  - [ ] spec.md Updated?
-  - [ ] **[NEW] Implement.md Section 7+ Updated?** (บันทึก E2E Flow ของ Feature นี้แล้วหรือยัง?)
-  - หากยังไม่ครบ **5 ข้อนี้** ห้ามเริ่มเขียน Code เด็ดขาด!
-- เขียน Code ตามแผนที่วางไว้ใน Step 2.3
-- ทำทีละ Sub-task เพื่อลดความซับซ้อน
+---
 
-### Step 2.6: Verification (ตรวจสอบ) **[VERIFICATION MODE]**
-- รัน Validate Command: npm run lint หรือ Build Check
-- **Verification Plan**: ตรวจสอบตาม "Confirmed Behavior" ที่ระบุใน Task
+## 7. E2E Flow Documentation (Logic Flow)
 
-### Step 2.7: Closure & Handoff (จบงาน)
-- [x] Mark Task as Completed ใน task.md
-- ลบ Temporary Logs หรือ Comments ที่ไม่จำเป็นตอน Production
+### 🛣️ [F-014] Sales System Sync — E2E Flow & Schema Structure
 
-### Step 2.8: Documentation Summary (สรุปการอัปเดตเอกสาร) **[MANDATORY FINAL CHECK]**
-> **[CRITICAL GATEKEEPER]** : หากคุณไม่สรุปหัวข้อนี้ใน Final Response ถือว่างาน **"FAILED"** และผู้ใช้จะตีกลับงานทันที
+| มิติการทำงาน | รายละเอียด (Labor System -> Sales System) |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Project/Category -> `Submit` |
+| **API/SDK Contract** | ยิงตรงสู่ Firebase Collection: <br> `workOrders/{workOrderId}/categories/{catId}/tasks/{taskId}` |
+| **Database Schema** | **โครงสร้างแบบลำดับขั้น (Hierarchy):** <br> 1. `workOrders` (Collection) -> Document: `VH-2026-0001-STR` <br> 2. `categories` (Subcol) -> Document: `CAT-0001` (Fields: `catId`, `catName`) <br> 3. `tasks` (Subcol) -> Document: `TASK-0000001` <br> 4. `dailyreport` (Subcol) -> Document: `day-0000001` |
+| **Data Fields (Task)** | ข้อมูลที่จะบันทึกและแก้ไขผ่าน UI: <br> - `taskId`: "TASK-0000001" (Auto-gen) <br> - `taskName`: "งานผูกเหล็ก" (User กรอก) <br> - `assignees`: `[{ employeeId, name, roleId }]` (User เลือก) <br> - `dailyProgress`: 0 (Default) <br> - **`description`**: "หมายเหตุ" (User กรอกผ่าน TextArea ลำดับสุดท้าย) <br> - `dueDate`, `status`, `createdAt` (System/User) |
+| **Backend/Client Logic** | 1. อ่านข้อมูล (Read): `getDocs()` จาก Sales Firebase ตาม Hierarchy <br> 2. เขียนข้อมูล (Write): `setDoc()` หรือ `addDoc()` เข้า Sales Firebase พร้อมรหัส `CAT-xxxx` และ `TASK-xxxxxxx` |
 
-ในขั้นตอนสุดท้ายของการตอบโต้ (Final Response) หรือเมื่อจะแจ้ง notify_user เพื่อจบงาน **คุณต้อง** สรุปการเปลี่ยนแปลงของเอกสาร **5 ฉบับหลัก** เสมอ:
+### 🛣️ [F-014] Hierarchical Task Creation — E2E Flow
 
-1. Speckit/instruction.md
-2. Speckit/spec.md
-3. Speckit/task.md
-4. Speckit/traceability.md
-5. **[NEW] Speckit/Implement.md** (ต้องระบุว่าอัปเดต E2E Flow Section หรือไม่ พร้อมเหตุผล)
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> `Add New Task` -> เลือก Location (Project) -> เลือก Work Order -> พิมพ์ Category -> พิมพ์ Task Name -> `Submit` |
+| **API Contract** | `POST /api/tasks` <br> **Payload**: `{ taskName, projectId, workOrderCode, categoryName, assignees, dueDate }` |
+| **Backend Logic (T-840)** | **TaskService.createTask (Counter + Upsert Logic)**: <br> ดำเนินการผ่าน `db.runTransaction()` เพื่อความปลอดภัย: <br> 1. **WorkOrder**: Query `projectId` + `woCode` ถ้าไม่พบ สร้าง ID `${projectId}-${workOrderCode}` <br> 2. **Category**: Query ชื่อ `catName` ในหมวดนี้ ถ้าไม่พบ ให้อ่านและอัปเดต Counter เพื่อสร้าง `CAT-XXXX` <br> 3. **Task**: Query ชื่อ `taskName` ในหมวดนี้ ถ้าไม่พบ ให้อ่านและอัปเดต Counter เพื่อสร้าง `TASK-XXXXXXX` <br> 4. ใช้คำสั่ง `transaction.set({ merge: true })` กับทุกระดับชั้นเพื่ออัปเดตข้อมูลและหลีกเลี่ยงการสร้างซ้ำซ้อน |
+| **Database Structure** | `workOrders/{woId}/categories/{catId}/tasks/{taskId}` <br> (Note: ข้อมูลที่ใช้ชื่อเดียวกันจะเข้าไปแก้ไข Document เดิม และหากสร้างใหม่จะรันเลข Running Number ได้อย่างถูกต้อง) |
+| **Global Uniqueness** | **Composite ID Strategy**: เพื่อป้องกัน Key ชนกันใน UI และการอัปเดตผิดใบใน Backend -> ให้ใช้รหัส `workOrderId` + `categoryId` + `taskId` เชื่อมกันด้วย `__` เป็นรหัส `id` หลักสำหรับ API และ React Key |
+| **UI/UX Audit (T-807)** | **Consistency Check**: All input fields (Autocomplete & TextField) ต้องใช้ชุด Style เดียวกันผ่าน `sx` ที่ตัว Root ของ `TextField` โดยเจาะจงไปที่คลาส `.MuiFilledInput-root` เพื่อป้องกันการถูก Override จากสี Default ของ Browser หรือ MUI Theme |
 
-**Format การสรุป (Copy template นี้ไปใช้):**
-markdown
-### Documentation Summary
-1. **instruction.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
-2. **spec.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
-3. **task.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
-4. **traceability.md**: [Updated / No Change] - (ระบุรายละเอียดการแก้ หรือเหตุผลที่ไม่ได้แก้)
-5. **Implement.md**: [Updated / No Change] - (ระบุ Section ที่อัปเดต E2E Flow หรือเหตุผลที่ไม่ต้องอัปเดต)
-*เหตุผลที่ต้องระบุ "No Change"*: เพื่อยืนยันว่าคุณได้ "คิด" และ "ตรวจสอบ" แล้วจริงๆ ไม่ใช่แค่ลืม
+### 🛣️ [T-810 & T-812] Workspace Dashboard (Fetch & Filter) — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Page` -> เปิดหน้าจอ / เปลี่ยน Tab (`All Tasks`, `This Month`, `This Week`, `Today`) |
+| **API Contract** | `GET /api/tasks?projectId={id}` <br> Response: Array ของ Task |
+| **Security (T-811)** | **Authentication Mandatory**: ต้องใช้ `authenticate` middleware เพื่อยืนยันตัวตนก่อนเข้าถึงข้อมูล (ห้ามใช้ fallback 'system') |
+| **Backend Logic (T-810)** | **TaskService.getTasks**: <br> 1. กรอง `isActive` และ `projectId` ใน Memory ชั่วคราว (เพื่อเลี่ยง Error: FAILED_PRECONDITION กรณีที่ยังไม่ได้สร้าง Index) <br> 2. กรองข้อมูลตามผู้ที่ได้รับมอบหมาย (Assignee) |
+| **Client Logic (T-812)** | **Active Tab Filter**: <br> เมื่อได้รับ tasks มาแล้ว จะนำมาเข้ากระบวนการกรองอีกชั้นตาม `activeTab` ก่อนแสดงผลใน Column: <br> - **Today**: กรอง `dueDate` ที่ตรงกับวันปัจจุบัน <br> - **This Week**: กรอง `dueDate` ที่อยู่ในสัปดาห์นี้ <br> - **This Month**: กรอง `dueDate` ที่อยู่ในเดือนนี้ <br> - **All Tasks**: ข้ามการกรองวันที่ |
 
 ---
 
-## 3. Error Handling & Logging (การบันทึกปัญหา)
+## 8. 🛠️ Task Management (Edit/Delete & Audit Trail)
 
-หากพบ Error ระหว่างทำงาน ให้บันทึกแบบ **Nested Log** ภายใต้ Task นั้นๆ ใน task.md เสมอ:
+### 🛣️ [T-816 & T-818] Backend Update & Soft Delete — E2E Flow
 
-### Format: T-XXX-EX-Y
-- **`T-XXX` (Task ID)**: รหัสงานหลักที่ปัญหานั้นเกิดขึ้น
-- **`EX` (Error Index)**: ลำดับของ "ปัญหา" (Problem) ที่พบ (รันเลข E1, E2, ... ตามลำดับการเจอ)
-  - *Note*: หากเป็นปัญหาเรื่องเดิม อาการเดิม หรือ Root Cause เดิม ให้ใช้เลข **E เดิม** เสมอ
-- **`Y` (Attempt Count)**: จำนวนครั้งที่พยายามแก้ไข (เริ่มที่ 1)
-  - หากแก้ครั้งแรกไม่หาย แล้วต้องแก้ซ้ำ ให้เพิ่มเลขนี้เป็น 2, 3, ... (เช่น E1-2, E1-3)
-  - ห้ามเปลี่ยนเลข E ถ้ายังเป็นปัญหาเดิม
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **API Contract** | `PATCH /api/tasks/:id` (Update) <br> `DELETE /api/tasks/:id` (Soft Delete) |
+| **Soft Delete Logic** | ปรับ `isActive: false` เพื่อซ่อนข้อมูลจากการดึงผลลัพธ์ปกติ (Omit from memory filter in `getTasks`) |
+| **Audit Trail (T-818)** | บันทึกประวัติลงใน `TaskEditHistory` (Subcollection): <br> - `oldValues`: ข้อมูลก่อนแก้ไข <br> - `newValues`: ข้อมูลหลังแก้ไข <br> - `changedBy`: userId ของผู้แก้ไข |
+| **Category Migration (T-818)** | หากมีการเปลี่ยน `categoryName`: <br> 1. คำนวณ `categoryId` ใหม่ (หรือใช้ที่มีอยู่) <br> 2. ย้าย Document ไปยัง Path ใหม่ (Delete old, Create new) เพื่อรักษาโครงสร้าง Hierarchy |
 
-**Critical Rule: Bug vs. New Task (The "No New Task" Policy)**
-- **ห้ามสร้าง Task ใหม่** ([T-New]) สำหรับการแก้ไขปัญหา (Bug/Fix) ในทุกกรณี ยกเว้นมันคือ Feature ใหม่ 100%
-- หากปัญหานั้นเกิดจาก:
-  1.  **Immediate Regression**: บั๊กที่เกิดทันทีหลัง Deploy หรือหลังแก้โค้ดจาก Task ล่าสุด
-  2.  **Implementation Defect**: การตกหล่นของฟีเจอร์ที่กำลังทำอยู่ (ทำไม่ครบ, ทำแล้วพัง)
-  3.  **Config/Env Issue**: ปัญหา Environment ที่ต้องแก้เพื่อให้ Task เดิมผ่าน (เช่น CORS, API Key)
-  4.  **Logic Error**: สูตรคำนวณผิด, แสดงผลผิด
-- **Action**: ให้บันทึกเป็น **Error Log (Nested List)** ใต้ Task เดิมที่เป็นเจ้าของ Feature นั้นๆ ทันที
-  - *เหตุผล*: เพื่อให้เห็น History การแก้ปัญหาอยู่ในจุดเดียว (Traceability) และไม่ทำให้ Task List รกด้วยเศษงานแก้บั๊ก
-- **สร้าง Task ใหม่ได้เมื่อ (Exceptions)**:
-  - เป็น **Feature Request** ใหม่จาก User ที่ไม่เคยมีใน Spec มาก่อน
-  - ต้องการ **Refactor** ใหญ่ที่แยก Module ออกมาอย่างชัดเจน
-  - เป็นงาน **Optimization** ที่ไม่ได้เกิดจาก Error แต่ต้องการ Performance ที่ดีขึ้นมาก
+### 🎨 [T-817] Frontend Edit Task UI
 
-### Example Log:
-markdown
-- [ ] [T-XXX] Implement Feature A
-    - **Error Logs**:
-      - **[T-XXX-E1-1]**: Import Error
-        1. **Root Cause**: วงวนการ Import (Circular Dependency)
-        2. **Action**: แยก Type ออกไฟล์กลาง
-        3. **Status**: Fixed
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **Component** | `TaskCreateModal.tsx` (Reuse) |
+| **Edit Mode** | เมื่อเปิดในโหมด Edit: <br> 1. รับ `task` object ผ่าน props <br> 2. ล็อคฟิลด์ `Project` และ `Work Order` ให้เป็น Read-only <br> 3. แสดง Checkbox "ขอความช่วยเหลือ" เพื่อให้สามารถเรียกทีม Support ได้ภายหลัง <br> 4. เปลี่ยนปุ่ม Submit เป็น "บันทึกการแก้ไข" |
+| **Confirmation** | เมื่อกด Delete: <br> - แสดง Dialog ยืนยัน "คุณแน่ใจหรือไม่ว่าต้องการลบงานนี้?" |
 
 ---
 
-## 3. Core Skills & References (ทักษะและกรอบการทำงาน)
+### 🛣️ [F-015] Daily Report Form & Labor Management — E2E Flow
 
-ให้พิจารณาเลือกใช้ **Skill** และ **Framework** ต่อไปนี้ตลอดการทำงานเพื่อยกระดับคุณภาพของโค้ดและ UX:
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Daily Report Page` -> `Select Task` -> `Select Date` -> `Add DC Labor (Popup)` -> `Adjust Individual Hours` -> `Fill Progress & Upload Photos` -> `Submit` |
+| **Business Logic: Retroactive & Lock** | **1. การลงเวลาย้อนหลัง (Retroactive):**<br>- ย้อนหลัง <= 3 วัน: แก้ไขได้ทุกฟิลด์ รวม Progress<br>- ย้อนหลัง > 3 วัน: ล็อคฟิลด์ `Progress` (Read-only) แต่แก้ไข `แรงงาน DC` และ `ชั่วโมงทำงาน` ได้<br>**2. การล็อคตามงวดค่าแรง (Wage Period Lock):**<br>- ถ้าระยะเวลาของวันนั้น อยู่ในงวดค่าแรงที่ถูก `อนุมัติ` หรือ `นำจ่ายแล้ว` -> ล็อคไม่ให้แก้ไขหรือบันทึกข้อมูลใดๆ ทั้งสิ้น (Logic เชื่อมต่อกับระบบคำนวณค่าแรง) |
+| **UI/UX: Labor Selection Popup** | - กดปุ่ม `+ เลือกแรงงาน DC` แสดง Popup รายชื่อแรงงาน<br>- **รายชื่อพนักงาน:** แสดงในรูปแบบ `employeeId : name` และกรองเฉพาะพนักงานที่อยู่ใน `projectLocationIds` เดียวกับ Task<br>- **กำหนดเวลา:** เลือกระบุเวลาทำงานส่วนกลาง (Day, OT เช้า/เที่ยง/เย็น) ไว้ใน Popup<br>- เมื่อกดยืนยัน ข้อมูลรายชื่อพร้อมเวลาจะไปแสดงที่ตารางหลัก และผู้ใช้สามารถ Edit เวลาของ "แต่ละบุคคล" แยกกันในหน้าหลักได้ |
+| **Media Requirements** | บังคับอัปโหลดรูปภาพ 4 รูป (รูปถ่ายหน้างาน 2 รูป, รูปถ่ายแรงงาน 2 รูป) |
 
-### 🚀 3.1 [Skill: Development Workflow](file:///d:/Labor%20Management%20System/Speckit/skills/dev-workflow.md)
-*   **เมื่อไหร่ที่ควรใช้:** เมื่อตั้งต้นเริ่มงานใหม่ ฟีเจอร์ใหม่ หรือรับ Requirements
-*   **หน้าที่:** ควบคุมแผนงานตลอดเส้นทางเพื่อไม่ให้หลุด Concept และบังคับการทำเอกสารตาม Step
+### 🎨 [T-822] Task Card Progress UI — Logic Flow
 
-### 🕵️ 3.2 [Skill: E2E Troubleshooter](file:///d:/Labor%20Management%20System/Speckit/skills/e2e-troubleshooter.md) & [Checklist](file:///d:/Labor%20Management%20System/Speckit/skills/refs/investigation-checklist.md)
-*   **เมื่อไหร่ที่ควรใช้:** เมื่อเจอบั๊ก, หน้าจอพัง, ข้อมูลไม่อัปเดต, หรือต้องวิเคราะห์ Root Cause
-*   **หน้าที่:** ค้นหาจุดเชื่อมต่อ (Connectivity) วิเคราะห์ Log และหา Missing Link ตั้งแต่หน้าจอจนถึงฐานข้อมูล
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **Data Field** | `dailyProgress` (number: 0 - 100) |
+| **UI Component** | MUI `LinearProgress` + `Typography` (Percentage) |
+| **Visual Logic** | 1. แสดงอยู่ระหว่าง Description และ Due Date <br> 2. ความสูง 6px, ขอบมน (borderRadius: 3) <br> 3. สี: ตาม Theme (Primary) หรือเปลี่ยนตามช่วง (เช่น <30% ส้ม, >70% เขียว) |
+| **Fallback** | หากค่าเป็น undefined หรือ null ให้แสดงเป็น 0% |
 
-### 🛡️ 3.3 [Skill: Issue Management](file:///d:/Labor%20Management%20System/Speckit/skills/issue-management.md)
-*   **เมื่อไหร่ที่ควรใช้:** เมื่อหน้างานเกิดปัญหาไม่คาดคิดที่บล็อกการทำงาน (Blocker) หรือต้องออกแพตช์ฉุกเฉิน
-*   **หน้าที่:** กำหนด Error Type และสร้างเอกสารบันทึกเหตุการณ์ (EX-Log) เพื่อให้ง่ายต่อการย้อนกลับ
+### 🛣️ [F-016] Task Revision & Reject Workflow — E2E Flow
 
-### 💰 3.4 [Skill: Wage Sync & Formula](file:///d:/Labor%20Management%20System/Speckit/skills/wage-sync-skill.md)
-*   **เมื่อไหร่ที่ควรใช้:** เมื่อต้องเขียน/แก้ไข ส่วนที่เกี่ยวข้องกับการคำนวณเงิน ค่าแรง OT ส่วนลด ฯลฯ
-*   **หน้าที่:** ควบคุม Logic ของเงินให้ทำงานแบบ Transactional และลดข้อผิดพลาดการผูกสูตร
-
-### 🎨 3.5 [Ref: UX Audit Framework](file:///d:/Labor%20Management%20System/Speckit/skills/refs/ux-audit-framework.md)
-*   **เมื่อไหร่ที่ควรใช้:** ก่อนส่งมอบงานหน้าจอ (UI/UX) เสมอ
-*   **หน้าที่:** ประเมิน 5 มิติ (System Status, Control, Consistency, Error Prevention, Flow) เพื่อสร้างประสบการณ์ระดับ Premium ให้กับผู้ใช้งาน
-
----
-
-## 4. Incident Resolution Template (Production Issues)
-*(สำหรับปัญหาเร่งด่วน หรือ Critical Bug)*
-
-### A. Symptom (อาการ)
-*   **What**: เกิดอะไรขึ้น Error คืออะไร
-*   **Where**: Environment ไหน (Dev/Prod)
-
-### B. Analysis (วิเคราะห์)
-*   **Root Cause**: สาเหตุทางเทคนิค
-*   **Impact**: ผลกระทบ
-
-### C. Solution (การแก้ไข)
-*   **Fix Steps**: วิธีแก้ตามลำดับ
-*   **Verification**: วิธีตรวจสอบว่าหายจริง
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban` -> `Reject Button (Supervisor)` -> ใส่ชื่องานที่ให้แก้และระบุ FM -> `Submit` |
+| **API Contract** | `POST /api/tasks/:id/reject` <br> Payload: `{ revisionName, assignees }` |
+| **Database Schema** | **1. Task Document (Container):** ไม่ถูกสร้างใหม่ แต่เก็บ `assignees` สะสมทุกคนจากทุก Rev ไว้เพื่อใช้ Filter และเก็บ `currentRevision: "rev0X"` ชี้ไปยังเวอร์ชั่นล่าสุด <br> **2. Revision Document (Subcollection):** ซ้อนอยู่ใต้ `revisions/{revId}` เก็บประวัติของรอบนั้นๆ (`revisionName`, `assignees` เฉพาะรอบนั้น, `createdAt`) |
+| **Backend Logic (T-852/T-853)** | 1. **Task Model Setup:** `Task` model has `currentRevision` defaulting to `rev00`. <br> 2. **Create Trigger:** In `TaskService.createTask`, `revisions/rev00` is generated atomically. <br> 3. **Reject Action (`POST /api/tasks/:id/reject`):** Increment `currentRevision` (e.g., `rev01`), union `assignees` to main task, reset `dailyProgress = 0`. <br> 4. **Daily Report Dynamic Routing:** Change daily report write/read paths to `revisions/{currentRevision}/dailyReports/{dateStr}`. <br> 5. **Cross-Revision Intelligence:** `getAllDailyReports` query reports across ALL revisions to show full history on calendar. |
+| **Daily Report Logic** | 1. **Task Expansion (Frontend):** หาก Task มี Revision > rev00 ระบบจะสร้าง Virtual Task Items สำหรับรอบเก่าๆ และแสดงในแถบ `Finish` อัตโนมัติ <br> 2. **UI Labeling:** แสดงรหัส Revision นำหน้าชื่อ (e.g. `rev01 : "..."`) <br> 3. **Conflict Protection:** ระบบบล็อกการลงรายงานในรอบปัจจุบัน (rev01) หากพบว่าวันนั้นมีรายงานอยู่ในรอบเก่า (rev00) แล้ว เพื่อป้องกันข้อมูลทับซ้อน |
 
 ---
 
-## 5. Daily Report Core Concept & Migration Strategy (แผนพัฒนาระบบรายงานประจำวัน)
-> **สถานะ:** 🔵 กำลังดำเนินการ (รอรับไฟล์อ้างอิงจาก User)
+### 🛣️ [F-020] Cross-Site Collaborative Workflow (Support Request) — E2E Flow
 
-**เป้าหมายหลัก (Core Objective):** 
-นำหน้าจอและ Flow การทำงาน (UI Source Code) ของระบบ Daily Report จากระบบอ้างอิง (ระบบหลังการขาย) นำเข้ามาติดตั้งในระบบโปรเจกต์งาน ก่อสร้าง/จัดการแรงงาน ของเรา จากนั้นทำการ Refactor เพื่อให้เข้ากับประสบการณ์ใช้งาน (UX) ของเรา พร้อมเชื่อมข้อมูลวิ่งเข้า Production Firebase อย่างสมบูรณ์
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Workspace Kanban (Site)` -> สร้างงานใหม่ติ๊ก `isSupportRequest` -> <br> `Workspace Kanban (Support)` -> กด `Add New` -> เลือกรายการจาก Dropdown `existingTasks` -> ระบุชื่อและมอบหมาย -> Submit |
+| **API Contract** | `POST /api/tasks/:id/support` <br> Payload: `{ supportTaskName, assignees }` |
+| **Database Schema** | **1. Task Document (Container):** งานยังคงอิงอ้างอิงกับ `taskId` ฝั่ง Site เสมอ (Composite ID: `woId__catId__taskId`) <br> **2. Support Data Flags:** เพิ่มฟิลด์ `isSupportRequest`, `isPickedUpBySupport`, `supportTaskName`, `supportDailyProgress` และ `supportAssignees` แยกต่างหากจาก `assignees` ปกติ<br> **3. Held Document (Subcollection):** เก็บ `held00` ไว้ใต้ `held/{heldId}` เพื่อแยก Version Control ของฝั่ง Support ออกจาก Rev ของ Site |
+| **Backend Logic** | 1. ค้นหาเอกสารผ่าน `.includes('__')` สำหรับ Composite Path Navigation <br> 2. `runTransaction` ทำงานแบบ Atomic อ่านข้อมูลจาก `revisions/rev00` และคัดลอกมาสร้างเป็น `held/held00` <br> 3. แก้ไข `supportAssignees` กลับไปที่เอกสารหลัก เพื่ออำนวยความสะดวกในการกรองผล |
+| **Frontend UI/UX** | 1. **Data Isolation:** การแสดงผลในการ์ดงานจะแยกชื่อ Assignees อย่างเด็ดขาด (`site` เห็นเฉพาะของตัวเอง, `support` เห็นเฉพาะ `supportAssignees`) <br> 2. **Task Board Rule:** งาน Support จะไม่ปรากฏใน Kanban Board จนกว่า `isPickedUpBySupport` จะเป็น `true` |
 
-### 🔄 A. Integration Lifecycle (วงจรการเชื่อมต่อ)
-1. **Source Integration (รอโค้ดจากผู้ใช้งาน):**
-    - นำเข้าไฟล์ UI Components, React Hooks, หรือ Utils ที่เกี่ยวข้องจากระบบอ้างอิงเข้ามาใน Workspace
-2. **Refactoring & UX Adaptation (ปรับจูนประสบการณ์):**
-    - แปลง Form Logic ให้เข้ากับ Tech Stack ในระบบเรา 
-    - ตกแต่งหน้าตา (Styling) ให้เนียนตาและดู Premium สอดคล้องกับภาพรวมแอปพลิเคชันของเรา ผ่านมาตรฐาน `UX Audit Framework`
-3. **Data Model Mapping (Mapping ข้อมูล):**
-    - สำรวจโครงสร้าง Payload (เช่น JSON ส่งออก) จากระบบเก่า
-    - นำมาแปลง (Adapter Pattern) ให้ตรงสเปกของ Collection บน Firestore (`collections.ts` เช่น `users`, `dailyReports` เป็นต้น)
-4. **Permanent Docs Update:**
-    - สรุป Logic การทำงานใหม่ลงใน `spec.md` และสร้าง `task.md` เพื่อบันทึก Traceability
+---
 
-### 🎯 B. Expected Outcome (สิ่งที่มุ่งหวัง)
-- **Zero-Friction UX:** UI ทำงานลื่นไหล ไม่รู้สึกถึงความแตกต่างของการนำโค้ดจากโปรเจกต์อื่นมาต่อ
-- **Data Integrity:** ข้อมูลวิ่งเข้า Database ของ Production ได้แบบไร้รอยต่อ ไม่มี Error หรือ Data Loss อันเกิดจากความไม่ตรงกันของ Schema (Type/Variables)
+### 🛣️ [F-021] Image Display & Preview Carousel — Logic Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Request** | ปรับปรุงการแสดงผลรูปภาพในหน้าสรุปข้อมูล (Modal) ให้ดู Premium และใช้งานง่ายขึ้น |
+| **UI/UX Update** | 1. **Single Image Summary:** ในหน้า `TaskDailyReportModal` และ `Summary View` ของหน้าสร้างรายงาน จะรวมรูปถ่าย `site` และ `labor` เข้าด้วยกันและแสดงเพียงรูปแรกรูปเดียว <br> 2. **Dynamic Header:** เปลี่ยนหัวข้อเป็น "รูปแนบทั้งหมด 1/N" โดย N คือจำนวนรูปทั้งหมดที่มีในวันนั้น <br> 3. **Image Counter:** มีการแสดงตัวเลขกำกับตำแหน่งรูปปัจจุบัน (เช่น 1/5) ในหน้า Preview |
+| **Preview Mechanism** | เมื่อคลิกที่รูปภาพ ระบบจะเปิด `Dialog` แสดงรูปขนาดใหญ่ พร้อมปุ่ม `ChevronLeft` และ `ChevronRight` (Carousel) เพื่อเลื่อนดูรูปทั้งหมดในรายการนั้นๆ |
+| **Technical Implementation** | 1. **State Management:** เพิ่ม `previewImages` (string[]) และ `previewIndex` (number) เพื่อจัดการลำดับรูปภาพใน Carousel <br> 2. **Shared Logic:** ใช้ `getImageUrl` helper เพื่อจัดการ Path ของรูปภาพทั้งแบบ Local และ Cloud Storage |
+
+### 🛣️ [F-016] Daily Report Task Visibility — E2E Flow
+
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **Logic Objective** | แก้ไขปัญหางานหายในหน้า Daily Report โดยเฉพาะในแถบ "Finish" เพื่อให้ FM ตรวจสอบงานย้อนหลังได้ |
+| **Visibility Rules** | **1. Admin/God:** มองเห็นงานทั้งหมดที่ `isActive: true` <br> **2. FM/Support:** มองเห็นงานที่ตัวเองมีส่วนร่วม โดยเช็คจาก: <br> - `assignees` (Site Team) <br> - `supportAssignees` (Support Team) <br> - `historicalAssigneeIds` (ประวัติการทำงานใน Revision ก่อนหน้า) |
+| **Tab Filtering (UI)** | **1. Active Tasks Tab:** แสดงงานที่ `status !== 'completed'` (หรือยังทำไม่เสร็จ) <br> **2. Finish Tab:** แสดงงานที่ `status === 'completed'` (เพื่อให้เข้าไปแก้ไขแรงงานย้อนหลังได้) |
+| **Historical Data** | งานในทุก `revisions` จะถูกดึงมาแสดงผลหาก User เคยมีส่วนร่วม เพื่อให้ประวัติการทำงานไม่ขาดตอน แม้จะมีการ Reject และสร้าง Revision ใหม่ก็ตาม |
+
+### 🔒 Business Rules: 3-Day Retroactive Lock
+ระบบมีการบังคับใช้กฎการแก้ไขข้อมูลย้อนหลังเพื่อรักษาความถูกต้องของข้อมูล (Data Integrity) ดังนี้:
+
+| ประเภทข้อมูล | สถานะเมื่อย้อนหลัง > 3 วัน | หมายเหตุ |
+| :--- | :--- | :--- |
+| **Progress (ความคืบหน้า)** | 🚫 **Locked** | ห้ามแก้ไขเพื่อให้ตัวเลขสะท้อนความเป็นจริงในอดีต |
+| **Photos (รูปหน้างาน/แรงงาน)** | 🚫 **Locked** | รูปถ่ายต้องถูกบันทึก ณ วันที่ปฏิบัติงานจริง |
+| **Notes (หมายเหตุ)** | 🚫 **Locked** | บล็อกการแก้ไขคำอธิบายงานย้อนหลัง |
+| **Labor Management (แรงงาน)** | ✅ **Editable** | อนุญาตให้เพิ่ม/ลดคน และปรับเวลา เพื่อความถูกต้องของค่าแรง |
+| **Medical Certs (ใบรับรองแพทย์)** | ✅ **Editable** | ถือเป็นส่วนหนึ่งของการจัดการแรงงาน (อนุญาต) |
+
+> [!TIP]
+> **Admin Override:** Admin สามารถปลดล็อควันที่ต้องการเป็นรายกรณีได้ผ่านฟิลด์ `unlockedDates` ใน Task object เพื่อให้ FM สามารถแก้ไขข้อมูลทั้งหมดได้ชั่วคราว
+
+#### 👥 Business Rules: Worker Selection (FM vs Admin)
+ระบบมีการดึงรายชื่อแรงงานรายวัน (Daily Contractors) มาให้เลือกใช้งานแตกต่างกันตามบทบาทของผู้ใช้:
+
+| บทบาทผู้ใช้ (User Role) | วิธีการดึงข้อมูล | เหตุผล |
+| :--- | :--- | :--- |
+| **FM / SFM (Support FM)** | **กรองตามแผนก (Department)** | เพื่อให้ FM สามารถเรียกใช้คนงานในสังกัดแผนกเดียวกันได้ทั้งหมด แม้จะอยู่คนละโครงการ |
+| **Admin / Supervisor / Others** | **กรองตามโครงการ (Project)** | เพื่อจำกัดขอบเขตการจัดการแรงงานให้ตรงกับหน้างานที่ได้รับมอบหมาย |
+
+> [!NOTE]
+> **Data Logic:** การดึงข้อมูลของ FM จะดึงจากฟิลด์ `department` ในคอลเลกชัน `dailyContractors` ซึ่งจะถูกบันทึกเมื่อมีการแก้ไขข้อมูลคนงานหรืออัปโหลดไฟล์ชุดใหม่ที่มีระบุแผนกเท่านั้น
+
+## 7.5 [F-017] Task Caching Strategy (Zustand + React Query + Midnight Reset)
+
+กลยุทธ์การจัดการข้อมูลด้วยระบบ Cache เพื่อลดการเรียก API ซ้ำซ้อน (Redundant Requests) และเพิ่มประสิทธิภาพในการตอบสนองของ UI:
+
+### 1. Storage & Expiry Logic
+- **Store:** ใช้ `TaskCacheStore` (Zustand) สำหรับเก็บรายการ Task และใช้ `React Query` สำหรับข้อมูลระดับ Report Detail และ Worker List.
+- **Expiry:** กำหนด `staleTime` และ `gcTime` ให้มีอายุจนถึง **"เวลาเที่ยงคืนของวันปัจจุบัน" (Midnight Reset)** เพื่อให้ระบบรีเฟรชข้อมูลใหม่โดยอัตโนมัติในวันถัดไป
+- **Evaluation:** คำนวณเวลาที่เหลือจนถึงเที่ยงคืนผ่าน `remainingStaleTime` และนำไปใช้ใน Hook `useQuery` ทุกตัวในหน้า Daily Report.
+
+### 2. Manual Invalidation (Global Sync)
+- เมื่อผู้ใช้กดปุ่ม **Sync (Refresh)** บน Navbar ระบบจะทำงานดังนี้:
+  1. เรียก `dailyReportService.clearCache()` เพื่อล้างข้อมูล Metadata.
+  2. เรียก `taskCache.invalidate()` เพื่อล้างข้อมูล Task ใน Zustand Store.
+  3. เรียก `queryClient.invalidateQueries()` เพื่อล้างข้อมูลทั้งหมดใน React Query Cache.
+  4. ยิง Event `globalSync` เพื่อแจ้งให้ทุก Page ที่เปิดอยู่ทำการ Fetch ข้อมูลใหม่แบบ Silent Refresh.
+
+### 3. Submission Invalidation
+- หลังการบันทึกรายงานสำเร็จ (Submit) ระบบจะเรียก `invalidate()` ทุกจุดเพื่อให้มั่นใจว่าข้อมูลล่าสุด (เช่น Progress หรือ Status) จะถูกดึงมาแสดงผลใน Workspace ทันทีโดยไม่ต้องโหลดหน้าใหม่.
+
+### 🛣️ [F-017] Caching & Global Sync — E2E Flow
+| มิติการทำงาน | รายละเอียด |
+| :--- | :--- |
+| **User Action Path** | `Navbar` -> `Sync Button` หรือ `Daily Report` -> `Submit` |
+| **State Management** | Zustand (`useTaskCacheStore`) + React Query (`useQueryClient`) |
+| **Cache Duration** | Dynamic (Until 24:00:00 Local Time) |
+| **Invalidation Flow** | 1. Clear Zustand Store -> 2. Invalidate React Query -> 3. Emit `globalSync` Event -> 4. `useQuery` refetch automatically |
+| **UI Impact** | ข้อมูล Task และ Report โหลดเร็วขึ้น 80% หลังจากการเข้าถึงครั้งแรก และมีสถานะการโหลด (Global Backdrop) ที่ชัดเจนตอน Sync |
+
+### 🛠️ Critical Bug Fix: Infinite Loop Resolution (Zustand + React Query)
+- **Issue:** พบปัญหา "Maximum update depth exceeded" เมื่อ `isFetching` ของ React Query เปลี่ยนสถานะ
+- **Root Cause:** การเรียกใช้ Zustand Store แบบ `const s = useStore()` (ทั้ง Object) ทำให้ Component Re-render ทุกครั้งที่ Store มีการขยับ และ `useEffect` ที่เรียก `showLoading()` กระตุ้นให้เกิดการวนลูปซ้ำซ้อน
+- **Fix:** 
+  1. เปลี่ยนการเรียกใช้เป็นแบบ **Selectors** (e.g., `const user = useAuthStore(s => s.user)`) เพื่อลดการ Re-render
+  2. เพิ่ม **Defensive Updates** ใน Store actions (ตรวจสอบค่าเดิมก่อน `set`) เพื่อป้องกันการอัปเดตสถานะที่ไม่มีการเปลี่ยนแปลงจริง
+
+---

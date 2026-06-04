@@ -27,14 +27,14 @@ router.use(authenticate);
 /** Add/Update Work Entry */
 router.post(
   '/entry',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']),
   addWorkEntry
 );
 
 /** Remove Work Entry */
 router.delete(
   '/project/:projectId/date/:date/worker/:workerId/entry/:entryId',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']),
   removeWorkEntry
 );
 
@@ -59,7 +59,7 @@ router.get(
 /** Import Excel (Preview Mode) */
 router.post(
   '/import-excel',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']),
   upload.single('file'),
   importExcel
 );
@@ -67,7 +67,7 @@ router.post(
 /** Bulk Create (Commit Mode) */
 router.post(
   '/bulk-create',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
+  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']),
   bulkCreate
 );
 

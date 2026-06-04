@@ -15,6 +15,10 @@ import { useAuthStore } from '@/store/authStore';
 import { taskService } from '@/services/taskService';
 import { dailyReportService } from '@/services/dailyReportService';
 import { useQuery } from '@tanstack/react-query';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import th from 'date-fns/locale/th';
 // Helper for SLA Countdown component
 const SLACountdown = ({ startTime, durationHours = 24 }: { startTime: string, durationHours?: number }) => {
     const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, isOverdue: boolean } | null>(null);
@@ -243,6 +247,7 @@ const DailyReport = () => {
 
     const [selectedTaskInfo, setSelectedTaskInfo] = useState<{ task: MasterTask; wo: WorkOrder } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [reportDate, setReportDate] = useState<Date>(new Date());
 
     const [progress, setProgress] = useState(0);
     const [note, setNote] = useState('');
@@ -290,24 +295,26 @@ const DailyReport = () => {
         allTasks.forEach(t => {
             if (t.status === 'completed') return;
 
-            const isAssigned = user?.roleId === 'GOD' || user?.roleCode === 'GOD' ||
-                user?.roleId === 'AM' || user?.roleCode === 'AM' ||
-                user?.roleId === 'PM' || user?.roleCode === 'PM' ||
-                t.assignees?.some(a => a.id === foremanId);
+            const isAssigned = user?.roleCode === 'GOD' ||
+                user?.roleId === 'Admin' ||
+                user?.roleId === 'Manager' ||
+                t.assignees?.some(a => a.employeeId === foremanId);
 
             if (isAssigned) {
                 // Map to legacy MasterTask shape for UI compatibility
                 const mappedTask = {
                     id: t.id,
-                    name: t.title,
+                    revisionId: t.revisionId,
+                    revisionName: t.revisionName,
+                    name: t.taskName,
                     dailyProgress: t.status === 'in-progress' ? 50 : 0,
                     status: t.status === 'in-progress' ? 'In Progress' : 'Approved',
-                    responsibleStaffIds: t.assignees?.map(a => a.id) || [],
+                    responsibleStaffIds: t.assignees?.map(a => a.employeeId) || [],
                     history: []
                 };
                 
                 const mappedWo = {
-                    id: t.taskCode || t.id,
+                    id: t.workOrderId || t.id,
                     locationName: t.projectCode || 'Unknown Project',
                     projectId: t.projectId
                 };
@@ -325,7 +332,7 @@ const DailyReport = () => {
         });
 
         return { newTasks: _newTasks, inProgressTasks: _inProgressTasks };
-    }, [allTasks, searchTerm, foremanId, user?.roleId, user?.roleCode]);
+    }, [allTasks, searchTerm, foremanId, user?.roleCode, user?.roleId]);
 
     // ✅ Deep Link: Open Work Order if ID is in URL
     useEffect(() => {
@@ -462,7 +469,7 @@ const DailyReport = () => {
             if (l.id !== id) return l;
             const currentShifts = l.shifts || { normal: false, otMorning: false, otNoon: false, otEvening: false };
             const isActive = !currentShifts[shiftKey];
-            const newShiftTimes = { ...(l.shiftTimes || {}) };
+            let newShiftTimes = { ...(l.shiftTimes || {}) };
             if (isActive && l.membership === 'Internal') {
                 if (shiftKey === 'otMorning' && !newShiftTimes.otMorning) newShiftTimes.otMorning = '06:00 - 08:00';
                 if (shiftKey === 'otNoon' && !newShiftTimes.otNoon) newShiftTimes.otNoon = '12:00 - 13:00';
@@ -611,7 +618,7 @@ const DailyReport = () => {
             for (const entry of entriesToCreate) {
                 await dailyReportService.addWorkEntry({
                     projectId: selectedTaskInfo.wo.projectId || 'unknown',
-                    date: new Date(),
+                    date: reportDate,
                     entry: entry as any
                 });
             }
@@ -677,6 +684,11 @@ const DailyReport = () => {
                         <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#3b82f6', textTransform: 'uppercase', background: '#dbeafe', padding: '2px 6px', borderRadius: '4px' }}>{wo.id}</div>
                         {isNew && <div style={{ background: '#ef4444', color: '#fff', fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '8px' }}>ใหม่</div>}
                     </div>
+                    {task.revisionId && task.revisionId !== 'rev00' && (
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', marginBottom: '6px', letterSpacing: '0.3px' }}>
+                            {task.revisionId} : "{task.revisionName || 'แก้ไขงาน'}"
+                        </div>
+                    )}
                     <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.name}</div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Building2 size={12} /> <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wo.locationName}</span>
@@ -800,7 +812,27 @@ const DailyReport = () => {
                                             return <SLACountdown startTime={selectedTaskInfo.task.slaStartTime || selectedTaskInfo.task.startDate || new Date().toISOString()} durationHours={slaDuration} />;
                                         })()}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
+                                    <div style={{ marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', marginBottom: '8px' }}>วันที่รายงานผล (Report Date)</div>
+                                        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={th}>
+                                            <DatePicker
+                                                value={reportDate}
+                                                onChange={(newValue) => { if (newValue) setReportDate(newValue); }}
+                                                format="dd/MM/yyyy"
+                                                slotProps={{
+                                                    textField: {
+                                                        size: 'small',
+                                                        fullWidth: true,
+                                                        sx: {
+                                                            backgroundColor: '#fff',
+                                                            '& .MuiOutlinedInput-root': { borderRadius: '8px', fontWeight: 700 }
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </LocalizationProvider>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '20px', marginTop: '16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ background: '#eff6ff', padding: '6px', borderRadius: '8px', color: '#3b82f6' }}><MapPin size={16} /></div><div><div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700 }}>ตำแหน่ง</div><div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{selectedTaskInfo.task.position || '-'}</div></div></div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ background: '#f0fdf4', padding: '6px', borderRadius: '8px', color: '#15803d' }}><Package size={16} /></div><div><div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700 }}>จำนวน</div><div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{selectedTaskInfo.task.amount || 1} {selectedTaskInfo.task.unit || 'จุด'}</div></div></div>
                                     </div>
@@ -947,7 +979,7 @@ const DailyReport = () => {
                                             ))}
                                         </div>
                                     </div>
-                                    {progress === 100 && <div style={{ marginTop: '1rem', padding: '12px', background: '#eff6ff', borderRadius: '12px', fontSize: '0.75rem', color: '#1e40af', fontWeight: 700, display: 'flex', gap: '8px' }}><Info size={14} /> <span>ยืนยันที่ 100% ระบบจะใช้รูปภาพเป็นรูป &quot;หลังซ่อม&quot;</span></div>}
+                                    {progress === 100 && <div style={{ marginTop: '1rem', padding: '12px', background: '#eff6ff', borderRadius: '12px', fontSize: '0.75rem', color: '#1e40af', fontWeight: 700, display: 'flex', gap: '8px' }}><Info size={14} /> <span>ยืนยันที่ 100% ระบบจะใช้รูปภาพเป็นรูป "หลังซ่อม"</span></div>}
                                 </div>
                                 <div>
                                     <h3 style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0f172a', margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}><Camera size={20} color="#3b82f6" /> รูปภาพหน้างาน</h3>
@@ -1154,7 +1186,7 @@ const DailyReport = () => {
 
 export default function WorkRecordComposerPage() {
   return (
-    <ProtectedRoute requiredRoles={['SE', 'OE', 'PE', 'PM', 'PD', 'AM']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
       <Layout>
         <DailyReport />
       </Layout>

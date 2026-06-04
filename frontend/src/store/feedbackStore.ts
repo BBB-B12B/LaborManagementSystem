@@ -5,6 +5,7 @@ export type FeedbackType = 'success' | 'error' | null;
 interface FeedbackState {
   // Loading Spinner
   isLoading: boolean;
+  loadingCount: number;
   showLoading: () => void;
   hideLoading: () => void;
 
@@ -27,8 +28,18 @@ interface FeedbackState {
 export const useFeedbackStore = create<FeedbackState>((set) => ({
   // Initial Loading State
   isLoading: false,
-  showLoading: () => set({ isLoading: true }),
-  hideLoading: () => set({ isLoading: false }),
+  loadingCount: 0,
+  showLoading: () => set((state) => ({ 
+    loadingCount: state.loadingCount + 1,
+    isLoading: true 
+  })),
+  hideLoading: () => set((state) => {
+    const newCount = Math.max(0, state.loadingCount - 1);
+    return { 
+      loadingCount: newCount, 
+      isLoading: newCount > 0 
+    };
+  }),
 
   // Initial Feedback State
   isOpen: false,
@@ -44,13 +55,15 @@ export const useFeedbackStore = create<FeedbackState>((set) => ({
       title,
       message,
       onConfirm: onConfirm || null,
-      isLoading: false, // Ensure loading is hidden when showing feedback
+      isLoading: false, 
+      loadingCount: 0, // Reset counter when showing final feedback
     }),
 
   hideFeedback: () =>
     set({
       isOpen: false,
       onConfirm: null,
-      // We don't clear type/title/message immediately to allow for exit animations
+      isLoading: false,
+      loadingCount: 0,
     }),
 }));

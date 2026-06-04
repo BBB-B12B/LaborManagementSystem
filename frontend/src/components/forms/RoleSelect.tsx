@@ -63,6 +63,13 @@ export const ROLES: Role[] = [
     level: 6,
   },
   {
+    id: 'LD',
+    code: 'LD',
+    name: 'Leader',
+    nameEnglish: 'Leader',
+    level: 5.5,
+  },
+  {
     id: 'OE',
     code: 'OE',
     name: 'Office Engineer',

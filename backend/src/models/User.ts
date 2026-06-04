@@ -26,6 +26,7 @@ export interface User {
   createdBy: string;
   updatedBy: string;
   rawPassword?: string;
+  systemCode?: string;
 }
 
 /**
@@ -36,10 +37,8 @@ export interface UserDTO {
   employeeId: string;
   username: string;
   name: string;
-  fullNameEn?: string;
   roleId: string;
   department: Department;
-  dateOfBirth?: Date;
   startDate: Date;
   projectLocationIds: string[];
   isActive: boolean;
@@ -55,10 +54,8 @@ export interface CreateUserInput {
   username: string;
   password: string; // Plain text, will be hashed
   name: string;
-  fullNameEn?: string;
   roleId: string;
   department: Department;
-  dateOfBirth?: Date;
   startDate: Date;
   projectLocationIds: string[];
   isActive?: boolean;
@@ -72,10 +69,8 @@ export interface UpdateUserInput {
   username?: string;
   password?: string; // Plain text, will be hashed if provided
   name?: string;
-  fullNameEn?: string;
   roleId?: string;
   department?: Department;
-  dateOfBirth?: Date;
   startDate?: Date;
   projectLocationIds?: string[];
   isActive?: boolean;
@@ -86,48 +81,30 @@ export interface UpdateUserInput {
  */
 export const userConverter = {
   toFirestore: (user: Omit<User, 'id'>): any => {
-    const serializeDate = (value?: Date): any => {
-      if (!value) return null;
-      return value instanceof Date ? value : new Date(value);
-    };
-
     const timestampOrDate = (value: Date): any =>
       value instanceof Date ? value : new Date(value);
 
-    const englishName = user.fullNameEn || user.name;
     const usernameValue = (user.username || '').trim();
     const usernameLower = usernameValue.toLowerCase();
     const projectLocations = Array.isArray(user.projectLocationIds)
       ? user.projectLocationIds
       : [];
-    const activeValue = user.isActive ? 'On' : 'Off';
 
     return {
       employeeId: user.employeeId,
-      Employeeid: user.employeeId,
       username: usernameLower,
-      Username: usernameLower,
-      UsernameLower: usernameLower,
       passwordHash: user.passwordHash,
-      Password: user.rawPassword ?? user.passwordHash,
       name: user.name,
-      Fullname: user.name,
-      fullNameEn: englishName,
-      Fullnameen: englishName,
       roleId: user.roleId,
-      Role: user.roleId,
       department: user.department,
-      Department: user.department,
-      dateOfBirth: serializeDate(user.dateOfBirth),
       startDate: timestampOrDate(user.startDate),
       projectLocationIds: projectLocations,
-      projectLocation: projectLocations,
       isActive: user.isActive,
-      Active: activeValue,
       createdAt: timestampOrDate(user.createdAt),
       updatedAt: timestampOrDate(user.updatedAt),
       createdBy: user.createdBy,
       updatedBy: user.updatedBy,
+      systemCode: user.systemCode || null,
     };
   },
   fromFirestore: (snapshot: any): User => {
@@ -162,14 +139,14 @@ export const userConverter = {
     const createdAtValue = data.createdAt || data.CreatedAt || new Date();
     const updatedAtValue = data.updatedAt || data.UpdatedAt || new Date();
 
-    const projectIds =
-      Array.isArray(data.projectLocation)
-        ? data.projectLocation
-        : Array.isArray(data.projectLocationIds)
-        ? data.projectLocationIds
-        : Array.isArray(data.ProjectLocationIds)
-        ? data.ProjectLocationIds
-        : [];
+    let projectIds: string[] = [];
+    const rawProjectIds = data.projectLocation || data.projectLocationIds || data.ProjectLocationIds || data.projectIds || data.projectId;
+    
+    if (Array.isArray(rawProjectIds)) {
+      projectIds = rawProjectIds;
+    } else if (typeof rawProjectIds === 'string') {
+      projectIds = rawProjectIds.split(/[|,]/).map(item => item.trim()).filter(Boolean);
+    }
 
     return {
       id: snapshot.id,
@@ -189,6 +166,7 @@ export const userConverter = {
       updatedAt: parseDate(updatedAtValue),
       createdBy: data.createdBy || data.CreatedBy || 'system',
       updatedBy: data.updatedBy || data.UpdatedBy || 'system',
+      systemCode: data.systemCode || data.SystemCode || undefined,
     };
   },
 };

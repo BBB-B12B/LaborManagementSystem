@@ -20,6 +20,8 @@ import importedWageSystemRoutes from './labor/importedWageSystem.routes';
 import companyHolidaysRoutes from './companyHolidays.routes';
 import reconciliationRoutes from './reconciliation.routes';
 import taskRoutes from './tasks.routes';
+import mediaRoutes from './media.routes';
+import notificationRoutes from './notifications.routes';
 
 const router = Router();
 
@@ -62,5 +64,11 @@ router.use('/reconciliation', reconciliationRoutes);
 
 // Task routes
 router.use('/tasks', taskRoutes);
+
+// Media routes
+router.use('/media', mediaRoutes);
+
+// Notification routes
+router.use('/notifications', notificationRoutes);
 
 export default router;

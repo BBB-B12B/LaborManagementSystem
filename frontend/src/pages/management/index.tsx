@@ -80,7 +80,7 @@ export default function ManagementHubPage() {
   const sections = MANAGEMENT_SECTIONS.filter((section) => section.permissionCheck(permissions));
 
   return (
-    <ProtectedRoute requiredRoles={['AM', 'FM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
+    <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
           <Box sx={{ mb: 4 }}>

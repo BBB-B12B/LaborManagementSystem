@@ -1,0 +1,8 @@
+{
+  "session_id": "session_013_uxui_workspace",
+  "associated_tasks": ["T-016"],
+  "status": "completed",
+  "estimated_tokens": 80000,
+  "summary_context": "UX/UI Workspace Session — แก้ไขและปรับปรุง:\n\n1. [Structure Tree] ย้าย DueDate color indicator มาแสดงบนการ์ดใน WorkspaceTree.tsx โดยใช้แถบสีแทนจุดสี:\n   - แถบสีน้ำเงิน: เหลือเวลา > 7 วัน\n   - แถบสีน้ำส้ม: เหลือเวลา 4–7 วัน\n   - แถบสีแดง: เหลือเวลา ≤ 3 วัน หรือเกินกำหนด\n\n2. [DueDate Tooltip] เปลี่ยนจากแถบสีบนการ์ดมาเป็น Tooltip แสดงเมื่อ hover/คลิกปุ่ม DueDate บนการ์ด TaskCard.tsx\n\n3. [Bug Fix] Reject Task 500 Error — แก้ backend TaskService.ts และ tasks.routes.ts:\n   - แก้ rejectTask ให้ส่ง progress=0 และ status=pending_assignment กลับหน้าบ้านถูกต้อง\n   - การ์ดที่ถูก Reject (rev01) ต้องแสดงใน Upcoming (progress=0)\n\n4. [Bug Fix] updateSubtask 404 Error — แก้ frontend taskService.ts และ backend tasks.routes.ts:\n   - ปัญหา: URL ส่ง composite ID ผิดรูปแบบ ทำให้ route ไม่ match\n   - แก้ไข handleSubtaskEditSubmit ใน index.tsx ให้ส่ง parentTaskId และ subtaskId แยกกัน\n   - แก้ backend route PATCH /tasks/:taskId/subtasks/:subtaskId ให้ resolve ID ถูกต้อง\n\n5. [Bug Fix] DueDate ไม่อัปเดตหลัง edit — แก้ให้ refresh task list หลัง updateSubtask สำเร็จ\n\n6. [Git] Push ทุกการเปลี่ยนแปลงขึ้น branch dailyReport ด้วย commit: 'UX/UI workspace'",
+  "History": []
+}

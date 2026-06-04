@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { useFeedbackStore } from '@/store/feedbackStore';
+import { auth as firebaseAuth } from '../firebase/config';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -97,9 +98,23 @@ const apiClient: AxiosInstance = axios.create({
 
 // Request interceptor
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     // เพิ่ม auth token ถ้ามี
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    let token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+    // Refresh Firebase Token ถ้ามี session ค้างอยู่
+    if (typeof window !== 'undefined' && firebaseAuth.currentUser) {
+      try {
+        const freshToken = await firebaseAuth.currentUser.getIdToken();
+        if (freshToken && freshToken !== token) {
+          token = freshToken;
+          localStorage.setItem('authToken', freshToken);
+        }
+      } catch (e) {
+        console.warn('Failed to refresh Firebase token', e);
+      }
+    }
+
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -173,40 +188,40 @@ apiClient.interceptors.response.use(
 export const api = {
   get: async <T = any>(url: string, params?: Record<string, any>): Promise<T> => {
     const response = await apiClient.get<APIResponse<T>>(url, { params });
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   post: async <T = any>(url: string, data?: any): Promise<T> => {
     const response = await apiClient.post<APIResponse<T>>(url, data);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   put: async <T = any>(url: string, data?: any): Promise<T> => {
     const response = await apiClient.put<APIResponse<T>>(url, data);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   delete: async <T = any>(url: string): Promise<T> => {
     const response = await apiClient.delete<APIResponse<T>>(url);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
 
   patch: async <T = any>(url: string, data?: any): Promise<T> => {
     const response = await apiClient.patch<APIResponse<T>>(url, data);
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Request failed');
   },
@@ -216,8 +231,8 @@ export const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000, // 5 minutes timeout for large file uploads
     });
-    if (response.data.success && response.data.data !== undefined) {
-      return response.data.data;
+    if (response.data.success) {
+      return response.data.data as T;
     }
     throw new Error(response.data.error || 'Upload failed');
   },

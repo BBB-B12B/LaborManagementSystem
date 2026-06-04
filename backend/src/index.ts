@@ -18,7 +18,12 @@ const PORT = config.port || 4000;
 // ============================================
 
 // Security
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // CORS
 const corsOrigins = config.corsOrigin.split(',').map(origin => origin.trim());

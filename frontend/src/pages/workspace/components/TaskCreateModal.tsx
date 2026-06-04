@@ -13,33 +13,61 @@ import {
   CircularProgress,
   IconButton,
   Avatar,
+  Tooltip,
+  InputAdornment,
+  Checkbox,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import { DatePicker } from '@/components/forms/DatePicker';
-import { useForm, Controller, useWatch } from 'react-hook-form';
+import { useForm, Controller, useWatch, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { projectService, type Project } from '@/services/projectService';
 import { memberService, type User } from '@/services/memberService';
 import { taskService } from '@/services/taskService';
+import { projectConfigService, WorkOrderConfig, CategoryConfig } from '@/services/projectConfigService';
 import { useSnackbar } from 'notistack';
 import { useAuthStore } from '@/store/authStore';
+import { useToast } from '@/components/common/Toast';
+import { WorkOrderConfigModal } from './WorkOrderConfigModal';
+import { CategoryConfigModal } from './CategoryConfigModal';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 
 // Form validation schema
 const taskSchema = z.object({
-  title: z.string().min(2, 'กรุณาระบุชื่องาน'),
+  taskName: z.string().min(2, 'กรุณาระบุชื่องาน'),
+  description: z.string().optional(),
   projectId: z.string().min(1, 'กรุณาเลือกโครงการ'),
-  assignees: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-    })
-  ).min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน'),
   dueDate: z.date({
-    required_error: 'กรุณาเลือกวันที่ครบกำหนด',
     invalid_type_error: 'รูปแบบวันที่ไม่ถูกต้อง',
-  }),
+  }).optional().nullable(),
+  workOrderCode: z.string().min(1, 'กรุณาเลือกหมวดหมู่งานหลัก'),
+  categoryName: z.string().min(2, 'กรุณาระบุหมวดหมู่งานย่อย'),
+  isSupportRequest: z.boolean().optional().default(false),
+  subtasks: z.array(
+    z.object({
+      id: z.string().optional(),
+      subtaskId: z.string().optional(),
+      subtaskName: z.string().min(1, 'กรุณาระบุชื่องานย่อย'),
+      assignees: z.array(
+        z.object({
+          employeeId: z.string(),
+          name: z.string(),
+          roleId: z.string(),
+        })
+      ).optional().default([]),
+      dueDate: z.date({
+        required_error: 'กรุณาเลือกวันที่ครบกำหนดสำหรับงานย่อย',
+        invalid_type_error: 'รูปแบบวันที่ไม่ถูกต้อง',
+      }),
+      isSupportRequest: z.boolean().optional().default(false),
+    })
+  ).optional().default([]),
 });
 
 type TaskFormData = z.infer<typeof taskSchema>;
@@ -48,31 +76,130 @@ interface TaskCreateModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  task?: any; // ถ้ามี task แสดงว่าเป็นโหมดแก้ไข
 }
 
-export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose, onSuccess }) => {
+export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose, onSuccess, task }) => {
+  const toast = useToast();
+  const { user } = useAuthStore();
+  const isEdit = !!task;
   const [projects, setProjects] = useState<Project[]>([]);
   const [fmUsers, setFmUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [confirmData, setConfirmData] = useState<TaskFormData | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  // Dynamic Configs State
+  const [workOrders, setWorkOrders] = useState<WorkOrderConfig[]>([]);
+  const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  
+  // Modal states
+  const [openWOModal, setOpenWOModal] = useState(false);
+  const [openCatModal, setOpenCatModal] = useState(false);
+  const [editWO, setEditWO] = useState<WorkOrderConfig | null>(null);
+  const [editCat, setEditCat] = useState<CategoryConfig | null>(null);
+
+  // --- Helper/Support Team Logic ---
+  /** ตรวจสอบว่าเป็นทีม Support (คลังสินค้า P004 หรือ บริการลูกค้า P002) หรือไม่ โดยเช็คจากชื่อโครงการ */
+  const isHelperUser = projects.some(p => 
+    user?.projectLocationIds?.includes(p.id) && 
+    (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+  );
+  /** รายการงานที่มีอยู่แล้วในโครงการ (สำหรับทีม Support เลือก) */
+  const [existingTasks, setExistingTasks] = useState<any[]>([]);
+  const [isFetchingTasks, setIsFetchingTasks] = useState(false);
+  
+  // State สำหรับให้ Support แก้ไขชื่องาน
+  const [supportOriginalTaskId, setSupportOriginalTaskId] = useState<string | null>(null);
+  const [supportOriginalSubtaskId, setSupportOriginalSubtaskId] = useState<string | null>(null);
+
+
+
+  const [isEditingTaskName, setIsEditingTaskName] = useState(false);
+  const [hasSubtasks, setHasSubtasks] = useState(false);
+  const [subtasksToDelete, setSubtasksToDelete] = useState<string[]>([]);
+  const [selectedParentTaskId, setSelectedParentTaskId] = useState<string | null>(null);
+  const [isFetchingSubtasks, setIsFetchingSubtasks] = useState(false);
+  const [projectTasks, setProjectTasks] = useState<any[]>([]);
+  const [isLoadingProjectTasks, setIsLoadingProjectTasks] = useState(false);
 
   const {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting, isValid },
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
     mode: 'onChange',
     defaultValues: {
-      title: '',
+      taskName: '',
+      description: '',
       projectId: '',
-      assignees: [],
+      workOrderCode: '',
+      categoryName: '',
       dueDate: null as any,
+      isSupportRequest: false,
+      subtasks: [{ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false }],
     },
   });
 
-  // Fetch initial data
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'subtasks',
+  });
+
+  // Set default values when in Edit mode
+  useEffect(() => {
+    if (open && task) {
+      setSubtasksToDelete([]);
+      const fetchSubtasksAndReset = async () => {
+        try {
+          const subtasksData = await taskService.getSubtasks(task.id);
+          const hasExistingSubtasks = subtasksData.length > 0;
+          setHasSubtasks(hasExistingSubtasks);
+          reset({
+            taskName: task.taskName,
+            description: task.description || '',
+            projectId: task.projectId,
+            workOrderCode: task.workOrderCode,
+            categoryName: task.categoryName,
+            dueDate: task.dueDate ? new Date(task.dueDate) : null as any,
+            isSupportRequest: task.isSupportRequest || false,
+            subtasks: hasExistingSubtasks ? subtasksData.map(st => ({
+              id: st.id,
+              subtaskId: st.subtaskId,
+              subtaskName: st.subtaskName,
+              assignees: st.assignees || [],
+              dueDate: st.dueDate ? new Date(st.dueDate) : null as any,
+              isSupportRequest: st.isSupportRequest || false,
+            })) : []
+          });
+        } catch (error) {
+          console.error("Failed to load subtasks for task", task.id, error);
+        }
+      };
+      fetchSubtasksAndReset();
+    } else if (open && !task) {
+      setSubtasksToDelete([]);
+      setHasSubtasks(false);
+      setSelectedParentTaskId(null);
+      setIsFetchingSubtasks(false);
+      reset({
+        taskName: '',
+        description: '',
+        projectId: '', // จะถูกเซ็ตโดย fetchData ด้านล่าง
+        workOrderCode: '',
+        categoryName: '',
+        dueDate: null as any,
+        isSupportRequest: false,
+        subtasks: [],
+      });
+    }
+  }, [open, task, reset]);
+
+  // Fetch initial projects & users
   useEffect(() => {
     if (open) {
       const fetchData = async () => {
@@ -84,6 +211,25 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           ]);
           setProjects(projectsData);
           setFmUsers(usersData.users || []);
+
+          // --- LOGIC: Default Project Selection ---
+          if (!isEdit && user?.projectLocationIds && user.projectLocationIds.length > 0) {
+            // Check if user belongs to "Helper/Support" projects by Project Name
+            const isHelperProject = projectsData.some(p => 
+              user.projectLocationIds.includes(p.id) && 
+              (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+            );
+
+            const userProjectId = user.projectLocationIds[0];
+            // Match by ID or Project Code (to support both legacy and new ID formats)
+            const matchedProject = projectsData.find(p => 
+              p.id === userProjectId || p.code === userProjectId
+            );
+
+            if (matchedProject) {
+              setValue('projectId', matchedProject.id, { shouldValidate: true, shouldDirty: true });
+            }
+          }
         } catch (error) {
           console.error('Failed to fetch modal data', error);
         } finally {
@@ -92,35 +238,277 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       };
       fetchData();
     } else {
-      // Reset form when closed
       reset();
       setSubmitError('');
+      setWorkOrders([]);
+      setCategories([]);
+      setSelectedParentTaskId(null);
+      setIsFetchingSubtasks(false);
     }
-  }, [open, reset]);
+  }, [open, reset, isEdit, user]);
 
-  const onSubmit = async (data: TaskFormData) => {
+  const selectedProjectId = useWatch({ control, name: 'projectId' });
+  const selectedWorkOrderCode = useWatch({ control, name: 'workOrderCode' });
+  const selectedCategoryName = useWatch({ control, name: 'categoryName' });
+  const selectedTaskName = useWatch({ control, name: 'taskName' });
+  const subtasksWatch = useWatch({ control, name: 'subtasks' }) || [];
+
+  // Filter tasks based on selected Work Order and Category
+  const filteredTasksForDropdown = React.useMemo(() => {
+    if (!selectedWorkOrderCode || !selectedCategoryName) return [];
+    return projectTasks.filter(t => 
+      t.workOrderCode === selectedWorkOrderCode && 
+      t.categoryName === selectedCategoryName
+    );
+  }, [projectTasks, selectedWorkOrderCode, selectedCategoryName]);
+
+  const derivedDueDate = React.useMemo(() => {
+    let maxDate: Date | null = null;
+    subtasksWatch.forEach((st: any) => {
+      if (st?.dueDate) {
+        const date = new Date(st.dueDate);
+        if (!isNaN(date.getTime())) {
+          if (!maxDate || date.getTime() > maxDate.getTime()) {
+            maxDate = date;
+          }
+        }
+      }
+    });
+    return maxDate;
+  }, [subtasksWatch]);
+
+  const isSupportPickup = !!(isHelperUser && selectedProjectId && selectedProjectId !== user?.projectLocationIds?.[0]);
+
+  // Fetch Existing Subtasks for Support Team when projectId changes
+  useEffect(() => {
+    if (isHelperUser && selectedProjectId && open) {
+      setIsFetchingTasks(true);
+      taskService.getTasks()
+        .then(allTasks => {
+          const options: any[] = [];
+          allTasks.forEach(t => {
+            if (t.projectId === selectedProjectId) {
+              t.subtasks?.forEach(st => {
+                if (st.isSupportRequest === true && !st.isPickedUpBySupport && (st.dailyProgress || 0) < 100) {
+                  options.push({
+                    id: `${t.id}__${st.subtaskId}`,
+                    taskId: t.id,
+                    taskName: t.taskName,
+                    subtaskId: st.subtaskId,
+                    subtaskName: st.subtaskName,
+                    workOrderCode: t.workOrderCode || '',
+                    categoryName: t.categoryName || '',
+                    dueDate: t.dueDate || '',
+                  });
+                }
+              });
+            }
+          });
+          setExistingTasks(options);
+        })
+        .catch(err => console.error('Failed to fetch existing tasks', err))
+        .finally(() => setIsFetchingTasks(false));
+    } else {
+      setExistingTasks([]);
+    }
+  }, [isHelperUser, selectedProjectId, open]);
+
+  // Fetch Work Orders when projectId changes
+  useEffect(() => {
+    if (selectedProjectId) {
+      projectConfigService.getWorkOrders(selectedProjectId).then(setWorkOrders).catch(console.error);
+    } else {
+      setWorkOrders([]);
+    }
+  }, [selectedProjectId]);
+
+  // Fetch Categories when workOrderCode changes
+  useEffect(() => {
+    if (selectedProjectId && selectedWorkOrderCode) {
+      projectConfigService.getCategories(selectedProjectId, selectedWorkOrderCode).then(setCategories).catch(console.error);
+    } else {
+      setCategories([]);
+    }
+  }, [selectedProjectId, selectedWorkOrderCode]);
+
+  // Fetch all tasks for selected project (to support selecting an existing task for subtasks)
+  useEffect(() => {
+    if (selectedProjectId && open) {
+      setIsLoadingProjectTasks(true);
+      taskService.getTasks({ projectId: selectedProjectId })
+        .then(setProjectTasks)
+        .catch(err => console.error('Failed to fetch project tasks', err))
+        .finally(() => setIsLoadingProjectTasks(false));
+    } else {
+      setProjectTasks([]);
+    }
+  }, [selectedProjectId, open]);
+
+  // Reset selected parent task if Work Order or Category changes
+  useEffect(() => {
+    if (selectedParentTaskId) {
+      const currentTask = projectTasks.find(t => t.id === selectedParentTaskId);
+      if (currentTask && (currentTask.workOrderCode !== selectedWorkOrderCode || currentTask.categoryName !== selectedCategoryName)) {
+        setSelectedParentTaskId(null);
+        setValue('taskName', '');
+        setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
+      }
+    }
+  }, [selectedWorkOrderCode, selectedCategoryName, selectedParentTaskId, projectTasks, setValue]);
+
+  const handleToggleSubtasks = (checked: boolean) => {
+    setHasSubtasks(checked);
+    if (checked) {
+      if (fields.length === 0) {
+        append({ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false });
+      }
+    } else {
+      if (isEdit) {
+        fields.forEach((item: any) => {
+          if (item.subtaskId) {
+            setSubtasksToDelete(prev => [...prev, item.subtaskId]);
+          } else if (item.id) {
+            setSubtasksToDelete(prev => [...prev, item.id]);
+          }
+        });
+      }
+      setValue('subtasks', []);
+    }
+  };
+
+  const handleDeleteSubtask = (index: number) => {
+    const item = fields[index] as any;
+    if (isEdit && item) {
+      if (item.subtaskId) {
+        setSubtasksToDelete(prev => [...prev, item.subtaskId]);
+      } else if (item.id) {
+        setSubtasksToDelete(prev => [...prev, item.id]);
+      }
+    }
+    remove(index);
+  };
+
+  const onSubmit = (data: TaskFormData) => {
+    // Calculate parent task's dueDate from subtasks max dueDate
+    if (data.subtasks && data.subtasks.length > 0) {
+      let maxDate: Date | null = null;
+      data.subtasks.forEach(st => {
+        if (st.dueDate) {
+          const date = new Date(st.dueDate);
+          if (!isNaN(date.getTime())) {
+            if (!maxDate || date.getTime() > maxDate.getTime()) {
+              maxDate = date;
+            }
+          }
+        }
+      });
+      data.dueDate = maxDate;
+    }
+    setConfirmData(data);
+  };
+
+  const onConfirmSubmit = async (data: TaskFormData) => {
+    setIsConfirming(true);
     try {
       setSubmitError('');
-      await taskService.createTask({
-        title: data.title,
-        projectId: data.projectId,
-        assignees: data.assignees,
-        dueDate: data.dueDate.toISOString(),
-        status: 'upcoming',
-      });
+      
+      const mappedSubtasks = data.subtasks.map(st => ({
+        ...st,
+        dueDate: st.dueDate instanceof Date ? st.dueDate.toISOString() : st.dueDate
+      }));
+
+      if (isEdit) {
+        if (subtasksToDelete.length > 0) {
+          await Promise.all(
+            subtasksToDelete.map(subtaskId => 
+              taskService.deleteSubtask(task.id, subtaskId).catch(err => {
+                console.error(`Failed to delete subtask ${subtaskId}:`, err);
+              })
+            )
+          );
+        }
+        await taskService.updateTask(task.id, {
+          taskName: data.taskName,
+          description: data.description,
+          categoryName: data.categoryName,
+          dueDate: data.dueDate ? data.dueDate.toISOString() : undefined,
+          isSupportRequest: data.subtasks.some(st => st.isSupportRequest),
+          subtasks: mappedSubtasks,
+        }, user?.id || 'system');
+      } else {
+        const selectedProject = projects.find(p => p.id === data.projectId);
+        
+        // ตรวจสอบว่าเป็นการหยิบงานมาจาก Support Request หรือไม่
+        const existingOption = existingTasks.find(t => t.taskId === supportOriginalTaskId && t.subtaskId === supportOriginalSubtaskId);
+        const isPickingUpSupport = isHelperUser && 
+                                 selectedProjectId !== user?.projectLocationIds?.[0] && 
+                                 existingOption;
+
+        if (isPickingUpSupport && existingOption) {
+          // เข้าร่วม Task เดิม โดยระบุ subtaskId ไปที่หลังบ้าน
+          await taskService.joinSupportTask(
+            existingOption.taskId, 
+            data.taskName, 
+            data.subtasks.flatMap(s => s.assignees),
+            existingOption.subtaskId
+          );
+        } else if (hasSubtasks && selectedParentTaskId) {
+          // อัปเดต Task เดิมโดยการเพิ่ม/แก้ไข Subtasks
+          await taskService.updateTask(selectedParentTaskId, {
+            taskName: data.taskName,
+            description: data.description,
+            categoryName: data.categoryName,
+            dueDate: data.dueDate ? data.dueDate.toISOString() : undefined,
+            isSupportRequest: data.subtasks.some(st => st.isSupportRequest),
+            subtasks: mappedSubtasks,
+          }, user?.id || 'system');
+        } else {
+          await taskService.createTask({
+            taskName: data.taskName,
+            description: data.description,
+            projectId: data.projectId,
+            projectName: selectedProject?.projectName || 'Unknown Project',
+            workOrderCode: data.workOrderCode,
+            workOrderName: workOrders.find((w) => w.code === data.workOrderCode)?.name || 'General',
+            categoryName: data.categoryName,
+            dueDate: data.dueDate ? data.dueDate.toISOString() : undefined as any,
+            status: 'upcoming',
+            subtasks: mappedSubtasks,
+          });
+        }
+      }
+      toast.success(isEdit ? 'แก้ไขข้อมูลงานเรียบร้อยแล้ว' : 'สร้างรายการงานใหม่สำเร็จแล้ว');
+      setConfirmData(null);
+      setIsConfirming(false);
       onSuccess();
     } catch (error: any) {
-      console.error('Failed to create task', error);
-      setSubmitError(error.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างงาน');
+      console.error('Failed to save task', error);
+      const serverData = error.response?.data;
+      let errorMsg = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
+      
+      if (serverData) {
+        errorMsg = typeof serverData === 'string' ? serverData : (serverData.error || serverData.message || JSON.stringify(serverData));
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
+      setSubmitError(errorMsg);
+      setIsConfirming(false);
     }
   };
 
   const inputStyles = { 
-    '& .MuiFilledInput-root': {
+    '& .MuiFilledInput-root, & .MuiInputBase-root': {
       borderRadius: 2, 
-      bgcolor: '#F4F6F8',
-      '&:hover': { bgcolor: '#EAECEF' }, 
-      '&.Mui-focused': { bgcolor: '#ffffff', boxShadow: 'inset 0 0 0 1px #1c1e2b' }
+      backgroundColor: '#F4F6F8 !important',
+      '&::before': { display: 'none !important' },
+      '&::after': { display: 'none !important' },
+      '&:hover': { backgroundColor: '#EAECEF !important' }, 
+      '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' },
+      '&.Mui-disabled': {
+        backgroundColor: '#f5f7f9 !important',
+        '&::before': { display: 'none !important' }
+      }
     },
     '& .MuiInputBase-input': {
       color: '#1c1e2b',
@@ -136,7 +524,12 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
 
   const filteredFms = React.useMemo(() => {
     // ซ่อน Role GOD อย่างเด็ดขาด และกรองเฉพาะ FM ในกรณีที่ Backend ส่งมาเกิน
-    const validFms = fmUsers.filter((u) => u.roleId !== 'GOD' && u.roleId === 'FM');
+    const validFms = fmUsers.filter((u) => 
+      u.roleId !== 'GOD' && 
+      u.roleId === 'FM' && 
+      (u as any).systemCode !== 'AS' && 
+      (u as any).SystemCode !== 'AS'
+    );
 
     if (!currentUser?.projectLocationIds || currentUser.projectLocationIds.length === 0) {
       return validFms;
@@ -147,58 +540,89 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   }, [fmUsers, currentUser]);
 
   return (
-    <Dialog 
+    <>
+      <Dialog 
       open={open} 
-      onClose={onClose} 
+      onClose={(event, reason) => {
+        if (reason !== 'backdropClick') {
+          onClose();
+        }
+      }}
       maxWidth="sm" 
       fullWidth 
       PaperProps={{ 
         sx: { 
-          borderRadius: 4,
-          boxShadow: '0 24px 48px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
+          borderRadius: '24px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
+          overflow: 'hidden',
+          backgroundColor: '#ffffff',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column'
         } 
+      }}
+      BackdropProps={{
+        sx: {
+          backdropFilter: 'blur(10px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        },
       }}
     >
       <DialogTitle sx={{ 
-        fontWeight: 700, 
-        color: '#1c1e2b',
+        fontWeight: 800, 
+        color: '#1a1a1a',
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
+        gap: 2,
         px: 3,
         pt: 3,
-        pb: 2,
-        borderBottom: '1px solid #f0f0f0'
+        pb: 1.5,
       }}>
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          width: 40, 
-          height: 40, 
-          borderRadius: '50%', 
-          bgcolor: 'primary.50',
-          color: 'primary.main'
+          width: 44, 
+          height: 44, 
+          borderRadius: '14px', 
+          bgcolor: '#1c1e2b',
+          color: '#fff',
+          boxShadow: '0 8px 16px rgba(28, 30, 43, 0.25)'
         }}>
-          <AssignmentIcon />
+          <AssignmentIcon fontSize="medium" />
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>สร้างงานใหม่</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          {isEdit ? 'แก้ไขรายละเอียดงาน' : 'สร้างรายการงานใหม่'}
+        </Typography>
         <IconButton 
           onClick={onClose}
-          sx={{ ml: 'auto', color: 'text.secondary', '&:hover': { bgcolor: 'grey.100' } }}
+          sx={{ 
+            ml: 'auto', 
+            color: 'text.secondary', 
+            bgcolor: '#f5f7f9',
+            '&:hover': { bgcolor: '#eceff2' } 
+          }}
         >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-        <DialogContent dividers>
+      <Box 
+        component="form" 
+        onSubmit={handleSubmit(onSubmit)}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          flex: 1
+        }}
+      >
+        <DialogContent dividers sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, msOverflowStyle: 'none', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
           ) : (
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
               {submitError && (
                 <Grid item xs={12}>
                   <Typography color="error" variant="body2">
@@ -209,148 +633,1011 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
               
               <Grid item xs={12}>
                 <Controller
-                  name="title"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="ชื่องาน *"
-                      fullWidth
-                      variant="filled"
-                      InputProps={{ disableUnderline: true }}
-                      error={!!errors.title}
-                      helperText={errors.title?.message}
-                      disabled={isSubmitting}
-                      sx={inputStyles}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Controller
                   name="projectId"
                   control={control}
-                  render={({ field }) => (
-                    <Autocomplete
-                      options={projects}
-                      getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
-                      onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
-                      value={projects.find((p) => p.id === field.value) || null}
-                      disabled={isSubmitting}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Location (โครงการ) *"
-                          variant="filled"
-                          error={!!errors.projectId}
-                          helperText={errors.projectId?.message}
-                          InputProps={{ ...params.InputProps, disableUnderline: true }}
-                          sx={inputStyles}
+                  render={({ field }) => {
+                    const isHelperProject = user?.projectLocationIds?.some(id => 
+                      id === 'P002' || id === 'P004'
+                    );
+                    const shouldDisableProject = !isHelperProject && user?.projectLocationIds && user.projectLocationIds.length > 0;
+
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <Autocomplete
+                          sx={{ flex: 1 }}
+                          options={projects}
+                          getOptionLabel={(option) => `${option.projectCode} - ${option.projectName}`}
+                          onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
+                          value={projects.find((p) => p.id === field.value) || null}
+                          disabled={isSubmitting || isEdit || shouldDisableProject}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Location (โครงการ) *"
+                              variant="filled"
+                              error={!!errors.projectId}
+                              helperText={errors.projectId?.message || (shouldDisableProject ? 'โครงการถูกกำหนดตามสังกัดของคุณ' : '')}
+                              InputProps={{ ...params.InputProps, disableUnderline: true }}
+                              sx={inputStyles}
+                            />
+                          )}
                         />
-                      )}
-                    />
-                  )}
+                        <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                          <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
+                            <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                          </Tooltip>
+                        </Box>
+                      </Box>
+                    );
+                  }}
                 />
               </Grid>
 
-              <Grid item xs={12}>
-                <Controller
-                  name="assignees"
-                  control={control}
-                  render={({ field }) => (
-                    <Autocomplete
-                      multiple
-                      options={filteredFms}
-                      getOptionLabel={(option) => option.name}
-                      isOptionEqualToValue={(option, value) => option.id === value.id}
-                      onChange={(_, newValue) => {
-                        field.onChange(
-                          newValue.map((v) => ({ id: v.id, name: v.name }))
-                        );
-                      }}
-                      value={filteredFms.filter((u) => field.value?.some((val) => val.id === u.id))}
-                      disabled={isSubmitting}
-                      renderOption={(props, option) => {
-                        const { key, ...otherProps } = props as any;
-                        return (
-                          <li key={key || option.id} {...otherProps}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
-                              <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
-                                {option.name.substring(0, 2).toUpperCase()}
-                              </Avatar>
-                              <Typography variant="body2">{option.name}</Typography>
+              {isSupportPickup ? (
+                // ==================== SUPPORT PICKUP LAYOUT ====================
+                <>
+                  {/* Dropdown for selecting support subtasks / Edit text field */}
+                  <Grid item xs={12}>
+                    <Controller
+                      name="taskName"
+                      control={control}
+                      render={({ field }) => (
+                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                          {!isEditingTaskName && !isEdit ? (
+                            <Autocomplete
+                              sx={{ flex: 1 }}
+                              options={existingTasks}
+                              getOptionLabel={(option) => {
+                                if (typeof option === 'string') return option;
+                                return `${option.taskName} > ${option.subtaskName}`;
+                              }}
+                              loading={isFetchingTasks}
+                              onChange={(_, newValue) => {
+                                if (newValue && typeof newValue !== 'string') {
+                                  setSupportOriginalTaskId(newValue.taskId);
+                                  setSupportOriginalSubtaskId(newValue.subtaskId);
+                                  field.onChange(newValue.subtaskName);
+                                  
+                                  // Auto-fill Work Order, Category, and Due Date
+                                  setValue('workOrderCode', newValue.workOrderCode || '', { shouldValidate: true });
+                                  setValue('categoryName', newValue.categoryName || '', { shouldValidate: true });
+                                  if (newValue.dueDate) {
+                                    setValue('dueDate', new Date(newValue.dueDate), { shouldValidate: true });
+                                  }
+                                  
+                                  // Initialize subtasks array with exactly 1 element
+                                  setValue('subtasks', [{ 
+                                    subtaskName: newValue.subtaskName, 
+                                    assignees: [], 
+                                    isSupportRequest: false,
+                                    dueDate: newValue.dueDate ? new Date(newValue.dueDate) : (null as any)
+                                  }], { shouldValidate: true });
+                                } else {
+                                  setSupportOriginalTaskId(null);
+                                  setSupportOriginalSubtaskId(null);
+                                  field.onChange('');
+                                  setValue('workOrderCode', '');
+                                  setValue('categoryName', '');
+                                  setValue('dueDate', null as any);
+                                  setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
+                                }
+                              }}
+                              value={existingTasks.find(t => t.taskId === supportOriginalTaskId && t.subtaskId === supportOriginalSubtaskId) || null}
+                              disabled={isSubmitting || isEdit}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="เลือกงานย่อยที่ต้องการช่วยเหลือ *"
+                                  variant="filled"
+                                  placeholder="ค้นหางานย่อย..."
+                                  InputProps={{ 
+                                    ...params.InputProps, 
+                                    disableUnderline: true,
+                                  }}
+                                  error={!!errors.taskName}
+                                  helperText={errors.taskName?.message || (isFetchingTasks ? 'กำลังโหลดรายการงานย่อย...' : 'เฉพาะงานย่อยที่ยังไม่เสร็จ (Progress < 100%)')}
+                                  sx={inputStyles}
+                                />
+                              )}
+                            />
+                          ) : (
+                            <TextField
+                              {...field}
+                              fullWidth
+                              label="ชื่องานย่อยช่วยเหลือ (พิมพ์ปรับเปลี่ยนได้) *"
+                              variant="filled"
+                              InputProps={{ disableUnderline: true }}
+                              error={!!errors.taskName}
+                              helperText={errors.taskName?.message}
+                              sx={{ ...inputStyles, flex: 1 }}
+                              onChange={(e) => {
+                                field.onChange(e.target.value);
+                                setValue('subtasks.0.subtaskName', e.target.value, { shouldValidate: true });
+                              }}
+                            />
+                          )}
+
+                          {supportOriginalTaskId && supportOriginalSubtaskId && !isEdit && (
+                            <Tooltip title={isEditingTaskName ? "ยกเลิกแก้ไขชื่อ" : "แก้ไขชื่องานสำหรับฝั่ง Support"} arrow placement="top">
+                              <Button
+                                variant="outlined"
+                                onClick={() => setIsEditingTaskName(!isEditingTaskName)}
+                                sx={{ 
+                                  height: 52, 
+                                  minWidth: 100, 
+                                  borderRadius: 2, 
+                                  borderColor: '#cbd5e1', 
+                                  color: '#475569',
+                                  fontSize: '0.875rem',
+                                  textTransform: 'none',
+                                  px: 2,
+                                  '&:hover': {
+                                    borderColor: '#94a3b8',
+                                    backgroundColor: '#f1f5f9'
+                                  }
+                                }}
+                                startIcon={isEditingTaskName ? <CloseIcon sx={{ fontSize: '1.1rem !important' }} /> : <EditOutlinedIcon sx={{ fontSize: '1.1rem !important' }} />}
+                              >
+                                {isEditingTaskName ? "ยกเลิก" : "เปลี่ยนชื่อ"}
+                              </Button>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      )}
+                    />
+                  </Grid>
+
+                  {/* Assign to own Support FMs */}
+                  {supportOriginalTaskId && supportOriginalSubtaskId && (
+                    <Grid item xs={12}>
+                      <Controller
+                        name="subtasks.0.assignees"
+                        control={control}
+                        render={({ field }) => (
+                          <Autocomplete
+                            multiple
+                            options={filteredFms}
+                            getOptionLabel={(option) => option.name}
+                            isOptionEqualToValue={(option, value) => option.id === value.employeeId}
+                            onChange={(_, newValue) => {
+                              field.onChange(
+                                newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                              );
+                            }}
+                            value={
+                              (field.value || []).map(val => 
+                                filteredFms.find(f => f.id === val.employeeId || f.employeeId === val.employeeId) || { id: val.employeeId, employeeId: val.employeeId, name: val.name, roleId: val.roleId }
+                              )
+                            }
+                            disabled={isSubmitting}
+                            renderOption={(props, option) => {
+                              const { key, ...otherProps } = props as any;
+                              return (
+                                <li key={key || option.id} {...otherProps}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                                    <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
+                                      {option.name.substring(0, 2).toUpperCase()}
+                                    </Avatar>
+                                    <Typography variant="body2">{option.name}</Typography>
+                                  </Box>
+                                </li>
+                              );
+                            }}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="ผู้รับผิดชอบ (Assign to FMs)"
+                                variant="filled"
+                                placeholder="เลือกหัวหน้างาน..."
+                                error={!!errors.subtasks?.[0]?.assignees}
+                                helperText={errors.subtasks?.[0]?.assignees?.message || 'เลือกหัวหน้างาน (FM) ของทีมคุณเพื่อรับผิดชอบงานช่วยเหลือนี้'}
+                                InputProps={{ ...params.InputProps, disableUnderline: true }}
+                                sx={inputStyles}
+                              />
+                            )}
+                          />
+                        )}
+                      />
+                    </Grid>
+                  )}
+
+                  {/* Due Date (Disabled / Read-only) */}
+                  {supportOriginalTaskId && supportOriginalSubtaskId && (
+                    <Grid item xs={12}>
+                      <Controller
+                        name="dueDate"
+                        control={control}
+                        render={({ field }) => (
+                          <Box sx={inputStyles}>
+                            <DatePicker
+                              label="Due Date (วันที่ครบกำหนดดึงมาจาก Task หลัก) *"
+                              value={field.value || null}
+                              onChange={field.onChange}
+                              disabled={true}
+                              variant="filled"
+                              InputProps={{ 
+                                disableUnderline: true,
+                                sx: {
+                                  backgroundColor: '#f8fafc !important',
+                                  borderRadius: 2,
+                                  '&::before': { display: 'none !important' },
+                                  '&::after': { display: 'none !important' },
+                                  '&.Mui-disabled': {
+                                    backgroundColor: '#f1f5f9 !important',
+                                    '&::before': { display: 'none !important' }
+                                  }
+                                }
+                              }}
+                              sx={inputStyles}
+                            />
+                          </Box>
+                        )}
+                      />
+                    </Grid>
+                  )}
+                </>
+              ) : (
+                // ==================== NORMAL WORKFLOW LAYOUT ====================
+                <>
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                      <Controller
+                        name="workOrderCode"
+                        control={control}
+                        render={({ field }) => (
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
+                            <Autocomplete
+                              sx={{ flex: 1 }}
+                              options={workOrders}
+                              getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                              onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
+                              value={workOrders.find((c) => c.code === field.value) || null}
+                              disabled={isSubmitting || !selectedProjectId || isEdit}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="หมวดหมู่งานหลัก (Work Order) *"
+                                  variant="filled"
+                                  error={!!errors.workOrderCode}
+                                  helperText={errors.workOrderCode?.message || (!selectedProjectId ? 'กรุณาเลือกโครงการก่อน' : '')}
+                                  InputProps={{ ...params.InputProps, disableUnderline: true }}
+                                  sx={inputStyles}
+                                />
+                              )}
+                              renderOption={(props, option) => (
+                                <li {...props} key={option.code}>
+                                  <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
+                                  {!isEdit && user?.roleCode !== 'LD' && (
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={(e) => { e.stopPropagation(); setEditWO(option); setOpenWOModal(true); }}
+                                    >
+                                      <EditOutlinedIcon fontSize="small" />
+                                    </IconButton>
+                                  )}
+                                </li>
+                              )}
+                            />
+                            <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                              <Tooltip title="หมวดงานหลัก ยกตัวอย่างเช่น งานโครงสร้าง งานสถาปัตย์ งานระบบ งานผลิต งานขนส่ง เป็นต้น" arrow placement="top">
+                                <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                              </Tooltip>
                             </Box>
-                          </li>
+                          </Box>
+                        )}
+                      />
+                      {!isEdit && selectedProjectId && user?.roleCode !== 'LD' && (
+                        <Button 
+                          variant="outlined" 
+                          onClick={() => { setEditWO(null); setOpenWOModal(true); }}
+                          sx={{ 
+                            height: 52, 
+                            minWidth: 140, 
+                            borderRadius: 2, 
+                            borderColor: '#cbd5e1', 
+                            color: '#475569',
+                            fontSize: '0.875rem',
+                            textTransform: 'none',
+                            '&:hover': {
+                              borderColor: '#94a3b8',
+                              backgroundColor: '#f1f5f9'
+                            }
+                          }}
+                          startIcon={<AddCircleOutlineIcon />}
+                        >
+                          สร้างหมวดหมู่หลัก
+                        </Button>
+                      )}
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                      <Controller
+                        name="categoryName"
+                        control={control}
+                        render={({ field }) => (
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flex: 1 }}>
+                            <Autocomplete
+                              sx={{ flex: 1 }}
+                              freeSolo
+                              forcePopupIcon={true}
+                              options={categories.map(c => c.name)}
+                              onChange={(_, newValue) => field.onChange(newValue || '')}
+                              onInputChange={(_, newValue) => field.onChange(newValue)}
+                              value={field.value}
+                              disabled={isSubmitting || !selectedWorkOrderCode || isEdit}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="หมวดหมู่งานย่อย (Category) *"
+                                  variant="filled"
+                                  placeholder="พิมพ์หรือเลือกหมวดหมู่งานย่อย"
+                                  InputProps={{ ...params.InputProps, disableUnderline: true }}
+                                  error={!!errors.categoryName}
+                                  helperText={errors.categoryName?.message || (!selectedWorkOrderCode ? 'กรุณาเลือกหมวดหมู่งานหลักก่อน' : '')}
+                                  sx={inputStyles}
+                                />
+                              )}
+                              renderOption={(props, option) => {
+                                const catObj = categories.find(c => c.name === option);
+                                return (
+                                  <li {...props} key={option}>
+                                    <Box sx={{ flex: 1 }}>{option}</Box>
+                                    {catObj && !isEdit && (
+                                      <IconButton 
+                                        size="small" 
+                                        onClick={(e) => { e.stopPropagation(); setEditCat(catObj); setOpenCatModal(true); }}
+                                      >
+                                        <EditOutlinedIcon fontSize="small" />
+                                      </IconButton>
+                                    )}
+                                  </li>
+                                );
+                              }}
+                            />
+                            <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                              <Tooltip title="หมวดงานย่อยให้สอดคล้องกับหมวดงานหลัก เช่น งานโครงสร้างเสา งานฉาบเรียบทาสี งานปูกระเบื้อง งานขนส่งคนงาน งานผนัง Precast เป็นต้น" arrow placement="top">
+                                <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+                              </Tooltip>
+                            </Box>
+                          </Box>
+                        )}
+                      />
+                      {!isEdit && selectedWorkOrderCode && (
+                        <Button 
+                          variant="outlined" 
+                          onClick={() => { setEditCat(null); setOpenCatModal(true); }}
+                          sx={{ 
+                            height: 52, 
+                            minWidth: 140, 
+                            borderRadius: 2, 
+                            borderColor: '#cbd5e1', 
+                            color: '#475569',
+                            fontSize: '0.875rem',
+                            textTransform: 'none',
+                            '&:hover': {
+                              borderColor: '#94a3b8',
+                              backgroundColor: '#f1f5f9'
+                            }
+                          }}
+                          startIcon={<AddCircleOutlineIcon />}
+                        >
+                          สร้างหมวดหมู่ย่อย
+                        </Button>
+                      )}
+                    </Box>
+                  </Grid>
+
+                  {/* ชื่องาน (taskName) หรือ Dropdown เลือกงานหลัก */}
+                  <Grid item xs={12}>
+                    <Controller
+                      name="taskName"
+                      control={control}
+                      render={({ field }) => {
+                        if (!isEdit && hasSubtasks) {
+                          return (
+                            <Autocomplete
+                              sx={{ flex: 1 }}
+                              options={filteredTasksForDropdown}
+                              getOptionLabel={(option) => {
+                                if (typeof option === 'string') return option;
+                                return option.taskName;
+                              }}
+                              loading={isLoadingProjectTasks || isFetchingSubtasks}
+                              onChange={(_, newValue) => {
+                                if (newValue && typeof newValue !== 'string') {
+                                  setSelectedParentTaskId(newValue.id);
+                                  field.onChange(newValue.taskName);
+                                  
+                                  // Fetch subtasks of this selected task and populate subtasks array
+                                  setIsFetchingSubtasks(true);
+                                  taskService.getSubtasks(newValue.id)
+                                    .then(subtasksData => {
+                                      if (subtasksData && subtasksData.length > 0) {
+                                        setValue('subtasks', subtasksData.map(st => ({
+                                          subtaskId: st.subtaskId,
+                                          subtaskName: st.subtaskName,
+                                          assignees: st.assignees || [],
+                                          dueDate: st.dueDate ? new Date(st.dueDate) : null as any,
+                                          isSupportRequest: st.isSupportRequest || false
+                                        })), { shouldValidate: true });
+                                      } else {
+                                        setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
+                                      }
+                                    })
+                                    .catch(err => {
+                                      console.error("Failed to load subtasks for selected task", err);
+                                      setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
+                                    })
+                                    .finally(() => setIsFetchingSubtasks(false));
+                                } else {
+                                  setSelectedParentTaskId(null);
+                                  field.onChange('');
+                                  setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
+                                }
+                              }}
+                              value={filteredTasksForDropdown.find((t: any) => t.id === selectedParentTaskId) || null}
+                              disabled={isSubmitting}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="เลือกงานหลัก *"
+                                  variant="filled"
+                                  placeholder="ค้นหางานหลัก..."
+                                  InputProps={{ 
+                                    ...params.InputProps, 
+                                    disableUnderline: true,
+                                  }}
+                                  error={!!errors.taskName}
+                                  helperText={errors.taskName?.message || (isLoadingProjectTasks ? 'กำลังโหลดรายการงาน...' : isFetchingSubtasks ? 'กำลังโหลดงานย่อย...' : 'เลือกงานหลักที่ต้องการเพิ่มงานย่อยภายใต้')}
+                                  sx={inputStyles}
+                                />
+                              )}
+                            />
+                          );
+                        }
+                        
+                        return (
+                          <TextField
+                            {...field}
+                            fullWidth
+                            label="ชื่องาน *"
+                            variant="filled"
+                            InputProps={{ disableUnderline: true }}
+                            error={!!errors.taskName}
+                            helperText={errors.taskName?.message}
+                            sx={inputStyles}
+                          />
                         );
                       }}
-                      renderInput={(params) => (
+                    />
+                  </Grid>
+
+                  {/* หมายเหตุ (description) */}
+                  <Grid item xs={12}>
+                    <Controller
+                      name="description"
+                      control={control}
+                      render={({ field }) => (
                         <TextField
-                          {...params}
-                          label="Assign (ผู้รับผิดชอบ) *"
+                          {...field}
+                          label="หมายเหตุ"
                           variant="filled"
-                          error={!!errors.assignees}
-                          helperText={errors.assignees?.message || 'แสดงเฉพาะ FM ในโครงการของคุณ'}
-                          InputProps={{ ...params.InputProps, disableUnderline: true }}
+                          multiline
+                          rows={2}
+                          fullWidth
+                          disabled={isSubmitting}
+                          placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)"
+                          InputProps={{ disableUnderline: true }}
                           sx={inputStyles}
                         />
                       )}
                     />
-                  )}
-                />
-              </Grid>
+                  </Grid>
 
-              <Grid item xs={12}>
-                <Controller
-                  name="dueDate"
-                  control={control}
-                  render={({ field }) => (
-                    <DatePicker
-                      label="Due Date (วันที่ครบกำหนด) *"
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={isSubmitting}
-                      error={!!errors.dueDate}
-                      helperText={errors.dueDate?.message as string}
-                      variant="filled"
-                      InputProps={{ disableUnderline: true }}
-                      sx={inputStyles}
-                    />
+                  {/* สวิตช์ เปิด/ปิด งานย่อย (Subtasks Switch) */}
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1c1e2b' }}>
+                        เพิ่มงานย่อย (Subtasks)
+                      </Typography>
+                      <Switch
+                        checked={hasSubtasks}
+                        onChange={(e) => handleToggleSubtasks(e.target.checked)}
+                        disabled={isSubmitting}
+                        sx={{
+                          width: 42,
+                          height: 26,
+                          padding: 0,
+                          '& .MuiSwitch-switchBase': {
+                            padding: 0,
+                            margin: '2px',
+                            transitionDuration: '300ms',
+                            '&.Mui-checked': {
+                              transform: 'translateX(16px)',
+                              color: '#fff',
+                              '& + .MuiSwitch-track': {
+                                backgroundColor: '#2563eb',
+                                opacity: 1,
+                                border: 0,
+                              },
+                            },
+                          },
+                          '& .MuiSwitch-thumb': {
+                            boxSizing: 'border-box',
+                            width: 22,
+                            height: 22,
+                            backgroundColor: '#ffffff',
+                          },
+                          '& .MuiSwitch-track': {
+                            borderRadius: 26 / 2,
+                            backgroundColor: '#cbd5e1',
+                            opacity: 1,
+                            transition: 'background-color 500ms',
+                          },
+                        }}
+                      />
+                    </Box>
+                  </Grid>
+
+                  {/* รายการงานย่อย (Subtasks Container) */}
+                  {hasSubtasks && (
+                    <Grid item xs={12}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, mb: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Tooltip title="กรอกชื่องานย่อยและระบุผู้รับผิดชอบ (แต่ละงานย่อยจะถูกสร้างเป็น 1 งานในระบบ)" arrow placement="top">
+                            <HelpOutlineIcon sx={{ color: '#94a3b8', fontSize: 18, cursor: 'help' }} />
+                          </Tooltip>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1c1e2b', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            รายการงานย่อย (Subtasks)
+                          </Typography>
+                        </Box>
+                        
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => append({ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any })}
+                          sx={{ 
+                            borderRadius: '20px', 
+                            borderColor: '#cbd5e1', 
+                            color: '#475569',
+                            fontSize: '0.75rem',
+                            py: 0.5,
+                            px: 1.5,
+                            textTransform: 'none',
+                            '&:hover': {
+                              borderColor: '#94a3b8',
+                              backgroundColor: '#f1f5f9'
+                            }
+                          }}
+                          startIcon={<AddCircleOutlineIcon sx={{ fontSize: '1rem !important' }} />}
+                        >
+                          เพิ่มงานย่อย
+                        </Button>
+                      </Box>
+                      
+                      {fields.map((item, index) => (
+                        <Box 
+                          key={item.id} 
+                          sx={{ 
+                            p: 2, 
+                            mb: 2, 
+                            borderRadius: '16px', 
+                            border: '1px solid #e2e8f0', 
+                            backgroundColor: '#f8fafc',
+                            position: 'relative'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569' }}>
+                              งานย่อยที่ {index + 1}
+                            </Typography>
+                            {(isEdit || fields.length > 1) && (
+                              <Tooltip title="ลบงานย่อย" arrow placement="top">
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleDeleteSubtask(index)} 
+                                  color="error"
+                                  sx={{ 
+                                    p: 0.5,
+                                    backgroundColor: '#fee2e2',
+                                    '&:hover': { backgroundColor: '#fecaca' }
+                                  }}
+                                >
+                                  <CloseIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Box>
+
+                          <Grid container spacing={1.5}>
+                            {/* Row 1: subtaskName (sm=8) & dueDate (sm=4) */}
+                            <Grid item xs={12} sm={8}>
+                              <Controller
+                                name={`subtasks.${index}.subtaskName`}
+                                control={control}
+                                render={({ field }) => (
+                                  <TextField
+                                    {...field}
+                                    label="ชื่องานย่อย *"
+                                    variant="outlined"
+                                    fullWidth
+                                    disabled={isSubmitting}
+                                    error={!!errors.subtasks?.[index]?.subtaskName}
+                                    helperText={errors.subtasks?.[index]?.subtaskName?.message}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+                                        borderRadius: '24px !important',
+                                        backgroundColor: '#ffffff !important',
+                                        height: 40,
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                          borderColor: '#cbd5e1 !important',
+                                          borderWidth: '1px !important',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                          borderColor: '#94a3b8 !important',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                          borderColor: '#1c1e2b !important',
+                                          borderWidth: '1.5px !important',
+                                        },
+                                      },
+                                      '& .MuiInputBase-input': {
+                                        fontSize: '0.85rem',
+                                        py: '8px !important',
+                                      },
+                                      '& .MuiInputLabel-root': {
+                                        fontSize: '0.85rem',
+                                        mt: -0.75,
+                                        color: '#64748b',
+                                        '&.Mui-focused': {
+                                          color: '#1c1e2b !important',
+                                          mt: 0,
+                                        },
+                                        '&.MuiInputLabel-shrink': {
+                                          mt: 0,
+                                        }
+                                      }
+                                    }}
+                                  />
+                                )}
+                              />
+                            </Grid>
+
+                            <Grid item xs={12} sm={4}>
+                              <Controller
+                                name={`subtasks.${index}.dueDate`}
+                                control={control}
+                                render={({ field }) => (
+                                  <DatePicker
+                                    label="วันที่ครบกำหนด *"
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={isSubmitting}
+                                    error={!!errors.subtasks?.[index]?.dueDate}
+                                    helperText={errors.subtasks?.[index]?.dueDate?.message as string}
+                                    variant="outlined"
+                                    sx={{
+                                      width: '100%',
+                                      '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+                                        borderRadius: '24px !important',
+                                        backgroundColor: '#ffffff !important',
+                                        height: 40,
+                                        paddingRight: '8px !important',
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                          borderColor: '#cbd5e1 !important',
+                                          borderWidth: '1px !important',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                          borderColor: '#94a3b8 !important',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                          borderColor: '#2563eb !important',
+                                          borderWidth: '1.5px !important',
+                                        },
+                                      },
+                                      '& .MuiInputBase-input': {
+                                        fontSize: '0.8rem',
+                                        py: '8px !important',
+                                        color: '#2563eb !important',
+                                        WebkitTextFillColor: '#2563eb !important',
+                                        fontWeight: 600,
+                                      },
+                                      '& .MuiInputLabel-root': {
+                                        fontSize: '0.8rem',
+                                        mt: -0.25,
+                                        color: '#64748b',
+                                        '&.Mui-focused': {
+                                          color: '#2563eb !important',
+                                        }
+                                      },
+                                      '& .MuiIconButton-root': {
+                                        color: '#64748b',
+                                        p: 0.5,
+                                      }
+                                    }}
+                                  />
+                                )}
+                              />
+                            </Grid>
+
+                            {/* Row 2: assignees (xs=12) */}
+                            <Grid item xs={12}>
+                              <Controller
+                                name={`subtasks.${index}.assignees`}
+                                control={control}
+                                render={({ field }) => (
+                                  <Autocomplete
+                                    multiple
+                                    options={filteredFms}
+                                    getOptionLabel={(option) => option.name}
+                                    isOptionEqualToValue={(option, value) => option.id === value.employeeId}
+                                    onChange={(_, newValue) => {
+                                      field.onChange(
+                                        newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                                      );
+                                    }}
+                                    value={
+                                      (field.value || []).map(val => 
+                                        filteredFms.find(f => f.id === val.employeeId || f.employeeId === val.employeeId) || { id: val.employeeId, employeeId: val.employeeId, name: val.name, roleId: val.roleId }
+                                      )
+                                    }
+                                    disabled={isSubmitting}
+                                    renderOption={(props, option) => {
+                                      const { key, ...otherProps } = props as any;
+                                      return (
+                                        <li key={key || option.id} {...otherProps}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                                            <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
+                                              {option.name.substring(0, 2).toUpperCase()}
+                                            </Avatar>
+                                            <Typography variant="body2">{option.name}</Typography>
+                                          </Box>
+                                        </li>
+                                      );
+                                    }}
+                                    renderInput={(params) => (
+                                      <TextField
+                                        {...params}
+                                        label="ผู้รับผิดชอบ"
+                                        variant="outlined"
+                                        error={!!errors.subtasks?.[index]?.assignees}
+                                        helperText={errors.subtasks?.[index]?.assignees?.message}
+                                        sx={{
+                                          '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+                                            borderRadius: '24px !important',
+                                            backgroundColor: '#ffffff !important',
+                                            minHeight: 40,
+                                            py: '4px !important',
+                                            '& .MuiOutlinedInput-notchedOutline': {
+                                              borderColor: '#cbd5e1 !important',
+                                              borderWidth: '1px !important',
+                                            },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                                              borderColor: '#94a3b8 !important',
+                                            },
+                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                              borderColor: '#1c1e2b !important',
+                                              borderWidth: '1.5px !important',
+                                            },
+                                          },
+                                          '& .MuiInputBase-input': {
+                                            fontSize: '0.85rem',
+                                          },
+                                          '& .MuiInputLabel-root': {
+                                            fontSize: '0.85rem',
+                                            mt: -0.75,
+                                            color: '#64748b',
+                                            '&.Mui-focused': {
+                                              color: '#1c1e2b !important',
+                                              mt: 0,
+                                            },
+                                            '&.MuiInputLabel-shrink': {
+                                              mt: 0,
+                                            }
+                                          }
+                                        }}
+                                      />
+                                    )}
+                                  />
+                                )}
+                              />
+                            </Grid>
+
+                            {/* Row 3 (optional): isSupportRequest (xs=12) */}
+                            {!isHelperUser && (
+                              <Grid item xs={12}>
+                                <Controller
+                                  name={`subtasks.${index}.isSupportRequest`}
+                                  control={control}
+                                  render={({ field }) => (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <Tooltip title="ขอความช่วยเหลือจากทีม Support ในงานย่อยนี้" arrow placement="top">
+                                        <HelpOutlineIcon sx={{ color: '#94a3b8', fontSize: 18, cursor: 'help' }} />
+                                      </Tooltip>
+                                      <FormControlLabel
+                                        control={
+                                          <Checkbox 
+                                            {...field} 
+                                            checked={field.value}
+                                            onChange={(e) => field.onChange(e.target.checked)}
+                                            disabled={isSubmitting}
+                                            sx={{ color: '#94a3b8', '&.Mui-checked': { color: 'primary.main' } }}
+                                          />
+                                        }
+                                        label={
+                                          <Typography variant="body2" sx={{ fontWeight: 600, color: field.value ? 'primary.main' : '#64748b' }}>
+                                            ขอความช่วยเหลือจากทีม Support
+                                          </Typography>
+                                        }
+                                        sx={{ m: 0 }}
+                                      />
+                                    </Box>
+                                  )}
+                                />
+                              </Grid>
+                            )}
+                          </Grid>
+                        </Box>
+                      ))}
+                    </Grid>
                   )}
-                />
-              </Grid>
+
+                </>
+              )}
             </Grid>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2.5, bgcolor: '#fafafa', borderTop: '1px solid #f0f0f0' }}>
-          <Button onClick={onClose} disabled={isSubmitting} variant="text" sx={{ borderRadius: 2, color: 'text.secondary', fontWeight: 600, px: 3 }}>
+        <DialogActions sx={{ 
+          px: 3, 
+          py: 2, 
+          bgcolor: '#fcfcfc',
+          gap: 2,
+          justifyContent: 'center'
+        }}>
+          <Button 
+            onClick={onClose}
+            sx={{
+              flex: 1,
+              maxWidth: 200,
+              bgcolor: '#ef4444',
+              color: '#fff',
+              fontWeight: 600,
+              borderRadius: '8px',
+              py: 1,
+              textTransform: 'none',
+              boxShadow: '0 4px 6px rgba(239, 68, 68, 0.2)',
+              '&:hover': {
+                bgcolor: '#dc2626',
+                boxShadow: '0 6px 12px rgba(239, 68, 68, 0.3)',
+              }
+            }}
+          >
             ยกเลิก
           </Button>
           <Button 
-            type="submit" 
-            variant="contained" 
-            disabled={!isValid || isSubmitting || loading}
-            sx={{ 
-              borderRadius: 2, 
-              bgcolor: '#1c1e2b', 
+            type="submit"
+            disabled={isSubmitting}
+            sx={{
+              flex: 1,
+              maxWidth: 200,
+              bgcolor: '#10b981',
               color: '#fff',
               fontWeight: 600,
-              px: 4,
-              boxShadow: '0 4px 12px rgba(28, 30, 43, 0.2)',
-              '&:hover': { bgcolor: '#000000', boxShadow: '0 6px 16px rgba(0, 0, 0, 0.3)' },
-              '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' }
+              borderRadius: '8px',
+              py: 1,
+              textTransform: 'none',
+              boxShadow: '0 4px 6px rgba(16, 185, 129, 0.2)',
+              '&:hover': {
+                bgcolor: '#059669',
+                boxShadow: '0 6px 12px rgba(16, 185, 129, 0.3)',
+              },
+              '&.Mui-disabled': {
+                bgcolor: '#a7f3d0',
+                color: '#fff'
+              }
             }}
           >
-            {isSubmitting ? (
-              <>
-                <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
-                กำลังบันทึก...
-              </>
-            ) : 'สร้างงาน'}
+            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'บันทึกรายงาน'}
           </Button>
         </DialogActions>
       </Box>
+
+      {/* Config Modals */}
+      {selectedProjectId && (
+        <WorkOrderConfigModal
+          open={openWOModal}
+          onClose={() => setOpenWOModal(false)}
+          projectId={selectedProjectId}
+          editData={editWO}
+          onSuccess={async (newWorkOrder) => {
+            const latest = await projectConfigService.getWorkOrders(selectedProjectId);
+            setWorkOrders(latest);
+            if (newWorkOrder) {
+              setValue('workOrderCode', newWorkOrder.code);
+            }
+            setOpenWOModal(false);
+          }}
+        />
+      )}
+
+      {selectedProjectId && selectedWorkOrderCode && (
+        <CategoryConfigModal
+          open={openCatModal}
+          onClose={() => setOpenCatModal(false)}
+          projectId={selectedProjectId}
+          workOrderCode={selectedWorkOrderCode}
+          editData={editCat}
+          onSuccess={async (newCategory) => {
+            const latest = await projectConfigService.getCategories(selectedProjectId, selectedWorkOrderCode);
+            setCategories(latest);
+            if (newCategory && newCategory.name) {
+              setValue('categoryName', newCategory.name);
+            }
+            setOpenCatModal(false);
+          }}
+        />
+      )}
+
     </Dialog>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={!!confirmData} onClose={() => !isConfirming && setConfirmData(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>ยืนยันข้อมูลการบันทึกรายงาน</DialogTitle>
+        <DialogContent dividers>
+          {confirmData && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                กรุณาตรวจสอบข้อมูลก่อนกดยืนยันการบันทึก:
+              </Typography>
+              <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 2, overflow: 'hidden' }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid #e0e0e0' }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>ชื่องาน</Box>
+                  <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>{confirmData.taskName}</Box>
+                </Box>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid #e0e0e0' }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>หมวดหมู่หลัก</Box>
+                  <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>{workOrders.find(w => w.code === confirmData.workOrderCode)?.name || confirmData.workOrderCode}</Box>
+                </Box>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid #e0e0e0' }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>หมวดหมู่ย่อย</Box>
+                  <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>{confirmData.categoryName}</Box>
+                </Box>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid #e0e0e0' }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>ครบกำหนด</Box>
+                  <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>{confirmData.dueDate ? new Date(confirmData.dueDate).toLocaleDateString('th-TH') : '-'}</Box>
+                </Box>
+
+                {confirmData.subtasks && confirmData.subtasks.length > 0 && (
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr' }}>
+                    <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>งานย่อย</Box>
+                    <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>
+                      {confirmData.subtasks.map((st, i) => (
+                        <Box key={i} sx={{ mb: i !== confirmData.subtasks.length - 1 ? 1 : 0 }}>
+                          • {st.subtaskName} (มอบหมาย: {st.assignees.map(a => a.name).join(', ')})
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+              {submitError && (
+                <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+                  {submitError}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 1 }}>
+          <Button onClick={() => setConfirmData(null)} color="error" disabled={isConfirming}>ยกเลิก</Button>
+          <Button onClick={() => confirmData && onConfirmSubmit(confirmData)} variant="contained" color="success" disabled={isConfirming}>
+            {isConfirming ? <CircularProgress size={24} color="inherit" /> : 'ยืนยันการบันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

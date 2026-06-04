@@ -1,0 +1,8 @@
+{
+  "session_id": "session_012_page_route_protection",
+  "associated_tasks": ["T-015"],
+  "status": "completed",
+  "estimated_tokens": 30000,
+  "summary_context": "ปรับปรุงสิทธิ์การเข้าถึงเมนูและหน้าต่าง ๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection):\n\n- RESTRICTED หน้าหลัก (Dashboard) ให้เฉพาะบทบาท: 'AM', 'OE', 'PE', 'PM', 'PD', 'MD'\n- RESTRICTED รายงานประจำวัน (Daily Reports) ให้เฉพาะบทบาท: 'SE', 'FM'\n- RESTRICTED การจัดการ (Management) ให้เฉพาะบทบาท: 'AM', 'OE', 'PE', 'PM', 'PD', 'MD'\n- RESTRICTED คำนวณค่าแรง (Wage Calculation) ให้เฉพาะบทบาท: 'AM', 'OE', 'PE', 'PM', 'PD', 'MD'\n- RESTRICTED ข้อมูลสแกนนิ้ว (Scan Data Monitoring) ให้เฉพาะบทบาท: 'AM'\n- RESTRICTED Workspace ให้เฉพาะบทบาท: 'AM', 'OE', 'PE', 'PM', 'PD', 'MD'\n- แก้ไข layout และ clean up code/imports ที่ซ้ำซ้อน\n- รันตัว Indexer เพื่อ sync index_variables.json และ sync error_index.md (ERR-037)\n- อัปเดตสถานะงาน T-015 เป็น [X] ใน docs/master_roadmap.md เรียบร้อย",
+  "History": []
+}

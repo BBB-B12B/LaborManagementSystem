@@ -12,7 +12,7 @@ import { userService } from '../../services/auth/UserService';
 /**
  * Role types ตาม data-model.md
  */
-export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD';
+export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'LD';
 
 /**
  * Department types

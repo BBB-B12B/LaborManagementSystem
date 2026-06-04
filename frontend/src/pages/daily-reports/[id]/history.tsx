@@ -29,7 +29,7 @@ import {
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { LoadingSpinner } from '@/components/common';
 import { dailyReportService } from '@/services/dailyReportService';
-import { formatDateTime } from '@/utils/dateUtils';
+import { formatDate } from '@/utils/dateUtils';
 
 /**
  * Daily Report Edit History Page
@@ -64,7 +64,7 @@ export default function DailyReportHistoryPage() {
 
   if (isLoading) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
         <Layout>
           <LoadingSpinner message="กำลังโหลดประวัติการแก้ไข..." />
         </Layout>
@@ -74,7 +74,7 @@ export default function DailyReportHistoryPage() {
 
   if (error || !history) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
         <Layout>
           <Container maxWidth="lg" sx={{ py: 4 }}>
             <Alert severity="error">ไม่พบประวัติการแก้ไข หรือคุณไม่มีสิทธิ์เข้าถึง</Alert>
@@ -122,7 +122,7 @@ export default function DailyReportHistoryPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
       <Layout>
         <Container maxWidth="lg" sx={{ py: 4 }}>
           {/* Header */}
@@ -132,7 +132,7 @@ export default function DailyReportHistoryPage() {
             </Typography>
             {report && (
               <Typography variant="body2" color="text.secondary">
-                รายงาน: {report.workDescription} | {formatDateTime(report.reportDate, 'dd/MM/yyyy')}
+                รายงาน: {report.workDescription} | {formatDate(report.reportDate, 'dd/MM/yyyy')}
               </Typography>
             )}
           </Box>
@@ -169,7 +169,7 @@ export default function DailyReportHistoryPage() {
                             </Typography>
                           </Box>
                           <Chip
-                            label={formatDateTime(entry.editedAt, 'dd/MM/yyyy HH:mm')}
+                            label={formatDate(entry.editedAt, 'dd/MM/yyyy HH:mm')}
                             size="small"
                             variant="outlined"
                           />

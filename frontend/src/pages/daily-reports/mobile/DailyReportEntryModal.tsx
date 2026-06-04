@@ -139,7 +139,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
             t.projectId === projectId &&
             t.status !== 'completed' &&
             // If user has GOD role, they can see all, otherwise filter by assignees
-            (currentUser?.roleId === 'GOD' || t.assignees.some(a => a.id === currentUser?.id))
+            (currentUser?.roleId === 'GOD' || t.assignees.some((a: any) => a.id === currentUser?.id || a.employeeId === currentUser?.id || a.employeeId === currentUser?.employeeId || a.id === currentUser?.employeeId))
         );
     }, [allTasks, projectId, currentUser]);
 
@@ -204,14 +204,17 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
 
         entriesToSave.forEach(({ type, state }) => {
             if (state.enabled && state.workerIds.length > 0 && state.startTime && state.endTime && state.taskName) {
+                const diffMs = state.endTime.getTime() - state.startTime.getTime();
+                let hours = diffMs / (1000 * 60 * 60);
+                if (hours < 0) hours += 24; // Handle over-midnight
+                
                 state.workerIds.forEach(workerId => {
                     onSave({
                         dailyContractorId: workerId,
                         taskId: state.taskId,
                         taskName: state.taskName,
                         workType: type,
-                        startTime: state.startTime!.toISOString(),
-                        endTime: state.endTime!.toISOString(),
+                        hours: hours,
                     });
                 });
             }
@@ -311,13 +314,13 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                             <Autocomplete
                                 freeSolo
                                 options={availableTasks}
-                                getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
+                                getOptionLabel={(option) => typeof option === 'string' ? option : option.taskName}
                                 value={regular.taskName}
                                 onChange={(e, newValue) => {
                                     if (typeof newValue === 'string') {
                                         setRegular({ ...regular, taskName: newValue, taskId: undefined });
                                     } else if (newValue) {
-                                        setRegular({ ...regular, taskName: newValue.title, taskId: newValue.id });
+                                        setRegular({ ...regular, taskName: newValue.taskName, taskId: newValue.id });
                                     } else {
                                         setRegular({ ...regular, taskName: '', taskId: undefined });
                                     }
@@ -407,13 +410,13 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                                 <Autocomplete
                                     freeSolo
                                     options={availableTasks}
-                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.taskName}
                                     value={otMorning.taskName}
                                     onChange={(e, newValue) => {
                                         if (typeof newValue === 'string') {
                                             setOtMorning({ ...otMorning, taskName: newValue, taskId: undefined });
                                         } else if (newValue) {
-                                            setOtMorning({ ...otMorning, taskName: newValue.title, taskId: newValue.id });
+                                            setOtMorning({ ...otMorning, taskName: newValue.taskName, taskId: newValue.id });
                                         } else {
                                             setOtMorning({ ...otMorning, taskName: '', taskId: undefined });
                                         }
@@ -457,13 +460,13 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                                 <Autocomplete
                                     freeSolo
                                     options={availableTasks}
-                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.taskName}
                                     value={otNoon.taskName}
                                     onChange={(e, newValue) => {
                                         if (typeof newValue === 'string') {
                                             setOtNoon({ ...otNoon, taskName: newValue, taskId: undefined });
                                         } else if (newValue) {
-                                            setOtNoon({ ...otNoon, taskName: newValue.title, taskId: newValue.id });
+                                            setOtNoon({ ...otNoon, taskName: newValue.taskName, taskId: newValue.id });
                                         } else {
                                             setOtNoon({ ...otNoon, taskName: '', taskId: undefined });
                                         }
@@ -498,13 +501,13 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                                 <Autocomplete
                                     freeSolo
                                     options={availableTasks}
-                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.title}
+                                    getOptionLabel={(option) => typeof option === 'string' ? option : option.taskName}
                                     value={otEvening.taskName}
                                     onChange={(e, newValue) => {
                                         if (typeof newValue === 'string') {
                                             setOtEvening({ ...otEvening, taskName: newValue, taskId: undefined });
                                         } else if (newValue) {
-                                            setOtEvening({ ...otEvening, taskName: newValue.title, taskId: newValue.id });
+                                            setOtEvening({ ...otEvening, taskName: newValue.taskName, taskId: newValue.id });
                                         } else {
                                             setOtEvening({ ...otEvening, taskName: '', taskId: undefined });
                                         }

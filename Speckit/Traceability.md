@@ -2,56 +2,6 @@
 
 - **2026-04-06 09:36Z:** **PHASE 1.5 AUDIT & POLISH STARTED.** Addressing frontend instructions and backend API consistency based on UX Framework.
 - **2026-04-06 09:46Z:** **PHASE 1.6 BULLETPROOF IMPORT ACTIVATED.** Implemented multi-sheet scanning and fuzzy header matching for maximum reliability.
-
-## 1. RTM (Requirements Traceability Matrix)
-Mapping ระหว่าง Feature หลักและไฟล์ Code ที่สำคัญ
-
-| Feature ID | Task ID | Controller / Route | Model File | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| **F-013** | **T-709, T-710** | `DailyReportService.ts` | - | Multi-sheet & Fuzzy Parsing Logic |
-| **F-013** | **T-711** | `dailyReportService.ts` (FE) | - | Descriptive Error Messaging |
-| **F-001** (Auth) | - | `auth.routes.ts` | `User.ts` | Authentication System |
-| **F-002** (User) | - | `users.routes.ts` | `User.ts`, `Role.ts` | User Administration |
-| **F-003** (Report) | - | `dailyReports.routes.ts` | `DailyReport.ts`, `FileAttachment.ts` | Daily Work Records |
-| **F-004** (Project) | - | `projects.routes.ts` | `ProjectLocation.ts` | Site Management |
-| **F-005** (Skill) | - | `skills.routes.ts` | `Skill.ts` | Skill Categories |
-| **F-013** | **T-706** | `backend/src/api/routes/dailyReports.routes.ts` | - | Fix removal route matching |
-| **F-013** | **T-707** | `backend/src/utils/dailyReportExcel.ts` | - | Robust Excel Parsing logic |
-| **F-013** | **T-708** | `frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx` | - | UX Refinement and Update Help Text |
-| **F-006** (DC) | - | `dailyContractors.routes.ts` | `DailyContractor.ts`, `SocialSecurityCalculation.ts` | Contractor Data |
-| **F-007** (Wage) | - | `wagePeriods.routes.ts` | `WagePeriod.ts`, `AdditionalIncome.ts` | Wage Calculation |
-| **F-008** (Scan) | - | `scanData.routes.ts` | `ScanData.ts`, `LateRecord.ts` | Finger Scan Processing |
-| **F-007, F-008** | - | `seedWageTestData.ts` | - | Mock Data for Wage Testing |
-| **F-010** (Integrated Wage) | - | `wagePeriods.routes.ts` | `WagePeriod.ts`, `ScanData.ts`, `LateRecord.ts` | Integrated Wage Calculation |
-| **F-012** (SS Rules) | - | `socialSecurityRules.routes.ts` | `SocialSecurityRule.ts` | Social Security Rules Config |
-
-## 2. Data & Component Traceability
-Mapping ระหว่าง Entity และความหมายในระบบ
-
-| Entity / Concept | File (`backend/src/models`) | Description & Usage |
-| :--- | :--- | :--- |
-| **User** | `User.ts` | ผู้ใช้งานระบบ (Admin, Foreman) |
-| **Role** | `Role.ts` | สิทธิ์การเข้าถึง (8 Levels) |
-| **DailyReport** | `DailyReport.ts` | เอกสารรายงาน 1 วัน |
-| **EditHistory** | `EditHistory.ts` | ประวัติการแก้ไข (Audit Trail) |
-| **FileAttachment** | `FileAttachment.ts` | ไฟล์แนบ (รูปภาพ/เอกสาร) |
-| **DailyContractor** | `DailyContractor.ts` | รายชื่อคนงาน |
-| **SocialSecurity** | `SocialSecurityCalculation.ts` | ตรรกะคำนวณประกันสังคม |
-| **ScanData** | `ScanData.ts` | ข้อมูลดิบจากเครื่องสแกน |
-| **ScanDataDiscrepancy** | `ScanDataDiscrepancy.ts` | ผลต่างระหว่าง Report vs Scan |
-| **LateRecord** | `LateRecord.ts` | บันทึกการเข้างานสาย |
-| **WagePeriod** | `WagePeriod.ts` | งวดการจ่ายเงิน (15 วัน) |
-| **AdditionalIncome** | `AdditionalIncome.ts` | รายได้อื่นๆ (เบี้ยขยัน, ค่ารถ) |
-| **AdditionalExpense** | `AdditionalExpense.ts` | รายจ่ายอื่นๆ (ค่าหัก) |
-| **SocialSecurityRule** | `SocialSecurityRule.ts` | กฎเกณฑ์การหักเงินประกันสังคม แบบไดนามิก |
-
-## 3. Infrastructure & Configuration
-Mapping ระหว่าง System Config และตัวแปรที่ใช้งาน
-
-| `backend/.env` | `FIREBASE_SERVICE_ACCOUNT_KEY` | `firebase.ts` | Service Account Credential JSON |
-| `backend/src/config/index.ts` | `FIREBASE_PROJECT_ID` | `firebase.ts` | Target Project Identifier |
-
-## 4. Task Traceability
 | Task ID | Name | Goal | key Components |
 | :--- | :--- | :--- | :--- |
 | **T-300** | Mobile Daily Report | Schema Refactor & Unified UI | `DailyReport.ts`, `DailyReportService.ts`, `new.tsx`, `MobileDailyReportView.tsx` |
@@ -65,3 +15,24 @@ Mapping ระหว่าง System Config และตัวแปรที่
 | **T-302** | Workspace Kanban UI | Mock rendering of Task Board with Gradient borders based on UX Audit | `workspace/index.tsx`, `Navbar.tsx` |
 | **T-303** | Workspace API Integration | Real data integration, Task creation logic with running number, Modal UI | `TaskService.ts`, `Task.ts`, `TaskCreateModal.tsx`, `workspace/index.tsx` |
 | **T-304** | UserForm DatePicker Fix | Fix LocalizationProvider crash by using custom DatePicker component | `UserForm.tsx` |
+| **REQ-014** | F-014 | Sales System Integration | Read/Write to external Firebase path | API/DB |
+| **REQ-015** | F-015 | Daily Report Form | Store labor records and site images under tasks | UI/API |
+| **REQ-016** | F-016 | Task Revision Workflow | Keep taskId intact, increment currentRevision | DB/API |
+| **REQ-017** | F-017 | Leave Tracking System | Split labor/leave hours, Med Cert auto-trigger | UI/API |
+| **T-805** | Hierarchical Task ID | Auto-run ID per Project/WorkOrder (STR/ARC) | `TaskService.ts` |
+| **T-806** | UI Flow Reorder | Reorder form fields to match hierarchy (Location -> WO -> Cat -> Task) | `TaskCreateModal.tsx` |
+| **T-807** | UX Style Audit | Fix background color inconsistency on TextFields | `TaskCreateModal.tsx` |
+| **T-810** | Fix Task Fetching Perf | Change to `.where()` for performance and stability | `TaskService.ts` |
+| **T-811** | Remove 'system' Fallback | Add strict auth check | `tasks.routes.ts` |
+| **T-812** | Dead Tabs Fix | Implement date-based filtering for Workspace Tabs | `workspace/index.tsx` |
+| **T-813** | TaskCard Actions | Add Edit and Delete menu | `TaskCard.tsx` |
+| **T-814** | Quick Filters | [Frontend] Fix Quick Filters button (Add functionality or hide it) | `workspace/index.tsx` |
+| **T-815** | Localized Category ID | [Backend] Localized running number for Categories per WorkOrder | `TaskService.ts` |
+| **T-816** | [Backend] Update/Delete API | PATCH/DELETE endpoints for Tasks with Soft Delete | `tasks.routes.ts`, `TaskService.ts` |
+| **T-817** | [Frontend] Edit UI | Edit Modal and Confirmation Dialog | `TaskCreateModal.tsx`, `WorkspacePage` |
+| **T-818** | [Backend] Task Audit Trail | Record Old/New values for task edits | `TaskService.ts`, `EditHistory.ts` |
+| **T-819** | [Frontend] Description UI | Add 'หมายเหตุ' field to Task modal | `TaskCreateModal.tsx` |
+| **T-820** | [Frontend] Summary Button | Button to link Reporting view to Summary table | `daily-reports/index.tsx` |
+| **T-821** | [Backend/FE] Progress Sync | Sync Task progress from Daily Report | `DailyReportService.ts`, `TaskService.ts` |
+| **T-905** | Global Sync Logic | Implementation of "Sync" button in Topbar to invalidate all caches | `Layout.tsx`, `dailyReportService.ts`, `taskCacheStore.ts` |
+| **T-920** | Performance Optimization | Refactor Daily Report to use React Query + Midnight Reset Cache | `daily-reports/index.tsx`, `dailyReportService.ts` |

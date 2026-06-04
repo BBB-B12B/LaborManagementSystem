@@ -1,0 +1,8 @@
+{
+  "session_id": "session_011_unlock_request_flow",
+  "associated_tasks": ["T-012-008-09", "T-012-008-10", "T-012-011"],
+  "status": "completed",
+  "estimated_tokens": 18000,
+  "summary_context": "ตรวจสอบและแก้ไข Flow ของ FM ส่งคำขอปลดล็อคย้อนหลัง + Notification Routing Bug Fix:\n\n[Before] แก้ไข unlock request flow + calendar badge ก่อนหน้า\n\n[Added: Session 2026-05-27]\n(1) แก้บั๊ก FM กดการแจ้งเตือน (Notification Bell) แล้วถูกพาไปหน้า /workspace ที่ FM ไม่มีสิทธิ์เข้า — แก้โดย handleMarkAsRead ตรวจ role ก่อน: FM → /daily-reports, AM/WH/GOD → /workspace\n(2) ปรับ Notification scoping ตาม role ใน GET /api/notifications: FM เห็นเฉพาะ type=unlock_granted ที่มี targetUserId===user.uid, AM/WH/GOD เห็นเฉพาะ type=daily_report_submit ตามโครงการ\n(3) เพิ่ม NotificationType 'unlock_granted' + field targetUserId ใน Notification model (backend + frontend)\n(4) เพิ่ม logic สร้าง notification type=unlock_granted ใน POST /:id/unlock-report หลัง AM อนุมัติปลดล็อค — resolve FM uid จาก unlockRequests + ส่ง taskContext จาก frontend\n(5) แก้บั๊ก readBy.includes crash — readBy อาจ undefined ใน Firestore docs ใหม่ แก้ด้วย (readBy ?? []).includes() ทุกจุด ใน Layout.tsx",
+  "History": []
+}
