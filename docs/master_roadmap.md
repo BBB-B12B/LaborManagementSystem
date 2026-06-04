@@ -37,8 +37,7 @@
 - [X] T-004: พัฒนาและเชื่อมโยงประวัติการแก้ไขเวลาสแกนนิ้ว (ScanData editHistory) ลงใน History Drawer และนำ statusHistory ออก · attempts: 1 · tool_calls: 11
 - [X] T-004-001-01: แก้ไขบั๊กปุ่มบน Modal รายละเอียดทำงานไม่ได้เมื่อเปิด History Drawer พร้อมกัน (ขัดขวาง Pointer Events) · attempts: 1 · tool_calls: 13
 - [X] T-005: รวมสาขาโค้ด integration และ dailyReport พร้อมกับลบฟิลด์ dateOfBirth ออกอย่างสมบูรณ์ · attempts: 1 · tool_calls: 20
-
-
+- [X] T-006: ตั้งค่าเชื่อมต่อ Firebase Emulator อัตโนมัติสำหรับโหมด Development (Backend) · attempts: 1 · tool_calls: 2
 
 ---
 
