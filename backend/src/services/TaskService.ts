@@ -401,9 +401,20 @@ export class TaskService {
     const { taskRef, subtaskRef } = await this.resolveRefs(id);
 
     await afterSaleDb.runTransaction(async (transaction) => {
+      // ─── READS FIRST (Firestore transaction rule) ───────────────────────────
       const doc = await transaction.get(taskRef);
       if (!doc.exists) throw new AppError('Task not found', 404);
-      
+
+      let subtaskDoc = null;
+      let subtasksQuery = null;
+
+      if (subtaskRef) {
+        subtaskDoc = await transaction.get(subtaskRef);
+        if (!subtaskDoc.exists) throw new AppError('Subtask not found', 404);
+        subtasksQuery = await transaction.get(taskRef.collection('subtasks'));
+      }
+
+      // ─── WRITES SECOND ───────────────────────────────────────────────────────
       const now = new Date();
       const updates = {
         status: 'completed' as any,
@@ -411,11 +422,8 @@ export class TaskService {
         updatedBy: updatedBy,
       };
 
-      if (subtaskRef) {
+      if (subtaskRef && subtasksQuery) {
         // Approve specific subtask
-        const subtaskDoc = await transaction.get(subtaskRef);
-        if (!subtaskDoc.exists) throw new AppError('Subtask not found', 404);
-        
         transaction.update(subtaskRef, {
           status: 'completed',
           updatedAt: now,
@@ -423,7 +431,6 @@ export class TaskService {
         });
 
         // Recalculate parent task progress & status
-        const subtasksQuery = await transaction.get(taskRef.collection('subtasks'));
         const allSubtasks = subtasksQuery.docs.map(d => {
           if (d.id === subtaskRef.id) {
             return { ...d.data(), status: 'completed' };
@@ -2308,6 +2315,335 @@ export class TaskService {
       updatedAt: new Date(),
       updatedBy
     });
+  }
+
+  async importWbs(
+    projectId: string,
+    groupedTasks: any[],
+    createdBy: string
+  ): Promise<{ success: boolean; importedCount: number }> {
+    const projectRef = db.collection(PROJECTS_COLLECTION).doc(projectId);
+    const projectDoc = await projectRef.get();
+    if (!projectDoc.exists) {
+      throw new AppError('ไม่พบโครงการที่ระบุ', 404);
+    }
+    const projectData = projectDoc.data();
+    const projectCode = projectData?.projectCode || projectData?.code || 'XX';
+    const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    await afterSaleDb.runTransaction(async (transaction) => {
+      // 1. COLLECT ALL DOC REFERENCES & COUNTERS TO READ
+      const woQuery = await afterSaleDb.collection(WORK_ORDERS_COLLECTION)
+        .where('projectId', '==', projectId)
+        .get();
+
+      const existingWos = new Map<string, { id: string; code: string }>();
+      woQuery.docs.forEach(doc => {
+        const data = doc.data();
+        existingWos.set(data.workOrderCode?.toUpperCase().trim(), {
+          id: doc.id,
+          code: data.workOrderCode
+        });
+      });
+
+      const existingCats = new Map<string, { id: string; name: string }>();
+      const existingTasks = new Map<string, { id: string; name: string; currentRevision: string; dailyProgress: number }>();
+      const subtaskCounts = new Map<string, number>();
+
+      for (const wo of existingWos.values()) {
+        const catQuery = await afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(wo.id).collection('categories').get();
+        catQuery.docs.forEach(doc => {
+          const data = doc.data();
+          const key = `${wo.id}__${data.catName?.trim()}`.toLowerCase();
+          existingCats.set(key, { id: doc.id, name: data.catName });
+        });
+
+        for (const catDoc of catQuery.docs) {
+          const taskQuery = await afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(wo.id)
+            .collection('categories').doc(catDoc.id).collection('tasks').get();
+          
+          for (const taskDoc of taskQuery.docs) {
+            const data = taskDoc.data();
+            const key = `${wo.id}__${catDoc.id}__${data.taskName?.trim()}`.toLowerCase();
+            existingTasks.set(key, {
+              id: taskDoc.id,
+              name: data.taskName,
+              currentRevision: data.currentRevision || 'rev00',
+              dailyProgress: data.dailyProgress || 0
+            });
+
+            const subtasksQuery = await taskDoc.ref.collection('subtasks').get();
+            const countKey = `${wo.id}__${catDoc.id}__${taskDoc.id}`;
+            subtaskCounts.set(countKey, subtasksQuery.size);
+          }
+        }
+      }
+
+      const countersSnap = await transaction.get(afterSaleDb.collection('system_counters'));
+      const countersMap = new Map<string, number>();
+      countersSnap.docs.forEach(doc => {
+        countersMap.set(doc.id, doc.data()?.count || 0);
+      });
+
+      const tempCounters = new Map<string, number>(countersMap);
+
+      const resolvedWos = new Map<string, string>();
+      existingWos.forEach((val, key) => resolvedWos.set(key, val.id));
+
+      const resolvedCats = new Map<string, string>();
+      existingCats.forEach((val, key) => resolvedCats.set(key, val.id));
+
+      const resolvedTasks = new Map<string, { id: string; currentRevision: string; dailyProgress: number }>();
+      existingTasks.forEach((val, key) => resolvedTasks.set(key, { id: val.id, currentRevision: val.currentRevision, dailyProgress: val.dailyProgress }));
+
+      // 2. WRITES PHASE
+      for (const task of groupedTasks) {
+        const woCode = (task.workOrderCode || 'GEN').toUpperCase().trim();
+        const woName = task.workOrderName || 'General';
+        const catName = task.categoryName || 'General';
+        const taskName = task.taskName;
+
+        let woId = resolvedWos.get(woCode) || '';
+        if (!woId) {
+          const woCounterId = `wo_counter_${projectCode}_${woCode}_${currentYear}`;
+          const currentCount = tempCounters.get(woCounterId) || 0;
+          const woNextRun = currentCount + 1;
+          tempCounters.set(woCounterId, woNextRun);
+
+          woId = `${projectCode}-${currentYear}-${woCode}-${woNextRun.toString().padStart(4, '0')}`;
+          resolvedWos.set(woCode, woId);
+
+          const woCounterRef = afterSaleDb.collection('system_counters').doc(woCounterId);
+          transaction.set(woCounterRef, { count: woNextRun, updatedAt: now }, { merge: true });
+
+          const workOrderRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId);
+          transaction.set(workOrderRef, {
+            workOrderId: woId,
+            projectId: projectId,
+            workOrderCode: woCode,
+            workOrderName: woName,
+            updatedAt: now
+          }, { merge: true });
+        }
+
+        const catKey = `${woId}__${catName?.trim()}`.toLowerCase();
+        let catId = resolvedCats.get(catKey) || '';
+        if (!catId) {
+          const catCounterId = `cat_counter_${woId}`;
+          const currentCount = tempCounters.get(catCounterId) || 0;
+          const catNextRun = currentCount + 1;
+          tempCounters.set(catCounterId, catNextRun);
+
+          catId = `${woCode}-${catNextRun.toString().padStart(4, '0')}`;
+          resolvedCats.set(catKey, catId);
+
+          const catCounterRef = afterSaleDb.collection('system_counters').doc(catCounterId);
+          transaction.set(catCounterRef, { count: catNextRun, updatedAt: now }, { merge: true });
+
+          const categoryRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId).collection('categories').doc(catId);
+          transaction.set(categoryRef, {
+            catId,
+            catName: catName,
+            updatedAt: now
+          }, { merge: true });
+        }
+
+        const taskKey = `${woId}__${catId}__${taskName?.trim()}`.toLowerCase();
+        let taskInfo = resolvedTasks.get(taskKey);
+        let taskId = '';
+        let currentRevision = 'rev00';
+        let existingProgress = 0;
+
+        if (taskInfo) {
+          taskId = taskInfo.id;
+          currentRevision = taskInfo.currentRevision;
+          existingProgress = taskInfo.dailyProgress;
+        } else {
+          const taskCounterId = `task_${woId}`;
+          const currentCount = tempCounters.get(taskCounterId) || 0;
+          const taskNextRun = currentCount + 1;
+          tempCounters.set(taskCounterId, taskNextRun);
+
+          taskId = `${catId}-${taskNextRun.toString().padStart(3, '0')}`;
+          resolvedTasks.set(taskKey, { id: taskId, currentRevision: 'rev00', dailyProgress: 0 });
+
+          const taskCounterRef = afterSaleDb.collection('system_counters').doc(taskCounterId);
+          transaction.set(taskCounterRef, { count: taskNextRun, updatedAt: now }, { merge: true });
+        }
+
+        const taskRef = afterSaleDb.collection(WORK_ORDERS_COLLECTION).doc(woId)
+          .collection('categories').doc(catId).collection('tasks').doc(taskId);
+
+        const allAssigneesMap = new Map<string, any>();
+        task.subtasks.forEach((st: any) => {
+          st.assignees.forEach((a: any) => {
+            allAssigneesMap.set(a.employeeId, a);
+          });
+        });
+        const allAssignees = Array.from(allAssigneesMap.values());
+
+        const maxDueDate = this.calculateMaxDueDate(task.subtasks || []) || (task.dueDate ? new Date(task.dueDate) : now);
+
+        const taskDataToSet: Omit<Task, 'id'> = {
+          taskId: taskId,
+          taskName: taskName,
+          description: task.description || '',
+          projectId: projectId,
+          projectCode: projectCode,
+          projectName: projectName,
+          workOrderId: woId,
+          workOrderCode: woCode,
+          workOrderName: woName,
+          categoryId: catId,
+          categoryName: catName,
+          assignees: allAssignees,
+          dueDate: maxDueDate,
+          status: 'upcoming',
+          currentRevision: currentRevision,
+          revisionId: currentRevision,
+          revisionName: taskName,
+          dailyProgress: existingProgress,
+          attachmentsCount: 0,
+          isActive: true,
+          isSupportRequest: task.subtasks.some((st: any) => st.isSupportRequest),
+          createdAt: now,
+          updatedAt: now,
+          createdBy: createdBy,
+          updatedBy: createdBy,
+          supportedRevisionIds: [],
+          historicalAssigneeIds: Array.from(new Set([
+            ...allAssignees.map(a => a.employeeId),
+            createdBy
+          ]))
+        };
+
+        transaction.set(taskRef.withConverter(taskConverter), taskDataToSet as any, { merge: true });
+
+        const countKey = `${woId}__${catId}__${taskId}`;
+        let subtaskIndexOffset = subtaskCounts.get(countKey) || 0;
+
+        task.subtasks.forEach((st: any) => {
+          subtaskIndexOffset++;
+          const subtaskNum = subtaskIndexOffset.toString().padStart(4, '0');
+          const subtaskId = `${taskId}-${subtaskNum}`;
+          const subtaskRef = taskRef.collection('subtasks').doc(subtaskId);
+
+          const subtaskData = {
+            id: `${woId}__${catId}__${taskId}__${subtaskId}`,
+            subtaskId: subtaskId,
+            subtaskName: st.subtaskName,
+            status: 'upcoming',
+            assignees: st.assignees,
+            dailyProgress: 0,
+            currentRevision: 'rev00',
+            isSupportRequest: false,
+            dueDate: st.dueDate ? new Date(st.dueDate) : null,
+            editHistory: [],
+            createdAt: now,
+            updatedAt: now,
+            createdBy: createdBy,
+            updatedBy: createdBy,
+            historicalAssigneeIds: Array.from(new Set([
+              ...st.assignees.map((a: any) => a.employeeId),
+              createdBy
+            ]))
+          };
+
+          transaction.set(subtaskRef, subtaskData);
+
+          const rev00Ref = subtaskRef.collection('revisions').doc('rev00');
+          transaction.set(rev00Ref, {
+            revisionId: 'rev00',
+            revisionName: st.subtaskName,
+            taskName: st.subtaskName,
+            assignees: st.assignees,
+            createdAt: now,
+            createdBy: createdBy,
+          });
+        });
+
+        subtaskCounts.set(countKey, subtaskIndexOffset);
+      }
+    });
+
+    // ─── Upsert WorkOrder & Category configs into Firebase A ──────────────────
+    // This ensures the NewTask modal dropdowns (workOrderCode + categoryName)
+    // reflect whatever was imported from the WBS Excel plan.
+    // Strategy: createIfAbsent (merge: true on new doc, skip if doc already exists)
+    // so we never overwrite existing leaderIds / leaderNames assignments.
+    const PROJECT_CONFIG_COLLECTION = 'Project';
+
+    // Collect unique (woCode, woName) and unique (woCode, catName) pairs
+    const woEntries = new Map<string, string>(); // woCode → woName
+    const catEntries = new Map<string, string>(); // `${woCode}||${catName}` → woCode
+
+    for (const task of groupedTasks) {
+      const woCode = (task.workOrderCode || 'GEN').toUpperCase().trim();
+      const woName = task.workOrderName || 'General';
+      const catName = (task.categoryName || 'General').trim();
+      if (!woEntries.has(woCode)) {
+        woEntries.set(woCode, woName);
+      }
+      const catKey = `${woCode}||${catName}`;
+      if (!catEntries.has(catKey)) {
+        catEntries.set(catKey, woCode);
+      }
+    }
+
+    // Upsert WorkOrder Configs
+    for (const [woCode, woName] of woEntries) {
+      const woConfigRef = db
+        .collection(PROJECT_CONFIG_COLLECTION)
+        .doc(projectId)
+        .collection('workOrderConfigs')
+        .doc(woCode);
+      const woConfigDoc = await woConfigRef.get();
+      if (!woConfigDoc.exists) {
+        await woConfigRef.set({
+          code: woCode,
+          name: woName,
+          createdAt: now,
+          createdBy: createdBy,
+          leaderId: null,
+          leaderName: null,
+          leaderIds: [],
+          leaderNames: [],
+        });
+      }
+    }
+
+    // Upsert Category Configs
+    for (const [catKey, woCode] of catEntries) {
+      const catName = catKey.split('||')[1];
+      // Check for existing category with same workOrderCode + name
+      const existingCatSnap = await db
+        .collection(PROJECT_CONFIG_COLLECTION)
+        .doc(projectId)
+        .collection('categoryConfigs')
+        .where('workOrderCode', '==', woCode)
+        .where('name', '==', catName)
+        .limit(1)
+        .get();
+      if (existingCatSnap.empty) {
+        const newCatRef = db
+          .collection(PROJECT_CONFIG_COLLECTION)
+          .doc(projectId)
+          .collection('categoryConfigs')
+          .doc();
+        await newCatRef.set({
+          workOrderCode: woCode,
+          name: catName,
+          createdAt: now,
+          createdBy: createdBy,
+        });
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    return { success: true, importedCount: groupedTasks.length };
   }
 
   private async resolveRefs(id: string) {

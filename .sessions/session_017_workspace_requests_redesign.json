@@ -1,0 +1,8 @@
+{
+  "session_id": "session_017_workspace_requests_redesign",
+  "associated_tasks": ["T-012-009-09", "T-012-009-10"],
+  "status": "completed",
+  "estimated_tokens": 78440,
+  "summary_context": "Workspace Requests Table & Dashboard Stats Redesign (T-012-009-09, T-012-009-10):\n\n1. [Backend] Updated `/api/tasks/requests-all` and `/api/tasks/reports-all` API endpoints in tasks.routes.ts to fetch and return the `dueDate` property for both tasks and subtasks.\n2. [Table Columns] Modified requests.tsx to remove 'ชั่วโมงรวม' (Total Hours) and 'สถานะ' (Status) columns and colSpan adjustment from 13 to 12.\n3. [Due Date Badge] Replicated TaskCard.tsx's due date badge rendering logic in requests.tsx. Displayed styled due date badges with tailormade HSL/hex colors and tooltips calculated relative to due dates and dailyProgress.\n4. [CSV Export] Updated handleExportCSV in requests.tsx to remove hourly/status columns and output the formatted subtask due date.\n5. [Dashboard Stats] Styled the 4 stat cards in requests.tsx with modern linear gradients (Purple, Orange, Blue, Green), high-contrast white text, white icons on semi-transparent circular backgrounds, and glassmorphic sub-cards for OT.\n6. [Verification] Type-checked both frontend and backend projects, and synchronized symbols using symbol_indexer.py.\n\nFiles edited:\n- backend/src/api/routes/tasks.routes.ts\n- frontend/src/pages/workspace/requests.tsx\n- docs/master_roadmap.md\n- CODING_FAILURE_PATTERNS.md\n\nSession tokens: ~78k",
+  "History": []
+}

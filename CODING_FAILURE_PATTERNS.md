@@ -22,3 +22,11 @@
 - **Files affected:** `.sessions/session_*.json`, `.sessions/session_handoff.md`, `.sessions/mece_plan.md`
 - **Task:** T-003 · Session: session_001_labor_popups
 
+## CFP-002 · Walkthrough Artifact Path Error
+- **Symptom:** เมื่ออ้างอิงพาธของ walkthrough.md หรือเอกสารสรุปผลงานในระบบ, พาธถูกระบุเป็นพาธของ Windows ปกติ ทำให้ระบบการอ่านย้อนกลับและลิงก์ของผู้ใช้งานทำงานผิดพลาด
+- **Root Cause:** เอเจนต์ไม่ได้เขียนพาธตามรูปแบบ Absolute URI ด้วยโปรโตคอล `file:///` พร้อมสัญลักษณ์ forward slash (`/`) แต่กลับเขียนเป็น Windows path สัญลักษณ์ backslash (`\`) หรือสัมพัทธ์
+- **Wrong approach:** ระบุพาธตรงๆ เช่น `d:\Labor Management System\walkthrough.md` หรือใช้ backslash ทั่วไป
+- **Resolution:** กำหนดให้การอ้างอิงพาธของเอกสาร walkthrough หรือไฟล์ระบบใดๆ ต้องเขียนตามสคีมา `file:///absolute/path/to/file` และใช้ forward slash (`/`) ทั้งหมดเสมอ
+- **Files affected:** `docs/master_roadmap.md`, `walkthrough.md`
+- **Task:** T-012-009-10 · Session: session_010_dashboard_styling
+

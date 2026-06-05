@@ -42,6 +42,7 @@ import {
   AccessTime as AccessTimeIcon,
   People as PeopleIcon,
   FilterAltOff as FilterAltOffIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -51,6 +52,7 @@ import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
+import { WbsImportModal } from './components/WbsImportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
 import { taskService, type Task, type Subtask, type TaskAssignee, type EditHistoryRecord } from '@/services/taskService';
 import { projectConfigService } from '@/services/projectConfigService';
@@ -118,6 +120,7 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isWbsModalOpen, setIsWbsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isTaskEditOpen, setIsTaskEditOpen] = useState(false);
@@ -1177,32 +1180,78 @@ export default function WorkspacePage() {
                     Newtasks
                   </Button>
                 )}
+
+                {canEditWorkspace && (
+                  <Button
+                    variant="contained"
+                    startIcon={<CloudUploadIcon />}
+                    onClick={() => setIsWbsModalOpen(true)}
+                    sx={{
+                      bgcolor: '#22c55e',
+                      color: '#fff',
+                      borderRadius: '50px',
+                      px: 3,
+                      py: 1.2,
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+                      '&:hover': {
+                        bgcolor: '#16a34a',
+                      },
+                      display: { xs: 'none', sm: 'flex' },
+                    }}
+                  >
+                    Upload
+                  </Button>
+                )}
               </Stack>
 
               {/* Mobile Newtasks fallback */}
               {canEditWorkspace && (
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => setIsModalOpen(true)}
-                  sx={{
-                    bgcolor: '#1c1e2b',
-                    color: '#fff',
-                    borderRadius: '999px',
-                    px: 3,
-                    py: 1.2,
-                    textTransform: 'none',
-                    fontWeight: 700,
-                    boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
-                    '&:hover': {
-                      bgcolor: '#000000',
-                    },
-                    display: { xs: 'flex', sm: 'none' },
-                    width: '100%',
-                  }}
-                >
-                  Newtasks
-                </Button>
+                <Stack spacing={1} sx={{ width: '100%', display: { xs: 'flex', sm: 'none' } }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setIsModalOpen(true)}
+                    sx={{
+                      bgcolor: '#1c1e2b',
+                      color: '#fff',
+                      borderRadius: '999px',
+                      px: 3,
+                      py: 1.2,
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
+                      '&:hover': {
+                        bgcolor: '#000000',
+                      },
+                      width: '100%',
+                    }}
+                  >
+                    Newtasks
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<CloudUploadIcon />}
+                    onClick={() => setIsWbsModalOpen(true)}
+                    sx={{
+                      bgcolor: '#22c55e',
+                      color: '#fff',
+                      borderRadius: '50px',
+                      px: 3,
+                      py: 1.2,
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+                      '&:hover': {
+                        bgcolor: '#16a34a',
+                      },
+                      width: '100%',
+                    }}
+                  >
+                    Upload
+                  </Button>
+                </Stack>
               )}
 
               {/* Actions */}
@@ -1922,6 +1971,14 @@ export default function WorkspacePage() {
         }}
         onSuccess={handleModalSuccess}
         task={editingTask}
+      />
+
+      {/* WBS Import Modal */}
+      <WbsImportModal
+        open={isWbsModalOpen}
+        onClose={() => setIsWbsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        projectId={user?.projectLocationIds?.[0] || ''}
       />
 
       {/* Task Daily Progress Report Modal */}

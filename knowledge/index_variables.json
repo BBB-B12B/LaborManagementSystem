@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 95
+      "line": 97
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2290,23 +2290,23 @@
     },
     "DataGrid": {
       "source": "frontend/src/components/common/DataGrid.tsx",
-      "line": 64
+      "line": 66
     },
     "createColumn": {
       "source": "frontend/src/components/common/DataGrid.tsx",
-      "line": 285
+      "line": 291
     },
     "createDateColumn": {
       "source": "frontend/src/components/common/DataGrid.tsx",
-      "line": 300
+      "line": 306
     },
     "createNumberColumn": {
       "source": "frontend/src/components/common/DataGrid.tsx",
-      "line": 321
+      "line": 327
     },
     "createActionsColumn": {
       "source": "frontend/src/components/common/DataGrid.tsx",
-      "line": 339
+      "line": 345
     },
     "ErrorBoundary": {
       "source": "frontend/src/components/common/ErrorBoundary.tsx",
@@ -2550,7 +2550,7 @@
     },
     "WorkspaceRequestsPage": {
       "source": "frontend/src/pages/workspace/requests.tsx",
-      "line": 404
+      "line": 486
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
@@ -2579,6 +2579,26 @@
     "useNotificationStore": {
       "source": "frontend/src/store/notificationStore.ts",
       "line": 13
+    },
+    "ParsedWbsRow": {
+      "source": "backend/src/utils/wbsParser.ts",
+      "line": 4
+    },
+    "WbsValidationResult": {
+      "source": "backend/src/utils/wbsParser.ts",
+      "line": 16
+    },
+    "GroupedWbsTask": {
+      "source": "backend/src/utils/wbsParser.ts",
+      "line": 24
+    },
+    "parseWbsExcel": {
+      "source": "backend/src/utils/wbsParser.ts",
+      "line": 107
+    },
+    "WbsImportModal": {
+      "source": "frontend/src/pages/workspace/components/WbsImportModal.tsx",
+      "line": 33
     }
   }
 }

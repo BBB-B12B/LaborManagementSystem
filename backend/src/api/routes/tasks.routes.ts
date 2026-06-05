@@ -6,8 +6,12 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { db } from '../../config/firebase';
 import { afterSaleDb } from '../../config/firebaseProjectB';
 import admin from 'firebase-admin';
+import multer from 'multer';
+import { parseWbsExcel } from '../../utils/wbsParser';
+import * as ExcelJS from 'exceljs';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Apply authentication to all routes
 router.use(authenticate);
@@ -697,14 +701,19 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
         workOrderCode: taskData.workOrderCode,
         createdBy: taskData.createdBy || 'ไม่ระบุ',
         createdAt: taskData.createdAt ? (typeof taskData.createdAt.toDate === 'function' ? taskData.createdAt.toDate() : taskData.createdAt) : null,
+        dueDate: taskData.dueDate ? (typeof taskData.dueDate.toDate === 'function' ? taskData.dueDate.toDate() : taskData.dueDate) : null,
       });
     });
 
-    // Fetch all subtasks to get subtaskName map
+    // Fetch all subtasks to get subtaskName and dueDate map
     const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
     const subtasksMap = new Map();
     subtasksSnapshot.docs.forEach(doc => {
-      subtasksMap.set(doc.id, doc.data().subtaskName);
+      const sData = doc.data();
+      subtasksMap.set(doc.id, {
+        subtaskName: sData.subtaskName,
+        dueDate: sData.dueDate ? (typeof sData.dueDate.toDate === 'function' ? sData.dueDate.toDate() : sData.dueDate) : null,
+      });
     });
 
     // Fetch all users to map employeeId / uid / username to name
@@ -752,10 +761,16 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
       if (endDate && rDateStr > endDate) return;
 
       let taskName = taskMeta.taskName;
+      let dueDate = taskMeta.dueDate || null;
       if (subtaskId) {
-        const subtaskName = subtasksMap.get(subtaskId);
-        if (subtaskName) {
-          taskName = `${taskMeta.taskName} > ${subtaskName}`;
+        const subtaskMeta = subtasksMap.get(subtaskId);
+        if (subtaskMeta) {
+          if (subtaskMeta.subtaskName) {
+            taskName = `${taskMeta.taskName} > ${subtaskMeta.subtaskName}`;
+          }
+          if (subtaskMeta.dueDate) {
+            dueDate = subtaskMeta.dueDate;
+          }
         }
       }
 
@@ -778,6 +793,7 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
         taskId: `${parts[1]}__${parts[3]}__${parts[5]}`,
         subtaskId,
         taskName,
+        dueDate,
         createdBy: reporterName,
         projectId: taskMeta.projectId,
         projectName: taskMeta.projectName,
@@ -816,14 +832,19 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
         workOrderCode: taskData.workOrderCode,
         createdBy: taskData.createdBy || 'ไม่ระบุ',
         createdAt: taskData.createdAt ? (typeof taskData.createdAt.toDate === 'function' ? taskData.createdAt.toDate() : taskData.createdAt) : null,
+        dueDate: taskData.dueDate ? (typeof taskData.dueDate.toDate === 'function' ? taskData.dueDate.toDate() : taskData.dueDate) : null,
       });
     });
 
-    // Fetch all subtasks to get subtaskName map
+    // Fetch all subtasks to get subtaskName and dueDate map
     const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
     const subtasksMap = new Map();
     subtasksSnapshot.docs.forEach(doc => {
-      subtasksMap.set(doc.id, doc.data().subtaskName);
+      const sData = doc.data();
+      subtasksMap.set(doc.id, {
+        subtaskName: sData.subtaskName,
+        dueDate: sData.dueDate ? (typeof sData.dueDate.toDate === 'function' ? sData.dueDate.toDate() : sData.dueDate) : null,
+      });
     });
 
     // Fetch all users to map employeeId / uid / username to name
@@ -871,10 +892,16 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
       if (endDate && rDateStr > endDate) return;
 
       let taskName = taskMeta.taskName;
+      let dueDate = taskMeta.dueDate || null;
       if (subtaskId) {
-        const subtaskName = subtasksMap.get(subtaskId);
-        if (subtaskName) {
-          taskName = `${taskMeta.taskName} > ${subtaskName}`;
+        const subtaskMeta = subtasksMap.get(subtaskId);
+        if (subtaskMeta) {
+          if (subtaskMeta.subtaskName) {
+            taskName = `${taskMeta.taskName} > ${subtaskMeta.subtaskName}`;
+          }
+          if (subtaskMeta.dueDate) {
+            dueDate = subtaskMeta.dueDate;
+          }
         }
       }
 
@@ -897,6 +924,7 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
         taskId: `${parts[1]}__${parts[3]}__${parts[5]}`,
         subtaskId,
         taskName,
+        dueDate,
         createdBy: reporterName,
         projectId: taskMeta.projectId,
         projectName: taskMeta.projectName,
@@ -969,6 +997,282 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// GET /api/tasks/import-wbs/template
+router.get('/import-wbs/template', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    
+    // Sheet 1: WBS Template
+    const wsTemplate = workbook.addWorksheet('WBS Template');
+    
+    // Columns definition for WBS Template
+    wsTemplate.columns = [
+      { header: 'รหัสหมวดหมู่งานหลัก (ตัวย่อ)', key: 'workOrderCode', width: 26 },
+      { header: 'ชื่อหมวดหมู่งานหลัก (ชื่อเต็ม)', key: 'workOrderName', width: 30 },
+      { header: 'ชื่อหมวดหมู่งานย่อย', key: 'categoryName', width: 22 },
+      { header: 'ชื่องาน', key: 'taskName', width: 25 },
+      { header: 'ชื่องานย่อย', key: 'subtaskName', width: 28 },
+      { header: 'วันครบกำหนด (งานย่อย)', key: 'subtaskDueDate', width: 22 },
+      { header: 'รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย)', key: 'subtaskAssignees', width: 35 }
+    ];
+
+    // Data rows
+    const dataRows = [
+      {
+        workOrderCode: 'STR',
+        workOrderName: 'งานโครงสร้าง',
+        categoryName: 'งานตอกเสาเข็ม',
+        taskName: 'งานขุดดินฐานราก',
+        subtaskName: 'ขุดดินหลุมเสาเข็มต้นที่ 1',
+        subtaskDueDate: '2026-06-15',
+        subtaskAssignees: '123456, 123457'
+      },
+      {
+        workOrderCode: 'STR',
+        workOrderName: 'งานโครงสร้าง',
+        categoryName: 'งานตอกเสาเข็ม',
+        taskName: 'งานขุดดินฐานราก',
+        subtaskName: 'ขุดดินหลุมเสาเข็มต้นที่ 2',
+        subtaskDueDate: '2026-06-16',
+        subtaskAssignees: '123456'
+      },
+      {
+        workOrderCode: 'ARC',
+        workOrderName: 'งานสถาปัตยกรรม',
+        categoryName: 'งานก่อผนัง',
+        taskName: 'งานก่ออิฐมวลเบาชั้น 1',
+        subtaskName: '',
+        subtaskDueDate: '',
+        subtaskAssignees: ''
+      }
+    ];
+
+    dataRows.forEach(row => wsTemplate.addRow(row));
+
+    // Style the header row in WBS Template to match Image 3
+    const headerRow = wsTemplate.getRow(1);
+    headerRow.height = 32;
+    headerRow.eachCell(cell => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF2F65D6' } // Deep blue background matching Image 3
+      };
+      cell.font = {
+        name: 'Segoe UI',
+        size: 11,
+        bold: true,
+        color: { argb: 'FFFFFFFF' } // White text
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true
+      };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FFF59E0B' } }, // Yellow/Gold border at top
+        bottom: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+        left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+      };
+    });
+
+    // Zebra striping and padding for data rows
+    wsTemplate.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip header
+      row.height = 24;
+      const isEven = rowNumber % 2 === 0;
+      row.eachCell((cell, colNumber) => {
+        cell.font = {
+          name: 'Segoe UI',
+          size: 10
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF1F5F9' } // Alternating white / light-gray
+        };
+        cell.border = {
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: colNumber === 6 ? 'center' : 'left'
+        };
+      });
+    });
+
+    // Sheet 2: Guide
+    const wsInstructions = workbook.addWorksheet('คู่มือการกรอกข้อมูล WBS');
+    
+    // Columns for Instructions sheet
+    wsInstructions.columns = [
+      { key: 'colName', width: 28 },
+      { key: 'desc', width: 70 },
+      { key: 'required', width: 26 },
+      { key: 'example', width: 25 }
+    ];
+
+    wsInstructions.addRow(['คู่มือการกรอกข้อมูลเทมเพลต WBS Import (WBS Upload Guide)']);
+    wsInstructions.addRow([]);
+    wsInstructions.addRow(['ชื่อคอลัมน์ (Column Name)', 'คำอธิบาย (Description)', 'ความจำเป็น (Required?)', 'ตัวอย่างข้อมูล (Example)']);
+    
+    const instructions = [
+      ['รหัสหมวดหมู่งานหลัก (ตัวย่อ)', 'รหัสตัวย่อของหมวดหมู่งานหลัก เช่น STR, ARC, EE เพื่อใช้จัดกลุ่มในระบบ', 'จำเป็น (Required)', 'STR'],
+      ['ชื่อหมวดหมู่งานหลัก (ชื่อเต็ม)', 'ชื่อเต็มของหมวดหมู่งานหลัก เช่น งานโครงสร้าง, งานสถาปัตยกรรม, งานระบบ', 'จำเป็น (Required)', 'งานโครงสร้าง'],
+      ['ชื่อหมวดหมู่งานย่อย', 'ชื่อของหมวดหมู่ย่อยภายใต้หมวดหลัก เช่น งานตอกเสาเข็ม, งานก่อผนัง', 'จำเป็น (Required)', 'งานตอกเสาเข็ม'],
+      ['ชื่องาน', 'ชื่องานหลัก (Task) ที่ต้องการสร้าง', 'จำเป็น (Required)', 'งานขุดดินฐานราก'],
+      ['ชื่องานย่อย', 'ชื่องานย่อย (Subtask) ภายใต้งานหลัก (เว้นว่างได้หากไม่มีงานย่อย)', 'ไม่จำเป็น (Optional)', 'ขุดดินหลุมเสาเข็มต้นที่ 1'],
+      ['วันครบกำหนด (งานย่อย)', 'วันครบกำหนดส่งมอบของงานย่อย รูปแบบ: ปี-เดือน-วัน (ค.ศ.)', 'จำเป็นเมื่อระบุงานย่อย', '2026-06-15'],
+      ['รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย)', 'รหัสพนักงาน FM ที่รับผิดชอบงานย่อยนี้ คั่นด้วยจุลภาค (,) ตัวอย่างการกรอกรหัสพนักงาน 6 หลัก เช่น 123456, 123457', 'ไม่จำเป็น (Optional)', '123456, 123457']
+    ];
+
+    instructions.forEach(inst => wsInstructions.addRow(inst));
+    
+    wsInstructions.addRow([]);
+    wsInstructions.addRow(['ข้อแนะนำเพิ่มเติม:']);
+    wsInstructions.addRow(['- กรุณากรอกข้อมูลในชีท "WBS Template" เพื่อทำการอัปโหลด']);
+    wsInstructions.addRow(['- ระบบรันเลข ID งานหลักและงานย่อยให้อัตโนมัติโดยที่ผู้ใช้ไม่ต้องกรอกข้อมูลช่อง ID ใดๆ ทั้งสิ้น']);
+    wsInstructions.addRow(['- วันที่ต้องกรอกในรูปแบบ ค.ศ. เท่านั้น เช่น 2026-06-30 (ปี-เดือน-วัน)']);
+    wsInstructions.addRow(['- รหัสผู้รับผิดชอบต้องตรงกับรหัสพนักงานในระบบ (ตัวอย่างเช่น 123456, 123457) หากกรอกรหัสพนักงานที่ไม่มีในระบบ ระบบจะแสดงคำเตือนแต่ยังสามารถกดนำเข้าได้']);
+
+    // Style the title of Guide
+    wsInstructions.mergeCells('A1:D1');
+    const titleCell = wsInstructions.getCell('A1');
+    titleCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    // Style instructions header row
+    const instHeader = wsInstructions.getRow(3);
+    instHeader.height = 28;
+    instHeader.eachCell(cell => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF2F65D6' }
+      };
+      cell.font = {
+        name: 'Segoe UI',
+        size: 11,
+        bold: true,
+        color: { argb: 'FFFFFFFF' }
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FFF59E0B' } },
+        bottom: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+        left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+      };
+    });
+
+    // Style guide data rows
+    wsInstructions.eachRow((row, rowNumber) => {
+      if (rowNumber <= 3) return; // Skip header
+      if (rowNumber > 12) {
+        // Tips styling
+        row.eachCell(cell => {
+          cell.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF475569' } };
+        });
+        return;
+      }
+      row.height = 22;
+      const isEven = rowNumber % 2 === 0;
+      row.eachCell((cell, colIndex) => {
+        cell.font = { name: 'Segoe UI', size: 10 };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF1F5F9' }
+        };
+        cell.border = {
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: colIndex === 3 ? 'center' : 'left'
+        };
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=wbs_import_template.xlsx');
+
+    await workbook.xlsx.write(res);
+  } catch (error) {
+    next(error);
+    return;
+  }
+});
+
+// POST /api/tasks/import-wbs
+router.post('/import-wbs', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authReq = req as AuthRequest;
+    if (!authReq.user) {
+      throw new AppError('Unauthorized', 401);
+    }
+    const userId = authReq.user.id;
+    const { projectId } = req.body;
+    if (!projectId) {
+      throw new AppError('กรุณาระบุรหัสโครงการ (projectId is required)', 400);
+    }
+
+    if (!req.file) {
+      throw new AppError('กรุณาเลือกไฟล์ Excel สำหรับนำเข้า (.xlsx, .xls) (file is required)', 400);
+    }
+
+    const usersSnapshot = await db.collection('users').get();
+    const usersMap = new Map<string, { name: string; roleId: string }>();
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      const employeeId = data.employeeId || doc.id;
+      const userVal = {
+        name: data.name || data.username || 'Unknown',
+        roleId: data.roleId || 'FM',
+      };
+      usersMap.set(employeeId, userVal);
+      if (doc.id) {
+        usersMap.set(doc.id, userVal);
+      }
+    });
+
+    const parsed = parseWbsExcel(req.file.buffer, usersMap);
+    const { commit } = req.query;
+
+    if (commit === 'true') {
+      if (!parsed.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: 'ข้อมูลในไฟล์ Excel ไม่ถูกต้อง ไม่สามารถนำเข้าได้',
+          data: parsed.rows
+        });
+      }
+
+      const result = await taskService.importWbs(projectId, parsed.groupedTasks, userId);
+      return res.status(200).json({
+        success: true,
+        message: `นำเข้าแผนงานสำเร็จทั้งหมด ${result.importedCount} งานหลัก`,
+        importedCount: result.importedCount,
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        data: parsed.rows,
+        groupedCount: parsed.groupedTasks.length,
+        isValid: parsed.isValid,
+      });
+    }
+  } catch (error) {
+    next(error);
+    return;
   }
 });
 

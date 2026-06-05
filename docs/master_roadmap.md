@@ -108,6 +108,9 @@
 - [X] T-012-009-06: เพิ่มฟังก์ชันตรวจสอบประวัติการบันทึก/แก้ไขย้อนหลังในการ์ด Subtask บนบอร์ด Workspace · attempts: 1 · tool_calls: 18
 - [X] T-012-008-21-07: สิทธิ์การเข้าถึงเมนูและหน้า Workspace กับ Daily Report สำหรับบทบาท LD (Leader) · attempts: 1 · tool_calls: 18
 - [X] T-012-008-21-08: ปรับปรุงการเลือกหัวหน้ากลุ่มงาน (Leader Selection) ให้สามารถระบุได้มากกว่า 1 คนและแก้ไขข้อความซ้อนทับ · attempts: 1 · tool_calls: 12
+- [X] T-017: ระบบนำเข้าแผนงาน (WBS/Plan Excel Import) สำหรับบอร์ดโครงสร้างงาน · attempts: 1 · tool_calls: 14
+- [X] T-017-01: ปรับปรุงฟอร์ม Excel Template และระบบ parser ให้ตรงกับฟิลด์ Newtask และรองรับกรณีไม่มีงานย่อยและไม่มีผู้รับผิดชอบ · attempts: 1 · tool_calls: 28
+
 
 ---
 
@@ -134,6 +137,17 @@
 - [X] T-014-005-03: ปรับปรุงการแสดงข้อความปุ่ม Due Date เป็นจำนวนวัน และย้ายวันที่ไปยัง Tooltip สำหรับงานที่ยังไม่เสร็จ (→ ERR-049) · attempts: 1 · tool_calls: 13
 - [X] T-012-009-07: เพิ่มข้อมูลละเอียดใน History Modal — แสดงชื่อกำลังพลที่เพิ่มเข้ามา, เวลาบันทึกรายงาน และรายชื่อสรุปทั้งหมดพร้อมกะ · attempts: 1 · tool_calls: 22
 - [X] T-012-009-08: เพิ่ม ReportEditHistoryPanel — แสดงประวัติการแก้ไขรายงานวันเดิม (FM บันทึกแล้วกลับมาแก้) พร้อม before/after diff กำลังพลและใบลา · attempts: 1 · tool_calls: 10
+- [X] T-017-001-01: แก้ไขปัญหา Network Error ERR_EMPTY_RESPONSE เมื่อ Login ที่พอร์ต 4000 (→ ERR-063) · attempts: 1 · tool_calls: 33
+- [X] T-017-002-01: นำคอลัมน์วันครบกำหนด (งานหลัก) ออกจากเทมเพลต Excel WBS และระบบนำเข้า (→ ERR-064) · attempts: 1 · tool_calls: 31
+- [X] T-017-003-01: ปรับปรุงการนำเข้า WBS: ลบลายน้ำ ตารางหมายเหตุ และแก้ไข Tooltip/ตัวอย่างคอลัมน์ · attempts: 1 · tool_calls: 11
+- [X] T-017-003-02: ปรับปรุงโครงสร้าง Popup นำเข้า WBS: ลบกรอบหลัง ปรับหัวตารางเป็น 2 แถวและลดขนาดความกว้าง (→ ERR-066) · attempts: 1 · tool_calls: 40
+- [X] T-018: ผูก Logic WBS Import ให้ Upsert WorkOrder/Category Config ใน Firebase A หลัง Import สำเร็จ (เพื่อให้ Dropdown ฟอร์ม NewTask แสดง STR, ARC ฯลฯ) · attempts: 1 · tool_calls: 6
+- [X] T-012-009-09: ปรับปรุงตารางกำลังพลและแผนงาน (ลบคอลัมน์ชั่วโมงรวม/สถานะ และแสดงปุ่ม Due Date งานย่อย) · attempts: 1 · tool_calls: 11
+- [X] T-012-009-10: ปรับปรุงสีสันแดชบอร์ดการ์ดสถิติ (Gradient Colors & Glassmorphism OT Cards) · attempts: 1 · tool_calls: 5
+- [X] T-012-009-11: ปรับแต่งรูปแบบตารางไฟล์ส่งออก Excel (Export to Excel) ให้สวยงามมีเส้นขอบและหัวตารางสีเขียวพรีเมียม · attempts: 1 · tool_calls: 4
+
+
+
 
 
 

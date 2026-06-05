@@ -515,3 +515,51 @@ This catalog lists known errors and bug fix details.
   2. For `deleteWorkOrder`: If the A-config is missing, it verifies if there are matching workOrders in Firebase B. If so, it verifies child subtask deletability and batch-deletes Firebase B records, skipping Firebase A deletions.
   If the records cannot be found in both Firebase A and Firebase B, it throws a 404 error.
 
+## ERR-063: Login failed with AxiosError: Network Error due to backend container crash (Cannot find module 'exceljs')
+- **Task:** T-017-001-01 · **Session:** session_current
+- **File:** backend/package.json · **Line:** 30
+- **Symptom:** User gets AxiosError: Network Error / net::ERR_EMPTY_RESPONSE when trying to send a request to :4000/api/auth/login. The backend container is unhealthy, and docker compose logs backend shows MODULE_NOT_FOUND error: "Cannot find module 'exceljs'".
+- **Root Cause:** A new dependency `exceljs` was added to backend/package.json in a previous change, but the Docker Compose backend container had not been restarted/rebuilt since. The backend's `/app/node_modules` volume is mapped as an anonymous volume which persists and shields the container from package.json updates, keeping node_modules in the container outdated and lacking the `exceljs` module.
+- **Resolution:** Rebuilt the backend container image using `docker compose up -d --build backend`. Since Docker Compose aggressively caches and reuses anonymous volumes, we performed `docker compose down` (which deletes anonymous volumes) followed by `docker compose up -d` to create fresh volumes containing the newly installed dependencies (including `exceljs`). The backend server started successfully and is now healthy.
+
+## ERR-064: Redundant "วันครบกำหนด (งาน)" column in WBS Excel Template
+- **Task:** T-017-002-01 · **Session:** session_current
+- **File:** backend/src/api/routes/tasks.routes.ts · **Line:** 988, 1111
+- **Symptom:** WBS import template features a redundant "วันครบกำหนด (งาน)" (Task Due Date) column which is not needed because the task's due date is automatically computed from the maximum due date of its subtasks anyway.
+- **Root Cause:** The template Excel sheet was initially defined with a dedicated "วันครบกำหนด (งาน)" column, which is unnecessary and confusing to the user.
+- **Resolution:** Removed the column "วันครบกำหนด (งาน)" from `wsTemplate.columns` and `dataRows` in `tasks.routes.ts`. Adjusted center-alignment check to apply to the new column index 7 (`subtaskDueDate`). Removed the instruction row for "วันครบกำหนด (งาน)" from the "คู่มือการกรอกข้อมูล WBS" guide sheet in `tasks.routes.ts`. The parser (`wbsParser.ts`) remains backward-compatible since the field is treated as optional.
+
+## ERR-065: Curved dashed focus ring (watermark) artifact showing next to WBS upload dialog and outdated template column headers
+- **Task:** T-017-003-01 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/WbsImportModal.tsx · **Line:** 268-284
+- **Symptom:** 1) WBS upload dialog displays curved dashed circular lines (crescent shapes) on the left side of the card, looking like a watermark. 2) The Excel template and UI grid columns feature outdated column headers and examples (e.g. WO-01 instead of STR, ARC; Emp001 instead of 6-digit employee IDs; and a redundant "หมายเหตุ" column).
+- **Root Cause:** 1) The upload box container in the modal was wrapped in a `<label>` element with a hidden file input inside it. Browser-specific focus/active rings on the hidden input triggered concentric dashed outline arches on the rounded container boundaries, rendering as circular artifacts. 2) The template Excel sheet and DataGrid headers had not been updated to align with the simplified WBS structure and Thai localized examples.
+- **Resolution:** 1) Replaced the `component="label"` Box upload container with a standard `div` Box container. Hooked its `onClick` to trigger a click on a hidden input using `useRef`. Used `style={{ display: 'none' }}` on the input and added `overflow: 'hidden'` to the Box to completely eliminate all browser focus outlines. 2) Removed the "หมายเหตุ" (taskDescription) column from `tasks.routes.ts` columns/dataRows and instructions sheet. Shifted aligned column indices. Updated preview grid columns in `WbsImportModal.tsx` and guides/examples with localized values (STR, ARC, EE; งานโครงสร้าง, งานสถาปัตยกรรม; รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย) with 6-digit numeric IDs like 123456).
+
+## ERR-066: Excess outer frame/shadow border in WBS Import modal and single-line truncated preview headers
+- **Task:** T-017-003-02 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/WbsImportModal.tsx · **Line:** 138-222, 250-258, 370-410
+- **Symptom:** The WBS Excel import dialog displays an unwanted grey shadow/border outline around its container. Behind the preview table, a white card with rounded corners (borderRadius: 12) and shadow is still visible, overlapping with the blue/orange table header. Additionally, the preview table's long column header titles are truncated onto a single line, causing the column widths to be excessively wide and pushing the critical "หมายเหตุ / ข้อผิดพลาด" column off-screen.
+- **Root Cause:** 1) The Dialog Paper component was styled with a drop-shadow and a border. 2) The custom DataGrid component wrapper was hardcoded with a Paper container styled with borderRadius: 12 and box-shadow that wasn't customizable from the outside. 3) The custom DataGrid wrapper was not configured with a headerHeight or header title wrapping CSS styles.
+- **Resolution:** 1) Removed the border and box shadow from the Dialog PaperProps sx styling. 2) Updated the shared DataGrid component to support an optional paperSx prop, forwarding it to the outer Paper container and resetting shadow elevation when boxShadow: 'none' is set. 3) Passed paperSx={{ borderRadius: 0, boxShadow: 'none', border: 'none', p: 0 }} to DataGrid in WbsImportModal.tsx. Adjusted preview table columns widths to be narrower and set header text wrapping CSS styles on .MuiDataGrid-columnHeaderTitle along with headerHeight={62} and center-justified header title containers.
+
+## ERR-067: Missing WorkOrder and Category configurations in Project A for existing WBS imports
+- **Task:** T-018-001-01 · **Session:** session_current
+- **File:** backend/src/services/TaskService.ts · **Line:** 2590-2630
+- **Symptom:** After importing WBS, the newly imported Work Orders (like STR) and their Categories do not appear in the "สร้างรายการงานใหม่" (Create new task) dropdown in the UI.
+- **Root Cause:** The Excel WBS sheet was imported before the sync logic was added to `TaskService.ts`. Since the new code only syncs configurations to Project A during the import process itself, already-imported WBS data remained unsynced and lacked configuration entries in Project A.
+- **Resolution:** Created and executed a one-time migration script `sync_project_configs.js` in the backend. The script reads all existing work orders and categories from Project B (afterSaleDb) and successfully backports them as configuration documents in Project A (db) under the collections `Project/{projectId}/workOrderConfigs` and `Project/{projectId}/categoryConfigs`.
+
+## ERR-068: Firestore transaction error "all reads to be executed before all writes" during task approval
+- **Task:** T-019-001-01 · **Session:** session_current
+- **File:** backend/src/services/TaskService.ts · **Line:** 400-461
+- **Symptom:** Approving a task or subtask fails with a 500 Internal Server Error, and the backend logs show "Unhandled error: Firestore transactions require all reads to be executed before all writes".
+- **Root Cause:** In the `approveTask` method in `TaskService.ts`, the code performed `transaction.update` on the subtask reference at line 419, and then subsequently performed `transaction.get` on the subtasks collection at line 426. Since Firestore transactions strictly enforce that all read operations (`get`) must occur before any write operations (`set`/`update`/`delete`), this order violation triggered the error.
+- **Resolution:** Restructured the transaction block inside `approveTask` to query both `taskRef`, `subtaskRef`, and `subtasks` collection (via `transaction.get`) at the very beginning of the block under a dedicated reads section. All update writes (`transaction.update`) were moved to execute after these reads.
+
+## ERR-069: Redundant vertical stacking of Export and Requests/Daily Reports buttons in requests workspace
+- **Task:** T-019-002-01 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/requests.tsx · **Line:** 779-824
+- **Symptom:** In the schedule table workspace page, the "Export to Excel (CSV)" button and the "Requests / Daily Reports" toggle buttons are stacked vertically, cluttering the layout, and the Export button's border style looks inconsistent with the premium green "Upload" button design.
+- **Root Cause:** 1) The layout was wrapped in a Stack configured with direction md: 'column' on desktop screens. 2) The Export button was configured as an outlined button with standard grey borders.
+- **Resolution:** 1) Changed the right-side Stack direction to a row on desktop `direction={{ xs: 'column', sm: 'row' }}` with `alignItems="center"`, adjusted the parent Stack vertical alignment to `alignItems={{ xs: 'stretch', md: 'center' }}`, and swapped the child order so the Export button is positioned at the very end of the row. 2) Re-styled the "Export to Excel (CSV)" button to use a green background `#22c55e`, white text/icon, border radius `50px`, height `38px` (aligning with toggle buttons), and premium box shadow `0 4px 14px rgba(34, 197, 94, 0.3)`.

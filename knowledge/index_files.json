@@ -242,7 +242,8 @@
       "backlinks": [
         "backend/src/scratch/test_subtask_history.ts",
         "backend/src/services/TaskService.ts",
-        "backend/src/api/routes/tasks.routes.ts"
+        "backend/src/api/routes/tasks.routes.ts",
+        "backend/src/utils/wbsParser.ts"
       ]
     },
     "backend/src/models/User.ts": {
@@ -376,6 +377,13 @@
         "backend/src/api/middleware/errorHandler.ts",
         "backend/src/api/routes/dailyContractors.routes.ts",
         "backend/src/api/routes/users.routes.ts"
+      ]
+    },
+    "backend/src/utils/wbsParser.ts": {
+      "description": "WBS excel parser utility",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/tasks.routes.ts"
       ]
     },
     "backend/src/services/auth/AuthService.ts": {
@@ -1137,6 +1145,13 @@
       "associated_tasks": [],
       "backlinks": [
         "frontend/src/pages/workspace/components/TaskCreateModal.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/WbsImportModal.tsx": {
+      "description": "WBS / Plan Import Modal",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
       ]
     },
     "frontend/src/pages/workspace/components/WorkspaceTree.tsx": {
