@@ -58,6 +58,7 @@ export interface DailyReport {
   createdBy: string;
   updatedBy: string;
   version: number;
+  entries?: DailyReportEntry[];
 }
 
 export interface AddEntryInput {

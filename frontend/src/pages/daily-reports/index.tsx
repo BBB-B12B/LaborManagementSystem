@@ -50,6 +50,10 @@ import {
   Paper,
   Chip,
   Autocomplete,
+  Avatar,
+  AvatarGroup,
+  LinearProgress,
+  Tooltip,
   Checkbox,
   Stack,
   Fade,
@@ -160,6 +164,7 @@ export default function DailyReportPage() {
   // --- 1. State Management ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [pageMode, setPageMode] = useState<'daily-report' | 'requests'>('daily-report');
   const [reportDate, setReportDate] = useState<Date>(new Date());
   const [progress, setProgress] = useState<number | string>(0);
   const [previousProgress, setPreviousProgress] = useState(0);
@@ -392,6 +397,11 @@ export default function DailyReportPage() {
   }, [selectedTask, boundaryDate, earliestReportDateStr]);
 
   const calendarMinDate = useMemo(() => {
+    if (pageMode === 'requests') {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
     if (!effectiveBoundaryDate || isNaN(effectiveBoundaryDate.getTime())) return undefined;
     let minD = new Date(effectiveBoundaryDate);
 
@@ -411,7 +421,9 @@ export default function DailyReportPage() {
       });
     }
     return minD;
-  }, [effectiveBoundaryDate, selectedTask, isActingAsSupport]);
+  }, [pageMode, effectiveBoundaryDate, selectedTask, isActingAsSupport]);
+
+
 
   const completionDateStr = useMemo(() => {
     // Always use Site reports to determine completion date for locking purposes
@@ -448,6 +460,20 @@ export default function DailyReportPage() {
     dates.sort();
     return dates[dates.length - 1];
   }, [selectedTask, allSiteReportsData]);
+
+  const calendarMaxDate = useMemo(() => {
+    if (pageMode === 'requests') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 59, 59, 999);
+      return tomorrow;
+    }
+    return completionDateStr ? new Date(completionDateStr) : (() => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow;
+    })();
+  }, [pageMode, completionDateStr]);
 
   const isAfterCompletion = useMemo(() => {
     if (!completionDateStr || !reportDate) return false;
@@ -860,7 +886,7 @@ export default function DailyReportPage() {
         }
 
         // Show auto-filled banner ONLY on reporting days (not future dates)
-        const isFuture = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+        const isFuture = pageMode === 'requests';
         if (!isFuture) {
           setIsAutofilledFromRequest(true);
         }
@@ -1081,7 +1107,7 @@ export default function DailyReportPage() {
   }, [reportDetailData]);
 
   const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked;
-  const isAdvanceRequestUI = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+  const isAdvanceRequestUI = pageMode === 'requests';
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
   // Bulk Time State for Popup (T-903)
@@ -1236,6 +1262,13 @@ export default function DailyReportPage() {
     };
   }, [invalidateCache, queryClient, refetchTasks]);
 
+  // Open the sidebar automatically when no task is selected (selectedTask is null)
+  useEffect(() => {
+    if (!selectedTask) {
+      setIsSidebarOpen(true);
+    }
+  }, [selectedTask]);
+
   const { data: projectWorkers = [], isLoading: workersLoading } = useQuery({
     queryKey: ['workers', user?.roleCode, user?.department, user?.projectLocationIds?.[0]],
     queryFn: async () => {
@@ -1354,10 +1387,21 @@ export default function DailyReportPage() {
     let filtered = processedTasks.filter(
       (t) =>
         t.taskName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.subtaskName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.categoryName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.taskId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.revisionName || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    if (pageMode === 'requests' && reportDate) {
+      const dateStr = format(reportDate, 'yyyy-MM-dd');
+      filtered = filtered.filter((t) => {
+        if (t.isPastRevision) return false;
+        if (t.startDate && dateStr < t.startDate) return false;
+        if (t.completionDate && dateStr > t.completionDate) return false;
+        return true;
+      });
+    }
 
     if (activeTab === 'pending') {
       // Show only current revision tasks that are not yet 100% AND not completed
@@ -1381,7 +1425,7 @@ export default function DailyReportPage() {
       if (a.isPastRevision !== b.isPastRevision) return a.isPastRevision ? 1 : -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
-  }, [processedTasks, searchTerm, activeTab]);
+  }, [processedTasks, searchTerm, activeTab, pageMode, reportDate]);
 
   // --- 3. Handlers ---
   const handleSelectTask = (task: any) => {
@@ -1973,7 +2017,7 @@ export default function DailyReportPage() {
       return;
     }
 
-    const isAdvanceRequest = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+    const isAdvanceRequest = pageMode === 'requests';
 
     if (!isActingAsSupport && !isAdvanceRequest) {
       if (sitePhotos.length + existingPhotos.site.length < 2) {
@@ -2188,7 +2232,7 @@ export default function DailyReportPage() {
       };
 
       // ─── 4. Submit ───────────────────────────────────────────────────────
-      const isAdvanceRequestSubmit = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+      const isAdvanceRequestSubmit = pageMode === 'requests';
       if (isAdvanceRequestSubmit) {
         await taskService.submitAdvanceRequest(selectedTask.id, {
           reportDate: format(reportDate, 'yyyy-MM-dd'),
@@ -2259,22 +2303,23 @@ export default function DailyReportPage() {
                   Daily Report
                 </Typography>
 
-                {/* Tabs */}
+                {/* Tabs: Dailyreport & Requests */}
                 <Stack
                   direction="row"
                   spacing={1}
                   sx={{ bgcolor: '#f1f3f6', p: 0.5, borderRadius: '999px' }}
                 >
                   {[
-                    { id: 'pending', label: 'Active Tasks' },
-                    { id: 'finish', label: 'Finish' },
+                    { id: 'daily-report', label: 'Dailyreport' },
+                    { id: 'requests', label: 'Requests' },
                   ].map((tab) => (
                     <Button
                       key={tab.id}
                       onClick={() => {
-                        setActiveTab(tab.id as 'pending' | 'finish');
-                        setSelectedTask(null); // Clear selected task when switching tabs
-                        setIsSidebarOpen(true); // Open the sidebar to show the filtered task list
+                        const targetMode = tab.id as 'daily-report' | 'requests';
+                        setPageMode(targetMode);
+                        setSelectedTask(null); // Clear selected task
+                        setReportDate(new Date()); // Reset date to today
                       }}
                       sx={{
                         px: 3,
@@ -2282,11 +2327,11 @@ export default function DailyReportPage() {
                         borderRadius: '999px',
                         textTransform: 'none',
                         fontWeight: 700,
-                        color: activeTab === tab.id ? '#1c1e2b' : '#6b7280',
-                        bgcolor: activeTab === tab.id ? '#ffffff' : 'transparent',
-                        boxShadow: activeTab === tab.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                        color: pageMode === tab.id ? '#ffffff' : '#6b7280',
+                        bgcolor: pageMode === tab.id ? '#FF7F32' : 'transparent',
+                        boxShadow: pageMode === tab.id ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
                         '&:hover': {
-                          bgcolor: activeTab === tab.id ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                          bgcolor: pageMode === tab.id ? '#e06b24' : 'rgba(0, 0, 0, 0.04)',
                         },
                       }}
                     >
@@ -2318,11 +2363,14 @@ export default function DailyReportPage() {
                 <Grid
                   item
                   xs={12}
-                  lg={3.5}
+                  lg={isSidebarOpen ? 'auto' : 12}
                   sx={{
                     height: '100%',
                     display: isSidebarOpen ? 'block' : 'none',
                     transition: 'all 0.3s',
+                    width: { lg: 320 },
+                    maxWidth: { lg: 320 },
+                    flexBasis: { lg: 320 },
                   }}
                 >
                   <Paper
@@ -2332,12 +2380,12 @@ export default function DailyReportPage() {
                       display: 'flex',
                       flexDirection: 'column',
                       overflow: 'hidden',
-                      border: '1px solid #e2e8f0',
+                      border: 'none',
                       boxShadow: 'none',
-                      bgcolor: '#f8fafc',
+                      background: 'linear-gradient(180deg, #2c2437 0%, #201b2b 100%)',
                     }}
                   >
-                    <Box sx={{ p: 3, borderBottom: '1px solid #f1f5f9' }}>
+                    <Box sx={{ p: 3, borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
                       <Box
                         sx={{
                           display: 'flex',
@@ -2352,11 +2400,11 @@ export default function DailyReportPage() {
                               width: 36,
                               height: 36,
                               borderRadius: '10px',
-                              bgcolor: '#e2e8f0',
+                              bgcolor: 'rgba(255, 255, 255, 0.1)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: '#1e293b',
+                              color: '#FF7F32',
                               flexShrink: 0,
                             }}
                           >
@@ -2365,13 +2413,13 @@ export default function DailyReportPage() {
                           <Typography
                             variant="h6"
                             fontWeight={800}
-                            color="#1e293b"
+                            color="#ffffff"
                             sx={{ whiteSpace: 'nowrap' }}
                           >
                             My job{' '}
                             <Box
                               component="span"
-                              sx={{ color: '#94a3b8', fontSize: '0.85rem', ml: 1 }}
+                              sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.85rem', ml: 1 }}
                             >
                               ({filteredTasks.length})
                             </Box>
@@ -2382,22 +2430,82 @@ export default function DailyReportPage() {
                           placeholder="Search tasks..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          sx={{ flex: 1, minWidth: 120, maxWidth: 220 }}
+                          sx={{
+                            flex: 1,
+                            minWidth: 120,
+                            maxWidth: 220,
+                            '& .MuiInputBase-root': {
+                              color: '#ffffff',
+                              fontSize: '0.825rem',
+                            }
+                          }}
                           InputProps={{
                             startAdornment: (
                               <Search
                                 size={16}
-                                style={{ marginRight: 8, color: '#94a3b8', flexShrink: 0 }}
+                                style={{ marginRight: 8, color: 'rgba(255, 255, 255, 0.5)', flexShrink: 0 }}
                               />
                             ),
                             sx: {
                               borderRadius: '10px',
-                              bgcolor: '#ffffff',
+                              bgcolor: 'rgba(255, 255, 255, 0.08)',
+                              border: '1px solid rgba(255, 255, 255, 0.15)',
                               '& fieldset': { border: 'none' },
+                              '&:hover': {
+                                bgcolor: 'rgba(255, 255, 255, 0.12)',
+                              },
+                              '&.Mui-focused': {
+                                bgcolor: 'rgba(255, 255, 255, 0.15)',
+                                border: '1px solid #FF7F32',
+                              }
                             },
                           }}
                         />
                       </Box>
+
+                      {/* Active Tasks & Finish Segment Control */}
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                          bgcolor: 'rgba(255, 255, 255, 0.08)',
+                          p: 0.5,
+                          borderRadius: '999px',
+                          mt: 2,
+                          width: '100%',
+                        }}
+                      >
+                        {[
+                          { id: 'pending', label: 'Active Tasks' },
+                          { id: 'finish', label: 'Finish' },
+                        ].map((tab) => (
+                          <Button
+                            key={tab.id}
+                            onClick={() => {
+                              setActiveTab(tab.id as 'pending' | 'finish');
+                              setSelectedTask(null); // Clear selected task when switching tabs
+                              setIsSidebarOpen(true); // Open the sidebar to show the filtered task list
+                            }}
+                            sx={{
+                              flex: 1,
+                              px: 2,
+                              py: 0.75,
+                              borderRadius: '999px',
+                              textTransform: 'none',
+                              fontWeight: 700,
+                              fontSize: '0.8rem',
+                              color: activeTab === tab.id ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                              bgcolor: activeTab === tab.id ? '#FF7F32' : 'transparent',
+                              boxShadow: activeTab === tab.id ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
+                              '&:hover': {
+                                bgcolor: activeTab === tab.id ? '#e06b24' : 'rgba(255, 255, 255, 0.08)',
+                              },
+                            }}
+                          >
+                            {tab.label}
+                          </Button>
+                        ))}
+                      </Stack>
                     </Box>
                     <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
                       {tasksLoading ? (
@@ -2423,8 +2531,14 @@ export default function DailyReportPage() {
                 <Grid
                   item
                   xs={12}
-                  lg={isSidebarOpen ? 8.5 : 12}
-                  sx={{ height: '100%', transition: 'all 0.3s' }}
+                  lg={isSidebarOpen ? 'auto' : 12}
+                  sx={{
+                    height: '100%',
+                    transition: 'all 0.3s',
+                    width: { lg: isSidebarOpen ? 'calc(100% - 320px)' : '100%' },
+                    maxWidth: { lg: isSidebarOpen ? 'calc(100% - 320px)' : '100%' },
+                    flexBasis: { lg: isSidebarOpen ? 'calc(100% - 320px)' : '100%' },
+                  }}
                 >
                   <Paper
                     sx={{
@@ -2546,8 +2660,18 @@ export default function DailyReportPage() {
                                   ? selectedTask.supportTaskName
                                   : selectedTask.taskName}
                               </Typography>
+                              {selectedTask.subtaskName && (
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={700}
+                                  color="text.primary"
+                                  sx={{ mt: 0.25 }}
+                                >
+                                  {selectedTask.subtaskName}
+                                </Typography>
+                              )}
                               {selectedTask.woName && (
-                                <Typography variant="caption" color="text.secondary" noWrap>
+                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.5 }}>
                                   {selectedTask.woName}
                                 </Typography>
                               )}
@@ -2559,6 +2683,20 @@ export default function DailyReportPage() {
                               value={reportDate}
                               onChange={(newValue) => {
                                 if (newValue) {
+                                  if (pageMode === 'requests') {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const tomorrow = new Date();
+                                    tomorrow.setDate(tomorrow.getDate() + 1);
+                                    tomorrow.setHours(0, 0, 0, 0);
+
+                                    const valDate = new Date(newValue);
+                                    valDate.setHours(0, 0, 0, 0);
+
+                                    if (valDate.getTime() !== today.getTime() && valDate.getTime() !== tomorrow.getTime()) {
+                                      return;
+                                    }
+                                  }
                                   const today = new Date();
                                   today.setHours(0, 0, 0, 0);
                                   const isPast =
@@ -2581,7 +2719,7 @@ export default function DailyReportPage() {
                                     }
                                   }
 
-                                  if (isMissingReport && isLocked && !hasValidUnlock) {
+                                  if (isMissingReport && isLocked && !hasValidUnlock && pageMode !== 'requests') {
                                     setUnlockRequestDate(newValue);
                                     setIsUnlockRequestDialogOpen(true);
                                     return;
@@ -2590,13 +2728,7 @@ export default function DailyReportPage() {
                                 setReportDate(newValue || new Date());
                               }}
                               minDate={calendarMinDate}
-                              maxDate={completionDateStr ? new Date(completionDateStr) : (
-                                (() => {
-                                  const tomorrow = new Date();
-                                  tomorrow.setDate(tomorrow.getDate() + 1);
-                                  return tomorrow;
-                                })()
-                              )}
+                              maxDate={calendarMaxDate}
                               slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
                               slotProps={{
                                 textField: {
@@ -3798,113 +3930,284 @@ function TaskSidebarCard({
     isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName;
   const displayProgress = task.dailyProgress || 0;
 
+  const getDueDateColor = () => {
+    if (!task.dueDate) return displayProgress === 100 ? '#10b981' : '#9ca3af';
+    const dueDateObj = new Date(task.dueDate);
+    if (isNaN(dueDateObj.getTime())) return displayProgress === 100 ? '#10b981' : '#9ca3af';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    if (displayProgress === 100) {
+      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+      return diffDaysCompleted >= 0 ? '#10b981' : '#ef4444';
+    }
+
+    const diffTime = dueDateObj.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return '#ef4444';
+    } else if (diffDays <= 3) {
+      return '#f97316';
+    } else if (diffDays <= 7) {
+      return '#eab308';
+    } else if (
+      dueDateObj.getFullYear() === today.getFullYear() &&
+      dueDateObj.getMonth() === today.getMonth()
+    ) {
+      return '#3b82f6';
+    } else {
+      return '#9ca3af';
+    }
+  };
+
+  const getDueDateTooltip = () => {
+    if (!task.dueDate) return displayProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+    const dueDateObj = new Date(task.dueDate);
+    if (isNaN(dueDateObj.getTime())) return displayProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    if (displayProgress === 100) {
+      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+      const formattedDueDate = dueDateObj.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      const formattedCompletionDate = completionDate.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+
+      if (diffDaysCompleted > 0) {
+        return `เสร็จสิ้นก่อนกำหนด ${diffDaysCompleted} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+      } else if (diffDaysCompleted === 0) {
+        return `เสร็จสิ้นตรงตามแผนงาน (วันที่: ${formattedDueDate})`;
+      } else {
+        return `เสร็จสิ้นล่าช้ากว่ากำหนด ${Math.abs(diffDaysCompleted)} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+      }
+    }
+
+    return `Due: ${dueDateObj.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })}`;
+  };
+
   return (
-    <Box
+    <Paper
+      elevation={0}
       onClick={onClick}
       sx={{
         p: 2,
-        borderRadius: '16px',
-        cursor: 'pointer',
-        border: '1px solid',
-        borderColor: active ? '#3b82f6' : '#cbd5e1',
-        bgcolor: active ? '#eff6ff' : '#ffffff',
-        boxShadow: active ? '0 4px 14px rgba(59, 130, 246, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.04)',
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        display: 'flex',
-        gap: 2,
+        mb: 1.5,
+        borderRadius: '12px',
+        border: '1.5px solid',
+        borderColor: active ? '#3b82f6' : 'transparent',
+        backgroundColor: active ? '#eff6ff' : '#ffffff',
+        boxShadow: active ? '0 4px 16px rgba(59, 130, 246, 0.15)' : '0 4px 16px rgba(0,0,0,0.06)',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
         '&:hover': {
           transform: 'translateY(-2px)',
+          boxShadow: active ? '0 6px 20px rgba(59, 130, 246, 0.2)' : '0 8px 24px rgba(0,0,0,0.08)',
           borderColor: active ? '#3b82f6' : '#94a3b8',
-          boxShadow: active
-            ? '0 6px 20px rgba(59, 130, 246, 0.25)'
-            : '0 8px 16px rgba(0, 0, 0, 0.08)',
         },
+        cursor: 'pointer',
       }}
     >
-      <Box sx={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
-        <svg height="44" width="44" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="22" cy="22" r="19" stroke="#f1f5f9" strokeWidth="3" fill="none" />
-          <circle
-            cx="22"
-            cy="22"
-            r="19"
-            stroke="#10b981"
-            strokeWidth="3"
-            fill="none"
-            strokeDasharray={2 * Math.PI * 19}
-            strokeDashoffset={
-              2 * Math.PI * 19 - ((displayProgress || 0) / 100) * (2 * Math.PI * 19)
-            }
-            strokeLinecap="round"
-          />
-        </svg>
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Typography variant="caption" fontWeight={900} fontSize="0.65rem" color="#10b981">
-            {displayProgress || 0}%
-          </Typography>
-        </Box>
-      </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Box
-          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.2 }}
-        >
-          <Typography variant="caption" fontWeight={900} color="primary">
-            {task.taskId}
-          </Typography>
-          {task.isSupportRequest && (
-            <Chip
-              label="Support"
-              size="small"
-              sx={{
-                height: 18,
-                fontSize: '0.6rem',
-                fontWeight: 800,
-                bgcolor: '#fef08a',
-                color: '#854d0e',
-                borderRadius: '4px',
-              }}
-            />
-          )}
-        </Box>
-        {task.revisionId && task.revisionId !== 'rev00' && (
-          <Typography
-            variant="caption"
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {/* Task Code Badge */}
+          <Box
             sx={{
-              display: 'block',
-              fontWeight: 700,
-              color: '#ef4444',
-              mb: 0.5,
-              fontSize: '0.7rem',
-              letterSpacing: 0.3,
+              display: 'inline-flex',
+              px: 1,
+              py: 0.25,
+              borderRadius: 1.5,
+              backgroundColor: active ? '#dbeafe' : '#f1f3f6',
             }}
           >
-            {task.revisionId} : &quot;{task.revisionName || 'แก้ไขงาน'}&quot;
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, color: active ? '#1d4ed8' : '#6b7280', fontSize: '0.7rem', letterSpacing: 0.5 }}
+            >
+              {task.taskId}
+              {task.revisionId && task.revisionId !== 'rev00' && (
+                <Box component="span" sx={{ color: '#ef4444' }}>
+                  -{task.revisionId}
+                </Box>
+              )}
+            </Typography>
+          </Box>
+
+          {/* Support Label */}
+          {task.isSupportRequest && (
+            <Box
+              sx={{
+                display: 'inline-flex',
+                px: 0.8,
+                py: 0.2,
+                borderRadius: '4px',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
+                boxShadow: '0 2px 4px rgba(251, 191, 36, 0.1)',
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ 
+                  fontWeight: 800, 
+                  color: '#92400e', 
+                  fontSize: '0.625rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                Support
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+      </Stack>
+
+      {/* Title (Task Name) */}
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 700, color: '#111827', mb: 0.5, fontSize: '0.825rem', lineHeight: 1.2 }}
+      >
+        {displayTaskName}
+      </Typography>
+
+      {/* Subtask Name / Project Info */}
+      <Typography
+        variant="caption"
+        sx={{ display: 'block', color: '#6b7280', mb: 0.5, fontSize: '0.75rem', lineHeight: 1.3, fontWeight: 500 }}
+      >
+        {task.subtaskName || (task.subtasks && task.subtasks[0]?.subtaskName)}
+      </Typography>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        noWrap
+        sx={{ display: 'block', mb: 1.5, fontWeight: 600, fontSize: '0.7rem' }}
+      >
+        {getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}
+      </Typography>
+      
+      {/* Progress Section */}
+      <Box sx={{ mb: 1.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563', fontSize: '0.7rem' }}>
+            Progress
           </Typography>
-        )}
-        <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>
-          {displayTaskName}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
-          sx={{ display: 'block', mt: 0.3, fontWeight: 600 }}
-        >
-          {getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}
-        </Typography>
-        <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>
-          Duedate : {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) ? format(new Date(task.dueDate), 'dd/MM/yyyy') : '-'}
-        </Typography>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: (displayProgress || 0) >= 100 ? '#059669' : '#1c1e2b', fontSize: '0.7rem' }}>
+            {displayProgress || 0}%
+          </Typography>
+        </Stack>
+        <LinearProgress 
+          variant="determinate" 
+          value={Math.min(100, Math.max(0, displayProgress || 0))} 
+          sx={{
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: active ? '#dbeafe' : '#f1f3f6',
+            '& .MuiLinearProgress-bar': {
+              borderRadius: 2,
+              background: (displayProgress || 0) >= 100 
+                ? 'linear-gradient(90deg, #059669, #10b981)' 
+                : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+            }
+          }}
+        />
       </Box>
-    </Box>
+
+      {/* Due Date Row */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0 }}>
+        <Tooltip title={getDueDateTooltip()} arrow placement="top">
+          <Box
+            sx={{
+              display: 'inline-flex',
+              backgroundColor: getDueDateColor(),
+              borderRadius: '999px',
+              px: 1,
+              py: 0.25,
+              alignItems: 'center',
+              boxShadow: '0 2px 6px rgba(28, 30, 43, 0.2)',
+              cursor: 'default',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                color: getDueDateColor() === '#eab308' ? '#1c1e2b' : '#ffffff',
+                fontSize: '0.7rem',
+                letterSpacing: 0.5,
+              }}
+            >
+              {(() => {
+                if (displayProgress === 100) {
+                  if (!task.dueDate) return 'ตรงตามแผน';
+                  const dueDateObj = new Date(task.dueDate);
+                  if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+
+                  const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+                  completionDate.setHours(0, 0, 0, 0);
+                  dueDateObj.setHours(0, 0, 0, 0);
+
+                  const diff = dueDateObj.getTime() - completionDate.getTime();
+                  const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+                  if (diffDaysCompleted > 0) {
+                    return `เสร็จก่อนแผน ${diffDaysCompleted} วัน`;
+                  } else if (diffDaysCompleted === 0) {
+                    return 'ตรงตามแผน';
+                  } else {
+                    return `เลยกำหนด ${Math.abs(diffDaysCompleted)} วัน`;
+                  }
+                }
+
+                if (!task.dueDate) return 'ไม่ระบุ';
+                const dueDateObj = new Date(task.dueDate);
+                if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                dueDateObj.setHours(0, 0, 0, 0);
+
+                const diffTime = dueDateObj.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays < 0) {
+                  return `เลยกำหนดส่ง ${Math.abs(diffDays)} วัน`;
+                } else if (diffDays <= 3) {
+                  return `ใกล้ถึงใน ${diffDays} วัน`;
+                } else if (diffDays <= 7) {
+                  return `ใกล้ถึงใน ${diffDays} วัน`;
+                } else {
+                  return `เหลือ ${diffDays} วัน`;
+                }
+              })()}
+            </Typography>
+          </Box>
+        </Tooltip>
+      </Stack>
+    </Paper>
   );
 }
 

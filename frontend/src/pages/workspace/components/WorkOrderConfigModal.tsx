@@ -47,7 +47,7 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
         reset({
           code: editData.code,
           name: editData.name,
-          leaderIds: editData.leaderIds || (editData.leaderId ? [editData.leaderId] : [])
+          leaderIds: editData.AssignLD || editData.leaderIds || (editData.leaderId ? [editData.leaderId] : [])
         });
       } else {
         reset({ code: '', name: '', leaderIds: [] });
@@ -56,7 +56,7 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
       const fetchLeaders = async () => {
         setLoadingLeaders(true);
         try {
-          const res = await memberService.getAllUsers({ roleId: 'LD', pageSize: 1000 });
+          const res = await memberService.getAllUsers({ roleId: 'LD', projectId, pageSize: 1000 });
           setLeaders(res.users || []);
         } catch (error) {
           console.error('Failed to fetch leaders', error);
@@ -66,7 +66,7 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
       };
       fetchLeaders();
     }
-  }, [open, editData, reset]);
+  }, [open, editData, reset, projectId]);
 
   const onSubmit = async (data: FormData) => {
     if (!projectId) return;
@@ -80,7 +80,8 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
         leaderId: selectedLeaders.length > 0 ? selectedLeaders[0].id : null,
         leaderName: selectedLeaders.length > 0 ? selectedLeaders[0].name : null,
         leaderIds: data.leaderIds || [],
-        leaderNames: leaderNames
+        leaderNames: leaderNames,
+        AssignLD: data.leaderIds || []
       };
 
       if (editData) {

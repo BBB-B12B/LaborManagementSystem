@@ -19,6 +19,7 @@ export interface WorkOrderConfig {
   leaderName?: string | null;
   leaderIds?: string[];
   leaderNames?: string[];
+  AssignLD?: string[];
 }
 
 export interface CategoryConfig {
@@ -43,7 +44,11 @@ export class ProjectConfigService {
       .orderBy('code', 'asc')
       .get();
       
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrderConfig));
+    const configs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrderConfig));
+    return configs.filter(wo => {
+      const code = wo.code?.toUpperCase().trim();
+      return code !== 'WOA' && code !== 'WOP';
+    });
   }
 
   async createWorkOrder(projectId: string, data: Omit<WorkOrderConfig, 'id'>, userId: string): Promise<WorkOrderConfig> {
@@ -66,6 +71,7 @@ export class ProjectConfigService {
       leaderName: data.leaderName || null,
       leaderIds: data.leaderIds || [],
       leaderNames: data.leaderNames || [],
+      AssignLD: data.AssignLD || [],
     };
 
     await ref.set(payload);
@@ -86,31 +92,45 @@ export class ProjectConfigService {
     if (data.leaderName !== undefined) updatePayload.leaderName = data.leaderName;
     if (data.leaderIds !== undefined) updatePayload.leaderIds = data.leaderIds;
     if (data.leaderNames !== undefined) updatePayload.leaderNames = data.leaderNames;
+    if (data.AssignLD !== undefined) updatePayload.AssignLD = data.AssignLD;
 
     await ref.update(updatePayload);
 
-    // Cascade update workOrderName in tasks
-    if (data.name) {
-      const nameTrimmed = data.name.trim();
+    // Cascade update workOrderName and AssignLD in B-database (afterSaleDb)
+    if (data.name || data.AssignLD !== undefined) {
       const woSnapshot = await afterSaleDb.collection('workOrders').where('projectId', '==', projectId).get();
       const matchingWoDocs = woSnapshot.docs.filter(d => d.data().workOrderCode === code);
       const batch = afterSaleDb.batch();
       let updateNeeded = false;
 
       for (const woDoc of matchingWoDocs) {
-        batch.update(woDoc.ref, { workOrderName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
-        
-        const catsSnapshot = await woDoc.ref.collection('categories').get();
-        for (const catDoc of catsSnapshot.docs) {
-          const tasksSnapshot = await catDoc.ref.collection('tasks').get();
-          for (const taskDoc of tasksSnapshot.docs) {
-            batch.update(taskDoc.ref, { workOrderName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
-            updateNeeded = true;
+        const woUpdate: any = {
+          updatedAt: new Date(),
+          updatedBy: userId,
+        };
+        if (data.name) {
+          woUpdate.workOrderName = data.name.trim();
+        }
+        if (data.AssignLD !== undefined) {
+          woUpdate.AssignLD = data.AssignLD;
+        }
+
+        batch.update(woDoc.ref, woUpdate);
+        updateNeeded = true;
+
+        if (data.name) {
+          const nameTrimmed = data.name.trim();
+          const catsSnapshot = await woDoc.ref.collection('categories').get();
+          for (const catDoc of catsSnapshot.docs) {
+            const tasksSnapshot = await catDoc.ref.collection('tasks').get();
+            for (const taskDoc of tasksSnapshot.docs) {
+              batch.update(taskDoc.ref, { workOrderName: nameTrimmed, updatedAt: new Date(), updatedBy: userId });
+            }
           }
         }
       }
 
-      if (updateNeeded || matchingWoDocs.length > 0) {
+      if (updateNeeded) {
         await batch.commit();
       }
     }

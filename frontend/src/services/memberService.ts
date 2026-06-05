@@ -46,8 +46,9 @@ export interface UserFilterOptions {
   roleId?: string;
   department?: string;
   isActive?: boolean;
- page?: number;
- pageSize?: number;
+  page?: number;
+  pageSize?: number;
+  projectId?: string;
 }
 
 /**
@@ -66,6 +67,7 @@ export async function getAllUsers(
     params.append('isActive', String(filters.isActive));
   if (filters?.page) params.append('page', String(filters.page));
   if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
+  if (filters?.projectId) params.append('projectId', filters.projectId);
 
   const response = await api.get<UserListResponse>('/users', Object.fromEntries(params));
   return response;

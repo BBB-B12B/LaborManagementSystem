@@ -646,15 +646,15 @@
     },
     "CategoryConfig": {
       "source": "frontend/src/services/projectConfigService.ts",
-      "line": 13
+      "line": 14
     },
     "ProjectConfigService": {
       "source": "backend/src/services/ProjectConfigService.ts",
-      "line": 34
+      "line": 35
     },
     "projectConfigService": {
       "source": "frontend/src/services/projectConfigService.ts",
-      "line": 19
+      "line": 20
     },
     "ProjectData": {
       "source": "backend/src/services/projectService.ts",
@@ -758,7 +758,7 @@
     },
     "userService": {
       "source": "backend/src/services/auth/UserService.ts",
-      "line": 159
+      "line": 194
     },
     "PaginationOptions": {
       "source": "backend/src/services/base/CrudService.ts",
@@ -786,7 +786,7 @@
     },
     "dailyReportService": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 464
+      "line": 465
     },
     "projectLocationService": {
       "source": "backend/src/services/project/ProjectLocationService.ts",
@@ -926,11 +926,11 @@
     },
     "AddEntryInput": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 63
+      "line": 64
     },
     "DailyReportImportResult": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 69
+      "line": 70
     },
     "DCCompensationIncome": {
       "source": "frontend/src/services/dcService.ts",
@@ -1030,39 +1030,39 @@
     },
     "getAllUsers": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 57
+      "line": 58
     },
     "getUserById": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 78
+      "line": 80
     },
     "createUser": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 93
+      "line": 95
     },
     "updateUser": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 108
+      "line": 110
     },
     "deleteUser": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 123
+      "line": 125
     },
     "importUsersFromFile": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 127
+      "line": 129
     },
     "getUsersByDepartment": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 137
+      "line": 139
     },
     "getUsersByRole": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 149
+      "line": 151
     },
     "memberService": {
       "source": "frontend/src/services/memberService.ts",
-      "line": 160
+      "line": 162
     },
     "OvertimeRecord": {
       "source": "frontend/src/services/overtimeService.ts",
@@ -2010,7 +2010,7 @@
     },
     "DailyReportPage": {
       "source": "frontend/src/pages/daily-reports/index.tsx",
-      "line": 145
+      "line": 149
     },
     "WorkRecordsPage": {
       "source": "frontend/src/pages/daily-reports/list.tsx",
@@ -2506,7 +2506,7 @@
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 337
+      "line": 341
     },
     "SIDEBAR_WIDTH": {
       "source": "frontend/src/components/layout/Navbar.tsx",
@@ -2554,7 +2554,7 @@
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 44
+      "line": 46
     },
     "EditHistoryRecord": {
       "source": "frontend/src/services/taskService.ts",

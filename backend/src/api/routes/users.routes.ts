@@ -134,8 +134,23 @@ router.get(
 
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.pageSize as string) || 50;
+      const roleId = req.query.roleId as string;
+      const department = req.query.department as string;
+      const projectId = req.query.projectId as string;
+      
+      let isActive: boolean | undefined;
+      if (req.query.isActive !== undefined) {
+        isActive = req.query.isActive === 'true' || req.query.isActive === '1';
+      }
 
-      const result = await userService.getAllUsers({ page, pageSize });
+      const result = await userService.getAllUsers({
+        page,
+        pageSize,
+        roleId,
+        department,
+        isActive,
+        projectId
+      });
 
       res.json({
         success: true,

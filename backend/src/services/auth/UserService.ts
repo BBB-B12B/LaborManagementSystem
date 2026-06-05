@@ -137,21 +137,56 @@ export class UserService extends BaseCrudService<User> {
 
     return this.update(id, updates);
   }
-  /**
-   * Get all users with pagination
-   */
-  async getAllUsers(options?: PaginationOptions): Promise<PaginatedResult<User>> {
-    const result = await this.getAll(options);
+  async getAllUsers(options?: PaginationOptions & {
+    roleId?: string;
+    department?: string;
+    isActive?: boolean;
+    projectId?: string;
+  }): Promise<PaginatedResult<User>> {
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 50;
+
+    let queryRef: any = this.collection;
+
+    if (options?.roleId) {
+      queryRef = queryRef.where('roleId', '==', options.roleId);
+    }
+    if (options?.department) {
+      queryRef = queryRef.where('department', '==', options.department);
+    }
+    if (options?.isActive !== undefined) {
+      queryRef = queryRef.where('isActive', '==', options.isActive);
+    }
+    if (options?.projectId) {
+      queryRef = queryRef.where('projectLocationIds', 'array-contains', options.projectId);
+    }
+
+    const snapshot = await queryRef.get();
+    let users = snapshot.docs.map((doc: any) => doc.data() as User);
+
+    // Sort by createdAt desc in-memory
+    users.sort((a: User, b: User) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    const total = users.length;
+    const startIndex = (page - 1) * pageSize;
+    const paginatedItems = users.slice(startIndex, startIndex + pageSize);
 
     // Remove passwordHash from results
-    const items = result.items.map(user => {
+    const items = paginatedItems.map((user: User) => {
       const { passwordHash, ...userWithoutPassword } = user;
       return userWithoutPassword as User;
     });
 
     return {
-      ...result,
-      items
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
     };
   }
 }

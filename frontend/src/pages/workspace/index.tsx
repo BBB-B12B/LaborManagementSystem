@@ -55,10 +55,10 @@ import TaskDailyReportModal from './components/TaskDailyReportModal';
 import { WbsImportModal } from './components/WbsImportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
 import { taskService, type Task, type Subtask, type TaskAssignee, type EditHistoryRecord } from '@/services/taskService';
-import { projectConfigService } from '@/services/projectConfigService';
+import { projectConfigService, type WorkOrderConfig } from '@/services/projectConfigService';
 import { projectService } from '@/services/projectService';
 import { DatePicker } from '@/components/forms/DatePicker';
-import { memberService } from '@/services/memberService';
+import { memberService, type User } from '@/services/memberService';
 import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/utils/permissions';
@@ -178,6 +178,12 @@ export default function WorkspacePage() {
   const [woEditName, setWoEditName] = useState('');
   const [woEditSubmitting, setWoEditSubmitting] = useState(false);
   const [woEditError, setWoEditError] = useState('');
+  const [woEditLeaderIds, setWoEditLeaderIds] = useState<string[]>([]);
+  const [woEditLeaders, setWoEditLeaders] = useState<User[]>([]);
+  const [loadingWoEditLeaders, setLoadingWoEditLeaders] = useState(false);
+
+  // WorkOrder configurations for tree layout LD icon
+  const [woConfigs, setWoConfigs] = useState<WorkOrderConfig[]>([]);
 
   const [isWoDeleteOpen, setIsWoDeleteOpen] = useState(false);
   const [woToDelete, setWoToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -200,6 +206,8 @@ export default function WorkspacePage() {
 
   // Track the user ID to detect user-switch and force refetch
   const prevUserIdRef = useRef<string | null>(null);
+  // ป้องกัน Loop การดึงและเปิดบอร์ดรายงานผลงานจาก Notification
+  const handledSubtaskIdRef = useRef<string | null>(null);
 
   /** กรอง Task ตาม Role ของ User */
   const filterTasksByRole = useCallback(
@@ -477,11 +485,38 @@ export default function WorkspacePage() {
     }
   };
 
-  const handleEditWorkOrderOpen = (woId: string, currentName: string) => {
+  const handleEditWorkOrderOpen = async (woId: string, currentName: string) => {
     setEditingWo({ id: woId, name: currentName });
     setWoEditName(currentName);
     setWoEditError('');
+    setWoEditLeaderIds([]);
+    setWoEditLeaders([]);
     setIsWoEditOpen(true);
+
+    const parentTask = tasks.find((t) => t.workOrderId === woId);
+    const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+    const workOrderCode = parentTask?.workOrderCode || woId;
+
+    if (projectId) {
+      setLoadingWoEditLeaders(true);
+      try {
+        const [leadersRes, configsRes] = await Promise.all([
+          memberService.getAllUsers({ roleId: 'LD', projectId, pageSize: 1000 }),
+          projectConfigService.getWorkOrders(projectId)
+        ]);
+        setWoEditLeaders(leadersRes.users || []);
+        
+        // Find current AssignLD config
+        const currentWoConfig = configsRes.find(cfg => cfg.code === workOrderCode || cfg.id === workOrderCode);
+        if (currentWoConfig) {
+          setWoEditLeaderIds(currentWoConfig.AssignLD || currentWoConfig.leaderIds || (currentWoConfig.leaderId ? [currentWoConfig.leaderId] : []));
+        }
+      } catch (err) {
+        console.error('Failed to load leaders or configurations for WorkOrder edit', err);
+      } finally {
+        setLoadingWoEditLeaders(false);
+      }
+    }
   };
 
   const handleEditWorkOrderSubmit = async () => {
@@ -500,8 +535,20 @@ export default function WorkspacePage() {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
 
-      await projectConfigService.updateWorkOrder(projectId, workOrderCode, { name: woEditName.trim() });
-      toast.show('แก้ไขชื่อ WorkOrder สำเร็จ', 'success');
+      const selectedLeaders = woEditLeaders.filter(u => woEditLeaderIds.includes(u.id));
+      const leaderNames = selectedLeaders.map(u => u.name);
+
+      const submitData = {
+        name: woEditName.trim(),
+        leaderId: selectedLeaders.length > 0 ? selectedLeaders[0].id : null,
+        leaderName: selectedLeaders.length > 0 ? selectedLeaders[0].name : null,
+        leaderIds: woEditLeaderIds,
+        leaderNames: leaderNames,
+        AssignLD: woEditLeaderIds
+      };
+
+      await projectConfigService.updateWorkOrder(projectId, workOrderCode, submitData);
+      toast.show('แก้ไขข้อมูล WorkOrder สำเร็จ', 'success');
       setIsWoEditOpen(false);
       setEditingWo(null);
       invalidateCache();
@@ -705,8 +752,12 @@ export default function WorkspacePage() {
     const { subtaskId: querySubtaskId, date: queryDate } = router.query;
 
     if (querySubtaskId && typeof querySubtaskId === 'string' && subtaskCards.length > 0) {
+      // ป้องกัน Loop การยิงเปลี่ยนเส้นทางด้วย Router.replace ซ้ำซ้อนก่อนที่การนำทางจะสมบูรณ์
+      if (handledSubtaskIdRef.current === querySubtaskId) return;
+
       const foundCard = subtaskCards.find((card) => card.id === querySubtaskId);
       if (foundCard) {
+        handledSubtaskIdRef.current = querySubtaskId; // ล็อก ID นี้เพื่อป้องกันการเข้ามตกรอบวนซ้ำ
         setSelectedTaskForReport(foundCard);
         setIsReportModalOpen(true);
 
@@ -734,6 +785,9 @@ export default function WorkspacePage() {
         // Clean query parameters from URL bar
         router.replace('/workspace', undefined, { shallow: true });
       }
+    } else if (!querySubtaskId) {
+      // เคลียร์ค่า ID ที่ล็อกไว้เมื่อ URL ถูกล้างเรียบร้อยแล้ว เพื่อให้เปิดแจ้งเตือนรอบใหม่ได้
+      handledSubtaskIdRef.current = null;
     }
   }, [router.isReady, router.query, subtaskCards, user, notifications, markSubtaskAsRead, isCacheLoading]);
 
@@ -913,6 +967,21 @@ export default function WorkspacePage() {
     }
   }, [isHistoryOpen, usersMap]);
 
+  // Load work order configs for all user project locations
+  useEffect(() => {
+    const projectIds = user?.projectLocationIds || [];
+    if (projectIds.length > 0) {
+      Promise.all(
+        projectIds.map((pid) => projectConfigService.getWorkOrders(pid).catch(() => []))
+      ).then((results) => {
+        const flatConfigs = results.flat();
+        setWoConfigs(flatConfigs);
+      }).catch(err => {
+        console.error('Failed to load work order configs for projects', err);
+      });
+    }
+  }, [user?.projectLocationIds, tasks]);
+
   // Filter FMs strictly by the parent task's project
   const filteredFms = useMemo(() => {
     const validFms = fmUsers.filter((u) => 
@@ -1065,6 +1134,7 @@ export default function WorkspacePage() {
               onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
               onEditTask={canEditWorkspace ? handleEditTaskOpen : undefined}
               activeTab={activeTab}
+              workOrderConfigs={woConfigs}
             />
           </Box>
         </Box>
@@ -1490,6 +1560,7 @@ export default function WorkspacePage() {
               setMobileDrawerOpen(false);
             } : undefined}
             activeTab={activeTab}
+            workOrderConfigs={woConfigs}
           />
         </Box>
       </Drawer>
@@ -1999,6 +2070,7 @@ export default function WorkspacePage() {
         onClose={() => {
           setIsReportModalOpen(false);
           setSelectedReportDate(null);
+          setSelectedTaskForReport(null);
         }}
         task={selectedTaskForReport}
         initialDate={selectedReportDate}
@@ -2261,7 +2333,10 @@ export default function WorkspacePage() {
         fullWidth
         PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
       >
-        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่อหมวดหมู่หลัก (WorkOrder)</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>แก้ไขหมวดหมู่งานหลัก</DialogTitle>
+        <Typography variant="body2" sx={{ color: 'text.secondary', px: 3, pb: 1, fontSize: '0.825rem' }}>
+          แก้ไขข้อมูลรหัสและชื่อหมวดหมู่งานหลักของคุณ
+        </Typography>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
             {woEditError && (
@@ -2271,11 +2346,12 @@ export default function WorkspacePage() {
             )}
 
             <TextField
-              label="รหัส WorkOrder (แก้ไขไม่ได้)"
+              label="รหัสหมวดหมู่งานหลัก (Code) *"
               variant="filled"
               fullWidth
               value={editingWo?.id || ''}
               disabled
+              helperText="ไม่สามารถแก้ไขรหัสได้"
               InputProps={{ disableUnderline: true }}
               sx={{
                 '& .MuiFilledInput-root': {
@@ -2287,11 +2363,12 @@ export default function WorkspacePage() {
             />
 
             <TextField
-              label="ชื่อ WorkOrder *"
+              label="ชื่อหมวดหมู่งานหลัก *"
               variant="filled"
               fullWidth
               value={woEditName}
               onChange={(e) => setWoEditName(e.target.value)}
+              helperText="เช่น งานโครงสร้าง, งานสถาปัตยกรรม"
               InputProps={{ disableUnderline: true }}
               sx={{
                 '& .MuiFilledInput-root': {
@@ -2301,27 +2378,81 @@ export default function WorkspacePage() {
                 },
               }}
             />
+
+            <Autocomplete
+              multiple
+              options={woEditLeaders}
+              getOptionLabel={(option) => `${option.name} ${option.employeeId ? `(${option.employeeId})` : ''}`}
+              isOptionEqualToValue={(option, val) => option.id === val.id}
+              value={woEditLeaders.filter(u => woEditLeaderIds.includes(u.id))}
+              onChange={(_event, newValue) => {
+                setWoEditLeaderIds(newValue.map(u => u.id));
+              }}
+              disabled={woEditSubmitting || loadingWoEditLeaders}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="filled"
+                  label="หัวหน้ากลุ่มงาน (Leader)"
+                  placeholder={woEditLeaderIds.length > 0 ? '' : 'เลือกหัวหน้ากลุ่มงาน'}
+                  helperText={loadingWoEditLeaders ? 'กำลังโหลดข้อมูลหัวหน้างาน...' : 'ระบุหัวหน้ากลุ่มงานที่รับผิดชอบหลัก'}
+                  InputProps={{
+                    ...params.InputProps,
+                    disableUnderline: true,
+                    endAdornment: (
+                      <>
+                        {loadingWoEditLeaders ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    )
+                  }}
+                  sx={{
+                    '& .MuiFilledInput-root': {
+                      borderRadius: 2,
+                      bgcolor: '#f1f5f9',
+                      paddingTop: '20px',
+                      '&::before, &::after': { display: 'none' },
+                    },
+                  }}
+                />
+              )}
+            />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setIsWoEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
-            ยกเลิก
-          </Button>
+        <DialogActions sx={{ px: 3, pb: 2, justifyContent: 'space-between' }}>
           <Button
-            onClick={handleEditWorkOrderSubmit}
-            variant="contained"
-            disabled={woEditSubmitting}
-            sx={{
-              bgcolor: '#1c1e2b',
-              color: '#fff',
-              fontWeight: 700,
-              px: 3,
-              borderRadius: 2.5,
-              '&:hover': { bgcolor: '#000000' },
+            onClick={() => {
+              if (editingWo) {
+                setIsWoEditOpen(false);
+                handleDeleteWorkOrderOpen(editingWo.id, editingWo.name);
+              }
             }}
+            color="error"
+            disabled={woEditSubmitting}
+            sx={{ fontWeight: 700 }}
           >
-            {woEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+            ลบหมวดหมู่
           </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button onClick={() => setIsWoEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleEditWorkOrderSubmit}
+              variant="contained"
+              disabled={woEditSubmitting}
+              sx={{
+                bgcolor: '#1c1e2b',
+                color: '#fff',
+                fontWeight: 700,
+                px: 3,
+                borderRadius: 2.5,
+                '&:hover': { bgcolor: '#000000' },
+              }}
+            >
+              {woEditSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+            </Button>
+          </Box>
         </DialogActions>
       </Dialog>
 

@@ -70,9 +70,9 @@ const MobileDailyReportPage = () => {
 
     // Mutation: Remove Entry
     const removeEntryMutation = useMutation({
-        mutationFn: async (entryId: string) => {
+        mutationFn: async ({ entryId, workerId }: { entryId: string; workerId: string }) => {
             if (!projectId || !date) throw new Error("Missing Project or Date");
-            return dailyReportService.removeWorkEntry(projectId, date, entryId);
+            return dailyReportService.removeWorkEntry(projectId, date, workerId, entryId);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['dailyReport', projectId, date] });
@@ -88,9 +88,9 @@ const MobileDailyReportPage = () => {
         }
     };
 
-    const handleDeleteEntry = async (id: string) => {
+    const handleDeleteEntry = async (id: string, workerId: string) => {
         if (confirm("ต้องการลบรายการนี้ใช่ไหม?")) {
-            await removeEntryMutation.mutateAsync(id);
+            await removeEntryMutation.mutateAsync({ entryId: id, workerId });
         }
     };
 
@@ -136,7 +136,7 @@ const MobileDailyReportPage = () => {
                     </Box>
                 ) : (
                     <Stack spacing={2}>
-                        {entries.map((entry) => (
+                        {entries.map((entry: any) => (
                             <Paper
                                 key={entry.id}
                                 sx={{
@@ -163,7 +163,7 @@ const MobileDailyReportPage = () => {
                                             </Typography>
                                         </Stack>
                                     </Box>
-                                    <IconButton size="small" color="error" onClick={() => handleDeleteEntry(entry.id)}>
+                                    <IconButton size="small" color="error" onClick={() => handleDeleteEntry(entry.id, entry.dailyContractorId)}>
                                         <DeleteIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
@@ -201,6 +201,7 @@ const MobileDailyReportPage = () => {
                     onClose={() => setModalOpen(false)}
                     onSave={handleSaveEntry}
                     projectId={projectId}
+                    date={date}
                     initialData={editingEntry}
                 />
             )}

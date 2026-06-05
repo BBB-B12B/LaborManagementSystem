@@ -23,6 +23,7 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { Task, Subtask } from '@/services/taskService';
+import type { WorkOrderConfig } from '@/services/projectConfigService';
 import { useAuthStore } from '@/store/authStore';
 
 
@@ -39,6 +40,7 @@ interface WorkspaceTreeProps {
   onDeleteCategory?: (catId: string, currentName: string) => void;
   onEditTask?: (taskId: string, currentName: string) => void;
   activeTab?: string;
+  workOrderConfigs?: WorkOrderConfig[];
 }
 
 export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
@@ -54,6 +56,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   onDeleteCategory,
   onEditTask,
   activeTab = 'All Tasks',
+  workOrderConfigs = [],
 }) => {
   const { user } = useAuthStore();
   const isWH = user?.department === 'WH';
@@ -252,7 +255,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
 
   // Helper to build hierarchy based on a subtask filter
   const buildTree = (subtaskFilter: (sub: Subtask) => boolean, checkTask: (t: Task) => boolean) => {
-    const woMap = new Map<string, { id: string; name: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
+    const woMap = new Map<string, { id: string; name: string; code?: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
 
     tasks.forEach((task) => {
       const activeSubtasks = (task.subtasks || []).filter(sub => sub.isActive !== false);
@@ -274,7 +277,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
       const catName = task.categoryName || 'ทั่วไป';
 
       if (!woMap.has(woId)) {
-        woMap.set(woId, { id: woId, name: woName, categories: new Map() });
+        woMap.set(woId, { id: woId, name: woName, code: task.workOrderCode, categories: new Map() });
       }
       const wo = woMap.get(woId)!;
 
@@ -321,6 +324,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
       return {
         id: wo.id,
         name: wo.name,
+        code: wo.code,
         categories: categoriesArray,
         totalSubtaskCount,
         assignedSubtaskCount
@@ -426,6 +430,28 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
             <Typography variant="body2" noWrap sx={{ fontWeight: isWoSelected ? 700 : 600, fontSize: '0.85rem' }}>
               {wo.name}
             </Typography>
+            {(() => {
+              const config = workOrderConfigs.find(c => 
+                (wo.code && (c.code === wo.code || c.id === wo.code)) || 
+                c.code === wo.id || 
+                c.id === wo.id
+              );
+              if (!config) return null;
+              const names = config.leaderNames || (config.leaderName ? [config.leaderName] : []);
+              if (names.length === 0) return null;
+
+              return (
+                <Tooltip title={`หัวหน้ากลุ่มงาน (LD): ${names.join(', ')}`} arrow placement="top">
+                  <Box
+                    component="span"
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ display: 'inline-flex', alignItems: 'center', ml: 0.75 }}
+                  >
+                    <Person sx={{ fontSize: 15, color: '#3b82f6' }} />
+                  </Box>
+                </Tooltip>
+              );
+            })()}
             <Box sx={{ flexGrow: 1 }} />
             {/* Hover Actions */}
             {(onEditWorkOrder || onDeleteWorkOrder) && (

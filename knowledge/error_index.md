@@ -563,3 +563,56 @@ This catalog lists known errors and bug fix details.
 - **Symptom:** In the schedule table workspace page, the "Export to Excel (CSV)" button and the "Requests / Daily Reports" toggle buttons are stacked vertically, cluttering the layout, and the Export button's border style looks inconsistent with the premium green "Upload" button design.
 - **Root Cause:** 1) The layout was wrapped in a Stack configured with direction md: 'column' on desktop screens. 2) The Export button was configured as an outlined button with standard grey borders.
 - **Resolution:** 1) Changed the right-side Stack direction to a row on desktop `direction={{ xs: 'column', sm: 'row' }}` with `alignItems="center"`, adjusted the parent Stack vertical alignment to `alignItems={{ xs: 'stretch', md: 'center' }}`, and swapped the child order so the Export button is positioned at the very end of the row. 2) Re-styled the "Export to Excel (CSV)" button to use a green background `#22c55e`, white text/icon, border radius `50px`, height `38px` (aligning with toggle buttons), and premium box shadow `0 4px 14px rgba(34, 197, 94, 0.3)`.
+
+## ERR-070: WorkOrder leaders dropdown shows all system users and doesn't support multiple AssignLD
+- **Task:** T-019-001-01 · **Session:** session_current
+- **File:** backend/src/services/auth/UserService.ts · **Line:** 143
+- **Symptom:** The Leader dropdown in the Work Order edit modal displays all system users instead of filtering by role ID 'LD' and project location. Additionally, only one leader is stored in the `leaderId` field, failing to capture multiple selections (`AssignLD`).
+- **Root Cause:** 
+  1. The backend API `/api/users` only retrieved page and pageSize, ignoring other query parameters.
+  2. `UserService.getAllUsers` had no filtering capability for `roleId`, `department`, `isActive`, or `projectId`.
+  3. The work orders config creation/update routes didn't save or cascade the multiple leader assignments array (`AssignLD`).
+- **Resolution:** 
+  1. Updated `/api/users` route to parse and forward `roleId`, `department`, `isActive`, and `projectId` query parameters.
+  2. Implemented dynamic filtering in `UserService.getAllUsers` (using `array-contains` for project location IDs) and sorted/paginated in-memory to prevent composite index requirements.
+  3. Added the `AssignLD` array to frontend inputs, backend schemas, and cascaded updates from config in Project A to workOrders collection in Project B.
+
+## ERR-071: Work Order codes WOA and WOP from another system display in dropdowns
+- **Task:** T-019-001-02 · **Session:** session_current
+- **File:** backend/src/services/ProjectConfigService.ts · **Line:** 35
+- **Symptom:** In the "สร้างรายการงานใหม่" (Create new task) modal, the "หมวดหมู่งานหลัก (Work Order)" dropdown shows codes like `WOA` and `WOP` which are from another system, causing confusion.
+- **Root Cause:** The `ProjectConfigService.getWorkOrders` method fetched all work orders configurations from the database without excluding codes that belong to the After-Sale system (`WOA` and `WOP`).
+- **Resolution:** Added a filter check inside `ProjectConfigService.getWorkOrders` to exclude configurations whose code equals `WOA` or `WOP` (case-insensitive).
+
+## ERR-072: TaskName toggles to select dropdown even when user typed a name before checking subtasks
+- **Task:** T-019-001-03 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 363, 1044
+- **Symptom:** When a user types a new task name in "ชื่องาน" (taskName) and ticks "เพิ่มงานย่อย" (Add Subtasks), the input field changes to "เลือกงานหลัก" (Autocomplete dropdown), causing them to lose the name they typed and preventing them from creating subtasks under the new task name.
+- **Root Cause:** The conditional rendering logic strictly checked `!isEdit && hasSubtasks` to switch from TextField to Autocomplete, without checking if the user had already typed a value in the TextField before checking the toggle.
+- **Resolution:** 
+  1. Destructured `watch` from `useForm` and introduced a state variable `isAddingSubtasksToNewTask`.
+  2. In `handleToggleSubtasks`, evaluated if `taskName` has a value. If so, set `isAddingSubtasksToNewTask(true)` to keep the input as a text field. Otherwise, set it to `false` to render the Autocomplete.
+  3. Modified the conditional rendering check to `!isEdit && hasSubtasks && !isAddingSubtasksToNewTask`.
+
+## ERR-073: Redundant subtask name in first line of Daily Report TaskSidebarCard
+- **Task:** T-020-001-03 · **Session:** session_current
+- **File:** backend/src/api/routes/tasks.routes.ts, frontend/src/pages/daily-reports/index.tsx · **Line:** 673 (backend), 1360, 2620 (frontend)
+- **Symptom:** The task cards in the left sidebar of the Daily Report page display the subtask name on both the first line (concatenated after the parent task name like `Parent Task > Subtask`) and the second line (standalone).
+- **Root Cause:** 1) The backend `/tasks/assigned-subtasks` API route concatenated the subtask name into `taskName`. 2) The frontend search filter only checked `taskName`, meaning that removing it from `taskName` would break subtask searching. 3) The frontend detail view header didn't display the `subtaskName` field, so removing it from `taskName` left the detail view without subtask context.
+- **Resolution:** 1) Modified the backend `/tasks/assigned-subtasks` route to return only `parentTask.taskName` in `taskName`. 2) Updated the frontend search filter to check `t.subtaskName` as well. 3) Added a dedicated subtitle rendering `selectedTask.subtaskName` in the main detail header pane.
+
+## ERR-074: Daily Report page redirects to Requests table workspace instead of toggling planning mode locally
+- **Task:** T-020-001-04 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 167, 400, 420, 1310, 2275, 2665
+- **Symptom:** Selecting the "Requests" page header tab on `/daily-reports` redirected the user to `/workspace/requests`. There was no way to submit advance planning requests on specific days (today/tomorrow) directly from the daily report workspace itself, and sidebar task cards were not filtered to valid active date ranges.
+- **Root Cause:** 1) The page header tabs were hardcoded to redirect to `/workspace/requests`. 2) There was no page state to toggle between daily report and advance plan submission modes. 3) UI modes and submission APIs were dynamically driven purely by future date checks (`reportDate > today`) rather than explicit tab selection.
+- **Resolution:** 1) Introduced `pageMode` state (`'daily-report' | 'requests'`) in `daily-reports/index.tsx`. 2) Modified header tabs to switch `pageMode` locally, resetting selected date and clearing selected task. 3) Restrained date selection to today and tomorrow only in Requests mode. 4) Added sidebar task card filtering to only show tasks valid for the selected date range in Requests mode. 5) Updated all request/submission evaluation variables to use `pageMode === 'requests'`.
+
+## ERR-075: Task sidebar is blank/closed and cannot be opened when switching tabs or canceling in daily-reports index
+- **Task:** T-020-001-04-01 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 1265
+- **Symptom:** Switching page mode tabs ("Dailyreport" / "Requests") or canceling from the report form resets `selectedTask` to `null` while keeping the sidebar closed (`isSidebarOpen` as `false`). This leaves the user with an empty left side and a centered placeholder, with no way to toggle the sidebar open because the toggle button is only rendered when a task is selected.
+- **Root Cause:** 1) `handleSelectTask` closes the sidebar unconditionally on select. 2) The switcher tabs and the cancel button clear `selectedTask` but do not open the sidebar. 3) The sidebar toggle button is conditionally rendered only when `selectedTask` is truthy, so when it is closed and `selectedTask` becomes null, the user is trapped.
+- **Resolution:** Added a `useEffect` hook in `daily-reports/index.tsx` that automatically triggers when `selectedTask` is `null` (or becomes `null`) and sets `isSidebarOpen(true)`, guaranteeing that the sidebar is always open and available for task selection when no task is active.
+
+

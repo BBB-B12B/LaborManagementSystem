@@ -28,7 +28,9 @@ async function validateLeaderAccess(userId: string, projectId: string, workOrder
   if (!doc.exists) return false;
   const data = doc.data();
   if (!data) return false;
-  return data.leaderId === userId || (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(userId));
+  return data.leaderId === userId || 
+         (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(userId)) ||
+         (data.AssignLD && Array.isArray(data.AssignLD) && data.AssignLD.includes(userId));
 }
 
 async function checkTaskLeaderAccess(req: Request, taskId: string): Promise<void> {
@@ -615,7 +617,8 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
       const woId = parts[1];
       const catId = parts[3];
       const taskId = parts[5];
-      const fullId = `${woId}__${catId}__${taskId}__${data.subtaskId}`;
+      const subtaskId = doc.id;
+      const fullId = `${woId}__${catId}__${taskId}__${subtaskId}`;
       return {
         ...data,
         createdAt: parseFirestoreTimestamp(data.createdAt),
@@ -626,7 +629,7 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
         supportUnlockedDates: parseUnlockDates(data.supportUnlockedDates),
         supportUnlockRequests: parseUnlockRequests(data.supportUnlockRequests),
         id: fullId,
-        taskId: data.subtaskId, // original subtaskId
+        taskId: subtaskId, // original subtaskId (full code ARC-xxxx-xxx-xxxx)
         parentTaskId: taskId, // the parent task's id
       };
     });
@@ -667,7 +670,7 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
          ...parentTask,
          ...st,
          dueDate: st.dueDate || parentTask.dueDate,
-         taskName: `${parentTask.taskName || ''} > ${st.subtaskName}`,
+         taskName: parentTask.taskName || '',
        };
     }).filter(Boolean);
 
@@ -977,7 +980,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         
         woSnapshot.forEach((doc) => {
           const data = doc.data();
-          const isLeader = data.leaderId === authReq.user!.id || (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(authReq.user!.id));
+          const isLeader = data.leaderId === authReq.user!.id || 
+                           (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(authReq.user!.id)) ||
+                           (data.AssignLD && Array.isArray(data.AssignLD) && data.AssignLD.includes(authReq.user!.id));
           const code = data.code;
           if (isLeader && code) {
             leaderWorkOrderCodes.add(code.trim().toUpperCase());

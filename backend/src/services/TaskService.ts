@@ -26,6 +26,18 @@ export class TaskService {
     const projectCode = projectData?.projectCode || projectData?.code || 'XX';
     const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
 
+    // Read workOrderConfigs to get AssignLD
+    let assignLD: string[] = [];
+    if (input.workOrderCode) {
+      const woConfigDoc = await projectRef
+        .collection('workOrderConfigs')
+        .doc(input.workOrderCode.trim().toUpperCase())
+        .get();
+      if (woConfigDoc.exists) {
+        assignLD = woConfigDoc.data()?.AssignLD || [];
+      }
+    }
+
     return await afterSaleDb.runTransaction(async (transaction) => {
       // --- 2. ALL READS IN AFTER-SALE DB ---
       
@@ -132,6 +144,7 @@ export class TaskService {
         projectId: input.projectId,
         workOrderCode: input.workOrderCode || 'GEN',
         workOrderName: input.workOrderName || 'General',
+        AssignLD: assignLD,
         updatedAt: now
       }, { merge: true });
 
@@ -2331,6 +2344,14 @@ export class TaskService {
     const projectCode = projectData?.projectCode || projectData?.code || 'XX';
     const projectName = projectData?.name || projectData?.projectName || 'Unknown Project';
 
+    // Fetch all workOrderConfigs from Project A to copy AssignLD
+    const configsSnapshot = await projectRef.collection('workOrderConfigs').get();
+    const woConfigsMap = new Map<string, string[]>();
+    configsSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      woConfigsMap.set(doc.id.toUpperCase().trim(), data.AssignLD || []);
+    });
+
     const now = new Date();
     const currentYear = now.getFullYear();
 
@@ -2425,6 +2446,7 @@ export class TaskService {
             projectId: projectId,
             workOrderCode: woCode,
             workOrderName: woName,
+            AssignLD: woConfigsMap.get(woCode) || [],
             updatedAt: now
           }, { merge: true });
         }

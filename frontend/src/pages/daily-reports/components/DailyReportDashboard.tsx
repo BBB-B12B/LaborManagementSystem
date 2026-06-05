@@ -64,9 +64,9 @@ export const DailyReportDashboard = () => {
 
     // Mutation: Remove Entry
     const removeEntryMutation = useMutation({
-        mutationFn: async (entryId: string) => {
+        mutationFn: async ({ entryId, workerId }: { entryId: string; workerId: string }) => {
             if (!projectId || !date) throw new Error("Missing Project or Date");
-            return dailyReportService.removeWorkEntry(projectId, date, entryId);
+            return dailyReportService.removeWorkEntry(projectId, date, workerId, entryId);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['dailyReport', projectId, date] });
@@ -82,9 +82,9 @@ export const DailyReportDashboard = () => {
         }
     };
 
-    const handleDeleteEntry = async (id: string) => {
+    const handleDeleteEntry = async (id: string, workerId: string) => {
         if (confirm("ต้องการลบรายการนี้ใช่ไหม?")) {
-            await removeEntryMutation.mutateAsync(id);
+            await removeEntryMutation.mutateAsync({ entryId: id, workerId });
         }
     };
 
@@ -151,7 +151,7 @@ export const DailyReportDashboard = () => {
                     </Box>
                 ) : (
                     <Stack spacing={2}>
-                        {entries.map((entry) => (
+                        {entries.map((entry: any) => (
                             <Paper
                                 key={entry.id}
                                 elevation={1}
@@ -181,7 +181,7 @@ export const DailyReportDashboard = () => {
                                             </Typography>
                                         </Stack>
                                     </Box>
-                                    <IconButton size="small" color="default" onClick={() => handleDeleteEntry(entry.id)}>
+                                    <IconButton size="small" color="default" onClick={() => handleDeleteEntry(entry.id, entry.dailyContractorId)}>
                                         <DeleteIcon />
                                     </IconButton>
                                 </Stack>
@@ -229,8 +229,8 @@ export const DailyReportDashboard = () => {
                     date={date}
                     initialData={editingEntry}
                     existingRegularWorkerIds={entries
-                        .filter(e => e.workType === 'regular')
-                        .map(e => e.dailyContractorId)
+                        .filter((e: any) => e.workType === 'regular')
+                        .map((e: any) => e.dailyContractorId)
                     }
                 />
             )}

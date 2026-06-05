@@ -118,6 +118,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
 
   const [isEditingTaskName, setIsEditingTaskName] = useState(false);
   const [hasSubtasks, setHasSubtasks] = useState(false);
+  const [isAddingSubtasksToNewTask, setIsAddingSubtasksToNewTask] = useState(false);
   const [subtasksToDelete, setSubtasksToDelete] = useState<string[]>([]);
   const [selectedParentTaskId, setSelectedParentTaskId] = useState<string | null>(null);
   const [isFetchingSubtasks, setIsFetchingSubtasks] = useState(false);
@@ -129,6 +130,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors, isSubmitting, isValid },
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
@@ -154,6 +156,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   useEffect(() => {
     if (open && task) {
       setSubtasksToDelete([]);
+      setIsAddingSubtasksToNewTask(false);
       const fetchSubtasksAndReset = async () => {
         try {
           const subtasksData = await taskService.getSubtasks(task.id);
@@ -184,6 +187,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     } else if (open && !task) {
       setSubtasksToDelete([]);
       setHasSubtasks(false);
+      setIsAddingSubtasksToNewTask(false);
       setSelectedParentTaskId(null);
       setIsFetchingSubtasks(false);
       reset({
@@ -205,12 +209,16 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       const fetchData = async () => {
         setLoading(true);
         try {
-          const [projectsData, usersData] = await Promise.all([
+          const [projectsData, fmUsersData, seUsersData] = await Promise.all([
             projectService.getActive(),
-            memberService.getAllUsers({ roleId: 'FM' }),
+            memberService.getAllUsers({ roleId: 'FM', pageSize: 1000 }),
+            memberService.getAllUsers({ roleId: 'SE', pageSize: 1000 }),
           ]);
           setProjects(projectsData);
-          setFmUsers(usersData.users || []);
+          setFmUsers([
+            ...(fmUsersData.users || []),
+            ...(seUsersData.users || [])
+          ]);
 
           // --- LOGIC: Default Project Selection ---
           if (!isEdit && user?.projectLocationIds && user.projectLocationIds.length > 0) {
@@ -362,7 +370,15 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       if (fields.length === 0) {
         append({ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false });
       }
+      const currentTaskName = watch('taskName');
+      if (currentTaskName && currentTaskName.trim()) {
+        setIsAddingSubtasksToNewTask(true);
+      } else {
+        setIsAddingSubtasksToNewTask(false);
+      }
     } else {
+      setIsAddingSubtasksToNewTask(false);
+      setSelectedParentTaskId(null);
       if (isEdit) {
         fields.forEach((item: any) => {
           if (item.subtaskId) {
@@ -523,10 +539,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   const currentUser = useAuthStore((state) => state.user);
 
   const filteredFms = React.useMemo(() => {
-    // ซ่อน Role GOD อย่างเด็ดขาด และกรองเฉพาะ FM ในกรณีที่ Backend ส่งมาเกิน
+    // ซ่อน Role GOD อย่างเด็ดขาด และกรองเฉพาะ FM หรือ SE ในกรณีที่ Backend ส่งมาเกิน
     const validFms = fmUsers.filter((u) => 
       u.roleId !== 'GOD' && 
-      u.roleId === 'FM' && 
+      (u.roleId === 'FM' || u.roleId === 'SE') && 
       (u as any).systemCode !== 'AS' && 
       (u as any).SystemCode !== 'AS'
     );
@@ -826,11 +842,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             renderInput={(params) => (
                               <TextField
                                 {...params}
-                                label="ผู้รับผิดชอบ (Assign to FMs)"
+                                label="ผู้รับผิดชอบ (Assign to FMs / SEs)"
                                 variant="filled"
                                 placeholder="เลือกหัวหน้างาน..."
                                 error={!!errors.subtasks?.[0]?.assignees}
-                                helperText={errors.subtasks?.[0]?.assignees?.message || 'เลือกหัวหน้างาน (FM) ของทีมคุณเพื่อรับผิดชอบงานช่วยเหลือนี้'}
+                                helperText={errors.subtasks?.[0]?.assignees?.message || 'เลือกหัวหน้างาน (FM / SE) ของทีมคุณเพื่อรับผิดชอบงานช่วยเหลือนี้'}
                                 InputProps={{ ...params.InputProps, disableUnderline: true }}
                                 sx={inputStyles}
                               />
@@ -1035,7 +1051,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                       name="taskName"
                       control={control}
                       render={({ field }) => {
-                        if (!isEdit && hasSubtasks) {
+                        if (!isEdit && hasSubtasks && !isAddingSubtasksToNewTask) {
                           return (
                             <Autocomplete
                               sx={{ flex: 1 }}

@@ -21,7 +21,9 @@ async function validateLeaderAccess(userId: string, projectId: string, workOrder
   if (!doc.exists) return false;
   const data = doc.data();
   if (!data) return false;
-  return data.leaderId === userId || (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(userId));
+  return data.leaderId === userId || 
+         (data.leaderIds && Array.isArray(data.leaderIds) && data.leaderIds.includes(userId)) ||
+         (data.AssignLD && Array.isArray(data.AssignLD) && data.AssignLD.includes(userId));
 }
 
 async function checkCategoryLeaderAccess(userId: string, projectId: string, categoryId: string): Promise<void> {
@@ -55,7 +57,11 @@ router.get('/work-orders', async (req: Request, res: Response, next: NextFunctio
     let data = await projectConfigService.getWorkOrders(projectId);
 
     if (userRole === 'LD' && authReq.user) {
-      data = data.filter(wo => wo.leaderId === authReq.user!.id || (wo.leaderIds && Array.isArray(wo.leaderIds) && wo.leaderIds.includes(authReq.user!.id)));
+      data = data.filter(wo => 
+        wo.leaderId === authReq.user!.id || 
+        (wo.leaderIds && Array.isArray(wo.leaderIds) && wo.leaderIds.includes(authReq.user!.id)) ||
+        (wo.AssignLD && Array.isArray(wo.AssignLD) && wo.AssignLD.includes(authReq.user!.id))
+      );
     }
 
     res.json({ success: true, data });
@@ -133,7 +139,11 @@ router.get('/categories', async (req: Request, res: Response, next: NextFunction
       // Leader can only see categories under their assigned work orders
       const workOrders = await projectConfigService.getWorkOrders(projectId);
       const leaderWoCodes = workOrders
-        .filter(wo => wo.leaderId === authReq.user!.id || (wo.leaderIds && Array.isArray(wo.leaderIds) && wo.leaderIds.includes(authReq.user!.id)))
+        .filter(wo => 
+          wo.leaderId === authReq.user!.id || 
+          (wo.leaderIds && Array.isArray(wo.leaderIds) && wo.leaderIds.includes(authReq.user!.id)) ||
+          (wo.AssignLD && Array.isArray(wo.AssignLD) && wo.AssignLD.includes(authReq.user!.id))
+        )
         .map(wo => wo.code.toUpperCase());
 
       if (workOrderCode) {
