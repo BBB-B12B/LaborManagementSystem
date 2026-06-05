@@ -64,7 +64,7 @@ import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/utils/permissions';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useFeedbackStore } from '@/store/feedbackStore';
-import { useNotificationStore } from '@/store';
+import { useNotifications } from '@/hooks';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
@@ -97,7 +97,7 @@ const getEffectiveSubtaskStatus = (st: any) => {
 export default function WorkspacePage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { notifications, markSubtaskAsRead } = useNotificationStore();
+  const { notifications, markSubtaskAsRead } = useNotifications();
   const tasksInCache = useTaskCacheStore((s) => s.tasks);
   const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
   const invalidateCache = useTaskCacheStore((s) => s.invalidate);

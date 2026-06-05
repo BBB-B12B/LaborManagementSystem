@@ -10,8 +10,9 @@ import { dailyReportService } from '@/services/dailyReportService';
 import { taskService } from '@/services/taskService';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useUIStore } from '@/store/uiStore';
-import { notificationService, type Notification } from '@/services/notificationService';
-import { useNotificationStore } from '@/store';
+import { type Notification } from '@/services/notificationService';
+import { useNotifications } from '@/hooks';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -32,23 +33,9 @@ const Topbar: React.FC = () => {
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
 
-  const { notifications, fetchNotifications, markAsRead, markAllAsRead } = useNotificationStore();
+  const { notifications, markAsRead, markAllAsRead } = useNotifications();
   const [bellAnchorEl, setBellAnchorEl] = useState<null | HTMLElement>(null);
-
-  useEffect(() => {
-    fetchNotifications();
-
-    const handleSync = () => {
-      fetchNotifications();
-    };
-    window.addEventListener('globalSync', handleSync);
-    const interval = setInterval(fetchNotifications, 30000);
-
-    return () => {
-      window.removeEventListener('globalSync', handleSync);
-      clearInterval(interval);
-    };
-  }, [fetchNotifications]);
+  const queryClient = useQueryClient();
 
   const unreadCount = useMemo(() => {
     if (!user) return 0;
@@ -97,6 +84,7 @@ const Topbar: React.FC = () => {
     // DailyReport page จะรับ event นี้ และเป็นเจ้าของ Spinner + refetch ทั้งหมด
     dailyReportService.clearCache();
     useTaskCacheStore.getState().invalidate();
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
     window.dispatchEvent(new CustomEvent('globalSync'));
   };
 
