@@ -2502,11 +2502,11 @@
     },
     "LayoutProps": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 16
+      "line": 17
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 349
+      "line": 337
     },
     "SIDEBAR_WIDTH": {
       "source": "frontend/src/components/layout/Navbar.tsx",
@@ -2599,6 +2599,10 @@
     "WbsImportModal": {
       "source": "frontend/src/pages/workspace/components/WbsImportModal.tsx",
       "line": 33
+    },
+    "useNotifications": {
+      "source": "frontend/src/hooks/useNotifications.ts",
+      "line": 8
     }
   }
 }
