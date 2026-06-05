@@ -76,7 +76,7 @@ import { format, subDays, addDays, parseISO, isValid } from 'date-fns';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import DatePicker from '@/components/forms/DatePicker';
 import { memberService } from '@/services/memberService';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 // ฟังก์ชันคำนวณชั่วโมงจากช่วงเวลากะ
 const calculateHoursFromRange = (timeRange: string | null | undefined): number => {
@@ -878,7 +878,7 @@ export default function WorkspaceRequestsPage() {
         const headerCellAddr = XLSX.utils.encode_cell({ r: 0, c: col });
         if (!worksheet[headerCellAddr]) worksheet[headerCellAddr] = { t: 's', v: '' };
         worksheet[headerCellAddr].s = {
-          fill: { fgColor: { rgb: '16A34A' }, patternType: 'solid' }, // เขียวพรีเมียม
+          fill: { fgColor: { rgb: '16A34A' }, patternType: 'solid' }, // เขียวพรีเมียม (ไม่มี #)
           font: { name: 'Segoe UI', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
           alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
           border: {
@@ -893,7 +893,7 @@ export default function WorkspaceRequestsPage() {
       // Data rows style — zebra striping
       for (let row = 1; row <= range.e.r; row++) {
         const isEven = row % 2 === 0;
-        const rowBgColor = isEven ? 'FFFFFF' : 'F0FDF4'; // white vs green-50
+        const rowBgColor = isEven ? 'FFFFFF' : 'F0FDF4'; // white vs green-50 (ไม่มี #)
         for (let col = range.s.c; col <= range.e.c; col++) {
           const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
           if (!worksheet[cellAddr]) worksheet[cellAddr] = { t: 's', v: '' };
