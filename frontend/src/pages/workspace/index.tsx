@@ -104,6 +104,7 @@ export default function WorkspacePage() {
   const setTasksInCache = useTaskCacheStore((s) => s.setTasks);
   const setCacheLoading = useTaskCacheStore((s) => s.setLoading);
   const setCacheError = useTaskCacheStore((s) => s.setError);
+  const isCacheLoading = useTaskCacheStore((s) => s.isLoading);
   const { showLoading, hideLoading } = useFeedbackStore();
   const toast = useToast();
   const { canEditWorkspace } = usePermissions(user);
@@ -699,6 +700,7 @@ export default function WorkspacePage() {
   // Auto-open Daily Report modal if query params are present (routing from Notification)
   useEffect(() => {
     if (!router.isReady) return;
+    if (isCacheLoading) return; // รอให้ดึงข้อมูลจาก API ล่าสุดเสร็จสิ้นก่อนเปิด Modal
 
     const { subtaskId: querySubtaskId, date: queryDate } = router.query;
 
@@ -733,7 +735,17 @@ export default function WorkspacePage() {
         router.replace('/workspace', undefined, { shallow: true });
       }
     }
-  }, [router.isReady, router.query, subtaskCards, user, notifications, markSubtaskAsRead]);
+  }, [router.isReady, router.query, subtaskCards, user, notifications, markSubtaskAsRead, isCacheLoading]);
+
+  // ซิงก์ข้อมูลของ Modal รายงานผลงานที่กำลังเปิดค้างไว้ เมื่อมีการดึงข้อมูลใหม่ (เช่น กด Sync หรือคลิกเปิดจากแจ้งเตือน)
+  useEffect(() => {
+    if (selectedTaskForReport) {
+      const updatedCard = subtaskCards.find((card) => card.id === selectedTaskForReport.id);
+      if (updatedCard && JSON.stringify(updatedCard) !== JSON.stringify(selectedTaskForReport)) {
+        setSelectedTaskForReport(updatedCard);
+      }
+    }
+  }, [subtaskCards, selectedTaskForReport]);
 
   // Filter subtasks by tab & Structure Tree selection
   const filteredSubtasks = useMemo(() => {

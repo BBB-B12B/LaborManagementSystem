@@ -48,6 +48,10 @@ const Topbar: React.FC = () => {
     }
     setBellAnchorEl(null);
 
+    // ทำลายแคชเพื่อให้ดึงข้อมูลใหม่ล่าสุด และยิง event แจ้งเตือนบอร์ด Workspace
+    useTaskCacheStore.getState().invalidate();
+    window.dispatchEvent(new CustomEvent('globalSync'));
+
     // Navigate based on role and notification type
     if (noti.type === 'unlock_granted' || user?.roleCode === 'FM') {
       // FM: navigate to Daily Report list page
