@@ -468,12 +468,16 @@ export default function DailyReportPage() {
       tomorrow.setHours(23, 59, 59, 999);
       return tomorrow;
     }
-    return completionDateStr ? new Date(completionDateStr) : (() => {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return tomorrow;
-    })();
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (completionDateStr) {
+      const compDate = new Date(completionDateStr);
+      compDate.setHours(23, 59, 59, 999);
+      return compDate < today ? compDate : today;
+    }
+    return today;
   }, [pageMode, completionDateStr]);
+
 
   const isAfterCompletion = useMemo(() => {
     if (!completionDateStr || !reportDate) return false;
@@ -502,8 +506,17 @@ export default function DailyReportPage() {
 
   const reportsSummaryMap = useMemo(() => {
     const map: Record<string, any> = {};
-    if (!taskReportsData || !Array.isArray(taskReportsData)) return map;
+    if (!taskReportsData || !Array.isArray(taskReportsData) || !selectedTask) return map;
+
+    let currentRevId = selectedTask.revisionId || selectedTask.currentRevision || 'rev00';
+    if (isActingAsSupport) {
+      currentRevId = currentRevId.replace('rev', 'help');
+    }
+
     taskReportsData.forEach((r: any) => {
+      const rRevId = r.revisionId || r._revisionId;
+      if (rRevId !== currentRevId) return;
+
       let rDate: Date;
       const rawDate = r.reportDate || r.id || r.date || r.reportDateId;
       if (rawDate && typeof rawDate === 'object' && ('_seconds' in rawDate || 'seconds' in rawDate)) {
@@ -520,7 +533,7 @@ export default function DailyReportPage() {
       }
     });
     return map;
-  }, [taskReportsData]);
+  }, [taskReportsData, selectedTask, isActingAsSupport]);
 
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
@@ -677,10 +690,18 @@ export default function DailyReportPage() {
     queryFn: async () => {
       if (!selectedTask || !dateStr) return null;
 
+      let currentRevId = selectedTask.revisionId || selectedTask.currentRevision || 'rev00';
+      if (isActingAsSupport) {
+        currentRevId = currentRevId.replace('rev', 'help');
+      }
+
       let lastPrevProgress = 0;
       if (taskReportsData && Array.isArray(taskReportsData)) {
         const sortedPastReports = [...taskReportsData]
           .filter((r: any) => {
+            const rRevId = r.revisionId || r._revisionId;
+            if (rRevId !== currentRevId) return false;
+
             const rDateRaw = r.reportDate || r.id;
             let rDate: Date;
             if (
@@ -713,6 +734,9 @@ export default function DailyReportPage() {
       if (taskReportsData && Array.isArray(taskReportsData)) {
         const sortedFutureReports = [...taskReportsData]
           .filter((r: any) => {
+            const rRevId = r.revisionId || r._revisionId;
+            if (rRevId !== currentRevId) return false;
+
             const rDateRaw = r.reportDate || r.id;
             let rDate: Date;
             if (rDateRaw && typeof rDateRaw === 'object' && ('_seconds' in rDateRaw || 'seconds' in rDateRaw)) {
@@ -774,6 +798,21 @@ export default function DailyReportPage() {
   const [supportReportData, setSupportReportData] = useState<any>(null);
   const [selectedWorkers, setSelectedWorkers] = useState<any[]>([]);
   const [isAutofilledFromRequest, setIsAutofilledFromRequest] = useState(false);
+
+  const regularActiveSlots = useMemo(() => {
+    const defaultSlots = ['เข้า', 'พักเที่ยง', 'เข้าบ่าย', 'ออก'];
+    if (isActingAsSupport) return defaultSlots;
+    const activeRegularWorkers = selectedWorkers.filter((w) => w.times?.regular);
+    if (activeRegularWorkers.length === 0) return defaultSlots;
+    const regTimes = new Set(activeRegularWorkers.map((w) => w.times?.regTime || '08:00 - 17:00'));
+    if (regTimes.size === 1 && regTimes.has('08:00 - 12:00')) {
+      return ['เข้า', 'พักเที่ยง'];
+    }
+    if (regTimes.size === 1 && regTimes.has('13:00 - 17:00')) {
+      return ['เข้าบ่าย', 'ออก'];
+    }
+    return defaultSlots;
+  }, [selectedWorkers, isActingAsSupport]);
 
   useEffect(() => {
     if (reportDetailData) {
@@ -1059,6 +1098,19 @@ export default function DailyReportPage() {
 
 
   // --- 1.1 Derived States for Business Rules ---
+  const hasValidUnlock = useMemo(() => {
+    if (!reportDate || !selectedTask) return false;
+    const dateStr = format(reportDate, 'yyyy-MM-dd');
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = selectedTask?.[unlockedDatesField];
+    if (unlockedDates && unlockedDates[dateStr]) {
+      const unlockInfo = unlockedDates[dateStr];
+      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
+      return unlockUntil > new Date();
+    }
+    return false;
+  }, [reportDate, selectedTask, isActingAsSupport]);
+
   const isRetroactiveOver3Days = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1070,20 +1122,16 @@ export default function DailyReportPage() {
 
     if (diffDays <= 3) return false;
 
-    // Check if it's unlocked
-    const dateStr = format(reportDate, 'yyyy-MM-dd');
-    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
-    const unlockedDates = selectedTask?.[unlockedDatesField];
-    if (unlockedDates && unlockedDates[dateStr]) {
-      const unlockInfo = unlockedDates[dateStr];
-      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
-      if (unlockUntil > new Date()) {
-        return false; // It's unlocked, so it's not locked
-      }
-    }
+    return !hasValidUnlock;
+  }, [reportDate, hasValidUnlock]);
 
-    return true;
-  }, [reportDate, selectedTask]);
+  const isReportSubmittedAndPast = useMemo(() => {
+    if (pageMode === 'requests') return false;
+    const reportStatus = reportDetailData?.report?.status;
+    const today = startOfDay(new Date());
+    const isPast = isBefore(reportDate, today);
+    return reportStatus === 'submitted' && isPast;
+  }, [pageMode, reportDetailData, reportDate]);
 
   // Simulated Wage Period Lock (T-902)
   // In a real scenario, this would check against an API or a list of approved periods
@@ -1106,7 +1154,7 @@ export default function DailyReportPage() {
     return false;
   }, [reportDetailData]);
 
-  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked;
+  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked || (isReportSubmittedAndPast && !hasValidUnlock);
   const isAdvanceRequestUI = pageMode === 'requests';
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
@@ -1653,7 +1701,7 @@ export default function DailyReportPage() {
 
   const handleLaborShiftPhotoUpload = (files: FileList | null, shift: keyof ShiftPhotos) => {
     if (!files) return;
-    const maxPhotos = shift === 'regular' ? 4 : 2;
+    const maxPhotos = shift === 'regular' ? regularActiveSlots.length : 2;
     const newFiles = Array.from(files).slice(0, maxPhotos);
     const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
     setLaborPhotos((prev) => ({
@@ -1681,10 +1729,17 @@ export default function DailyReportPage() {
     }));
   };
 
-  const removePhoto = (index: number, type: 'site' | 'labor') => {
+  const removePhoto = (index: number, type: 'site' | 'labor', isExisting: boolean = false) => {
     if (type === 'site') {
-      setSitePhotos((prev) => prev.filter((_, i) => i !== index));
-      setSitePhotoPreviews((prev) => prev.filter((_, i) => i !== index));
+      if (isExisting) {
+        setExistingPhotos((prev) => ({
+          ...prev,
+          site: prev.site.filter((_, i) => i !== index),
+        }));
+      } else {
+        setSitePhotos((prev) => prev.filter((_, i) => i !== index));
+        setSitePhotoPreviews((prev) => prev.filter((_, i) => i !== index));
+      }
     }
   };
 
@@ -1693,7 +1748,7 @@ export default function DailyReportPage() {
     existingUrls: string[],
     previews: string[],
     onUpload: (f: FileList | null) => void,
-    onRemove: (i: number) => void,
+    onRemove: (i: number, isExisting: boolean) => void,
     type: 'site' | 'labor',
     disabled?: boolean
   ) => {
@@ -1738,7 +1793,7 @@ export default function DailyReportPage() {
             />
             <IconButton
               size="small"
-              onClick={() => onRemove(item.originalIndex)}
+              onClick={() => onRemove(item.originalIndex, item.isExisting)}
               sx={{
                 position: 'absolute',
                 top: 8,
@@ -1817,7 +1872,7 @@ export default function DailyReportPage() {
     const previews = isActingAsSupport ? [] : laborPhotoPreviews[shiftKey];
 
     const slotLabels =
-      shiftKey === 'regular' ? ['เข้า', 'พักเที่ยง', 'เข้าบ่าย', 'ออก'] : ['เข้า', 'ออก'];
+      shiftKey === 'regular' ? regularActiveSlots : ['เข้า', 'ออก'];
     const maxPhotos = slotLabels.length;
 
     const allPhotoItems = [
@@ -2008,7 +2063,7 @@ export default function DailyReportPage() {
     });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isFinalSubmit: boolean = true) => {
     // 1. Validation
     if (!selectedTask) return;
 
@@ -2018,8 +2073,11 @@ export default function DailyReportPage() {
     }
 
     const isAdvanceRequest = pageMode === 'requests';
+    const isToday = isSameDay(reportDate, new Date());
+    const isFinalProgress = Number(progress) === 100;
+    const isPhotoRequired = isFinalSubmit && (!isToday || isFinalProgress);
 
-    if (!isActingAsSupport && !isAdvanceRequest) {
+    if (isFinalSubmit && !isActingAsSupport && !isAdvanceRequest && isPhotoRequired) {
       if (sitePhotos.length + existingPhotos.site.length < 2) {
         enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
         return;
@@ -2037,8 +2095,8 @@ export default function DailyReportPage() {
         if (activeShifts[shift.key]) {
           const totalPhotos =
             laborPhotos[shift.key].length + existingPhotos.labor[shift.key].length;
-          const required = shift.key === 'regular' ? 4 : 2;
-          const reqText = shift.key === 'regular' ? '(เข้า/พักเที่ยง/เข้าบ่าย/ออก)' : '(เข้า/ออก)';
+          const required = shift.key === 'regular' ? regularActiveSlots.length : 2;
+          const reqText = shift.key === 'regular' ? `(${regularActiveSlots.join('/')})` : '(เข้า/ออก)';
           if (totalPhotos < required) {
             enqueueSnackbar(
               `กรุณาแนบรูปถ่ายแรงงาน (${shift.label}) ให้ครบ ${required} รูป ${reqText}`,
@@ -2058,22 +2116,32 @@ export default function DailyReportPage() {
     }
 
     if (!isActingAsSupport && !isAdvanceRequest) {
-      if (progress === '') {
-        enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
-        return;
-      }
-      const numProgress = Number(progress);
-      if (numProgress <= previousProgress) {
-        enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
-          variant: 'error',
-        });
-        return;
-      }
-      if (nextProgress !== null && numProgress >= nextProgress) {
-        enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
-          variant: 'error',
-        });
-        return;
+      if (isFinalSubmit) {
+        if (progress === '') {
+          enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
+          return;
+        }
+        const numProgress = Number(progress);
+        if (numProgress <= previousProgress) {
+          enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
+            variant: 'error',
+          });
+          return;
+        }
+        if (nextProgress !== null && numProgress >= nextProgress) {
+          enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
+            variant: 'error',
+          });
+          return;
+        }
+      } else {
+        const numProgress = progress === '' ? previousProgress : Number(progress);
+        if (nextProgress !== null && numProgress >= nextProgress) {
+          enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
+            variant: 'error',
+          });
+          return;
+        }
       }
     }
 
@@ -2199,7 +2267,8 @@ export default function DailyReportPage() {
 
       const payload = {
         reportDate: reportDate,
-        progress: Number(progress) || 0,
+        progress: progress === '' ? previousProgress : (Number(progress) || 0),
+        status: isAdvanceRequest ? undefined : (isFinalSubmit ? 'submitted' : 'draft'),
         note: note,
         photos: {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
@@ -2243,8 +2312,9 @@ export default function DailyReportPage() {
         toast.success('บันทึกแผนงานล่วงหน้าสำเร็จ');
       } else {
         await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
-        toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
+        toast.success(isFinalSubmit ? 'ส่งรายงานประจำวันฉบับสมบูรณ์สำเร็จ' : 'บันทึกรายงานฉบับร่างสำเร็จ');
       }
+
 
       // Invalidate Cache once and perform a 100% Hard Refresh
       invalidateCache();
@@ -2298,16 +2368,17 @@ export default function DailyReportPage() {
                 alignItems: 'center',
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Typography variant="h4" fontWeight={900} color="#1e293b">
-                  Daily Report
-                </Typography>
-
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, width: { xs: '100%', lg: 'auto' } }}>
                 {/* Tabs: Dailyreport & Requests */}
                 <Stack
                   direction="row"
                   spacing={1}
-                  sx={{ bgcolor: '#f1f3f6', p: 0.5, borderRadius: '999px' }}
+                  sx={{
+                    bgcolor: '#f1f3f6',
+                    p: 0.5,
+                    borderRadius: '999px',
+                    width: { xs: '100%', lg: 320 },
+                  }}
                 >
                   {[
                     { id: 'daily-report', label: 'Dailyreport' },
@@ -2322,6 +2393,7 @@ export default function DailyReportPage() {
                         setReportDate(new Date()); // Reset date to today
                       }}
                       sx={{
+                        flex: 1,
                         px: 3,
                         py: 1,
                         borderRadius: '999px',
@@ -2507,7 +2579,18 @@ export default function DailyReportPage() {
                         ))}
                       </Stack>
                     </Box>
-                    <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        p: 2,
+                        '&::-webkit-scrollbar': {
+                          display: 'none',
+                        },
+                        msOverflowStyle: 'none',
+                        scrollbarWidth: 'none',
+                      }}
+                    >
                       {tasksLoading ? (
                         <Box sx={{ textAlign: 'center', py: 5 }}>
                           <CircularProgress size={24} />
@@ -2576,9 +2659,10 @@ export default function DailyReportPage() {
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
+                            position: 'relative',
                           }}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0, zIndex: 2 }}>
                             <IconButton
                               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                               sx={{
@@ -2590,7 +2674,7 @@ export default function DailyReportPage() {
                             >
                               <Menu size={20} />
                             </IconButton>
-
+ 
                             {/* Progress Circle — เหมือน My Job card */}
                             <Box
                               sx={{
@@ -2625,64 +2709,104 @@ export default function DailyReportPage() {
                                 {selectedTask.dailyProgress}%
                               </span>
                             </Box>
-
+ 
                             {/* Task info */}
                             <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                                <Chip
-                                  label={selectedTask.taskId}
-                                  size="small"
-                                  sx={{
-                                    fontWeight: 900,
-                                    borderRadius: '6px',
-                                    bgcolor: '#1e293b',
-                                    color: 'white',
-                                    fontSize: '0.7rem',
-                                    flexShrink: 0,
-                                  }}
-                                />
+                              {/* Metadata line: ID + Category */}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                                 <Typography
                                   variant="caption"
-                                  fontWeight={700}
-                                  color="primary"
-                                  noWrap
+                                  fontWeight={800}
+                                  sx={{
+                                    bgcolor: 'rgba(30, 41, 59, 0.06)',
+                                    color: '#475569',
+                                    px: 1,
+                                    py: 0.25,
+                                    borderRadius: '6px',
+                                    fontSize: '0.7rem',
+                                    letterSpacing: '0.02em',
+                                  }}
                                 >
-                                  {selectedTask.categoryName}
+                                  {selectedTask.taskId}
+                                  {selectedTask.revisionId && selectedTask.revisionId !== 'rev00' && `-${selectedTask.revisionId}`}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={750}
+                                  color="text.secondary"
+                                  sx={{ fontSize: '0.7rem' }}
+                                >
+                                  • {selectedTask.categoryName}
                                 </Typography>
                               </Box>
+ 
+                              {/* Title line: Subtask name as primary */}
                               <Typography
                                 variant="subtitle1"
                                 fontWeight={900}
                                 color="#1e293b"
-                                sx={{ lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                sx={{
+                                  lineHeight: 1.25,
+                                  fontSize: { xs: '0.9rem', md: '1.05rem' },
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
                               >
-                                {isActingAsSupport && selectedTask.supportTaskName
+                                {selectedTask.subtaskName || (isActingAsSupport && selectedTask.supportTaskName
                                   ? selectedTask.supportTaskName
-                                  : selectedTask.taskName}
+                                  : selectedTask.taskName)}
                               </Typography>
+ 
+                              {/* Subtitle line: Parent task name as context */}
                               {selectedTask.subtaskName && (
                                 <Typography
-                                  variant="body2"
-                                  fontWeight={700}
-                                  color="text.primary"
-                                  sx={{ mt: 0.25 }}
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{
+                                    display: 'block',
+                                    mt: 0.25,
+                                    fontSize: '0.75rem',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
                                 >
-                                  {selectedTask.subtaskName}
+                                  {isActingAsSupport && selectedTask.supportTaskName
+                                    ? selectedTask.supportTaskName
+                                    : selectedTask.taskName}
                                 </Typography>
                               )}
-                              {selectedTask.woName && (
-                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.5 }}>
-                                  {selectedTask.woName}
+ 
+                              {/* Mobile Mode Badge */}
+                              <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 0.5 }}>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={800}
+                                  sx={{
+                                    display: 'inline-block',
+                                    color: pageMode === 'requests' ? '#f57c00' : '#2e7d32',
+                                    bgcolor: pageMode === 'requests' ? '#fff3e0' : '#e8f5e9',
+                                    px: 1,
+                                    py: 0.25,
+                                    borderRadius: '8px',
+                                    fontSize: '0.65rem',
+                                    border: '1px solid',
+                                    borderColor: pageMode === 'requests' ? '#ffe0b2' : '#c8e6c9',
+                                  }}
+                                >
+                                  {pageMode === 'requests' ? 'บันทึกแผนล่วงหน้า (Requests)' : 'บันทึกรายงานประจำวัน (Daily Report)'}
                                 </Typography>
-                              )}
+                              </Box>
                             </Box>
                           </Box>
-
-                          <Box sx={{ flexShrink: 0 }}>
+ 
+ 
+                          <Box sx={{ flexShrink: 0, zIndex: 2 }}>
                             <DatePicker
                               value={reportDate}
                               onChange={(newValue) => {
-                                if (newValue) {
+                                if (newValue && isValid(newValue)) {
                                   if (pageMode === 'requests') {
                                     const today = new Date();
                                     today.setHours(0, 0, 0, 0);
@@ -3196,7 +3320,7 @@ export default function DailyReportPage() {
                                         {
                                           id: 'regular',
                                           label: 'เวลาทำงานปกติ',
-                                          required: 4,
+                                          required: regularActiveSlots.length,
                                           current: isActingAsSupport ? siteReportPhotos.labor.regular.length : laborPhotos.regular.length + existingPhotos.labor.regular.length,
                                         },
                                         {
@@ -3321,7 +3445,7 @@ export default function DailyReportPage() {
                                             isActingAsSupport ? siteReportPhotos.site : existingPhotos.site,
                                             isActingAsSupport ? [] : sitePhotoPreviews,
                                             (f) => handlePhotoUpload(f, 'site'),
-                                            (i) => removePhoto(i, 'site'),
+                                            (i, isExisting) => removePhoto(i, 'site', isExisting),
                                             'site',
                                             isProgressLocked || isActingAsSupport
                                           )}
@@ -3404,23 +3528,58 @@ export default function DailyReportPage() {
                           >
                             ยกเลิก
                           </Button>
-                          <Button
-                            variant="contained"
-                            sx={{
-                              bgcolor: isAdvanceRequestUI ? '#4f46e5' : '#10b981',
-                              borderRadius: '10px',
-                              px: 6,
-                              fontWeight: 800,
-                              '&:hover': { bgcolor: isAdvanceRequestUI ? '#4338ca' : '#059669' },
-                              boxShadow: isAdvanceRequestUI 
-                                ? '0 4px 14px rgba(79, 70, 229, 0.4)' 
-                                : '0 4px 14px rgba(16, 185, 129, 0.4)',
-                            }}
-                            disabled={isFormDisabled || isSubmitting}
-                            onClick={handleSubmit}
-                          >
-                            {isAdvanceRequestUI ? 'บันทึกแผนงานล่วงหน้า' : 'บันทึกรายงาน'}
-                          </Button>
+                          {!isAdvanceRequestUI ? (
+                            <>
+                              {isSameDay(reportDate, new Date()) && (
+                                <Button
+                                  variant="outlined"
+                                  sx={{
+                                    color: '#0284c7',
+                                    borderColor: '#0284c7',
+                                    borderRadius: '10px',
+                                    px: 4,
+                                    fontWeight: 800,
+                                    '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0369a1' },
+                                  }}
+                                  disabled={isFormDisabled || isSubmitting}
+                                  onClick={() => handleSubmit(false)}
+                                >
+                                  บันทึกฉบับร่าง
+                                </Button>
+                              )}
+                              <Button
+                                variant="contained"
+                                sx={{
+                                  bgcolor: '#10b981',
+                                  borderRadius: '10px',
+                                  px: 4,
+                                  fontWeight: 800,
+                                  '&:hover': { bgcolor: '#059669' },
+                                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                                }}
+                                disabled={isFormDisabled || isSubmitting}
+                                onClick={() => handleSubmit(true)}
+                              >
+                                ส่งรายงานสมบูรณ์
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="contained"
+                              sx={{
+                                bgcolor: '#4f46e5',
+                                borderRadius: '10px',
+                                px: 6,
+                                fontWeight: 800,
+                                '&:hover': { bgcolor: '#4338ca' },
+                                boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)',
+                              }}
+                              disabled={isFormDisabled || isSubmitting}
+                              onClick={() => handleSubmit(true)}
+                            >
+                              บันทึกแผนงานล่วงหน้า
+                            </Button>
+                          )}
                         </Box>
                       </>
                     )}

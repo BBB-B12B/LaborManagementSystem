@@ -72,7 +72,7 @@ import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
 import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import thLocale from 'date-fns/locale/th';
-import { format, subDays, isBefore, isSameDay, isValid } from 'date-fns';
+import { format, subDays, isBefore, isSameDay, isValid, startOfDay } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
 type ShiftPhotos = { regular: File[]; otMorning: File[]; otNoon: File[]; otEvening: File[] };
@@ -921,6 +921,18 @@ export default function DailyReportPage() {
 
 
   // --- 1.1 Derived States for Business Rules ---
+  const hasValidUnlock = useMemo(() => {
+    if (!reportDate || !selectedTask) return false;
+    const dateStr = format(reportDate, 'yyyy-MM-dd');
+    const unlockedDates = selectedTask?.unlockedDates;
+    if (unlockedDates && unlockedDates[dateStr]) {
+      const unlockInfo = unlockedDates[dateStr];
+      const unlockUntil = new Date(unlockInfo.unlockedUntil);
+      return unlockUntil > new Date();
+    }
+    return false;
+  }, [reportDate, selectedTask]);
+
   const isRetroactiveOver3Days = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -932,18 +944,15 @@ export default function DailyReportPage() {
 
     if (diffDays <= 3) return false;
 
-    // Check if it's unlocked
-    const dateStr = format(reportDate, 'yyyy-MM-dd');
-    if (selectedTask?.unlockedDates && selectedTask.unlockedDates[dateStr]) {
-      const unlockInfo = selectedTask.unlockedDates[dateStr];
-      const unlockUntil = new Date(unlockInfo.unlockedUntil);
-      if (unlockUntil > new Date()) {
-        return false; // It's unlocked, so it's not locked
-      }
-    }
+    return !hasValidUnlock;
+  }, [reportDate, hasValidUnlock]);
 
-    return true;
-  }, [reportDate, selectedTask]);
+  const isReportSubmittedAndPast = useMemo(() => {
+    const reportStatus = reportDetailData?.report?.status;
+    const today = startOfDay(new Date());
+    const isPast = isBefore(reportDate, today);
+    return reportStatus === 'submitted' && isPast;
+  }, [reportDetailData, reportDate]);
 
   // Simulated Wage Period Lock (T-902)
   // In a real scenario, this would check against an API or a list of approved periods
@@ -959,7 +968,7 @@ export default function DailyReportPage() {
     return false;
   }, [reportDate]);
 
-  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion;
+  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || (isReportSubmittedAndPast && !hasValidUnlock);
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
   // Bulk Time State for Popup (T-903)
@@ -1839,7 +1848,7 @@ export default function DailyReportPage() {
     });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isFinalSubmit: boolean = true) => {
     // 1. Validation
     if (!selectedTask) return;
 
@@ -1848,7 +1857,11 @@ export default function DailyReportPage() {
       return;
     }
 
-    if (!isActingAsSupport) {
+    const isToday = isSameDay(reportDate, new Date());
+    const isFinalProgress = Number(progress) === 100;
+    const isPhotoRequired = isFinalSubmit && (!isToday || isFinalProgress);
+
+    if (isFinalSubmit && !isActingAsSupport && isPhotoRequired) {
       if (sitePhotos.length + existingPhotos.site.length < 2) {
         enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
         return;
@@ -2008,7 +2021,8 @@ export default function DailyReportPage() {
 
       const payload = {
         reportDate: reportDate,
-        progress: Number(progress) || 0,
+        progress: progress === '' ? (selectedTask?.dailyProgress || 0) : (Number(progress) || 0),
+        status: isFinalSubmit ? 'submitted' : 'draft',
         note: note,
         photos: {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
@@ -2043,7 +2057,8 @@ export default function DailyReportPage() {
       // ─── 4. Submit ───────────────────────────────────────────────────────
       await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
 
-      toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
+      toast.success(isFinalSubmit ? 'ส่งรายงานประจำวันฉบับสมบูรณ์สำเร็จ' : 'บันทึกรายงานฉบับร่างสำเร็จ');
+
 
       // Invalidate Cache once and perform a 100% Hard Refresh
       invalidateCache();
@@ -2097,10 +2112,6 @@ export default function DailyReportPage() {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Typography variant="h4" fontWeight={900} color="#1e293b">
-                  Daily Report
-                </Typography>
-
                 {/* Tabs */}
                 <Stack
                   direction="row"
@@ -2241,7 +2252,18 @@ export default function DailyReportPage() {
                         />
                       </Box>
                     </Box>
-                    <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        p: 2,
+                        '&::-webkit-scrollbar': {
+                          display: 'none',
+                        },
+                        msOverflowStyle: 'none',
+                        scrollbarWidth: 'none',
+                      }}
+                    >
                       {tasksLoading ? (
                         <Box sx={{ textAlign: 'center', py: 5 }}>
                           <CircularProgress size={24} />
@@ -2304,9 +2326,10 @@ export default function DailyReportPage() {
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
+                            position: 'relative',
                           }}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0, zIndex: 2 }}>
                             <IconButton
                               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                               sx={{
@@ -2318,7 +2341,7 @@ export default function DailyReportPage() {
                             >
                               <Menu size={20} />
                             </IconButton>
-
+ 
                             {/* Progress Circle — เหมือน My Job card */}
                             <Box
                               sx={{
@@ -2353,50 +2376,100 @@ export default function DailyReportPage() {
                                 {selectedTask.dailyProgress}%
                               </span>
                             </Box>
-
+ 
                             {/* Task info */}
                             <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                                <Chip
-                                  label={selectedTask.taskId}
-                                  size="small"
-                                  sx={{
-                                    fontWeight: 900,
-                                    borderRadius: '6px',
-                                    bgcolor: '#1e293b',
-                                    color: 'white',
-                                    fontSize: '0.7rem',
-                                    flexShrink: 0,
-                                  }}
-                                />
+                              {/* Metadata line: ID + Category */}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                                 <Typography
                                   variant="caption"
-                                  fontWeight={700}
-                                  color="primary"
-                                  noWrap
+                                  fontWeight={800}
+                                  sx={{
+                                    bgcolor: 'rgba(30, 41, 59, 0.06)',
+                                    color: '#475569',
+                                    px: 1,
+                                    py: 0.25,
+                                    borderRadius: '6px',
+                                    fontSize: '0.7rem',
+                                    letterSpacing: '0.02em',
+                                  }}
                                 >
-                                  {selectedTask.categoryName}
+                                  {selectedTask.taskId}
+                                  {selectedTask.revisionId && selectedTask.revisionId !== 'rev00' && `-${selectedTask.revisionId}`}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={750}
+                                  color="text.secondary"
+                                  sx={{ fontSize: '0.7rem' }}
+                                >
+                                  • {selectedTask.categoryName}
                                 </Typography>
                               </Box>
+ 
+                              {/* Title line: Subtask name as primary */}
                               <Typography
                                 variant="subtitle1"
                                 fontWeight={900}
                                 color="#1e293b"
-                                sx={{ lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                sx={{
+                                  lineHeight: 1.25,
+                                  fontSize: { xs: '0.9rem', md: '1.05rem' },
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
                               >
-                                {isActingAsSupport && selectedTask.supportTaskName
+                                {selectedTask.subtaskName || (isActingAsSupport && selectedTask.supportTaskName
                                   ? selectedTask.supportTaskName
-                                  : selectedTask.taskName}
+                                  : selectedTask.taskName)}
                               </Typography>
-                              {selectedTask.woName && (
-                                <Typography variant="caption" color="text.secondary" noWrap>
-                                  {selectedTask.woName}
+ 
+                              {/* Subtitle line: Parent task name as context */}
+                              {selectedTask.subtaskName && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{
+                                    display: 'block',
+                                    mt: 0.25,
+                                    fontSize: '0.75rem',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {isActingAsSupport && selectedTask.supportTaskName
+                                    ? selectedTask.supportTaskName
+                                    : selectedTask.taskName}
                                 </Typography>
                               )}
+ 
+                              {/* Mobile Mode Badge */}
+                              <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 0.5 }}>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={800}
+                                  sx={{
+                                    display: 'inline-block',
+                                    color: (reportDate && reportDate > new Date()) ? '#f57c00' : '#2e7d32',
+                                    bgcolor: (reportDate && reportDate > new Date()) ? '#fff3e0' : '#e8f5e9',
+                                    px: 1,
+                                    py: 0.25,
+                                    borderRadius: '8px',
+                                    fontSize: '0.65rem',
+                                    border: '1px solid',
+                                    borderColor: (reportDate && reportDate > new Date()) ? '#ffe0b2' : '#c8e6c9',
+                                  }}
+                                >
+                                  {(reportDate && reportDate > new Date()) ? 'บันทึกแผนล่วงหน้า (Requests)' : 'บันทึกรายงานประจำวัน (Daily Report)'}
+                                </Typography>
+                              </Box>
                             </Box>
                           </Box>
-
-                          <Box sx={{ flexShrink: 0 }}>
+ 
+ 
+                          <Box sx={{ flexShrink: 0, zIndex: 2 }}>
                             <DatePicker
                               value={reportDate}
                               onChange={(newValue) => {
@@ -2432,7 +2505,16 @@ export default function DailyReportPage() {
                                 setReportDate(newValue || new Date());
                               }}
                               minDate={effectiveBoundaryDate || undefined}
-                              maxDate={completionDateStr ? new Date(completionDateStr) : new Date()}
+                              maxDate={(() => {
+                                const today = new Date();
+                                today.setHours(23, 59, 59, 999);
+                                if (completionDateStr) {
+                                  const compDate = new Date(completionDateStr);
+                                  compDate.setHours(23, 59, 59, 999);
+                                  return compDate < today ? compDate : today;
+                                }
+                                return today;
+                              })()}
                               slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
                               slotProps={{
                                 textField: {
@@ -3029,20 +3111,37 @@ export default function DailyReportPage() {
                           >
                             ยกเลิก
                           </Button>
+                          {isSameDay(reportDate, new Date()) && (
+                            <Button
+                              variant="outlined"
+                              sx={{
+                                color: '#0284c7',
+                                borderColor: '#0284c7',
+                                borderRadius: '10px',
+                                px: 4,
+                                fontWeight: 800,
+                                '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0369a1' },
+                              }}
+                              disabled={isFormDisabled || isSubmitting}
+                              onClick={() => handleSubmit(false)}
+                            >
+                              บันทึกฉบับร่าง
+                            </Button>
+                          )}
                           <Button
                             variant="contained"
                             sx={{
                               bgcolor: '#10b981',
                               borderRadius: '10px',
-                              px: 6,
+                              px: 4,
                               fontWeight: 800,
                               '&:hover': { bgcolor: '#059669' },
                               boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
                             }}
                             disabled={isFormDisabled || isSubmitting}
-                            onClick={handleSubmit}
+                            onClick={() => handleSubmit(true)}
                           >
-                            บันทึกรายงาน
+                            ส่งรายงานสมบูรณ์
                           </Button>
                         </Box>
                       </>

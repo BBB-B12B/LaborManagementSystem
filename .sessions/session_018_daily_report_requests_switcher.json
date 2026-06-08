@@ -1,0 +1,11 @@
+{
+  "session_id": "session_018_daily_report_requests_switcher",
+  "associated_tasks": [
+    "T-020-001-04",
+    "T-020-001-04-01"
+  ],
+  "status": "completed",
+  "estimated_tokens": 13500,
+  "summary_context": "Daily Report / Requests Switcher & Task Card Align (T-020, T-020-001-04, T-020-001-04-01):\n\n1. [Sidebar UI Aligned] Refactored TaskSidebarCard layout and style in daily-reports/index.tsx to mirror the design, spacing, and progress bars of the main Workspace page. Added orange active state accent styling.\n2. [Local Switcher Mode] Implemented a local switcher in daily-reports/index.tsx for 'Dailyreport' (actual labor reports) and 'Requests' (advance planning) mode using top-bar switcher tabs, resetting selected date and task on toggle.\n3. [Requests Constraints] Enforced a strict today/tomorrow date selection limit on DatePicker in Requests mode, and filtered sidebar task cards to only show tasks valid for the selected date range.\n4. [Bug Fixed] Fixed a critical UI bug where switching modes or canceling the report form cleared selectedTask to null while keeping the sidebar closed, which trapped the user in an empty screen with no toggle button. Added a useEffect hook to force isSidebarOpen(true) whenever selectedTask becomes null.\n5. [Git Push] Committed all modifications under message 'UI daily/Requests' and pushed the changes to the remote branch dailyReport.",
+  "History": []
+}

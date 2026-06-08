@@ -1075,44 +1075,7 @@ export default function WorkspaceRequestsPage() {
 
       {/* ส่วนสรุปตัวเลขชั่วโมงทำงาน (Dashboard Summary) */}
       <Grid container spacing={2} sx={{ mb: 3 }} alignItems="stretch">
-        {/* การ์ด 1: ชั่วโมงรวมทั้งหมด */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2.5,
-              borderRadius: '16px',
-              border: 'none',
-              background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
-              color: '#ffffff',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 10px 20px -5px rgba(124, 58, 237, 0.3)',
-              height: '100%',
-              minHeight: '142px',
-            }}
-          >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, color: 'rgba(255, 255, 255, 0.85)' }}>
-                  ชั่วโมงทำงานรวมทั้งหมด
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ffffff' }}>
-                  {summaryStats.totalHours} ชม.
-                </Typography>
-              </Box>
-              <Box sx={{ p: 1, bgcolor: 'rgba(255, 255, 255, 0.2)', borderRadius: '50%', color: '#ffffff', display: 'flex' }}>
-                <ScheduleIcon sx={{ fontSize: 22 }} />
-              </Box>
-            </Stack>
-            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255, 255, 255, 0.7)' }}>
-              ชั่วโมงรวมสะสมจากตัวกรอง
-            </Typography>
-          </Paper>
-        </Grid>
-
-        {/* การ์ด 2: ชั่วโมงกะปกติ */}
+        {/* การ์ด 1: ชั่วโมงกะปกติ */}
         <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={0}
@@ -1149,7 +1112,7 @@ export default function WorkspaceRequestsPage() {
           </Paper>
         </Grid>
 
-        {/* การ์ด 3: ชั่วโมงโอทีรวม */}
+        {/* การ์ด 2: ชั่วโมงโอทีรวม */}
         <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={0}
@@ -1213,6 +1176,43 @@ export default function WorkspaceRequestsPage() {
                 </Box>
               </Grid>
             </Grid>
+          </Paper>
+        </Grid>
+
+        {/* การ์ด 3: ชั่วโมงรวมทั้งหมด */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: '16px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
+              color: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 10px 20px -5px rgba(124, 58, 237, 0.3)',
+              height: '100%',
+              minHeight: '142px',
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, color: 'rgba(255, 255, 255, 0.85)' }}>
+                  ชั่วโมงทำงานรวมทั้งหมด
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ffffff' }}>
+                  {summaryStats.totalHours} ชม.
+                </Typography>
+              </Box>
+              <Box sx={{ p: 1, bgcolor: 'rgba(255, 255, 255, 0.2)', borderRadius: '50%', color: '#ffffff', display: 'flex' }}>
+                <ScheduleIcon sx={{ fontSize: 22 }} />
+              </Box>
+            </Stack>
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255, 255, 255, 0.7)' }}>
+              ชั่วโมงรวมสะสมจากตัวกรอง
+            </Typography>
           </Paper>
         </Grid>
 

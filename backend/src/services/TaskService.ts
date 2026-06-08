@@ -2220,6 +2220,9 @@ export class TaskService {
     const requestDate = new Date(requestData.reportDate);
     
     const now = new Date();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
@@ -2227,8 +2230,8 @@ export class TaskService {
     const requestDateStart = new Date(requestDate);
     requestDateStart.setHours(0, 0, 0, 0);
 
-    if (requestDateStart < tomorrow) {
-       throw new AppError('สามารถวางแผนงานล่วงหน้าได้อย่างน้อย 1 วัน (ไม่สามารถลงสำหรับวันนี้หรือย้อนหลังได้)', 400);
+    if (requestDateStart.getTime() !== today.getTime() && requestDateStart.getTime() !== tomorrow.getTime()) {
+      throw new AppError('สามารถวางแผนงานล่วงหน้าได้เฉพาะสำหรับวันนี้หรือวันพรุ่งนี้เท่านั้น', 400);
     }
 
     const year = requestDate.getFullYear();

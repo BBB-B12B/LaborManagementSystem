@@ -615,4 +615,68 @@ This catalog lists known errors and bug fix details.
 - **Root Cause:** 1) `handleSelectTask` closes the sidebar unconditionally on select. 2) The switcher tabs and the cancel button clear `selectedTask` but do not open the sidebar. 3) The sidebar toggle button is conditionally rendered only when `selectedTask` is truthy, so when it is closed and `selectedTask` becomes null, the user is trapped.
 - **Resolution:** Added a `useEffect` hook in `daily-reports/index.tsx` that automatically triggers when `selectedTask` is `null` (or becomes `null`) and sets `isSidebarOpen(true)`, guaranteeing that the sidebar is always open and available for task selection when no task is active.
 
+## ERR-076: Daily Report / Request Mode defaults progress to 100% for new revisions
+- **Task:** T-020-001-05-02 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 503, 684
+- **Symptom:** When a task is reworked or has a new revision (e.g. `rev01` which should start with 0% progress), entering the Daily Report or Requests page shows the latest/previous progress as `100%` and throws a validation error saying progress must be greater than 100%.
+- **Root Cause:** The `taskReportsData` query fetches all daily reports for the task, which includes completed reports from previous revisions (e.g., `rev00` which was completed at 100%). The frontend page did not filter `taskReportsData` by the active revision ID (`currentRevId`) when calculating the latest previous progress (`lastPrevProgress` in `task-report-detail` query) or building `reportsSummaryMap`.
+- **Resolution:** Modified `reportsSummaryMap` and the `task-report-detail` query in `index.tsx` to compute `currentRevId` (adjusting for support mode if active) and filter out any reports whose revision ID does not match `currentRevId`.
+
+## ERR-077: Vertical scrollbar visible in Daily Report sidebar task list
+- **Task:** T-020-001-05-03 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2548 (index.tsx), 2244 (reference.tsx)
+- **Symptom:** A default browser scrollbar is visible on the right side of the left sidebar "My job" task list, which looks cluttered and unaligned with the premium design theme.
+- **Root Cause:** The `<Box>` wrapping the task list items had `overflowY: 'auto'` but did not hide Webkit scrollbars or configure scrollbar-width to none.
+- **Resolution:** Added custom `sx` style rules to hide the scrollbar (`&::-webkit-scrollbar: { display: 'none' }`, `msOverflowStyle: 'none'`, `scrollbarWidth: 'none'`) while preserving the scrolling functionality.
+
+## ERR-078: Confusing "Daily Report" header text next to local tabs switcher
+- **Task:** T-020-001-05-04 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2339 (index.tsx), 2099 (reference.tsx)
+- **Symptom:** The page title "Daily Report" text is rendered next to the "Dailyreport" and "Requests" tabs capsule. This title is redundant, overlaps the switcher, and reduces the horizontal space on mobile/tablet viewports.
+- **Root Cause:** Hardcoded `Typography` header element inside the flex row wrapper.
+- **Resolution:** Removed the redundant `Typography` title elements from both files so that the tabs capsule sits directly at the start of the header box.
+
+## ERR-079: Daily Report / Requests tabs switcher too small and unaligned on desktop viewports
+- **Task:** T-020-001-05-05 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 2339
+- **Symptom:** The tabs switcher capsule ("Dailyreport" / "Requests") has a small width, which does not match the alignment or width of the left task sidebar card container (320px), looking unaligned and inconsistent.
+- **Root Cause:** The `Stack` wrapping the tabs had no explicit desktop width defined, and the child `Button` elements had no flex-grow or flex-basis settings.
+- **Resolution:** Modified the parent `Box` width to `{ xs: '100%', lg: 'auto' }`, and the tabs `Stack` width to `{ xs: '100%', lg: 320 }`, setting `flex: 1` on each tab `Button` so they share the 320px width equally.
+
+## ERR-080: Cluttered task metadata and lack of mode indicators in form card header
+- **Task:** T-020-001-05-06 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2623 (index.tsx), 2307 (reference.tsx)
+- **Symptom:** The form card header top-left task info is cluttered with too many text lines (Task ID, Category, Parent Task Name, Subtask Name, Work Order Name). Also, there is no visual indicator showing whether the user is recording a Daily Report or a Request, causing confusion.
+- **Root Cause:** Hardcoded, unoptimized Typography stacking layout in the header Box, and lack of layout state variables rendering the active pageMode context.
+- **Resolution:** Redesigned the card header: (1) Streamlined metadata to show Task ID (as a soft gray pill) + Category on line 1, Subtask Name as the main bold title on line 2, and Parent Task Name as subtitle on line 3, hiding Work Order. (2) Added an absolute-centered mode indicator badge on desktop viewports. (3) Added an inline mode indicator badge on mobile viewports below the task metadata.
+
+## ERR-081: Redundant mode indicator banner centered in desktop form card header
+- **Task:** T-020-001-05-07 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2772 (index.tsx), 2456 (reference.tsx)
+- **Symptom:** In desktop view, there is an absolute-centered mode indicator banner ("บันทึกรายงานประจำวัน (Daily Report)" / "บันทึกแผนล่วงหน้า (Requests)") in the card header, which clutter the layout and duplicate the mode switcher button text.
+- **Root Cause:** Hardcoded absolute positioned Box in the card header layout of both files.
+- **Resolution:** Removed the desktop centered Box mode indicator element completely in both files.
+
+## ERR-082: Lack of calendar restriction and draft vs submitted daily report flow
+- **Task:** T-020-001-05-08 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 464 (index.tsx), 2494 (reference.tsx)
+- **Symptom:** Users can select future dates (like tomorrow) in Dailyreport mode. FMs have to fill in all photos and progress every time they want to report intermediate updates to their supervisor, which is redundant and heavy.
+- **Root Cause:** DatePicker maxDate allowed tomorrow, and there was only a single "บันทึกรายงาน" action that enforced all validations.
+- **Resolution:** (1) Clamped DatePicker maxDate to today in Dailyreport mode. (2) Added a `status` field ('draft' | 'submitted') to the daily report document. (3) Split the submit button into "บันทึกฉบับร่าง" (Save Draft) and "ส่งรายงานสมบูรณ์" (Submit Final), bypassing photo validations in draft mode to let FMs update status incrementally. (4) Locked submitted past reports while allowing same-day editing.
+
+## ERR-083: Save Draft button visible for past dates
+- **Task:** T-020-001-05-09 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 3524 (index.tsx), 3114 (reference.tsx)
+- **Symptom:** The "บันทึกฉบับร่าง" (Save Draft) button is visible even when the user selects a past date, which violates the flow that drafts should only be saved for today's active work.
+- **Root Cause:** The Save Draft button was conditionally rendered only based on pageMode !== 'requests', without checking if the reportDate is today.
+- **Resolution:** Added `isSameDay(reportDate, new Date())` conditional check around the Save Draft button in both files so it only renders when the selected date is today.
+
+## ERR-084: Site photo remove (X) button non-functional for existing photos
+- **Task:** T-020-001-05-10 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx (line 3448)
+- **Symptom:** กดปุ่มกากบาท (X) เพื่อลบรูปหน้างาน (Existing Photos) ไม่มีผลใดๆ รูปยังคงแสดงอยู่
+- **Root Cause:** `renderPhotoGrid` call site ส่ง `onRemove` เป็น `(i) => removePhoto(i, 'site')` โดยไม่ส่ง `isExisting` parameter ทำให้ `removePhoto` เข้า branch `isExisting=false` เสมอ จึงพยายามลบจาก `sitePhotos` (new uploads) แทน `existingPhotos.site` (existing URLs)
+- **Resolution:** เปลี่ยน call site เป็น `(i, isExisting) => removePhoto(i, 'site', isExisting)` เพื่อส่ง flag ที่ถูกต้องตาม `item.isExisting` ที่ `renderPhotoGrid` คำนวณไว้
+
+
 
