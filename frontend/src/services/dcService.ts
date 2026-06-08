@@ -36,7 +36,6 @@ export interface DailyContractor {
   phoneAllowance?: number;
   mouDeductionRate?: number;
   nationality?: string;
-  department?: string; // T-943: Added department field
   foremanUsage?: Record<string, { count: number; name: string }>;
 }
 

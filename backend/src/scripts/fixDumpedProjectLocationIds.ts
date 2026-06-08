@@ -23,7 +23,7 @@ import * as path from 'path';
 // Config
 // ---------------------------------------------------------------------------
 
-const PROJECT_B_KEY_PATH = path.resolve(__dirname, '../../../keys/after-sale-system-621698fcd44f.json');
+const PROJECT_B_KEY_PATH = path.resolve(__dirname, '../config/after-sale-key.json');
 const COLLECTION = 'DailyEmployeeTimesheets';
 const TARGET_LOCATION_ID = 'P002';
 const BATCH_SIZE = 499;

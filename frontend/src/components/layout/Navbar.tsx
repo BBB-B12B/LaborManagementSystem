@@ -52,7 +52,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.dailyReport'),
       path: '/daily-reports',
       icon: <DescriptionIcon />,
-      roles: ['SE', 'FM', 'LD'],
+      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'],
     },
     {
       label: t('nav.management', 'การจัดการ'),
@@ -77,12 +77,6 @@ export const Navbar: React.FC = () => {
       path: '/work-hour-monitoring',
       icon: <AccessTimeIcon />,
       roles: ['AM', 'PM', 'PD', 'MD'],
-    },
-    {
-      label: 'บันทึกแรงงาน',
-      path: '/labor/recording',
-      icon: <DescriptionIcon />,
-      roles: ['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD'],
     },
     {
       label: t('nav.workspace', 'Workspace'),

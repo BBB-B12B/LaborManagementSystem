@@ -105,6 +105,7 @@ firestore-debug.log
 ui-debug.log
 backend/keys/
 serviceAccountKey.json
+backend/src/config/*-key.json
 
 # ============================================
 # Temporary Files

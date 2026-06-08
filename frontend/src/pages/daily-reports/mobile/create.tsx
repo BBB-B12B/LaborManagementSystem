@@ -97,7 +97,7 @@ const MobileDailyReportPage = () => {
     // Group entries by Task Name for better view? Or just list them? 
     // Let's list cards. Simple first.
 
-    const entries = report?.entries || [];
+    const entries = (report as any)?.entries || [];
 
     return (
         <Container maxWidth="sm" sx={{ p: 0, minHeight: '100vh', bgcolor: '#F4F6F8', pb: 10 }}>

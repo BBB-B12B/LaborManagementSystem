@@ -516,7 +516,7 @@ export default function ScanDataMonitoringPage() {
             ScanData Monitoring
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-            ความผิดปกติ (Discrepancies) และข้อมูลสแกนทั้งหมด
+            รายการข้อมูลการสแกนนิ้วเข้า-ออกงานทั้งหมด
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
@@ -752,28 +752,7 @@ export default function ScanDataMonitoringPage() {
           minHeight: 0,
         }}
       >
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Tabs 
-            value={currentTab} 
-            onChange={(_e, newValue) => {
-              setCurrentTab(newValue);
-              setPage(0);
-            }} 
-            sx={{
-              '& .MuiTab-root': {
-                fontWeight: 600,
-                fontSize: '0.95rem',
-                py: 2,
-                minHeight: 64,
-                textTransform: 'none',
-              }
-            }}
-          >
-            <Tab icon={<WarningIcon />} iconPosition="start" label="ความผิดปกติ" />
-            <Tab icon={<List />} iconPosition="start" label="ข้อมูลสแกนทั้งหมด" />
-            <Tab icon={<History />} iconPosition="start" label="ประวัติการลบ" />
-          </Tabs>
-
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', py: 1.5 }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
             {!showFilters && !isFullscreen && (
               <Button 
@@ -812,7 +791,7 @@ export default function ScanDataMonitoringPage() {
           </Box>
         </Box>
 
-        {(currentTab === 0 ? isDiscrepancyLoading : currentTab === 1 ? isAllScanLoading : isDeletedLoading) ? (
+        {isAllScanLoading ? (
           <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}>
             <LoadingSpinner size="large" />
           </Box>
@@ -860,24 +839,7 @@ export default function ScanDataMonitoringPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                 {currentTab === 0 ? (
-                   <TableRow>
-                     <TableCell colSpan={tableHeaders.length} sx={{ p: 0 }}>
-                       <Box sx={{ minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
-                         <WorkHourComparisonTable 
-                           selectedDate={filter.startDate || new Date()} 
-                           startDate={filter.startDate || null}
-                           endDate={filter.endDate || null}
-                           filterStatus={filter.status || 'pending'}
-                           project={filter.projectLocationId || ''}
-                         />
-                       </Box>
-                     </TableCell>
-                   </TableRow>
-                 ) : (currentTab === 1 
-                       ? (allScanData?.data || []) 
-                       : (deletedScanData?.data || [])
-                   ).map((row: any, rowIndex: number) => {
+                 {(allScanData?.data || []).map((row: any, rowIndex: number) => {
 
                       // Map raw scan fields to the same UI structure
                       const baseRow = row.detailedView || row;
@@ -972,13 +934,39 @@ export default function ScanDataMonitoringPage() {
                             const val = (displayRow as any)?.[`time${i}`] || '-';
                             const display = val && val !== '-' ? val.toString().substring(0, 8) : '-';
                             const isEdited = row.isManuallyEdited || baseRow.isManuallyEdited || (row.scanSummary && row.scanSummary.isManuallyEdited);
+                            
+                            let textColor = 'inherit';
+                            let textWeight: number | string = 'normal';
+                            
+                            if (display !== '-') {
+                              // ตรวจสอบว่าเวลานี้เป็นเวลาดั้งเดิมจากเครื่องสแกนหรือไม่
+                              const devicePunches = row.devicePunches || baseRow.devicePunches || [];
+                              const isOriginal = Array.isArray(devicePunches) && devicePunches.some((p: string) => p.startsWith(display.substring(0, 5)));
+                              
+                              if (isEdited) {
+                                if (isOriginal) {
+                                  // เวลาดั้งเดิมที่พนักงานสแกนจริง (Original Data)
+                                  textColor = '#16a34a'; // Green
+                                  textWeight = 700;
+                                } else {
+                                  // เวลาที่ Admin เติมให้/ยืนยันให้ (Admin Added/Confirmed Data)
+                                  textColor = '#ea580c'; // Orange
+                                  textWeight = 800;
+                                }
+                              } else {
+                                // ถ้าไม่มีการแก้ไขเลย ก็ให้เป็นสี default หรือถ้าอยากให้เป็นสีเขียวทั้งหมดก็สามารถปรับได้
+                                // textColor = '#16a34a'; // Uncomment ถ้าต้องการให้เวลาที่สแกนครบปกติเป็นสีเขียวด้วย
+                                textWeight = 500;
+                              }
+                            }
+
                             return (
                               <TableCell 
                                 key={i} 
                                 align="center"
                                 sx={{ 
-                                  color: (isEdited && display !== '-') ? '#ff6d00' : 'inherit',
-                                  fontWeight: (isEdited && display !== '-') ? 900 : 'normal'
+                                  color: textColor,
+                                  fontWeight: textWeight
                                 }}
                               >
                                 {display}
@@ -997,7 +985,7 @@ export default function ScanDataMonitoringPage() {
               <TablePagination
                 rowsPerPageOptions={[25, 50, 100]}
                 component="div"
-                count={(currentTab === 1 ? allScanData?.total : deletedScanData?.total) || 0}
+                count={allScanData?.total || 0}
 
                 rowsPerPage={pageSize}
                 page={page}

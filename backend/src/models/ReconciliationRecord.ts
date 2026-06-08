@@ -20,6 +20,7 @@ export type ReconciliationStatus =
   | 'MISSING_DAILY'        // มีพนักงานในระบบ มี Scan Data แต่ไม่มี Daily Report
   | 'ABSENT'               // ไม่มีข้อมูลทั้งคู่
   | 'LEAVE'                // พนักงานลา (ยืนยันจาก Leave Request)
+  | 'PENDING_LEAVE_REVIEW' // รอ Admin ตรวจสอบใบรับรองแพทย์
   | 'HOLIDAY'              // วันหยุดบริษัท
   | 'UNREGISTERED_EMPLOYEE'; // มี Scan Data แต่รหัสพนักงานไม่มีในระบบ
 
@@ -129,6 +130,7 @@ export interface ReconciliationRecord {
   leaveEntries?: any[];              // ข้อมูลการลาเพิ่มเติม
   hasLeave?: boolean;                // Flag ระบุว่ามีการลางาน (ใช้ฟิลเตอร์)
   medCertFileUrl?: string;           // รูปภาพเอกสารการลา
+  isLeaveReviewed?: boolean;         // Admin กดยืนยันใบลาแล้วหรือยัง
   
   // --- Approved Hours (ยอดที่ใช้คิดเงินจริง หลังจากการ Resolve) ---
   // ถ้า Admin แก้ไขเอง จะใช้ค่าเหล่านี้แทนค่าจาก Daily/Scan
@@ -211,6 +213,7 @@ export interface CreateReconciliationRecordInput {
     description?: string;
   }[];
   medCertFileUrl?: string; // Add medCertFileUrl
+  isLeaveReviewed?: boolean;
   hasLeave?: boolean;
   assigneeId?: string;
   assigneeName?: string;
@@ -320,6 +323,7 @@ export const reconciliationRecordConverter = {
     if ('leaveHours' in record) data.leaveHours = record.leaveHours;
     if ('leaveEntries' in record) data.leaveEntries = record.leaveEntries;
     if ('medCertFileUrl' in record) data.medCertFileUrl = record.medCertFileUrl;
+    if ('isLeaveReviewed' in record) data.isLeaveReviewed = record.isLeaveReviewed;
     if ('hasLeave' in record) data.hasLeave = record.hasLeave;
 
     return data;
@@ -416,6 +420,7 @@ export const reconciliationRecordConverter = {
       ...(data.leaveHours !== undefined && { leaveHours: data.leaveHours }),
       ...(data.leaveEntries !== undefined && { leaveEntries: data.leaveEntries }),
       ...(data.medCertFileUrl !== undefined && { medCertFileUrl: data.medCertFileUrl }),
+      ...(data.isLeaveReviewed !== undefined && { isLeaveReviewed: data.isLeaveReviewed }),
       ...(data.hasLeave !== undefined && { hasLeave: data.hasLeave }),
     };
   },

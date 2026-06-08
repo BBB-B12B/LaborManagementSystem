@@ -286,7 +286,7 @@ class ProjectBDailyReportService {
         return;
       }
 
-      const keyPath = path.resolve(process.cwd(), '../keys/after-sale-system-621698fcd44f.json');
+      const keyPath = path.resolve(process.cwd(), 'src/config/after-sale-key.json');
 
       if (!fs.existsSync(keyPath)) {
         console.warn(

@@ -124,6 +124,16 @@ class ScanDataService extends BaseCrudService<ScanData> {
       // allScans = HH:mm:ss (เก็บวินาทีไว้) ใช้คำนวณสาย/OT ได้ละเอียด
       const punches = allScans.map(t => t.slice(0, 5));
 
+      let devicePunches = (existingData as any).devicePunches;
+      if (existingDoc.exists && Array.isArray(devicePunches)) {
+        const newPunch = scanTimeStr.slice(0, 5);
+        if (!devicePunches.includes(newPunch)) {
+          devicePunches = [...devicePunches, newPunch].sort((a, b) => a.localeCompare(b));
+        }
+      } else {
+        devicePunches = punches;
+      }
+
       const scanData: Omit<ScanData, 'id'> = {
         ...(existingData as any),
         dailyContractorId: input.dailyContractorId,
@@ -148,7 +158,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         ...timeSlots,
         allScans,
         punches,
-        devicePunches: (existingData as any).devicePunches || punches,
+        devicePunches,
       };
 
       await docRef.set(scanData, { merge: true });
@@ -901,6 +911,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
         // Clear remaining slots if any
         ...Object.fromEntries(Array.from({ length: 10 - punches.length }, (_, i) => [`Time${punches.length + i + 1}`, '-'])),
         ...metrics,
+        punches: punches,
+        allScans: punches.map(p => `${p}:00`),
         isManuallyEdited: true, // Flag for highlighting in UI
         updatedAt: new Date(),
         updatedBy
@@ -1077,9 +1089,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
       // พนักงานทำโอเที่ยง (hasOtNoon) จะไม่มีการสแกนนิ้วช่วง 12:00 และ 13:00 ดังนั้นไม่ต้องดึงเวลาส่วนนี้เข้ามาใน punches
       if (hasOtEvening) extractPunches(timesheet.shiftTimes?.otEvening, '18:00 - 21:00');
 
-      const punches = Array.from(punchSet).sort((a, b) => a.localeCompare(b));
+      const expectedPunches = Array.from(punchSet).sort((a, b) => a.localeCompare(b));
 
-      if (punches.length === 0) {
+      if (expectedPunches.length === 0) {
         throw new AppError('ไม่พบช่วงเวลา (shiftTimes) ใน Daily Report', 400);
       }
 
@@ -1121,21 +1133,57 @@ class ScanDataService extends BaseCrudService<ScanData> {
         otEveningHours: (existingData as any).otEveningHours || 0,
       };
 
+      // ── Merge existing punches with expected punches ──
+      // To preserve original scan data, we only add expected punches if there isn't an existing punch within 60 minutes.
+      const existingPunches: string[] = snapshot.punches;
+      const mergedPunches = [...existingPunches];
+      const availableExisting = [...existingPunches];
+
+      const toMins = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      };
+
+      for (const ep of expectedPunches) {
+        const epMins = toMins(ep);
+        
+        let closestIdx = -1;
+        let minDiff = 61; // Maximum allowed difference is 60 minutes
+        
+        for (let i = 0; i < availableExisting.length; i++) {
+          const diff = Math.abs(toMins(availableExisting[i]) - epMins);
+          if (diff <= 60 && diff < minDiff) {
+            minDiff = diff;
+            closestIdx = i;
+          }
+        }
+        
+        if (closestIdx !== -1) {
+          // Found a close existing punch, mark it as used
+          availableExisting.splice(closestIdx, 1);
+        } else {
+          // No close existing punch, add the expected punch
+          mergedPunches.push(ep);
+        }
+      }
+
+      const finalPunches = mergedPunches.sort((a, b) => a.localeCompare(b));
+
       const editEntry: any = {
         editedAt: new Date(),
         editedBy: adminUserId,
         action,
-        reason: 'ยืนยันข้อมูลปรับตาม Daily Report',
+        reason: 'ยืนยันข้อมูลปรับตาม Daily Report (เติมเฉพาะเวลาที่ขาดหาย)',
         snapshot,
         // NOTE: reconciliationRecordId intentionally omitted — avoid undefined in Firestore
       };
 
       const timeSlots: any = {};
-      punches.forEach((p, i) => {
+      finalPunches.forEach((p, i) => {
         if (i < 10) timeSlots[`Time${i + 1}`] = p;
       });
       // Clear leftover slots from any previous scan data
-      for (let i = punches.length + 1; i <= 10; i++) {
+      for (let i = finalPunches.length + 1; i <= 10; i++) {
         timeSlots[`Time${i}`] = '-';
       }
 
@@ -1150,11 +1198,11 @@ class ScanDataService extends BaseCrudService<ScanData> {
         scanDateTime: (existingData as any).scanDateTime || workDateObj,
         roundedTime: (existingData as any).roundedTime || workDateObj,
         isManuallyEdited: true,
-        allScans: punches,
-        punches: punches,
+        allScans: finalPunches,
+        punches: finalPunches,
         devicePunches: (existingData as any).devicePunches || (existingData as any).punches || [],
-        firstIn: punches[0],
-        lastOut: punches[punches.length - 1],
+        firstIn: finalPunches[0],
+        lastOut: finalPunches[finalPunches.length - 1],
         regularHours,
         otMorningHours,
         otNoonHours,

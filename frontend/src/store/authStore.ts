@@ -8,11 +8,12 @@ import { persist } from 'zustand/middleware';
 
 export interface User {
   id: string;
+  employeeId?: string;
   username: string;
   name: string;
   fullNameEn?: string;
   roleId: string;
-  roleCode?: 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD'; // User role code (AM, FM, SE, OE, PE, PM, PD, MD, GOD)
+  roleCode?: 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD' | 'LD'; // Added LD
   department: string;
   departmentCode?: string; // Department code (PD01-PD05)
   projectLocationIds: string[];

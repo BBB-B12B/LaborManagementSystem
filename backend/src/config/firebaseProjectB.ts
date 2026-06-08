@@ -5,6 +5,7 @@ import path from 'path';
 const serviceAccountPath = path.resolve(__dirname, 'after-sale-key.json');
 
 let afterSaleApp: admin.app.App;
+let afterSaleDb: admin.firestore.Firestore;
 
 try {
   const serviceAccount = require(serviceAccountPath);
@@ -12,13 +13,13 @@ try {
     credential: admin.credential.cert(serviceAccount),
     storageBucket: 'after-sale-system.firebasestorage.app'
   }, 'afterSaleDb'); // ตั้งชื่อ App ที่ 2 ป้องกันการชนกับ App หลัก
+  afterSaleDb = afterSaleApp.firestore();
   console.log('[firebaseProjectB] Initialized After-Sale Firebase connection');
 } catch (error) {
-  console.error('[firebaseProjectB] Failed to initialize After-Sale Firebase:', error);
+  console.warn('[firebaseProjectB] Missing after-sale-key.json. Falling back to default Firebase app.');
   // Fallback if file doesn't exist (e.g. CI/CD or before placing the file)
-  // we could just use the default app or throw
-  throw error;
+  afterSaleApp = admin.app();
+  afterSaleDb = admin.firestore();
 }
 
-export const afterSaleDb = afterSaleApp.firestore();
-export { afterSaleApp };
+export { afterSaleDb, afterSaleApp };

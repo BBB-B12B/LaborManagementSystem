@@ -936,6 +936,12 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             conflictNote = 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)';
         }
     }
+    // ── Override for PENDING_LEAVE_REVIEW ──────────────────────────────────
+    const originalStatus = status;
+    const hasMedCert = timesheet?.leaveStatus?.medCertFileUrl || timesheet?.medCertFileUrl;
+    if (hasMedCert && existingRecord?.isLeaveReviewed !== true) {
+        status = 'PENDING_LEAVE_REVIEW';
+    }
     // ── 5. Upsert ReconciliationRecord ────────────────────────────────────────
     const now = new Date();
     const newStatusEntry = {
@@ -1008,6 +1014,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         }
         if (existing['status'] !== status) {
             updates['status'] = status;
+            updates['originalStatus'] = originalStatus;
             updates['statusHistory'] = [
                 ...(existing['statusHistory'] || []),
                 newStatusEntry,
@@ -1058,6 +1065,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             dailyReportHistory: hasTimesheet ? (timesheet?.editHistory || []) : [],
             isHoliday,
             status,
+            originalStatus,
             statusHistory: [newStatusEntry],
             createdAt: now,
             updatedAt: now,

@@ -50,11 +50,11 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { format, parse, lastDayOfMonth } from 'date-fns';
-import thLocale from 'date-fns/locale/th';
+import { th as thLocale } from 'date-fns/locale/th';
 
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { th } from 'date-fns/locale';
 
 import { Layout, ProtectedRoute } from '@/components/layout';

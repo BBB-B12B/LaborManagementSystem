@@ -221,7 +221,7 @@ export default function WorkHourMonitoringPage() {
       setShowNormalBreakdown(true);
       setShowAbnormalBreakdown(false);
       setActiveBreakdownId(status === 'normal' ? undefined : status);
-    } else if (status === 'abnormal' || status.startsWith('abnormal_') || ['missingDaily', 'workHourConflict', 'missingScan', 'unregistered', 'absent'].includes(status)) {
+    } else if (status === 'abnormal' || status.startsWith('abnormal_') || ['missingDaily', 'workHourConflict', 'missingScan', 'unregistered', 'absent', 'pendingLeave'].includes(status)) {
       setShowAbnormalBreakdown(true);
       setShowNormalBreakdown(false);
       setActiveBreakdownId(['abnormal', 'abnormal_pending', 'abnormal_fixed'].includes(status) ? undefined : status);

@@ -16,9 +16,9 @@ import { taskService } from '@/services/taskService';
 import { dailyReportService } from '@/services/dailyReportService';
 import { useQuery } from '@tanstack/react-query';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import th from 'date-fns/locale/th';
+import { th } from "date-fns/locale/th";
 // Helper for SLA Countdown component
 const SLACountdown = ({ startTime, durationHours = 24 }: { startTime: string, durationHours?: number }) => {
     const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, isOverdue: boolean } | null>(null);

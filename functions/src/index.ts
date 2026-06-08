@@ -35,6 +35,7 @@ type ReconciliationStatus =
   | 'ABSENT'
   | 'LEAVE'
   | 'HOLIDAY'
+  | 'PENDING_LEAVE_REVIEW'
   | 'UNREGISTERED_EMPLOYEE';
 
 interface LeaveEntry {
@@ -1066,6 +1067,13 @@ async function reconcile(
     }
   }
 
+  // ── Override for PENDING_LEAVE_REVIEW ──────────────────────────────────
+  const originalStatus = status;
+  const hasMedCert = timesheet?.leaveStatus?.medCertFileUrl || timesheet?.medCertFileUrl;
+  if (hasMedCert && existingRecord?.isLeaveReviewed !== true) {
+    status = 'PENDING_LEAVE_REVIEW';
+  }
+
   // ── 5. Upsert ReconciliationRecord ────────────────────────────────────────
   const now = new Date();
   const newStatusEntry = {
@@ -1143,6 +1151,7 @@ async function reconcile(
 
     if (existing['status'] !== status) {
       updates['status'] = status;
+      updates['originalStatus'] = originalStatus;
       updates['statusHistory'] = [
         ...(existing['statusHistory'] || []),
         newStatusEntry,
@@ -1194,6 +1203,7 @@ async function reconcile(
       dailyReportHistory:   hasTimesheet ? (timesheet?.editHistory || []) : [],
       isHoliday,
       status,
+      originalStatus,
       statusHistory:        [newStatusEntry],
       createdAt:            now,
       updatedAt:            now,

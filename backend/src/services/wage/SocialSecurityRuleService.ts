@@ -77,17 +77,27 @@ class SocialSecurityRuleService extends BaseCrudService<SocialSecurityRule> {
         }
     }
 
+    private cachedRules: { rules: SocialSecurityRule[], timestamp: number } | null = null;
+    private CACHE_TTL_MS = 60000; // 1 minute
+
     /**
      * Get all active rules, sorted by order
      */
     async getActiveRules(): Promise<SocialSecurityRule[]> {
         try {
+            const now = Date.now();
+            if (this.cachedRules && (now - this.cachedRules.timestamp) < this.CACHE_TTL_MS) {
+                return this.cachedRules.rules;
+            }
+
             const snapshot = await collections.socialSecurityRules
                 .where('isActive', '==', true)
                 .orderBy('order', 'asc')
                 .get();
                 
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SocialSecurityRule));
+            const rules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SocialSecurityRule));
+            this.cachedRules = { rules, timestamp: now };
+            return rules;
         } catch (error: any) {
             logger.error('Error getting active social security rules:', error);
             throw error;

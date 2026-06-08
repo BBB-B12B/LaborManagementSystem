@@ -60,6 +60,7 @@ export const MIN_FONT_SIZE = {
 export const STATUS_COLOR_MAP: Record<string, keyof typeof RECON_COLORS> = {
   MATCHED: 'GREEN',
   LEAVE: 'ORANGE',
+  PENDING_LEAVE_REVIEW: 'ORANGE',
   CONFLICTED: 'ORANGE',
   MISSING_SCAN: 'RED',
   MISSING_DAILY: 'RED',
@@ -77,5 +78,6 @@ export const STATUS_LABEL_MAP: Record<string, string> = {
   CONFLICTED: 'ข้อมูลขัดแย้ง',
   ABSENT: 'ขาดงาน',
   LEAVE: 'ลา',
+  PENDING_LEAVE_REVIEW: 'รอตรวจใบรับรองแพทย์',
   UNREGISTERED_EMPLOYEE: 'ไม่มีในระบบ',
 };

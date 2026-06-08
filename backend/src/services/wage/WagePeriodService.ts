@@ -209,6 +209,16 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       let totalDeductions = 0;
       let totalNetWages = 0;
 
+      // [Optimization] Pre-fetch compensation details for all DCs
+      const compensationMap = new Map<string, any>();
+      for (let i = 0; i < dcs.length; i += 50) {
+        const batch = dcs.slice(i, i + 50);
+        await Promise.all(batch.map(async (dc) => {
+          const comp = await dailyContractorService.getCompensationDetails(dc.id);
+          compensationMap.set(dc.id, comp);
+        }));
+      }
+
       // 6. Calculate for each DC
       for (const dc of dcs) {
         // Filter reconciliation records for this DC and only process valid statuses
@@ -249,7 +259,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         const dcTotalOtHours = otMorning + otNoon + otEvening;
 
         // Fetch income/expense details
-        const compensation = await dailyContractorService.getCompensationDetails(dc.id);
+        const compensation = compensationMap.get(dc.id) || { income: null, expense: null };
         const income = compensation.income;
         const expense = compensation.expense;
 

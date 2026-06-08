@@ -45,6 +45,8 @@ function mapFilterStatusToStatuses(filterStatus: string): ReconciliationStatus[]
       return ['ABSENT'];
     case 'leave':
       return ['LEAVE'];
+    case 'pendingLeave':
+      return ['PENDING_LEAVE_REVIEW'];
     case 'abnormal_fixed':
       // 'abnormal_fixed' จะกรองเฉพาะ status 'MATCHED' ร่วมกับ isResolved=true เพื่อไม่ให้นับซ้ำกับ ลา (LEAVE)
       return ['MATCHED'];
@@ -505,6 +507,49 @@ export async function resolveManual(req: Request, res: Response): Promise<void> 
     res.status(500).json({ success: false, error: error.message || 'Failed to resolve manual' });
   }
 }
+
+/**
+ * Admin ตรวจสอบใบรับรองแพทย์ (Review Leave Status)
+ * Body: { isApproved: boolean, reason?: string }
+ */
+export async function reviewLeaveStatus(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user?.uid;
+
+    if (!adminId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { isApproved, reason } = req.body as { isApproved: boolean; reason?: string };
+    if (isApproved === undefined) {
+      res.status(400).json({ success: false, error: 'isApproved is required' });
+      return;
+    }
+
+    // 1. อัปเดตฝั่ง LaborManagementSystem
+    await reconciliationService.reviewLeaveStatus(id, adminId, isApproved, reason);
+
+    // 2. ถ้าไม่อนุมัติ ให้ยิงไปแก้ต้นฉบับและ trigger AfterSale
+    if (!isApproved) {
+      // id จะเป็นรูปแบบ REC_{employeeId}_{workDate}
+      const parts = id.split('_');
+      if (parts.length >= 3) {
+        const employeeId = parts[1];
+        const workDate = parts.slice(2).join('_'); // รองรับกรณี date มี _ (แม้ปกติจะเป็น YYYY-MM-DD)
+        const { taskService } = await import('../services/TaskService');
+        await taskService.rejectMedCertInDailyReport(employeeId, workDate);
+      }
+    }
+
+    res.json({ success: true, message: 'Leave status reviewed successfully' });
+  } catch (error: any) {
+    console.error('[reconciliation] reviewLeaveStatus error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to review leave status' });
+  }
+}
+
 
 /**
  * Admin แก้ไขรายการสแกนนิ้ว (Manual Adjust Scan Data)

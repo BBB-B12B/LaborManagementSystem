@@ -33,6 +33,21 @@ export interface DailyContractor {
     count: number;
     name: string;
   }>;
+  // T-230/T-240 Fields
+  dailyWageRate?: number;
+  professionalRate?: number;
+  phoneAllowance?: number;
+  mouDeductionRate?: number;
+  nationality?: string;
+  otherIncome?: number;
+  housingFee?: number;
+  followerCount?: number;
+  refrigeratorFee?: number;
+  soundSystemFee?: number;
+  tvFee?: number;
+  laundryFee?: number;
+  airConFee?: number;
+  otherDeduction?: number;
 }
 
 export interface DailyContractorDTO {
@@ -66,6 +81,20 @@ export interface CreateDailyContractorInput {
   isActive?: boolean;
   startDate?: Date;
   endDate?: Date;
+  dailyWageRate?: number;
+  professionalRate?: number;
+  phoneAllowance?: number;
+  mouDeductionRate?: number;
+  nationality?: string;
+  otherIncome?: number;
+  housingFee?: number;
+  followerCount?: number;
+  refrigeratorFee?: number;
+  soundSystemFee?: number;
+  tvFee?: number;
+  laundryFee?: number;
+  airConFee?: number;
+  otherDeduction?: number;
 }
 
 export interface UpdateDailyContractorInput {
@@ -80,6 +109,20 @@ export interface UpdateDailyContractorInput {
   isActive?: boolean;
   startDate?: Date;
   endDate?: Date;
+  dailyWageRate?: number;
+  professionalRate?: number;
+  phoneAllowance?: number;
+  mouDeductionRate?: number;
+  nationality?: string;
+  otherIncome?: number;
+  housingFee?: number;
+  followerCount?: number;
+  refrigeratorFee?: number;
+  soundSystemFee?: number;
+  tvFee?: number;
+  laundryFee?: number;
+  airConFee?: number;
+  otherDeduction?: number;
 }
 
 const parseDate = (val: any) => {
@@ -115,6 +158,20 @@ export const dailyContractorConverter = {
       createdBy: dc.createdBy,
       updatedBy: dc.updatedBy,
       foremanUsage: dc.foremanUsage || null,
+      dailyWageRate: dc.dailyWageRate || 0,
+      professionalRate: dc.professionalRate || 0,
+      phoneAllowance: dc.phoneAllowance || 0,
+      mouDeductionRate: dc.mouDeductionRate || 0,
+      nationality: dc.nationality || 'ไทย',
+      otherIncome: dc.otherIncome || 0,
+      housingFee: dc.housingFee || 0,
+      followerCount: dc.followerCount || 0,
+      refrigeratorFee: dc.refrigeratorFee || 0,
+      soundSystemFee: dc.soundSystemFee || 0,
+      tvFee: dc.tvFee || 0,
+      laundryFee: dc.laundryFee || 0,
+      airConFee: dc.airConFee || 0,
+      otherDeduction: dc.otherDeduction || 0,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
@@ -144,6 +201,20 @@ export const dailyContractorConverter = {
       createdBy: data.createdBy,
       updatedBy: data.updatedBy,
       foremanUsage: data.foremanUsage,
+      dailyWageRate: data.dailyWageRate || 0,
+      professionalRate: data.professionalRate || 0,
+      phoneAllowance: data.phoneAllowance || 0,
+      mouDeductionRate: data.mouDeductionRate || 0,
+      nationality: data.nationality || 'ไทย',
+      otherIncome: data.otherIncome || 0,
+      housingFee: data.housingFee || 0,
+      followerCount: data.followerCount || 0,
+      refrigeratorFee: data.refrigeratorFee || 0,
+      soundSystemFee: data.soundSystemFee || 0,
+      tvFee: data.tvFee || 0,
+      laundryFee: data.laundryFee || 0,
+      airConFee: data.airConFee || 0,
+      otherDeduction: data.otherDeduction || 0,
     };
   },
 };

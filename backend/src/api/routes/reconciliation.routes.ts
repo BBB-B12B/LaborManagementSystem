@@ -20,6 +20,7 @@ import {
   exportToExcel,
   generateForProjectAuto,
   updateScanPunches,
+  reviewLeaveStatus,
 } from '../../controllers/reconciliationController';
 
 const router = Router();
@@ -56,5 +57,8 @@ router.post('/:id/delete-scan', deleteGhostScan);
 
 // POST /api/reconciliation/:id/update-scan    — แก้ไขเวลาสแกนนิ้ว
 router.post('/:id/update-scan', updateScanPunches);
+
+// POST /api/reconciliation/:id/review-leave   — ตรวจสอบใบรับรองแพทย์
+router.post('/:id/review-leave', reviewLeaveStatus);
 
 export default router;

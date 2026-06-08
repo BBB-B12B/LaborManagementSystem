@@ -2066,6 +2066,62 @@ export class TaskService {
   }
 
   /**
+   * ค้นหา dailyReport ของพนักงานในวันนั้น แล้วปฏิเสธใบรับรองแพทย์ (เปลี่ยนเป็น Unpaid) 
+   * และยิง webhook กลับไปให้ AfterSale อัปเดตข้อมูล
+   */
+  async rejectMedCertInDailyReport(employeeId: string, dateStr: string): Promise<void> {
+    const timesheetRef = afterSaleDb.collection('DailyEmployeeTimesheets').doc(`${employeeId}_${dateStr}`);
+    const timesheetSnap = await timesheetRef.get();
+
+    if (!timesheetSnap.exists) {
+      console.warn(`[TaskService] DailyEmployeeTimesheet not found for ${employeeId}_${dateStr}`);
+      return;
+    }
+
+    const sourceReportPath = timesheetSnap.data()?.sourceReport;
+    if (!sourceReportPath) {
+      console.warn(`[TaskService] No sourceReport found in timesheet for ${employeeId}_${dateStr}`);
+      return;
+    }
+
+    const reportRef = afterSaleDb.doc(sourceReportPath);
+    const reportSnap = await reportRef.get();
+
+    if (!reportSnap.exists) {
+      console.warn(`[TaskService] DailyReport not found at path ${sourceReportPath}`);
+      return;
+    }
+
+    const data = reportSnap.data();
+    if (!data?.leave || !Array.isArray(data.leave)) {
+      return;
+    }
+
+    const workerIndex = data.leave.findIndex((l: any) => l.workerId === employeeId || l.employeeId === employeeId);
+    if (workerIndex === -1) {
+      return;
+    }
+
+    const updatedLeaveArray = [...data.leave];
+    updatedLeaveArray[workerIndex].leaveType = 'Unpaid';
+    updatedLeaveArray[workerIndex].isMedCertRejected = true;
+
+    await reportRef.update({ leave: updatedLeaveArray });
+    const reportPath = reportRef.path;
+      // Trigger After-Sale System Webhook
+      try {
+        await axios.post('https://asia-southeast1-after-sale-system.cloudfunctions.net/syncDailyReport', {
+          reportPath: reportPath,
+          reportDate: dateStr
+        }, { headers: { 'Content-Type': 'application/json' }});
+        console.log(`[TaskService] Triggered After-Sale Sync Successfully for ${reportPath} after rejecting med cert`);
+      } catch (error: any) {
+         console.error("[TaskService] Failed to trigger After-Sale sync after rejecting med cert:", error.message);
+      }
+
+  }
+
+  /**
    * ดึงข้อมูลรายงานประจำวันทั้งหมดของ Task
    */
   async getAllDailyReports(id: string, isSupportReport?: boolean): Promise<any[]> {

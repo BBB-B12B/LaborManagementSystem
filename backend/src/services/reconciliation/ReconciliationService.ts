@@ -879,7 +879,7 @@ export class ReconciliationService {
     }
 
     const abnormalStatuses: ReconciliationStatus[] = [
-      'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'ABSENT', 'UNREGISTERED_EMPLOYEE',
+      'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'ABSENT', 'UNREGISTERED_EMPLOYEE', 'PENDING_LEAVE_REVIEW'
     ];
     const normalStatuses: ReconciliationStatus[] = ['MATCHED', 'LEAVE', 'HOLIDAY'];
 
@@ -1629,6 +1629,70 @@ export class ReconciliationService {
   }
 
   /**
+   * Admin ตรวจสอบใบลา (Approve/Reject) สำหรับ PENDING_LEAVE_REVIEW
+   */
+  async reviewLeaveStatus(
+    recordId: string,
+    adminId: string,
+    isApproved: boolean,
+    reason?: string
+  ): Promise<void> {
+    const ref = this.collection.doc(recordId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error(`ReconciliationRecord ${recordId} not found`);
+
+    const now = new Date();
+    const record = reconciliationRecordConverter.fromFirestore(snap);
+
+    // อัปเดต leaveType ใน leaveEntries
+    let updatedLeaveEntries = record.leaveEntries;
+    if (updatedLeaveEntries && Array.isArray(updatedLeaveEntries)) {
+      updatedLeaveEntries = updatedLeaveEntries.map(entry => ({
+        ...entry,
+        type: isApproved ? 'Paid' : 'Unpaid'
+      }));
+    }
+
+    const updateData: any = {
+      isLeaveReviewed: true,
+      leaveEntries: updatedLeaveEntries,
+      updatedAt: Timestamp.fromDate(now),
+    };
+
+    if (record.status === 'PENDING_LEAVE_REVIEW') {
+      const restoredStatus = (record as any).originalStatus || 'LEAVE';
+      updateData.status = restoredStatus;
+      updateData.resolvedAt = Timestamp.fromDate(now);
+      updateData.resolvedBy = adminId;
+      updateData.statusHistory = FieldValue.arrayUnion(this.toFirestoreHistoryEntry({
+        status: restoredStatus, // กลับสู่สถานะหลักที่แท้จริง
+        changedAt: now,
+        changedBy: adminId,
+        reason: `Admin ${isApproved ? 'อนุมัติ' : 'ไม่อนุมัติ'}ใบรับรองแพทย์${reason ? `: ${reason}` : ''}`,
+      }));
+    } else {
+      updateData.statusHistory = FieldValue.arrayUnion(this.toFirestoreHistoryEntry({
+        status: record.status,
+        changedAt: now,
+        changedBy: adminId,
+        reason: `Admin ${isApproved ? 'อนุมัติ' : 'ไม่อนุมัติ'}ใบรับรองแพทย์ (สถานะหลักยังคงเป็น ${record.status})${reason ? `: ${reason}` : ''}`,
+      }));
+    }
+
+    await ref.update(updateData);
+
+    // ถ้าไม่อนุมัติ (Unpaid) ให้ไปอัปเดต DailyReport ต้นทาง และยิง Webhook ไป Aftersale
+    if (!isApproved) {
+      try {
+        const { taskService } = require('../TaskService'); // Lazy load to avoid circular dep
+        await taskService.rejectMedCertInDailyReport(record.employeeId, record.workDate);
+      } catch (err: any) {
+        console.error(`[ReconciliationService] Failed to reject med cert in TaskService for ${record.employeeId}:`, err.message);
+      }
+    }
+  }
+
+  /**
    * Admin ลบ Ghost Scan → บันทึก editHistory แล้ว soft-delete
    */
   async deleteGhostScan(
@@ -1881,10 +1945,11 @@ export class ReconciliationService {
     missingScanCount: number;
     conflictedCount: number;
     unregisteredCount: number;
+    pendingLeaveCount: number;
     employeeCount: number;
   }> {
     const abnormalStatuses: ReconciliationStatus[] = [
-      'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE', 'ABSENT',
+      'CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE', 'ABSENT', 'PENDING_LEAVE_REVIEW'
     ];
 
     // Base project/date filter (ไม่ใส่ status)
@@ -1922,6 +1987,7 @@ export class ReconciliationService {
       absentSnap,
       leaveSnap,
       holidaySnap,
+      pendingLeaveSnap,
       employeeCountSnap,
     ] = await Promise.all([
       baseQ.count().get(),
@@ -1937,6 +2003,7 @@ export class ReconciliationService {
       baseQ.where('status', '==', 'ABSENT').count().get(),
       baseQ.where('status', '==', 'LEAVE').count().get(),
       baseQ.where('status', '==', 'HOLIDAY').count().get(),
+      baseQ.where('status', '==', 'PENDING_LEAVE_REVIEW').count().get(),
       // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project (สังกัด)
       (() => {
         let dcQ: FirebaseFirestore.Query = this.db.collection(COLLECTIONS.DAILY_CONTRACTORS)
@@ -1967,6 +2034,7 @@ export class ReconciliationService {
       missingScanCount:   missingScanSnap.data().count,
       conflictedCount:    conflictedSnap.data().count,
       unregisteredCount:  unregisteredSnap.data().count,
+      pendingLeaveCount:  pendingLeaveSnap.data().count,
       employeeCount:      employeeCountSnap.data().count,
     };
   }
@@ -1996,6 +2064,7 @@ export class ReconciliationService {
       'MISSING_SCAN',
       'MISSING_DAILY',
       'ABSENT',
+      'PENDING_LEAVE_REVIEW'
     ];
 
     // ใช้ buildBaseQuery โดยตรง — ไม่ paginate เพื่อ export ข้อมูลทั้งหมด
@@ -2120,6 +2189,7 @@ export class ReconciliationService {
       'MISSING_DAILY',
       'CONFLICTED',
       'LEAVE',
+      'PENDING_LEAVE_REVIEW'
     ];
 
     const query = this.buildBaseQuery({

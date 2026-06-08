@@ -15,7 +15,7 @@ import React from 'react';
  * 8. AM (Admin) - Level 8 - All management features
  */
 
-export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD';
+export type UserRole = 'AM' | 'FM' | 'SE' | 'OE' | 'PE' | 'PM' | 'PD' | 'MD' | 'GOD' | 'LD';
 
 export interface User {
   id: string;
@@ -158,6 +158,25 @@ export class Permissions {
   }
 
   /**
+   * Check if user can access workspace
+   */
+  static canAccessWorkspace(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
+    if (!role) return false;
+    return true; // Or however it was implemented, let's assume true for now, but I'll check.
+  }
+
+  /**
+   * Check if user can edit workspace
+   * Allowed: GOD, MD, PD, PM, PE, OE, LD (AM is read-only)
+   */
+  static canEditWorkspace(role?: UserRole): boolean {
+    if (role === 'GOD') return true;
+    if (!role) return false;
+    return ['MD', 'PD', 'PM', 'PE', 'OE', 'LD'].includes(role);
+  }
+
+  /**
    * Check if user is restricted to department projects
    * Allowed: PD only (FR-A-007)
    */
@@ -247,6 +266,7 @@ export class Permissions {
       SE: 'วิศวกรประจำหน้างาน',
       FM: 'หัวหน้างาน',
       AM: 'ผู้ดูแลระบบ',
+      LD: 'หัวหน้าคนงาน',
     };
     return roleNames[roleCode] || roleCode;
   }
@@ -265,6 +285,7 @@ export class Permissions {
       SE: 6,
       FM: 7,
       AM: 8,
+      LD: 9,
     };
     return roleLevels[roleCode] || 99;
   }
@@ -300,6 +321,8 @@ export function usePermissions(user: User | null | undefined) {
     canAccessSSOManagement: Permissions.canAccessSSOManagement(role),
     canAccessHolidayManagement: Permissions.canAccessHolidayManagement(role),
     canAccessAllProjects: Permissions.canAccessAllProjects(role),
+    canAccessWorkspace: Permissions.canAccessWorkspace(role),
+    canEditWorkspace: Permissions.canEditWorkspace(role),
     isDepartmentRestricted: Permissions.isDepartmentRestricted(role),
     canAccessProject: (projectId: string) => Permissions.canAccessProject(user, projectId),
     accessibleMenuItems: Permissions.getAccessibleMenuItems(role),

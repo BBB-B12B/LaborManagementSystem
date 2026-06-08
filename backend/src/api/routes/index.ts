@@ -22,6 +22,7 @@ import reconciliationRoutes from './reconciliation.routes';
 import taskRoutes from './tasks.routes';
 import mediaRoutes from './media.routes';
 import notificationRoutes from './notifications.routes';
+import lateRecordRoutes from './lateRecords.routes';
 
 const router = Router();
 
@@ -70,5 +71,8 @@ router.use('/media', mediaRoutes);
 
 // Notification routes
 router.use('/notifications', notificationRoutes);
+
+// Late Record routes
+router.use('/late-records', lateRecordRoutes);
 
 export default router;

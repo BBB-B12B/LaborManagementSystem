@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Configuration
-const PROJECT_B_KEY_PATH = path.resolve(__dirname, '../../../keys/after-sale-system-621698fcd44f.json');
+const PROJECT_B_KEY_PATH = path.resolve(__dirname, '../config/after-sale-key.json');
 const TARGET_COLLECTION = 'DailyEmployeeTimesheets';
 
 // The input CSV file path passed as argument

@@ -7,7 +7,7 @@
 import * as admin from 'firebase-admin';
 import path from 'path';
 
-const serviceAccount = require(path.resolve(__dirname, '../../../keys/after-sale-system-621698fcd44f.json'));
+const serviceAccount = require(path.resolve(__dirname, '../config/after-sale-key.json'));
 
 const app = admin.initializeApp(
   { credential: admin.credential.cert(serviceAccount), projectId: 'after-sale-system' },

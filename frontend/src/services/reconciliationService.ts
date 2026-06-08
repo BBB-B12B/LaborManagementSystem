@@ -7,6 +7,7 @@ export type ReconciliationStatus =
   | 'MISSING_DAILY'
   | 'ABSENT'
   | 'LEAVE'
+  | 'PENDING_LEAVE_REVIEW'
   | 'HOLIDAY'
   | 'UNREGISTERED_EMPLOYEE';
 
@@ -68,6 +69,7 @@ export interface ReconciliationRecord {
   };
   suggestedHours?: number;
   status: ReconciliationStatus;
+  originalStatus?: ReconciliationStatus;
   isLocked?: boolean;
   resolvedAt?: string;          // Timestamp ISO string — set เมื่อ Admin แก้ไขสำเร็จ
   resolvedBy?: string;          // userId ของ Admin ที่แก้ไข
@@ -240,6 +242,13 @@ export const reconciliationService = {
   },
 
   /**
+   * Admin ตรวจสอบใบรับรองแพทย์ (Review Leave Status)
+   */
+  reviewLeaveStatus: async (id: string, isApproved: boolean, reason?: string): Promise<void> => {
+    await apiClient.post(`/reconciliation/${id}/review-leave`, { isApproved, reason });
+  },
+
+  /**
    * Export รายการผิดปกติเป็น JSON
    */
   exportAnomalies: async (params: {
@@ -313,6 +322,7 @@ export const reconciliationService = {
     missingScanCount: number;
     conflictedCount: number;
     unregisteredCount: number;
+    pendingLeaveCount: number;
     employeeCount: number;
   }> => {
     const response = await apiClient.get<{
@@ -332,6 +342,7 @@ export const reconciliationService = {
         missingScanCount: number;
         conflictedCount: number;
         unregisteredCount: number;
+        pendingLeaveCount: number;
         employeeCount: number;
       };
     }>('/reconciliation/stats', { params });

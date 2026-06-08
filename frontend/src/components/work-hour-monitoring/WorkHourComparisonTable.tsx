@@ -14,6 +14,9 @@ import {
   TablePagination,
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogActions,
+  Backdrop,
   Grid,
   IconButton,
   TextField,
@@ -331,6 +334,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   });
   const [resolveReason, setResolveReason] = React.useState('');
   const [viewerOpen, setViewerOpen] = React.useState(false);
+  const [fileReviewDialogOpen, setFileReviewDialogOpen] = React.useState(false);
   const [viewerImages, setViewerImages] = React.useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = React.useState(0);
   const [confirmFillOpen, setConfirmFillOpen] = React.useState(false);
@@ -459,6 +463,21 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     },
   });
 
+  const reviewLeaveMutation = useMutation({
+    mutationFn: (vars: { id: string; isApproved: boolean; reason?: string }) =>
+      reconciliationService.reviewLeaveStatus(vars.id, vars.isApproved, vars.reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
+      toast.success('ตรวจสอบใบรับรองแพทย์เรียบร้อยแล้ว');
+      setCheckDialogOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(`เกิดข้อผิดพลาด: ${err.message || 'ไม่สามารถอัปเดตข้อมูลได้'}`);
+    },
+  });
+
   const getFullImageUrl = (photoUrl: string) => {
     if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
       return photoUrl;
@@ -501,6 +520,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setFileReviewDialogOpen(true);
     }
   };
 
@@ -1949,10 +1969,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               ) : (
                 (() => {
                   const status = selectedRow?.status;
-                  const hasSomeScan = (selectedRow?.scanPunches?.length ?? 0) > 0;
-                  const canEditScan =
-                    status === 'CONFLICTED' || (status === 'MISSING_SCAN' && hasSomeScan);
-                  const canFillFromDaily = status === 'MISSING_SCAN' && !hasSomeScan;
+                  // รวมทั้งสองเงื่อนไขเข้าด้วยกัน: ถ้ามีปัญหาเรื่องเวลา/ขาดสแกน (CONFLICTED หรือ MISSING_SCAN) ให้แสดงปุ่ม "ยืนยันตาม Daily Report" ที่จะช่วยเติมเวลาให้อัตโนมัติโดยไม่ทับข้อมูลเดิม
+                  const canFillFromDaily = status === 'MISSING_SCAN' || status === 'CONFLICTED';
 
                   return (
                     <>
@@ -1962,29 +1980,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                         </Typography>
                       )}
 
-                      {/* กรณี CONFLICTED หรือ MISSING_SCAN ที่มีสแกนบางส่วน → แก้ไขสแกนนิ้ว */}
-                      {canEditScan && !(isLocked || selectedRow?.isLocked) && (
-                        <Button
-                          variant="outlined"
-                          onClick={() => {
-                            setEditingScanPunches(selectedRow?.scanPunches || []);
-                            setScanEditReason('');
-                            setIsEditingScan(true);
-                          }}
-                          sx={{
-                            textTransform: 'none',
-                            fontWeight: 800,
-                            borderRadius: '10px',
-                            px: 3,
-                            borderColor: '#475569',
-                            color: '#475569',
-                          }}
-                        >
-                          แก้ไขเวลาสแกนนิ้ว
-                        </Button>
-                      )}
-
-                      {/* กรณี MISSING_SCAN ที่ไม่มีสแกนเลย → ยืนยันตาม Daily Report */}
+                      {/* กรณี MISSING_SCAN หรือ CONFLICTED → ยืนยันตาม Daily Report (เติมเวลาที่ขาดหาย) */}
                       {canFillFromDaily && !(isLocked || selectedRow?.isLocked) && (
                         <Button
                           variant="outlined"
@@ -2002,6 +1998,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                           ยืนยันตาม Daily Report
                         </Button>
                       )}
+
+                      {/* ปุ่มอนุมัติการลา ย้ายไปอยู่ในการดูหลักฐานแทน (Phase 4 UX) */}
+                      {/* แต่ยังคงเช็ค condition เผื่อไว้เผื่อมีเคสพิเศษ */}
 
                       <Button
                         variant="contained"
@@ -2060,8 +2059,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             คุณต้องการยืนยันการปรับข้อมูลสแกนนิ้วตาม Daily Report ใช่หรือไม่?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            ระบบจะทำการบันทึกเวลาจาก Daily Report ลงในสแกนนิ้วของพนักงาน และจะอัปเดตสถานะเป็น &quot;ปกติ&quot;
-            ทันที
+            ระบบจะทำการเติมเวลาสแกนนิ้วที่ขาดหายไปตาม Daily Report โดยจะรักษาข้อมูลการสแกนเดิมที่มีอยู่ไว้ และอัปเดตสถานะเป็น &quot;ปกติ&quot; ทันที
           </Typography>
 
           <Stack direction="row" spacing={2} justifyContent="center">
@@ -2119,75 +2117,180 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           <CloseIcon />
         </IconButton>
         {viewerImages.length > 0 && (
-          <Box
-            sx={{
-              maxWidth: '90vw',
-              maxHeight: '90vh',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            {viewerImages.length > 1 && (
-              <IconButton
-                onClick={handlePrevImage}
-                sx={{
-                  position: 'absolute',
-                  left: 16,
-                  color: '#fff',
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
-                }}
-              >
-                <PrevIcon />
-              </IconButton>
-            )}
-
-            <img
-              src={viewerImages[viewerIndex]}
-              alt={`Image ${viewerIndex + 1}`}
-              style={{
-                maxWidth: '100%',
-                maxHeight: '90vh',
-                objectFit: 'contain',
-                borderRadius: '8px',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box
+              sx={{
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                position: 'relative',
               }}
-            />
+            >
+              {viewerImages.length > 1 && (
+                <IconButton
+                  onClick={handlePrevImage}
+                  sx={{
+                    position: 'absolute',
+                    left: 16,
+                    color: '#fff',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
+                  }}
+                >
+                  <PrevIcon />
+                </IconButton>
+              )}
 
-            {viewerImages.length > 1 && (
-              <IconButton
-                onClick={handleNextImage}
-                sx={{
-                  position: 'absolute',
-                  right: 16,
-                  color: '#fff',
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
+              <img
+                src={viewerImages[viewerIndex]}
+                alt={`Image ${viewerIndex + 1}`}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '85vh',
+                  objectFit: 'contain',
+                  borderRadius: '8px',
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                 }}
-              >
-                <NextIcon />
-              </IconButton>
-            )}
+              />
 
-            {viewerImages.length > 1 && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: 16,
-                  color: '#fff',
-                  backgroundColor: 'rgba(0,0,0,0.6)',
-                  px: 2,
-                  py: 0.5,
-                  borderRadius: 4,
-                  fontWeight: 'bold',
-                }}
-              >
-                {viewerIndex + 1} / {viewerImages.length}
+              {viewerImages.length > 1 && (
+                <IconButton
+                  onClick={handleNextImage}
+                  sx={{
+                    position: 'absolute',
+                    right: 16,
+                    color: '#fff',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
+                  }}
+                >
+                  <NextIcon />
+                </IconButton>
+              )}
+
+              {viewerImages.length > 1 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 16,
+                    color: '#fff',
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    px: 2,
+                    py: 0.5,
+                    borderRadius: 4,
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {viewerIndex + 1} / {viewerImages.length}
+                </Box>
+              )}
+            </Box>
+
+            {/* Action Buttons inside Image Viewer (Phase 4 UX) */}
+            {(selectedRow?.status === 'PENDING_LEAVE_REVIEW' || (selectedRow?.medCertFileUrl && !selectedRow?.isLeaveReviewed)) && !(isLocked || selectedRow?.isLocked) && (
+              <Box sx={{ display: 'flex', gap: 2, mt: 3, zIndex: 20 }}>
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    if (window.confirm('ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่? ระบบจะทำการอัปเดตไปที่ระบบยื่นรายงานประจำวันด้วย')) {
+                      reviewLeaveMutation.mutate({
+                        id: selectedRow.id,
+                        isApproved: false,
+                      });
+                      setViewerOpen(false);
+                    }
+                  }}
+                  disabled={reviewLeaveMutation.isPending}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    borderRadius: '10px',
+                    px: 4,
+                    py: 1.5,
+                    backgroundColor: '#ef4444',
+                    color: '#fff',
+                    boxShadow: '0 10px 15px -3px rgba(239, 68, 68, 0.4)',
+                    '&:hover': { backgroundColor: '#dc2626' },
+                  }}
+                >
+                  ไม่อนุมัติ (Unpaid)
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    reviewLeaveMutation.mutate({
+                      id: selectedRow.id,
+                      isApproved: true,
+                    });
+                    setViewerOpen(false);
+                  }}
+                  disabled={reviewLeaveMutation.isPending}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    borderRadius: '10px',
+                    px: 4,
+                    py: 1.5,
+                    backgroundColor: '#22c55e',
+                    color: '#fff',
+                    boxShadow: '0 10px 15px -3px rgba(34, 197, 94, 0.4)',
+                    '&:hover': { backgroundColor: '#16a34a' },
+                  }}
+                >
+                  อนุมัติ (Paid)
+                </Button>
               </Box>
             )}
           </Box>
         )}
+      </Dialog>
+
+      {/* --- File Download Leave Review Dialog --- */}
+      <Dialog open={fileReviewDialogOpen} onClose={() => setFileReviewDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a' }}>ตรวจสอบหลักฐานการลา</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ color: '#334155', mb: 2 }}>
+            ระบบได้ทำการดาวน์โหลดไฟล์หลักฐานการลาเรียบร้อยแล้ว กรุณาเปิดไฟล์ในอุปกรณ์ของคุณเพื่อตรวจสอบ
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#64748b' }}>
+            เมื่อตรวจสอบเสร็จสิ้น โปรดพิจารณาการลานี้:
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
+          <Button onClick={() => setFileReviewDialogOpen(false)} sx={{ fontWeight: 700, color: '#64748b' }}>
+            ปิด (ยังไม่พิจารณา)
+          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => {
+                if (window.confirm('ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่?')) {
+                  reviewLeaveMutation.mutate({ id: selectedRow?.id, isApproved: false });
+                  setFileReviewDialogOpen(false);
+                }
+              }}
+              disabled={reviewLeaveMutation.isPending}
+              sx={{ fontWeight: 700, borderRadius: '8px' }}
+            >
+              ไม่อนุมัติ (Unpaid)
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={() => {
+                reviewLeaveMutation.mutate({ id: selectedRow?.id, isApproved: true });
+                setFileReviewDialogOpen(false);
+              }}
+              disabled={reviewLeaveMutation.isPending}
+              sx={{ fontWeight: 700, borderRadius: '8px', color: '#fff' }}
+            >
+              อนุมัติ (Paid)
+            </Button>
+          </Stack>
+        </DialogActions>
       </Dialog>
 
       {/* ประวัติการแก้ไข Daily Report Drawer */}

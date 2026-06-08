@@ -40,6 +40,48 @@
 - [X] T-006: ตั้งค่าเชื่อมต่อ Firebase Emulator อัตโนมัติสำหรับโหมด Development (Backend) · attempts: 1 · tool_calls: 2
 
 ---
+# Master Project Roadmap: LaborManagementSystem
+
+> **📌 CURRENT ACTIVE FOCUS:** Phase 1 - Project Initialization & Architecture Setup
+> **📊 OVERALL PROGRESS:** 100% (Phase 1 Setup)
+
+---
+
+## 📚 System Documentation (Governance)
+- `docs/master_roadmap.md`: แผนงานหลัก (อัปเดตตลอด)
+- `docs/domain_rules.md`: กฎและ Business Logic ที่ตายตัว
+- `knowledge/error_index.md`: แหล่งรวมความรู้สำหรับแก้ Bug และ Error
+
+---
+
+## 🖥️ Phase 1: Project Foundation
+
+### Feature 1.1: Core Setup
+- [X] T-000: ติดตั้งระบบ Agent และโครงสร้างพื้นฐาน
+
+---
+
+## 🖥️ Phase 2: Reconciliation & Data Integrity
+
+### Feature 2.1: Assignee Name Resolution
+- [X] T-001: จัดการข้อมูลในระบบ Reconciliation (→ ERR-001) · attempts: 1 · tool_calls: 31
+- [X] T-001-001-01: แก้ไขปัญหา assigneeName เป็น null เนื่องจากฟังก์ชัน generateForEmployee ตรวจสอบชื่อไม่ครอบคลุม (→ ERR-001) · attempts: 1 · tool_calls: 31
+- [X] T-001-001-02: แก้ไข case-sensitivity ของฟิลด์คิวรีผู้ใช้และรัน backfill ข้อมูลเก่าที่มีค่าเป็น null (→ ERR-002) · attempts: 1 · tool_calls: 16
+- [X] T-001-001-03: แก้ไขปัญหา assigneeName ของพนักงานรหัส 411435 เป็น null ใน Cloud Functions (→ ERR-003) · attempts: 1 · tool_calls: 14
+- [X] T-001-001-04: แก้ไขการแสดงรูปภาพของ Daily Report ในช่วงเวลาลางาน (Leave) บน Modal รายละเอียด (→ ERR-004) · attempts: 1 · tool_calls: 23
+- [X] T-001-001-05: แก้ไขการแสดงช่วงเวลาทำงานและลางานครึ่งวัน/ไม่เต็มวันใน Modal รายละเอียด (→ ERR-005) · attempts: 1 · tool_calls: 18
+- [X] T-001-001-06: แก้ไขการคำนวณเวลาสาย/ออกก่อนรวมของทุก Segment (เปลี่ยนจาก Max เป็น Sum) (→ ERR-006) · attempts: 1 · tool_calls: 16
+- [X] T-001-001-07: แก้ไขบั๊กตัวเลขการ์ดสรุปสะสมไม่ตรงกันจากการนับซ้ำของรายการที่ลาและแก้ไขแล้ว (→ ERR-007) · attempts: 1 · tool_calls: 11
+- [X] T-001-002-01: เพิ่มการบันทึก workLogs (subtaskName, taskName) จาก After-Sale ใน reconciliationRecords ทั้ง Cloud Functions และ Backend Service · attempts: 1
+- [X] T-002: ยุบปุ่มและปรับปรุงระบบ Export รายงานแบบ Multi-sheet (v2+C+D) · session_008
+- [X] T-003: เชื่อมโยงตัวกรองงวดงานในหน้าติดตามชั่วโมงการทำงาน และแก้ไขความคลาดเคลื่อนเขตเวลาตอนคำนวณค่าแรง (→ ERR-008) · attempts: 1 · tool_calls: 14
+- [X] T-003-001-01: แก้ไขบั๊กตัวกรองงวดงานแสดงซ้ำกันเมื่อไม่ได้กรองโครงการในหน้าติดตามชั่วโมงการทำงาน (→ ERR-009) · attempts: 1 · tool_calls: 7
+- [X] T-004: พัฒนาและเชื่อมโยงประวัติการแก้ไขเวลาสแกนนิ้ว (ScanData editHistory) ลงใน History Drawer และนำ statusHistory ออก · attempts: 1 · tool_calls: 11
+- [X] T-004-001-01: แก้ไขบั๊กปุ่มบน Modal รายละเอียดทำงานไม่ได้เมื่อเปิด History Drawer พร้อมกัน (ขัดขวาง Pointer Events) · attempts: 1 · tool_calls: 13
+- [X] T-005: รวมสาขาโค้ด integration และ dailyReport พร้อมกับลบฟิลด์ dateOfBirth ออกอย่างสมบูรณ์ · attempts: 1 · tool_calls: 20
+- [X] T-006: ตั้งค่าเชื่อมต่อ Firebase Emulator อัตโนมัติสำหรับโหมด Development (Backend) · attempts: 1 · tool_calls: 2
+
+---
 
 ### 🐛 Bug & Error Task Format Reference
 > **Format:** `{TaskID}-{BugID}-{AttemptID}`
@@ -47,3 +89,4 @@
 
 ---
 > **Status:** `[ ]` (ยังไม่เริ่ม) → `[/]` (กำลังทำ/รอตรวจ) → `[X]` (เสร็จ/ตรวจผ่าน)
+- [X] T-018-01: Update conflict data modal button to auto-fill missing scan times without overwriting

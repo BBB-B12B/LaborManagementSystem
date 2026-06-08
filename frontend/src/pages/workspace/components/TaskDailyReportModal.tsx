@@ -37,11 +37,11 @@ import {
   NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { format, isBefore, subDays, startOfDay, isSameDay } from 'date-fns';
-import th from 'date-fns/locale/th';
+import { th } from "date-fns/locale/th";
 import { dailyReportService } from '@/services/dailyReportService';
 import { taskService, type Task } from '@/services/taskService';
 import { useSnackbar } from 'notistack';

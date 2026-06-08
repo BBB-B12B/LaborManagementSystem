@@ -6,6 +6,7 @@ import {
   SearchOff as SearchOffIcon,
   PersonOff as PersonOffIcon,
   PersonRemove as PersonRemoveIcon,
+  PendingActions as PendingActionsIcon,
 } from '@mui/icons-material';
 import { RECON_COLORS } from '../../constants/theme';
 import BreakdownCard from './BreakdownCard';
@@ -72,13 +73,21 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, st
       colorTheme: 'red' as const,
       count: stats?.absentCount ?? 0,
     },
+    {
+      id: 'pendingLeave',
+      title: 'รอตรวจใบรับรองแพทย์',
+      description: 'มีการแนบใบรับรองแพทย์/หลักฐานลางาน รอแอดมินตรวจสอบ',
+      icon: <PendingActionsIcon sx={{ fontSize: 28, color: RECON_COLORS.ORANGE.activeBorder }} />,
+      colorTheme: 'orange' as const,
+      count: stats?.pendingLeaveCount ?? 0,
+    },
   ];
 
   return (
     <Box sx={{ mb: 2 }}>
       <Grid container spacing={1.5}>
         {items.map((item) => (
-          <Grid item xs={12} sm={6} md={2.4} key={item.id}>
+          <Grid item xs={12} sm={6} md={2} key={item.id}>
             <BreakdownCard 
               active={activeId === item.id}
               colorTheme={item.colorTheme}
