@@ -59,6 +59,19 @@ const afterSaleDb = admin.firestore(afterSaleApp); // After-Sale Firestore
 function generateReconciliationId(employeeId, workDate) {
     return `REC_${employeeId}_${workDate}`;
 }
+async function updateTrigger(projectLocationId) {
+    if (!projectLocationId)
+        return;
+    try {
+        await db.collection('reconciliationTriggers').doc(projectLocationId).set({
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        console.log(`[CloudFunctions] Updated trigger for project: ${projectLocationId}`);
+    }
+    catch (err) {
+        console.warn(`[CloudFunctions] Failed to update trigger for project: ${projectLocationId}`, err.message);
+    }
+}
 /** แปลง HH:mm เป็นจำนวนนาทีจากเที่ยงคืน */
 function punchToMinutes(punch) {
     const [h, m] = punch.split(':').map(Number);
@@ -1021,6 +1034,9 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             ];
         }
         await recordRef.update(updates);
+        if (projectLocationId) {
+            await updateTrigger(projectLocationId);
+        }
     }
     else {
         const setObj = {
@@ -1087,6 +1103,9 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             }
         }
         await recordRef.set(setObj);
+        if (projectLocationId) {
+            await updateTrigger(projectLocationId);
+        }
     }
     console.log(`[onScanDataChanged] Reconciled ${employeeNumber} on ${workDateStr} → ${status} (scan:${totalScanHours}h / timesheet:${totalTimesheetHours}h)`);
 }
@@ -1384,6 +1403,10 @@ exports.onWagePeriodApproved = firebase_functions_1.firestore
         }
         await Promise.all(batches.map(b => b.commit()));
         console.log(`[onWagePeriodApproved] Successfully locked ${recordsSnap.size} records.`);
+        const projId = afterData['projectLocationId'];
+        if (projId) {
+            await updateTrigger(projId);
+        }
     }
     return null;
 });

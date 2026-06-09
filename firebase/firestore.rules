@@ -148,5 +148,11 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin() || request.auth.uid == resource.data.uploadedBy;
     }
+
+    // Reconciliation Triggers collection
+    match /reconciliationTriggers/{projectId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
   }
 }

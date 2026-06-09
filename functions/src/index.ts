@@ -96,6 +96,18 @@ function generateReconciliationId(employeeId: string, workDate: string): string 
   return `REC_${employeeId}_${workDate}`;
 }
 
+async function updateTrigger(projectLocationId: string): Promise<void> {
+  if (!projectLocationId) return;
+  try {
+    await db.collection('reconciliationTriggers').doc(projectLocationId).set({
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log(`[CloudFunctions] Updated trigger for project: ${projectLocationId}`);
+  } catch (err: any) {
+    console.warn(`[CloudFunctions] Failed to update trigger for project: ${projectLocationId}`, err.message);
+  }
+}
+
 /** แปลง HH:mm เป็นจำนวนนาทีจากเที่ยงคืน */
 function punchToMinutes(punch: string): number {
   const [h, m] = punch.split(':').map(Number);
@@ -1159,6 +1171,9 @@ async function reconcile(
     }
 
     await recordRef.update(updates);
+    if (projectLocationId) {
+      await updateTrigger(projectLocationId);
+    }
 
   } else {
     const setObj: any = {
@@ -1226,6 +1241,9 @@ async function reconcile(
     }
 
     await recordRef.set(setObj);
+    if (projectLocationId) {
+      await updateTrigger(projectLocationId);
+    }
   }
 
   console.log(`[onScanDataChanged] Reconciled ${employeeNumber} on ${workDateStr} → ${status} (scan:${totalScanHours}h / timesheet:${totalTimesheetHours}h)`);
@@ -1580,6 +1598,10 @@ export const onWagePeriodApproved = firestore
 
       await Promise.all(batches.map(b => b.commit()));
       console.log(`[onWagePeriodApproved] Successfully locked ${recordsSnap.size} records.`);
+      const projId = afterData['projectLocationId'];
+      if (projId) {
+        await updateTrigger(projId);
+      }
     }
 
     return null;

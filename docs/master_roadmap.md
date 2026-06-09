@@ -91,3 +91,5 @@
 > **Status:** `[ ]` (ยังไม่เริ่ม) → `[/]` (กำลังทำ/รอตรวจ) → `[X]` (เสร็จ/ตรวจผ่าน)
 - [X] T-018-01: Update conflict data modal button to auto-fill missing scan times without overwriting
 - [X] T-007: เพิ่มแท็บแสดงสถิติการขาด ลา มาสาย ใน Modal จัดการแรงงานรายวัน (DC) แบบ Pre-calculated
+- [X] T-008: ปรับปรุงประสิทธิภาพและ UX ความลื่นไหลของระบบในฝั่งหน้าบ้าน (Phase 1) · attempts: 1 · tool_calls: 5
+- [X] T-008: ปรับปรุงประสิทธิภาพและ UX ความลื่นไหลของระบบในฝั่งหลังบ้าน (Phase 2)

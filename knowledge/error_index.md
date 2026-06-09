@@ -82,7 +82,9 @@
 - **Resolution:**
   1. Deduplicated wage period dropdown options by `startDate` + `endDate` when `project === 'all'`.
   2. Upgraded comparison table edit actions and Dialogs to evaluate both global `isLocked` and row-level `row.isLocked` or `selectedRow?.isLocked`.
-
-
-
-
+## ERR-010: ScanDataMonitoring Page Compilation Fails due to Undefined currentTab Reference
+- **Task:** T-008 · **Session:** session_021
+- **File:** frontend/src/pages/scan-data-monitoring/index.tsx · **Line:** 313
+- **Symptom:** Next.js frontend build fails with error `Cannot find name 'currentTab'`.
+- **Root Cause:** A pre-existing tab interface in `ScanDataMonitoringPage` was deprecated and the `currentTab` state variable was removed, but the `handleDeleteRow` function still checked `if (currentTab === 0)` when attempting to prevent deleting reconciliation records.
+- **Resolution:** Removed the check `if (currentTab === 0)` from `handleDeleteRow` since the page now only manages scan data, making the call to `deleteScanDataById` direct and resolving the compiler error.

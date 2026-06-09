@@ -369,25 +369,62 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     keyword: string,
     options?: PaginationOptions
   ): Promise<{ items: DailyContractor[]; total: number; page: number; pageSize: number; totalPages: number }> {
-    const trimmed = keyword.trim().toLowerCase();
+    const trimmed = keyword.trim();
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 200;
 
+    // 1. If keyword is empty, just use the standard paginated getAll
+    if (!trimmed) {
+      const result = await this.getAll(options);
+      return {
+        items: result.items,
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages,
+      };
+    }
+
+    const lowerKeyword = trimmed.toLowerCase();
+
+    // 2. If it is an exact document lookup, try that first (Document ID is DC-[employeeId])
+    const directDoc = await this.getById(`DC-${trimmed}`);
+    if (directDoc) {
+      return {
+        items: [directDoc],
+        total: 1,
+        page: 1,
+        pageSize,
+        totalPages: 1,
+      };
+    }
+
+    // Also check for direct query matches on employeeId
+    const queryByEmpId = await this.query([
+      { field: 'employeeId', operator: '==', value: trimmed }
+    ]);
+    if (queryByEmpId.length > 0) {
+      return {
+        items: queryByEmpId,
+        total: queryByEmpId.length,
+        page: 1,
+        pageSize,
+        totalPages: 1,
+      };
+    }
+
+    // 3. Fallback to fetching all and filtering in memory ONLY when a search keyword is provided
     const result = await this.getAll({
       page: 1,
       pageSize: 5000,
     });
 
-    let filtered = result.items;
+    const filtered = result.items.filter((dc) => {
+      const idMatch = dc.employeeId?.toLowerCase().includes(lowerKeyword);
+      const nameMatch = dc.name?.toLowerCase().includes(lowerKeyword);
+      return Boolean(idMatch || nameMatch);
+    });
 
-    if (trimmed) {
-      filtered = result.items.filter((dc) => {
-        const idMatch = dc.employeeId?.toLowerCase().includes(trimmed);
-        const nameMatch = dc.name?.toLowerCase().includes(trimmed);
-        return Boolean(idMatch || nameMatch);
-      });
-    }
-
-    const page = options?.page || 1;
-    const pageSize = options?.pageSize || 200;
     const offset = (page - 1) * pageSize;
 
     return {

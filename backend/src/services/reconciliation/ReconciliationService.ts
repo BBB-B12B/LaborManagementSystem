@@ -123,6 +123,18 @@ export class ReconciliationService {
     return this.db.collection(COLLECTION);
   }
 
+  private async updateTrigger(projectLocationId: string) {
+    if (!projectLocationId) return;
+    try {
+      await this.db.collection('reconciliationTriggers').doc(projectLocationId).set({
+        lastUpdated: new Date(),
+      }, { merge: true });
+      console.log(`[ReconciliationService] Updated trigger for project: ${projectLocationId}`);
+    } catch (err) {
+      console.warn(`[ReconciliationService] Failed to update trigger for project: ${projectLocationId}`, err);
+    }
+  }
+
   private async getAssigneeName(assigneeId: string): Promise<string | null> {
     try {
       // 1. Try direct document lookup (doc ID = assigneeId)
@@ -922,10 +934,14 @@ export class ReconciliationService {
 
     if (!existing) {
       await ref.set(reconciliationRecordConverter.toFirestore(resultData as any));
+      const targetProj = resultData.projectLocationId || resultData.homeProjectId || input.projectLocationId;
+      if (targetProj) await this.updateTrigger(targetProj);
       return { id, ...resultData } as ReconciliationRecord;
     } else {
       // update
       await ref.update(reconciliationRecordConverter.toFirestore(resultData as any));
+      const targetProj = resultData.projectLocationId || resultData.homeProjectId || existing.projectLocationId || existing.homeProjectId || input.projectLocationId;
+      if (targetProj) await this.updateTrigger(targetProj);
       return { ...existing, ...resultData } as ReconciliationRecord;
     }
   }
@@ -1071,19 +1087,54 @@ export class ReconciliationService {
 
     const contractorMap = new Map<string, string>();
     const contractorHomeProjectMap = new Map<string, string>(); // empId → homeProjectId
+
+    // Chunk employeeIds into groups of 30 for efficient batch Firestore queries
+    const empIdArray = Array.from(employeeIds).filter(Boolean);
+    const queryChunks: string[][] = [];
+    const CHUNK_SIZE = 30;
+    for (let i = 0; i < empIdArray.length; i += CHUNK_SIZE) {
+      queryChunks.push(empIdArray.slice(i, i + CHUNK_SIZE));
+    }
+
     await Promise.all(
-      Array.from(employeeIds).map(async (empId) => {
+      queryChunks.map(async (chunk) => {
         try {
-          const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empId);
-          if (contractor) {
-            if (contractor.name) contractorMap.set(empId, contractor.name);
-            if (contractor.projectLocationId) contractorHomeProjectMap.set(empId, contractor.projectLocationId);
-          }
+          const qSnap = await this.db.collection('dailyContractors')
+            .where('employeeId', 'in', chunk)
+            .get();
+          qSnap.docs.forEach((doc) => {
+            const data = doc.data();
+            if (data && data.employeeId) {
+              if (data.name) contractorMap.set(data.employeeId, data.name);
+              const homeProj = data.projectLocationId || data.homeProjectId || '';
+              if (homeProj) contractorHomeProjectMap.set(data.employeeId, homeProj);
+            }
+          });
         } catch (err) {
-          // Ignore if not found
+          console.warn(`[ReconciliationService] Chunk query failed for employeeIds:`, chunk, err);
         }
       })
     );
+
+    // Fallback: For any employee ID not found in the initial batch query, perform a singular lookup
+    const missingEmpIds = empIdArray.filter(empId => !contractorMap.has(empId));
+    if (missingEmpIds.length > 0) {
+      console.log(`[ReconciliationService] Performing fallback lookup for ${missingEmpIds.length} missing employee(s)`);
+      await Promise.all(
+        missingEmpIds.map(async (empId) => {
+          try {
+            const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empId);
+            if (contractor) {
+              if (contractor.name) contractorMap.set(empId, contractor.name);
+              const homeProj = contractor.projectLocationId || (contractor as any).homeProjectId || '';
+              if (homeProj) contractorHomeProjectMap.set(empId, homeProj);
+            }
+          } catch (err) {
+            // Ignore if not found
+          }
+        })
+      );
+    }
     
     // 3.6 ดึงข้อมูลโฟร์แมน (Assignees) จาก users collection
     // ใช้ Employeeid (ตัว E ใหญ่) ตาม schema จริงใน Firestore
@@ -1185,6 +1236,8 @@ export class ReconciliationService {
       return !matchedKeys.has(`${scan.employeeId}_${dateKey}`);
     });
 
+    const fallbackAssigneeCache = new Map<string, { id: string; name: string } | null>();
+
     for (const scan of unmatchedScans) {
       const dateKey =
         scan.scanDate ||
@@ -1192,7 +1245,13 @@ export class ReconciliationService {
           ? scan.workDate.toISOString().split('T')[0]
           : String(scan.workDate).split('T')[0]);
       
-      const fallback = await this.getFallbackAssignee(scan.employeeId);
+      let fallback = null;
+      if (fallbackAssigneeCache.has(scan.employeeId)) {
+        fallback = fallbackAssigneeCache.get(scan.employeeId) || null;
+      } else {
+        fallback = await this.getFallbackAssignee(scan.employeeId);
+        fallbackAssigneeCache.set(scan.employeeId, fallback);
+      }
       const totalScanHours =
         (scan.regularHours ?? 0) +
         (scan.otMorningHours ?? 0) +
@@ -1241,6 +1300,10 @@ export class ReconciliationService {
     console.log(`[ReconciliationService] Step 6: writer.close() starting (${succeeded} writes queued)...`);
     await writer.close();
     console.log(`[ReconciliationService] Step 6: writer.close() DONE`);
+
+    if (succeeded > 0 && projectLocationId && projectLocationId !== 'all') {
+      await this.updateTrigger(projectLocationId);
+    }
 
     return {
       succeeded,
@@ -1563,6 +1626,10 @@ export class ReconciliationService {
         scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
       }),
     });
+
+    if (record.projectLocationId) {
+      await this.updateTrigger(record.projectLocationId);
+    }
   }
 
   /**
@@ -1626,6 +1693,10 @@ export class ReconciliationService {
       statusHistory: FieldValue.arrayUnion(this.toFirestoreHistoryEntry(historyEntry)),
       scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(editEntry)),
     });
+
+    if (record.projectLocationId) {
+      await this.updateTrigger(record.projectLocationId);
+    }
   }
 
   /**
@@ -1680,6 +1751,10 @@ export class ReconciliationService {
     }
 
     await ref.update(updateData);
+
+    if (record.projectLocationId) {
+      await this.updateTrigger(record.projectLocationId);
+    }
 
     // ถ้าไม่อนุมัติ (Unpaid) ให้ไปอัปเดต DailyReport ต้นทาง และยิง Webhook ไป Aftersale
     if (!isApproved) {
@@ -1750,6 +1825,10 @@ export class ReconciliationService {
         scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
       }),
     });
+
+    if (record.projectLocationId) {
+      await this.updateTrigger(record.projectLocationId);
+    }
 
     // Soft delete scan SECOND (triggers onScanDataChanged which will see resolvedAt != null)
     if (record.scanDataId && scanEditEntryToLog) {
@@ -1865,7 +1944,6 @@ export class ReconciliationService {
       note: `Punches ใหม่: [${punches.join(', ')}] -> ${classified.status}`,
     };
 
-    // 4. บันทึก ReconciliationRecord FIRST (เพื่อให้ Cloud Function reconcile ใน background เห็น resolvedAt ก่อน!)
     await ref.update({
       scanPunches: punches,
       scanDataHours: totalScanHours,
@@ -1893,6 +1971,10 @@ export class ReconciliationService {
         scanEditHistory: FieldValue.arrayUnion(this.toFirestoreScanEditEntry(scanEditEntryToLog)),
       }),
     });
+
+    if (record.projectLocationId) {
+      await this.updateTrigger(record.projectLocationId);
+    }
 
     // 5. บันทึก ScanData SECOND (จะไป trigger onScanDataChanged ภายหลัง)
     if (record.scanDataId && scanEditEntryToLog) {

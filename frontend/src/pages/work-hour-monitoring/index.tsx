@@ -9,25 +9,14 @@ import {
   MenuItem,
   Select,
   FormControl,
-  Divider,
-  GlobalStyles,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControlLabel,
-  RadioGroup,
-  Radio
+  GlobalStyles
 } from '@mui/material';
 import projectService from '@/services/projectService';
 import {
   Fullscreen as FullscreenIcon,
-  FullscreenExit as FullscreenExitIcon,
-  Sync as SyncIcon,
   Search as SearchIcon,
   KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { wageService, type WagePeriod } from '@/services/wageService';
 import { useToast } from '@/components/common';
@@ -39,11 +28,12 @@ import AbnormalBreakdown from '@/components/work-hour-monitoring/AbnormalBreakdo
 import NormalBreakdown from '@/components/work-hour-monitoring/NormalBreakdown';
 import DatePicker from '@/components/forms/DatePicker';
 import { RECON_COLORS } from '@/constants/theme';
+import { db } from '@/config/firebase';
+import { doc, collection, onSnapshot } from 'firebase/firestore';
 
 export default function WorkHourMonitoringPage() {
-  const { t } = useTranslation();
+  // useTranslation hook removed since t is unused
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -60,14 +50,28 @@ export default function WorkHourMonitoringPage() {
     return new Date(d.getFullYear(), d.getMonth() + 1, 0);
   });
   const [project, setProject] = useState('all');
-  const [projectsList, setProjectsList] = useState<{id: string, code: string, name: string}[]>([]);
+  // Fetch projects list using React Query
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects', 'active-list'],
+    queryFn: () => projectService.getAll(),
+    staleTime: 1000 * 60 * 5, // 5 minutes cache
+  });
+
+  const projectsList = useMemo(() => {
+    if (!projectsData) return [];
+    return projectsData.map((p) => ({
+      id: p.id,
+      code: p.projectCode || p.code || p.id,
+      name: p.projectName || p.code || p.id
+    }));
+  }, [projectsData]);
 
   // Fetch wage periods
   const { data: wagePeriodsData } = useQuery({
     queryKey: ['wagePeriods'],
     queryFn: () => wageService.getAllWagePeriods(),
   });
-  const wagePeriods = wagePeriodsData?.wagePeriods || [];
+  const wagePeriods = useMemo(() => wagePeriodsData?.wagePeriods || [], [wagePeriodsData]);
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('custom');
   const [hasSetDefaultPeriod, setHasSetDefaultPeriod] = useState(false);
@@ -135,26 +139,48 @@ export default function WorkHourMonitoringPage() {
     }
   }, [wagePeriods, hasSetDefaultPeriod]);
 
+  // Real-time Trigger Listener for auto-refreshing reconciliation data
+  useEffect(() => {
+    let unsubscribe = () => {};
+
+    if (project === 'all') {
+      // Listen to the entire reconciliationTriggers collection
+      unsubscribe = onSnapshot(collection(db, 'reconciliationTriggers'), (snapshot) => {
+        let hasChanges = false;
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added' || change.type === 'modified') {
+            hasChanges = true;
+          }
+        });
+
+        if (hasChanges) {
+          console.log('[WorkHourMonitoring] reconciliationTriggers collection changed, invalidating queries...');
+          queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+          queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
+        }
+      });
+    } else {
+      // Listen to the specific project trigger document
+      unsubscribe = onSnapshot(doc(db, 'reconciliationTriggers', project), (snapshot) => {
+        if (snapshot.exists()) {
+          console.log(`[WorkHourMonitoring] Trigger for project ${project} changed, invalidating queries...`);
+          queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
+          queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
+        }
+      });
+    }
+
+    return () => unsubscribe();
+  }, [project, queryClient]);
+
   // Breakdown Visibility
   const [showAbnormalBreakdown, setShowAbnormalBreakdown] = useState(false);
   const [showNormalBreakdown, setShowNormalBreakdown] = useState(false);
   const [activeBreakdownId, setActiveBreakdownId] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const projectsData = await projectService.getAll();
-        setProjectsList(projectsData.map((p) => ({
-          id: p.id,
-          code: p.projectCode || p.code || p.id,
-          name: p.projectName || p.code || p.id
-        })));
-      } catch (error) {
-        console.error("Error fetching projects:", error);
-      }
-    };
-    fetchProjects();
-  }, []);
+  // Projects fetching is now handled by useQuery above
 
   const handleProjectChange = (newProject: string) => {
     setProject(newProject);
@@ -263,27 +289,7 @@ export default function WorkHourMonitoringPage() {
     }
   };
 
-  const handleSync = async () => {
-    if (!startDate || !endDate) {
-      toast.warning('กรุณาเลือกช่วงวันที่');
-      return;
-    }
-    setIsSyncing(true);
-    try {
-      await reconciliationService.generateForProjectAuto({
-        projectLocationId: project,
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0]
-      });
-      toast.success('ประมวลผลเสร็จสิ้น');
-      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
-      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
-    } catch (error: any) {
-      toast.error(error.message || 'Sync failed');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  // handleSync is removed because reconciliation is automated in real-time
 
   const handleOpenFilter = (event: React.MouseEvent<HTMLDivElement>) => setFilterAnchorEl(event.currentTarget);
   const handleCloseFilter = () => setFilterAnchorEl(null);
@@ -361,7 +367,6 @@ export default function WorkHourMonitoringPage() {
                 </Stack>
                 <Stack direction="row" spacing={1}>
                   <Button variant="outlined" size="small" onClick={() => setIsFullscreen(true)} startIcon={<FullscreenIcon />}>Full Screen</Button>
-                  <Button variant="outlined" size="small" onClick={handleSync} startIcon={<SyncIcon />}>ประมวลผลใหม่</Button>
                   <Box onClick={handleOpenFilter} sx={{ border: '1px solid #cbd5e1', borderRadius: '6px', px: 1.5, py: 0.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1 }}>
                     <SearchIcon fontSize="small" /> <Typography variant="caption">ตัวกรอง</Typography> <ArrowDownIcon fontSize="small" />
                   </Box>

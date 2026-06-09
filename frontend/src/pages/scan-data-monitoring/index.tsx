@@ -310,11 +310,7 @@ export default function ScanDataMonitoringPage() {
       `ข้อมูลสแกนของพนักงาน ${empNo} วันที่ ${dateStr}`,
       async () => {
         try {
-          if (currentTab === 0) {
-            alert('ไม่สามารถลบข้อมูล Reconciliation ได้จากหน้านี้');
-          } else {
-            await deleteScanDataById(row.id);
-          }
+          await deleteScanDataById(row.id);
           showSuccess('ลบข้อมูลสำเร็จ');
           handleRefresh();
         } catch (err: any) {
