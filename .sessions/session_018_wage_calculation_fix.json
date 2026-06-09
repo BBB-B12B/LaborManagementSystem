@@ -1,8 +1,8 @@
 {
   "session_id": "session_018_wage_calculation_fix",
-  "associated_tasks": ["Wage-Calculation-N+1-Fix", "Late-Records-Route"],
+  "associated_tasks": ["Wage-Calculation-N+1-Fix", "Late-Records-Route", "ScanData-UI-Fix"],
   "status": "completed",
-  "estimated_tokens": 5000,
-  "summary_context": "Fixed N+1 query timeout in WagePeriodService calculateWages by batch-fetching compensation details. Added caching for SocialSecurityRules. Added missing /late-records API route. Fixed ReconciliationService TypeScript build errors regarding originalStatus and date.",
+  "estimated_tokens": 8000,
+  "summary_context": "Fixed N+1 query timeout in WagePeriodService calculateWages by batch-fetching compensation details. Added caching for SocialSecurityRules. Added missing /late-records API route. Fixed ReconciliationService TypeScript build errors regarding originalStatus and date. Additionally, fixed ScanData UI by removing unnecessary tabs and adding color legend. Fixed critical bug in ScanDataService where isDeleted: false was not set for newly created scanData during fillFromDailyReport and addManualScan, causing data to be invisible in ScanDataMonitoringPage.",
   "History": []
 }

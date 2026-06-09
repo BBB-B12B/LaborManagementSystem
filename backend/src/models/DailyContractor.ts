@@ -11,6 +11,22 @@
  *   - dcExpenseDetails
  */
 
+export interface AttendanceStats {
+  yearly: Record<string, {
+    paidLeave: number;
+    unpaidLeave: number;
+    lateCount: number;
+    absentDays: number;
+  }>;
+  periods: Record<string, {
+    name: string;
+    paidLeave: number;
+    unpaidLeave: number;
+    lateCount: number;
+    absentDays: number;
+  }>;
+}
+
 export interface DailyContractor {
   id: string;
   employeeId: string;
@@ -48,6 +64,7 @@ export interface DailyContractor {
   laundryFee?: number;
   airConFee?: number;
   otherDeduction?: number;
+  attendanceStats?: AttendanceStats;
 }
 
 export interface DailyContractorDTO {
@@ -67,6 +84,7 @@ export interface DailyContractorDTO {
     count: number;
     name: string;
   }>;
+  attendanceStats?: AttendanceStats;
 }
 
 export interface CreateDailyContractorInput {
@@ -172,6 +190,7 @@ export const dailyContractorConverter = {
       laundryFee: dc.laundryFee || 0,
       airConFee: dc.airConFee || 0,
       otherDeduction: dc.otherDeduction || 0,
+      attendanceStats: dc.attendanceStats || null,
     };
   },
   fromFirestore: (snapshot: any): DailyContractor => {
@@ -215,6 +234,7 @@ export const dailyContractorConverter = {
       laundryFee: data.laundryFee || 0,
       airConFee: data.airConFee || 0,
       otherDeduction: data.otherDeduction || 0,
+      attendanceStats: data.attendanceStats,
     };
   },
 };

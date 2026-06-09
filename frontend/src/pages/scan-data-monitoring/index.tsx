@@ -77,6 +77,7 @@ import {
   restoreScanDataById,
 } from '../../services/scanDataService';
 import { reconciliationService } from '../../services/reconciliationService';
+import { wageService } from '../../services/wageService';
 import WorkHourComparisonTable from '../../components/work-hour-monitoring/WorkHourComparisonTable';
 
 
@@ -127,7 +128,6 @@ export default function ScanDataMonitoringPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
-  const [currentTab, setCurrentTab] = useState(1); // 0: Discrepancies, 1: All Scans, 2: Deleted History
   const [manualScanOpen, setManualScanOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
@@ -163,7 +163,7 @@ export default function ScanDataMonitoringPage() {
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
   // Filter form
-  const { control, watch, reset, handleSubmit: handleFilterSubmit } = useForm<DiscrepancyFilter>({
+  const { control, watch, reset, setValue, handleSubmit: handleFilterSubmit } = useForm<DiscrepancyFilter>({
     defaultValues: {
       status: 'pending', // แสดงเฉพาะรอแก้ไขตอนเริ่มต้น
       startDate: startOfMonth,
@@ -172,6 +172,50 @@ export default function ScanDataMonitoringPage() {
   });
 
   const filter = watch();
+
+  // Fetch wage periods for default date setting
+  const { data: wagePeriodsData } = useQuery({
+    queryKey: ['wagePeriods'],
+    queryFn: () => wageService.getAllWagePeriods(),
+  });
+  const wagePeriods = wagePeriodsData?.wagePeriods || [];
+
+  const [hasSetDefaultPeriod, setHasSetDefaultPeriod] = useState(false);
+
+  // Auto set period dates based on wage periods and selected project
+  useEffect(() => {
+    if (wagePeriods.length > 0) {
+      let periods = wagePeriods;
+      if (filter.projectLocationId) {
+        periods = wagePeriods.filter(p => p.projectCode === filter.projectLocationId);
+      }
+
+      // Automatically find and select the active period
+      const today = new Date();
+      const currentPeriod = periods.find(p => {
+        const start = new Date(p.startDate);
+        const end = new Date(p.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+      });
+
+      if (currentPeriod) {
+        setValue('startDate', new Date(currentPeriod.startDate));
+        setValue('endDate', new Date(currentPeriod.endDate));
+      } else {
+        // Fallback to current month if no active period found
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        setValue('startDate', startOfMonth);
+        setValue('endDate', endOfMonth);
+      }
+      
+      if (!hasSetDefaultPeriod) {
+        setHasSetDefaultPeriod(true);
+      }
+    }
+  }, [wagePeriods, filter.projectLocationId, setValue, hasSetDefaultPeriod]);
 
   // Discrepancy is now handled by WorkHourComparisonTable
   // We no longer fetch discrepancies here since the component fetches its own data
@@ -191,26 +235,8 @@ export default function ScanDataMonitoringPage() {
       endDate: filter.endDate,
       enriched: true,
     }, page + 1, pageSize),
-    enabled: currentTab === 1,
   });
 
-  // Fetch deleted scan data
-  const {
-    data: deletedScanData,
-    isLoading: isDeletedLoading,
-    refetch: refetchDeleted
-  } = useQuery({
-    queryKey: ['deletedScanData', filter, page, pageSize],
-    queryFn: () => getAllScanData({
-      projectLocationId: filter.projectLocationId,
-      employeeNumber: filter.employeeNumber,
-      startDate: filter.startDate,
-      endDate: filter.endDate,
-      enriched: true,
-      onlyDeleted: true,
-    }, page + 1, pageSize),
-    enabled: currentTab === 2,
-  });
 
 
   const handleViewDetails = (id: string) => {
@@ -227,8 +253,7 @@ export default function ScanDataMonitoringPage() {
   };
 
   const handleRefresh = () => {
-    if (currentTab === 1) refetchAllScans();
-    else if (currentTab === 2) refetchDeleted();
+    refetchAllScans();
     
     // Invalidate stats to ensure the Breakdown UI gets the latest counts
     queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
@@ -752,7 +777,20 @@ export default function ScanDataMonitoringPage() {
           minHeight: 0,
         }}
       >
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', py: 1.5 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+          {/* Legend */}
+          <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>ความหมายของสี:</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#16a34a' }} />
+              <Typography variant="body2" sx={{ color: '#16a34a', fontWeight: 700 }}>ข้อมูลที่พนักงานสแกนจริง</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ea580c' }} />
+              <Typography variant="body2" sx={{ color: '#ea580c', fontWeight: 700 }}>เพิ่ม/ยืนยันโดย Admin</Typography>
+            </Box>
+          </Box>
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             {!showFilters && !isFullscreen && (
               <Button 

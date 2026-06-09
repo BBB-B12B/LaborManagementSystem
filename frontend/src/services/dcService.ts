@@ -12,6 +12,24 @@ import type { DCCreateInput, DCEditInput } from '../validation/dcSchema';
 /**
  * Daily Contractor data type (DTO from backend)
  */
+export interface AttendanceStats {
+  yearly: Record<string, {
+    paidLeave: number;
+    unpaidLeave: number;
+    lateMinutes: number;
+    earlyLeaveMinutes: number;
+    absentDays: number;
+  }>;
+  periods: Record<string, {
+    name: string;
+    paidLeave: number;
+    unpaidLeave: number;
+    lateMinutes: number;
+    earlyLeaveMinutes: number;
+    absentDays: number;
+  }>;
+}
+
 export interface DailyContractor {
   id: string;
   employeeId: string;
@@ -37,6 +55,7 @@ export interface DailyContractor {
   mouDeductionRate?: number;
   nationality?: string;
   foremanUsage?: Record<string, { count: number; name: string }>;
+  attendanceStats?: AttendanceStats;
 }
 
 export interface DCCompensationIncome {

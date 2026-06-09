@@ -159,6 +159,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         allScans,
         punches,
         devicePunches,
+        isDeleted: false,
       };
 
       await docRef.set(scanData, { merge: true });
@@ -1210,6 +1211,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         ...timeSlots,
         updatedAt: new Date(),
         createdAt: (existingData as any).createdAt || new Date(),
+        isDeleted: false,
       };
 
       await docRef.set(updateData, { merge: true });

@@ -30,6 +30,7 @@ import {
   ReconciliationRecord,
   PaginatedReconciliationResponse,
 } from '../../services/reconciliationService';
+import { dcService } from '../../services/dcService';
 import { format } from 'date-fns';
 import {
   Info as InfoIcon,
@@ -39,6 +40,10 @@ import {
   FileDownload as FileDownloadIcon,
   Refresh as RefreshIcon,
   History as HistoryIcon,
+  ZoomIn as ZoomInIcon,
+  ZoomOut as ZoomOutIcon,
+  RestartAlt as ResetZoomIcon,
+  InsertDriveFile as InsertDriveFileIcon,
 } from '@mui/icons-material';
 import { useToast } from '@/components/common';
 import { TimePicker } from '../../components/forms/TimePicker';
@@ -113,11 +118,11 @@ const StyledTableContainer = styled(TableContainer)({
   },
   // Sub-headers for OT
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root:nth-of-type(3), & .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root:nth-of-type(4), & .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root:nth-of-type(5)':
-    {
-      backgroundColor: '#01497c',
-      color: 'rgba(255, 255, 255, 0.9)',
-      fontSize: '0.7rem',
-    },
+  {
+    backgroundColor: '#01497c',
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: '0.7rem',
+  },
   '& .MuiTableBody-root .MuiTableRow-root': {
     transition: 'all 0.2s ease',
     '&:hover': {
@@ -333,11 +338,63 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     otEvening: 0,
   });
   const [resolveReason, setResolveReason] = React.useState('');
+  const [isRejectModalOpen, setIsRejectModalOpen] = React.useState(false);
   const [viewerOpen, setViewerOpen] = React.useState(false);
-  const [fileReviewDialogOpen, setFileReviewDialogOpen] = React.useState(false);
+  const [imageZoom, setImageZoom] = React.useState(1);
   const [viewerImages, setViewerImages] = React.useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = React.useState(0);
   const [confirmFillOpen, setConfirmFillOpen] = React.useState(false);
+  // Measured rendered size of image at zoom=1 — used as base for linear zoom
+  const [fitSize, setFitSize] = React.useState<{ w: number; h: number } | null>(null);
+  const imgRef = React.useRef<HTMLImageElement>(null);
+
+  // --- Image Drag to Pan Refs ---
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const isDragging = React.useRef(false);
+  const startPos = React.useRef({ x: 0, y: 0 });
+  const scrollPos = React.useRef({ left: 0, top: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current || imageZoom <= 1) return;
+    isDragging.current = true;
+    startPos.current = { x: e.clientX, y: e.clientY };
+    scrollPos.current = { left: scrollRef.current.scrollLeft, top: scrollRef.current.scrollTop };
+    scrollRef.current.style.cursor = 'grabbing';
+    scrollRef.current.style.userSelect = 'none';
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    const dx = e.clientX - startPos.current.x;
+    const dy = e.clientY - startPos.current.y;
+    scrollRef.current.scrollLeft = scrollPos.current.left - dx;
+    scrollRef.current.scrollTop = scrollPos.current.top - dy;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    if (!scrollRef.current) return;
+    isDragging.current = false;
+    scrollRef.current.style.cursor = imageZoom > 1 ? 'grab' : 'default';
+    scrollRef.current.style.userSelect = '';
+  };
+
+  // Scroll to top-left when zooming in/out
+  React.useEffect(() => {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    el.scrollTop = 0;
+    el.scrollLeft = 0;
+  }, [imageZoom]);
+
+  const handleImgLoad = () => {
+    // Measure the rendered size once when image loads at zoom=1 — used as base for all zoom levels
+    if (imgRef.current) {
+      const rect = imgRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setFitSize({ w: rect.width, h: rect.height });
+      }
+    }
+  };
 
   // --- Scan Edit States ---
   const [isEditingScan, setIsEditingScan] = React.useState(false);
@@ -391,9 +448,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         if (!old) return old;
         return {
           ...old,
-          pendingCount:  Math.max(0, (old.pendingCount  ?? 1) - 1),
-          normalCount:   (old.normalCount  ?? 0) + 1,
-          matchedCount:  (old.matchedCount ?? 0) + 1,  // record กลายเป็น MATCHED
+          pendingCount: Math.max(0, (old.pendingCount ?? 1) - 1),
+          normalCount: (old.normalCount ?? 0) + 1,
+          matchedCount: (old.matchedCount ?? 0) + 1,  // record กลายเป็น MATCHED
           resolvedCount: (old.resolvedCount ?? 0) + 1,  // เพิ่ม resolution count ทันที
           resolvedMatchedCount: (old.resolvedMatchedCount ?? 0) + 1, // เพิ่ม resolved matched count ทันที
         };
@@ -497,40 +554,31 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const handleOpenViewer = (urls: string[], startIndex: number = 0) => {
     setViewerImages(urls);
     setViewerIndex(startIndex);
+    setImageZoom(1);
+    setFitSize(null); // Reset measured size for new image
     setViewerOpen(true);
   };
 
   const handleOpenEvidence = (photoUrl: string) => {
     const fullUrl = getFullImageUrl(photoUrl);
-    const cleanUrl = fullUrl.split('?')[0].toLowerCase();
-    const isImage =
-      cleanUrl.endsWith('.jpg') ||
-      cleanUrl.endsWith('.jpeg') ||
-      cleanUrl.endsWith('.png') ||
-      cleanUrl.endsWith('.gif') ||
-      cleanUrl.endsWith('.webp');
-
-    if (isImage) {
-      handleOpenViewer([fullUrl]);
-    } else {
-      const link = document.createElement('a');
-      link.href = fullUrl;
-      link.download = fullUrl.split('/').pop()?.split('?')[0] || 'evidence';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setFileReviewDialogOpen(true);
-    }
+    setViewerImages([fullUrl]);
+    setViewerIndex(0);
+    setImageZoom(1);
+    setFitSize(null); // Reset measured size for new image
+    setViewerOpen(true);
   };
 
   const handleNextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setImageZoom(1);
+    setFitSize(null);
     setViewerIndex((prev) => (prev + 1) % viewerImages.length);
   };
 
   const handlePrevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setImageZoom(1);
+    setFitSize(null);
     setViewerIndex((prev) => (prev - 1 + viewerImages.length) % viewerImages.length);
   };
 
@@ -586,6 +634,40 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   const records = paginatedData?.records ?? [];
   const total = paginatedData?.total ?? 0;
+
+  const { data: dcList } = useQuery({
+    queryKey: ['dc-stats', selectedRow?.employeeId],
+    queryFn: () => dcService.searchDCs(selectedRow!.employeeId, 1),
+    enabled: !!selectedRow?.employeeId && !!selectedRow?.medCertFileUrl,
+  });
+
+  const leaveQuotaElement = React.useMemo(() => {
+    if (!selectedRow?.medCertFileUrl || !selectedRow?.workDate) return null;
+    const workYear = selectedRow.workDate.substring(0, 4);
+    const stats = dcList?.[0]?.attendanceStats?.yearly?.[workYear];
+    const paidLeaveCount = stats?.paidLeave || 0;
+
+    // We assume if the request is pending, it hasn't been counted in attendanceStats yet.
+    const isOverQuota = paidLeaveCount >= 30;
+
+    if (isOverQuota) {
+      return (
+        <Box sx={{ width: 'fit-content', mx: 'auto', mt: 1, mb: 1, p: 1.5, bgcolor: '#fee2e2', borderRadius: 2, border: '1px solid #f87171', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+          <Typography variant="body2" sx={{ color: '#991b1b', fontWeight: 800, textAlign: 'center' }}>
+            🔴 ลาป่วยแบบได้เงิน: {paidLeaveCount}/30 วัน (รายการนี้คือครั้งที่ {paidLeaveCount + 1} — เกินโควตา)
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={{ width: 'fit-content', mx: 'auto', mt: 1, mb: 1, p: 1.5, bgcolor: '#dcfce7', borderRadius: 2, border: '1px solid #4ade80', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+        <Typography variant="body2" sx={{ color: '#166534', fontWeight: 800, textAlign: 'center' }}>
+          🟢 ลาป่วยแบบได้เงิน: {paidLeaveCount}/30 วัน (รายการนี้คือครั้งที่ {paidLeaveCount + 1})
+        </Typography>
+      </Box>
+    );
+  }, [dcList, selectedRow]);
 
   const resolveSinglePunch = (
     punches: number[],
@@ -1389,25 +1471,25 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             <Stack direction="row" spacing={1.5} alignItems="center">
               {((selectedRow?.dailyReportHistory && selectedRow.dailyReportHistory.length > 0) ||
                 (selectedRow?.scanEditHistory && selectedRow.scanEditHistory.length > 0)) && (
-                <IconButton
-                  onClick={() => setHistoryOpen(!historyOpen)}
-                  sx={{
-                    color: '#fff',
-                    backgroundColor: historyOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.25)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                    },
-                    width: 36,
-                    height: 36,
-                    borderRadius: '8px',
-                    transition: 'all 0.2s',
-                  }}
-                  title="ประวัติการแก้ไขและตรวจสอบข้อมูล (Audit Trail)"
-                >
-                  <HistoryIcon sx={{ fontSize: 20 }} />
-                </IconButton>
-              )}
+                  <IconButton
+                    onClick={() => setHistoryOpen(!historyOpen)}
+                    sx={{
+                      color: '#fff',
+                      backgroundColor: historyOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                      },
+                      width: 36,
+                      height: 36,
+                      borderRadius: '8px',
+                      transition: 'all 0.2s',
+                    }}
+                    title="ประวัติการแก้ไขและตรวจสอบข้อมูล (Audit Trail)"
+                  >
+                    <HistoryIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                )}
               <Box sx={getStatusStyle(selectedRow?.status || 'ALL')}>
                 {getStatusLabel(selectedRow?.status)}
               </Box>
@@ -1888,7 +1970,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                         justifyContent: 'space-between',
                       }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <Typography variant="body2" fontWeight={850} sx={{ color: '#ea580c' }}>
                           📄 มีหลักฐานใบรับรองแพทย์ / การลางานแนบไว้
                         </Typography>
@@ -2090,207 +2172,265 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Image Viewer Lightbox */}
+      {/* Evidence Viewer Dialog (Images, PDFs & Other files) */}
       <Dialog
         open={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        maxWidth="lg"
+        onClose={() => { setViewerOpen(false); setImageZoom(1); }}
+        maxWidth={false}
         PaperProps={{
           sx: {
             backgroundColor: 'transparent',
             boxShadow: 'none',
             overflow: 'visible',
-            position: 'relative',
+            m: 0,
           },
         }}
       >
+        {/* Close button */}
         <IconButton
-          onClick={() => setViewerOpen(false)}
-          sx={{
-            position: 'absolute',
-            top: -40,
-            right: -40,
-            color: '#fff',
-            '&:hover': { color: '#e2e8f0' },
-          }}
+          onClick={() => { setViewerOpen(false); setImageZoom(1); }}
+          sx={{ position: 'fixed', top: 16, right: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10, '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}
         >
           <CloseIcon />
         </IconButton>
-        {viewerImages.length > 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Box
-              sx={{
-                maxWidth: '90vw',
-                maxHeight: '85vh',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                position: 'relative',
-              }}
-            >
-              {viewerImages.length > 1 && (
-                <IconButton
-                  onClick={handlePrevImage}
-                  sx={{
-                    position: 'absolute',
-                    left: 16,
-                    color: '#fff',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
-                  }}
-                >
-                  <PrevIcon />
-                </IconButton>
-              )}
 
-              <img
-                src={viewerImages[viewerIndex]}
-                alt={`Image ${viewerIndex + 1}`}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '85vh',
-                  objectFit: 'contain',
-                  borderRadius: '8px',
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                }}
-              />
+        {viewerImages.length > 0 && (() => {
+          const currentUrl = viewerImages[viewerIndex];
+          const cleanUrl = currentUrl ? currentUrl.split('?')[0].toLowerCase() : '';
+          const isPdf = cleanUrl.endsWith('.pdf');
+          const isImage =
+            cleanUrl.endsWith('.jpg') ||
+            cleanUrl.endsWith('.jpeg') ||
+            cleanUrl.endsWith('.png') ||
+            cleanUrl.endsWith('.gif') ||
+            cleanUrl.endsWith('.webp');
+          const isOther = !isPdf && !isImage;
 
-              {viewerImages.length > 1 && (
-                <IconButton
-                  onClick={handleNextImage}
-                  sx={{
-                    position: 'absolute',
-                    right: 16,
-                    color: '#fff',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
-                  }}
-                >
-                  <NextIcon />
-                </IconButton>
-              )}
+          return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', width: '92vw', maxHeight: '95vh' }}>
 
-              {viewerImages.length > 1 && (
+              {/* ── Scrollable Content Area ── */}
+              {isImage && (
                 <Box
+                  ref={scrollRef}
                   sx={{
-                    position: 'absolute',
-                    bottom: 16,
-                    color: '#fff',
-                    backgroundColor: 'rgba(0,0,0,0.6)',
-                    px: 2,
-                    py: 0.5,
-                    borderRadius: 4,
-                    fontWeight: 'bold',
+                    height: '65vh',
+                    overflow: 'auto',
+                    backgroundColor: 'rgba(0,0,0,0.85)',
+                    borderRadius: '12px 12px 0 0',
+                    cursor: imageZoom > 1 ? 'grab' : 'default',
                   }}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUpOrLeave}
+                  onMouseLeave={handleMouseUpOrLeave}
                 >
-                  {viewerIndex + 1} / {viewerImages.length}
+                  {/* Inner wrapper: grows to fit zoomed image so scroll covers all edges */}
+                  <Box sx={{
+                    minWidth: fitSize && imageZoom > 1 ? `${fitSize.w * imageZoom}px` : '100%',
+                    minHeight: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: imageZoom > 1 ? 'flex-start' : 'center',
+                    py: imageZoom > 1 ? 1 : 0,
+                  }}>
+                    <img
+                      ref={imgRef}
+                      src={currentUrl}
+                      alt={`Image ${viewerIndex + 1}`}
+                      draggable={false}
+                      onLoad={handleImgLoad}
+                      style={
+                        imageZoom === 1 || !fitSize
+                          ? {
+                            display: 'block',
+                            maxWidth: '100%',
+                            maxHeight: '65vh',
+                            width: 'auto',
+                            height: 'auto',
+                            borderRadius: '8px',
+                          }
+                          : {
+                            display: 'block',
+                            width: `${fitSize.w * imageZoom}px`,
+                            height: `${fitSize.h * imageZoom}px`,
+                            borderRadius: '8px',
+                            flexShrink: 0,
+                          }
+                      }
+                    />
+                  </Box>
                 </Box>
               )}
-            </Box>
 
-            {/* Action Buttons inside Image Viewer (Phase 4 UX) */}
-            {(selectedRow?.status === 'PENDING_LEAVE_REVIEW' || (selectedRow?.medCertFileUrl && !selectedRow?.isLeaveReviewed)) && !(isLocked || selectedRow?.isLocked) && (
-              <Box sx={{ display: 'flex', gap: 2, mt: 3, zIndex: 20 }}>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    if (window.confirm('ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่? ระบบจะทำการอัปเดตไปที่ระบบยื่นรายงานประจำวันด้วย')) {
-                      reviewLeaveMutation.mutate({
-                        id: selectedRow.id,
-                        isApproved: false,
-                      });
-                      setViewerOpen(false);
-                    }
-                  }}
-                  disabled={reviewLeaveMutation.isPending}
+              {isPdf && (
+                <Box
                   sx={{
-                    textTransform: 'none',
-                    fontWeight: 800,
-                    borderRadius: '10px',
-                    px: 4,
-                    py: 1.5,
-                    backgroundColor: '#ef4444',
-                    color: '#fff',
-                    boxShadow: '0 10px 15px -3px rgba(239, 68, 68, 0.4)',
-                    '&:hover': { backgroundColor: '#dc2626' },
+                    height: '70vh',
+                    backgroundColor: 'rgba(0,0,0,0.85)',
+                    borderRadius: '12px 12px 0 0',
+                    p: 1.5,
+                    display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
-                  ไม่อนุมัติ (Unpaid)
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    reviewLeaveMutation.mutate({
-                      id: selectedRow.id,
-                      isApproved: true,
-                    });
-                    setViewerOpen(false);
-                  }}
-                  disabled={reviewLeaveMutation.isPending}
+                  <iframe
+                    src={`${currentUrl}#toolbar=1`}
+                    width="100%"
+                    height="100%"
+                    style={{
+                      border: 'none',
+                      backgroundColor: '#fff',
+                      borderRadius: '8px',
+                    }}
+                    title="PDF Evidence Viewer"
+                  />
+                </Box>
+              )}
+
+              {isOther && (
+                <Box
                   sx={{
-                    textTransform: 'none',
-                    fontWeight: 800,
-                    borderRadius: '10px',
-                    px: 4,
-                    py: 1.5,
-                    backgroundColor: '#22c55e',
+                    height: '65vh',
+                    backgroundColor: 'rgba(0,0,0,0.85)',
+                    borderRadius: '12px 12px 0 0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
                     color: '#fff',
-                    boxShadow: '0 10px 15px -3px rgba(34, 197, 94, 0.4)',
-                    '&:hover': { backgroundColor: '#16a34a' },
+                    p: 4,
+                    textAlign: 'center',
                   }}
                 >
-                  อนุมัติ (Paid)
-                </Button>
+                  <Box
+                    sx={{
+                      width: 100,
+                      height: 100,
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      mb: 3,
+                    }}
+                  >
+                    <InsertDriveFileIcon sx={{ fontSize: 60, color: '#38bdf8' }} />
+                  </Box>
+                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 1, maxWidth: '600px' }}>
+                    เอกสารแนบ: {currentUrl.split('/').pop()?.split('?')[0] || 'evidence_file'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#94a3b8', mb: 4, maxWidth: '500px' }}>
+                    เบราว์เซอร์ไม่สามารถเปิดพรีวิวไฟล์ประเภทนี้ได้โดยตรงในหน้าต่างนี้ โปรดดาวน์โหลดหรือเปิดดูในแท็บใหม่เพื่อทำการตรวจสอบ
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    href={currentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    startIcon={<FileDownloadIcon />}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      borderRadius: '10px',
+                      px: 4,
+                      py: 1.5,
+                      backgroundColor: '#0284c7',
+                      '&:hover': { backgroundColor: '#0369a1' },
+                      boxShadow: '0 10px 15px -3px rgba(2,132,199,0.3)',
+                    }}
+                  >
+                    ดาวน์โหลด / เปิดไฟล์เพื่อตรวจสอบ
+                  </Button>
+                </Box>
+              )}
+
+              {/* ── Bottom toolbar: zoom controls + action buttons ── */}
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  backgroundColor: 'rgba(15,23,42,0.95)',
+                  borderRadius: '0 0 12px 12px',
+                  px: 3,
+                  py: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1.5,
+                }}
+              >
+                {/* Zoom bar (Only for images) */}
+                {isImage && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, backgroundColor: 'rgba(255,255,255,0.08)', px: 2, py: 0.5, borderRadius: 4 }}>
+                    <IconButton size="small" onClick={() => setImageZoom(z => Math.max(1, +(z - 0.25).toFixed(2)))} sx={{ color: '#fff' }}>
+                      <ZoomOutIcon fontSize="small" />
+                    </IconButton>
+                    <Typography variant="body2" sx={{ color: '#fff', minWidth: '44px', textAlign: 'center', fontWeight: 'bold' }}>
+                      {Math.round(imageZoom * 100)}%
+                    </Typography>
+                    <IconButton size="small" onClick={() => setImageZoom(z => Math.min(5, +(z + 0.25).toFixed(2)))} sx={{ color: '#fff' }}>
+                      <ZoomInIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => setImageZoom(1)} sx={{ color: '#94a3b8', ml: 1 }} title="รีเซ็ต">
+                      <ResetZoomIcon fontSize="small" />
+                    </IconButton>
+                    {viewerImages.length > 1 && (
+                      <>
+                        <Box sx={{ width: '1px', height: '20px', backgroundColor: '#475569', mx: 1 }} />
+                        <IconButton size="small" onClick={handlePrevImage} sx={{ color: '#fff' }}><PrevIcon fontSize="small" /></IconButton>
+                        <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 'bold' }}>{viewerIndex + 1}/{viewerImages.length}</Typography>
+                        <IconButton size="small" onClick={handleNextImage} sx={{ color: '#fff' }}><NextIcon fontSize="small" /></IconButton>
+                      </>
+                    )}
+                  </Box>
+                )}
+
+                {/* For multi-files navigation if they are PDF or other formats */}
+                {!isImage && viewerImages.length > 1 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, backgroundColor: 'rgba(255,255,255,0.08)', px: 2, py: 0.5, borderRadius: 4 }}>
+                    <IconButton size="small" onClick={handlePrevImage} sx={{ color: '#fff' }}><PrevIcon fontSize="small" /></IconButton>
+                    <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>{viewerIndex + 1}/{viewerImages.length}</Typography>
+                    <IconButton size="small" onClick={handleNextImage} sx={{ color: '#fff' }}><NextIcon fontSize="small" /></IconButton>
+                  </Box>
+                )}
+
+                {/* Leave quota + approve buttons */}
+                {(selectedRow?.status === 'PENDING_LEAVE_REVIEW' || (selectedRow?.medCertFileUrl && !selectedRow?.isLeaveReviewed)) && !(isLocked || selectedRow?.isLocked) && (
+                  <>
+                    {leaveQuotaElement}
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          if (window.confirm('ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่? ระบบจะทำการอัปเดตไปที่ระบบยื่นรายงานประจำวันด้วย')) {
+                            reviewLeaveMutation.mutate({ id: selectedRow.id, isApproved: false });
+                            setViewerOpen(false);
+                          }
+                        }}
+                        disabled={reviewLeaveMutation.isPending}
+                        sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1.5, backgroundColor: '#ef4444', color: '#fff', boxShadow: '0 10px 15px -3px rgba(239,68,68,0.4)', '&:hover': { backgroundColor: '#dc2626' } }}
+                      >
+                        ไม่อนุมัติ (Unpaid)
+                      </Button>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          reviewLeaveMutation.mutate({ id: selectedRow.id, isApproved: true });
+                          setViewerOpen(false);
+                        }}
+                        disabled={reviewLeaveMutation.isPending}
+                        sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1.5, backgroundColor: '#22c55e', color: '#fff', boxShadow: '0 10px 15px -3px rgba(34,197,94,0.4)', '&:hover': { backgroundColor: '#16a34a' } }}
+                      >
+                        อนุมัติ (Paid)
+                      </Button>
+                    </Box>
+                  </>
+                )}
               </Box>
-            )}
-          </Box>
-        )}
-      </Dialog>
-
-      {/* --- File Download Leave Review Dialog --- */}
-      <Dialog open={fileReviewDialogOpen} onClose={() => setFileReviewDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a' }}>ตรวจสอบหลักฐานการลา</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ color: '#334155', mb: 2 }}>
-            ระบบได้ทำการดาวน์โหลดไฟล์หลักฐานการลาเรียบร้อยแล้ว กรุณาเปิดไฟล์ในอุปกรณ์ของคุณเพื่อตรวจสอบ
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b' }}>
-            เมื่อตรวจสอบเสร็จสิ้น โปรดพิจารณาการลานี้:
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0, justifyContent: 'space-between' }}>
-          <Button onClick={() => setFileReviewDialogOpen(false)} sx={{ fontWeight: 700, color: '#64748b' }}>
-            ปิด (ยังไม่พิจารณา)
-          </Button>
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={() => {
-                if (window.confirm('ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่?')) {
-                  reviewLeaveMutation.mutate({ id: selectedRow?.id, isApproved: false });
-                  setFileReviewDialogOpen(false);
-                }
-              }}
-              disabled={reviewLeaveMutation.isPending}
-              sx={{ fontWeight: 700, borderRadius: '8px' }}
-            >
-              ไม่อนุมัติ (Unpaid)
-            </Button>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={() => {
-                reviewLeaveMutation.mutate({ id: selectedRow?.id, isApproved: true });
-                setFileReviewDialogOpen(false);
-              }}
-              disabled={reviewLeaveMutation.isPending}
-              sx={{ fontWeight: 700, borderRadius: '8px', color: '#fff' }}
-            >
-              อนุมัติ (Paid)
-            </Button>
-          </Stack>
-        </DialogActions>
+            </Box>
+          );
+        })()}
       </Dialog>
 
       {/* ประวัติการแก้ไข Daily Report Drawer */}
@@ -2507,7 +2647,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                         <Typography variant="body2" fontWeight={800} sx={{ color: '#1e293b', mb: 0.5 }}>
                           [ {formattedDate} ] แก้ไขโดย Foreman รหัส: {event.by}
                         </Typography>
-                        
+
                         <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: '8px', border: '1px solid #e2e8f0', mt: 1 }}>
                           <Typography variant="caption" fontWeight={750} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                             ชั่วโมงทำงานดิบในอดีต (Snapshot ก่อนแก้ไข):
@@ -2620,7 +2760,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                           >
                             {actionLabel.text}
                           </Box>
-                          
+
                           {/* snapshot punches before */}
                           {hist.snapshot?.punches && hist.snapshot.punches.length > 0 && (
                             <Box sx={{ mb: 1 }}>
@@ -2642,7 +2782,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                               ไม่มีข้อมูลสแกนนิ้วก่อนหน้า
                             </Typography>
                           )}
-                          
+
                           {/* reason */}
                           <Box sx={{ pt: 1, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
                             <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontSize: '0.7rem' }}>

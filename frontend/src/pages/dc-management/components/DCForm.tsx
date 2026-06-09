@@ -29,8 +29,14 @@ import {
   Tabs,
   Tab,
   InputAdornment,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Card,
+  CardContent,
 } from '@mui/material';
-import { Info, Person, AttachMoney } from '@mui/icons-material';
+import { Info, Person, AttachMoney, EventBusy, LocalHotel, AccessTime, DirectionsRun, ExitToApp } from '@mui/icons-material';
 import {
   dcCreateSchema,
   dcEditSchema,
@@ -40,9 +46,10 @@ import {
 import { DatePicker } from '../../../components/forms/DatePicker';
 import { SkillSelect } from '../../../components/forms/SkillSelect';
 import { ProjectSelect } from '../../../components/forms/ProjectSelect';
+import type { AttendanceStats } from '../../../services/dcService';
 
 export interface DCFormProps {
-  defaultValues?: Partial<DCEditInput>;
+  defaultValues?: Partial<DCEditInput> & { attendanceStats?: AttendanceStats };
   onSubmit: (data: DCCreateInput | DCEditInput) => Promise<void>;
   onCancel: () => void;
   mode: 'create' | 'edit';
@@ -82,6 +89,11 @@ export function DCForm({
 }: DCFormProps) {
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
+
+  // Attendance Stats State
+  const [statsViewMode, setStatsViewMode] = useState<'yearly' | 'period'>('yearly');
+  const [statsSelectedYear, setStatsSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [statsSelectedPeriod, setStatsSelectedPeriod] = useState<string>('');
 
   const schema = mode === 'create' ? dcCreateSchema : dcEditSchema;
 
@@ -144,6 +156,25 @@ export function DCForm({
     setTabValue(newValue);
   };
 
+  // Prepare stats data
+  const stats = defaultValues?.attendanceStats;
+  const availableYears = stats?.yearly ? Object.keys(stats.yearly).sort((a, b) => b.localeCompare(a)) : [new Date().getFullYear().toString()];
+  const availablePeriods = stats?.periods ? Object.entries(stats.periods).map(([id, data]) => ({ id, name: data.name })).sort((a, b) => b.name.localeCompare(a.name)) : [];
+
+  // Auto-select first period if empty
+  React.useEffect(() => {
+    if (statsViewMode === 'period' && !statsSelectedPeriod && availablePeriods.length > 0) {
+      setStatsSelectedPeriod(availablePeriods[0].id);
+    }
+  }, [statsViewMode, availablePeriods, statsSelectedPeriod]);
+
+  let currentStats = { paidLeave: 0, unpaidLeave: 0, lateMinutes: 0, earlyLeaveMinutes: 0, absentDays: 0 };
+  if (statsViewMode === 'yearly' && stats?.yearly?.[statsSelectedYear]) {
+    currentStats = { ...currentStats, ...stats.yearly[statsSelectedYear] };
+  } else if (statsViewMode === 'period' && stats?.periods?.[statsSelectedPeriod]) {
+    currentStats = { ...currentStats, ...stats.periods[statsSelectedPeriod] };
+  }
+
   return (
     <Box>
       {submitError && (
@@ -155,6 +186,7 @@ export function DCForm({
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 1.5 }}>
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="DC Form Tabs" variant="fullWidth">
           <Tab icon={<Person />} iconPosition="start" label="ข้อมูลส่วนตัว" sx={{ minHeight: 48 }} />
+          <Tab icon={<EventBusy />} iconPosition="start" label="สถิติ ขาด/ลา/มาสาย" sx={{ minHeight: 48 }} disabled={mode === 'create'} />
           <Tab icon={<AttachMoney />} iconPosition="start" label="ข้อมูลการเงิน" sx={{ minHeight: 48 }} />
         </Tabs>
       </Box>
@@ -290,8 +322,127 @@ export function DCForm({
           </Grid>
         </TabPanel>
 
-        {/* Tab 2: Financial Information */}
+        {/* Tab 2: Attendance Stats */}
         <TabPanel value={tabValue} index={1}>
+          {mode === 'create' ? (
+            <Alert severity="info">ข้อมูลสถิติจะแสดงเมื่อมีการบันทึกพนักงานและมีการคำนวณงวดงานแล้ว</Alert>
+          ) : (
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel id="stats-view-mode-label">รูปแบบการดู</InputLabel>
+                    <Select
+                      labelId="stats-view-mode-label"
+                      value={statsViewMode}
+                      label="รูปแบบการดู"
+                      onChange={(e) => setStatsViewMode(e.target.value as 'yearly' | 'period')}
+                    >
+                      <MenuItem value="yearly">รายปี (Yearly)</MenuItem>
+                      <MenuItem value="period">รายงวดงาน (Period)</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  {statsViewMode === 'yearly' ? (
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                      <InputLabel id="stats-year-label">ปี</InputLabel>
+                      <Select
+                        labelId="stats-year-label"
+                        value={statsSelectedYear}
+                        label="ปี"
+                        onChange={(e) => setStatsSelectedYear(e.target.value)}
+                      >
+                        {availableYears.map(year => (
+                          <MenuItem key={year} value={year}>{year}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                      <InputLabel id="stats-period-label">งวดงาน</InputLabel>
+                      <Select
+                        labelId="stats-period-label"
+                        value={statsSelectedPeriod}
+                        label="งวดงาน"
+                        onChange={(e) => setStatsSelectedPeriod(e.target.value)}
+                        disabled={availablePeriods.length === 0}
+                      >
+                        {availablePeriods.length === 0 && <MenuItem value="">ไม่มีข้อมูลงวดงาน</MenuItem>}
+                        {availablePeriods.map(period => (
+                          <MenuItem key={period.id} value={period.id}>{period.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Box>
+              </Grid>
+
+              {/* Stat Cards */}
+              <Grid item xs={6}>
+                <Card sx={{ bgcolor: '#e3f2fd', boxShadow: 'none', border: '1px solid #bbdefb' }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                    <LocalHotel sx={{ color: '#1976d2', fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ลาได้เงิน (Paid Leave)</Typography>
+                      <Typography variant="h5" color="#1565c0" fontWeight="bold">{currentStats.paidLeave} <Typography component="span" variant="body1">วัน</Typography></Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={6}>
+                <Card sx={{ bgcolor: '#fff3e0', boxShadow: 'none', border: '1px solid #ffe0b2' }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                    <EventBusy sx={{ color: '#f57c00', fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ลาไม่ได้เงิน (Unpaid Leave)</Typography>
+                      <Typography variant="h5" color="#e65100" fontWeight="bold">{currentStats.unpaidLeave} <Typography component="span" variant="body1">วัน</Typography></Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={6}>
+                <Card sx={{ bgcolor: '#ffebee', boxShadow: 'none', border: '1px solid #ffcdd2' }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                    <AccessTime sx={{ color: '#d32f2f', fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">มาสาย (Late)</Typography>
+                      <Typography variant="h5" color="#c62828" fontWeight="bold">{currentStats.lateMinutes} <Typography component="span" variant="body1">นาที</Typography></Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={6}>
+                <Card sx={{ bgcolor: '#fce4ec', boxShadow: 'none', border: '1px solid #f8bbd0' }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                    <ExitToApp sx={{ color: '#c2185b', fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ออกก่อน (Early Leave)</Typography>
+                      <Typography variant="h5" color="#880e4f" fontWeight="bold">{currentStats.earlyLeaveMinutes} <Typography component="span" variant="body1">นาที</Typography></Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={6}>
+                <Card sx={{ bgcolor: '#f3e5f5', boxShadow: 'none', border: '1px solid #e1bee7' }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                    <DirectionsRun sx={{ color: '#7b1fa2', fontSize: 40 }} />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ขาดงาน (Absent)</Typography>
+                      <Typography variant="h5" color="#4a148c" fontWeight="bold">{currentStats.absentDays} <Typography component="span" variant="body1">วัน</Typography></Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+        </TabPanel>
+
+        {/* Tab 3: Financial Information */}
+        <TabPanel value={tabValue} index={2}>
           <Grid container spacing={1}>
             {/* Income Section */}
             <Grid item xs={12}>
