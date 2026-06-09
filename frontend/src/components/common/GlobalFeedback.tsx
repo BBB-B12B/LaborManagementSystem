@@ -90,11 +90,56 @@ export const GlobalFeedback: React.FC = () => {
           </Typography>
 
           {/* Message */}
-          {message && (
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-              {message}
-            </Typography>
-          )}
+          {message && (() => {
+            // Detect overlap error pattern
+            const overlapMatch = message.match(/พบแรงงาน \(รหัส ([^)]+)\) ลงเวลาซ้อนทับกับ(งาน[^\s(]+(?:\s"[^"]+")?).*?\(เวลางานนี้: ([^)]+)\)/);
+            if (overlapMatch) {
+              const [, empId, conflictTask, times] = overlapMatch;
+              const [thisTime, otherTime] = times.split(' ทับซ้อนกับ ');
+              return (
+                <Box sx={{ mb: 4, textAlign: 'left' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, textAlign: 'center' }}>
+                    ไม่สามารถบันทึกรายงานได้เนื่องจากเวลาซ้อนทับกัน
+                  </Typography>
+                  {/* Worker row */}
+                  <Box sx={{ bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', p: 1.5, mb: 1 }}>
+                    <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 700, fontSize: '0.7rem', display: 'block', mb: 0.5 }}>
+                      แรงงานที่ซ้อนทับ
+                    </Typography>
+                    <Typography variant="body2" fontWeight={700} color="#1e293b">
+                      รหัส {empId}
+                    </Typography>
+                  </Box>
+                  {/* Conflict task row */}
+                  <Box sx={{ bgcolor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px', p: 1.5, mb: 1 }}>
+                    <Typography variant="caption" sx={{ color: '#92400e', fontWeight: 700, fontSize: '0.7rem', display: 'block', mb: 0.5 }}>
+                      ซ้อนทับกับ
+                    </Typography>
+                    <Typography variant="body2" fontWeight={700} color="#1e293b">
+                      {conflictTask}
+                    </Typography>
+                  </Box>
+                  {/* Time row */}
+                  <Box sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', p: 1.5, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.68rem', display: 'block' }}>เวลางานนี้</Typography>
+                      <Typography variant="body2" fontWeight={800} color="#dc2626">{thisTime?.trim()}</Typography>
+                    </Box>
+                    <Typography variant="body1" color="text.disabled" sx={{ alignSelf: 'center' }}>⟺</Typography>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.68rem', display: 'block' }}>เวลางานที่ซ้อนทับ</Typography>
+                      <Typography variant="body2" fontWeight={800} color="#dc2626">{otherTime?.trim()}</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              );
+            }
+            return (
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+                {message}
+              </Typography>
+            );
+          })()}
 
           {/* Action Button */}
           <Button

@@ -2010,7 +2010,7 @@
     },
     "DailyReportPage": {
       "source": "frontend/src/pages/daily-reports/index.tsx",
-      "line": 149
+      "line": 150
     },
     "WorkRecordsPage": {
       "source": "frontend/src/pages/daily-reports/list.tsx",

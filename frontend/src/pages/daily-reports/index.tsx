@@ -76,6 +76,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
+import { usePickerContext } from '@mui/x-date-pickers/hooks';
 import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import thLocale from 'date-fns/locale/th';
@@ -635,6 +636,7 @@ export default function DailyReportPage() {
   };
 
   const CustomActionBar = (props: PickersActionBarProps) => {
+    const { acceptValueChanges } = usePickerContext();
     return (
       <Stack
         className={props.className}
@@ -676,6 +678,25 @@ export default function DailyReportPage() {
             <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ขอปลดล็อคลงย้อนหลัง</Typography>
           </Stack>
         </Stack>
+
+        {/* Confirm button — mobile only */}
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={acceptValueChanges}
+          sx={{
+            display: { xs: 'flex', md: 'none' },
+            bgcolor: '#f97316',
+            borderRadius: '10px',
+            fontWeight: 800,
+            fontSize: '0.9rem',
+            py: 1,
+            '&:hover': { bgcolor: '#ea6c0a' },
+            boxShadow: '0 4px 12px rgba(249,115,22,0.35)',
+          }}
+        >
+          ยืนยันวันที่เลือก
+        </Button>
       </Stack>
     );
   };
@@ -2067,7 +2088,7 @@ export default function DailyReportPage() {
     // 1. Validation
     if (!selectedTask) return;
 
-    if (isFormDisabled) {
+    if (isDateLockedByWagePeriod) {
       enqueueSnackbar('ไม่สามารถบันทึกรายงานในวันที่งวดค่าแรงถูกปิดแล้ว', { variant: 'error' });
       return;
     }
@@ -2391,6 +2412,7 @@ export default function DailyReportPage() {
                         setPageMode(targetMode);
                         setSelectedTask(null); // Clear selected task
                         setReportDate(new Date()); // Reset date to today
+                        if (targetMode === 'requests') setActiveTab('pending'); // Requests mode only shows active tasks
                       }}
                       sx={{
                         flex: 1,
@@ -2432,20 +2454,6 @@ export default function DailyReportPage() {
                 >
                   Backlog
                 </Button>
-              </Box>
-              <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
-                <IconButton
-                  onClick={() => router.push('/daily-reports/list')}
-                  sx={{
-                    color: '#475569',
-                    bgcolor: '#ffffff',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '12px',
-                    p: 1.2,
-                  }}
-                >
-                  <History size={18} />
-                </IconButton>
               </Box>
             </Box>
 
@@ -2570,33 +2578,44 @@ export default function DailyReportPage() {
                         {[
                           { id: 'pending', label: 'Active Tasks' },
                           { id: 'finish', label: 'Finish' },
-                        ].map((tab) => (
-                          <Button
-                            key={tab.id}
-                            onClick={() => {
-                              setActiveTab(tab.id as 'pending' | 'finish');
-                              setSelectedTask(null); // Clear selected task when switching tabs
-                              setIsSidebarOpen(true); // Open the sidebar to show the filtered task list
-                            }}
-                            sx={{
-                              flex: 1,
-                              px: 2,
-                              py: 0.75,
-                              borderRadius: '999px',
-                              textTransform: 'none',
-                              fontWeight: 700,
-                              fontSize: '0.8rem',
-                              color: activeTab === tab.id ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
-                              bgcolor: activeTab === tab.id ? '#FF7F32' : 'transparent',
-                              boxShadow: activeTab === tab.id ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
-                              '&:hover': {
-                                bgcolor: activeTab === tab.id ? '#e06b24' : 'rgba(255, 255, 255, 0.08)',
-                              },
-                            }}
-                          >
-                            {tab.label}
-                          </Button>
-                        ))}
+                        ].map((tab) => {
+                          const isFinishDisabled = tab.id === 'finish' && pageMode === 'requests';
+                          return (
+                            <Button
+                              key={tab.id}
+                              disabled={isFinishDisabled}
+                              onClick={() => {
+                                setActiveTab(tab.id as 'pending' | 'finish');
+                                setSelectedTask(null);
+                                setIsSidebarOpen(true);
+                              }}
+                              sx={{
+                                flex: 1,
+                                px: 2,
+                                py: 0.75,
+                                borderRadius: '999px',
+                                textTransform: 'none',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                color: isFinishDisabled
+                                  ? 'rgba(255,255,255,0.25)'
+                                  : activeTab === tab.id ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                bgcolor: activeTab === tab.id && !isFinishDisabled ? '#FF7F32' : 'transparent',
+                                boxShadow: activeTab === tab.id && !isFinishDisabled ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
+                                '&:hover': {
+                                  bgcolor: isFinishDisabled ? 'transparent' : activeTab === tab.id ? '#e06b24' : 'rgba(255, 255, 255, 0.08)',
+                                },
+                                '&.Mui-disabled': {
+                                  color: 'rgba(255,255,255,0.25)',
+                                  cursor: 'not-allowed',
+                                  pointerEvents: 'auto',
+                                },
+                              }}
+                            >
+                              {tab.label}
+                            </Button>
+                          );
+                        })}
                       </Stack>
                     </Box>
                     <Box
@@ -2674,11 +2693,13 @@ export default function DailyReportPage() {
                       <>
                         <Box
                           sx={{
-                            p: 3,
+                            p: { xs: 2, md: 3 },
                             borderBottom: '1px solid #f1f5f9',
                             display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
+                            flexDirection: { xs: 'column', md: 'row' },
+                            justifyContent: { xs: 'flex-start', md: 'space-between' },
+                            alignItems: { xs: 'stretch', md: 'center' },
+                            gap: { xs: 1.5, md: 0 },
                             position: 'relative',
                           }}
                         >
@@ -2700,13 +2721,13 @@ export default function DailyReportPage() {
                               </Box>
                             </IconButton>
  
-                            {/* Progress Circle — เหมือน My Job card */}
+                            {/* Progress Circle — desktop only */}
                             <Box
                               sx={{
                                 width: 48,
                                 height: 48,
                                 borderRadius: '50%',
-                                display: 'flex',
+                                display: { xs: 'none', md: 'flex' },
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontSize: '0.7rem',
@@ -2843,31 +2864,26 @@ export default function DailyReportPage() {
                                 </Typography>
                               )}
  
-                              {/* Mobile Mode Badge */}
-                              <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 0.5 }}>
-                                <Typography
-                                  variant="caption"
-                                  fontWeight={800}
-                                  sx={{
-                                    display: 'inline-block',
-                                    color: pageMode === 'requests' ? '#f57c00' : '#2e7d32',
-                                    bgcolor: pageMode === 'requests' ? '#fff3e0' : '#e8f5e9',
-                                    px: 1,
-                                    py: 0.25,
-                                    borderRadius: '8px',
-                                    fontSize: '0.65rem',
-                                    border: '1px solid',
-                                    borderColor: pageMode === 'requests' ? '#ffe0b2' : '#c8e6c9',
-                                  }}
-                                >
-                                  {pageMode === 'requests' ? 'บันทึกแผนล่วงหน้า (Requests)' : 'บันทึกรายงานประจำวัน (Daily Report)'}
-                                </Typography>
-                              </Box>
                             </Box>
                           </Box>
- 
- 
-                          <Box sx={{ flexShrink: 0, zIndex: 2 }}>
+
+                          {/* Mobile Linear Progress Bar */}
+                          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ flex: 1, height: 6, borderRadius: 3, bgcolor: '#e8f5e9', overflow: 'hidden' }}>
+                              <Box sx={{
+                                height: '100%',
+                                width: `${selectedTask.dailyProgress}%`,
+                                bgcolor: selectedTask.dailyProgress > 0 ? '#4caf50' : '#e2e8f0',
+                                borderRadius: 3,
+                                transition: 'width 0.3s ease',
+                              }} />
+                            </Box>
+                            <Typography variant="caption" fontWeight={800} sx={{ color: selectedTask.dailyProgress > 0 ? '#2e7d32' : '#94a3b8', flexShrink: 0 }}>
+                              {selectedTask.dailyProgress}%
+                            </Typography>
+                          </Box>
+
+                          <Box sx={{ flexShrink: 0, zIndex: 2, width: { xs: '100%', md: 'auto' } }}>
                             <DatePicker
                               value={reportDate}
                               onChange={(newValue) => {
@@ -2922,7 +2938,7 @@ export default function DailyReportPage() {
                               slotProps={{
                                 textField: {
                                   size: 'small',
-                                  sx: { width: 150 },
+                                  sx: { width: { xs: '100%', md: 150 } },
                                   error: isDateLockedByWagePeriod,
                                   helperText: isDateLockedByWagePeriod ? 'งวดค่าแรงถูกปิดแล้ว' : '',
                                 },
@@ -3020,7 +3036,7 @@ export default function DailyReportPage() {
                                       textTransform: 'none',
                                       bgcolor: '#3b82f6',
                                     }}
-                                    disabled={isFormDisabled}
+                                    disabled={isDateLockedByWagePeriod || isAfterCompletion || requestLocked}
                                   >
                                     เลือกแรงงาน DC
                                   </Button>
@@ -3040,6 +3056,35 @@ export default function DailyReportPage() {
                                       <Typography variant="body2">ยังไม่มีการเลือกคนงาน</Typography>
                                     </Box>
                                   ) : (
+                                    <>
+                                    {/* Mobile Cards — xs only */}
+                                    <Box sx={{ display: { xs: 'block', md: 'none' }, p: 1.5 }}>
+                                      {readonlySupportWorkers.map((worker: any, idx: number) => (
+                                        <WorkerMobileCard
+                                          key={`support-${worker.id}`}
+                                          worker={worker}
+                                          onUpdate={() => {}}
+                                          onUpdateLeave={() => {}}
+                                          onUploadCert={() => {}}
+                                          onRemove={() => {}}
+                                          index={idx + 1}
+                                          isReadOnly={true}
+                                        />
+                                      ))}
+                                      {selectedWorkers.map((worker: any, idx: number) => (
+                                        <WorkerMobileCard
+                                          key={worker.id}
+                                          worker={worker}
+                                          onUpdate={(f: string, v: any) => updateWorkerTime(worker.id, f, v)}
+                                          onUpdateLeave={(f: string, v: any) => updateWorkerLeave(worker.id, f, v)}
+                                          onUploadCert={(f: File | null) => handleCertUpload(worker.id, f)}
+                                          onRemove={() => removeWorker(worker.id)}
+                                          index={readonlySupportWorkers.length + idx + 1}
+                                        />
+                                      ))}
+                                    </Box>
+                                    {/* Desktop Table — md+ only */}
+                                    <Box sx={{ display: { xs: 'none', md: 'block' } }}>
                                     <Table
                                       size="small"
                                       sx={{
@@ -3165,6 +3210,8 @@ export default function DailyReportPage() {
                                         ))}
                                       </TableBody>
                                     </Table>
+                                    </Box>
+                                    </>
                                   )}
                                 </TableContainer>
                               </Box>
@@ -3528,7 +3575,7 @@ export default function DailyReportPage() {
                             borderTop: '1px solid #f1f5f9',
                             display: 'flex',
                             justifyContent: 'center',
-                            gap: 2,
+                            gap: { xs: 1, md: 2 },
                           }}
                         >
                           <Button
@@ -3536,8 +3583,11 @@ export default function DailyReportPage() {
                             sx={{
                               bgcolor: '#ef4444',
                               borderRadius: '10px',
-                              px: 6,
+                              flex: 1,
+                              px: { xs: 1, md: 6 },
+                              fontSize: { xs: '0.78rem', md: '0.875rem' },
                               fontWeight: 800,
+                              minWidth: 0,
                               '&:hover': { bgcolor: '#dc2626' },
                             }}
                             onClick={() => setSelectedTask(null)}
@@ -3554,8 +3604,11 @@ export default function DailyReportPage() {
                                     color: '#0284c7',
                                     borderColor: '#0284c7',
                                     borderRadius: '10px',
-                                    px: 4,
+                                    flex: 1,
+                                    px: { xs: 1, md: 4 },
+                                    fontSize: { xs: '0.78rem', md: '0.875rem' },
                                     fontWeight: 800,
+                                    minWidth: 0,
                                     '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0369a1' },
                                   }}
                                   disabled={isFormDisabled || isSubmitting}
@@ -3569,12 +3622,15 @@ export default function DailyReportPage() {
                                 sx={{
                                   bgcolor: '#10b981',
                                   borderRadius: '10px',
-                                  px: 4,
+                                  flex: 1,
+                                  px: { xs: 1, md: 4 },
+                                  fontSize: { xs: '0.78rem', md: '0.875rem' },
                                   fontWeight: 800,
+                                  minWidth: 0,
                                   '&:hover': { bgcolor: '#059669' },
                                   boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
                                 }}
-                                disabled={isFormDisabled || isSubmitting}
+                                disabled={isDateLockedByWagePeriod || isSubmitting}
                                 onClick={() => handleSubmit(true)}
                               >
                                 ส่งรายงานสมบูรณ์
@@ -3586,8 +3642,11 @@ export default function DailyReportPage() {
                               sx={{
                                 bgcolor: '#4f46e5',
                                 borderRadius: '10px',
-                                px: 6,
+                                flex: 1,
+                                px: { xs: 1, md: 6 },
+                                fontSize: { xs: '0.78rem', md: '0.875rem' },
                                 fontWeight: 800,
+                                minWidth: 0,
                                 '&:hover': { bgcolor: '#4338ca' },
                                 boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)',
                               }}
@@ -4812,5 +4871,165 @@ function WorkerTableRow({
         </Box>
       </TableCell>
     </TableRow>
+  );
+}
+
+function WorkerMobileCard({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index, isReadOnly }: any) {
+  const [expanded, setExpanded] = React.useState(false);
+  const initial = ((worker.name || worker.employeeId || '?')[0] || '?').toUpperCase();
+
+  const hasOT = worker.times?.otMorning || worker.times?.otNoon || worker.times?.otEvening;
+  const hasLeave = worker.leave?.active;
+
+  const timeRow = (
+    label: string,
+    checked: boolean,
+    onCheck: (v: boolean) => void,
+    disabled: boolean,
+    timeValue?: string,
+    onTimeChange?: (v: string) => void,
+    fixedTime?: string,
+  ) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75, borderBottom: '1px solid #f8fafc' }}>
+      <Checkbox size="small" sx={{ p: 0 }} checked={!!checked} onChange={(e) => onCheck(e.target.checked)} disabled={disabled} />
+      <Typography variant="caption" fontWeight={700} sx={{ minWidth: 58, color: '#475569', fontSize: '0.72rem' }}>
+        {label}
+      </Typography>
+      {checked && (
+        fixedTime ? (
+          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.7rem', bgcolor: '#f1f5f9', px: 1, py: 0.25, borderRadius: '6px' }}>{fixedTime}</Typography>
+        ) : (
+          <TimeRangePicker value={timeValue || ''} onChange={(val: string) => onTimeChange && onTimeChange(val)} disabled={disabled} />
+        )
+      )}
+    </Box>
+  );
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: expanded ? '#cbd5e1' : '#e2e8f0',
+        borderRadius: '12px',
+        bgcolor: '#fff',
+        mb: 1.5,
+        overflow: 'hidden',
+        transition: 'border-color 0.2s',
+        boxShadow: expanded ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+      }}
+    >
+      {/* Collapsed Header — always visible */}
+      <Box
+        onClick={() => setExpanded(!expanded)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          p: 1.5,
+          cursor: 'pointer',
+          userSelect: 'none',
+          bgcolor: expanded ? '#f8fafc' : '#fff',
+          transition: 'background 0.2s',
+        }}
+      >
+        {/* Avatar */}
+        <Box
+          sx={{
+            width: 36, height: 36, borderRadius: '50%',
+            bgcolor: isReadOnly ? '#94a3b8' : '#1e293b',
+            color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.85rem', fontWeight: 800, flexShrink: 0,
+          }}
+        >
+          {initial}
+        </Box>
+
+        {/* Name + ID */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.67rem', display: 'block', fontWeight: 700 }}>
+            {worker.employeeId}
+          </Typography>
+          <Typography variant="body2" fontWeight={700} color="#1e293b" sx={{ lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {worker.name}
+          </Typography>
+        </Box>
+
+        {/* Status dots */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+          {worker.times?.regular && (
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22c55e' }} title="ปกติ" />
+          )}
+          {hasOT && (
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#3b82f6' }} title="OT" />
+          )}
+          {hasLeave && (
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#f97316' }} title="ลา" />
+          )}
+        </Box>
+
+        {/* Chevron */}
+        <ChevronRight
+          size={16}
+          style={{
+            color: '#94a3b8',
+            flexShrink: 0,
+            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s',
+          }}
+        />
+
+        {/* Delete — stop propagation so click doesn't toggle expand */}
+        {isReadOnly ? (
+          <Chip label="Support" size="small" onClick={(e) => e.stopPropagation()} sx={{ fontSize: '0.62rem', height: 20, bgcolor: '#fef08a', color: '#854d0e', fontWeight: 800, flexShrink: 0 }} />
+        ) : (
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            sx={{ color: '#ef4444', bgcolor: '#fef2f2', borderRadius: '8px', p: 0.5, flexShrink: 0 }}
+          >
+            <X size={15} />
+          </IconButton>
+        )}
+      </Box>
+
+      {/* Expanded body */}
+      {expanded && (
+        <Box sx={{ px: 2, pb: 1.5, pt: 0.5, borderTop: '1px solid #f1f5f9' }}>
+          {timeRow('ปกติ', worker.times?.regular, (v) => onUpdate('regular', v), !!isReadOnly, worker.times?.regTime || '08:00 - 17:00', (v) => onUpdate('regTime', v))}
+          {timeRow('OT เช้า', worker.times?.otMorning, (v) => onUpdate('otMorning', v), !!isReadOnly || !worker.times?.regular, worker.times?.otMorningTime || '06:00 - 08:00', (v) => onUpdate('otMorningTime', v))}
+          {timeRow('OT เที่ยง', worker.times?.otNoon, (v) => onUpdate('otNoon', v), !!isReadOnly || !worker.times?.regular, undefined, undefined, '12:00 - 13:00')}
+          {timeRow('OT เย็น', worker.times?.otEvening, (v) => onUpdate('otEvening', v), !!isReadOnly || !worker.times?.regular, worker.times?.otEveningTime || '18:00 - 21:00', (v) => onUpdate('otEveningTime', v))}
+          {!isReadOnly && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75 }}>
+              <Checkbox size="small" sx={{ p: 0 }} checked={!!worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} />
+              <Typography variant="caption" fontWeight={700} sx={{ minWidth: 58, color: '#475569', fontSize: '0.72rem' }}>ลา</Typography>
+              {worker.leave?.active && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', flex: 1 }}>
+                  <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val: string) => onUpdateLeave('time', val)} disabled={false} />
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
+                      <>
+                        <IconButton size="small" onClick={() => window.open(getImageUrl(worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl), '_blank')} sx={{ color: '#3b82f6', p: 0.5, bgcolor: '#eff6ff', borderRadius: '6px' }}>
+                          <Eye size={14} />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} sx={{ color: '#ef4444', p: 0.5, bgcolor: '#fef2f2', borderRadius: '6px' }}>
+                          <Trash2 size={14} />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <IconButton component="label" size="small" sx={{ color: '#64748b', p: 0.5, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
+                        <Paperclip size={14} />
+                        <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
+                      </IconButton>
+                    )}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
   );
 }

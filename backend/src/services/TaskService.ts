@@ -1774,7 +1774,28 @@ export class TaskService {
           for (const sA of shiftsA) {
             for (const sB of shiftsB) {
               if (isTimeOverlap(sA as string, sB as string)) {
-                throw new AppError(`ไม่อนุญาตให้บันทึก: พบแรงงาน (รหัส ${laborInput.employeeId || laborInput.workerId}) ลงเวลาซ้อนทับกับงานอื่น (${sA} ทับซ้อนกับ ${sB})`, 400);
+                // Resolve conflicting task name from path
+                let conflictLabel = 'งานอื่น';
+                try {
+                  const pathParts = doc.ref.path.split('/');
+                  const tasksIdx = pathParts.indexOf('tasks');
+                  if (tasksIdx >= 0) {
+                    const taskDocRef = afterSaleDb.doc(pathParts.slice(0, tasksIdx + 2).join('/'));
+                    const taskDoc = await taskDocRef.get();
+                    if (taskDoc.exists) {
+                      const td = taskDoc.data() as any;
+                      const readableId = td.taskId || '';
+                      const name = td.taskName || td.revisionName || td.subtaskName || '';
+                      conflictLabel = readableId
+                        ? `งาน ${readableId}${name ? ` "${name}"` : ''}`
+                        : name ? `งาน "${name}"` : 'งานอื่น';
+                    }
+                  }
+                } catch (_) { /* ใช้ default label หากหาชื่องานไม่ได้ */ }
+                throw new AppError(
+                  `ไม่อนุญาตให้บันทึก: พบแรงงาน (รหัส ${laborInput.employeeId || laborInput.workerId}) ลงเวลาซ้อนทับกับ${conflictLabel} (เวลางานนี้: ${sA} ทับซ้อนกับ ${sB})`,
+                  400
+                );
               }
             }
           }
