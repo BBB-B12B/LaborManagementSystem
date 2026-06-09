@@ -1,3 +1,3 @@
-task: Fix site photo remove button (T-020-001-05-10)
+task: Quick Subtask popup Assignee dropdown filter FM and SE roles
 phase: done
 next: none

@@ -592,34 +592,49 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     >
       <DialogTitle sx={{ pb: 1, pt: 3, px: 3, borderBottom: '1px solid #eef0f4' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 700 }}>
+          <Box sx={{ minWidth: 0, flex: 1, pr: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', fontWeight: 700, fontSize: { xs: '0.7rem', md: '0.75rem' }, letterSpacing: 0.2 }}
+            >
               {task?.projectName} - {task?.categoryName}
             </Typography>
-            <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 0.5 }}>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
-                {task?.taskId}
-                {task?.revisionId && task.revisionId !== 'rev00' && (
-                  <Box component="span" sx={{ color: '#ef4444' }}>
-                    -{task.revisionId}
-                  </Box>
-                )}
-                {' : '}
-                {isActingAsSupport && task?.supportTaskName 
-                  ? task.supportTaskName 
+            <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mt: 0.25, flexWrap: 'wrap', gap: 0.5 }}>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  color: '#1c1e2b',
+                  fontSize: { xs: '0.82rem', md: '1rem' },
+                  lineHeight: 1.4,
+                  wordBreak: 'break-word',
+                  flex: '1 1 auto',
+                  minWidth: 0,
+                }}
+              >
+                <Box component="span" sx={{ color: '#FF7F32', fontFamily: 'monospace', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                  {task?.taskId}
+                  {task?.revisionId && task.revisionId !== 'rev00' && (
+                    <Box component="span" sx={{ color: '#ef4444' }}>
+                      -{task.revisionId}
+                    </Box>
+                  )}
+                </Box>
+                {' · '}
+                {isActingAsSupport && task?.supportTaskName
+                  ? task.supportTaskName
                   : (task?.subtaskName ? `${task.taskName} > ${task.subtaskName}` : task?.taskName)}
               </Typography>
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '99px' }}>
-                <Avatar sx={{ width: 24, height: 24, bgcolor: '#334155', fontSize: 12, fontWeight: 700, mr: 1 }}>
-                  {isActingAsSupport 
+
+              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.25, py: 0.4, borderRadius: '99px', flexShrink: 0 }}>
+                <Avatar sx={{ width: 20, height: 20, bgcolor: '#334155', fontSize: 10, fontWeight: 700, mr: 0.75 }}>
+                  {isActingAsSupport
                     ? (task?.supportAssignees?.[0]?.name ? task.supportAssignees[0].name.substring(0, 2) : 'NA')
                     : (task?.assignees?.[0]?.name ? task.assignees[0].name.substring(0, 2) : 'NA')}
                 </Avatar>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>
-                  {isActingAsSupport 
-                    ? (task?.supportAssignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ (Support)')
-                    : (task?.assignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ')}
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', fontSize: '0.7rem' }}>
+                  {isActingAsSupport
+                    ? (task?.supportAssignees?.[0]?.name || 'ไม่ระบุ')
+                    : (task?.assignees?.[0]?.name || 'ไม่ระบุ')}
                 </Typography>
               </Box>
             </Stack>
@@ -700,13 +715,13 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         </Stack>
       </DialogTitle>
 
-      <DialogContent sx={{ px: 3, pb: 4, pt: 3 }}>
+      <DialogContent sx={{ px: 3, pb: 4, pt: 3, overflowX: 'hidden' }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
             <CircularProgress />
           </Box>
         ) : (
-          <Grid container spacing={4} sx={{ mt: 1.5 }}>
+          <Grid container rowSpacing={4} columnSpacing={{ md: 4 }} sx={{ mt: 1.5 }}>
             <Grid item xs={12} md={5}>
               <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '32px' }}>
@@ -806,15 +821,18 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
             <Grid item xs={12} md={7}>
               <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', height: '32px' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
-                    สรุปข้อมูลวันที่ {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: th }) : ''}
+                <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: { xs: 'center', md: 'flex-start' }, height: '32px' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b', textAlign: { xs: 'center', md: 'left' } }}>
+                    สรุปข้อมูลวันที่{' '}
+                    <Box component="span" sx={{ color: '#FF7F32' }}>
+                      {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: th }) : ''}
+                    </Box>
                   </Typography>
                 </Box>
 
                 {selectedSummary ? (
                   <Stack spacing={3} sx={{ flexGrow: 1 }}>
-                    <Grid container spacing={2}>
+                    <Grid container rowSpacing={2} columnSpacing={{ sm: 2 }}>
                       <Grid item xs={12} sm={6}>
                         <Stack spacing={2} sx={{ height: '100%' }}>
                           <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

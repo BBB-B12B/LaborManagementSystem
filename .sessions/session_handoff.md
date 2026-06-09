@@ -1,10 +1,12 @@
 status: completed
-session_id: session_018_daily_report_requests_switcher
-tasks_done:
-  - T-020
-  - T-020-001-04
-  - T-020-001-04-01
-tasks_pending:
-  - none
-last_action: Committed and pushed the bug fix (useEffect forced sidebar open on selectedTask null) and ran symbol_indexer.
-next_session_start: Await user's next feature request or bug report.
+session_id: session_023_quick_subtask_roles
+skill: editor
+cfp_count: 36
+objective: Modify assignee dropdown in quick subtask and edit subtask forms to fetch and display users with both FM and SE roles
+outcome: Successfully fetched and filtered FM/SE users and validated compilation.
+changes:
+  - Updated frontend/src/pages/workspace/index.tsx useEffect to fetch both FM and SE roles in parallel and combine results
+  - Updated filteredFms and editFilteredFms useMemo hooks to allow u.roleId === 'FM' || u.roleId === 'SE'
+validation:
+  - Verified compilation via npm run type-check (no errors in index.tsx)
+  - Verified master roadmap task status is marked completed

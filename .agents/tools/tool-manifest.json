@@ -1,0 +1,238 @@
+{
+  "version": "1.0",
+  "_comment": "Tool registry for choose_tools.py. Tools = Claude Code built-ins + local scripts. Tags drive keyword matching.",
+  "_schema": "{ id, type, short, tags[], spawn_script?, when, note? }",
+  "tools": {
+    "Read": {
+      "type": "builtin",
+      "short": "Read file contents with offset+limit",
+      "tags": [
+        "read",
+        "file",
+        "view",
+        "open",
+        "inspect",
+        "content",
+        "source",
+        "อ่าน"
+      ],
+      "when": "Read a specific file or section — prefer offset+limit over full read"
+    },
+    "Edit": {
+      "type": "builtin",
+      "short": "Exact string replacement in existing files (<5 lines — use sed instead)",
+      "tags": [
+        "edit",
+        "modify",
+        "change",
+        "update",
+        "replace",
+        "patch",
+        "fix",
+        "แก้ไข"
+      ],
+      "when": "Modify an existing file — exact string match required"
+    },
+    "Write": {
+      "type": "builtin",
+      "short": "Write or overwrite a file entirely",
+      "tags": [
+        "write",
+        "create",
+        "new file",
+        "overwrite",
+        "scaffold",
+        "สร้างไฟล์"
+      ],
+      "when": "Create a new file or fully rewrite — use Edit for partial changes"
+    },
+    "Bash": {
+      "type": "builtin",
+      "short": "Execute shell commands (pipe 2>&1 | grep | tail)",
+      "tags": [
+        "bash",
+        "shell",
+        "run",
+        "execute",
+        "grep",
+        "find",
+        "command",
+        "script",
+        "รัน"
+      ],
+      "when": "Shell commands, grep, find, git, python scripts — always pipe output filter"
+    },
+    "Agent": {
+      "type": "builtin",
+      "short": "Spawn sub-agent for isolated Cycle or Explore tasks",
+      "tags": [
+        "agent",
+        "spawn",
+        "parallel",
+        "delegate",
+        "sub-agent",
+        "cycle",
+        "fanout",
+        "explore"
+      ],
+      "when": "≥5 tool calls expected OR independent parallel sections — max depth 1"
+    },
+    "lookup_py": {
+      "type": "script",
+      "spawn_script": "python scripts/lookup.py \"<query>\" --json",
+      "short": "T0 oracle: file + symbol + session index search before any grep or Read",
+      "tags": [
+        "lookup",
+        "search",
+        "find symbol",
+        "find file",
+        "index",
+        "oracle",
+        "T0",
+        "ค้นหา"
+      ],
+      "when": "T0 — ALWAYS run before grep or Read — returns file+line+read_hint+keywords+sessions",
+      "note": "High score = already exists — prevents duplicate scaffolding"
+    },
+    "symbol_indexer_py": {
+      "type": "script",
+      "spawn_script": "python scripts/symbol_indexer.py",
+      "short": "Refresh line numbers in knowledge/index_variables.json after symbol changes",
+      "tags": [
+        "index",
+        "symbol",
+        "refresh",
+        "line numbers",
+        "variable",
+        "sync",
+        "index sync"
+      ],
+      "when": "After any symbol rename, add, or delete — run to keep index accurate"
+    },
+    "session_indexer_py": {
+      "type": "script",
+      "spawn_script": "python scripts/session_indexer.py",
+      "short": "Index .sessions/ JSON files into knowledge/index_sessions.json",
+      "tags": [
+        "session",
+        "index",
+        "history",
+        "sessions",
+        "index sessions",
+        "session history"
+      ],
+      "when": "After session close — update session search index"
+    },
+    "token_estimator_py": {
+      "type": "script",
+      "spawn_script": "python scripts/token_estimator.py \"<text>\"",
+      "short": "Estimate token count for a text string",
+      "tags": [
+        "token",
+        "estimate",
+        "count",
+        "cost",
+        "size",
+        "token count"
+      ],
+      "when": "Before large file reads or long operations — estimate cost first"
+    },
+    "choose_tools_py": {
+      "type": "script",
+      "spawn_script": "python scripts/choose_tools.py --keywords \"<kw1,kw2>\" [--top N]",
+      "short": "Keyword search across skill-manifest + tool-manifest — returns top-N matches",
+      "tags": [
+        "choose",
+        "select",
+        "discover",
+        "skill",
+        "tool",
+        "keyword search",
+        "which skill",
+        "routing"
+      ],
+      "when": "When intent is unclear — call before loading skill-manifest manually"
+    },
+    "backlink_analyzer": {
+      "type": "script",
+      "path": "scripts/backlink_analyzer.py",
+      "short": "Compute topic-graph related[] links from topic overlap in index_files.json",
+      "tags": [
+        "backlink",
+        "topic",
+        "related",
+        "overlap",
+        "index",
+        "graph",
+        "analyze"
+      ],
+      "when": "After adding/editing files in index_files.json — refreshes related[] based on shared topics",
+      "flags": [
+        "--dry-run",
+        "--min-overlap FLOAT",
+        "--show-matrix"
+      ],
+      "run": "python3 scripts/backlink_analyzer.py"
+    },
+    "repo_scout": {
+      "type": "script",
+      "path": "scripts/repo_scout.py",
+      "short": "Clone or validate a git repo, enumerate files, detect language, output JSON metadata",
+      "tags": [
+        "repo",
+        "clone",
+        "scout",
+        "github",
+        "research",
+        "language",
+        "enumerate",
+        "files"
+      ],
+      "when": "Phase 1 of repo_researcher skill — before any Read or map steps",
+      "output": ".sessions/repo_scout_<repo_name>.json",
+      "args": "<url_or_local_path> [--output <path>]"
+    },
+    "session_close": {
+      "type": "script",
+      "path": "scripts/session_close.py",
+      "short": "Write all 5 mandatory session-close files (session JSON, tokens, thread, handoff, indexer)",
+      "tags": [
+        "session",
+        "close",
+        "automation",
+        "5-file",
+        "handoff"
+      ],
+      "when": "session_manager §3 Steps 1-5 — replaces manual file writes at session close",
+      "args": "[--task <str>] [--next <str>] [--session-total <int>] [--chat-total <int>] [--dry-run]"
+    },
+    "verify_runner": {
+      "type": "script",
+      "path": "scripts/verify_runner.py",
+      "short": "Parse Verify-N lines from mece_plan.md section and run each as bash command, reporting PASS/FAIL",
+      "tags": [
+        "verify",
+        "mece",
+        "automation",
+        "test",
+        "bash"
+      ],
+      "when": "Phase 3 [L4] VERIFY step — after Edit/Write, run section Verify-N automatically",
+      "args": "--section S<N> [--all] [--file <path>]"
+    },
+    "learning_profile": {
+      "type": "script",
+      "path": "scripts/learning_profile.py",
+      "short": "Record post-task quiz results + analyze user proficiency (mastery, weak/strong, glossing depth) — the usage engine of the user-coach closed learning loop",
+      "tags": [
+        "learning",
+        "quiz",
+        "user-coach",
+        "proficiency",
+        "glossing"
+      ],
+      "when": "user-coach at task close (record) + UserPromptSubmit hook every turn (analyze)",
+      "args": "record --topic <str> --correct <int> --total <int> [--note <str>] | analyze [--topic <str>]"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "user": "pongsada.p",
+  "updated": "2026-06-08",
+  "global": {
+    "english_comfort": "low",
+    "glossing_depth": "high",
+    "strong_areas": [
+      "closed-learning-loop"
+    ],
+    "weak_areas": []
+  },
+  "topics": [
+    {
+      "topic": "closed-learning-loop",
+      "exposures": 1,
+      "quiz_attempts": 3,
+      "quiz_correct": 3,
+      "mastery": 1.0,
+      "status": "mastered",
+      "last_seen": "2026-06-08",
+      "notes": "first quiz: nailed closed-loop, used-not-stored, adaptive glossing"
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-06-08",
+      "topic": "closed-learning-loop",
+      "score": 1.0,
+      "note": "first quiz: nailed closed-loop, used-not-stored, adaptive glossing"
+    }
+  ]
+}

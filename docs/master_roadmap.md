@@ -174,3 +174,14 @@
 
 
 
+
+- [ ] T-020-001-05-11: แก้ไขบั๊ก Column Header ของ Kanban Board ไม่ lock เมื่อ scroll (Sticky Header)
+- [X] T-012-009-12: ปรับปรุงตารางกำลังพลและแผนงานสำหรับเวอร์ชันมือถือด้วยรูปแบบการ์ดรายการ (Card-based List) · attempts: 1 · tool_calls: 3
+- [X] T-012-009-13: ซ่อนปุ่ม Export to Excel บนหน้าจอมือถือในหน้าตารางกำลังพล · attempts: 1 · tool_calls: 2
+- [X] T-012-009-14: ปรับปรุงส่วนเลือกผู้รับผิดชอบของ Quick Subtask และหน้าต่างแก้ไขย่อย ให้ดึงบทบาท SE เพิ่มเติม · attempts: 1 · tool_calls: 2
+
+
+
+
+
+

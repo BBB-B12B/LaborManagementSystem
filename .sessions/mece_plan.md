@@ -1,24 +1,18 @@
-## Sections
-- id: 1
-  name: "Diagnose"
-  steps:
-    - "Confirm that no photo validation rules exist in backend"
-    - "Check imports and utility functions used in frontend photo validation"
-- id: 2
-  name: "Edit & Verify"
-  steps:
-    - "Modify submitAdvanceRequest in backend/src/services/TaskService.ts to enforce Today or Tomorrow only"
-    - "Modify handleSubmit in frontend/src/pages/daily-reports/index.tsx to make photos optional if today and progress < 100%"
-    - "Verify changes in compiler / linter"
-- id: 3
-  name: "Sync & Close"
-  steps:
-    - "python scripts/symbol_indexer.py"
-    - "roadmap: add and mark T-020-001-05 as complete"
-    - "active_thread.md → phase: done"
+# MECE Plan — T-012-009-14 Update Assignee Filter (FM & SE)
 
-## Session Archive
-### Closed: 2026-06-05
-Done: [S1, S2] | Remaining: [] | Summary: Daily Report page switcher between reports/requests with sidebar layout matching Workspace and bug fix.
-### Closed: 2026-06-05
-Done: [Section 1, Section 2, Section 3] | Remaining: [] | Summary: Redesign the Workspace Requests Table (remove hours/status, add due date badge) and style dashboard stat cards with modern linear gradients and glassmorphism.
+date: 2026-06-09
+task: Quick Subtask popup Assignee dropdown filter FM and SE roles
+skill: editor
+
+## Phase 0 — Boot (once per session · keep [X] on resume · reset on topic switch only)
+- [X] B1: compact_state.md checked · SESSION_TOTAL=0 · CHAT_TOTAL=sys_fixed · CFP_COUNT stored
+- [X] B2-B3: skill=editor identified · SKILL.md loaded · hashes checked
+- [X] C0-C3: routing confirmed · no unresolved topic switch
+→ TOKEN CHECK: SESSION_TOTAL ~0k
+
+---
+
+## Phase 1 — Info Gather
+
+## Phase 1–3 — cleared
+status: task-complete

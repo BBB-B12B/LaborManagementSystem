@@ -330,7 +330,7 @@
       "backlinks": []
     },
     "backend/src/services/TaskService.ts": {
-      "description": "สร้าง Task ใหม่ พร้อม Running Number (เช่น WH-2026-0001)",
+      "description": "\u0e2a\u0e23\u0e49\u0e32\u0e07 Task \u0e43\u0e2b\u0e21\u0e48 \u0e1e\u0e23\u0e49\u0e2d\u0e21 Running Number (\u0e40\u0e0a\u0e48\u0e19 WH-2026-0001)",
       "associated_tasks": [],
       "backlinks": [
         "backend/src/scratch/test_subtask_history.ts",
@@ -338,7 +338,7 @@
       ]
     },
     "backend/src/types/index.ts": {
-      "description": "ประเภทข้อมูลหลักสำหรับระบบจัดการแรงงาน",
+      "description": "\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e2b\u0e25\u0e31\u0e01\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e41\u0e23\u0e07\u0e07\u0e32\u0e19",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -803,7 +803,7 @@
       "backlinks": []
     },
     "frontend/src/types/index.ts": {
-      "description": "ประเภทข้อมูลหลักสำหรับระบบจัดการแรงงาน",
+      "description": "\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e2b\u0e25\u0e31\u0e01\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e41\u0e23\u0e07\u0e07\u0e32\u0e19",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1046,7 +1046,7 @@
       "backlinks": []
     },
     "frontend/src/pages/overtime/index.tsx": {
-      "description": "Legacy OT route – redirect into the combined work records page (OT tab).",
+      "description": "Legacy OT route \u2013 redirect into the combined work records page (OT tab).",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1091,7 +1091,7 @@
       "backlinks": []
     },
     "frontend/src/pages/workspace/index.tsx": {
-      "description": "กรอง Task ตาม Role ของ User",
+      "description": "\u0e01\u0e23\u0e2d\u0e07 Task \u0e15\u0e32\u0e21 Role \u0e02\u0e2d\u0e07 User",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1115,7 +1115,7 @@
       ]
     },
     "frontend/src/pages/workspace/components/TaskCreateModal.tsx": {
-      "description": "ตรวจสอบว่าเป็นทีม Support (คลังสินค้า P004 หรือ บริการลูกค้า P002) หรือไม่ โดยเช็คจากชื่อโครงการ",
+      "description": "\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e27\u0e48\u0e32\u0e40\u0e1b\u0e47\u0e19\u0e17\u0e35\u0e21 Support (\u0e04\u0e25\u0e31\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 P004 \u0e2b\u0e23\u0e37\u0e2d \u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32 P002) \u0e2b\u0e23\u0e37\u0e2d\u0e44\u0e21\u0e48 \u0e42\u0e14\u0e22\u0e40\u0e0a\u0e47\u0e04\u0e08\u0e32\u0e01\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23",
       "associated_tasks": [],
       "backlinks": [
         "frontend/src/pages/workspace/index.tsx"
@@ -1479,6 +1479,7 @@
       "description": "Protected Route Component",
       "associated_tasks": [],
       "backlinks": []
-    }
+    },
+    "related": []
   }
 }

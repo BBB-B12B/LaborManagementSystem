@@ -2413,20 +2413,36 @@ export default function DailyReportPage() {
                 </Stack>
               </Box>
 
-              <Button
-                variant="outlined"
-                startIcon={<History size={18} />}
-                onClick={() => router.push('/daily-reports/list')}
-                sx={{
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  px: 3,
-                  bgcolor: 'white',
-                }}
-              >
-                Backlog / History
-              </Button>
+              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<History size={18} />}
+                  onClick={() => router.push('/daily-reports/list')}
+                  sx={{
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    px: 3,
+                    bgcolor: 'white',
+                  }}
+                >
+                  Backlog / History
+                </Button>
+              </Box>
+              <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
+                <IconButton
+                  onClick={() => router.push('/daily-reports/list')}
+                  sx={{
+                    color: '#475569',
+                    bgcolor: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '12px',
+                    p: 1.2,
+                  }}
+                >
+                  <History size={18} />
+                </IconButton>
+              </Box>
             </Box>
 
             {/* Content area */}
@@ -2672,7 +2688,12 @@ export default function DailyReportPage() {
                                 '&:hover': { bgcolor: '#e2e8f0' },
                               }}
                             >
-                              <Menu size={20} />
+                              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                                <Menu size={20} />
+                              </Box>
+                              <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                                <ChevronLeft size={20} />
+                              </Box>
                             </IconButton>
  
                             {/* Progress Circle — เหมือน My Job card */}

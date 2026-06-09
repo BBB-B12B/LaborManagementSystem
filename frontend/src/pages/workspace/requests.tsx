@@ -483,6 +483,50 @@ const getDueDateTooltip = (row: any) => {
   })}`;
 };
 
+const getDueDateText = (row: any) => {
+  if (row.progress === 100) {
+    if (!row.dueDate) return 'ตรงตามแผน';
+    const dueDateObj = new Date(row.dueDate);
+    if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+
+    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    completionDate.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    const diff = dueDateObj.getTime() - completionDate.getTime();
+    const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+    if (diffDaysCompleted > 0) {
+      return `เสร็จก่อนแผน ${diffDaysCompleted} วัน`;
+    } else if (diffDaysCompleted === 0) {
+      return 'ตรงตามแผน';
+    } else {
+      return `เลยกำหนด ${Math.abs(diffDaysCompleted)} วัน`;
+    }
+  }
+
+  if (!row.dueDate) return 'ไม่ระบุ';
+  const dueDateObj = new Date(row.dueDate);
+  if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dueDateObj.setHours(0, 0, 0, 0);
+
+  const diffTime = dueDateObj.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return `เลยกำหนดส่ง ${Math.abs(diffDays)} วัน`;
+  } else if (diffDays <= 3) {
+    return `ใกล้ถึงใน ${diffDays} วัน`;
+  } else if (diffDays <= 7) {
+    return `ใกล้ถึงใน ${diffDays} วัน`;
+  } else {
+    return `เหลือ ${diffDays} วัน`;
+  }
+};
+
 export default function WorkspaceRequestsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -1054,6 +1098,7 @@ export default function WorkspaceRequestsPage() {
               startIcon={<FileDownloadIcon />}
               onClick={handleExportExcel}
               sx={{
+                display: { xs: 'none', md: 'inline-flex' },
                 bgcolor: '#22c55e',
                 color: '#fff',
                 borderRadius: '50px',
@@ -1479,235 +1524,395 @@ export default function WorkspaceRequestsPage() {
             </Typography>
           </Box>
         ) : (
-          <TableContainer>
-            <Table sx={{ minWidth: 1000 }} aria-label="labor workspace table">
-              <TableHead sx={{
-                '& .MuiTableCell-head': {
-                  bgcolor: '#f8fafc',
-                  color: '#475569',
-                  fontWeight: 700,
-                  fontSize: '0.825rem',
-                  py: 2,
-                  borderBottom: '2px solid #e2e8f0',
-                }
-              }}>
-                <TableRow>
-                  <TableCell>วันที่ (Date)</TableCell>
-                  <TableCell>โครงการ (Site)</TableCell>
-                  <TableCell>ชื่องาน (Task Name)</TableCell>
-                  <TableCell>ผู้รายงาน (Foreman)</TableCell>
-                  <TableCell align="center">จำนวนแรงงาน</TableCell>
-                  <TableCell sx={{ width: '100px' }}>เวลาปกติ</TableCell>
-                  <TableCell sx={{ width: '90px' }}>OT เช้า</TableCell>
-                  <TableCell sx={{ width: '90px' }}>OT เที่ยง</TableCell>
-                  <TableCell sx={{ width: '90px' }}>OT เย็น</TableCell>
-                  <TableCell align="center" sx={{ width: '150px' }}>วันครบกำหนด</TableCell>
-                  <TableCell>ความคืบหน้า</TableCell>
-                  <TableCell align="center">ประวัติ</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedRows.length === 0 ? (
+          <>
+            {/* Desktop Table View */}
+            <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Table sx={{ minWidth: 1000 }} aria-label="labor workspace table">
+                <TableHead sx={{
+                  '& .MuiTableCell-head': {
+                    bgcolor: '#f8fafc',
+                    color: '#475569',
+                    fontWeight: 700,
+                    fontSize: '0.825rem',
+                    py: 2,
+                    borderBottom: '2px solid #e2e8f0',
+                  }
+                }}>
                   <TableRow>
-                    <TableCell colSpan={12} align="center" sx={{ py: 10 }}>
-                      <WarningIcon sx={{ fontSize: 40, color: '#9ca3af', mb: 1.5 }} />
-                      <Typography variant="h6" color="textSecondary" sx={{ fontWeight: 600 }}>
-                        ไม่พบข้อมูลกำลังพลในเงื่อนไขการค้นหา
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        กรุณาลองเปลี่ยนตัวกรองโครงการหรือขยายช่วงวันที่ตรวจสอบ
-                      </Typography>
-                    </TableCell>
+                    <TableCell>วันที่ (Date)</TableCell>
+                    <TableCell>โครงการ (Site)</TableCell>
+                    <TableCell>ชื่องาน (Task Name)</TableCell>
+                    <TableCell>ผู้รายงาน (Foreman)</TableCell>
+                    <TableCell align="center">จำนวนแรงงาน</TableCell>
+                    <TableCell sx={{ width: '100px' }}>เวลาปกติ</TableCell>
+                    <TableCell sx={{ width: '90px' }}>OT เช้า</TableCell>
+                    <TableCell sx={{ width: '90px' }}>OT เที่ยง</TableCell>
+                    <TableCell sx={{ width: '90px' }}>OT เย็น</TableCell>
+                    <TableCell align="center" sx={{ width: '150px' }}>วันครบกำหนด</TableCell>
+                    <TableCell>ความคืบหน้า</TableCell>
+                    <TableCell align="center">ประวัติ</TableCell>
                   </TableRow>
-                ) : (
-                  paginatedRows.map((row) => {
-                    return (
-                      <TableRow
-                        key={row.key}
-                        hover
-                        sx={{
-                          transition: 'background-color 0.2s ease',
-                          '&:hover': {
-                            bgcolor: '#f8fafc',
-                          }
-                        }}
-                      >
-                        <TableCell sx={{ fontWeight: 600 }}>
-                          {row.dateStr ? format(parseISO(row.dateStr), 'dd/MM/yyyy') : '-'}
-                        </TableCell>
-                        <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
-                          {row.projectName || '-'}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 600, color: '#1f2937' }}>
-                          {row.taskName}
-                          {row.isSupportReport && (
-                            <Chip
-                              label="Support"
-                              size="small"
-                              color="info"
-                              variant="outlined"
-                              sx={{ ml: 1, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
-                          {row.createdBy}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#374151' }}>
-                            {row.laborCount} คน
-                          </Typography>
-                        </TableCell>
-                        
-                        {/* กะปกติ */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.day ? (
-                            <Chip label={row.shiftTimes.day} size="small" variant="outlined" sx={{ borderColor: '#22c55e', color: '#15803d', fontWeight: 600, height: 20 }} />
-                          ) : '-'}
-                        </TableCell>
+                </TableHead>
+                <TableBody>
+                  {paginatedRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={12} align="center" sx={{ py: 10 }}>
+                        <WarningIcon sx={{ fontSize: 40, color: '#9ca3af', mb: 1.5 }} />
+                        <Typography variant="h6" color="textSecondary" sx={{ fontWeight: 600 }}>
+                          ไม่พบข้อมูลกำลังพลในเงื่อนไขการค้นหา
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          กรุณาลองเปลี่ยนตัวกรองโครงการหรือขยายช่วงวันที่ตรวจสอบ
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedRows.map((row) => {
+                      return (
+                        <TableRow
+                          key={row.key}
+                          hover
+                          sx={{
+                            transition: 'background-color 0.2s ease',
+                            '&:hover': {
+                              bgcolor: '#f8fafc',
+                            }
+                          }}
+                        >
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {row.dateStr ? format(parseISO(row.dateStr), 'dd/MM/yyyy') : '-'}
+                          </TableCell>
+                          <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
+                            {row.projectName || '-'}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 600, color: '#1f2937' }}>
+                            {row.taskName}
+                            {row.isSupportReport && (
+                              <Chip
+                                label="Support"
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                sx={{ ml: 1, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
+                            {row.createdBy}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#374151' }}>
+                              {row.laborCount} คน
+                            </Typography>
+                          </TableCell>
+                          
+                          {/* กะปกติ */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.day ? (
+                              <Chip label={row.shiftTimes.day} size="small" variant="outlined" sx={{ borderColor: '#22c55e', color: '#15803d', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
 
-                        {/* OT เช้า */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.otMorning ? (
-                            <Chip label={row.shiftTimes.otMorning} size="small" variant="outlined" sx={{ borderColor: '#ef4444', color: '#b91c1c', fontWeight: 600, height: 20 }} />
-                          ) : '-'}
-                        </TableCell>
+                          {/* OT เช้า */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.otMorning ? (
+                              <Chip label={row.shiftTimes.otMorning} size="small" variant="outlined" sx={{ borderColor: '#ef4444', color: '#b91c1c', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
 
-                        {/* OT เที่ยง */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.otNoon ? (
-                            <Chip label={row.shiftTimes.otNoon} size="small" variant="outlined" sx={{ borderColor: '#3b82f6', color: '#1d4ed8', fontWeight: 600, height: 20 }} />
-                          ) : '-'}
-                        </TableCell>
+                          {/* OT เที่ยง */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.otNoon ? (
+                              <Chip label={row.shiftTimes.otNoon} size="small" variant="outlined" sx={{ borderColor: '#3b82f6', color: '#1d4ed8', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
 
-                        {/* OT เย็น */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.otEvening ? (
-                            <Chip label={row.shiftTimes.otEvening} size="small" variant="outlined" sx={{ borderColor: '#f59e0b', color: '#b45309', fontWeight: 600, height: 20 }} />
-                          ) : '-'}
-                        </TableCell>
+                          {/* OT เย็น */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.otEvening ? (
+                              <Chip label={row.shiftTimes.otEvening} size="small" variant="outlined" sx={{ borderColor: '#f59e0b', color: '#b45309', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
 
-                        {/* วันครบกำหนด (Due Date Badge) */}
-                        <TableCell align="center">
-                          <Tooltip title={getDueDateTooltip(row)} arrow placement="top">
-                            <Box
-                              sx={{
-                                display: 'inline-flex',
-                                backgroundColor: getDueDateColor(row),
-                                borderRadius: '999px',
-                                px: 1.5,
-                                py: 0.5,
-                                alignItems: 'center',
-                                boxShadow: '0 2px 6px rgba(28, 30, 43, 0.15)',
-                                cursor: 'default',
-                              }}
-                            >
-                              <Typography
-                                variant="caption"
+                          {/* วันครบกำหนด (Due Date Badge) */}
+                          <TableCell align="center">
+                            <Tooltip title={getDueDateTooltip(row)} arrow placement="top">
+                              <Box
                                 sx={{
-                                  fontWeight: 700,
-                                  color: getDueDateColor(row) === '#eab308' ? '#1c1e2b' : '#ffffff',
-                                  fontSize: '0.75rem',
-                                  letterSpacing: 0.5,
-                                  whiteSpace: 'nowrap',
+                                  display: 'inline-flex',
+                                  backgroundColor: getDueDateColor(row),
+                                  borderRadius: '999px',
+                                  px: 1.5,
+                                  py: 0.5,
+                                  alignItems: 'center',
+                                  boxShadow: '0 2px 6px rgba(28, 30, 43, 0.15)',
+                                  cursor: 'default',
                                 }}
                               >
-                                {(() => {
-                                  if (row.progress === 100) {
-                                    if (!row.dueDate) return 'ตรงตามแผน';
-                                    const dueDateObj = new Date(row.dueDate);
-                                    if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: getDueDateColor(row) === '#eab308' ? '#1c1e2b' : '#ffffff',
+                                    fontSize: '0.75rem',
+                                    letterSpacing: 0.5,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {getDueDateText(row)}
+                                </Typography>
+                              </Box>
+                            </Tooltip>
+                          </TableCell>
 
-                                    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
-                                    completionDate.setHours(0, 0, 0, 0);
-                                    dueDateObj.setHours(0, 0, 0, 0);
-
-                                    const diff = dueDateObj.getTime() - completionDate.getTime();
-                                    const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
-
-                                    if (diffDaysCompleted > 0) {
-                                      return `เสร็จก่อนแผน ${diffDaysCompleted} วัน`;
-                                    } else if (diffDaysCompleted === 0) {
-                                      return 'ตรงตามแผน';
-                                    } else {
-                                      return `เลยกำหนด ${Math.abs(diffDaysCompleted)} วัน`;
-                                    }
-                                  }
-
-                                  if (!row.dueDate) return 'ไม่ระบุ';
-                                  const dueDateObj = new Date(row.dueDate);
-                                  if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
-
-                                  const today = new Date();
-                                  today.setHours(0, 0, 0, 0);
-                                  dueDateObj.setHours(0, 0, 0, 0);
-
-                                  const diffTime = dueDateObj.getTime() - today.getTime();
-                                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                                  if (diffDays < 0) {
-                                    return `เลยกำหนดส่ง ${Math.abs(diffDays)} วัน`;
-                                  } else if (diffDays <= 3) {
-                                    return `ใกล้ถึงใน ${diffDays} วัน`;
-                                  } else if (diffDays <= 7) {
-                                    return `ใกล้ถึงใน ${diffDays} วัน`;
-                                  } else {
-                                    return `เหลือ ${diffDays} วัน`;
-                                  }
-                                })()}
+                          {/* ความคืบหน้า */}
+                          <TableCell sx={{ minWidth: 120 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box sx={{ width: '100%', mr: 1 }}>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={Math.min(100, Math.max(0, row.progress))}
+                                  sx={{
+                                    height: 6,
+                                    borderRadius: 5,
+                                    bgcolor: '#e5e7eb',
+                                    '& .MuiLinearProgress-bar': {
+                                      bgcolor: row.progress >= 100 ? '#10b981' : '#3b82f6',
+                                    },
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700, minWidth: 35 }}>
+                                {row.progress}%
                               </Typography>
                             </Box>
-                          </Tooltip>
-                        </TableCell>
+                          </TableCell>
 
-                        {/* ความคืบหน้า */}
-                        <TableCell sx={{ minWidth: 120 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: '100%', mr: 1 }}>
-                              <LinearProgress
-                                variant="determinate"
-                                value={Math.min(100, Math.max(0, row.progress))}
+                          {/* ประวัติแก้ไข */}
+                          <TableCell align="center">
+                            <Tooltip title="ดูประวัติการบันทึก/แก้ไขข้อมูลงานย่อย">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenHistory(row)}
                                 sx={{
-                                  height: 6,
-                                  borderRadius: 5,
-                                  bgcolor: '#e5e7eb',
-                                  '& .MuiLinearProgress-bar': {
-                                    bgcolor: row.progress >= 100 ? '#10b981' : '#3b82f6',
+                                  color: '#4b5563',
+                                  '&:hover': {
+                                    color: '#1c1e2b',
+                                    bgcolor: 'rgba(28, 30, 43, 0.05)',
                                   },
                                 }}
-                              />
-                            </Box>
-                            <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700, minWidth: 35 }}>
-                              {row.progress}%
-                            </Typography>
-                          </Box>
-                        </TableCell>
+                              >
+                                <HistoryIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-                        {/* ประวัติแก้ไข */}
-                        <TableCell align="center">
-                          <Tooltip title="ดูประวัติการบันทึก/แก้ไขข้อมูลงานย่อย">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenHistory(row)}
-                              sx={{
-                                color: '#4b5563',
-                                '&:hover': {
-                                  color: '#1c1e2b',
-                                  bgcolor: 'rgba(28, 30, 43, 0.05)',
-                                },
-                              }}
-                            >
-                              <HistoryIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+            {/* Mobile Card-Based List View */}
+            <Box sx={{ display: { xs: 'block', md: 'none' }, p: 1.5, bgcolor: '#f8fafc' }}>
+              {paginatedRows.length === 0 ? (
+                <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', px: 2 }}>
+                  <WarningIcon sx={{ fontSize: 40, color: '#9ca3af', mb: 1.5 }} />
+                  <Typography variant="h6" color="textSecondary" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                    ไม่พบข้อมูลกำลังพลในเงื่อนไขการค้นหา
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontSize: '0.825rem', mt: 0.5 }}>
+                    กรุณาลองเปลี่ยนตัวกรองโครงการหรือขยายช่วงวันที่ตรวจสอบ
+                  </Typography>
+                </Box>
+              ) : (
+                paginatedRows.map((row) => (
+                  <Paper
+                    key={row.key}
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      borderRadius: '16px',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)',
+                      bgcolor: '#ffffff',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        borderColor: '#FF7F32',
+                        boxShadow: '0 6px 16px rgba(255, 127, 50, 0.06)',
+                      }
+                    }}
+                  >
+                    {/* Header: Date & Due Date Badge */}
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '8px' }}>
+                        {row.dateStr ? format(parseISO(row.dateStr), 'dd/MM/yyyy') : '-'}
+                      </Typography>
+                      
+                      <Tooltip title={getDueDateTooltip(row)} arrow placement="top">
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            backgroundColor: getDueDateColor(row),
+                            borderRadius: '999px',
+                            px: 1.5,
+                            py: 0.5,
+                            alignItems: 'center',
+                            boxShadow: '0 2px 6px rgba(28, 30, 43, 0.15)',
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: getDueDateColor(row) === '#eab308' ? '#1c1e2b' : '#ffffff',
+                              fontSize: '0.7rem',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {getDueDateText(row)}
+                          </Typography>
+                        </Box>
+                      </Tooltip>
+                    </Stack>
+
+                    {/* Task Title */}
+                    <Box sx={{ mb: 1.5 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '0.925rem', lineHeight: 1.4 }}>
+                        {row.taskName}
+                        {row.isSupportReport && (
+                          <Chip
+                            label="Support"
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                            sx={{ ml: 1, height: 18, fontSize: '0.6rem', fontWeight: 700 }}
+                          />
+                        )}
+                      </Typography>
+                    </Box>
+
+                    {/* Metadata: Site & Foreman */}
+                    <Stack spacing={1} sx={{ mb: 1.8 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, minWidth: '60px' }}>
+                          โครงการ:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500, fontSize: '0.825rem' }}>
+                          {row.projectName || '-'}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, minWidth: '60px' }}>
+                          ผู้รายงาน:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#334155', fontWeight: 600, fontSize: '0.825rem' }}>
+                          {row.createdBy}
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    {/* Divider */}
+                    <Box sx={{ borderTop: '1px solid #f1f5f9', my: 1.5 }} />
+
+                    {/* Labor Count & Shift Chips */}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                      {/* Labor Count Chip */}
+                      <Chip
+                        label={`${row.laborCount} คน`}
+                        size="small"
+                        sx={{ bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}
+                      />
+
+                      {/* Day Shift */}
+                      {row.shiftTimes?.day && (
+                        <Chip
+                          label={`กะปกติ: ${row.shiftTimes.day}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#22c55e', color: '#15803d', fontWeight: 600 }}
+                        />
+                      )}
+
+                      {/* OT Morning */}
+                      {row.shiftTimes?.otMorning && (
+                        <Chip
+                          label={`OT เช้า: ${row.shiftTimes.otMorning}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#ef4444', color: '#b91c1c', fontWeight: 600 }}
+                        />
+                      )}
+
+                      {/* OT Noon */}
+                      {row.shiftTimes?.otNoon && (
+                        <Chip
+                          label={`OT เที่ยง: ${row.shiftTimes.otNoon}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#3b82f6', color: '#1d4ed8', fontWeight: 600 }}
+                        />
+                      )}
+
+                      {/* OT Evening */}
+                      {row.shiftTimes?.otEvening && (
+                        <Chip
+                          label={`OT เย็น: ${row.shiftTimes.otEvening}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#f59e0b', color: '#b45309', fontWeight: 600 }}
+                        />
+                      )}
+                    </Box>
+
+                    {/* Footer: Progress & History Button */}
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ pt: 1, borderTop: '1px dashed #f1f5f9' }}>
+                      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(100, Math.max(0, row.progress))}
+                          sx={{
+                            height: 6,
+                            borderRadius: 5,
+                            width: '100%',
+                            bgcolor: '#e5e7eb',
+                            '& .MuiLinearProgress-bar': {
+                              bgcolor: row.progress >= 100 ? '#10b981' : '#3b82f6',
+                            },
+                          }}
+                        />
+                        <Typography variant="body2" sx={{ fontWeight: 800, color: '#334155', minWidth: 35 }}>
+                          {row.progress}%
+                        </Typography>
+                      </Box>
+                      
+                      <Tooltip title="ดูประวัติการบันทึก/แก้ไขข้อมูล">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenHistory(row)}
+                          sx={{
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            color: '#475569',
+                            '&:hover': {
+                              color: '#ffffff',
+                              bgcolor: '#FF7F32',
+                              borderColor: '#FF7F32',
+                            },
+                          }}
+                        >
+                          <HistoryIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Paper>
+                ))
+              )}
+            </Box>
+          </>
         )}
         <TablePagination
           rowsPerPageOptions={[10, 25, 50, 100]}

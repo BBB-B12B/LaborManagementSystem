@@ -28,6 +28,11 @@ import {
   Divider,
   Grid,
   Paper,
+  Collapse,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,6 +48,9 @@ import {
   People as PeopleIcon,
   FilterAltOff as FilterAltOffIcon,
   CloudUpload as CloudUploadIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  CalendarToday as CalendarTodayIcon,
+  AccountTree as AccountTreeIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -118,6 +126,7 @@ export default function WorkspacePage() {
   }, []);
 
   const [activeTab, setActiveTab] = useState('All Tasks');
+  const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -136,6 +145,9 @@ export default function WorkspacePage() {
   // Left Tree Filter state
   const [selectedNode, setSelectedNode] = useState<{ type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null>(null);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [mobileActiveColumn, setMobileActiveColumn] = useState<string>('upcoming');
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const swipeTouchStartX = useRef<number | null>(null);
 
   // Quick Create Subtask state
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
@@ -928,16 +940,23 @@ export default function WorkspacePage() {
     setIsQuickCreateOpen(true);
   };
 
-  // Fetch FM users for quick subtask creation or subtask edit
+  // Fetch FM and SE users for quick subtask creation or subtask edit
   useEffect(() => {
     if (isQuickCreateOpen || isSubtaskEditOpen) {
       const fetchFms = async () => {
         setFetchingFms(true);
         try {
-          const res = await memberService.getAllUsers({ roleId: 'FM' });
-          setFmUsers(res.users || []);
+          const [resFm, resSe] = await Promise.all([
+            memberService.getAllUsers({ roleId: 'FM', pageSize: 1000 }),
+            memberService.getAllUsers({ roleId: 'SE', pageSize: 1000 }),
+          ]);
+          const combined = [
+            ...(resFm.users || []),
+            ...(resSe.users || []),
+          ];
+          setFmUsers(combined);
         } catch (err) {
-          console.error('Failed to fetch FM users', err);
+          console.error('Failed to fetch FM and SE users', err);
         } finally {
           setFetchingFms(false);
         }
@@ -982,11 +1001,11 @@ export default function WorkspacePage() {
     }
   }, [user?.projectLocationIds, tasks]);
 
-  // Filter FMs strictly by the parent task's project
+  // Filter FMs/SEs strictly by the parent task's project
   const filteredFms = useMemo(() => {
     const validFms = fmUsers.filter((u) => 
       u.roleId !== 'GOD' && 
-      u.roleId === 'FM' && 
+      (u.roleId === 'FM' || u.roleId === 'SE') && 
       (u as any).systemCode !== 'AS' && 
       (u as any).SystemCode !== 'AS'
     );
@@ -998,11 +1017,11 @@ export default function WorkspacePage() {
     );
   }, [fmUsers, quickCreateTaskId, tasks]);
 
-  // Filter FMs strictly by the parent task's project for editing subtask
+  // Filter FMs/SEs strictly by the parent task's project for editing subtask
   const editFilteredFms = useMemo(() => {
     const validFms = fmUsers.filter((u) => 
       u.roleId !== 'GOD' && 
-      u.roleId === 'FM' && 
+      (u.roleId === 'FM' || u.roleId === 'SE') && 
       (u as any).systemCode !== 'AS' && 
       (u as any).SystemCode !== 'AS'
     );
@@ -1168,48 +1187,87 @@ export default function WorkspacePage() {
                     p: 1.2,
                   }}
                 >
-                  <MenuIcon />
+                  <AccountTreeIcon />
                 </IconButton>
 
-                <Stack
-                  direction="row"
-                  spacing={1}
+                {/* Filter toggle dropdown */}
+                <Button
+                  onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
+                  startIcon={<CalendarTodayIcon sx={{ fontSize: 15 }} />}
+                  endIcon={
+                    <KeyboardArrowDownIcon
+                      sx={{
+                        fontSize: 18,
+                        transition: 'transform 0.2s',
+                        transform: Boolean(filterMenuAnchor) ? 'rotate(180deg)' : 'rotate(0deg)',
+                      }}
+                    />
+                  }
                   sx={{
-                    bgcolor: '#f1f3f6',
-                    p: 0.5,
+                    px: 2,
+                    py: 0.9,
                     borderRadius: '999px',
-                    overflowX: 'auto',
-                    whiteSpace: 'nowrap',
-                    scrollbarWidth: 'none',
-                    '&::-webkit-scrollbar': {
-                      display: 'none',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    color: activeTab === 'All Tasks' ? '#374151' : '#ffffff',
+                    bgcolor: activeTab === 'All Tasks' ? '#f1f3f6' : '#FF7F32',
+                    boxShadow: activeTab !== 'All Tasks' ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
+                    border: '1px solid',
+                    borderColor: activeTab === 'All Tasks' ? '#e5e7eb' : '#FF7F32',
+                    '&:hover': {
+                      bgcolor: activeTab === 'All Tasks' ? '#e5e7eb' : '#e66a25',
                     },
-                    width: { xs: '100%', sm: 'auto' },
+                    flexShrink: 0,
+                    minWidth: 140,
                   }}
                 >
-                  {['All Tasks', 'This Month', 'This Week', 'Today'].map((tab) => (
-                    <Button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
+                  {activeTab}
+                </Button>
+                <Menu
+                  anchorEl={filterMenuAnchor}
+                  open={Boolean(filterMenuAnchor)}
+                  onClose={() => setFilterMenuAnchor(null)}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  PaperProps={{
+                    sx: {
+                      borderRadius: '14px',
+                      mt: 0.75,
+                      minWidth: 160,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
+                      border: '1px solid #f0f1f5',
+                      overflow: 'hidden',
+                    },
+                  }}
+                >
+                  {[
+                    { label: 'All Tasks', icon: '📋' },
+                    { label: 'This Month', icon: '📅' },
+                    { label: 'This Week', icon: '📆' },
+                    { label: 'Today', icon: '🗓️' },
+                  ].map(({ label, icon }) => (
+                    <MenuItem
+                      key={label}
+                      selected={activeTab === label}
+                      onClick={() => { setActiveTab(label); setFilterMenuAnchor(null); }}
                       sx={{
-                        px: 3,
-                        py: 1,
-                        borderRadius: '999px',
-                        textTransform: 'none',
-                        fontWeight: 700,
-                        color: activeTab === tab ? '#ffffff' : '#6b7280',
-                        bgcolor: activeTab === tab ? '#FF7F32' : 'transparent',
-                        boxShadow: activeTab === tab ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
-                        '&:hover': {
-                          bgcolor: activeTab === tab ? '#e66a25' : 'rgba(0,0,0,0.04)',
-                        },
-                        flexShrink: 0,
+                        px: 2,
+                        py: 1.2,
+                        fontWeight: activeTab === label ? 700 : 500,
+                        fontSize: '0.875rem',
+                        color: activeTab === label ? '#FF7F32' : '#374151',
+                        '&.Mui-selected': { bgcolor: '#fff5ee' },
+                        '&.Mui-selected:hover': { bgcolor: '#ffe8d6' },
+                        '&:hover': { bgcolor: '#fafafa' },
+                        gap: 1.2,
                       }}
                     >
-                      {tab}
-                    </Button>
+                      <ListItemIcon sx={{ minWidth: 'unset', fontSize: '1rem' }}>{icon}</ListItemIcon>
+                      <ListItemText primary={label} primaryTypographyProps={{ fontWeight: activeTab === label ? 700 : 500, fontSize: '0.875rem', color: activeTab === label ? '#FF7F32' : '#374151' }} />
+                    </MenuItem>
                   ))}
-                </Stack>
+                </Menu>
 
                 {/* Reset Filters button next to the tabs */}
                 {(activeTab !== 'All Tasks' || selectedNode !== null) && (
@@ -1288,60 +1346,105 @@ export default function WorkspacePage() {
                 )}
               </Stack>
 
-              {/* Mobile Newtasks fallback */}
-              {canEditWorkspace && (
-                <Stack spacing={1} sx={{ width: '100%', display: { xs: 'flex', sm: 'none' } }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => setIsModalOpen(true)}
-                    sx={{
-                      bgcolor: '#1c1e2b',
-                      color: '#fff',
-                      borderRadius: '999px',
-                      px: 3,
-                      py: 1.2,
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
-                      '&:hover': {
-                        bgcolor: '#000000',
-                      },
-                      width: '100%',
-                    }}
-                  >
-                    Newtasks
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<CloudUploadIcon />}
-                    onClick={() => setIsWbsModalOpen(true)}
-                    sx={{
-                      bgcolor: '#22c55e',
-                      color: '#fff',
-                      borderRadius: '50px',
-                      px: 3,
-                      py: 1.2,
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
-                      '&:hover': {
-                        bgcolor: '#16a34a',
-                      },
-                      width: '100%',
-                    }}
-                  >
-                    Upload
-                  </Button>
-                </Stack>
-              )}
+              {/* Mobile — collapsible action panel */}
+              <Box sx={{ display: { xs: 'block', sm: 'none' }, width: '100%' }}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  endIcon={
+                    <ExpandMoreIcon
+                      sx={{
+                        transform: showMobileActions ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s',
+                      }}
+                    />
+                  }
+                  onClick={() => setShowMobileActions((prev) => !prev)}
+                  sx={{
+                    borderRadius: '999px',
+                    borderColor: '#1c1e2b',
+                    color: '#1c1e2b',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    py: 1,
+                    '&:hover': { borderColor: '#000', bgcolor: 'rgba(28,30,43,0.05)' },
+                  }}
+                >
+                  Actions
+                </Button>
+                <Collapse in={showMobileActions}>
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    {canEditWorkspace && (
+                      <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => setIsModalOpen(true)}
+                        sx={{
+                          bgcolor: '#1c1e2b',
+                          color: '#fff',
+                          borderRadius: '999px',
+                          px: 3,
+                          py: 1.2,
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
+                          '&:hover': { bgcolor: '#000000' },
+                          width: '100%',
+                        }}
+                      >
+                        Newtasks
+                      </Button>
+                    )}
+                    {canEditWorkspace && (
+                      <Button
+                        variant="contained"
+                        startIcon={<CloudUploadIcon />}
+                        onClick={() => setIsWbsModalOpen(true)}
+                        sx={{
+                          bgcolor: '#22c55e',
+                          color: '#fff',
+                          borderRadius: '50px',
+                          px: 3,
+                          py: 1.2,
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+                          '&:hover': { bgcolor: '#16a34a' },
+                          width: '100%',
+                        }}
+                      >
+                        Upload
+                      </Button>
+                    )}
+                    <Button
+                      variant="contained"
+                      endIcon={<ArrowForwardIcon />}
+                      onClick={() => router.push('/workspace/requests')}
+                      sx={{
+                        bgcolor: '#1c1e2b',
+                        color: '#fff',
+                        borderRadius: '999px',
+                        px: 3.5,
+                        py: 1.2,
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(28, 30, 43, 0.25)',
+                        '&:hover': { bgcolor: '#000000', boxShadow: '0 6px 20px rgba(0, 0, 0, 0.3)' },
+                        width: '100%',
+                      }}
+                    >
+                      กำลังพล & แผนงาน
+                    </Button>
+                  </Stack>
+                </Collapse>
+              </Box>
 
-              {/* Actions */}
+              {/* Desktop — กำลังพล & แผนงาน always visible */}
               <Stack
                 direction="row"
                 spacing={2}
                 alignItems="center"
-                sx={{ width: { xs: '100%', md: 'auto' } }}
+                sx={{ display: { xs: 'none', sm: 'flex' }, width: { sm: '100%', md: 'auto' } }}
               >
                 <Button
                   variant="contained"
@@ -1369,14 +1472,150 @@ export default function WorkspacePage() {
             </Stack>
           </Box>
 
-          {/* Kanban Board columns */}
+          {/* Mobile Kanban — Status Toggle + Single Column */}
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', flexGrow: 1, overflow: 'hidden', bgcolor: '#f8fafc' }}>
+            {/* Status Toggle — 2×2 grid, always fully visible */}
+            <Box sx={{ px: 2, pt: 1.5, pb: 0, flexShrink: 0 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1,
+                }}
+              >
+                {COLUMNS.map((column) => {
+                  const count = filteredSubtasks.filter((t) => {
+                    let effectiveStatus = t.status;
+                    const progress = t.dailyProgress || 0;
+                    if (progress >= 100 && effectiveStatus !== 'completed') effectiveStatus = 'for-checking';
+                    else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
+                    else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
+                    else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
+                    return effectiveStatus === column.id;
+                  }).length;
+                  const isActive = mobileActiveColumn === column.id;
+                  return (
+                    <Box
+                      key={column.id}
+                      onClick={() => setMobileActiveColumn(column.id)}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 0.75,
+                        px: 1.5,
+                        py: 1.1,
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        bgcolor: isActive ? column.color : '#ffffff',
+                        border: `2px solid ${isActive ? column.color : '#e2e8f0'}`,
+                        boxShadow: isActive ? `0 4px 12px ${column.color}44` : 'none',
+                        transition: 'all 0.18s',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: isActive ? '#fff' : column.color, flexShrink: 0 }} />
+                        <Typography
+                          variant="caption"
+                          sx={{ fontWeight: 700, color: isActive ? '#fff' : '#475569', fontSize: '0.72rem', lineHeight: 1.3 }}
+                        >
+                          {column.label}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          minWidth: 22,
+                          height: 22,
+                          borderRadius: '999px',
+                          bgcolor: isActive ? 'rgba(255,255,255,0.28)' : '#e2e8f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          px: 0.5,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: isActive ? '#fff' : '#475569', fontSize: '0.7rem', lineHeight: 1 }}>
+                          {count}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+
+            {/* Active Column Cards */}
+            <Box
+              sx={{ flexGrow: 1, overflowY: 'auto', px: 2, pb: 3, pt: 1, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
+              onTouchStart={(e) => { swipeTouchStartX.current = e.touches[0].clientX; }}
+              onTouchEnd={(e) => {
+                if (swipeTouchStartX.current === null) return;
+                const dx = e.changedTouches[0].clientX - swipeTouchStartX.current;
+                swipeTouchStartX.current = null;
+                if (Math.abs(dx) < 50) return;
+                const colIds = COLUMNS.map((c) => c.id);
+                const idx = colIds.findIndex((id) => id === mobileActiveColumn);
+                if (dx < 0 && idx < colIds.length - 1) setMobileActiveColumn(colIds[idx + 1]);
+                if (dx > 0 && idx > 0) setMobileActiveColumn(colIds[idx - 1]);
+              }}
+            >
+              {COLUMNS.filter((col) => col.id === mobileActiveColumn).map((column) => {
+                const columnTasks = filteredSubtasks
+                  .filter((t) => {
+                    let effectiveStatus = t.status;
+                    const progress = t.dailyProgress || 0;
+                    if (progress >= 100 && effectiveStatus !== 'completed') effectiveStatus = 'for-checking';
+                    else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
+                    else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
+                    else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
+                    if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
+                    return effectiveStatus === column.id;
+                  })
+                  .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+                return (
+                  <Box key={column.id}>
+                    {loading ? (
+                      Array.from(new Array(3)).map((_, idx) => (
+                        <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '12px' }} />
+                      ))
+                    ) : columnTasks.length > 0 ? (
+                      columnTasks.map((task) => {
+                        const hasUnread = user && notifications.some(
+                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
+                        );
+                        return (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onEdit={canEditWorkspace ? handleEdit : undefined}
+                            onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                            onViewHistory={handleViewHistoryClick}
+                            onClick={handleSubtaskCardClick}
+                            hasUnread={!!hasUnread}
+                          />
+                        );
+                      })
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8, opacity: 0.4 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>ไม่มีงานในสถานะนี้</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+
+          {/* Desktop Kanban Board columns */}
           <Box
             sx={{
               flexGrow: 1,
               px: 3,
               pb: 3,
               overflowX: 'auto',
-              display: 'flex',
+              display: { xs: 'none', md: 'flex' },
               alignItems: 'flex-start',
               gap: 2.5,
               bgcolor: '#f8fafc',
@@ -1435,7 +1674,7 @@ export default function WorkspacePage() {
                   }}
                 >
                   {/* Column Header */}
-                  <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
+                  <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5, position: 'sticky', top: 0, zIndex: 1, bgcolor: '#f1f5f9', pb: 1 }}>
                     <Box
                       sx={{
                         width: 4,

@@ -2090,7 +2090,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 97
+      "line": 105
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
@@ -2102,7 +2102,7 @@
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 82
+      "line": 83
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
@@ -2506,23 +2506,23 @@
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 341
+      "line": 371
     },
     "SIDEBAR_WIDTH": {
       "source": "frontend/src/components/layout/Navbar.tsx",
-      "line": 16
+      "line": 17
     },
     "GRADIENT_BG": {
       "source": "frontend/src/components/layout/Navbar.tsx",
-      "line": 25
+      "line": 26
     },
     "NAV_TEXT": {
       "source": "frontend/src/components/layout/Navbar.tsx",
-      "line": 26
+      "line": 27
     },
     "Navbar": {
       "source": "frontend/src/components/layout/Navbar.tsx",
-      "line": 32
+      "line": 33
     },
     "ProtectedRouteProps": {
       "source": "frontend/src/components/layout/ProtectedRoute.tsx",
@@ -2550,7 +2550,7 @@
     },
     "WorkspaceRequestsPage": {
       "source": "frontend/src/pages/workspace/requests.tsx",
-      "line": 486
+      "line": 530
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",

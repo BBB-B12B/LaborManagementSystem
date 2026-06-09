@@ -37,6 +37,7 @@ import { WorkOrderConfigModal } from './WorkOrderConfigModal';
 import { CategoryConfigModal } from './CategoryConfigModal';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import AddIcon from '@mui/icons-material/Add';
 
 // Form validation schema
 const taskSchema = z.object({
@@ -514,25 +515,47 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   };
 
   const inputStyles = { 
-    '& .MuiFilledInput-root, & .MuiInputBase-root': {
-      borderRadius: 2, 
-      backgroundColor: '#F4F6F8 !important',
-      '&::before': { display: 'none !important' },
-      '&::after': { display: 'none !important' },
-      '&:hover': { backgroundColor: '#EAECEF !important' }, 
-      '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' },
+    '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+      borderRadius: '24px !important', 
+      backgroundColor: '#ffffff !important',
+      height: 40,
+      '&.MuiInputBase-multiline': {
+        height: 'auto !important',
+        borderRadius: '16px !important',
+      },
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#cbd5e1 !important',
+        borderWidth: '1px !important',
+      },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#94a3b8 !important',
+      },
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#1c1e2b !important',
+        borderWidth: '1.5px !important',
+      },
       '&.Mui-disabled': {
         backgroundColor: '#f5f7f9 !important',
-        '&::before': { display: 'none !important' }
       }
     },
     '& .MuiInputBase-input': {
       color: '#1c1e2b',
       WebkitTextFillColor: '#1c1e2b',
+      fontSize: '0.85rem',
+      py: '8px !important',
     },
     '& .MuiInputLabel-root': {
-      color: '#637381',
+      color: '#64748b',
       fontWeight: 500,
+      fontSize: '0.85rem',
+      mt: -0.75,
+      '&.Mui-focused': {
+        color: '#1c1e2b !important',
+        mt: 0,
+      },
+      '&.MuiInputLabel-shrink': {
+        mt: 0,
+      }
     }
   };
 
@@ -666,19 +689,24 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           onChange={(_, newValue) => field.onChange(newValue ? newValue.id : '')}
                           value={projects.find((p) => p.id === field.value) || null}
                           disabled={isSubmitting || isEdit || shouldDisableProject}
+                          renderOption={(props, option) => (
+                            <li {...props} key={option.id} style={{ padding: '12px 16px' }}>
+                              {option.projectCode} - {option.projectName}
+                            </li>
+                          )}
                           renderInput={(params) => (
                             <TextField
                               {...params}
                               label="Location (โครงการ) *"
-                              variant="filled"
+                              variant="outlined"
                               error={!!errors.projectId}
                               helperText={errors.projectId?.message || (shouldDisableProject ? 'โครงการถูกกำหนดตามสังกัดของคุณ' : '')}
-                              InputProps={{ ...params.InputProps, disableUnderline: true }}
+                              InputProps={{ ...params.InputProps, readOnly: true }}
                               sx={inputStyles}
                             />
                           )}
                         />
-                        <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                        <Box sx={{ height: 40, display: 'flex', alignItems: 'center' }}>
                           <Tooltip title="โครงการที่เลือกจะถูกนำไปคำนวณต้นทุน (Project Cost) ของงาน" arrow placement="top">
                             <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
                           </Tooltip>
@@ -740,15 +768,20 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               }}
                               value={existingTasks.find(t => t.taskId === supportOriginalTaskId && t.subtaskId === supportOriginalSubtaskId) || null}
                               disabled={isSubmitting || isEdit}
+                              renderOption={(props, option) => (
+                                <li {...props} key={`${option.taskId}__${option.subtaskId}`} style={{ padding: '12px 16px' }}>
+                                  {option.taskName} &gt; {option.subtaskName}
+                                </li>
+                              )}
                               renderInput={(params) => (
                                 <TextField
                                   {...params}
                                   label="เลือกงานย่อยที่ต้องการช่วยเหลือ *"
-                                  variant="filled"
+                                  variant="outlined"
                                   placeholder="ค้นหางานย่อย..."
                                   InputProps={{ 
                                     ...params.InputProps, 
-                                    disableUnderline: true,
+                                    readOnly: true,
                                   }}
                                   error={!!errors.taskName}
                                   helperText={errors.taskName?.message || (isFetchingTasks ? 'กำลังโหลดรายการงานย่อย...' : 'เฉพาะงานย่อยที่ยังไม่เสร็จ (Progress < 100%)')}
@@ -761,8 +794,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               {...field}
                               fullWidth
                               label="ชื่องานย่อยช่วยเหลือ (พิมพ์ปรับเปลี่ยนได้) *"
-                              variant="filled"
-                              InputProps={{ disableUnderline: true }}
+                              variant="outlined"
                               error={!!errors.taskName}
                               helperText={errors.taskName?.message}
                               sx={{ ...inputStyles, flex: 1 }}
@@ -829,8 +861,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             renderOption={(props, option) => {
                               const { key, ...otherProps } = props as any;
                               return (
-                                <li key={key || option.id} {...otherProps}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                                <li key={key || option.id} {...otherProps} style={{ padding: '12px 16px' }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                     <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
                                       {option.name.substring(0, 2).toUpperCase()}
                                     </Avatar>
@@ -843,11 +875,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               <TextField
                                 {...params}
                                 label="ผู้รับผิดชอบ (Assign to FMs / SEs)"
-                                variant="filled"
+                                variant="outlined"
                                 placeholder="เลือกหัวหน้างาน..."
                                 error={!!errors.subtasks?.[0]?.assignees}
                                 helperText={errors.subtasks?.[0]?.assignees?.message || 'เลือกหัวหน้างาน (FM / SE) ของทีมคุณเพื่อรับผิดชอบงานช่วยเหลือนี้'}
-                                InputProps={{ ...params.InputProps, disableUnderline: true }}
+                                InputProps={{ ...params.InputProps }}
                                 sx={inputStyles}
                               />
                             )}
@@ -870,18 +902,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               value={field.value || null}
                               onChange={field.onChange}
                               disabled={true}
-                              variant="filled"
+                              variant="outlined"
                               InputProps={{ 
-                                disableUnderline: true,
+                                readOnly: true,
                                 sx: {
-                                  backgroundColor: '#f8fafc !important',
-                                  borderRadius: 2,
-                                  '&::before': { display: 'none !important' },
-                                  '&::after': { display: 'none !important' },
-                                  '&.Mui-disabled': {
-                                    backgroundColor: '#f1f5f9 !important',
-                                    '&::before': { display: 'none !important' }
-                                  }
+                                  backgroundColor: '#f1f5f9 !important',
                                 }
                               }}
                               sx={inputStyles}
@@ -909,19 +934,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               onChange={(_, newValue) => field.onChange(newValue ? newValue.code : '')}
                               value={workOrders.find((c) => c.code === field.value) || null}
                               disabled={isSubmitting || !selectedProjectId || isEdit}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  label="หมวดหมู่งานหลัก (Work Order) *"
-                                  variant="filled"
-                                  error={!!errors.workOrderCode}
-                                  helperText={errors.workOrderCode?.message || (!selectedProjectId ? 'กรุณาเลือกโครงการก่อน' : '')}
-                                  InputProps={{ ...params.InputProps, disableUnderline: true }}
-                                  sx={inputStyles}
-                                />
-                              )}
                               renderOption={(props, option) => (
-                                <li {...props} key={option.code}>
+                                <li {...props} key={option.code} style={{ padding: '12px 16px' }}>
                                   <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
                                   {!isEdit && user?.roleCode !== 'LD' && (
                                     <IconButton 
@@ -933,8 +947,19 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                   )}
                                 </li>
                               )}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="หมวดหมู่งานหลัก (Work Order) *"
+                                  variant="outlined"
+                                  error={!!errors.workOrderCode}
+                                  helperText={errors.workOrderCode?.message || (!selectedProjectId ? 'กรุณาเลือกโครงการก่อน' : '')}
+                                  InputProps={{ ...params.InputProps, readOnly: true }}
+                                  sx={inputStyles}
+                                />
+                              )}
                             />
-                            <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ height: 40, display: 'flex', alignItems: 'center' }}>
                               <Tooltip title="หมวดงานหลัก ยกตัวอย่างเช่น งานโครงสร้าง งานสถาปัตย์ งานระบบ งานผลิต งานขนส่ง เป็นต้น" arrow placement="top">
                                 <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
                               </Tooltip>
@@ -943,26 +968,51 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         )}
                       />
                       {!isEdit && selectedProjectId && user?.roleCode !== 'LD' && (
-                        <Button 
-                          variant="outlined" 
-                          onClick={() => { setEditWO(null); setOpenWOModal(true); }}
-                          sx={{ 
-                            height: 52, 
-                            minWidth: 140, 
-                            borderRadius: 2, 
-                            borderColor: '#cbd5e1', 
-                            color: '#475569',
-                            fontSize: '0.875rem',
-                            textTransform: 'none',
-                            '&:hover': {
-                              borderColor: '#94a3b8',
-                              backgroundColor: '#f1f5f9'
-                            }
-                          }}
-                          startIcon={<AddCircleOutlineIcon />}
-                        >
-                          สร้างหมวดหมู่หลัก
-                        </Button>
+                        <>
+                          {/* Mobile circular plus icon button */}
+                          <IconButton
+                            onClick={() => { setEditWO(null); setOpenWOModal(true); }}
+                            sx={{
+                              display: { xs: 'inline-flex', sm: 'none' },
+                              width: 40,
+                              height: 40,
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '50%',
+                              color: '#475569',
+                              bgcolor: 'white',
+                              flexShrink: 0,
+                              '&:hover': {
+                                borderColor: '#94a3b8',
+                                backgroundColor: '#f1f5f9'
+                              }
+                            }}
+                          >
+                            <AddIcon fontSize="small" />
+                          </IconButton>
+
+                          {/* Desktop full text button */}
+                          <Button 
+                            variant="outlined" 
+                            onClick={() => { setEditWO(null); setOpenWOModal(true); }}
+                            sx={{ 
+                              display: { xs: 'none', sm: 'inline-flex' },
+                              height: 40, 
+                              minWidth: 140, 
+                              borderRadius: '20px', 
+                              borderColor: '#cbd5e1', 
+                              color: '#475569',
+                              fontSize: '0.75rem',
+                              textTransform: 'none',
+                              '&:hover': {
+                                borderColor: '#94a3b8',
+                                backgroundColor: '#f1f5f9'
+                              }
+                            }}
+                            startIcon={<AddCircleOutlineIcon />}
+                          >
+                            สร้างหมวดหมู่หลัก
+                          </Button>
+                        </>
                       )}
                     </Box>
                   </Grid>
@@ -983,22 +1033,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               onInputChange={(_, newValue) => field.onChange(newValue)}
                               value={field.value}
                               disabled={isSubmitting || !selectedWorkOrderCode || isEdit}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  label="หมวดหมู่งานย่อย (Category) *"
-                                  variant="filled"
-                                  placeholder="พิมพ์หรือเลือกหมวดหมู่งานย่อย"
-                                  InputProps={{ ...params.InputProps, disableUnderline: true }}
-                                  error={!!errors.categoryName}
-                                  helperText={errors.categoryName?.message || (!selectedWorkOrderCode ? 'กรุณาเลือกหมวดหมู่งานหลักก่อน' : '')}
-                                  sx={inputStyles}
-                                />
-                              )}
                               renderOption={(props, option) => {
                                 const catObj = categories.find(c => c.name === option);
                                 return (
-                                  <li {...props} key={option}>
+                                  <li {...props} key={option} style={{ padding: '12px 16px' }}>
                                     <Box sx={{ flex: 1 }}>{option}</Box>
                                     {catObj && !isEdit && (
                                       <IconButton 
@@ -1011,8 +1049,20 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                   </li>
                                 );
                               }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="หมวดหมู่งานย่อย (Category) *"
+                                  variant="outlined"
+                                  placeholder="พิมพ์หรือเลือกหมวดหมู่งานย่อย"
+                                  InputProps={{ ...params.InputProps }}
+                                  error={!!errors.categoryName}
+                                  helperText={errors.categoryName?.message || (!selectedWorkOrderCode ? 'กรุณาเลือกหมวดหมู่งานหลักก่อน' : '')}
+                                  sx={inputStyles}
+                                />
+                              )}
                             />
-                            <Box sx={{ height: 56, display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ height: 40, display: 'flex', alignItems: 'center' }}>
                               <Tooltip title="หมวดงานย่อยให้สอดคล้องกับหมวดงานหลัก เช่น งานโครงสร้างเสา งานฉาบเรียบทาสี งานปูกระเบื้อง งานขนส่งคนงาน งานผนัง Precast เป็นต้น" arrow placement="top">
                                 <HelpOutlineIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
                               </Tooltip>
@@ -1021,26 +1071,51 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         )}
                       />
                       {!isEdit && selectedWorkOrderCode && (
-                        <Button 
-                          variant="outlined" 
-                          onClick={() => { setEditCat(null); setOpenCatModal(true); }}
-                          sx={{ 
-                            height: 52, 
-                            minWidth: 140, 
-                            borderRadius: 2, 
-                            borderColor: '#cbd5e1', 
-                            color: '#475569',
-                            fontSize: '0.875rem',
-                            textTransform: 'none',
-                            '&:hover': {
-                              borderColor: '#94a3b8',
-                              backgroundColor: '#f1f5f9'
-                            }
-                          }}
-                          startIcon={<AddCircleOutlineIcon />}
-                        >
-                          สร้างหมวดหมู่ย่อย
-                        </Button>
+                        <>
+                          {/* Mobile circular plus icon button */}
+                          <IconButton
+                            onClick={() => { setEditCat(null); setOpenCatModal(true); }}
+                            sx={{
+                              display: { xs: 'inline-flex', sm: 'none' },
+                              width: 40,
+                              height: 40,
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '50%',
+                              color: '#475569',
+                              bgcolor: 'white',
+                              flexShrink: 0,
+                              '&:hover': {
+                                borderColor: '#94a3b8',
+                                backgroundColor: '#f1f5f9'
+                              }
+                            }}
+                          >
+                            <AddIcon fontSize="small" />
+                          </IconButton>
+
+                          {/* Desktop full text button */}
+                          <Button 
+                            variant="outlined" 
+                            onClick={() => { setEditCat(null); setOpenCatModal(true); }}
+                            sx={{ 
+                              display: { xs: 'none', sm: 'inline-flex' },
+                              height: 40, 
+                              minWidth: 140, 
+                              borderRadius: '20px', 
+                              borderColor: '#cbd5e1', 
+                              color: '#475569',
+                              fontSize: '0.75rem',
+                              textTransform: 'none',
+                              '&:hover': {
+                                borderColor: '#94a3b8',
+                                backgroundColor: '#f1f5f9'
+                              }
+                            }}
+                            startIcon={<AddCircleOutlineIcon />}
+                          >
+                            สร้างหมวดหมู่ย่อย
+                          </Button>
+                        </>
                       )}
                     </Box>
                   </Grid>
@@ -1095,15 +1170,20 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               }}
                               value={filteredTasksForDropdown.find((t: any) => t.id === selectedParentTaskId) || null}
                               disabled={isSubmitting}
+                              renderOption={(props, option) => (
+                                <li {...props} key={option.id} style={{ padding: '12px 16px' }}>
+                                  {option.taskName}
+                                </li>
+                              )}
                               renderInput={(params) => (
                                 <TextField
                                   {...params}
                                   label="เลือกงานหลัก *"
-                                  variant="filled"
+                                  variant="outlined"
                                   placeholder="ค้นหางานหลัก..."
                                   InputProps={{ 
                                     ...params.InputProps, 
-                                    disableUnderline: true,
+                                    readOnly: true,
                                   }}
                                   error={!!errors.taskName}
                                   helperText={errors.taskName?.message || (isLoadingProjectTasks ? 'กำลังโหลดรายการงาน...' : isFetchingSubtasks ? 'กำลังโหลดงานย่อย...' : 'เลือกงานหลักที่ต้องการเพิ่มงานย่อยภายใต้')}
@@ -1119,8 +1199,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             {...field}
                             fullWidth
                             label="ชื่องาน *"
-                            variant="filled"
-                            InputProps={{ disableUnderline: true }}
+                            variant="outlined"
                             error={!!errors.taskName}
                             helperText={errors.taskName?.message}
                             sx={inputStyles}
@@ -1139,13 +1218,13 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         <TextField
                           {...field}
                           label="หมายเหตุ"
-                          variant="filled"
+                          variant="outlined"
                           multiline
-                          rows={2}
+                          minRows={1}
+                          maxRows={2}
                           fullWidth
                           disabled={isSubmitting}
                           placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)"
-                          InputProps={{ disableUnderline: true }}
                           sx={inputStyles}
                         />
                       )}

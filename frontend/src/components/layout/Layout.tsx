@@ -145,6 +145,7 @@ const Topbar: React.FC = () => {
               borderRadius: '50%',
               '&:hover': { bgcolor: '#f0f1f5' },
               mr: 1,
+              display: { xs: 'none', md: 'inline-flex' },
             }}
           >
             <MenuIcon fontSize="small" sx={{ color: '#64748b' }} />
@@ -166,49 +167,43 @@ const Topbar: React.FC = () => {
           </Button>
         </Stack>
 
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <Stack spacing={0} alignItems="flex-end" sx={{ textAlign: 'right' }}>
-            <Typography variant="body2" sx={{ fontWeight: 700, color: '#1c1e2b' }}>
-              {user?.name || 'User'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#6b7080' }}>
-              {user?.department || user?.roleCode || '—'}
-            </Typography>
-          </Stack>
+        <Stack direction="row" alignItems="center" spacing={1}>
           <IconButton
             onClick={handleGlobalSync}
             disabled={isLoading}
             sx={{
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               bgcolor: '#ffffff',
               color: '#1c1e2b',
               border: '1px solid #e5e7ed',
+              borderRadius: '50%',
               '&:hover': { bgcolor: '#f0f1f5' },
               '&.Mui-disabled': { opacity: 0.7 }
             }}
           >
-            <SyncIcon 
-              fontSize="small" 
-              sx={{ 
+            <SyncIcon
+              fontSize="small"
+              sx={{
                 color: '#64748b',
                 animation: isLoading ? 'spin 1s linear infinite' : 'none',
                 '@keyframes spin': {
                   '0%': { transform: 'rotate(0deg)' },
                   '100%': { transform: 'rotate(-360deg)' },
                 }
-              }} 
+              }}
             />
           </IconButton>
           {/* Notification Bell */}
           <IconButton
             onClick={(e) => setBellAnchorEl(e.currentTarget)}
             sx={{
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               bgcolor: '#ffffff',
               color: '#1c1e2b',
               border: '1px solid #e5e7ed',
+              borderRadius: '50%',
               '&:hover': { bgcolor: '#f0f1f5' },
             }}
           >
@@ -292,29 +287,64 @@ const Topbar: React.FC = () => {
             </List>
           </Popover>
 
-          <IconButton
+          {/* User chip — avatar + name + dept */}
+          <Button
             onClick={(e) => setAnchorEl(e.currentTarget)}
             sx={{
-              width: 38,
-              height: 38,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              textTransform: 'none',
+              borderRadius: '999px',
+              px: 1.25,
+              py: 0.5,
               bgcolor: '#ffffff',
-              color: '#1c1e2b',
               border: '1px solid #e5e7ed',
-              '&:hover': { bgcolor: '#f0f1f5' },
+              boxShadow: 'none',
+              '&:hover': { bgcolor: '#f0f1f5', boxShadow: 'none' },
+              minWidth: 0,
             }}
           >
             <Avatar
               sx={{
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 bgcolor: '#d62828',
                 color: '#fff',
                 fontWeight: 700,
+                fontSize: '0.75rem',
+                flexShrink: 0,
               }}
             >
               {englishInitial || '?'}
             </Avatar>
-          </IconButton>
+            <Box sx={{ textAlign: 'left', display: { xs: 'none', sm: 'block' } }}>
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  color: '#1c1e2b',
+                  lineHeight: 1.25,
+                  whiteSpace: 'nowrap',
+                  maxWidth: 120,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {user?.name || 'User'}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: '0.68rem',
+                  color: '#6b7080',
+                  lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {user?.department || user?.roleCode || '—'}
+              </Typography>
+            </Box>
+          </Button>
           <Menu
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
@@ -378,6 +408,7 @@ export const Layout: React.FC<LayoutProps> = ({
           display: 'flex',
           flexDirection: 'column',
           pt: disableTopGap ? `${TOPBAR_HEIGHT}px` : `${TOPBAR_HEIGHT + 12}px`,
+          pb: { xs: 8, md: 0 },
           transition: 'margin-left 0.2s ease, width 0.2s ease',
         }}
       >
