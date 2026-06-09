@@ -1,104 +1,127 @@
 import os
-import re
-from datetime import datetime
+import sys
+import datetime
 
-cs_dt = None
+# Reconfigure stdout to use UTF-8
+sys.stdout.reconfigure(encoding="utf-8")
+
+# 1. Read compact_state.md
+compact_state_path = ".sessions/compact_state.md"
+compact_state = {}
+if os.path.exists(compact_state_path):
+    with open(compact_state_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if "=" in line:
+                k, v = line.strip().split("=", 1)
+                compact_state[k] = v
+
+today = datetime.date.today().strftime("%Y-%m-%d")
 compact_restore = False
-cs_size = 0
-reset_marker = None
-
-if os.path.exists('.sessions/compact_state.md'):
-    with open('.sessions/compact_state.md', 'r', encoding='utf-8') as f:
-        content = f.read()
-        m_dt = re.search(r'^dt=(.*)', content, re.MULTILINE)
-        if m_dt:
-            cs_dt = m_dt.group(1).split()[0]
-        m_size = re.search(r'^compact_size=(.*)', content, re.MULTILINE)
-        if m_size:
-            try: cs_size = int(m_size.group(1).strip())
-            except: pass
-        m_reset = re.search(r'^session_reset=(.*)', content, re.MULTILINE)
-        if m_reset:
-            reset_marker = m_reset.group(1).strip()
-
-today = datetime.now().strftime('%Y-%m-%d')
-if cs_dt == today:
+if compact_state.get("dt") == today:
     compact_restore = True
-    print('[compact-restore]')
-    with open('.sessions/compact_state.md', 'r', encoding='utf-8') as f:
-        print(f.read().encode('ascii', 'ignore').decode('ascii'))
-    print('---')
+    print("[compact-restore]")
+    if os.path.exists(compact_state_path):
+        with open(compact_state_path, "r", encoding="utf-8") as f:
+            print(f.read().strip())
+    print("---")
 
-phase = ''
-if os.path.exists('.sessions/active_thread.md'):
-    with open('.sessions/active_thread.md', 'r', encoding='utf-8') as f:
-        content = f.read()
-        m_phase = re.search(r'^phase:\s*(.*)', content, re.MULTILINE)
-        if m_phase:
-            phase = m_phase.group(1).strip()
+# 2. Read active_thread.md phase
+active_thread_path = ".sessions/active_thread.md"
+phase = "none"
+if os.path.exists(active_thread_path):
+    with open(active_thread_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("phase:"):
+                phase = line.split(":", 1)[1].strip()
 
-sys_fixed = int((os.path.getsize('CLAUDE.md') + os.path.getsize('AGENTS.md')) * 0.3) + 3500
+# 3. Calculate sys_fixed
+claude_size = os.path.getsize("CLAUDE.md") if os.path.exists("CLAUDE.md") else 0
+agents_size = os.path.getsize("AGENTS.md") if os.path.exists("AGENTS.md") else 0
+sys_fixed = int((claude_size + agents_size) * 0.3) + 3500
 
+session_tokens_path = ".sessions/session_tokens.md"
+
+# 4. Handle compact_restore & session_tokens.md
 if compact_restore:
-    ct = sys_fixed + cs_size
-    if reset_marker == 'armed':
-        st = 0
-        with open('.sessions/compact_state.md', 'r', encoding='utf-8') as f:
-            c = f.read()
-        c = re.sub(r'^session_reset=armed', 'session_reset=consumed', c, flags=re.MULTILINE)
-        with open('.sessions/compact_state.md', 'w', encoding='utf-8') as f:
-            f.write(c)
-        print('[reset-consumed] SESSION=0 · marker armed->consumed')
+    cs = int(compact_state.get("compact_size", "0"))
+    ct = sys_fixed + cs
+    reset_marker = compact_state.get("session_reset", "")
+    
+    if reset_marker == "armed":
+        with open(session_tokens_path, "w", encoding="utf-8") as f:
+            f.write(f"SESSION_TOTAL: 0\nCHAT_TOTAL: {ct}\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n")
+        
+        # update compact_state.md
+        if os.path.exists(compact_state_path):
+            with open(compact_state_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            with open(compact_state_path, "w", encoding="utf-8") as f:
+                for line in lines:
+                    if line.startswith("session_reset="):
+                        f.write("session_reset=consumed\n")
+                    else:
+                        f.write(line)
+        print("[reset-consumed] SESSION=0 · marker armed→consumed")
     else:
         st = 0
-        if os.path.exists('.sessions/session_tokens.md'):
-            with open('.sessions/session_tokens.md', 'r', encoding='utf-8') as f:
+        if os.path.exists(session_tokens_path):
+            with open(session_tokens_path, "r", encoding="utf-8") as f:
                 for line in f:
-                    if line.startswith('SESSION_TOTAL:'):
-                        try: st = int(line.split()[1])
-                        except: pass
-        print(f'[reset-skip] marker={reset_marker} · SESSION preserved={st}')
-    with open('.sessions/session_tokens.md', 'w', encoding='utf-8') as f:
-        f.write(f'SESSION_TOTAL: {st}\nCHAT_TOTAL: {ct}\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n')
-elif phase != 'in_progress':
-    with open('.sessions/session_tokens.md', 'w', encoding='utf-8') as f:
-        f.write(f'SESSION_TOTAL: 0\nCHAT_TOTAL: {sys_fixed}\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n')
+                    if line.startswith("SESSION_TOTAL:"):
+                        st = int(line.split(":", 1)[1].strip())
+        with open(session_tokens_path, "w", encoding="utf-8") as f:
+            f.write(f"SESSION_TOTAL: {st}\nCHAT_TOTAL: {ct}\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n")
+        print(f"[reset-skip] marker={reset_marker if reset_marker else 'absent'} · SESSION preserved={st}")
+elif phase != "in_progress":
+    with open(session_tokens_path, "w", encoding="utf-8") as f:
+        f.write(f"SESSION_TOTAL: 0\nCHAT_TOTAL: {sys_fixed}\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n")
 
-if os.path.exists('.sessions/session_tokens.md'):
-    with open('.sessions/session_tokens.md', 'r', encoding='utf-8') as f:
+# 5. Normalize LOOP_WEIGHT to 0
+if os.path.exists(session_tokens_path):
+    with open(session_tokens_path, "r", encoding="utf-8") as f:
         lines = f.read().splitlines()
-    normalized = []
+    new_lines = []
     for line in lines:
-        if line.startswith('LOOP_WEIGHT:'):
-            normalized.append('LOOP_WEIGHT: 0')
+        if line.startswith("LOOP_WEIGHT:"):
+            new_lines.append("LOOP_WEIGHT: 0")
         else:
-            normalized.append(line)
-    with open('.sessions/session_tokens.md', 'w', encoding='utf-8') as f:
-        f.write('\n'.join(normalized) + '\n')
+            new_lines.append(line)
+    with open(session_tokens_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(new_lines) + "\n")
 
-if os.path.exists('.sessions/active_thread.md'):
-    with open('.sessions/active_thread.md', 'r', encoding='utf-8') as f:
-        print(''.join(f.readlines()[-4:]).encode('ascii', 'ignore').decode('ascii'))
-print('---')
-if os.path.exists('.sessions/session_tokens.md'):
-    with open('.sessions/session_tokens.md', 'r', encoding='utf-8') as f:
-        print(f.read().encode('ascii', 'ignore').decode('ascii'))
-print('---')
-if os.path.exists('docs/master_roadmap.md'):
-    with open('docs/master_roadmap.md', 'r', encoding='utf-8') as f:
+# 6. Print tail of active_thread.md
+if os.path.exists(active_thread_path):
+    with open(active_thread_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
+        for line in lines[-4:]:
+            print(line.strip())
+print("---")
+
+# 7. Print session_tokens.md
+if os.path.exists(session_tokens_path):
+    with open(session_tokens_path, "r", encoding="utf-8") as f:
+        print(f.read().strip())
+print("---")
+
+# 8. Print docs/master_roadmap.md pending tasks
+roadmap_path = "docs/master_roadmap.md"
+if os.path.exists(roadmap_path):
     count = 0
-    for idx, line in enumerate(lines):
-        if '[/]' in line:
-            print(f'{idx+1}:{line.strip().encode("ascii", "ignore").decode("ascii")}')
-            count += 1
-            if count >= 3:
-                break
-print('---')
+    with open(roadmap_path, "r", encoding="utf-8") as f:
+        for idx, line in enumerate(f, 1):
+            if "[/]" in line:
+                print(f"{idx}:{line.strip()}")
+                count += 1
+                if count >= 3:
+                    break
+print("---")
+
+# 9. Print CFP Count
+cfp_path = "CODING_FAILURE_PATTERNS.md"
 cfp_count = 0
-if os.path.exists('CODING_FAILURE_PATTERNS.md'):
-    with open('CODING_FAILURE_PATTERNS.md', 'r', encoding='utf-8') as f:
+if os.path.exists(cfp_path):
+    with open(cfp_path, "r", encoding="utf-8") as f:
         for line in f:
-            if line.startswith('## CFP-'):
+            if line.startswith("## CFP-"):
                 cfp_count += 1
-print(f'CFP_COUNT: {cfp_count}')
+print(f"CFP_COUNT: {cfp_count}")

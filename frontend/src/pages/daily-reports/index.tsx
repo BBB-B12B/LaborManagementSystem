@@ -2415,7 +2415,7 @@ export default function DailyReportPage() {
 
               <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
                 <Button
-                  variant="outlined"
+                  variant="contained"
                   startIcon={<History size={18} />}
                   onClick={() => router.push('/daily-reports/list')}
                   sx={{
@@ -2423,10 +2423,14 @@ export default function DailyReportPage() {
                     fontWeight: 700,
                     textTransform: 'none',
                     px: 3,
-                    bgcolor: 'white',
+                    bgcolor: '#111827',
+                    color: '#ffffff',
+                    '&:hover': {
+                      bgcolor: '#000000',
+                    },
                   }}
                 >
-                  Backlog / History
+                  Backlog
                 </Button>
               </Box>
               <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
@@ -2734,7 +2738,7 @@ export default function DailyReportPage() {
                             {/* Task info */}
                             <Box sx={{ minWidth: 0, flex: 1 }}>
                               {/* Metadata line: ID + Category */}
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                 <Typography
                                   variant="caption"
                                   fontWeight={800}
@@ -2759,6 +2763,46 @@ export default function DailyReportPage() {
                                 >
                                   • {selectedTask.categoryName}
                                 </Typography>
+
+                                {/* Request Mode Badge */}
+                                {isAdvanceRequestUI && (
+                                  <Tooltip title="คุณกำลังวางแผนกำลังพลและคาดการณ์ Progress สำหรับวันนี้ (รูปถ่ายหน้างานและรูปกะจะถูกยกเว้นในโหมดนี้)" arrow>
+                                    <Chip
+                                      label="โหมดวางแผนล่วงหน้า"
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(99, 102, 241, 0.12)',
+                                        color: '#4f46e5',
+                                        fontWeight: 800,
+                                        fontSize: '0.65rem',
+                                        height: '20px',
+                                        border: '1px solid rgba(99, 102, 241, 0.25)',
+                                        borderRadius: '4px',
+                                        cursor: 'help',
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
+
+                                {/* Autofilled Success Badge */}
+                                {!isAdvanceRequestUI && isAutofilledFromRequest && (
+                                  <Tooltip title="รายชื่อแรงงาน DC ชั่วโมงกะ และ Progress ถูกดึงมาจากแผนงานล่วงหน้าของเมื่อวานเรียบร้อยแล้ว กรุณาตรวจสอบความถูกต้องและแนบรูปถ่ายการทำงานจริงเพื่อส่งรายงานประจำวัน" arrow>
+                                    <Chip
+                                      label="ดึงแผนงานสำเร็จ"
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(16, 185, 129, 0.12)',
+                                        color: '#059669',
+                                        fontWeight: 800,
+                                        fontSize: '0.65rem',
+                                        height: '20px',
+                                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                                        borderRadius: '4px',
+                                        cursor: 'help',
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
                               </Box>
  
                               {/* Title line: Subtask name as primary */}
@@ -2922,31 +2966,7 @@ export default function DailyReportPage() {
                             </Box>
                           ) : (
                             <>
-                              {isAdvanceRequestUI && (
-                                <Box
-                                  sx={{
-                                    p: 2,
-                                    mb: 3,
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                                    color: '#ffffff',
-                                    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
-                                  }}
-                                >
-                                  <CalendarRange size={24} />
-                                  <Box>
-                                    <Typography variant="subtitle2" fontWeight={800}>
-                                      โหมดวางแผนงานล่วงหน้า (Request Mode)
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                      คุณกำลังวางแผนกำลังพลและคาดการณ์ Progress สำหรับวันที่ {format(reportDate, 'dd/MM/yyyy')} (รูปถ่ายหน้างานและรูปกะจะถูกยกเว้นในโหมดนี้)
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              )}
+
 
                               {requestLocked && (
                                 <Box
@@ -2974,31 +2994,7 @@ export default function DailyReportPage() {
                                 </Box>
                               )}
 
-                              {!isAdvanceRequestUI && isAutofilledFromRequest && (
-                                <Box
-                                  sx={{
-                                    p: 2,
-                                    mb: 3,
-                                    borderRadius: '12px',
-                                    bgcolor: '#ecfdf5',
-                                    border: '1px solid #a7f3d0',
-                                    color: '#065f46',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
-                                  }}
-                                >
-                                  <Info size={24} color="#10b981" />
-                                  <Box>
-                                    <Typography variant="subtitle2" fontWeight={800}>
-                                      ระบบดึงข้อมูลจากแผนงานล่วงหน้าที่ FM ลงไว้เมื่อวานสำเร็จ!
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                      รายชื่อแรงงาน DC ชั่วโมงกะ และ Progress ถูกดึงมาให้เรียบร้อยแล้ว กรุณาตรวจสอบความถูกต้องและแนบรูปถ่ายการทำงานจริงเพื่อส่งรายงานประจำวัน
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              )}
+
                               <Box sx={{ mb: 4 }}>
                                 <Box
                                   sx={{

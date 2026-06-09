@@ -37,23 +37,36 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     // -------------------------------------------
     // Role-based scoping:
-    //   FM → only see 'unlock_granted' targeted at their own uid
-    //   AM/WH/GOD/etc. → only see 'daily_report_submit' for projects they manage
+    //   FM → see 'unlock_granted' and 'task_assigned' targeted at their own uid
+    //   AM/WH/GOD/etc. → see 'daily_report_submit', 'management_submit', 'unlock_request' for projects they manage
+    //                   and 'task_assigned' targeted at their own uid
     // -------------------------------------------
     if ((userRole as string) === 'FM') {
       notifications = notifications.filter((n: any) =>
-        n.type === 'unlock_granted' && n.targetUserId === userUid
+        (n.type === 'unlock_granted' || n.type === 'task_assigned') && n.targetUserId === userUid
       );
     } else if ((userRole as string) !== 'GOD') {
       notifications = notifications.filter((n: any) => {
-        if (n.type !== 'daily_report_submit') return false;
-        
-        // Allow WH department to see all support notifications
-        if (n.isSupportReport === true && authReq.user?.department === 'WH') {
-          return true;
+        if (n.type === 'task_assigned') {
+          return n.targetUserId === userUid;
         }
-        
-        return userProjectIds.includes(n.projectId);
+
+        if (['daily_report_submit', 'management_submit', 'unlock_request'].includes(n.type)) {
+          // Allow WH department to see all support notifications
+          if (n.isSupportReport === true && authReq.user?.department === 'WH') {
+            return true;
+          }
+
+          if (n.projectId && userProjectIds.includes(n.projectId)) {
+            return true;
+          }
+
+          if (Array.isArray(n.projectIds) && n.projectIds.some((pId: string) => userProjectIds.includes(pId))) {
+            return true;
+          }
+        }
+
+        return false;
       });
     }
     // GOD: sees everything (no additional filter)

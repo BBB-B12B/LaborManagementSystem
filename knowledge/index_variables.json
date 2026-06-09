@@ -2566,11 +2566,11 @@
     },
     "Notification": {
       "source": "frontend/src/services/notificationService.ts",
-      "line": 5
+      "line": 10
     },
     "notificationService": {
       "source": "frontend/src/services/notificationService.ts",
-      "line": 28
+      "line": 34
     },
     "NotificationState": {
       "source": "frontend/src/store/notificationStore.ts",

@@ -1,12 +1,12 @@
 status: completed
-session_id: session_023_quick_subtask_roles
+session_id: session_026_task_assigned_notifications
 skill: editor
 cfp_count: 36
-objective: Modify assignee dropdown in quick subtask and edit subtask forms to fetch and display users with both FM and SE roles
-outcome: Successfully fetched and filtered FM/SE users and validated compilation.
+objective: Implement notification triggers when tasks and subtasks are assigned to users (FM or SE).
+outcome: Added a robust sendAssignmentNotifications method in TaskService.ts that queries Project A's users collection to resolve target uids, and adds task_assigned notification documents to Project B's notifications collection. Integrated this trigger into createTask, createSubtask, updateSubtask, and importWbs.
 changes:
-  - Updated frontend/src/pages/workspace/index.tsx useEffect to fetch both FM and SE roles in parallel and combine results
-  - Updated filteredFms and editFilteredFms useMemo hooks to allow u.roleId === 'FM' || u.roleId === 'SE'
+  - Added sendAssignmentNotifications to backend/src/services/TaskService.ts.
+  - Triggered it asynchronously in createTask, createSubtask, updateSubtask, and importWbs.
 validation:
-  - Verified compilation via npm run type-check (no errors in index.tsx)
-  - Verified master roadmap task status is marked completed
+  - Verified backend compilation cleanly for the target file TaskService.ts via npm run type-check.
+  - Synchronized symbol index via symbol_indexer.py.

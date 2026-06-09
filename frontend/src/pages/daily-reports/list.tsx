@@ -262,17 +262,19 @@ export default function WorkRecordsPage() {
   const [medCertUrl, setMedCertUrl] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    if (recordType === 'leave') {
+      setLeaveType(medCertFile || medCertUrl ? 'Paid' : 'Unpaid');
+    }
+  }, [recordType, medCertFile, medCertUrl]);
+
   const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+
 
   const computedStatusBadge = useMemo(() => {
     if (recordType === 'leave') {
-      const labelMap: Record<string, string> = {
-        Sick: 'ลาป่วย',
-        Personal: 'ลากิจ',
-        Vacation: 'พักร้อน',
-      };
       return {
-        label: `ลา (${labelMap[leaveType] || leaveType})`,
+        label: 'ลา',
         color: 'warning' as const,
         bgcolor: 'rgba(237, 108, 2, 0.08)',
         textColor: 'warning.main',
@@ -389,6 +391,28 @@ export default function WorkRecordsPage() {
     queryFn: () => taskService.getBacklog(filterStartDate, filterEndDate),
     enabled: true,
   });
+
+  // Filter tasks that are eligible for the selected cell's date
+  const availableTasks = useMemo(() => {
+    if (!selectedCell || !backlogData?.tasks) return [];
+    const cellDateStr = selectedCell.day.date;
+    return backlogData.tasks.filter((task: any) => {
+      if (selectedCell.day.record?.taskId === task.taskId) {
+        return true;
+      }
+      const hasReportOnDate = Array.isArray(task.reportedDates) && task.reportedDates.includes(cellDateStr);
+      if (!hasReportOnDate) {
+        return false;
+      }
+      if (task.startDate && cellDateStr < task.startDate) {
+        return false;
+      }
+      if (task.completionDate && cellDateStr > task.completionDate) {
+        return false;
+      }
+      return true;
+    });
+  }, [selectedCell, backlogData?.tasks]);
 
   // Add globalSync event listener for Hard Refresh
   useEffect(() => {
@@ -695,7 +719,7 @@ export default function WorkRecordsPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM']}>
       <Layout maxWidth={false} disablePadding>
         <Box sx={{ p: 4 }}>
           {/* Header */}
@@ -1141,6 +1165,24 @@ export default function WorkRecordsPage() {
                     </Box>
                   )}
 
+                  {selectedCell.day.allowEdit && availableTasks.length === 0 && (
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: '12px',
+                        bgcolor: 'rgba(239, 68, 68, 0.04)',
+                        border: '1px solid rgba(239, 68, 68, 0.15)',
+                      }}
+                    >
+                      <Typography variant="body2" color="error.main" sx={{ fontWeight: 700 }}>
+                        ไม่พบการ์ดงานที่สามารถบันทึกได้ในวันที่เลือก
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        เนื่องจากไม่มีการบันทึกรายงานประจำวัน (Daily Report) สำหรับการ์ดงานของท่านในวันที่เลือก เพื่อป้องกันปัญหาการลืมแนบรูปถ่ายการทำงาน ระบบจึงไม่อนุญาตให้ลงบันทึกเวลาทำงานย้อนหลังสำหรับวันดังกล่าว
+                      </Typography>
+                    </Box>
+                  )}
+
                   <Box sx={{ mb: 1.5 }}>
                     <TextField
                       select
@@ -1148,29 +1190,14 @@ export default function WorkRecordsPage() {
                       label="เลือกการ์ดงาน (Task)*"
                       value={targetTaskId}
                       onChange={(e) => setTargetTaskId(e.target.value)}
-                      helperText="งานที่จะบันทึกเวลาทำงานย้อนหลังลงไป"
-                      disabled={!selectedCell.day.allowEdit}
+                      helperText={availableTasks.length === 0 ? "ไม่มีงานที่บันทึก Daily Report ในวันดังกล่าว" : "งานที่จะบันทึกเวลาทำงานย้อนหลังลงไป"}
+                      disabled={!selectedCell.day.allowEdit || availableTasks.length === 0}
                     >
-                      {(() => {
-                        const cellDateStr = selectedCell ? selectedCell.day.date : '';
-                        const availableTasks = (backlogData?.tasks || []).filter((task: any) => {
-                          if (selectedCell?.day.record?.taskId === task.taskId) {
-                            return true;
-                          }
-                          if (task.startDate && cellDateStr < task.startDate) {
-                            return false;
-                          }
-                          if (task.completionDate && cellDateStr > task.completionDate) {
-                            return false;
-                          }
-                          return true;
-                        });
-                        return availableTasks.map((task: any) => (
-                          <MenuItem key={task.taskId} value={task.taskId}>
-                            {task.taskName} {task.isSupportRequest && '(Support)'}
-                          </MenuItem>
-                        ));
-                      })()}
+                      {availableTasks.map((task: any) => (
+                        <MenuItem key={task.taskId} value={task.taskId}>
+                          {task.taskName} {task.isSupportRequest && '(Support)'}
+                        </MenuItem>
+                      ))}
                     </TextField>
                   </Box>
 
@@ -1383,40 +1410,25 @@ export default function WorkRecordsPage() {
                           )}
                         </Box>
 
-                        {recordType === 'leave' && (
+                        {recordType === 'leave' && (medCertFile || medCertUrl) && (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1.5, pl: 4 }}>
-                            <TextField
-                              select
-                              size="small"
-                              label="ประเภทการลา"
-                              value={leaveType}
-                              onChange={(e) => setLeaveType(e.target.value)}
-                              sx={{ minWidth: 120 }}
-                              disabled={!selectedCell.day.allowEdit}
-                            >
-                              <MenuItem value="Sick">ลาป่วย</MenuItem>
-                              <MenuItem value="Personal">ลากิจ</MenuItem>
-                              <MenuItem value="Vacation">พักร้อน</MenuItem>
-                            </TextField>
-                            {(medCertFile || medCertUrl) && (
-                              <Box display="flex" alignItems="center" gap={0.5}>
-                                <Typography variant="caption" color="text.secondary" sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 180 }}>
-                                  {medCertFile ? medCertFile.name : 'มีไฟล์แนบเดิมแล้ว'}
-                                </Typography>
-                                {medCertUrl && !medCertFile && (
-                                  <IconButton
-                                    size="small"
-                                    href={medCertUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    color="primary"
-                                    sx={{ p: 0.5 }}
-                                  >
-                                    <VisibilityIcon sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                )}
-                              </Box>
-                            )}
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Typography variant="caption" color="text.secondary" sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                                {medCertFile ? medCertFile.name : 'มีไฟล์แนบเดิมแล้ว'}
+                              </Typography>
+                              {medCertUrl && !medCertFile && (
+                                <IconButton
+                                  size="small"
+                                  href={medCertUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  color="primary"
+                                  sx={{ p: 0.5 }}
+                                >
+                                  <VisibilityIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              )}
+                            </Box>
                           </Box>
                         )}
                       </Grid>
@@ -1453,7 +1465,7 @@ export default function WorkRecordsPage() {
                   <Button
                     variant="contained"
                     onClick={handleSave}
-                    disabled={isSaving || !selectedCell.day.allowEdit}
+                    disabled={isSaving || !selectedCell.day.allowEdit || (recordType !== 'absent' && availableTasks.length === 0)}
                     startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : null}
                     sx={{ borderRadius: '12px', px: 4, fontWeight: 700 }}
                   >

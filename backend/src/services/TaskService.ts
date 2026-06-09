@@ -38,7 +38,7 @@ export class TaskService {
       }
     }
 
-    return await afterSaleDb.runTransaction(async (transaction) => {
+    const createdTask = await afterSaleDb.runTransaction(async (transaction) => {
       // --- 2. ALL READS IN AFTER-SALE DB ---
       
       // 2.1 ระดับ WorkOrder: Query หาซ้ำ
@@ -247,13 +247,30 @@ export class TaskService {
         });
       }
 
-
-
       return {
         id: `${woId}__${catId}__${taskId}`,
         ...newTaskData,
       };
     });
+
+    // Send notifications asynchronously after transaction completes
+    if (input.subtasks && input.subtasks.length > 0) {
+      input.subtasks.forEach((st, index) => {
+        const subtaskNum = (index + 1).toString().padStart(4, '0');
+        const subtaskId = `${createdTask.taskId}-${subtaskNum}`;
+        if (st.assignees && st.assignees.length > 0) {
+          this.sendAssignmentNotifications(
+            createdTask,
+            st.subtaskName,
+            subtaskId,
+            st.assignees,
+            createdBy
+          ).catch(err => console.error('[TaskService] Notification error in createTask:', err));
+        }
+      });
+    }
+
+    return createdTask;
   }
 
   /**
@@ -703,7 +720,7 @@ export class TaskService {
       catId = pathParts[3];
     }
 
-    return await afterSaleDb.runTransaction(async (transaction) => {
+    const result = await afterSaleDb.runTransaction(async (transaction) => {
       // 1. Get task doc (READ)
       const taskDoc = await transaction.get(taskRef);
       if (!taskDoc.exists) {
@@ -798,8 +815,20 @@ export class TaskService {
 
       transaction.update(taskRef, taskUpdates);
 
-      return subtaskData;
+      return { subtaskData, taskData };
     });
+
+    if (assignees && assignees.length > 0) {
+      this.sendAssignmentNotifications(
+        result.taskData,
+        result.subtaskData.subtaskName,
+        result.subtaskData.subtaskId,
+        assignees,
+        createdBy
+      ).catch(err => console.error('[TaskService] Notification error in createSubtask:', err));
+    }
+
+    return result.subtaskData;
   }
 
   async getTasks(filters?: { projectId?: string; assigneeId?: string }): Promise<Task[]> {
@@ -1406,6 +1435,28 @@ export class TaskService {
 
     // Recalculate and update parent task's aggregates
     await this.updateParentTaskAggregates(taskRef, now, userId);
+
+    // Send notifications to new assignees if any
+    if (subtaskData.assignees !== undefined) {
+      const oldAssigneeIds = new Set((oldData.assignees || []).map((a: any) => a.employeeId));
+      const newAssignees = (subtaskData.assignees || []).filter((a: any) => !oldAssigneeIds.has(a.employeeId));
+      
+      if (newAssignees.length > 0) {
+        taskRef.get().then(taskDoc => {
+          if (taskDoc.exists) {
+            this.sendAssignmentNotifications(
+              taskDoc.data(),
+              updates.subtaskName || oldData.subtaskName || '',
+              oldData.subtaskId || subtaskRef.id,
+              newAssignees,
+              userId
+            ).catch(err => console.error('[TaskService] Notification error in updateSubtask:', err));
+          }
+        }).catch(err => {
+          console.error('[TaskService] Failed to fetch parent task for update notification:', err.message);
+        });
+      }
+    }
   }
 
   /**
@@ -2358,7 +2409,10 @@ export class TaskService {
     const now = new Date();
     const currentYear = now.getFullYear();
 
+    const notificationsToSend: { taskData: any; subtaskName: string; subtaskId: string; assignees: any[] }[] = [];
+
     await afterSaleDb.runTransaction(async (transaction) => {
+      notificationsToSend.length = 0; // Clear on transaction retry
       // 1. COLLECT ALL DOC REFERENCES & COUNTERS TO READ
       const woQuery = await afterSaleDb.collection(WORK_ORDERS_COLLECTION)
         .where('projectId', '==', projectId)
@@ -2588,11 +2642,38 @@ export class TaskService {
             createdAt: now,
             createdBy: createdBy,
           });
+
+          if (st.assignees && st.assignees.length > 0) {
+            notificationsToSend.push({
+              taskData: {
+                projectId,
+                projectName,
+                workOrderId: woId,
+                workOrderName: woName,
+                categoryId: catId,
+                categoryName: catName,
+                taskId: taskId,
+                taskName: taskName
+              },
+              subtaskName: st.subtaskName,
+              subtaskId,
+              assignees: st.assignees
+            });
+          }
         });
 
         subtaskCounts.set(countKey, subtaskIndexOffset);
       }
     });
+
+    // Send notifications asynchronously after transaction completes
+    if (notificationsToSend.length > 0) {
+      Promise.all(notificationsToSend.map(n =>
+        this.sendAssignmentNotifications(n.taskData, n.subtaskName, n.subtaskId, n.assignees, createdBy)
+      )).catch(err => {
+        console.error('[TaskService] Error in bulk WBS assignment notifications:', err);
+      });
+    }
 
     // ─── Upsert WorkOrder & Category configs into Firebase A ──────────────────
     // This ensures the NewTask modal dropdowns (workOrderCode + categoryName)
@@ -2852,6 +2933,101 @@ export class TaskService {
     batch.delete(oldTaskRef);
     
     await batch.commit();
+  }
+
+  /**
+   * ส่งการแจ้งเตือนแบบกลุ่ม/เดี่ยวเมื่อมีการมอบหมายงาน (task_assigned) ไปยัง FM/SE
+   */
+  async sendAssignmentNotifications(
+    taskData: any,
+    subtaskName: string,
+    subtaskId: string,
+    assignees: TaskAssignee[],
+    createdBy: string
+  ): Promise<void> {
+    try {
+      if (!assignees || assignees.length === 0) return;
+
+      const employeeIds = assignees.map(a => a.employeeId).filter(Boolean);
+      if (employeeIds.length === 0) return;
+
+      // 1. Resolve target uids from db (Project A) by employeeId
+      const uidsMap = new Map<string, string>(); // employeeId -> uid
+      for (let i = 0; i < employeeIds.length; i += 30) {
+        const chunk = employeeIds.slice(i, i + 30);
+        const usersSnap = await db.collection('users').where('employeeId', 'in', chunk).get();
+        usersSnap.docs.forEach(doc => {
+          const uData = doc.data();
+          if (uData.employeeId) {
+            uidsMap.set(uData.employeeId, doc.id); // doc.id is Firestore uid
+          }
+        });
+      }
+
+      // 2. Resolve creator details
+      let createdByName = 'System';
+      let createdByEmployeeId = createdBy;
+      if (createdBy) {
+        const userDoc = await db.collection('users').doc(createdBy).get();
+        if (userDoc.exists) {
+          const uData = userDoc.data();
+          createdByName = uData?.name || uData?.username || 'Unknown User';
+          createdByEmployeeId = uData?.employeeId || createdBy;
+        } else {
+          const userQuery = await db.collection('users').where('employeeId', '==', createdBy).limit(1).get();
+          if (!userQuery.empty) {
+            const uData = userQuery.docs[0].data();
+            createdByName = uData?.name || uData?.username || 'Unknown User';
+            createdByEmployeeId = uData?.employeeId || createdBy;
+          }
+        }
+      }
+
+      // 3. Create notification documents in Project B (afterSaleDb)
+      const batch = afterSaleDb.batch();
+      let hasNotification = false;
+
+      for (const assignee of assignees) {
+        const targetUid = uidsMap.get(assignee.employeeId);
+        if (!targetUid) {
+          console.warn(`[TaskService] Could not resolve uid for employeeId: ${assignee.employeeId}`);
+          continue;
+        }
+
+        const notificationData: Notification = {
+          type: 'task_assigned',
+          projectId: taskData.projectId || '',
+          projectName: taskData.projectName || '',
+          workOrderId: taskData.workOrderId || '',
+          workOrderName: taskData.workOrderName || '',
+          categoryId: taskData.categoryId || '',
+          categoryName: taskData.categoryName || '',
+          taskId: taskData.taskId || '',
+          taskName: taskData.taskName || '',
+          subtaskId: subtaskId || '',
+          subtaskName: subtaskName || '',
+          message: subtaskName
+            ? `${createdByName} ได้มอบหมายงานย่อย "${subtaskName}" ในงาน "${taskData.taskName}" ให้คุณ`
+            : `${createdByName} ได้มอบหมายงาน "${taskData.taskName}" ให้คุณ`,
+          createdAt: new Date(),
+          createdBy: createdByEmployeeId,
+          createdByName: createdByName,
+          readBy: [],
+          targetUserId: targetUid
+        };
+
+        const docRef = afterSaleDb.collection('notifications').doc();
+        batch.set(docRef, notificationData);
+        hasNotification = true;
+      }
+
+      if (hasNotification) {
+        await batch.commit();
+        console.log(`[TaskService] Sent task_assigned notifications to ${assignees.length} assignees`);
+      }
+    } catch (error: any) {
+      console.error('[TaskService] Failed to send assignment notifications:', error.message);
+    }
   }
 
 }

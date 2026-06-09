@@ -19,3 +19,21 @@
 - **Friction**: Backend controller only supports singular equality filter for roles, requiring client-side merge.
 - **Lesson**: Standardize parallel fetch patterns for multi-role filtering where Firestore single-value filters are used.
 
+
+2026-06-09 | task: popup ?????????????? ??????????????? ?????????????? | skill: editor
+- Intent: Remove leaveType select dropdown and sync leaveType based on medCert presence.
+- Outcome: Successfully removed dropdown input, added useEffect to sync leaveType state with medCertFile/medCertUrl, and confirmed clean compile of list.tsx.
+- Lesson: Keep state variables completely synced when inputs are removed, so that payload and UI badge updates are perfectly consistent.
+
+## Session: session_025_update_notification_types (2026-06-09)
+- **Intent**: Update NotificationType and Notification interface on frontend and implement role-based scoping filters on the backend routes.
+- **Outcome**: Successfully modified `frontend/src/services/notificationService.ts` to support the new types ('task_assigned', 'management_submit', 'unlock_request'), made project/task fields optional, and added projectIds. Updated the role-based filter in `backend/src/api/routes/notifications.routes.ts` to filter these types correctly based on user roles and project location access.
+- **Friction**: Pre-existing, unrelated compilation errors on the branch failed the type checker run, but verification of the modified files confirmed they were correct.
+- **Lesson**: Interface definitions should mirror the database model and accommodate general/cross-project notification types by utilizing optional fields.
+
+## Session: session_026_task_assigned_notifications (2026-06-09)
+- **Intent**: Implement notification triggers when tasks/subtasks are assigned to users (FM or SE).
+- **Outcome**: Added `sendAssignmentNotifications` in `TaskService.ts` to fetch user uids from Project A's `users` collection and create `task_assigned` notifications in Project B's `notifications` collection. Triggered notifications asynchronously in `createTask`, `createSubtask`, `updateSubtask`, and `importWbs`.
+- **Friction**: Windows command line parsing issues with bash and PowerShell when executing boot scripts, resolved by writing a platform-independent python script.
+- **Lesson**: Separate database operations (transactions on Project B) from cross-project reads/writes (queries on Project A) by running the latter asynchronously outside the transaction to prevent blocking or database timeouts.
+

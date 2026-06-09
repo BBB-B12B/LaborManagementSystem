@@ -121,11 +121,22 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       ...doc.data()
     })) as any[];
 
-    if (userRole === 'FM' && userEmployeeId) {
-      // Filter strictly to contractors recorded by this foreman
+    if (userRole !== 'FM' && userRole !== 'SE') {
+      throw new AppError('ไม่มีสิทธิ์เข้าถึงข้อมูลประวัติย้อนหลัง (Access denied for this role)', 403);
+    }
+
+    if (userEmployeeId) {
+      // Filter strictly to contractors recorded by this User (FM or SE)
       contractors = contractors.filter(dc => {
         const usage = dc.foremanUsage || {};
         return usage[userEmployeeId] && usage[userEmployeeId].count > 0;
+      });
+
+      // Sort by the usage count of the current user (employeeId) descending (most frequently used first)
+      contractors.sort((a, b) => {
+        const countA = a.foremanUsage?.[userEmployeeId]?.count || 0;
+        const countB = b.foremanUsage?.[userEmployeeId]?.count || 0;
+        return countB - countA;
       });
     }
 
@@ -175,7 +186,7 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
 
     // Filter tasks if role is FM
     const userProjectIds = authReq.user?.projectLocationIds || [];
-    if (userRole === 'FM') {
+    if (userRole === 'FM' || userRole === 'SE') {
       if (userProjectIds.length > 0) {
         tasks = tasks.filter((t: any) => userProjectIds.includes(t.projectId));
       }
@@ -422,9 +433,12 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
             // Already has report for this date -> edit is allowed since it's labor update
             allowEdit = true;
           } else {
-            // No report exists for any task. If user wants to add, they must pick a task.
+            // If the date is older than 3 days:
+            // But there is at least one Dailyreport submitted for one of our tasks on this date,
+            // we allow editing so the user can add this worker to that reported task.
+            const hasExistingReportForAnyTask = reportsForDate.length > 0;
             const isWithin3Days = dateObj >= threeDaysAgo;
-            if (isWithin3Days) {
+            if (isWithin3Days || hasExistingReportForAnyTask) {
               allowEdit = true;
             } else {
               // Check if any task is unlocked for this date (handles Firestore Timestamps properly)
@@ -550,14 +564,19 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       data: {
         dates,
         grid,
-        tasks: tasks.map((t: any) => ({
-          taskId: t.taskId,
-          taskName: t.taskName,
-          isSupportRequest: t.isSupportRequest || false,
-          currentRevision: t.currentRevision || 'rev00',
-          completionDate: t.completionDate || null,
-          startDate: t.startDate || null
-        }))
+        tasks: tasks.map((t: any) => {
+          const taskReports = allReports.filter(r => r.taskId === t.taskId);
+          const reportedDates = Array.from(new Set(taskReports.map(r => r.dateStr)));
+          return {
+            taskId: t.taskId,
+            taskName: t.taskName,
+            isSupportRequest: t.isSupportRequest || false,
+            currentRevision: t.currentRevision || 'rev00',
+            completionDate: t.completionDate || null,
+            startDate: t.startDate || null,
+            reportedDates
+          };
+        })
       }
     });
 
