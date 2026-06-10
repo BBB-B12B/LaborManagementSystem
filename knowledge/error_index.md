@@ -140,3 +140,168 @@
 - **Root Cause:** When `fillFromDailyReport` and `updateDailyPunches` run, they merge punches in 2-digit `HH:mm` format and overwrite both `allScans` and `Time1`-`Time10`. This strips the original seconds from unmodified scans, and saves new admin punches as `HH:mm` instead of `HH:mm:00`.
 - **Resolution:** Modified both `fillFromDailyReport` and `updateDailyPunches` to fetch the existing document, extract `allScans` (which preserves seconds), and match them against incoming `HH:mm` edits. Unchanged punches keep their original seconds, and new admin-added punches are formatted with `:00` padded, preserving the `HH:mm:ss` format for consistent frontend rendering.
 
+## ERR-063: Login failed with AxiosError: Network Error due to backend container crash (Cannot find module 'exceljs')
+- **Task:** T-017-001-01 · **Session:** session_current
+- **File:** backend/package.json · **Line:** 30
+- **Symptom:** User gets AxiosError: Network Error / net::ERR_EMPTY_RESPONSE when trying to send a request to :4000/api/auth/login. The backend container is unhealthy, and docker compose logs backend shows MODULE_NOT_FOUND error: "Cannot find module 'exceljs'".
+- **Root Cause:** A new dependency `exceljs` was added to backend/package.json in a previous change, but the Docker Compose backend container had not been restarted/rebuilt since. The backend's `/app/node_modules` volume is mapped as an anonymous volume which persists and shields the container from package.json updates, keeping node_modules in the container outdated and lacking the `exceljs` module.
+- **Resolution:** Rebuilt the backend container image using `docker compose up -d --build backend`. Since Docker Compose aggressively caches and reuses anonymous volumes, we performed `docker compose down` (which deletes anonymous volumes) followed by `docker compose up -d` to create fresh volumes containing the newly installed dependencies (including `exceljs`). The backend server started successfully and is now healthy.
+
+## ERR-064: Redundant "วันครบกำหนด (งาน)" column in WBS Excel Template
+- **Task:** T-017-002-01 · **Session:** session_current
+- **File:** backend/src/api/routes/tasks.routes.ts · **Line:** 988, 1111
+- **Symptom:** WBS import template features a redundant "วันครบกำหนด (งาน)" (Task Due Date) column which is not needed because the task's due date is automatically computed from the maximum due date of its subtasks anyway.
+- **Root Cause:** The template Excel sheet was initially defined with a dedicated "วันครบกำหนด (งาน)" column, which is unnecessary and confusing to the user.
+- **Resolution:** Removed the column "วันครบกำหนด (งาน)" from `wsTemplate.columns` and `dataRows` in `tasks.routes.ts`. Adjusted center-alignment check to apply to the new column index 7 (`subtaskDueDate`). Removed the instruction row for "วันครบกำหนด (งาน)" from the "คู่มือการกรอกข้อมูล WBS" guide sheet in `tasks.routes.ts`. The parser (`wbsParser.ts`) remains backward-compatible since the field is treated as optional.
+
+## ERR-065: Curved dashed focus ring (watermark) artifact showing next to WBS upload dialog and outdated template column headers
+- **Task:** T-017-003-01 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/WbsImportModal.tsx · **Line:** 268-284
+- **Symptom:** 1) WBS upload dialog displays curved dashed circular lines (crescent shapes) on the left side of the card, looking like a watermark. 2) The Excel template and UI grid columns feature outdated column headers and examples (e.g. WO-01 instead of STR, ARC; Emp001 instead of 6-digit employee IDs; and a redundant "หมายเหตุ" column).
+- **Root Cause:** 1) The upload box container in the modal was wrapped in a `<label>` element with a hidden file input inside it. Browser-specific focus/active rings on the hidden input triggered concentric dashed outline arches on the rounded container boundaries, rendering as circular artifacts. 2) The template Excel sheet and DataGrid headers had not been updated to align with the simplified WBS structure and Thai localized examples.
+- **Resolution:** 1) Replaced the `component="label"` Box upload container with a standard `div` Box container. Hooked its `onClick` to trigger a click on a hidden input using `useRef`. Used `style={{ display: 'none' }}` on the input and added `overflow: 'hidden'` to the Box to completely eliminate all browser focus outlines. 2) Removed the "หมายเหตุ" (taskDescription) column from `tasks.routes.ts` columns/dataRows and instructions sheet. Shifted aligned column indices. Updated preview grid columns in `WbsImportModal.tsx` and guides/examples with localized values (STR, ARC, EE; งานโครงสร้าง, งานสถาปัตยกรรม; รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย) with 6-digit numeric IDs like 123456).
+
+## ERR-066: Excess outer frame/shadow border in WBS Import modal and single-line truncated preview headers
+- **Task:** T-017-003-02 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/WbsImportModal.tsx · **Line:** 138-222, 250-258, 370-410
+- **Symptom:** The WBS Excel import dialog displays an unwanted grey shadow/border outline around its container. Behind the preview table, a white card with rounded corners (borderRadius: 12) and shadow is still visible, overlapping with the blue/orange table header. Additionally, the preview table's long column header titles are truncated onto a single line, causing the column widths to be excessively wide and pushing the critical "หมายเหตุ / ข้อผิดพลาด" column off-screen.
+- **Root Cause:** 1) The Dialog Paper component was styled with a drop-shadow and a border. 2) The custom DataGrid component wrapper was hardcoded with a Paper container styled with borderRadius: 12 and box-shadow that wasn't customizable from the outside. 3) The custom DataGrid wrapper was not configured with a headerHeight or header title wrapping CSS styles.
+- **Resolution:** 1) Removed the border and box shadow from the Dialog PaperProps sx styling. 2) Updated the shared DataGrid component to support an optional paperSx prop, forwarding it to the outer Paper container and resetting shadow elevation when boxShadow: 'none' is set. 3) Passed paperSx={{ borderRadius: 0, boxShadow: 'none', border: 'none', p: 0 }} to DataGrid in WbsImportModal.tsx. Adjusted preview table columns widths to be narrower and set header text wrapping CSS styles on .MuiDataGrid-columnHeaderTitle along with headerHeight={62} and center-justified header title containers.
+
+## ERR-067: Missing WorkOrder and Category configurations in Project A for existing WBS imports
+- **Task:** T-018-001-01 · **Session:** session_current
+- **File:** backend/src/services/TaskService.ts · **Line:** 2590-2630
+- **Symptom:** After importing WBS, the newly imported Work Orders (like STR) and their Categories do not appear in the "สร้างรายการงานใหม่" (Create new task) dropdown in the UI.
+- **Root Cause:** The Excel WBS sheet was imported before the sync logic was added to `TaskService.ts`. Since the new code only syncs configurations to Project A during the import process itself, already-imported WBS data remained unsynced and lacked configuration entries in Project A.
+- **Resolution:** Created and executed a one-time migration script `sync_project_configs.js` in the backend. The script reads all existing work orders and categories from Project B (afterSaleDb) and successfully backports them as configuration documents in Project A (db) under the collections `Project/{projectId}/workOrderConfigs` and `Project/{projectId}/categoryConfigs`.
+
+## ERR-068: Firestore transaction error "all reads to be executed before all writes" during task approval
+- **Task:** T-019-001-01 · **Session:** session_current
+- **File:** backend/src/services/TaskService.ts · **Line:** 400-461
+- **Symptom:** Approving a task or subtask fails with a 500 Internal Server Error, and the backend logs show "Unhandled error: Firestore transactions require all reads to be executed before all writes".
+- **Root Cause:** In the `approveTask` method in `TaskService.ts`, the code performed `transaction.update` on the subtask reference at line 419, and then subsequently performed `transaction.get` on the subtasks collection at line 426. Since Firestore transactions strictly enforce that all read operations (`get`) must occur before any write operations (`set`/`update`/`delete`), this order violation triggered the error.
+- **Resolution:** Restructured the transaction block inside `approveTask` to query both `taskRef`, `subtaskRef`, and `subtasks` collection (via `transaction.get`) at the very beginning of the block under a dedicated reads section. All update writes (`transaction.update`) were moved to execute after these reads.
+
+## ERR-069: Redundant vertical stacking of Export and Requests/Daily Reports buttons in requests workspace
+- **Task:** T-019-002-01 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/requests.tsx · **Line:** 779-824
+- **Symptom:** In the schedule table workspace page, the "Export to Excel (CSV)" button and the "Requests / Daily Reports" toggle buttons are stacked vertically, cluttering the layout, and the Export button's border style looks inconsistent with the premium green "Upload" button design.
+- **Root Cause:** 1) The layout was wrapped in a Stack configured with direction md: 'column' on desktop screens. 2) The Export button was configured as an outlined button with standard grey borders.
+- **Resolution:** 1) Changed the right-side Stack direction to a row on desktop `direction={{ xs: 'column', sm: 'row' }}` with `alignItems="center"`, adjusted the parent Stack vertical alignment to `alignItems={{ xs: 'stretch', md: 'center' }}`, and swapped the child order so the Export button is positioned at the very end of the row. 2) Re-styled the "Export to Excel (CSV)" button to use a green background `#22c55e`, white text/icon, border radius `50px`, height `38px` (aligning with toggle buttons), and premium box shadow `0 4px 14px rgba(34, 197, 94, 0.3)`.
+
+## ERR-070: WorkOrder leaders dropdown shows all system users and doesn't support multiple AssignLD
+- **Task:** T-019-001-01 · **Session:** session_current
+- **File:** backend/src/services/auth/UserService.ts · **Line:** 143
+- **Symptom:** The Leader dropdown in the Work Order edit modal displays all system users instead of filtering by role ID 'LD' and project location. Additionally, only one leader is stored in the `leaderId` field, failing to capture multiple selections (`AssignLD`).
+- **Root Cause:** 
+  1. The backend API `/api/users` only retrieved page and pageSize, ignoring other query parameters.
+  2. `UserService.getAllUsers` had no filtering capability for `roleId`, `department`, `isActive`, or `projectId`.
+  3. The work orders config creation/update routes didn't save or cascade the multiple leader assignments array (`AssignLD`).
+- **Resolution:** 
+  1. Updated `/api/users` route to parse and forward `roleId`, `department`, `isActive`, and `projectId` query parameters.
+  2. Implemented dynamic filtering in `UserService.getAllUsers` (using `array-contains` for project location IDs) and sorted/paginated in-memory to prevent composite index requirements.
+  3. Added the `AssignLD` array to frontend inputs, backend schemas, and cascaded updates from config in Project A to workOrders collection in Project B.
+
+## ERR-071: Work Order codes WOA and WOP from another system display in dropdowns
+- **Task:** T-019-001-02 · **Session:** session_current
+- **File:** backend/src/services/ProjectConfigService.ts · **Line:** 35
+- **Symptom:** In the "สร้างรายการงานใหม่" (Create new task) modal, the "หมวดหมู่งานหลัก (Work Order)" dropdown shows codes like `WOA` and `WOP` which are from another system, causing confusion.
+- **Root Cause:** The `ProjectConfigService.getWorkOrders` method fetched all work orders configurations from the database without excluding codes that belong to the After-Sale system (`WOA` and `WOP`).
+- **Resolution:** Added a filter check inside `ProjectConfigService.getWorkOrders` to exclude configurations whose code equals `WOA` or `WOP` (case-insensitive).
+
+## ERR-072: TaskName toggles to select dropdown even when user typed a name before checking subtasks
+- **Task:** T-019-001-03 · **Session:** session_current
+- **File:** frontend/src/pages/workspace/components/TaskCreateModal.tsx · **Line:** 363, 1044
+- **Symptom:** When a user types a new task name in "ชื่องาน" (taskName) and ticks "เพิ่มงานย่อย" (Add Subtasks), the input field changes to "เลือกงานหลัก" (Autocomplete dropdown), causing them to lose the name they typed and preventing them from creating subtasks under the new task name.
+- **Root Cause:** The conditional rendering logic strictly checked `!isEdit && hasSubtasks` to switch from TextField to Autocomplete, without checking if the user had already typed a value in the TextField before checking the toggle.
+- **Resolution:** 
+  1. Destructured `watch` from `useForm` and introduced a state variable `isAddingSubtasksToNewTask`.
+  2. In `handleToggleSubtasks`, evaluated if `taskName` has a value. If so, set `isAddingSubtasksToNewTask(true)` to keep the input as a text field. Otherwise, set it to `false` to render the Autocomplete.
+  3. Modified the conditional rendering check to `!isEdit && hasSubtasks && !isAddingSubtasksToNewTask`.
+
+## ERR-073: Redundant subtask name in first line of Daily Report TaskSidebarCard
+- **Task:** T-020-001-03 · **Session:** session_current
+- **File:** backend/src/api/routes/tasks.routes.ts, frontend/src/pages/daily-reports/index.tsx · **Line:** 673 (backend), 1360, 2620 (frontend)
+- **Symptom:** The task cards in the left sidebar of the Daily Report page display the subtask name on both the first line (concatenated after the parent task name like `Parent Task > Subtask`) and the second line (standalone).
+- **Root Cause:** 1) The backend `/tasks/assigned-subtasks` API route concatenated the subtask name into `taskName`. 2) The frontend search filter only checked `taskName`, meaning that removing it from `taskName` would break subtask searching. 3) The frontend detail view header didn't display the `subtaskName` field, so removing it from `taskName` left the detail view without subtask context.
+- **Resolution:** 1) Modified the backend `/tasks/assigned-subtasks` route to return only `parentTask.taskName` in `taskName`. 2) Updated the frontend search filter to check `t.subtaskName` as well. 3) Added a dedicated subtitle rendering `selectedTask.subtaskName` in the main detail header pane.
+
+## ERR-074: Daily Report page redirects to Requests table workspace instead of toggling planning mode locally
+- **Task:** T-020-001-04 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 167, 400, 420, 1310, 2275, 2665
+- **Symptom:** Selecting the "Requests" page header tab on `/daily-reports` redirected the user to `/workspace/requests`. There was no way to submit advance planning requests on specific days (today/tomorrow) directly from the daily report workspace itself, and sidebar task cards were not filtered to valid active date ranges.
+- **Root Cause:** 1) The page header tabs were hardcoded to redirect to `/workspace/requests`. 2) There was no page state to toggle between daily report and advance plan submission modes. 3) UI modes and submission APIs were dynamically driven purely by future date checks (`reportDate > today`) rather than explicit tab selection.
+- **Resolution:** 1) Introduced `pageMode` state (`'daily-report' | 'requests'`) in `daily-reports/index.tsx`. 2) Modified header tabs to switch `pageMode` locally, resetting selected date and clearing selected task. 3) Restrained date selection to today and tomorrow only in Requests mode. 4) Added sidebar task card filtering to only show tasks valid for the selected date range in Requests mode. 5) Updated all request/submission evaluation variables to use `pageMode === 'requests'`.
+
+## ERR-075: Task sidebar is blank/closed and cannot be opened when switching tabs or canceling in daily-reports index
+- **Task:** T-020-001-04-01 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 1265
+- **Symptom:** Switching page mode tabs ("Dailyreport" / "Requests") or canceling from the report form resets `selectedTask` to `null` while keeping the sidebar closed (`isSidebarOpen` as `false`). This leaves the user with an empty left side and a centered placeholder, with no way to toggle the sidebar open because the toggle button is only rendered when a task is selected.
+- **Root Cause:** 1) `handleSelectTask` closes the sidebar unconditionally on select. 2) The switcher tabs and the cancel button clear `selectedTask` but do not open the sidebar. 3) The sidebar toggle button is conditionally rendered only when `selectedTask` is truthy, so when it is closed and `selectedTask` becomes null, the user is trapped.
+- **Resolution:** Added a `useEffect` hook in `daily-reports/index.tsx` that automatically triggers when `selectedTask` is `null` (or becomes `null`) and sets `isSidebarOpen(true)`, guaranteeing that the sidebar is always open and available for task selection when no task is active.
+
+## ERR-076: Daily Report / Request Mode defaults progress to 100% for new revisions
+- **Task:** T-020-001-05-02 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 503, 684
+- **Symptom:** When a task is reworked or has a new revision (e.g. `rev01` which should start with 0% progress), entering the Daily Report or Requests page shows the latest/previous progress as `100%` and throws a validation error saying progress must be greater than 100%.
+- **Root Cause:** The `taskReportsData` query fetches all daily reports for the task, which includes completed reports from previous revisions (e.g., `rev00` which was completed at 100%). The frontend page did not filter `taskReportsData` by the active revision ID (`currentRevId`) when calculating the latest previous progress (`lastPrevProgress` in `task-report-detail` query) or building `reportsSummaryMap`.
+- **Resolution:** Modified `reportsSummaryMap` and the `task-report-detail` query in `index.tsx` to compute `currentRevId` (adjusting for support mode if active) and filter out any reports whose revision ID does not match `currentRevId`.
+
+## ERR-077: Vertical scrollbar visible in Daily Report sidebar task list
+- **Task:** T-020-001-05-03 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2548 (index.tsx), 2244 (reference.tsx)
+- **Symptom:** A default browser scrollbar is visible on the right side of the left sidebar "My job" task list, which looks cluttered and unaligned with the premium design theme.
+- **Root Cause:** The `<Box>` wrapping the task list items had `overflowY: 'auto'` but did not hide Webkit scrollbars or configure scrollbar-width to none.
+- **Resolution:** Added custom `sx` style rules to hide the scrollbar (`&::-webkit-scrollbar: { display: 'none' }`, `msOverflowStyle: 'none'`, `scrollbarWidth: 'none'`) while preserving the scrolling functionality.
+
+## ERR-078: Confusing "Daily Report" header text next to local tabs switcher
+- **Task:** T-020-001-05-04 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2339 (index.tsx), 2099 (reference.tsx)
+- **Symptom:** The page title "Daily Report" text is rendered next to the "Dailyreport" and "Requests" tabs capsule. This title is redundant, overlaps the switcher, and reduces the horizontal space on mobile/tablet viewports.
+- **Root Cause:** Hardcoded `Typography` header element inside the flex row wrapper.
+- **Resolution:** Removed the redundant `Typography` title elements from both files so that the tabs capsule sits directly at the start of the header box.
+
+## ERR-079: Daily Report / Requests tabs switcher too small and unaligned on desktop viewports
+- **Task:** T-020-001-05-05 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 2339
+- **Symptom:** The tabs switcher capsule ("Dailyreport" / "Requests") has a small width, which does not match the alignment or width of the left task sidebar card container (320px), looking unaligned and inconsistent.
+- **Root Cause:** The `Stack` wrapping the tabs had no explicit desktop width defined, and the child `Button` elements had no flex-grow or flex-basis settings.
+- **Resolution:** Modified the parent `Box` width to `{ xs: '100%', lg: 'auto' }`, and the tabs `Stack` width to `{ xs: '100%', lg: 320 }`, setting `flex: 1` on each tab `Button` so they share the 320px width equally.
+
+## ERR-080: Cluttered task metadata and lack of mode indicators in form card header
+- **Task:** T-020-001-05-06 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2623 (index.tsx), 2307 (reference.tsx)
+- **Symptom:** The form card header top-left task info is cluttered with too many text lines (Task ID, Category, Parent Task Name, Subtask Name, Work Order Name). Also, there is no visual indicator showing whether the user is recording a Daily Report or a Request, causing confusion.
+- **Root Cause:** Hardcoded, unoptimized Typography stacking layout in the header Box, and lack of layout state variables rendering the active pageMode context.
+- **Resolution:** Redesigned the card header: (1) Streamlined metadata to show Task ID (as a soft gray pill) + Category on line 1, Subtask Name as the main bold title on line 2, and Parent Task Name as subtitle on line 3, hiding Work Order. (2) Added an absolute-centered mode indicator badge on desktop viewports. (3) Added an inline mode indicator badge on mobile viewports below the task metadata.
+
+## ERR-081: Redundant mode indicator banner centered in desktop form card header
+- **Task:** T-020-001-05-07 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 2772 (index.tsx), 2456 (reference.tsx)
+- **Symptom:** In desktop view, there is an absolute-centered mode indicator banner ("บันทึกรายงานประจำวัน (Daily Report)" / "บันทึกแผนล่วงหน้า (Requests)") in the card header, which clutter the layout and duplicate the mode switcher button text.
+- **Root Cause:** Hardcoded absolute positioned Box in the card header layout of both files.
+- **Resolution:** Removed the desktop centered Box mode indicator element completely in both files.
+
+## ERR-082: Lack of calendar restriction and draft vs submitted daily report flow
+- **Task:** T-020-001-05-08 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 464 (index.tsx), 2494 (reference.tsx)
+- **Symptom:** Users can select future dates (like tomorrow) in Dailyreport mode. FMs have to fill in all photos and progress every time they want to report intermediate updates to their supervisor, which is redundant and heavy.
+- **Root Cause:** DatePicker maxDate allowed tomorrow, and there was only a single "บันทึกรายงาน" action that enforced all validations.
+- **Resolution:** (1) Clamped DatePicker maxDate to today in Dailyreport mode. (2) Added a `status` field ('draft' | 'submitted') to the daily report document. (3) Split the submit button into "บันทึกฉบับร่าง" (Save Draft) and "ส่งรายงานสมบูรณ์" (Submit Final), bypassing photo validations in draft mode to let FMs update status incrementally. (4) Locked submitted past reports while allowing same-day editing.
+
+## ERR-083: Save Draft button visible for past dates
+- **Task:** T-020-001-05-09 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx, frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx · **Line:** 3524 (index.tsx), 3114 (reference.tsx)
+- **Symptom:** The "บันทึกฉบับร่าง" (Save Draft) button is visible even when the user selects a past date, which violates the flow that drafts should only be saved for today's active work.
+- **Root Cause:** The Save Draft button was conditionally rendered only based on pageMode !== 'requests', without checking if the reportDate is today.
+- **Resolution:** Added `isSameDay(reportDate, new Date())` conditional check around the Save Draft button in both files so it only renders when the selected date is today.
+
+## ERR-084: Site photo remove (X) button non-functional for existing photos
+- **Task:** T-020-001-05-10 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx (line 3448)
+- **Symptom:** กดปุ่มกากบาท (X) เพื่อลบรูปหน้างาน (Existing Photos) ไม่มีผลใดๆ รูปยังคงแสดงอยู่
+- **Root Cause:** `renderPhotoGrid` call site ส่ง `onRemove` เป็น `(i) => removePhoto(i, 'site')` โดยไม่ส่ง `isExisting` parameter ทำให้ `removePhoto` เข้า branch `isExisting=false` เสมอ จึงพยายามลบจาก `sitePhotos` (new uploads) แทน `existingPhotos.site` (existing URLs)
+- **Resolution:** เปลี่ยน call site เป็น `(i, isExisting) => removePhoto(i, 'site', isExisting)` เพื่อส่ง flag ที่ถูกต้องตาม `item.isExisting` ที่ `renderPhotoGrid` คำนวณไว้
+
+
+

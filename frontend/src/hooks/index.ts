@@ -7,3 +7,6 @@
 
 export { useResponsive } from './useResponsive';
 export { default as useResponsiveDefault } from './useResponsive';
+export { useNotifications } from './useNotifications';
+export { default as useNotificationsDefault } from './useNotifications';
+

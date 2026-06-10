@@ -1,0 +1,13 @@
+dt=2026-06-09
+s=0k
+task=done
+cfp=36
+sk=none
+p1=done
+p2=done
+p3=done
+section=none
+step=none
+resume_at=none
+compact_size=0
+session_reset=consumed

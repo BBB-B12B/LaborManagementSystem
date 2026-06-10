@@ -1,16 +1,16 @@
-export type NotificationType = 'daily_report_submit' | 'unlock_granted';
+export type NotificationType = 'daily_report_submit' | 'unlock_granted' | 'task_assigned' | 'management_submit' | 'unlock_request';
 
 export interface Notification {
   id?: string;
   type: NotificationType;
-  projectId: string;
-  projectName: string;
+  projectId?: string;
+  projectName?: string;
   workOrderId?: string;
   workOrderName?: string;
   categoryId?: string;
   categoryName?: string;
-  taskId: string;
-  taskName: string;
+  taskId?: string;
+  taskName?: string;
   subtaskId?: string;
   subtaskName?: string;
   reportDate?: string; // YYYY-MM-DD
@@ -19,6 +19,7 @@ export interface Notification {
   createdBy: string; // employeeId or uid
   createdByName: string; // resolved user name
   readBy: string[]; // array of user uids who marked this as read
-  targetUserId?: string; // for 'unlock_granted': the FM uid this notification is directed to
+  targetUserId?: string; // for 'unlock_granted' / 'task_assigned': the user uid this is directed to
   isSupportReport?: boolean;
+  projectIds?: string[]; // projects associated with this notification (e.g. for user management)
 }

@@ -1,13 +1,13 @@
 status: completed
-session_id: session_023_wage_calc_optimize
-tasks_done:
-  - T-WAGE-OPT-01: Audit + Optimize หน้าคำนวณค่าแรง (P1–P4 + U1 + P7)
-tasks_pending: none
-last_action: >
-  Extracted AdditionalItemsDrawer + AuditHistoryDrawer ออกเป็น component ต่างหาก
-  ใน components/wage/ — [id].tsx ลดจาก 2,326 เหลือ 1,004 บรรทัด
-  TypeScript ผ่าน 0 error — commit+push integration branch สำเร็จ
-next_session_start: >
-  ไม่มี task ค้างจาก session นี้
-  ถ้าต้องการ optimize ต่อ: P5 (rowNumber O(n²)), P8 (lateRecords limit hardcode),
-  P6 (status maps in [id].tsx), U2 (DataGrid pagination), U3/U4/U5 (UX minor)
+session_id: session_027_mobile_dailyreport
+skill: editor
+cfp_count: 36
+objective: Implement responsive mobile UI for daily reports and visual validation styling for time overlaps.
+outcome: Implemented WorkerMobileCard for a clean daily-reports layout on mobile, resolved conflicting task names in labor time-overlap errors on the backend, and added visual slot comparison layout to GlobalFeedback.tsx on the frontend.
+changes:
+  - Added WorkerMobileCard component to frontend/src/pages/daily-reports/index.tsx.
+  - Updated backend/src/services/TaskService.ts to resolve conflict task details for time-overlap exceptions.
+  - Styled frontend/src/components/common/GlobalFeedback.tsx to display structured overlap comparison blocks.
+validation:
+  - Verified compilation of all changed files in frontend and backend.
+  - Synchronized symbol index via symbol_indexer.py.

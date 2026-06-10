@@ -16,56 +16,77 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userRole = authReq.user?.roleCode;
     const userUid = authReq.user?.uid;
+    const userId = authReq.user?.id;
     const userProjectIds = authReq.user?.projectLocationIds || [];
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const snapshot = await afterSaleDb
-      .collection('notifications')
+    const snapshot = await afterSaleDb.collection('notifications')
       .where('createdAt', '>=', sevenDaysAgo)
       .orderBy('createdAt', 'desc')
       .get();
 
-    let notifications = snapshot.docs.map((doc) => {
+    let notifications = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
         ...data,
-        createdAt: data.createdAt
-          ? data.createdAt.toDate
-            ? data.createdAt.toDate().toISOString()
-            : new Date(data.createdAt).toISOString()
-          : '',
+        createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : ''
       };
     });
 
     // -------------------------------------------
     // Role-based scoping:
-    //   FM → only see 'unlock_granted' targeted at their own uid
-    //   AM/WH/GOD/etc. → only see 'daily_report_submit' for projects they manage
+    //   FM/SE → see 'unlock_granted' and 'task_assigned' targeted at their own uid
+    //   LD/OE/PE/PM → see 'unlock_requested' targeted at their own uid, plus project-based types
+    //   AM/WH/GOD/etc. → see 'daily_report_submit', 'management_submit', 'unlock_request' for projects they manage
+    //                   and 'task_assigned' targeted at their own uid
     // -------------------------------------------
-    if ((userRole as string) === 'FM') {
-      notifications = notifications.filter(
-        (n: any) => n.type === 'unlock_granted' && n.targetUserId === userUid
+    const FM_ROLES = ['FM', 'SE'];
+    if (FM_ROLES.includes(userRole as string)) {
+      notifications = notifications.filter((n: any) =>
+        (n.type === 'unlock_granted' || n.type === 'task_assigned') &&
+        (n.targetUserId === userUid || n.targetUserId === userId)
       );
     } else if ((userRole as string) !== 'GOD') {
       notifications = notifications.filter((n: any) => {
-        if (n.type !== 'daily_report_submit') return false;
-
-        // Allow WH department to see all support notifications
-        if (n.isSupportReport === true && authReq.user?.department === 'WH') {
-          return true;
+        if (n.type === 'task_assigned') {
+          return n.targetUserId === userUid || n.targetUserId === userId;
         }
 
-        return userProjectIds.includes(n.projectId);
+        // unlock_requested: any supervisor in the same project can see it
+        if (n.type === 'unlock_requested') {
+          const SUPERVISOR_ROLES = ['LD', 'OE', 'PE', 'PM'];
+          if (SUPERVISOR_ROLES.includes(userRole as string) && n.projectId && userProjectIds.includes(n.projectId)) {
+            return true;
+          }
+          return n.targetUserId === userUid || n.targetUserId === userId;
+        }
+
+        if (['daily_report_submit', 'management_submit', 'unlock_request'].includes(n.type)) {
+          // Allow WH department to see all support notifications
+          if (n.isSupportReport === true && authReq.user?.department === 'WH') {
+            return true;
+          }
+
+          if (n.projectId && userProjectIds.includes(n.projectId)) {
+            return true;
+          }
+
+          if (Array.isArray(n.projectIds) && n.projectIds.some((pId: string) => userProjectIds.includes(pId))) {
+            return true;
+          }
+        }
+
+        return false;
       });
     }
     // GOD: sees everything (no additional filter)
 
     res.status(200).json({
       success: true,
-      data: notifications,
+      data: notifications
     });
   } catch (error) {
     next(error);
@@ -92,12 +113,12 @@ router.post('/:id/read', async (req: Request, res: Response, next: NextFunction)
     }
 
     await notiRef.update({
-      readBy: admin.firestore.FieldValue.arrayUnion(userId),
+      readBy: admin.firestore.FieldValue.arrayUnion(userId)
     });
 
     res.status(200).json({
       success: true,
-      message: 'Notification marked as read',
+      message: 'Notification marked as read'
     });
   } catch (error) {
     next(error);
@@ -120,25 +141,23 @@ router.post('/read-all', async (req: Request, res: Response, next: NextFunction)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const snapshot = await afterSaleDb
-      .collection('notifications')
+    const snapshot = await afterSaleDb.collection('notifications')
       .where('createdAt', '>=', sevenDaysAgo)
       .get();
 
     const batch = afterSaleDb.batch();
     let count = 0;
 
-    snapshot.docs.forEach((doc) => {
+    snapshot.docs.forEach(doc => {
       const data = doc.data();
-      const belongsToProject =
-        (userRole as string) === 'GOD' ||
-        userProjectIds.includes(data.projectId) ||
-        (data.isSupportReport === true && authReq.user?.department === 'WH');
+      const belongsToProject = (userRole as string) === 'GOD' || 
+                               userProjectIds.includes(data.projectId) ||
+                               (data.isSupportReport === true && authReq.user?.department === 'WH');
       const alreadyRead = Array.isArray(data.readBy) && data.readBy.includes(userId);
 
       if (belongsToProject && !alreadyRead) {
         batch.update(doc.ref, {
-          readBy: admin.firestore.FieldValue.arrayUnion(userId),
+          readBy: admin.firestore.FieldValue.arrayUnion(userId)
         });
         count++;
       }
@@ -150,7 +169,7 @@ router.post('/read-all', async (req: Request, res: Response, next: NextFunction)
 
     res.status(200).json({
       success: true,
-      message: `Marked ${count} notifications as read`,
+      message: `Marked ${count} notifications as read`
     });
   } catch (error) {
     next(error);
@@ -179,28 +198,27 @@ router.post('/subtask/:subtaskId/read', async (req: Request, res: Response, next
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const snapshot = await afterSaleDb
-      .collection('notifications')
+    const snapshot = await afterSaleDb.collection('notifications')
       .where('subtaskId', '==', targetSubtaskId)
       .get();
 
     const batch = afterSaleDb.batch();
     let count = 0;
 
-    const filteredDocs = snapshot.docs.filter((doc) => {
+    const filteredDocs = snapshot.docs.filter(doc => {
       const data = doc.data();
       if (!data.createdAt) return false;
       const cDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
       return cDate >= sevenDaysAgo;
     });
 
-    filteredDocs.forEach((doc) => {
+    filteredDocs.forEach(doc => {
       const data = doc.data();
       const alreadyRead = Array.isArray(data.readBy) && data.readBy.includes(userId);
 
       if (!alreadyRead) {
         batch.update(doc.ref, {
-          readBy: admin.firestore.FieldValue.arrayUnion(userId),
+          readBy: admin.firestore.FieldValue.arrayUnion(userId)
         });
         count++;
       }
@@ -212,7 +230,7 @@ router.post('/subtask/:subtaskId/read', async (req: Request, res: Response, next
 
     res.status(200).json({
       success: true,
-      message: `Marked ${count} subtask notifications as read`,
+      message: `Marked ${count} subtask notifications as read`
     });
   } catch (error) {
     next(error);

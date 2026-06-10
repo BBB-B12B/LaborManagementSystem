@@ -28,6 +28,15 @@ import {
   Divider,
   Grid,
   Paper,
+  Collapse,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Popover,
+  List,
+  ListItem,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -42,6 +51,12 @@ import {
   AccessTime as AccessTimeIcon,
   People as PeopleIcon,
   FilterAltOff as FilterAltOffIcon,
+  CloudUpload as CloudUploadIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  CalendarToday as CalendarTodayIcon,
+  AccountTree as AccountTreeIcon,
+  VisibilityOff as VisibilityOffIcon,
+  RestoreFromTrash as RestoreIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -51,24 +66,19 @@ import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import TaskCard from './components/TaskCard';
 import TaskCreateModal from './components/TaskCreateModal';
 import TaskDailyReportModal from './components/TaskDailyReportModal';
+import { WbsImportModal } from './components/WbsImportModal';
 import { WorkspaceTree } from './components/WorkspaceTree';
-import {
-  taskService,
-  type Task,
-  type Subtask,
-  type TaskAssignee,
-  type EditHistoryRecord,
-} from '@/services/taskService';
-import { projectConfigService } from '@/services/projectConfigService';
+import { taskService, type Task, type Subtask, type TaskAssignee, type EditHistoryRecord } from '@/services/taskService';
+import { projectConfigService, type WorkOrderConfig } from '@/services/projectConfigService';
 import { projectService } from '@/services/projectService';
 import { DatePicker } from '@/components/forms/DatePicker';
-import { memberService } from '@/services/memberService';
+import { memberService, type User } from '@/services/memberService';
 import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/utils/permissions';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useFeedbackStore } from '@/store/feedbackStore';
-import { useNotificationStore } from '@/store';
+import { useNotifications } from '@/hooks';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
@@ -101,13 +111,15 @@ const getEffectiveSubtaskStatus = (st: any) => {
 export default function WorkspacePage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { notifications, markSubtaskAsRead } = useNotificationStore();
+  const { notifications, markSubtaskAsRead } = useNotifications();
   const tasksInCache = useTaskCacheStore((s) => s.tasks);
   const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
   const invalidateCache = useTaskCacheStore((s) => s.invalidate);
+  const patchTaskInCache = useTaskCacheStore((s) => s.patchTask);
   const setTasksInCache = useTaskCacheStore((s) => s.setTasks);
   const setCacheLoading = useTaskCacheStore((s) => s.setLoading);
   const setCacheError = useTaskCacheStore((s) => s.setError);
+  const isCacheLoading = useTaskCacheStore((s) => s.isLoading);
   const { showLoading, hideLoading } = useFeedbackStore();
   const toast = useToast();
   const { canEditWorkspace } = usePermissions(user);
@@ -115,16 +127,17 @@ export default function WorkspacePage() {
   const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
-    projectService
-      .getActive()
+    projectService.getActive()
       .then(setProjects)
       .catch((err) => console.error('Failed to load projects', err));
   }, []);
 
   const [activeTab, setActiveTab] = useState('All Tasks');
+  const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isWbsModalOpen, setIsWbsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isTaskEditOpen, setIsTaskEditOpen] = useState(false);
@@ -136,12 +149,42 @@ export default function WorkspacePage() {
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
   const [selectedReportDate, setSelectedReportDate] = useState<Date | null>(null);
 
+  // Hidden completed cards (per-user, persisted in localStorage)
+  const [hiddenCompletedIds, setHiddenCompletedIds] = useState<string[]>([]);
+  const [hiddenPopoverAnchor, setHiddenPopoverAnchor] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const stored = localStorage.getItem(`workspace_hidden_completed_${user.id}`);
+      if (stored) setHiddenCompletedIds(JSON.parse(stored));
+    } catch {}
+  }, [user?.id]);
+
+  const handleHideCard = useCallback((task: Task) => {
+    if (!user?.id) return;
+    setHiddenCompletedIds(prev => {
+      const next = prev.includes(task.id) ? prev : [...prev, task.id];
+      localStorage.setItem(`workspace_hidden_completed_${user.id}`, JSON.stringify(next));
+      return next;
+    });
+  }, [user?.id]);
+
+  const handleUnhideCard = useCallback((taskId: string) => {
+    if (!user?.id) return;
+    setHiddenCompletedIds(prev => {
+      const next = prev.filter(id => id !== taskId);
+      localStorage.setItem(`workspace_hidden_completed_${user.id}`, JSON.stringify(next));
+      return next;
+    });
+  }, [user?.id]);
+
   // Left Tree Filter state
-  const [selectedNode, setSelectedNode] = useState<{
-    type: 'all' | 'workOrder' | 'category' | 'task';
-    id: string;
-  } | null>(null);
+  const [selectedNode, setSelectedNode] = useState<{ type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null>(null);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [mobileActiveColumn, setMobileActiveColumn] = useState<string>('upcoming');
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const swipeTouchStartX = useRef<number | null>(null);
 
   // Quick Create Subtask state
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
@@ -184,6 +227,12 @@ export default function WorkspacePage() {
   const [woEditName, setWoEditName] = useState('');
   const [woEditSubmitting, setWoEditSubmitting] = useState(false);
   const [woEditError, setWoEditError] = useState('');
+  const [woEditLeaderIds, setWoEditLeaderIds] = useState<string[]>([]);
+  const [woEditLeaders, setWoEditLeaders] = useState<User[]>([]);
+  const [loadingWoEditLeaders, setLoadingWoEditLeaders] = useState(false);
+
+  // WorkOrder configurations for tree layout LD icon
+  const [woConfigs, setWoConfigs] = useState<WorkOrderConfig[]>([]);
 
   const [isWoDeleteOpen, setIsWoDeleteOpen] = useState(false);
   const [woToDelete, setWoToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -206,6 +255,8 @@ export default function WorkspacePage() {
 
   // Track the user ID to detect user-switch and force refetch
   const prevUserIdRef = useRef<string | null>(null);
+  // ป้องกัน Loop การดึงและเปิดบอร์ดรายงานผลงานจาก Notification
+  const handledSubtaskIdRef = useRef<string | null>(null);
 
   /** กรอง Task ตาม Role ของ User */
   const filterTasksByRole = useCallback(
@@ -223,92 +274,83 @@ export default function WorkspacePage() {
       const userProjectIds = user?.projectLocationIds || [];
       const employeeId = user?.employeeId;
 
-      return (
-        allTasks
-          .map((t) => {
-            const isMyProject = userProjectIds.includes(t.projectId);
+      return allTasks
+        .map((t) => {
+          const isMyProject = userProjectIds.includes(t.projectId);
 
-            // กรอง subtasks ของแต่ละ Task ตามสิทธิ์การเข้าถึง
-            const allowedSubtasks = (t.subtasks || []).filter((sub) => {
-              const isSubtaskSupport = sub.isSupportRequest || false;
-              const isSubtaskPickedUp = sub.isPickedUpBySupport || false;
+          // กรอง subtasks ของแต่ละ Task ตามสิทธิ์การเข้าถึง
+          const allowedSubtasks = (t.subtasks || []).filter((sub) => {
+            const isSubtaskSupport = sub.isSupportRequest || false;
+            const isSubtaskPickedUp = sub.isPickedUpBySupport || false;
 
-              if (!isWH) {
-                // 1. Site User (ไม่ใช่ WH)
-                if (isMyProject) {
-                  // เห็นงานหลักทั้งหมดของ Site ตัวเอง
-                  // แต่ถ้าเป็นงานช่วยเหลือ (isSupportRequest === true) จะเห็นก็ต่อเมื่อได้รับการรับงานแล้ว (isPickedUpBySupport === true)
-                  // หรือตนเองเป็นคนสร้างงานย่อยนั้น
-                  if (isSubtaskSupport) {
-                    const isCreatedByMe =
-                      sub.createdBy === user?.id || sub.createdBy === user?.employeeId;
-                    return isSubtaskPickedUp || isCreatedByMe;
-                  }
-                  return true;
-                } else {
-                  // ข้ามโครงการ (โครงการอื่น): เห็นเฉพาะงานย่อยที่ตนเองสร้าง หรือได้รับมอบหมายเป็นผู้รับผิดชอบงานช่วยเหลือ
-                  const isCreatedByMe =
-                    sub.createdBy === user?.id || sub.createdBy === user?.employeeId;
-                  const isAssignedToMe =
-                    sub.assignees?.some(
-                      (a: any) => a.employeeId === employeeId || a.employeeId === user?.id
-                    ) ||
-                    sub.supportAssignees?.some(
-                      (sa: any) => sa.employeeId === employeeId || sa.employeeId === user?.id
-                    );
-
-                  if (isSubtaskSupport) {
-                    return isSubtaskPickedUp && (isCreatedByMe || isAssignedToMe);
-                  }
-                  return isCreatedByMe || isAssignedToMe;
-                }
-              } else {
-                // 2. WH User
-                if (isMyProject) {
-                  // โครงการของตัวเอง เห็นงานทั้งหมด
-                  if (isSubtaskSupport) {
-                    return isSubtaskPickedUp;
-                  }
-                  return true;
-                } else {
-                  // ข้ามโครงการ (โครงการอื่น): เห็นเฉพาะงานช่วยเหลือที่ได้รับการรับงาน (PickedUp) แล้วเท่านั้น
-                  return isSubtaskSupport && isSubtaskPickedUp;
-                }
-              }
-            });
-
-            return {
-              ...t,
-              subtasks: allowedSubtasks,
-            };
-          })
-          // กรองเอาเฉพาะ Task ที่ได้รับสิทธิ์เข้าถึงตามบทบาท (รองรับงานที่ไม่มี subtask)
-          .filter((t) => {
-            const isMyProject = userProjectIds.includes(t.projectId);
-
-            // ตรวจสอบว่า Task ดั้งเดิมมี subtask หรือไม่
-            const originalTask = allTasks.find((x) => x.id === t.id);
-            const hadSubtasks =
-              originalTask && originalTask.subtasks && originalTask.subtasks.length > 0;
-
-            if (hadSubtasks) {
-              // ถ้าดั้งเดิมมี subtask ต้องมี allowedSubtasks เหลืออยู่ถึงจะแสดง
-              return t.subtasks && t.subtasks.length > 0;
-            }
-
-            // ถ้าดั้งเดิมไม่มี subtask เลย
-            // ให้ใช้สิทธิ์การเห็นที่ระดับตัว Task เอง
             if (!isWH) {
-              // 1. Site User
-              if (isMyProject) return true;
-              return t.createdBy === user?.id || t.createdBy === user?.employeeId;
+              // 1. Site User (ไม่ใช่ WH)
+              if (isMyProject) {
+                // เห็นงานหลักทั้งหมดของ Site ตัวเอง
+                // แต่ถ้าเป็นงานช่วยเหลือ (isSupportRequest === true) จะเห็นก็ต่อเมื่อได้รับการรับงานแล้ว (isPickedUpBySupport === true)
+                // หรือตนเองเป็นคนสร้างงานย่อยนั้น
+                if (isSubtaskSupport) {
+                  const isCreatedByMe = sub.createdBy === user?.id || sub.createdBy === user?.employeeId;
+                  return isSubtaskPickedUp || isCreatedByMe;
+                }
+                return true;
+              } else {
+                // ข้ามโครงการ (โครงการอื่น): เห็นเฉพาะงานย่อยที่ตนเองสร้าง หรือได้รับมอบหมายเป็นผู้รับผิดชอบงานช่วยเหลือ
+                const isCreatedByMe = sub.createdBy === user?.id || sub.createdBy === user?.employeeId;
+                const isAssignedToMe = 
+                  sub.assignees?.some((a: any) => a.employeeId === employeeId || a.employeeId === user?.id) ||
+                  sub.supportAssignees?.some((sa: any) => sa.employeeId === employeeId || sa.employeeId === user?.id);
+                
+                if (isSubtaskSupport) {
+                  return isSubtaskPickedUp && (isCreatedByMe || isAssignedToMe);
+                }
+                return isCreatedByMe || isAssignedToMe;
+              }
             } else {
               // 2. WH User
-              if (isMyProject) return true;
-              return !!t.isSupportRequest;
+              if (isMyProject) {
+                // โครงการของตัวเอง เห็นงานทั้งหมด
+                if (isSubtaskSupport) {
+                  return isSubtaskPickedUp;
+                }
+                return true;
+              } else {
+                // ข้ามโครงการ (โครงการอื่น): เห็นเฉพาะงานช่วยเหลือที่ได้รับการรับงาน (PickedUp) แล้วเท่านั้น
+                return isSubtaskSupport && isSubtaskPickedUp;
+              }
             }
-          })
-      );
+          });
+
+          return {
+            ...t,
+            subtasks: allowedSubtasks,
+          };
+        })
+        // กรองเอาเฉพาะ Task ที่ได้รับสิทธิ์เข้าถึงตามบทบาท (รองรับงานที่ไม่มี subtask)
+        .filter((t) => {
+          const isMyProject = userProjectIds.includes(t.projectId);
+          
+          // ตรวจสอบว่า Task ดั้งเดิมมี subtask หรือไม่
+          const originalTask = allTasks.find(x => x.id === t.id);
+          const hadSubtasks = originalTask && originalTask.subtasks && originalTask.subtasks.length > 0;
+          
+          if (hadSubtasks) {
+            // ถ้าดั้งเดิมมี subtask ต้องมี allowedSubtasks เหลืออยู่ถึงจะแสดง
+            return t.subtasks && t.subtasks.length > 0;
+          }
+          
+          // ถ้าดั้งเดิมไม่มี subtask เลย
+          // ให้ใช้สิทธิ์การเห็นที่ระดับตัว Task เอง
+          if (!isWH) {
+            // 1. Site User
+            if (isMyProject) return true;
+            return t.createdBy === user?.id || t.createdBy === user?.employeeId;
+          } else {
+            // 2. WH User
+            if (isMyProject) return true;
+            return !!t.isSupportRequest;
+          }
+        });
     },
     [user]
   );
@@ -438,17 +480,32 @@ export default function WorkspacePage() {
     }
     setSubtaskEditSubmitting(true);
     try {
-      await taskService.updateSubtask(parentTaskId, editingSubtaskCard.id, {
-        subtaskName: subtaskEditName.trim(),
-        assignees: subtaskEditAssignees,
-        dueDate: subtaskEditDueDate,
-        isSupportRequest: subtaskEditIsSupportRequest,
-      });
+      await taskService.updateSubtask(
+        parentTaskId,
+        editingSubtaskCard.id,
+        {
+          subtaskName: subtaskEditName.trim(),
+          assignees: subtaskEditAssignees,
+          dueDate: subtaskEditDueDate,
+          isSupportRequest: subtaskEditIsSupportRequest,
+        }
+      );
       toast.show('แก้ไขงานย่อยสำเร็จ', 'success');
       setIsSubtaskEditOpen(false);
+      const parentIdForPatch = editingSubtaskCard?.parentTaskId;
       setEditingSubtaskCard(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      if (parentIdForPatch) {
+        try {
+          const refreshed = await taskService.getTaskById(parentIdForPatch);
+          patchTaskInCache(refreshed);
+        } catch {
+          invalidateCache();
+          fetchFromAPI(true);
+        }
+      } else {
+        invalidateCache();
+        fetchFromAPI(true);
+      }
     } catch (error: any) {
       console.error('Failed to update subtask', error);
       setSubtaskEditError(error.message || 'ไม่สามารถแก้ไขงานย่อยได้');
@@ -466,7 +523,10 @@ export default function WorkspacePage() {
     }
     setSubtaskDeleteSubmitting(true);
     try {
-      const result = await taskService.deleteSubtask(parentTaskId, subtaskToDeleteCard.id);
+      const result = await taskService.deleteSubtask(
+        parentTaskId,
+        subtaskToDeleteCard.id
+      );
       toast.show(
         result.type === 'soft'
           ? 'ทำการปิดการทำงานชั่วคราว (Soft Delete) เนื่องจากมีรายงานผลงานแล้ว'
@@ -485,11 +545,38 @@ export default function WorkspacePage() {
     }
   };
 
-  const handleEditWorkOrderOpen = (woId: string, currentName: string) => {
+  const handleEditWorkOrderOpen = async (woId: string, currentName: string) => {
     setEditingWo({ id: woId, name: currentName });
     setWoEditName(currentName);
     setWoEditError('');
+    setWoEditLeaderIds([]);
+    setWoEditLeaders([]);
     setIsWoEditOpen(true);
+
+    const parentTask = tasks.find((t) => t.workOrderId === woId);
+    const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
+    const workOrderCode = parentTask?.workOrderCode || woId;
+
+    if (projectId) {
+      setLoadingWoEditLeaders(true);
+      try {
+        const [leadersRes, configsRes] = await Promise.all([
+          memberService.getAllUsers({ roleId: 'LD', projectId, pageSize: 1000 }),
+          projectConfigService.getWorkOrders(projectId)
+        ]);
+        setWoEditLeaders(leadersRes.users || []);
+        
+        // Find current AssignLD config
+        const currentWoConfig = configsRes.find(cfg => cfg.code === workOrderCode || cfg.id === workOrderCode);
+        if (currentWoConfig) {
+          setWoEditLeaderIds(currentWoConfig.AssignLD || currentWoConfig.leaderIds || (currentWoConfig.leaderId ? [currentWoConfig.leaderId] : []));
+        }
+      } catch (err) {
+        console.error('Failed to load leaders or configurations for WorkOrder edit', err);
+      } finally {
+        setLoadingWoEditLeaders(false);
+      }
+    }
   };
 
   const handleEditWorkOrderSubmit = async () => {
@@ -503,15 +590,25 @@ export default function WorkspacePage() {
       const parentTask = tasks.find((t) => t.workOrderId === editingWo.id);
       const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
       const workOrderCode = parentTask?.workOrderCode || editingWo.id;
-
+      
       if (!projectId) {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
 
-      await projectConfigService.updateWorkOrder(projectId, workOrderCode, {
+      const selectedLeaders = woEditLeaders.filter(u => woEditLeaderIds.includes(u.id));
+      const leaderNames = selectedLeaders.map(u => u.name);
+
+      const submitData = {
         name: woEditName.trim(),
-      });
-      toast.show('แก้ไขชื่อ WorkOrder สำเร็จ', 'success');
+        leaderId: selectedLeaders.length > 0 ? selectedLeaders[0].id : null,
+        leaderName: selectedLeaders.length > 0 ? selectedLeaders[0].name : null,
+        leaderIds: woEditLeaderIds,
+        leaderNames: leaderNames,
+        AssignLD: woEditLeaderIds
+      };
+
+      await projectConfigService.updateWorkOrder(projectId, workOrderCode, submitData);
+      toast.show('แก้ไขข้อมูล WorkOrder สำเร็จ', 'success');
       setIsWoEditOpen(false);
       setEditingWo(null);
       invalidateCache();
@@ -536,7 +633,7 @@ export default function WorkspacePage() {
       const parentTask = tasks.find((t) => t.workOrderId === woToDelete.id);
       const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
       const workOrderCode = parentTask?.workOrderCode || woToDelete.id;
-
+      
       if (!projectId) {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
@@ -552,8 +649,7 @@ export default function WorkspacePage() {
       setIsWoDeleteOpen(false);
       setWoToDelete(null);
       setBlockDeleteAlertMessage(
-        error.message ||
-          `ไม่สามารถลบ WorkOrder "${woToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้ WorkOrder นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
+        error.message || `ไม่สามารถลบ WorkOrder "${woToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้ WorkOrder นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
       );
       setIsBlockDeleteAlertOpen(true);
     } finally {
@@ -578,14 +674,12 @@ export default function WorkspacePage() {
     try {
       const parentTask = tasks.find((t) => t.categoryId === editingCat.id);
       const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
-
+      
       if (!projectId) {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
 
-      await projectConfigService.updateCategory(projectId, editingCat.id, {
-        name: catEditName.trim(),
-      });
+      await projectConfigService.updateCategory(projectId, editingCat.id, { name: catEditName.trim() });
       toast.show('แก้ไขหมวดหมู่ย่อยสำเร็จ', 'success');
       setIsCatEditOpen(false);
       setEditingCat(null);
@@ -647,7 +741,7 @@ export default function WorkspacePage() {
     try {
       const parentTask = tasks.find((t) => t.categoryId === catToDelete.id);
       const projectId = parentTask?.projectId || user?.projectLocationIds?.[0] || '';
-
+      
       if (!projectId) {
         throw new Error('ไม่พบข้อมูลโครงการที่เกี่ยวข้อง');
       }
@@ -663,8 +757,7 @@ export default function WorkspacePage() {
       setIsCatDeleteOpen(false);
       setCatToDelete(null);
       setBlockDeleteAlertMessage(
-        error.message ||
-          `ไม่สามารถลบหมวดหมู่ย่อย "${catToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้หมวดหมู่นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
+        error.message || `ไม่สามารถลบหมวดหมู่ย่อย "${catToDelete.name}" ได้เนื่องจากมีรายงานผลงาน/งานย่อย หรือความคืบหน้าเกิดขึ้นแล้วในงานภายใต้หมวดหมู่นี้\n\nแนะนำให้ท่านเปลี่ยนชื่อหมวดหมู่ดังกล่าวโดยการแก้ไขชื่อแล้วเพิ่มคำว่า "[ยกเลิก]" ต่อท้ายเพื่อแสดงผลแทนการลบ`
       );
       setIsBlockDeleteAlertOpen(true);
     } finally {
@@ -685,10 +778,7 @@ export default function WorkspacePage() {
         const mergedTask: Task = {
           ...task,
           id: subtask.id,
-          dueDate:
-            subtask.dueDate instanceof Date
-              ? subtask.dueDate.toISOString()
-              : String(subtask.dueDate || ''),
+          dueDate: subtask.dueDate instanceof Date ? subtask.dueDate.toISOString() : String(subtask.dueDate || ''),
           taskId: subtask.subtaskId,
           taskName: task.taskName,
           subtaskName: subtask.subtaskName,
@@ -717,12 +807,17 @@ export default function WorkspacePage() {
   // Auto-open Daily Report modal if query params are present (routing from Notification)
   useEffect(() => {
     if (!router.isReady) return;
+    if (isCacheLoading) return; // รอให้ดึงข้อมูลจาก API ล่าสุดเสร็จสิ้นก่อนเปิด Modal
 
     const { subtaskId: querySubtaskId, date: queryDate } = router.query;
 
     if (querySubtaskId && typeof querySubtaskId === 'string' && subtaskCards.length > 0) {
+      // ป้องกัน Loop การยิงเปลี่ยนเส้นทางด้วย Router.replace ซ้ำซ้อนก่อนที่การนำทางจะสมบูรณ์
+      if (handledSubtaskIdRef.current === querySubtaskId) return;
+
       const foundCard = subtaskCards.find((card) => card.id === querySubtaskId);
       if (foundCard) {
+        handledSubtaskIdRef.current = querySubtaskId; // ล็อก ID นี้เพื่อป้องกันการเข้ามตกรอบวนซ้ำ
         setSelectedTaskForReport(foundCard);
         setIsReportModalOpen(true);
 
@@ -740,9 +835,7 @@ export default function WorkspacePage() {
         if (user) {
           // Mark notifications for this subtask as read
           const hasUnread = notifications.some(
-            (n) =>
-              isNotificationForSubtask(n.subtaskId, foundCard.id) &&
-              !(n.readBy ?? []).includes(user.id)
+            (n) => isNotificationForSubtask(n.subtaskId, foundCard.id) && !(n.readBy ?? []).includes(user.id)
           );
           if (hasUnread) {
             markSubtaskAsRead(foundCard.id);
@@ -752,8 +845,21 @@ export default function WorkspacePage() {
         // Clean query parameters from URL bar
         router.replace('/workspace', undefined, { shallow: true });
       }
+    } else if (!querySubtaskId) {
+      // เคลียร์ค่า ID ที่ล็อกไว้เมื่อ URL ถูกล้างเรียบร้อยแล้ว เพื่อให้เปิดแจ้งเตือนรอบใหม่ได้
+      handledSubtaskIdRef.current = null;
     }
-  }, [router.isReady, router.query, subtaskCards, user, notifications, markSubtaskAsRead]);
+  }, [router.isReady, router.query, subtaskCards, user, notifications, markSubtaskAsRead, isCacheLoading]);
+
+  // ซิงก์ข้อมูลของ Modal รายงานผลงานที่กำลังเปิดค้างไว้ เมื่อมีการดึงข้อมูลใหม่ (เช่น กด Sync หรือคลิกเปิดจากแจ้งเตือน)
+  useEffect(() => {
+    if (selectedTaskForReport) {
+      const updatedCard = subtaskCards.find((card) => card.id === selectedTaskForReport.id);
+      if (updatedCard && JSON.stringify(updatedCard) !== JSON.stringify(selectedTaskForReport)) {
+        setSelectedTaskForReport(updatedCard);
+      }
+    }
+  }, [subtaskCards, selectedTaskForReport]);
 
   // Filter subtasks by tab & Structure Tree selection
   const filteredSubtasks = useMemo(() => {
@@ -815,9 +921,7 @@ export default function WorkspacePage() {
 
     if (user) {
       const hasUnread = notifications.some(
-        (n) =>
-          isNotificationForSubtask(n.subtaskId, subtaskCard.id) &&
-          !(n.readBy ?? []).includes(user.id)
+        (n) => isNotificationForSubtask(n.subtaskId, subtaskCard.id) && !(n.readBy ?? []).includes(user.id)
       );
       if (hasUnread) {
         markSubtaskAsRead(subtaskCard.id);
@@ -830,10 +934,7 @@ export default function WorkspacePage() {
     const mergedTask: Task = {
       ...task,
       id: subtask.id,
-      dueDate:
-        subtask.dueDate instanceof Date
-          ? subtask.dueDate.toISOString()
-          : String(subtask.dueDate || ''),
+      dueDate: subtask.dueDate instanceof Date ? subtask.dueDate.toISOString() : String(subtask.dueDate || ''),
       taskId: subtask.subtaskId,
       taskName: task.taskName,
       subtaskName: subtask.subtaskName,
@@ -855,8 +956,7 @@ export default function WorkspacePage() {
 
     if (user) {
       const hasUnread = notifications.some(
-        (n) =>
-          isNotificationForSubtask(n.subtaskId, subtask.id) && !(n.readBy ?? []).includes(user.id)
+        (n) => isNotificationForSubtask(n.subtaskId, subtask.id) && !(n.readBy ?? []).includes(user.id)
       );
       if (hasUnread) {
         markSubtaskAsRead(subtask.id);
@@ -888,16 +988,23 @@ export default function WorkspacePage() {
     setIsQuickCreateOpen(true);
   };
 
-  // Fetch FM users for quick subtask creation or subtask edit
+  // Fetch FM and SE users for quick subtask creation or subtask edit
   useEffect(() => {
     if (isQuickCreateOpen || isSubtaskEditOpen) {
       const fetchFms = async () => {
         setFetchingFms(true);
         try {
-          const res = await memberService.getAllUsers({ roleId: 'FM' });
-          setFmUsers(res.users || []);
+          const [resFm, resSe] = await Promise.all([
+            memberService.getAllUsers({ roleId: 'FM', pageSize: 1000 }),
+            memberService.getAllUsers({ roleId: 'SE', pageSize: 1000 }),
+          ]);
+          const combined = [
+            ...(resFm.users || []),
+            ...(resSe.users || []),
+          ];
+          setFmUsers(combined);
         } catch (err) {
-          console.error('Failed to fetch FM users', err);
+          console.error('Failed to fetch FM and SE users', err);
         } finally {
           setFetchingFms(false);
         }
@@ -915,8 +1022,7 @@ export default function WorkspacePage() {
           const mapping: Record<string, string> = {};
           if (res && res.users) {
             res.users.forEach((u: any) => {
-              mapping[u.id] =
-                u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || u.id;
+              mapping[u.id] = u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || u.id;
             });
           }
           setUsersMap(mapping);
@@ -928,35 +1034,52 @@ export default function WorkspacePage() {
     }
   }, [isHistoryOpen, usersMap]);
 
-  // Filter FMs strictly by the parent task's project
+  // Load work order configs for all user project locations
+  useEffect(() => {
+    const projectIds = user?.projectLocationIds || [];
+    if (projectIds.length > 0) {
+      Promise.all(
+        projectIds.map((pid) => projectConfigService.getWorkOrders(pid).catch(() => []))
+      ).then((results) => {
+        const flatConfigs = results.flat();
+        setWoConfigs(flatConfigs);
+      }).catch(err => {
+        console.error('Failed to load work order configs for projects', err);
+      });
+    }
+  }, [user?.projectLocationIds, tasks]);
+
+  // Filter FMs/SEs strictly by the parent task's project
   const filteredFms = useMemo(() => {
-    const validFms = fmUsers.filter(
-      (u) =>
-        u.roleId !== 'GOD' &&
-        u.roleId === 'FM' &&
-        (u as any).systemCode !== 'AS' &&
-        (u as any).SystemCode !== 'AS'
+    const validFms = fmUsers.filter((u) => 
+      u.roleId !== 'GOD' && 
+      (u.roleId === 'FM' || u.roleId === 'SE') && 
+      (u as any).systemCode !== 'AS' && 
+      (u as any).SystemCode !== 'AS'
     );
     const parentTask = tasks.find((t) => t.id === quickCreateTaskId);
     if (!parentTask) return validFms;
 
-    return validFms.filter((fm) => fm.projectLocationIds?.includes(parentTask.projectId));
+    return validFms.filter((fm) =>
+      fm.projectLocationIds?.includes(parentTask.projectId)
+    );
   }, [fmUsers, quickCreateTaskId, tasks]);
 
-  // Filter FMs strictly by the parent task's project for editing subtask
+  // Filter FMs/SEs strictly by the parent task's project for editing subtask
   const editFilteredFms = useMemo(() => {
-    const validFms = fmUsers.filter(
-      (u) =>
-        u.roleId !== 'GOD' &&
-        u.roleId === 'FM' &&
-        (u as any).systemCode !== 'AS' &&
-        (u as any).SystemCode !== 'AS'
+    const validFms = fmUsers.filter((u) => 
+      u.roleId !== 'GOD' && 
+      (u.roleId === 'FM' || u.roleId === 'SE') && 
+      (u as any).systemCode !== 'AS' && 
+      (u as any).SystemCode !== 'AS'
     );
     if (!editingSubtaskCard) return validFms;
     const parentTask = tasks.find((t) => t.id === editingSubtaskCard.parentTaskId);
     if (!parentTask) return validFms;
 
-    return validFms.filter((fm) => fm.projectLocationIds?.includes(parentTask.projectId));
+    return validFms.filter((fm) =>
+      fm.projectLocationIds?.includes(parentTask.projectId)
+    );
   }, [fmUsers, editingSubtaskCard, tasks]);
 
   const handleQuickCreateSubmit = async () => {
@@ -973,20 +1096,19 @@ export default function WorkspacePage() {
     try {
       showLoading();
       if (isQuickAssignMode && quickAssignSubtask) {
-        await taskService.updateSubtask(quickCreateTaskId, quickAssignSubtask.id, {
-          subtaskName: quickSubtaskName.trim(),
-          assignees: quickAssignees,
-          dueDate: quickDueDate,
-          isSupportRequest: quickAssignSubtask.isSupportRequest,
-        });
+        await taskService.updateSubtask(
+          quickCreateTaskId,
+          quickAssignSubtask.id,
+          {
+            subtaskName: quickSubtaskName.trim(),
+            assignees: quickAssignees,
+            dueDate: quickDueDate,
+            isSupportRequest: quickAssignSubtask.isSupportRequest,
+          }
+        );
         toast.success('มอบหมายงานย่อยสำเร็จแล้ว');
       } else {
-        await taskService.createSubtask(
-          quickCreateTaskId,
-          quickSubtaskName.trim(),
-          quickAssignees,
-          quickDueDate
-        );
+        await taskService.createSubtask(quickCreateTaskId, quickSubtaskName.trim(), quickAssignees, quickDueDate);
         toast.success('สร้างรายการงานย่อยสำเร็จแล้ว');
       }
       setIsQuickCreateOpen(false);
@@ -1029,10 +1151,9 @@ export default function WorkspacePage() {
 
   const shouldShowHelpCheckbox = useMemo(() => {
     if (!editingSubtaskCard) return false;
-    const isHelperUser = projects.some(
-      (p) =>
-        user?.projectLocationIds?.includes(p.id) &&
-        (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+    const isHelperUser = projects.some(p => 
+      user?.projectLocationIds?.includes(p.id) && 
+      (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
     );
     if (isHelperUser) return false;
 
@@ -1043,195 +1164,187 @@ export default function WorkspacePage() {
   return (
     <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD']}>
       <Layout disablePadding disableTopGap maxWidth={false}>
-        <Head>
-          <title>Workspace | Labor Manager</title>
-        </Head>
+      <Head>
+        <title>Workspace | Labor Manager</title>
+      </Head>
 
+      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', bgcolor: '#fbfcfd', overflow: 'hidden' }}>
+        {/* Left Structure Tree Panel - Desktop */}
         <Box
           sx={{
-            height: 'calc(100vh - 64px)',
-            display: 'flex',
-            bgcolor: '#fbfcfd',
-            overflow: 'hidden',
+            display: { xs: 'none', md: 'flex' },
+            flexDirection: 'column',
+            width: 280,
+            height: '100%',
+            flexShrink: 0,
+            borderRight: '1px solid #eaeef2',
+            bgcolor: '#ffffff',
           }}
         >
-          {/* Left Structure Tree Panel - Desktop */}
-          <Box
-            sx={{
-              display: { xs: 'none', md: 'flex' },
-              flexDirection: 'column',
-              width: 280,
-              height: '100%',
-              flexShrink: 0,
-              borderRight: '1px solid #eaeef2',
-              bgcolor: '#ffffff',
-            }}
-          >
-            {/* Sidebar Title */}
-            <Box sx={{ px: 2.5, pt: 3.5, pb: 0 }}>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
-                Workspace Board
-              </Typography>
-            </Box>
-            <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-              <WorkspaceTree
-                tasks={tasks}
-                selectedNode={selectedNode}
-                onSelectNode={setSelectedNode}
-                onSubtaskClick={handleSubtaskClickInTree}
-                onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
-                onQuickAssignSubtask={canEditWorkspace ? handleQuickAssignSubtaskClick : undefined}
-                onEditWorkOrder={
-                  canEditWorkspace && user?.roleCode !== 'LD' ? handleEditWorkOrderOpen : undefined
-                }
-                onDeleteWorkOrder={
-                  canEditWorkspace && user?.roleCode !== 'LD'
-                    ? handleDeleteWorkOrderOpen
-                    : undefined
-                }
-                onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
-                onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
-                onEditTask={canEditWorkspace ? handleEditTaskOpen : undefined}
-                activeTab={activeTab}
-              />
-            </Box>
+          {/* Sidebar Title */}
+          <Box sx={{ px: 2.5, pt: 3.5, pb: 0 }}>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
+              Workspace Board
+            </Typography>
           </Box>
+          <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+            <WorkspaceTree
+              tasks={tasks}
+              selectedNode={selectedNode}
+              onSelectNode={setSelectedNode}
+              onSubtaskClick={handleSubtaskClickInTree}
+              onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
+              onQuickAssignSubtask={canEditWorkspace ? handleQuickAssignSubtaskClick : undefined}
+              onEditWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleEditWorkOrderOpen : undefined}
+              onDeleteWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleDeleteWorkOrderOpen : undefined}
+              onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
+              onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
+              onEditTask={canEditWorkspace ? handleEditTaskOpen : undefined}
+              activeTab={activeTab}
+              workOrderConfigs={woConfigs}
+            />
+          </Box>
+        </Box>
 
-          {/* Right Content Area */}
-          <Box
-            sx={{
-              flexGrow: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              height: '100%',
-            }}
-          >
-            {/* Header Row / Filters */}
-            <Box sx={{ px: 3, pt: 3.5, pb: 2 }}>
+        {/* Right Content Area */}
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+          {/* Header Row / Filters */}
+          <Box sx={{ px: 3, pt: 3.5, pb: 2 }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              justifyContent="space-between"
+              alignItems={{ xs: 'stretch', md: 'center' }}
+              spacing={2}
+              sx={{ width: '100%' }}
+            >
+              {/* Tabs, Hamburger Toggle & Newtasks Button */}
               <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                justifyContent="space-between"
-                alignItems={{ xs: 'stretch', md: 'center' }}
+                direction="row"
                 spacing={2}
-                sx={{ width: '100%' }}
+                alignItems="center"
+                sx={{ width: { xs: '100%', md: 'auto' } }}
               >
-                {/* Tabs, Hamburger Toggle & Newtasks Button */}
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ width: { xs: '100%', md: 'auto' } }}
+                {/* Menu icon button for mobile drawer */}
+                <IconButton
+                  onClick={() => setMobileDrawerOpen(true)}
+                  sx={{
+                    display: { xs: 'flex', md: 'none' },
+                    bgcolor: '#f1f3f6',
+                    color: '#1c1e2b',
+                    borderRadius: 2,
+                    p: 1.2,
+                  }}
                 >
-                  {/* Menu icon button for mobile drawer */}
-                  <IconButton
-                    onClick={() => setMobileDrawerOpen(true)}
-                    sx={{
-                      display: { xs: 'flex', md: 'none' },
-                      bgcolor: '#f1f3f6',
-                      color: '#1c1e2b',
-                      borderRadius: 2,
-                      p: 1.2,
-                    }}
-                  >
-                    <MenuIcon />
-                  </IconButton>
+                  <AccountTreeIcon />
+                </IconButton>
 
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                      bgcolor: '#f1f3f6',
-                      p: 0.5,
-                      borderRadius: '999px',
-                      overflowX: 'auto',
-                      whiteSpace: 'nowrap',
-                      scrollbarWidth: 'none',
-                      '&::-webkit-scrollbar': {
-                        display: 'none',
-                      },
-                      width: { xs: '100%', sm: 'auto' },
-                    }}
-                  >
-                    {['All Tasks', 'This Month', 'This Week', 'Today'].map((tab) => (
-                      <Button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        sx={{
-                          px: 3,
-                          py: 1,
-                          borderRadius: '999px',
-                          textTransform: 'none',
-                          fontWeight: 700,
-                          color: activeTab === tab ? '#ffffff' : '#6b7280',
-                          bgcolor: activeTab === tab ? '#FF7F32' : 'transparent',
-                          boxShadow:
-                            activeTab === tab ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
-                          '&:hover': {
-                            bgcolor: activeTab === tab ? '#e66a25' : 'rgba(0,0,0,0.04)',
-                          },
-                          flexShrink: 0,
-                        }}
-                      >
-                        {tab}
-                      </Button>
-                    ))}
-                  </Stack>
-
-                  {/* Reset Filters button next to the tabs */}
-                  {(activeTab !== 'All Tasks' || selectedNode !== null) && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<FilterAltOffIcon sx={{ fontSize: 16 }} />}
-                      onClick={handleResetFilters}
+                {/* Filter toggle dropdown */}
+                <Button
+                  onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
+                  startIcon={<CalendarTodayIcon sx={{ fontSize: 15 }} />}
+                  endIcon={
+                    <KeyboardArrowDownIcon
                       sx={{
-                        borderRadius: '999px',
-                        color: '#ef4444',
-                        borderColor: '#fecaca',
-                        bgcolor: '#fef2f2',
-                        textTransform: 'none',
-                        fontWeight: 700,
-                        px: 2.5,
-                        py: 1,
-                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)',
-                        '&:hover': {
-                          borderColor: '#ef4444',
-                          bgcolor: '#fee2e2',
-                        },
-                        flexShrink: 0,
+                        fontSize: 18,
+                        transition: 'transform 0.2s',
+                        transform: Boolean(filterMenuAnchor) ? 'rotate(180deg)' : 'rotate(0deg)',
                       }}
-                    >
-                      ล้างตัวกรอง
-                    </Button>
-                  )}
-
-                  {canEditWorkspace && (
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => setIsModalOpen(true)}
+                    />
+                  }
+                  sx={{
+                    px: 2,
+                    py: 0.9,
+                    borderRadius: '999px',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    color: activeTab === 'All Tasks' ? '#374151' : '#ffffff',
+                    bgcolor: activeTab === 'All Tasks' ? '#f1f3f6' : '#FF7F32',
+                    boxShadow: activeTab !== 'All Tasks' ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
+                    border: '1px solid',
+                    borderColor: activeTab === 'All Tasks' ? '#e5e7eb' : '#FF7F32',
+                    '&:hover': {
+                      bgcolor: activeTab === 'All Tasks' ? '#e5e7eb' : '#e66a25',
+                    },
+                    flexShrink: 0,
+                    minWidth: 140,
+                  }}
+                >
+                  {activeTab}
+                </Button>
+                <Menu
+                  anchorEl={filterMenuAnchor}
+                  open={Boolean(filterMenuAnchor)}
+                  onClose={() => setFilterMenuAnchor(null)}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  PaperProps={{
+                    sx: {
+                      borderRadius: '14px',
+                      mt: 0.75,
+                      minWidth: 160,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
+                      border: '1px solid #f0f1f5',
+                      overflow: 'hidden',
+                    },
+                  }}
+                >
+                  {[
+                    { label: 'All Tasks', icon: '📋' },
+                    { label: 'This Month', icon: '📅' },
+                    { label: 'This Week', icon: '📆' },
+                    { label: 'Today', icon: '🗓️' },
+                  ].map(({ label, icon }) => (
+                    <MenuItem
+                      key={label}
+                      selected={activeTab === label}
+                      onClick={() => { setActiveTab(label); setFilterMenuAnchor(null); }}
                       sx={{
-                        bgcolor: '#1c1e2b',
-                        color: '#fff',
-                        borderRadius: '999px',
-                        px: 3,
+                        px: 2,
                         py: 1.2,
-                        textTransform: 'none',
-                        fontWeight: 700,
-                        boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
-                        '&:hover': {
-                          bgcolor: '#000000',
-                        },
-                        display: { xs: 'none', sm: 'flex' },
+                        fontWeight: activeTab === label ? 700 : 500,
+                        fontSize: '0.875rem',
+                        color: activeTab === label ? '#FF7F32' : '#374151',
+                        '&.Mui-selected': { bgcolor: '#fff5ee' },
+                        '&.Mui-selected:hover': { bgcolor: '#ffe8d6' },
+                        '&:hover': { bgcolor: '#fafafa' },
+                        gap: 1.2,
                       }}
                     >
-                      Newtasks
-                    </Button>
-                  )}
-                </Stack>
+                      <ListItemIcon sx={{ minWidth: 'unset', fontSize: '1rem' }}>{icon}</ListItemIcon>
+                      <ListItemText primary={label} primaryTypographyProps={{ fontWeight: activeTab === label ? 700 : 500, fontSize: '0.875rem', color: activeTab === label ? '#FF7F32' : '#374151' }} />
+                    </MenuItem>
+                  ))}
+                </Menu>
 
-                {/* Mobile Newtasks fallback */}
+                {/* Reset Filters button next to the tabs */}
+                {(activeTab !== 'All Tasks' || selectedNode !== null) && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<FilterAltOffIcon sx={{ fontSize: 16 }} />}
+                    onClick={handleResetFilters}
+                    sx={{
+                      borderRadius: '999px',
+                      color: '#ef4444',
+                      borderColor: '#fecaca',
+                      bgcolor: '#fef2f2',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      px: 2.5,
+                      py: 1,
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)',
+                      '&:hover': {
+                        borderColor: '#ef4444',
+                        bgcolor: '#fee2e2',
+                      },
+                      flexShrink: 0,
+                    }}
+                  >
+                    ล้างตัวกรอง
+                  </Button>
+                )}
+
                 {canEditWorkspace && (
                   <Button
                     variant="contained"
@@ -1249,816 +1362,916 @@ export default function WorkspacePage() {
                       '&:hover': {
                         bgcolor: '#000000',
                       },
-                      display: { xs: 'flex', sm: 'none' },
-                      width: '100%',
+                      display: { xs: 'none', sm: 'flex' },
                     }}
                   >
                     Newtasks
                   </Button>
                 )}
 
-                {/* Actions */}
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ width: { xs: '100%', md: 'auto' } }}
-                >
+                {canEditWorkspace && (
                   <Button
                     variant="contained"
-                    endIcon={<ArrowForwardIcon />}
-                    onClick={() => router.push('/workspace/requests')}
+                    startIcon={<CloudUploadIcon />}
+                    onClick={() => setIsWbsModalOpen(true)}
                     sx={{
-                      bgcolor: '#1c1e2b',
+                      bgcolor: '#22c55e',
                       color: '#fff',
-                      borderRadius: '999px',
-                      px: 3.5,
+                      borderRadius: '50px',
+                      px: 3,
                       py: 1.2,
                       textTransform: 'none',
                       fontWeight: 700,
-                      boxShadow: '0 4px 14px rgba(28, 30, 43, 0.25)',
+                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
                       '&:hover': {
-                        bgcolor: '#000000',
-                        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.3)',
+                        bgcolor: '#16a34a',
                       },
-                      width: '100%',
+                      display: { xs: 'none', sm: 'flex' },
                     }}
                   >
-                    กำลังพล & แผนงาน
+                    Upload
                   </Button>
-                </Stack>
+                )}
               </Stack>
+
+              {/* Mobile — collapsible action panel */}
+              <Box sx={{ display: { xs: 'block', sm: 'none' }, width: '100%' }}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  endIcon={
+                    <ExpandMoreIcon
+                      sx={{
+                        transform: showMobileActions ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s',
+                      }}
+                    />
+                  }
+                  onClick={() => setShowMobileActions((prev) => !prev)}
+                  sx={{
+                    borderRadius: '999px',
+                    borderColor: '#1c1e2b',
+                    color: '#1c1e2b',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    py: 1,
+                    '&:hover': { borderColor: '#000', bgcolor: 'rgba(28,30,43,0.05)' },
+                  }}
+                >
+                  Actions
+                </Button>
+                <Collapse in={showMobileActions}>
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    {canEditWorkspace && (
+                      <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => setIsModalOpen(true)}
+                        sx={{
+                          bgcolor: '#1c1e2b',
+                          color: '#fff',
+                          borderRadius: '999px',
+                          px: 3,
+                          py: 1.2,
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          boxShadow: '0 4px 14px rgba(28, 30, 43, 0.4)',
+                          '&:hover': { bgcolor: '#000000' },
+                          width: '100%',
+                        }}
+                      >
+                        Newtasks
+                      </Button>
+                    )}
+                    {canEditWorkspace && (
+                      <Button
+                        variant="contained"
+                        startIcon={<CloudUploadIcon />}
+                        onClick={() => setIsWbsModalOpen(true)}
+                        sx={{
+                          bgcolor: '#22c55e',
+                          color: '#fff',
+                          borderRadius: '50px',
+                          px: 3,
+                          py: 1.2,
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+                          '&:hover': { bgcolor: '#16a34a' },
+                          width: '100%',
+                        }}
+                      >
+                        Upload
+                      </Button>
+                    )}
+                    <Button
+                      variant="contained"
+                      endIcon={<ArrowForwardIcon />}
+                      onClick={() => router.push('/workspace/requests')}
+                      sx={{
+                        bgcolor: '#1c1e2b',
+                        color: '#fff',
+                        borderRadius: '999px',
+                        px: 3.5,
+                        py: 1.2,
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(28, 30, 43, 0.25)',
+                        '&:hover': { bgcolor: '#000000', boxShadow: '0 6px 20px rgba(0, 0, 0, 0.3)' },
+                        width: '100%',
+                      }}
+                    >
+                      กำลังพล & แผนงาน
+                    </Button>
+                  </Stack>
+                </Collapse>
+              </Box>
+
+              {/* Desktop — กำลังพล & แผนงาน always visible */}
+              <Stack
+                direction="row"
+                spacing={2}
+                alignItems="center"
+                sx={{ display: { xs: 'none', sm: 'flex' }, width: { sm: '100%', md: 'auto' } }}
+              >
+                <Button
+                  variant="contained"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={() => router.push('/workspace/requests')}
+                  sx={{
+                    bgcolor: '#1c1e2b',
+                    color: '#fff',
+                    borderRadius: '999px',
+                    px: 3.5,
+                    py: 1.2,
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    boxShadow: '0 4px 14px rgba(28, 30, 43, 0.25)',
+                    '&:hover': {
+                      bgcolor: '#000000',
+                      boxShadow: '0 6px 20px rgba(0, 0, 0, 0.3)',
+                    },
+                    width: '100%',
+                  }}
+                >
+                  กำลังพล & แผนงาน
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
+
+          {/* Mobile Kanban — Status Toggle + Single Column */}
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', flexGrow: 1, overflow: 'hidden', bgcolor: '#f8fafc' }}>
+            {/* Status Toggle — 2×2 grid, always fully visible */}
+            <Box sx={{ px: 2, pt: 1.5, pb: 0, flexShrink: 0 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1,
+                }}
+              >
+                {COLUMNS.map((column) => {
+                  const count = filteredSubtasks.filter((t) => {
+                    let effectiveStatus = t.status;
+                    const progress = t.dailyProgress || 0;
+                    if (progress >= 100 && effectiveStatus !== 'completed') effectiveStatus = 'for-checking';
+                    else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
+                    else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
+                    else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
+                    if (effectiveStatus !== column.id) return false;
+                    // Exclude hidden completed cards from tab count
+                    if (column.id === 'completed' && hiddenCompletedIds.includes(t.id)) return false;
+                    return true;
+                  }).length;
+                  const isActive = mobileActiveColumn === column.id;
+                  return (
+                    <Box
+                      key={column.id}
+                      onClick={() => setMobileActiveColumn(column.id)}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 0.75,
+                        px: 1.5,
+                        py: 1.1,
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        bgcolor: isActive ? column.color : '#ffffff',
+                        border: `2px solid ${isActive ? column.color : '#e2e8f0'}`,
+                        boxShadow: isActive ? `0 4px 12px ${column.color}44` : 'none',
+                        transition: 'all 0.18s',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: isActive ? '#fff' : column.color, flexShrink: 0 }} />
+                        <Typography
+                          variant="caption"
+                          sx={{ fontWeight: 700, color: isActive ? '#fff' : '#475569', fontSize: '0.72rem', lineHeight: 1.3 }}
+                        >
+                          {column.label}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          minWidth: 22,
+                          height: 22,
+                          borderRadius: '999px',
+                          bgcolor: isActive ? 'rgba(255,255,255,0.28)' : '#e2e8f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          px: 0.5,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: isActive ? '#fff' : '#475569', fontSize: '0.7rem', lineHeight: 1 }}>
+                          {count}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
             </Box>
 
-            {/* Kanban Board columns */}
+            {/* Active Column Cards */}
             <Box
-              sx={{
-                flexGrow: 1,
-                px: 3,
-                pb: 3,
-                overflowX: 'auto',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 2.5,
-                bgcolor: '#f8fafc',
-                height: '100%',
-                msOverflowStyle: 'none',
-                scrollbarWidth: 'none',
-                '&::-webkit-scrollbar': {
-                  display: 'none',
-                },
+              sx={{ flexGrow: 1, overflowY: 'auto', px: 2, pb: 3, pt: 1, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
+              onTouchStart={(e) => { swipeTouchStartX.current = e.touches[0].clientX; }}
+              onTouchEnd={(e) => {
+                if (swipeTouchStartX.current === null) return;
+                const dx = e.changedTouches[0].clientX - swipeTouchStartX.current;
+                swipeTouchStartX.current = null;
+                if (Math.abs(dx) < 50) return;
+                const colIds = COLUMNS.map((c) => c.id);
+                const idx = colIds.findIndex((id) => id === mobileActiveColumn);
+                if (dx < 0 && idx < colIds.length - 1) setMobileActiveColumn(colIds[idx + 1]);
+                if (dx > 0 && idx > 0) setMobileActiveColumn(colIds[idx - 1]);
               }}
             >
-              {COLUMNS.map((column) => {
-                const columnTasks = filteredSubtasks
+              {COLUMNS.filter((col) => col.id === mobileActiveColumn).map((column) => {
+                const allMobileColTasks = filteredSubtasks
                   .filter((t) => {
                     let effectiveStatus = t.status;
                     const progress = t.dailyProgress || 0;
-
-                    // Force UI column alignment if backend status is out of sync with progress
-                    if (progress >= 100 && effectiveStatus !== 'completed') {
-                      effectiveStatus = 'for-checking';
-                    } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
-                      effectiveStatus = 'in-progress';
-                    } else if (effectiveStatus === 'rework' && progress === 0) {
-                      // Rejected subtask with 0 progress → show in Upcoming
-                      effectiveStatus = 'upcoming';
-                    } else if (effectiveStatus === 'rework' && progress > 0) {
-                      // Rejected subtask with some progress → show in In Progress
-                      effectiveStatus = 'in-progress';
-                    }
-
+                    if (progress >= 100 && effectiveStatus !== 'completed') effectiveStatus = 'for-checking';
+                    else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
+                    else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
+                    else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
                     if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
                     return effectiveStatus === column.id;
                   })
                   .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-                return (
-                  <Box
-                    key={column.id}
-                    sx={{
-                      flex: '1 1 0px',
-                      minWidth: 260,
-                      maxWidth: 310,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      bgcolor: '#f1f5f9',
-                      borderRadius: '8px',
-                      p: 1.5,
-                      mt: 2,
-                      maxHeight: 'calc(100vh - 200px)',
-                      overflowY: 'auto',
-                      msOverflowStyle: 'none',
-                      scrollbarWidth: 'none',
-                      '&::-webkit-scrollbar': {
-                        display: 'none',
-                      },
-                    }}
-                  >
-                    {/* Column Header */}
-                    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
-                      <Box
-                        sx={{
-                          width: 4,
-                          height: 18,
-                          bgcolor: column.color,
-                          borderRadius: 2,
-                        }}
-                      />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
-                        {column.label}
-                      </Typography>
-                      <Chip
-                        label={columnTasks.length}
-                        size="small"
-                        sx={{
-                          bgcolor: '#e2e8f0',
-                          color: '#475569',
-                          fontWeight: 700,
-                          height: 24,
-                          '& .MuiChip-label': { px: 1.2 },
-                        }}
-                      />
-                    </Stack>
+                const isMobileCompletedCol = column.id === 'completed';
+                const columnTasks = isMobileCompletedCol
+                  ? allMobileColTasks.filter(t => !hiddenCompletedIds.includes(t.id))
+                  : allMobileColTasks;
+                const mobileHiddenTasks = isMobileCompletedCol
+                  ? allMobileColTasks.filter(t => hiddenCompletedIds.includes(t.id))
+                  : [];
 
-                    {/* Column Content */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 100 }}>
-                      {loading ? (
-                        Array.from(new Array(2)).map((_, idx) => (
-                          <Skeleton
-                            key={idx}
-                            variant="rounded"
-                            height={160}
-                            sx={{ mb: 2, borderRadius: '8px' }}
+                return (
+                  <Box key={column.id}>
+                    {/* Mobile: "ดูที่ซ่อน" chip for completed column */}
+                    {isMobileCompletedCol && mobileHiddenTasks.length > 0 && (
+                      <Chip
+                        icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
+                        label={`ซ่อนไว้ ${mobileHiddenTasks.length} รายการ — กดดู`}
+                        size="small"
+                        onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
+                        sx={{
+                          mb: 1.5,
+                          bgcolor: '#f1f5f9',
+                          border: '1px dashed #94a3b8',
+                          color: '#64748b',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: '#e2e8f0' },
+                        }}
+                      />
+                    )}
+                    {loading ? (
+                      Array.from(new Array(3)).map((_, idx) => (
+                        <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '12px' }} />
+                      ))
+                    ) : columnTasks.length > 0 ? (
+                      columnTasks.map((task) => {
+                        const hasUnread = user && notifications.some(
+                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
+                        );
+                        return (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onEdit={canEditWorkspace ? handleEdit : undefined}
+                            onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                            onViewHistory={handleViewHistoryClick}
+                            onClick={handleSubtaskCardClick}
+                            onHide={isMobileCompletedCol ? handleHideCard : undefined}
+                            hasUnread={!!hasUnread}
                           />
-                        ))
-                      ) : columnTasks.length > 0 ? (
-                        columnTasks.map((task) => {
-                          const hasUnread =
-                            user &&
-                            notifications.some(
-                              (n) =>
-                                isNotificationForSubtask(n.subtaskId, task.id) &&
-                                !(n.readBy ?? []).includes(user.id)
-                            );
-                          return (
-                            <TaskCard
-                              key={task.id}
-                              task={task}
-                              onEdit={canEditWorkspace ? handleEdit : undefined}
-                              onDelete={canEditWorkspace ? handleDeleteClick : undefined}
-                              onViewHistory={handleViewHistoryClick}
-                              onClick={handleSubtaskCardClick}
-                              hasUnread={!!hasUnread}
-                            />
-                          );
-                        })
-                      ) : (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            py: 5,
-                            opacity: 0.45,
-                          }}
-                        >
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            No Tasks
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
+                        );
+                      })
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8, opacity: 0.4 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>ไม่มีงานในสถานะนี้</Typography>
+                      </Box>
+                    )}
                   </Box>
                 );
               })}
             </Box>
           </Box>
-        </Box>
 
-        {/* Mobile Drawer Overlay for the Structure Tree */}
-        <Drawer
-          anchor="left"
-          open={mobileDrawerOpen}
-          onClose={() => setMobileDrawerOpen(false)}
-          PaperProps={{ sx: { width: 280 } }}
-        >
-          <Box sx={{ height: '100%' }}>
-            <WorkspaceTree
-              tasks={tasks}
-              selectedNode={selectedNode}
-              onSelectNode={(node) => {
-                setSelectedNode(node);
-                setMobileDrawerOpen(false);
-              }}
-              onSubtaskClick={(t, st) => {
-                handleSubtaskClickInTree(t, st);
-                setMobileDrawerOpen(false);
-              }}
-              onQuickCreateSubtask={
-                canEditWorkspace
-                  ? (taskId) => {
-                      handleQuickCreateSubtaskClick(taskId);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              onQuickAssignSubtask={
-                canEditWorkspace
-                  ? (t, st) => {
-                      handleQuickAssignSubtaskClick(t, st);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              onEditWorkOrder={
-                canEditWorkspace && user?.roleCode !== 'LD'
-                  ? (wId, wName) => {
-                      handleEditWorkOrderOpen(wId, wName);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              onDeleteWorkOrder={
-                canEditWorkspace && user?.roleCode !== 'LD'
-                  ? (wId, wName) => {
-                      handleDeleteWorkOrderOpen(wId, wName);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              onEditCategory={
-                canEditWorkspace
-                  ? (cId, cName) => {
-                      handleEditCategoryOpen(cId, cName);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              onDeleteCategory={
-                canEditWorkspace
-                  ? (cId, cName) => {
-                      handleDeleteCategoryOpen(cId, cName);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              onEditTask={
-                canEditWorkspace
-                  ? (tId, tName) => {
-                      handleEditTaskOpen(tId, tName);
-                      setMobileDrawerOpen(false);
-                    }
-                  : undefined
-              }
-              activeTab={activeTab}
-            />
-          </Box>
-        </Drawer>
+          {/* Desktop Kanban Board columns */}
+          <Box
+            sx={{
+              flexGrow: 1,
+              px: 3,
+              pb: 3,
+              overflowX: 'auto',
+              display: { xs: 'none', md: 'flex' },
+              alignItems: 'flex-start',
+              gap: 2.5,
+              bgcolor: '#f8fafc',
+              height: '100%',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': {
+                display: 'none',
+              },
+            }}
+          >
+            {COLUMNS.map((column) => {
+              const allColumnTasks = filteredSubtasks
+                .filter((t) => {
+                  let effectiveStatus = t.status;
+                  const progress = t.dailyProgress || 0;
 
-        {/* Quick Create Subtask Dialog */}
-        <Dialog
-          open={isQuickCreateOpen}
-          onClose={() => {
-            setIsQuickCreateOpen(false);
-            setQuickAssignSubtask(null);
-            setIsQuickAssignMode(false);
-          }}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{
-            sx: { borderRadius: 4, p: 1 },
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>
-            {isQuickAssignMode
-              ? 'มอบหมายงานย่อย (Assign Subtask)'
-              : 'สร้างงานย่อยด่วน (Quick Subtask)'}
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
-              {quickCreateError && (
-                <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
-                  {quickCreateError}
-                </Typography>
-              )}
+                  if (progress >= 100 && effectiveStatus !== 'completed') {
+                    effectiveStatus = 'for-checking';
+                  } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
+                    effectiveStatus = 'in-progress';
+                  } else if (effectiveStatus === 'rework' && progress === 0) {
+                    effectiveStatus = 'upcoming';
+                  } else if (effectiveStatus === 'rework' && progress > 0) {
+                    effectiveStatus = 'in-progress';
+                  }
 
-              <TextField
-                label="ชื่องานย่อย *"
-                variant="filled"
-                fullWidth
-                value={quickSubtaskName}
-                onChange={(e) => setQuickSubtaskName(e.target.value)}
-                disabled={isQuickAssignMode}
-                InputProps={{ disableUnderline: true }}
-                sx={{
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
+                  if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
+                  return effectiveStatus === column.id;
+                })
+                .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+              // For completed column: separate visible vs hidden
+              const isCompletedCol = column.id === 'completed';
+              const columnTasks = isCompletedCol
+                ? allColumnTasks.filter(t => !hiddenCompletedIds.includes(t.id))
+                : allColumnTasks;
+              const hiddenTasks = isCompletedCol
+                ? allColumnTasks.filter(t => hiddenCompletedIds.includes(t.id))
+                : [];
+
+              return (
+                <Box
+                  key={column.id}
+                  sx={{
+                    flex: '1 1 0px',
+                    minWidth: 260,
+                    maxWidth: 310,
+                    display: 'flex',
+                    flexDirection: 'column',
                     bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-
-              <DatePicker
-                label="วันที่ครบกำหนด *"
-                value={quickDueDate}
-                onChange={(date) => setQuickDueDate(date)}
-                disabled={isQuickAssignMode}
-                variant="filled"
-                InputProps={{
-                  disableUnderline: true,
-                  sx: {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none !important' },
-                  },
-                }}
-                sx={{
-                  width: '100%',
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-
-              {fetchingFms ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : (
-                <Autocomplete
-                  multiple
-                  options={filteredFms}
-                  getOptionLabel={(option) => option.name}
-                  isOptionEqualToValue={(option, value) => option.id === value.employeeId}
-                  value={quickAssignees.map(
-                    (a) =>
-                      filteredFms.find((f) => f.id === a.employeeId) || {
-                        id: a.employeeId,
-                        name: a.name,
-                        roleId: 'FM',
-                      }
-                  )}
-                  onChange={(_, newValue) => {
-                    setQuickAssignees(
-                      newValue.map((v) => ({
-                        employeeId: v.id,
-                        name: v.name,
-                        roleId: v.roleId || 'FM',
-                      }))
-                    );
+                    borderRadius: '8px',
+                    mt: 2,
+                    maxHeight: 'calc(100vh - 200px)',
+                    overflow: 'hidden',
                   }}
-                  renderOption={(props, option) => {
-                    const { key, ...otherProps } = props as any;
-                    return (
-                      <li key={key || option.id} {...otherProps}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
-                          <Avatar
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              bgcolor: 'primary.main',
-                              fontSize: '0.75rem',
-                            }}
-                          >
-                            {option.name.substring(0, 2).toUpperCase()}
-                          </Avatar>
-                          <Typography variant="body2">{option.name}</Typography>
-                        </Box>
-                      </li>
-                    );
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="ผู้รับผิดชอบ"
-                      variant="filled"
-                      InputProps={{ ...params.InputProps, disableUnderline: true }}
-                      sx={{
-                        '& .MuiFilledInput-root': {
-                          borderRadius: 2,
-                          bgcolor: '#f1f5f9',
-                          '&::before, &::after': { display: 'none' },
-                        },
-                      }}
+                >
+                  {/* Column Header */}
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1.5, pt: 1.5, pb: 1, flexShrink: 0, bgcolor: '#f1f5f9' }}>
+                    <Box sx={{ width: 4, height: 18, bgcolor: column.color, borderRadius: 2 }} />
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
+                      {column.label}
+                    </Typography>
+                    <Chip
+                      label={columnTasks.length}
+                      size="small"
+                      sx={{ bgcolor: '#e2e8f0', color: '#475569', fontWeight: 700, height: 24, '& .MuiChip-label': { px: 1.2 } }}
                     />
-                  )}
-                />
-              )}
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              onClick={() => {
-                setIsQuickCreateOpen(false);
-                setQuickAssignSubtask(null);
-                setIsQuickAssignMode(false);
-              }}
-              sx={{ color: 'text.secondary', fontWeight: 700 }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleQuickCreateSubmit}
-              variant="contained"
-              sx={{
-                bgcolor: '#1c1e2b',
-                color: '#fff',
-                fontWeight: 700,
-                px: 3,
-                borderRadius: 2.5,
-                '&:hover': { bgcolor: '#000000' },
-              }}
-            >
-              {isQuickAssignMode ? 'บันทึก' : 'สร้างงานย่อย'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+                    {isCompletedCol && hiddenTasks.length > 0 && (
+                      <Chip
+                        icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
+                        label={`ซ่อน ${hiddenTasks.length}`}
+                        size="small"
+                        onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
+                        sx={{
+                          ml: 'auto !important',
+                          bgcolor: '#f1f5f9',
+                          border: '1px dashed #94a3b8',
+                          color: '#64748b',
+                          fontWeight: 700,
+                          height: 24,
+                          cursor: 'pointer',
+                          '& .MuiChip-label': { px: 1 },
+                          '&:hover': { bgcolor: '#e2e8f0' },
+                        }}
+                      />
+                    )}
+                  </Stack>
 
-        {/* Subtask History Dialog */}
-        <Dialog
-          open={isHistoryOpen}
-          onClose={() => setIsHistoryOpen(false)}
-          maxWidth="md"
-          fullWidth
-          PaperProps={{
-            sx: { borderRadius: '20px', bgcolor: '#1c1e2b', color: '#fff', p: 2 },
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff' }}>
-                ประวัติการบันทึก/แก้ไข
+                  {/* Column Content */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 100, flexGrow: 1, overflowY: 'auto', px: 1.5, pb: 1.5, msOverflowStyle: 'none', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
+                    {loading ? (
+                      Array.from(new Array(2)).map((_, idx) => (
+                        <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '8px' }} />
+                      ))
+                    ) : columnTasks.length > 0 ? (
+                      columnTasks.map((task) => {
+                        const hasUnread = user && notifications.some(
+                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
+                        );
+                        return (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onEdit={canEditWorkspace ? handleEdit : undefined}
+                            onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                            onViewHistory={handleViewHistoryClick}
+                            onClick={handleSubtaskCardClick}
+                            onHide={isCompletedCol ? handleHideCard : undefined}
+                            hasUnread={!!hasUnread}
+                          />
+                        );
+                      })
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 5, opacity: 0.45 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          No Tasks
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Mobile Drawer Overlay for the Structure Tree */}
+      <Drawer
+        anchor="left"
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        PaperProps={{ sx: { width: 280 } }}
+      >
+        <Box sx={{ height: '100%' }}>
+          <WorkspaceTree
+            tasks={tasks}
+            selectedNode={selectedNode}
+            onSelectNode={(node) => {
+              setSelectedNode(node);
+              setMobileDrawerOpen(false);
+            }}
+            onSubtaskClick={(t, st) => {
+              handleSubtaskClickInTree(t, st);
+              setMobileDrawerOpen(false);
+            }}
+            onQuickCreateSubtask={canEditWorkspace ? (taskId) => {
+              handleQuickCreateSubtaskClick(taskId);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onQuickAssignSubtask={canEditWorkspace ? (t, st) => {
+              handleQuickAssignSubtaskClick(t, st);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onEditWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? (wId, wName) => {
+              handleEditWorkOrderOpen(wId, wName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onDeleteWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? (wId, wName) => {
+              handleDeleteWorkOrderOpen(wId, wName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onEditCategory={canEditWorkspace ? (cId, cName) => {
+              handleEditCategoryOpen(cId, cName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onDeleteCategory={canEditWorkspace ? (cId, cName) => {
+              handleDeleteCategoryOpen(cId, cName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            onEditTask={canEditWorkspace ? (tId, tName) => {
+              handleEditTaskOpen(tId, tName);
+              setMobileDrawerOpen(false);
+            } : undefined}
+            activeTab={activeTab}
+            workOrderConfigs={woConfigs}
+          />
+        </Box>
+      </Drawer>
+
+      {/* Quick Create Subtask Dialog */}
+      <Dialog
+        open={isQuickCreateOpen}
+        onClose={() => {
+          setIsQuickCreateOpen(false);
+          setQuickAssignSubtask(null);
+          setIsQuickAssignMode(false);
+        }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 4, p: 1 },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          {isQuickAssignMode ? 'มอบหมายงานย่อย (Assign Subtask)' : 'สร้างงานย่อยด่วน (Quick Subtask)'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {quickCreateError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {quickCreateError}
               </Typography>
-              <IconButton
-                onClick={() => setIsHistoryOpen(false)}
-                sx={{ color: 'rgba(255,255,255,0.6)' }}
-              >
-                ✕
-              </IconButton>
-            </Stack>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
-              {historySubtaskCard?.subtaskName}
-            </Typography>
-          </DialogTitle>
-          <Divider sx={{ my: 1.5, bgcolor: 'rgba(255,255,255,0.1)' }} />
-          <DialogContent sx={{ pt: 1, maxHeight: '60vh', overflowY: 'auto' }}>
-            <ToggleButtonGroup
-              value={activeHistoryTab}
-              exclusive
-              onChange={(_, val) => val && setActiveHistoryTab(val)}
+            )}
+
+            <TextField
+              label="ชื่องานย่อย *"
+              variant="filled"
+              fullWidth
+              value={quickSubtaskName}
+              onChange={(e) => setQuickSubtaskName(e.target.value)}
+              disabled={isQuickAssignMode}
+              InputProps={{ disableUnderline: true }}
               sx={{
-                width: '100%',
-                mb: 3,
-                bgcolor: 'rgba(255,255,255,0.05)',
-                borderRadius: '12px',
-                p: 0.5,
-                '& .MuiToggleButton-root': {
-                  flex: 1,
-                  border: 'none',
-                  color: 'rgba(255,255,255,0.6)',
-                  borderRadius: '8px',
-                  py: 1,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  '&.Mui-selected': {
-                    bgcolor: '#3b82f6',
-                    color: '#fff',
-                    '&:hover': {
-                      bgcolor: '#2563eb',
-                    },
-                  },
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
                 },
               }}
-            >
-              <ToggleButton value="report">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <HistoryIcon sx={{ fontSize: 18 }} />
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    ประวัติรายงานความคืบหน้า
-                  </Typography>
-                </Stack>
-              </ToggleButton>
-              <ToggleButton value="settings">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <VisibilityIcon sx={{ fontSize: 18 }} />
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    ประวัติการแก้ไขตั้งค่า
-                  </Typography>
-                </Stack>
-              </ToggleButton>
-            </ToggleButtonGroup>
+            />
 
-            {historyLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress sx={{ color: '#3b82f6' }} />
+            <DatePicker
+              label="วันที่ครบกำหนด *"
+              value={quickDueDate}
+              onChange={(date) => setQuickDueDate(date)}
+              disabled={isQuickAssignMode}
+              variant="filled"
+              InputProps={{
+                disableUnderline: true,
+                sx: {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none !important' },
+                }
+              }}
+              sx={{
+                width: '100%',
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            {fetchingFms ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
               </Box>
-            ) : activeHistoryTab === 'report' ? (
-              // Tab 1: Daily Reports History
-              !subtaskReports || subtaskReports.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 8, color: 'rgba(255,255,255,0.4)' }}>
-                  <HistoryIcon
-                    sx={{ fontSize: 48, mb: 1, opacity: 0.5, display: 'block', margin: '0 auto' }}
+            ) : (
+              <Autocomplete
+                multiple
+                options={filteredFms}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.employeeId}
+                value={quickAssignees.map(
+                  (a) => filteredFms.find((f) => f.id === a.employeeId) || { id: a.employeeId, name: a.name, roleId: 'FM' }
+                )}
+                onChange={(_, newValue) => {
+                  setQuickAssignees(
+                    newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                  );
+                }}
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props as any;
+                  return (
+                    <li key={key || option.id} {...otherProps}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
+                          {option.name.substring(0, 2).toUpperCase()}
+                        </Avatar>
+                        <Typography variant="body2">{option.name}</Typography>
+                      </Box>
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="ผู้รับผิดชอบ"
+                    variant="filled"
+                    InputProps={{ ...params.InputProps, disableUnderline: true }}
+                    sx={{
+                      '& .MuiFilledInput-root': {
+                        borderRadius: 2,
+                        bgcolor: '#f1f5f9',
+                        '&::before, &::after': { display: 'none' },
+                      },
+                    }}
                   />
-                  <Typography variant="body2">ไม่มีประวัติรายงานความคืบหน้า</Typography>
-                </Box>
-              ) : (
-                <Stack spacing={0.5}>
-                  {subtaskReports
-                    .slice()
-                    .sort((a: any, b: any) => {
-                      const dateA = parseSafeDate(a.reportDate)?.getTime() || 0;
-                      const dateB = parseSafeDate(b.reportDate)?.getTime() || 0;
-                      return dateB - dateA;
-                    })
-                    .map((report: any, index: number) => {
-                      const reportDate = parseSafeDate(report.reportDate);
-                      const dateStr =
-                        reportDate && isValid(reportDate)
-                          ? format(reportDate, 'dd/MM/yyyy')
-                          : 'ไม่ระบุวันที่';
-                      const reporterName = report.createdBy
-                        ? usersMap[report.createdBy] || report.createdBy
-                        : 'ไม่ระบุผู้รายงาน';
-                      const progressPercent = report.progress ?? 0;
-                      // เวลาบันทึก/อัปเดตรายงาน
-                      const recordedAt = parseSafeDate(report.updatedAt || report.createdAt);
-                      const recordedTimeStr =
-                        recordedAt && isValid(recordedAt)
-                          ? format(recordedAt, 'dd/MM/yyyy HH:mm')
-                          : null;
-                      const laborCount = Array.isArray(report.labor) ? report.labor.length : 0;
+                )}
+              />
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setIsQuickCreateOpen(false);
+              setQuickAssignSubtask(null);
+              setIsQuickAssignMode(false);
+            }}
+            sx={{ color: 'text.secondary', fontWeight: 700 }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleQuickCreateSubmit}
+            variant="contained"
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {isQuickAssignMode ? 'บันทึก' : 'สร้างงานย่อย'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-                      return (
-                        <Accordion
-                          key={report.id || index}
+      {/* Subtask History Dialog */}
+      <Dialog
+        open={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: '20px', bgcolor: '#1c1e2b', color: '#fff', p: 2 },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff' }}>
+              ประวัติการบันทึก/แก้ไข
+            </Typography>
+            <IconButton onClick={() => setIsHistoryOpen(false)} sx={{ color: 'rgba(255,255,255,0.6)' }}>
+              ✕
+            </IconButton>
+          </Stack>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
+            {historySubtaskCard?.subtaskName}
+          </Typography>
+        </DialogTitle>
+        <Divider sx={{ my: 1.5, bgcolor: 'rgba(255,255,255,0.1)' }} />
+        <DialogContent sx={{ pt: 1, maxHeight: '60vh', overflowY: 'auto' }}>
+          <ToggleButtonGroup
+            value={activeHistoryTab}
+            exclusive
+            onChange={(_, val) => val && setActiveHistoryTab(val)}
+            sx={{
+              width: '100%',
+              mb: 3,
+              bgcolor: 'rgba(255,255,255,0.05)',
+              borderRadius: '12px',
+              p: 0.5,
+              '& .MuiToggleButton-root': {
+                flex: 1,
+                border: 'none',
+                color: 'rgba(255,255,255,0.6)',
+                borderRadius: '8px',
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 700,
+                '&.Mui-selected': {
+                  bgcolor: '#3b82f6',
+                  color: '#fff',
+                  '&:hover': {
+                    bgcolor: '#2563eb',
+                  },
+                },
+              },
+            }}
+          >
+            <ToggleButton value="report">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <HistoryIcon sx={{ fontSize: 18 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>ประวัติรายงานความคืบหน้า</Typography>
+              </Stack>
+            </ToggleButton>
+            <ToggleButton value="settings">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <VisibilityIcon sx={{ fontSize: 18 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>ประวัติการแก้ไขตั้งค่า</Typography>
+              </Stack>
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          {historyLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress sx={{ color: '#3b82f6' }} />
+            </Box>
+          ) : activeHistoryTab === 'report' ? (
+            // Tab 1: Daily Reports History
+            (!subtaskReports || subtaskReports.length === 0) ? (
+              <Box sx={{ textAlign: 'center', py: 8, color: 'rgba(255,255,255,0.4)' }}>
+                <HistoryIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5, display: 'block', margin: '0 auto' }} />
+                <Typography variant="body2">ไม่มีประวัติรายงานความคืบหน้า</Typography>
+              </Box>
+            ) : (
+              <Stack spacing={0.5}>
+                {subtaskReports
+                  .slice()
+                  .sort((a: any, b: any) => {
+                    const dateA = parseSafeDate(a.reportDate)?.getTime() || 0;
+                    const dateB = parseSafeDate(b.reportDate)?.getTime() || 0;
+                    return dateB - dateA;
+                  })
+                  .map((report: any, index: number) => {
+                    const reportDate = parseSafeDate(report.reportDate);
+                    const dateStr = reportDate && isValid(reportDate) ? format(reportDate, 'dd/MM/yyyy') : 'ไม่ระบุวันที่';
+                    const reporterName = report.createdBy ? (usersMap[report.createdBy] || report.createdBy) : 'ไม่ระบุผู้รายงาน';
+                    const progressPercent = report.progress ?? 0;
+                    // เวลาบันทึก/อัปเดตรายงาน
+                    const recordedAt = parseSafeDate(report.updatedAt || report.createdAt);
+                    const recordedTimeStr = recordedAt && isValid(recordedAt) ? format(recordedAt, 'dd/MM/yyyy HH:mm') : null;
+                    const laborCount = Array.isArray(report.labor) ? report.labor.length : 0;
+
+                    return (
+                      <Accordion
+                        key={report.id || index}
+                        sx={{
+                          mb: 1.5,
+                          bgcolor: 'rgba(255, 255, 255, 0.03)',
+                          color: '#fff',
+                          borderRadius: '12px !important',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          boxShadow: 'none',
+                          '&::before': { display: 'none' },
+                          '&.Mui-expanded': {
+                            bgcolor: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                          },
+                        }}
+                      >
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreIcon sx={{ color: 'rgba(255,255,255,0.7)' }} />}
                           sx={{
-                            mb: 1.5,
-                            bgcolor: 'rgba(255, 255, 255, 0.03)',
-                            color: '#fff',
-                            borderRadius: '12px !important',
-                            border: '1px solid rgba(255, 255, 255, 0.05)',
-                            boxShadow: 'none',
-                            '&::before': { display: 'none' },
-                            '&.Mui-expanded': {
-                              bgcolor: 'rgba(255, 255, 255, 0.05)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                            px: 2.5,
+                            py: 1,
+                            '& .MuiAccordionSummary-content': {
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: 1,
                             },
                           }}
                         >
-                          <AccordionSummary
-                            expandIcon={<ExpandMoreIcon sx={{ color: 'rgba(255,255,255,0.7)' }} />}
-                            sx={{
-                              px: 2.5,
-                              py: 1,
-                              '& .MuiAccordionSummary-content': {
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                flexWrap: 'wrap',
-                                gap: 1,
-                              },
-                            }}
-                          >
-                            <Stack spacing={0.5}>
-                              <Typography
-                                variant="subtitle2"
-                                sx={{ fontWeight: 700, color: '#fff' }}
-                              >
-                                📅 {dateStr}
+                          <Stack spacing={0.5}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#fff' }}>
+                              📅 {dateStr}
+                            </Typography>
+                            <Stack direction="row" spacing={1.5} flexWrap="wrap" gap={0.5}>
+                              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <PeopleIcon sx={{ fontSize: 12 }} />
+                                ผู้รายงาน: <strong style={{ color: 'rgba(255,255,255,0.8)' }}>{reporterName}</strong>
                               </Typography>
-                              <Stack direction="row" spacing={1.5} flexWrap="wrap" gap={0.5}>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: 'rgba(255,255,255,0.5)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                  }}
-                                >
-                                  <PeopleIcon sx={{ fontSize: 12 }} />
-                                  ผู้รายงาน:{' '}
-                                  <strong style={{ color: 'rgba(255,255,255,0.8)' }}>
-                                    {reporterName}
-                                  </strong>
+                              {recordedTimeStr && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <ScheduleIcon sx={{ fontSize: 11 }} />
+                                  บันทึกเมื่อ: {recordedTimeStr} น.
                                 </Typography>
-                                {recordedTimeStr && (
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      color: 'rgba(255,255,255,0.4)',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    <ScheduleIcon sx={{ fontSize: 11 }} />
-                                    บันทึกเมื่อ: {recordedTimeStr} น.
-                                  </Typography>
-                                )}
-                                {laborCount > 0 && (
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      color: 'rgba(255,255,255,0.4)',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    👷 กำลังพล: {laborCount} คน
-                                  </Typography>
-                                )}
-                              </Stack>
+                              )}
+                              {laborCount > 0 && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  👷 กำลังพล: {laborCount} คน
+                                </Typography>
+                              )}
                             </Stack>
-                            <Chip
-                              label={`ความคืบหน้า: ${progressPercent}%`}
-                              size="small"
-                              sx={{
-                                bgcolor:
-                                  progressPercent === 100
-                                    ? 'rgba(16, 185, 129, 0.2)'
-                                    : 'rgba(59, 130, 246, 0.2)',
-                                color: progressPercent === 100 ? '#10b981' : '#3b82f6',
-                                fontWeight: 700,
-                                border: '1px solid currentColor',
-                              }}
-                            />
-                          </AccordionSummary>
-                          <AccordionDetails
+                          </Stack>
+                          <Chip
+                            label={`ความคืบหน้า: ${progressPercent}%`}
+                            size="small"
                             sx={{
-                              px: 2.5,
-                              pb: 2.5,
-                              pt: 1,
-                              borderTop: '1px solid rgba(255,255,255,0.05)',
+                              bgcolor: progressPercent === 100 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                              color: progressPercent === 100 ? '#10b981' : '#3b82f6',
+                              fontWeight: 700,
+                              border: '1px solid currentColor',
                             }}
-                          >
-                            <Stack spacing={2}>
-                              {report.notes && (
-                                <Box>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      color: 'rgba(255,255,255,0.5)',
-                                      fontWeight: 600,
-                                      display: 'block',
-                                      mb: 0.5,
-                                    }}
-                                  >
-                                    📝 รายละเอียดงาน / บันทึกเพิ่มเติม
-                                  </Typography>
-                                  <Typography
-                                    variant="body2"
-                                    sx={{
-                                      color: '#e2e8f0',
-                                      bgcolor: 'rgba(0,0,0,0.15)',
-                                      p: 1.5,
-                                      borderRadius: '8px',
-                                      whiteSpace: 'pre-wrap',
-                                    }}
-                                  >
-                                    {report.notes}
-                                  </Typography>
-                                </Box>
-                              )}
+                          />
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 1, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <Stack spacing={2}>
+                            {report.notes && (
+                              <Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                  📝 รายละเอียดงาน / บันทึกเพิ่มเติม
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#e2e8f0', bgcolor: 'rgba(0,0,0,0.15)', p: 1.5, borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
+                                  {report.notes}
+                                </Typography>
+                              </Box>
+                            )}
 
-                              {(report.otHours !== undefined ||
-                                report.otMorningHours !== undefined ||
-                                report.otEveningHours !== undefined) && (
-                                <Box
-                                  sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '8px' }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    sx={{
-                                      color: 'rgba(255,255,255,0.5)',
-                                      fontWeight: 600,
-                                      display: 'block',
-                                      mb: 0.5,
-                                    }}
-                                  >
-                                    ⏰ ชั่วโมงการทำงานล่วงเวลา (OT)
-                                  </Typography>
-                                  <Grid container spacing={2}>
-                                    <Grid item xs={4}>
-                                      <Typography
-                                        variant="caption"
-                                        sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}
-                                      >
-                                        OT เช้า
-                                      </Typography>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ fontWeight: 700, color: '#fff' }}
-                                      >
-                                        {report.otMorningHours || 0} ชม.
-                                      </Typography>
-                                    </Grid>
-                                    <Grid item xs={4}>
-                                      <Typography
-                                        variant="caption"
-                                        sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}
-                                      >
-                                        OT เย็น
-                                      </Typography>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ fontWeight: 700, color: '#fff' }}
-                                      >
-                                        {report.otEveningHours || 0} ชม.
-                                      </Typography>
-                                    </Grid>
-                                    <Grid item xs={4}>
-                                      <Typography
-                                        variant="caption"
-                                        sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}
-                                      >
-                                        OT เที่ยง
-                                      </Typography>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ fontWeight: 700, color: '#fff' }}
-                                      >
-                                        {report.otHours || 0} ชม.
-                                      </Typography>
-                                    </Grid>
+                            {(report.otHours !== undefined || report.otMorningHours !== undefined || report.otEveningHours !== undefined) && (
+                              <Box sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '8px' }}>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                  ⏰ ชั่วโมงการทำงานล่วงเวลา (OT)
+                                </Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={4}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>OT เช้า</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{report.otMorningHours || 0} ชม.</Typography>
                                   </Grid>
-                                </Box>
-                              )}
+                                  <Grid item xs={4}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>OT เย็น</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{report.otEveningHours || 0} ชม.</Typography>
+                                  </Grid>
+                                  <Grid item xs={4}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>OT เที่ยง</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{report.otHours || 0} ชม.</Typography>
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            )}
 
-                              {/* รายชื่อกำลังพลทั้งหมดในวันนั้น */}
-                              {Array.isArray(report.labor) && report.labor.length > 0 && (
-                                <LaborSummaryPanel labor={report.labor} />
-                              )}
-                              {/* ประวัติการแก้ไขรายงานวันนี้ */}
-                              {Array.isArray(report.editHistory) &&
-                                report.editHistory.length > 0 && (
-                                  <ReportEditHistoryPanel
-                                    editHistory={report.editHistory}
-                                    currentLabor={report.labor || []}
-                                    currentLeave={report.leave || []}
-                                    usersMap={usersMap}
-                                  />
-                                )}
-                              {Array.isArray(report.attachments) &&
-                                report.attachments.length > 0 && (
-                                  <Box>
-                                    <Typography
-                                      variant="caption"
+                            {/* รายชื่อกำลังพลทั้งหมดในวันนั้น */}
+                            {Array.isArray(report.labor) && report.labor.length > 0 && (
+                              <LaborSummaryPanel labor={report.labor} />
+                            )}
+                            {/* ประวัติการแก้ไขรายงานวันนี้ */}
+                            {Array.isArray(report.editHistory) && report.editHistory.length > 0 && (
+                              <ReportEditHistoryPanel
+                                editHistory={report.editHistory}
+                                currentLabor={report.labor || []}
+                                currentLeave={report.leave || []}
+                                usersMap={usersMap}
+                              />
+                            )}
+                            {Array.isArray(report.attachments) && report.attachments.length > 0 && (
+                              <Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                  📎 ไฟล์แนบ ({report.attachments.length})
+                                </Typography>
+                                <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                                  {report.attachments.map((url: string, uIdx: number) => (
+                                    <Button
+                                      key={uIdx}
+                                      variant="outlined"
+                                      size="small"
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
                                       sx={{
-                                        color: 'rgba(255,255,255,0.5)',
-                                        fontWeight: 600,
-                                        display: 'block',
-                                        mb: 0.5,
+                                        color: '#3b82f6',
+                                        borderColor: '#3b82f6',
+                                        textTransform: 'none',
+                                        borderRadius: '8px',
+                                        px: 1.5,
+                                        '&:hover': {
+                                          borderColor: '#2563eb',
+                                          bgcolor: 'rgba(59, 130, 246, 0.05)',
+                                        },
                                       }}
                                     >
-                                      📎 ไฟล์แนบ ({report.attachments.length})
-                                    </Typography>
-                                    <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-                                      {report.attachments.map((url: string, uIdx: number) => (
-                                        <Button
-                                          key={uIdx}
-                                          variant="outlined"
-                                          size="small"
-                                          href={url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          sx={{
-                                            color: '#3b82f6',
-                                            borderColor: '#3b82f6',
-                                            textTransform: 'none',
-                                            borderRadius: '8px',
-                                            px: 1.5,
-                                            '&:hover': {
-                                              borderColor: '#2563eb',
-                                              bgcolor: 'rgba(59, 130, 246, 0.05)',
-                                            },
-                                          }}
-                                        >
-                                          ดูไฟล์แนบ #{uIdx + 1}
-                                        </Button>
-                                      ))}
-                                    </Stack>
-                                  </Box>
-                                )}
-                            </Stack>
-                          </AccordionDetails>
-                        </Accordion>
-                      );
-                    })}
-                </Stack>
-              )
-            ) : // Tab 2: Settings Revisions
-            !historySubtaskCard?.editHistory || historySubtaskCard.editHistory.length === 0 ? (
+                                      ดูไฟล์แนบ #{uIdx + 1}
+                                    </Button>
+                                  ))}
+                                </Stack>
+                              </Box>
+                            )}
+                          </Stack>
+                        </AccordionDetails>
+                      </Accordion>
+                    );
+                  })}
+              </Stack>
+            )
+          ) : (
+            // Tab 2: Settings Revisions
+            (!historySubtaskCard?.editHistory || historySubtaskCard.editHistory.length === 0) ? (
               <Box sx={{ textAlign: 'center', py: 8, color: 'rgba(255,255,255,0.4)' }}>
-                <VisibilityIcon
-                  sx={{ fontSize: 48, mb: 1, opacity: 0.5, display: 'block', margin: '0 auto' }}
-                />
+                <VisibilityIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5, display: 'block', margin: '0 auto' }} />
                 <Typography variant="body2">ไม่มีประวัติการแก้ไขตั้งค่า</Typography>
               </Box>
             ) : (
@@ -2072,14 +2285,9 @@ export default function WorkspacePage() {
                   })
                   .map((edit: EditHistoryRecord, idx: number) => {
                     const editTime = parseSafeDate(edit.updatedAt);
-                    const timeStr =
-                      editTime && isValid(editTime)
-                        ? format(editTime, 'dd/MM/yyyy HH:mm')
-                        : 'ไม่ระบุเวลา';
-                    const editorName = edit.updatedBy
-                      ? usersMap[edit.updatedBy] || edit.updatedBy
-                      : 'ไม่ระบุผู้แก้ไข';
-
+                    const timeStr = editTime && isValid(editTime) ? format(editTime, 'dd/MM/yyyy HH:mm') : 'ไม่ระบุเวลา';
+                    const editorName = edit.updatedBy ? (usersMap[edit.updatedBy] || edit.updatedBy) : 'ไม่ระบุผู้แก้ไข';
+                    
                     return (
                       <Paper
                         key={idx}
@@ -2091,21 +2299,8 @@ export default function WorkspacePage() {
                           border: '1px solid rgba(255, 255, 255, 0.05)',
                         }}
                       >
-                        <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ mb: 1.5 }}
-                        >
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              color: 'rgba(255,255,255,0.5)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 0.5,
-                            }}
-                          >
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <ScheduleIcon sx={{ fontSize: 12 }} />
                             {timeStr}
                           </Typography>
@@ -2113,55 +2308,22 @@ export default function WorkspacePage() {
                             ผู้แก้ไข: {editorName}
                           </Typography>
                         </Stack>
-
+                        
                         <Stack spacing={1}>
                           {(edit.changes || []).map((change: any, cidx: number) => {
                             const label = getFieldNameThai(change.field);
-                            const oldText = formatFieldChange(
-                              change.field,
-                              change.oldValue,
-                              (uid) => usersMap[uid] || uid
-                            );
-                            const newText = formatFieldChange(
-                              change.field,
-                              change.newValue,
-                              (uid) => usersMap[uid] || uid
-                            );
-
+                            const oldText = formatFieldChange(change.field, change.oldValue, (uid) => usersMap[uid] || uid);
+                            const newText = formatFieldChange(change.field, change.newValue, (uid) => usersMap[uid] || uid);
+                            
                             return (
-                              <Box
-                                key={cidx}
-                                sx={{ borderLeft: '3px solid #3b82f6', pl: 1.5, py: 0.5 }}
-                              >
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: 'rgba(255,255,255,0.8)',
-                                    display: 'block',
-                                  }}
-                                >
+                              <Box key={cidx} sx={{ borderLeft: '3px solid #3b82f6', pl: 1.5, py: 0.5 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: 'rgba(255,255,255,0.8)', display: 'block' }}>
                                   {label}
                                 </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: 'rgba(255,255,255,0.4)',
-                                    display: 'block',
-                                    fontSize: '0.7rem',
-                                  }}
-                                >
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', fontSize: '0.7rem' }}>
                                   จาก: {oldText}
                                 </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: '#3b82f6',
-                                    display: 'block',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 600,
-                                  }}
-                                >
+                                <Typography variant="caption" sx={{ color: '#3b82f6', display: 'block', fontSize: '0.7rem', fontWeight: 600 }}>
                                   เป็น: {newText}
                                 </Typography>
                               </Box>
@@ -2172,381 +2334,521 @@ export default function WorkspacePage() {
                     );
                   })}
               </Stack>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
-            <Button
-              onClick={() => setIsHistoryOpen(false)}
-              variant="contained"
-              sx={{
-                bgcolor: '#3b82f6',
-                color: '#fff',
-                fontWeight: 700,
-                px: 4,
-                borderRadius: 2.5,
-                '&:hover': { bgcolor: '#2563eb' },
-              }}
-            >
-              ปิดหน้าต่าง
-            </Button>
-          </DialogActions>
-        </Dialog>
+            )
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
+          <Button
+            onClick={() => setIsHistoryOpen(false)}
+            variant="contained"
+            sx={{
+              bgcolor: '#3b82f6',
+              color: '#fff',
+              fontWeight: 700,
+              px: 4,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#2563eb' },
+            }}
+          >
+            ปิดหน้าต่าง
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-        {/* Parent Task Create/Edit Modal */}
-        <TaskCreateModal
-          open={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingTask(null);
-          }}
-          onSuccess={handleModalSuccess}
-          task={editingTask}
-        />
+      {/* Parent Task Create/Edit Modal */}
+      <TaskCreateModal
+        open={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTask(null);
+        }}
+        onSuccess={handleModalSuccess}
+        task={editingTask}
+      />
 
-        {/* Task Daily Progress Report Modal */}
-        <TaskDailyReportModal
-          open={isReportModalOpen}
-          onClose={() => {
-            setIsReportModalOpen(false);
-            setSelectedReportDate(null);
-          }}
-          task={selectedTaskForReport}
-          initialDate={selectedReportDate}
-          onTaskUpdated={() => {
+      {/* WBS Import Modal */}
+      <WbsImportModal
+        open={isWbsModalOpen}
+        onClose={() => setIsWbsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        projectId={user?.projectLocationIds?.[0] || ''}
+      />
+
+      {/* Task Daily Progress Report Modal */}
+      <TaskDailyReportModal
+        open={isReportModalOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setSelectedReportDate(null);
+          setSelectedTaskForReport(null);
+        }}
+        task={selectedTaskForReport}
+        initialDate={selectedReportDate}
+        onTaskUpdated={async () => {
+          const parentId = selectedTaskForReport?.parentTaskId;
+          if (parentId) {
+            try {
+              const refreshed = await taskService.getTaskById(parentId);
+              patchTaskInCache(refreshed);
+            } catch {
+              invalidateCache();
+              fetchFromAPI(true);
+            }
+          } else {
             invalidateCache();
             fetchFromAPI(true);
-          }}
-        />
+          }
+        }}
+      />
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog
-          open={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
-          PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงานหลัก</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              คุณแน่ใจหรือไม่ว่าต้องการลบงานหลัก "{taskToDelete?.taskName}"?
-              <br />
-              การลบนี้จะรวมถึงการซ่อนงานย่อยทั้งหมดภายใต้งานนี้ด้วย (Soft Delete)
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ pb: 2, px: 3 }}>
-            <Button
-              onClick={() => setIsDeleteDialogOpen(false)}
-              sx={{ fontWeight: 700, color: 'text.secondary' }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={confirmDelete}
-              variant="contained"
-              color="error"
-              sx={{ fontWeight: 700, borderRadius: 2, px: 3 }}
-            >
-              ยืนยันการลบ
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Edit Subtask Dialog */}
-        <Dialog
-          open={isSubtaskEditOpen}
-          onClose={() => setIsSubtaskEditOpen(false)}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{
-            sx: { borderRadius: 4, p: 1 },
-          }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขงานย่อย (Edit Subtask)</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
-              {subtaskEditError && (
-                <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
-                  {subtaskEditError}
-                </Typography>
-              )}
-
-              <TextField
-                label="ชื่องานย่อย *"
-                variant="filled"
-                fullWidth
-                value={subtaskEditName}
-                onChange={(e) => setSubtaskEditName(e.target.value)}
-                InputProps={{ disableUnderline: true }}
-                sx={{
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-
-              {fetchingFms ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                  <CircularProgress size={24} />
+      {/* Hidden completed cards popover */}
+      <Popover
+        open={Boolean(hiddenPopoverAnchor)}
+        anchorEl={hiddenPopoverAnchor}
+        onClose={() => setHiddenPopoverAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            minWidth: 280,
+            maxWidth: 360,
+            maxHeight: 420,
+            display: 'flex',
+            flexDirection: 'column',
+          }
+        }}
+      >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <VisibilityOffIcon sx={{ fontSize: 18, color: '#64748b' }} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b', flex: 1 }}>
+            งานที่ซ่อนไว้
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+            {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length} รายการ
+          </Typography>
+        </Box>
+        <List sx={{ p: 0, overflowY: 'auto', flexGrow: 1, '&::-webkit-scrollbar': { display: 'none' }, scrollbarWidth: 'none' }}>
+          {subtaskCards
+            .filter(t => hiddenCompletedIds.includes(t.id))
+            .map(task => (
+              <ListItem
+                key={task.id}
+                sx={{ px: 2, py: 1, borderBottom: '1px solid #f8fafc', '&:last-child': { borderBottom: 'none' } }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: '#64748b', fontFamily: 'monospace', display: 'block' }}
+                  >
+                    {task.taskId}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.8rem', lineHeight: 1.3,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {task.taskName}
+                  </Typography>
+                  {task.subtaskName && (
+                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
+                      {task.subtaskName}
+                    </Typography>
+                  )}
                 </Box>
-              ) : (
-                <Autocomplete
-                  multiple
-                  options={editFilteredFms}
-                  getOptionLabel={(option) => option.name}
-                  isOptionEqualToValue={(option, value) => option.id === value.employeeId}
-                  value={subtaskEditAssignees.map(
-                    (a) =>
-                      editFilteredFms.find((f) => f.id === a.employeeId) || {
-                        id: a.employeeId,
-                        name: a.name,
-                        roleId: 'FM',
-                      }
-                  )}
-                  onChange={(_, newValue) => {
-                    setSubtaskEditAssignees(
-                      newValue.map((v) => ({
-                        employeeId: v.id,
-                        name: v.name,
-                        roleId: v.roleId || 'FM',
-                      }))
-                    );
-                  }}
-                  renderOption={(props, option) => {
-                    const { key, ...otherProps } = props as any;
-                    return (
-                      <li key={key || option.id} {...otherProps}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
-                          <Avatar
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              bgcolor: 'primary.main',
-                              fontSize: '0.75rem',
-                            }}
-                          >
-                            {option.name.substring(0, 2).toUpperCase()}
-                          </Avatar>
-                          <Typography variant="body2">{option.name}</Typography>
-                        </Box>
-                      </li>
-                    );
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="ผู้รับผิดชอบ *"
-                      variant="filled"
-                      InputProps={{ ...params.InputProps, disableUnderline: true }}
-                      sx={{
-                        '& .MuiFilledInput-root': {
-                          borderRadius: 2,
-                          bgcolor: '#f1f5f9',
-                          '&::before, &::after': { display: 'none' },
-                        },
-                      }}
+                <Tooltip title="เอากลับมาแสดง">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleUnhideCard(task.id)}
+                    sx={{ color: '#00aa5c', bgcolor: '#dcfce7', '&:hover': { bgcolor: '#bbf7d0' }, flexShrink: 0 }}
+                  >
+                    <RestoreIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </ListItem>
+            ))}
+          {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length === 0 && (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>ไม่มีงานที่ซ่อนไว้</Typography>
+            </Box>
+          )}
+        </List>
+        {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length > 0 && (
+          <Box sx={{ p: 1.5, borderTop: '1px solid #f1f5f9' }}>
+            <Button
+              fullWidth
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                if (!user?.id) return;
+                setHiddenCompletedIds([]);
+                localStorage.removeItem(`workspace_hidden_completed_${user.id}`);
+                setHiddenPopoverAnchor(null);
+              }}
+              sx={{ borderRadius: 2, fontWeight: 700, color: '#64748b', borderColor: '#e2e8f0' }}
+            >
+              แสดงทั้งหมดกลับมา
+            </Button>
+          </Box>
+        )}
+      </Popover>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงานหลัก</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            คุณแน่ใจหรือไม่ว่าต้องการลบงานหลัก "{taskToDelete?.taskName}"?
+            <br />
+            การลบนี้จะรวมถึงการซ่อนงานย่อยทั้งหมดภายใต้งานนี้ด้วย (Soft Delete)
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsDeleteDialogOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={confirmDelete}
+            variant="contained"
+            color="error"
+            sx={{ fontWeight: 700, borderRadius: 2, px: 3 }}
+          >
+            ยืนยันการลบ
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Subtask Dialog */}
+      <Dialog
+        open={isSubtaskEditOpen}
+        onClose={() => setIsSubtaskEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 4, p: 1 },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขงานย่อย (Edit Subtask)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {subtaskEditError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {subtaskEditError}
+              </Typography>
+            )}
+
+            <TextField
+              label="ชื่องานย่อย *"
+              variant="filled"
+              fullWidth
+              value={subtaskEditName}
+              onChange={(e) => setSubtaskEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            {fetchingFms ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Autocomplete
+                multiple
+                options={editFilteredFms}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.employeeId}
+                value={subtaskEditAssignees.map(
+                  (a) => editFilteredFms.find((f) => f.id === a.employeeId) || { id: a.employeeId, name: a.name, roleId: 'FM' }
+                )}
+                onChange={(_, newValue) => {
+                  setSubtaskEditAssignees(
+                    newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                  );
+                }}
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props as any;
+                  return (
+                    <li key={key || option.id} {...otherProps}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
+                        <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
+                          {option.name.substring(0, 2).toUpperCase()}
+                        </Avatar>
+                        <Typography variant="body2">{option.name}</Typography>
+                      </Box>
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="ผู้รับผิดชอบ *"
+                    variant="filled"
+                    InputProps={{ ...params.InputProps, disableUnderline: true }}
+                    sx={{
+                      '& .MuiFilledInput-root': {
+                        borderRadius: 2,
+                        bgcolor: '#f1f5f9',
+                        '&::before, &::after': { display: 'none' },
+                      },
+                    }}
+                  />
+                )}
+              />
+            )}
+
+            <DatePicker
+              label="วันที่ครบกำหนด"
+              value={subtaskEditDueDate}
+              onChange={(date) => setSubtaskEditDueDate(date)}
+              variant="filled"
+              InputProps={{
+                disableUnderline: true,
+                sx: {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none !important' },
+                  '&:hover': { bgcolor: '#e2e8f0 !important' },
+                }
+              }}
+            />
+
+            {shouldShowHelpCheckbox && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Tooltip title="ขอความช่วยเหลือจากทีม Support ในงานย่อยนี้" arrow placement="top">
+                  <HelpOutlineIcon sx={{ color: '#94a3b8', fontSize: 18, cursor: 'help' }} />
+                </Tooltip>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={subtaskEditIsSupportRequest}
+                      onChange={(e) => setSubtaskEditIsSupportRequest(e.target.checked)}
+                      disabled={subtaskEditSubmitting}
+                      sx={{ color: '#94a3b8', '&.Mui-checked': { color: 'primary.main' } }}
                     />
-                  )}
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: subtaskEditIsSupportRequest ? 'primary.main' : '#64748b' }}>
+                      ขอความช่วยเหลือจากทีม Support
+                    </Typography>
+                  }
+                  sx={{ m: 0 }}
+                />
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsSubtaskEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleSubtaskEditSubmit}
+            variant="contained"
+            disabled={subtaskEditSubmitting}
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {subtaskEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Subtask Confirmation Dialog */}
+      <Dialog
+        open={isSubtaskDeleteOpen}
+        onClose={() => setIsSubtaskDeleteOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงานย่อย</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบงานย่อย "{subtaskToDeleteCard?.taskName?.split(' > ')?.[1] || subtaskToDeleteCard?.taskName}"?
+            <br />
+            <br />
+            {subtaskToDeleteCard && subtaskToDeleteCard.dailyProgress > 0 ? (
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2.5,
+                  bgcolor: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  color: '#b45309',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                }}
+              >
+                ⚠️ <b>ประเภทการลบ: ซอฟต์ดีลีท (Soft Delete)</b>
+                <br />
+                เนื่องจากงานย่อยนี้มีบันทึกรายงานผลงาน/ความคืบหน้าแล้ว เพื่อป้องกันไม่ให้ข้อมูลประวัติและระบบคำนวณค่าจ้างพัง ระบบจะทำการซ่อนงานนี้จากการ์ดบอร์ดแต่จะคงข้อมูลไว้ในฐานข้อมูลเพื่อความปลอดภัย
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2.5,
+                  bgcolor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#b91c1c',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                }}
+              >
+                ⚠️ <b>ประเภทการลบ: ลบถาวร (Hard Delete)</b>
+                <br />
+                เนื่องจากงานย่อยนี้ยังไม่มีรายงานผลงานเข้ามา ระบบจะลบข้อมูลงานย่อยนี้ รวมถึงประวัติการแก้ไขและความช่วยเหลือทั้งหมดออกจากระบบอย่างถาวร
+              </Box>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsSubtaskDeleteOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleSubtaskDeleteConfirm}
+            variant="contained"
+            color="error"
+            disabled={subtaskDeleteSubmitting}
+            sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
+          >
+            {subtaskDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* WorkOrder Edit Dialog */}
+      <Dialog
+        open={isWoEditOpen}
+        onClose={() => setIsWoEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>แก้ไขหมวดหมู่งานหลัก</DialogTitle>
+        <Typography variant="body2" sx={{ color: 'text.secondary', px: 3, pb: 1, fontSize: '0.825rem' }}>
+          แก้ไขข้อมูลรหัสและชื่อหมวดหมู่งานหลักของคุณ
+        </Typography>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {woEditError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {woEditError}
+              </Typography>
+            )}
+
+            <TextField
+              label="รหัสหมวดหมู่งานหลัก (Code) *"
+              variant="filled"
+              fullWidth
+              value={editingWo?.id || ''}
+              disabled
+              helperText="ไม่สามารถแก้ไขรหัสได้"
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            <TextField
+              label="ชื่อหมวดหมู่งานหลัก *"
+              variant="filled"
+              fullWidth
+              value={woEditName}
+              onChange={(e) => setWoEditName(e.target.value)}
+              helperText="เช่น งานโครงสร้าง, งานสถาปัตยกรรม"
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+
+            <Autocomplete
+              multiple
+              options={woEditLeaders}
+              getOptionLabel={(option) => `${option.name} ${option.employeeId ? `(${option.employeeId})` : ''}`}
+              isOptionEqualToValue={(option, val) => option.id === val.id}
+              value={woEditLeaders.filter(u => woEditLeaderIds.includes(u.id))}
+              onChange={(_event, newValue) => {
+                setWoEditLeaderIds(newValue.map(u => u.id));
+              }}
+              disabled={woEditSubmitting || loadingWoEditLeaders}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="filled"
+                  label="หัวหน้ากลุ่มงาน (Leader)"
+                  placeholder={woEditLeaderIds.length > 0 ? '' : 'เลือกหัวหน้ากลุ่มงาน'}
+                  helperText={loadingWoEditLeaders ? 'กำลังโหลดข้อมูลหัวหน้างาน...' : 'ระบุหัวหน้ากลุ่มงานที่รับผิดชอบหลัก'}
+                  InputProps={{
+                    ...params.InputProps,
+                    disableUnderline: true,
+                    endAdornment: (
+                      <>
+                        {loadingWoEditLeaders ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    )
+                  }}
+                  sx={{
+                    '& .MuiFilledInput-root': {
+                      borderRadius: 2,
+                      bgcolor: '#f1f5f9',
+                      paddingTop: '20px',
+                      '&::before, &::after': { display: 'none' },
+                    },
+                  }}
                 />
               )}
-
-              <DatePicker
-                label="วันที่ครบกำหนด"
-                value={subtaskEditDueDate}
-                onChange={(date) => setSubtaskEditDueDate(date)}
-                variant="filled"
-                InputProps={{
-                  disableUnderline: true,
-                  sx: {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none !important' },
-                    '&:hover': { bgcolor: '#e2e8f0 !important' },
-                  },
-                }}
-              />
-
-              {shouldShowHelpCheckbox && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Tooltip title="ขอความช่วยเหลือจากทีม Support ในงานย่อยนี้" arrow placement="top">
-                    <HelpOutlineIcon sx={{ color: '#94a3b8', fontSize: 18, cursor: 'help' }} />
-                  </Tooltip>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={subtaskEditIsSupportRequest}
-                        onChange={(e) => setSubtaskEditIsSupportRequest(e.target.checked)}
-                        disabled={subtaskEditSubmitting}
-                        sx={{ color: '#94a3b8', '&.Mui-checked': { color: 'primary.main' } }}
-                      />
-                    }
-                    label={
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 600,
-                          color: subtaskEditIsSupportRequest ? 'primary.main' : '#64748b',
-                        }}
-                      >
-                        ขอความช่วยเหลือจากทีม Support
-                      </Typography>
-                    }
-                    sx={{ m: 0 }}
-                  />
-                </Box>
-              )}
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              onClick={() => setIsSubtaskEditOpen(false)}
-              sx={{ color: 'text.secondary', fontWeight: 700 }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleSubtaskEditSubmit}
-              variant="contained"
-              disabled={subtaskEditSubmitting}
-              sx={{
-                bgcolor: '#1c1e2b',
-                color: '#fff',
-                fontWeight: 700,
-                px: 3,
-                borderRadius: 2.5,
-                '&:hover': { bgcolor: '#000000' },
-              }}
-            >
-              {subtaskEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Delete Subtask Confirmation Dialog */}
-        <Dialog
-          open={isSubtaskDeleteOpen}
-          onClose={() => setIsSubtaskDeleteOpen(false)}
-          PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงานย่อย</DialogTitle>
-          <DialogContent>
-            <DialogContentText component="div">
-              คุณแน่ใจหรือไม่ว่าต้องการลบงานย่อย "
-              {subtaskToDeleteCard?.taskName?.split(' > ')?.[1] || subtaskToDeleteCard?.taskName}"?
-              <br />
-              <br />
-              {subtaskToDeleteCard && subtaskToDeleteCard.dailyProgress > 0 ? (
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2.5,
-                    bgcolor: '#fffbeb',
-                    border: '1px solid #fde68a',
-                    color: '#b45309',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                  }}
-                >
-                  ⚠️ <b>ประเภทการลบ: ซอฟต์ดีลีท (Soft Delete)</b>
-                  <br />
-                  เนื่องจากงานย่อยนี้มีบันทึกรายงานผลงาน/ความคืบหน้าแล้ว
-                  เพื่อป้องกันไม่ให้ข้อมูลประวัติและระบบคำนวณค่าจ้างพัง
-                  ระบบจะทำการซ่อนงานนี้จากการ์ดบอร์ดแต่จะคงข้อมูลไว้ในฐานข้อมูลเพื่อความปลอดภัย
-                </Box>
-              ) : (
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2.5,
-                    bgcolor: '#fef2f2',
-                    border: '1px solid #fecaca',
-                    color: '#b91c1c',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                  }}
-                >
-                  ⚠️ <b>ประเภทการลบ: ลบถาวร (Hard Delete)</b>
-                  <br />
-                  เนื่องจากงานย่อยนี้ยังไม่มีรายงานผลงานเข้ามา ระบบจะลบข้อมูลงานย่อยนี้
-                  รวมถึงประวัติการแก้ไขและความช่วยเหลือทั้งหมดออกจากระบบอย่างถาวร
-                </Box>
-              )}
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ pb: 2, px: 3 }}>
-            <Button
-              onClick={() => setIsSubtaskDeleteOpen(false)}
-              sx={{ fontWeight: 700, color: 'text.secondary' }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleSubtaskDeleteConfirm}
-              variant="contained"
-              color="error"
-              disabled={subtaskDeleteSubmitting}
-              sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
-            >
-              {subtaskDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* WorkOrder Edit Dialog */}
-        <Dialog
-          open={isWoEditOpen}
-          onClose={() => setIsWoEditOpen(false)}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่อหมวดหมู่หลัก (WorkOrder)</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
-              {woEditError && (
-                <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
-                  {woEditError}
-                </Typography>
-              )}
-
-              <TextField
-                label="รหัส WorkOrder (แก้ไขไม่ได้)"
-                variant="filled"
-                fullWidth
-                value={editingWo?.id || ''}
-                disabled
-                InputProps={{ disableUnderline: true }}
-                sx={{
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-
-              <TextField
-                label="ชื่อ WorkOrder *"
-                variant="filled"
-                fullWidth
-                value={woEditName}
-                onChange={(e) => setWoEditName(e.target.value)}
-                InputProps={{ disableUnderline: true }}
-                sx={{
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              onClick={() => setIsWoEditOpen(false)}
-              sx={{ color: 'text.secondary', fontWeight: 700 }}
-            >
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, justifyContent: 'space-between' }}>
+          <Button
+            onClick={() => {
+              if (editingWo) {
+                setIsWoEditOpen(false);
+                handleDeleteWorkOrderOpen(editingWo.id, editingWo.name);
+              }
+            }}
+            color="error"
+            disabled={woEditSubmitting}
+            sx={{ fontWeight: 700 }}
+          >
+            ลบหมวดหมู่
+          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button onClick={() => setIsWoEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
               ยกเลิก
             </Button>
             <Button
@@ -2562,257 +2864,241 @@ export default function WorkspacePage() {
                 '&:hover': { bgcolor: '#000000' },
               }}
             >
-              {woEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+              {woEditSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
             </Button>
-          </DialogActions>
-        </Dialog>
+          </Box>
+        </DialogActions>
+      </Dialog>
 
-        {/* WorkOrder Delete Dialog */}
-        <Dialog
-          open={isWoDeleteOpen}
-          onClose={() => setIsWoDeleteOpen(false)}
-          PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบ WorkOrder</DialogTitle>
-          <DialogContent>
-            <DialogContentText component="div">
-              คุณแน่ใจหรือไม่ว่าต้องการลบ WorkOrder "{woToDelete?.name}"?
-              <br />
-              <br />
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2.5,
-                  bgcolor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#b91c1c',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                }}
-              >
-                ⚠️ การลบนี้จะทำการตรวจสอบความปลอดภัย หากพบว่ามีงานย่อยใดๆ ใน WorkOrder
-                นี้มีรายงานผลงานหรือความคืบหน้า ระบบจะไม่อนุญาตให้ลบ เพื่อป้องกันข้อมูลระบบพัง
-              </Box>
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ pb: 2, px: 3 }}>
-            <Button
-              onClick={() => setIsWoDeleteOpen(false)}
-              sx={{ fontWeight: 700, color: 'text.secondary' }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleDeleteWorkOrderConfirm}
-              variant="contained"
-              color="error"
-              disabled={woDeleteSubmitting}
-              sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
-            >
-              {woDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Category Edit Dialog */}
-        <Dialog
-          open={isCatEditOpen}
-          onClose={() => setIsCatEditOpen(false)}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่อหมวดหมู่ย่อย (Category)</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
-              {catEditError && (
-                <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
-                  {catEditError}
-                </Typography>
-              )}
-
-              <TextField
-                label="ชื่อหมวดหมู่ย่อย *"
-                variant="filled"
-                fullWidth
-                value={catEditName}
-                onChange={(e) => setCatEditName(e.target.value)}
-                InputProps={{ disableUnderline: true }}
-                sx={{
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              onClick={() => setIsCatEditOpen(false)}
-              sx={{ color: 'text.secondary', fontWeight: 700 }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleEditCategorySubmit}
-              variant="contained"
-              disabled={catEditSubmitting}
+      {/* WorkOrder Delete Dialog */}
+      <Dialog
+        open={isWoDeleteOpen}
+        onClose={() => setIsWoDeleteOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบ WorkOrder</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบ WorkOrder "{woToDelete?.name}"?
+            <br />
+            <br />
+            <Box
               sx={{
-                bgcolor: '#1c1e2b',
-                color: '#fff',
-                fontWeight: 700,
-                px: 3,
+                p: 2,
                 borderRadius: 2.5,
-                '&:hover': { bgcolor: '#000000' },
+                bgcolor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                fontSize: '0.875rem',
+                fontWeight: 500,
               }}
             >
-              {catEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+              ⚠️ การลบนี้จะทำการตรวจสอบความปลอดภัย หากพบว่ามีงานย่อยใดๆ ใน WorkOrder นี้มีรายงานผลงานหรือความคืบหน้า ระบบจะไม่อนุญาตให้ลบ เพื่อป้องกันข้อมูลระบบพัง
+            </Box>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsWoDeleteOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleDeleteWorkOrderConfirm}
+            variant="contained"
+            color="error"
+            disabled={woDeleteSubmitting}
+            sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
+          >
+            {woDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-        {/* Category Delete Dialog */}
-        <Dialog
-          open={isCatDeleteOpen}
-          onClose={() => setIsCatDeleteOpen(false)}
-          PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบหมวดหมู่ย่อย</DialogTitle>
-          <DialogContent>
-            <DialogContentText component="div">
-              คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่ย่อย "{catToDelete?.name}"?
-              <br />
-              <br />
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2.5,
-                  bgcolor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#b91c1c',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                }}
-              >
-                ⚠️ การลบนี้จะทำการตรวจสอบความปลอดภัย หากพบว่ามีงานย่อยใดๆ
-                ในหมวดหมู่ย่อยนี้มีรายงานผลงานหรือความคืบหน้า ระบบจะไม่อนุญาตให้ลบ
-                เพื่อป้องกันข้อมูลระบบพัง
-              </Box>
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ pb: 2, px: 3 }}>
-            <Button
-              onClick={() => setIsCatDeleteOpen(false)}
-              sx={{ fontWeight: 700, color: 'text.secondary' }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleDeleteCategoryConfirm}
-              variant="contained"
-              color="error"
-              disabled={catDeleteSubmitting}
-              sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
-            >
-              {catDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+      {/* Category Edit Dialog */}
+      <Dialog
+        open={isCatEditOpen}
+        onClose={() => setIsCatEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่อหมวดหมู่ย่อย (Category)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            {catEditError && (
+              <Typography color="error" variant="caption" sx={{ fontWeight: 600 }}>
+                {catEditError}
+              </Typography>
+            )}
 
-        {/* Blocked Delete Alert Dialog */}
-        <Dialog
-          open={isBlockDeleteAlertOpen}
-          onClose={() => setIsBlockDeleteAlertOpen(false)}
-          PaperProps={{ sx: { borderRadius: 4, p: 1.5, maxWidth: 460 } }}
-        >
-          <DialogTitle
+            <TextField
+              label="ชื่อหมวดหมู่ย่อย *"
+              variant="filled"
+              fullWidth
+              value={catEditName}
+              onChange={(e) => setCatEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsCatEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleEditCategorySubmit}
+            variant="contained"
+            disabled={catEditSubmitting}
             sx={{
-              fontWeight: 800,
-              color: '#d32f2f',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
             }}
           >
-            ❌ การลบถูกระงับ (Deletion Blocked)
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText sx={{ color: 'text.primary', whiteSpace: 'pre-line', mt: 1 }}>
-              {blockDeleteAlertMessage}
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ pb: 2, px: 3 }}>
-            <Button
-              onClick={() => setIsBlockDeleteAlertOpen(false)}
-              variant="contained"
-              sx={{
-                bgcolor: '#1c1e2b',
-                color: '#fff',
-                fontWeight: 700,
-                px: 3,
-                borderRadius: 2.5,
-                '&:hover': { bgcolor: '#000000' },
-              }}
-            >
-              รับทราบ
-            </Button>
-          </DialogActions>
-        </Dialog>
+            {catEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-        {/* Task Edit Dialog */}
-        <Dialog
-          open={isTaskEditOpen}
-          onClose={() => setIsTaskEditOpen(false)}
-          maxWidth="xs"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
-        >
-          <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่องานหลัก (Task)</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
-              <TextField
-                label="ชื่องานหลัก *"
-                variant="filled"
-                fullWidth
-                value={taskEditName}
-                onChange={(e) => setTaskEditName(e.target.value)}
-                InputProps={{ disableUnderline: true }}
-                sx={{
-                  '& .MuiFilledInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f1f5f9',
-                    '&::before, &::after': { display: 'none' },
-                  },
-                }}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              onClick={() => setIsTaskEditOpen(false)}
-              sx={{ color: 'text.secondary', fontWeight: 700 }}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleEditTaskSubmit}
-              variant="contained"
-              disabled={taskEditSubmitting}
+      {/* Category Delete Dialog */}
+      <Dialog
+        open={isCatDeleteOpen}
+        onClose={() => setIsCatDeleteOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1, maxWidth: 440 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบหมวดหมู่ย่อย</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่ย่อย "{catToDelete?.name}"?
+            <br />
+            <br />
+            <Box
               sx={{
-                bgcolor: '#1c1e2b',
-                color: '#fff',
-                fontWeight: 700,
-                px: 3,
+                p: 2,
                 borderRadius: 2.5,
-                '&:hover': { bgcolor: '#000000' },
+                bgcolor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                fontSize: '0.875rem',
+                fontWeight: 500,
               }}
             >
-              {taskEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+              ⚠️ การลบนี้จะทำการตรวจสอบความปลอดภัย หากพบว่ามีงานย่อยใดๆ ในหมวดหมู่ย่อยนี้มีรายงานผลงานหรือความคืบหน้า ระบบจะไม่อนุญาตให้ลบ เพื่อป้องกันข้อมูลระบบพัง
+            </Box>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsCatDeleteOpen(false)}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleDeleteCategoryConfirm}
+            variant="contained"
+            color="error"
+            disabled={catDeleteSubmitting}
+            sx={{ fontWeight: 700, borderRadius: 2.5, px: 3 }}
+          >
+            {catDeleteSubmitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Blocked Delete Alert Dialog */}
+      <Dialog
+        open={isBlockDeleteAlertOpen}
+        onClose={() => setIsBlockDeleteAlertOpen(false)}
+        PaperProps={{ sx: { borderRadius: 4, p: 1.5, maxWidth: 460 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#d32f2f', display: 'flex', alignItems: 'center', gap: 1 }}>
+          ❌ การลบถูกระงับ (Deletion Blocked)
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: 'text.primary', whiteSpace: 'pre-line', mt: 1 }}>
+            {blockDeleteAlertMessage}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ pb: 2, px: 3 }}>
+          <Button
+            onClick={() => setIsBlockDeleteAlertOpen(false)}
+            variant="contained"
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            รับทราบ
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Task Edit Dialog */}
+      <Dialog
+        open={isTaskEditOpen}
+        onClose={() => setIsTaskEditOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>แก้ไขชื่องานหลัก (Task)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1.5 }}>
+            <TextField
+              label="ชื่องานหลัก *"
+              variant="filled"
+              fullWidth
+              value={taskEditName}
+              onChange={(e) => setTaskEditName(e.target.value)}
+              InputProps={{ disableUnderline: true }}
+              sx={{
+                '& .MuiFilledInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f1f5f9',
+                  '&::before, &::after': { display: 'none' },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsTaskEditOpen(false)} sx={{ color: 'text.secondary', fontWeight: 700 }}>
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={handleEditTaskSubmit}
+            variant="contained"
+            disabled={taskEditSubmitting}
+            sx={{
+              bgcolor: '#1c1e2b',
+              color: '#fff',
+              fontWeight: 700,
+              px: 3,
+              borderRadius: 2.5,
+              '&:hover': { bgcolor: '#000000' },
+            }}
+          >
+            {taskEditSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       </Layout>
     </ProtectedRoute>
   );
@@ -2834,7 +3120,7 @@ function LaborSummaryPanel({ labor }: { labor: any[] }) {
     >
       {/* Toggle header */}
       <Box
-        onClick={() => setExpanded((prev) => !prev)}
+        onClick={() => setExpanded(prev => !prev)}
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -2849,10 +3135,7 @@ function LaborSummaryPanel({ labor }: { labor: any[] }) {
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <Box
-            component="span"
-            sx={{ fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center' }}
-          >
+          <Box component="span" sx={{ fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
             👥
           </Box>
           <Typography variant="caption" sx={{ fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
@@ -2894,32 +3177,18 @@ function LaborSummaryPanel({ labor }: { labor: any[] }) {
                   px: 2,
                   py: 0.9,
                   gap: 2,
-                  borderTop:
-                    wi === 0
-                      ? '1px solid rgba(255,255,255,0.06)'
-                      : '1px solid rgba(255,255,255,0.04)',
+                  borderTop: wi === 0 ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.04)',
                 }}
               >
                 <Typography
                   variant="caption"
-                  sx={{
-                    fontWeight: 600,
-                    color: 'rgba(255,255,255,0.85)',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    fontSize: '0.74rem',
-                  }}
+                  sx={{ fontWeight: 600, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.74rem' }}
                 >
                   {workerName}
                 </Typography>
                 <Typography
                   variant="caption"
-                  sx={{
-                    color: 'rgba(255,255,255,0.45)',
-                    textAlign: 'right',
-                    fontSize: '0.68rem',
-                    lineHeight: 1.6,
-                  }}
+                  sx={{ color: 'rgba(255,255,255,0.45)', textAlign: 'right', fontSize: '0.68rem', lineHeight: 1.6 }}
                 >
                   {shiftStr}
                 </Typography>
@@ -2945,11 +3214,7 @@ const parseSafeDate = (val: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const formatFieldChange = (
-  field: string,
-  val: any,
-  resolveUser?: (uid: string) => string
-): string => {
+const formatFieldChange = (field: string, val: any, resolveUser?: (uid: string) => string): string => {
   if (val === null || val === undefined || val === '') return 'ไม่มีข้อมูล';
   if (field === 'dueDate') {
     const d = parseSafeDate(val);
@@ -2964,15 +3229,13 @@ const formatFieldChange = (
   if (field === 'assignees') {
     if (Array.isArray(val)) {
       if (val.length === 0) return 'ไม่มีผู้รับผิดชอบ';
-      return val
-        .map((a: any) => {
-          const id = typeof a === 'string' ? a : a.userId || a.username || a.name || '';
-          if (resolveUser && id) {
-            return resolveUser(id);
-          }
-          return a.name || a.userId || a.username || 'ไม่ระบุ';
-        })
-        .join(', ');
+      return val.map((a: any) => {
+        const id = typeof a === 'string' ? a : (a.userId || a.username || a.name || '');
+        if (resolveUser && id) {
+          return resolveUser(id);
+        }
+        return a.name || a.userId || a.username || 'ไม่ระบุ';
+      }).join(', ');
     }
     return String(val);
   }
@@ -3008,7 +3271,7 @@ const getLeaveText = (lv: any): string => {
     Business: 'ลากิจ',
     Vacation: 'ลาพักร้อน',
     Unpaid: 'ลาไม่รับค่าจ้าง',
-    Paid: 'ลาได้รับค่าจ้าง',
+    Paid: 'ลาได้รับค่าจ้าง'
   };
   return labelMap[lv.leaveType] || lv.leaveType || 'ไม่ระบุประเภท';
 };
@@ -3017,50 +3280,18 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
   // ฟังก์ชัน render worker card แบบละเอียด
   const renderWorkerCard = (w: any, colorScheme: 'green' | 'red' | 'neutral') => {
     const colors = {
-      green: {
-        bg: 'rgba(16, 185, 129, 0.08)',
-        border: 'rgba(16, 185, 129, 0.25)',
-        name: '#a7f3d0',
-        shift: 'rgba(167,243,208,0.75)',
-      },
-      red: {
-        bg: 'rgba(239, 68, 68, 0.08)',
-        border: 'rgba(239, 68, 68, 0.25)',
-        name: '#fca5a5',
-        shift: 'rgba(252,165,165,0.75)',
-      },
-      neutral: {
-        bg: 'rgba(255,255,255,0.04)',
-        border: 'rgba(255,255,255,0.1)',
-        name: 'rgba(255,255,255,0.85)',
-        shift: 'rgba(255,255,255,0.55)',
-      },
+      green:   { bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.25)', name: '#a7f3d0', shift: 'rgba(167,243,208,0.75)' },
+      red:     { bg: 'rgba(239, 68, 68, 0.08)',   border: 'rgba(239, 68, 68, 0.25)',   name: '#fca5a5', shift: 'rgba(252,165,165,0.75)' },
+      neutral: { bg: 'rgba(255,255,255,0.04)',     border: 'rgba(255,255,255,0.1)',     name: 'rgba(255,255,255,0.85)', shift: 'rgba(255,255,255,0.55)' },
     }[colorScheme];
     const name = w.name || w.workerName || 'ไม่ระบุชื่อ';
     const shiftStr = getShiftText(w.shiftTimes);
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          bgcolor: colors.bg,
-          border: `1px solid ${colors.border}`,
-          borderRadius: '8px',
-          px: 1.5,
-          py: 0.75,
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ fontWeight: 700, color: colors.name, fontSize: '0.75rem' }}
-        >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: colors.bg, border: `1px solid ${colors.border}`, borderRadius: '8px', px: 1.5, py: 0.75 }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: colors.name, fontSize: '0.75rem' }}>
           👷 {name}
         </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: colors.shift, fontSize: '0.68rem', textAlign: 'right', ml: 1 }}
-        >
+        <Typography variant="caption" sx={{ color: colors.shift, fontSize: '0.68rem', textAlign: 'right', ml: 1 }}>
           ⏱ {shiftStr}
         </Typography>
       </Box>
@@ -3070,26 +3301,8 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
   if (!prevLabor) {
     // รายงานครั้งแรก — แสดงรายชื่อกำลังพลทั้งหมดพร้อมกะ
     return (
-      <Box
-        sx={{
-          mt: 1,
-          p: 1.5,
-          bgcolor: 'rgba(16, 185, 129, 0.07)',
-          borderRadius: '8px',
-          border: '1px dashed rgba(16,185,129,0.4)',
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            color: '#10b981',
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            mb: currentLabor.length > 0 ? 1 : 0,
-          }}
-        >
+      <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(16, 185, 129, 0.07)', borderRadius: '8px', border: '1px dashed rgba(16,185,129,0.4)' }}>
+        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: currentLabor.length > 0 ? 1 : 0 }}>
           📝 บันทึกรายงานกำลังพลเริ่มต้น — {currentLabor.length} คน
         </Typography>
         {currentLabor.length > 0 ? (
@@ -3097,10 +3310,7 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
             {currentLabor.map((w: any, i: number) => renderWorkerCard(w, 'green'))}
           </Stack>
         ) : (
-          <Typography
-            variant="caption"
-            sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontStyle: 'italic' }}
-          >
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontStyle: 'italic' }}>
             ไม่มีข้อมูลกำลังพล
           </Typography>
         )}
@@ -3109,13 +3319,13 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
   }
 
   const currentMap = new Map<string, any>();
-  currentLabor.forEach((w) => {
+  currentLabor.forEach(w => {
     const name = w.name || w.workerName || '';
     if (name) currentMap.set(name, w);
   });
 
   const prevMap = new Map<string, any>();
-  prevLabor.forEach((w) => {
+  prevLabor.forEach(w => {
     const name = w.name || w.workerName || '';
     if (name) prevMap.set(name, w);
   });
@@ -3147,24 +3357,8 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
 
   if (!hasChanges) {
     return (
-      <Box
-        sx={{
-          mt: 1,
-          p: 1.5,
-          bgcolor: 'rgba(255,255,255,0.02)',
-          borderRadius: '8px',
-          border: '1px solid rgba(255,255,255,0.05)',
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            color: 'rgba(255,255,255,0.5)',
-            fontWeight: 600,
-            display: 'block',
-            fontStyle: 'italic',
-          }}
-        >
+      <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, display: 'block', fontStyle: 'italic' }}>
           ไม่มีการเปลี่ยนแปลงข้อมูลกำลังพล (แก้ไขส่วนอื่น เช่น รายละเอียดงาน หรือใบแนบ)
         </Typography>
       </Box>
@@ -3174,115 +3368,42 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
   return (
     <Stack spacing={1} sx={{ mt: 1 }}>
       {added.length > 0 && (
-        <Box
-          sx={{
-            p: 1.5,
-            bgcolor: 'rgba(16, 185, 129, 0.07)',
-            borderRadius: '8px',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: '#10b981',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 1,
-            }}
-          >
+        <Box sx={{ p: 1.5, bgcolor: 'rgba(16, 185, 129, 0.07)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+          <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
             ➕ เพิ่มกำลังพล ({added.length} คน)
           </Typography>
           <Stack spacing={0.5}>
-            {added.map((w, i) => (
-              <React.Fragment key={i}>{renderWorkerCard(w, 'green')}</React.Fragment>
-            ))}
+            {added.map((w, i) => <React.Fragment key={i}>{renderWorkerCard(w, 'green')}</React.Fragment>)}
           </Stack>
         </Box>
       )}
 
       {removed.length > 0 && (
-        <Box
-          sx={{
-            p: 1.5,
-            bgcolor: 'rgba(239, 68, 68, 0.07)',
-            borderRadius: '8px',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: '#ef4444',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 1,
-            }}
-          >
+        <Box sx={{ p: 1.5, bgcolor: 'rgba(239, 68, 68, 0.07)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+          <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
             ➖ ลบกำลังพลออก ({removed.length} คน)
           </Typography>
           <Stack spacing={0.5}>
-            {removed.map((w, i) => (
-              <React.Fragment key={i}>{renderWorkerCard(w, 'red')}</React.Fragment>
-            ))}
+            {removed.map((w, i) => <React.Fragment key={i}>{renderWorkerCard(w, 'red')}</React.Fragment>)}
           </Stack>
         </Box>
       )}
 
       {modified.length > 0 && (
-        <Box
-          sx={{
-            p: 1.5,
-            bgcolor: 'rgba(245, 158, 11, 0.07)',
-            borderRadius: '8px',
-            border: '1px solid rgba(245, 158, 11, 0.2)',
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: '#f59e0b',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 0.75,
-            }}
-          >
+        <Box sx={{ p: 1.5, bgcolor: 'rgba(245, 158, 11, 0.07)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+          <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.75 }}>
             📝 แก้ไขเวลาทำงาน ({modified.length} คน)
           </Typography>
           <Stack spacing={1}>
             {modified.map((w, i) => (
-              <Box
-                key={i}
-                sx={{
-                  bgcolor: 'rgba(245,158,11,0.08)',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                  borderRadius: '8px',
-                  px: 1.5,
-                  py: 1,
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#fef3c7', fontWeight: 700, display: 'block', mb: 0.5 }}
-                >
+              <Box key={i} sx={{ bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px', px: 1.5, py: 1 }}>
+                <Typography variant="caption" sx={{ color: '#fef3c7', fontWeight: 700, display: 'block', mb: 0.5 }}>
                   👷 {w.name}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: 'rgba(252,211,77,0.7)', display: 'block', fontSize: '0.68rem' }}
-                >
+                <Typography variant="caption" sx={{ color: 'rgba(252,211,77,0.7)', display: 'block', fontSize: '0.68rem' }}>
                   จาก: {w.prevShifts}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#f59e0b', display: 'block', fontSize: '0.68rem', fontWeight: 600 }}
-                >
+                <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', fontSize: '0.68rem', fontWeight: 600 }}>
                   เป็น: {w.currShifts}
                 </Typography>
               </Box>
@@ -3299,13 +3420,13 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
   const prevList = Array.isArray(prevLeave) ? prevLeave : [];
 
   const currentMap = new Map<string, any>();
-  currentLeave.forEach((lv) => {
+  currentLeave.forEach(lv => {
     const name = lv.name || lv.workerName || '';
     if (name) currentMap.set(name, lv);
   });
 
   const prevMap = new Map<string, any>();
-  prevList.forEach((lv) => {
+  prevList.forEach(lv => {
     const name = lv.name || lv.workerName || '';
     if (name) prevMap.set(name, lv);
   });
@@ -3322,7 +3443,7 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
       modified.push({
         name,
         prevType: getLeaveText(prevLeaveItem),
-        currType: getLeaveText(currLeave),
+        currType: getLeaveText(currLeave)
       });
     }
   });
@@ -3336,26 +3457,8 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
   if (added.length === 0 && removed.length === 0 && modified.length === 0) return null;
 
   return (
-    <Box
-      sx={{
-        mt: 1,
-        p: 1.5,
-        bgcolor: 'rgba(139, 92, 246, 0.1)',
-        borderRadius: '8px',
-        border: '1px solid rgba(139, 92, 246, 0.2)',
-      }}
-    >
-      <Typography
-        variant="caption"
-        sx={{
-          color: '#a78bfa',
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          mb: 0.5,
-        }}
-      >
+    <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+      <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
         ℹ️ การขอลาหยุด ({added.length + removed.length + modified.length} รายการ)
       </Typography>
       <Stack spacing={0.5}>
@@ -3405,8 +3508,7 @@ function ReportEditHistoryPanel({
   const sorted = [...editHistory].sort((a, b) => {
     const toTs = (v: any) => {
       if (!v) return 0;
-      if (typeof v === 'object' && ('_seconds' in v || 'seconds' in v))
-        return (v._seconds ?? v.seconds) * 1000;
+      if (typeof v === 'object' && ('_seconds' in v || 'seconds' in v)) return (v._seconds ?? v.seconds) * 1000;
       return new Date(v).getTime();
     };
     return toTs(a.editedAt) - toTs(b.editedAt);
@@ -3414,8 +3516,7 @@ function ReportEditHistoryPanel({
 
   const parseTs = (v: any): Date | null => {
     if (!v) return null;
-    if (typeof v === 'object' && ('_seconds' in v || 'seconds' in v))
-      return new Date((v._seconds ?? v.seconds) * 1000);
+    if (typeof v === 'object' && ('_seconds' in v || 'seconds' in v)) return new Date((v._seconds ?? v.seconds) * 1000);
     const d = new Date(v);
     return isNaN(d.getTime()) ? null : d;
   };
@@ -3424,16 +3525,12 @@ function ReportEditHistoryPanel({
   const entries = sorted.map((entry, i) => {
     const beforeLabor: any[] = entry.snapshot?.labor || [];
     const beforeLeave: any[] = entry.snapshot?.leave || [];
-    const afterLabor: any[] =
-      i < sorted.length - 1 ? sorted[i + 1].snapshot?.labor || [] : currentLabor;
-    const afterLeave: any[] =
-      i < sorted.length - 1 ? sorted[i + 1].snapshot?.leave || [] : currentLeave;
+    const afterLabor: any[] = i < sorted.length - 1 ? (sorted[i + 1].snapshot?.labor || []) : currentLabor;
+    const afterLeave: any[] = i < sorted.length - 1 ? (sorted[i + 1].snapshot?.leave || []) : currentLeave;
 
     const d = parseTs(entry.editedAt);
     const timeStr = d ? format(d, 'dd/MM/yyyy HH:mm') : 'ไม่ระบุเวลา';
-    const editorName = entry.editedBy
-      ? usersMap[entry.editedBy] || entry.editedBy
-      : 'ไม่ระบุผู้แก้ไข';
+    const editorName = entry.editedBy ? (usersMap[entry.editedBy] || entry.editedBy) : 'ไม่ระบุผู้แก้ไข';
     return { timeStr, editorName, beforeLabor, afterLabor, beforeLeave, afterLeave, round: i + 1 };
   });
 
@@ -3442,22 +3539,13 @@ function ReportEditHistoryPanel({
 
   const calcLaborDiff = (after: any[], before: any[]) => {
     const bMap = new Map<string, any>();
-    before.forEach((w) => {
-      const n = w.name || w.workerName || '';
-      if (n) bMap.set(n, w);
-    });
+    before.forEach(w => { const n = w.name || w.workerName || ''; if (n) bMap.set(n, w); });
     const aMap = new Map<string, any>();
-    after.forEach((w) => {
-      const n = w.name || w.workerName || '';
-      if (n) aMap.set(n, w);
-    });
-    const added: any[] = [],
-      removed: any[] = [],
-      modified: { name: string; from: string; to: string }[] = [];
+    after.forEach(w => { const n = w.name || w.workerName || ''; if (n) aMap.set(n, w); });
+    const added: any[] = [], removed: any[] = [], modified: { name: string; from: string; to: string }[] = [];
     aMap.forEach((w, name) => {
-      if (!bMap.has(name)) {
-        added.push(w);
-      } else {
+      if (!bMap.has(name)) { added.push(w); }
+      else {
         const shiftFn = (st: any) => {
           if (!st) return 'ไม่ได้ระบุเวลา';
           const parts: string[] = [];
@@ -3472,65 +3560,37 @@ function ReportEditHistoryPanel({
         if (fromStr !== toStr) modified.push({ name, from: fromStr, to: toStr });
       }
     });
-    bMap.forEach((w, name) => {
-      if (!aMap.has(name)) removed.push(w);
-    });
+    bMap.forEach((w, name) => { if (!aMap.has(name)) removed.push(w); });
     return { added, removed, modified };
   };
 
   const calcLeaveChanges = (after: any[], before: any[]) => {
-    const leaveLabel = (t: string) =>
-      ({
-        Sick: 'ลาป่วย',
-        Business: 'ลากิจ',
-        Vacation: 'ลาพักร้อน',
-        Unpaid: 'ลาไม่รับค่าจ้าง',
-        Paid: 'ลาได้รับค่าจ้าง',
-      })[t] || t;
+    const leaveLabel = (t: string) => ({ Sick: 'ลาป่วย', Business: 'ลากิจ', Vacation: 'ลาพักร้อน', Unpaid: 'ลาไม่รับค่าจ้าง', Paid: 'ลาได้รับค่าจ้าง' }[t] || t);
     const bMap = new Map<string, any>();
-    before.forEach((lv) => {
-      const n = lv.name || lv.workerName || '';
-      if (n) bMap.set(n, lv);
-    });
+    before.forEach(lv => { const n = lv.name || lv.workerName || ''; if (n) bMap.set(n, lv); });
     const aMap = new Map<string, any>();
-    after.forEach((lv) => {
-      const n = lv.name || lv.workerName || '';
-      if (n) aMap.set(n, lv);
-    });
+    after.forEach(lv => { const n = lv.name || lv.workerName || ''; if (n) aMap.set(n, lv); });
     const changes: string[] = [];
-    aMap.forEach((lv, name) => {
-      if (!bMap.has(name)) changes.push(`➕ ${name} (${leaveLabel(lv.leaveType)})`);
-    });
-    bMap.forEach((lv, name) => {
-      if (!aMap.has(name)) changes.push(`➖ ${name} (${leaveLabel(lv.leaveType)})`);
-    });
+    aMap.forEach((lv, name) => { if (!bMap.has(name)) changes.push(`➕ ${name} (${leaveLabel(lv.leaveType)})`); });
+    bMap.forEach((lv, name) => { if (!aMap.has(name)) changes.push(`➖ ${name} (${leaveLabel(lv.leaveType)})`); });
     return changes;
   };
 
   return (
-    <Box
-      sx={{ border: '1px solid rgba(251,191,36,0.25)', borderRadius: '10px', overflow: 'hidden' }}
-    >
+    <Box sx={{ border: '1px solid rgba(251,191,36,0.25)', borderRadius: '10px', overflow: 'hidden' }}>
       {/* Toggle header */}
       <Box
-        onClick={() => setExpanded((p) => !p)}
+        onClick={() => setExpanded(p => !p)}
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          px: 2,
-          py: 1.25,
-          cursor: 'pointer',
-          userSelect: 'none',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          px: 2, py: 1.25, cursor: 'pointer', userSelect: 'none',
           bgcolor: 'rgba(251,191,36,0.07)',
           '&:hover': { bgcolor: 'rgba(251,191,36,0.13)' },
           transition: 'background 0.15s',
         }}
       >
         <Stack direction="row" spacing={0.75} alignItems="center">
-          <Box component="span" sx={{ fontSize: 14 }}>
-            ⏱
-          </Box>
+          <Box component="span" sx={{ fontSize: 14 }}>⏱</Box>
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#fbbf24' }}>
             ประวัติการแก้ไขรายงานวันนี้ ({editHistory.length} ครั้ง)
           </Typography>
@@ -3538,11 +3598,9 @@ function ReportEditHistoryPanel({
         <Box
           component="span"
           sx={{
-            fontSize: 16,
-            color: 'rgba(251,191,36,0.6)',
+            fontSize: 16, color: 'rgba(251,191,36,0.6)',
             transform: expanded ? 'rotate(180deg)' : 'none',
-            transition: 'transform 0.2s',
-            display: 'inline-flex',
+            transition: 'transform 0.2s', display: 'inline-flex',
           }}
         >
           ▾
@@ -3555,74 +3613,34 @@ function ReportEditHistoryPanel({
           {displayEntries.map((entry, idx) => {
             const { added, removed, modified } = calcLaborDiff(entry.afterLabor, entry.beforeLabor);
             const leaveChanges = calcLeaveChanges(entry.afterLeave, entry.beforeLeave);
-            const hasChanges =
-              added.length + removed.length + modified.length + leaveChanges.length > 0;
+            const hasChanges = added.length + removed.length + modified.length + leaveChanges.length > 0;
 
             return (
               <Box key={idx} sx={{ px: 2, py: 1.5, bgcolor: 'rgba(0,0,0,0.12)' }}>
                 {/* Header row */}
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: hasChanges ? 1.25 : 0 }}
-                >
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: hasChanges ? 1.25 : 0 }}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     {/* Round badge */}
-                    <Box
-                      sx={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: '50%',
-                        flexShrink: 0,
-                        bgcolor: 'rgba(251,191,36,0.15)',
-                        border: '1px solid rgba(251,191,36,0.4)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontSize: '0.6rem',
-                          fontWeight: 800,
-                          color: '#fbbf24',
-                          lineHeight: 1,
-                        }}
-                      >
+                    <Box sx={{
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      bgcolor: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1 }}>
                         {displayEntries.length - idx}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontWeight: 700,
-                          color: 'rgba(255,255,255,0.9)',
-                          display: 'block',
-                          fontSize: '0.74rem',
-                        }}
-                      >
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'rgba(255,255,255,0.9)', display: 'block', fontSize: '0.74rem' }}>
                         {entry.editorName}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.67rem' }}
-                      >
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.67rem' }}>
                         ⏱ {entry.timeStr} น.
                       </Typography>
                     </Box>
                   </Stack>
                   {!hasChanges && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: 'rgba(255,255,255,0.3)',
-                        fontStyle: 'italic',
-                        fontSize: '0.67rem',
-                      }}
-                    >
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', fontSize: '0.67rem' }}>
                       ไม่มีการเปลี่ยนแปลงกำลังพล
                     </Typography>
                   )}
@@ -3632,49 +3650,18 @@ function ReportEditHistoryPanel({
                 {hasChanges && (
                   <Stack spacing={0.5}>
                     {added.length > 0 && (
-                      <Box
-                        sx={{
-                          p: 1,
-                          bgcolor: 'rgba(16,185,129,0.08)',
-                          border: '1px solid rgba(16,185,129,0.2)',
-                          borderRadius: '8px',
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{ color: '#10b981', fontWeight: 700, display: 'block', mb: 0.5 }}
-                        >
+                      <Box sx={{ p: 1, bgcolor: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'block', mb: 0.5 }}>
                           ➕ เพิ่มกำลังพล ({added.length} คน)
                         </Typography>
                         <Stack spacing={0.4}>
                           {added.map((w, wi) => (
-                            <Box
-                              key={wi}
-                              sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}
-                            >
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: '#a7f3d0',
-                                  fontWeight: 600,
-                                  fontSize: '0.72rem',
-                                  flexShrink: 0,
-                                }}
-                              >
+                            <Box key={wi} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: '#a7f3d0', fontWeight: 600, fontSize: '0.72rem', flexShrink: 0 }}>
                                 👷 {w.name || w.workerName}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: 'rgba(167,243,208,0.65)',
-                                  fontSize: '0.67rem',
-                                  textAlign: 'right',
-                                }}
-                              >
-                                {w.shiftTimes?.day ? `ปกติ (${w.shiftTimes.day})` : ''}
-                                {w.shiftTimes?.otEvening
-                                  ? ` | OT เย็น (${w.shiftTimes.otEvening})`
-                                  : ''}
+                              <Typography variant="caption" sx={{ color: 'rgba(167,243,208,0.65)', fontSize: '0.67rem', textAlign: 'right' }}>
+                                {w.shiftTimes?.day ? `ปกติ (${w.shiftTimes.day})` : ''}{w.shiftTimes?.otEvening ? ` | OT เย็น (${w.shiftTimes.otEvening})` : ''}
                               </Typography>
                             </Box>
                           ))}
@@ -3682,49 +3669,18 @@ function ReportEditHistoryPanel({
                       </Box>
                     )}
                     {removed.length > 0 && (
-                      <Box
-                        sx={{
-                          p: 1,
-                          bgcolor: 'rgba(239,68,68,0.08)',
-                          border: '1px solid rgba(239,68,68,0.2)',
-                          borderRadius: '8px',
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{ color: '#ef4444', fontWeight: 700, display: 'block', mb: 0.5 }}
-                        >
+                      <Box sx={{ p: 1, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 700, display: 'block', mb: 0.5 }}>
                           ➖ ลบกำลังพลออก ({removed.length} คน)
                         </Typography>
                         <Stack spacing={0.4}>
                           {removed.map((w, wi) => (
-                            <Box
-                              key={wi}
-                              sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}
-                            >
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: '#fca5a5',
-                                  fontWeight: 600,
-                                  fontSize: '0.72rem',
-                                  flexShrink: 0,
-                                }}
-                              >
+                            <Box key={wi} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: '#fca5a5', fontWeight: 600, fontSize: '0.72rem', flexShrink: 0 }}>
                                 👷 {w.name || w.workerName}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: 'rgba(252,165,165,0.65)',
-                                  fontSize: '0.67rem',
-                                  textAlign: 'right',
-                                }}
-                              >
-                                {w.shiftTimes?.day ? `ปกติ (${w.shiftTimes.day})` : ''}
-                                {w.shiftTimes?.otEvening
-                                  ? ` | OT เย็น (${w.shiftTimes.otEvening})`
-                                  : ''}
+                              <Typography variant="caption" sx={{ color: 'rgba(252,165,165,0.65)', fontSize: '0.67rem', textAlign: 'right' }}>
+                                {w.shiftTimes?.day ? `ปกติ (${w.shiftTimes.day})` : ''}{w.shiftTimes?.otEvening ? ` | OT เย็น (${w.shiftTimes.otEvening})` : ''}
                               </Typography>
                             </Box>
                           ))}
@@ -3732,56 +3688,20 @@ function ReportEditHistoryPanel({
                       </Box>
                     )}
                     {modified.length > 0 && (
-                      <Box
-                        sx={{
-                          p: 1,
-                          bgcolor: 'rgba(245,158,11,0.08)',
-                          border: '1px solid rgba(245,158,11,0.2)',
-                          borderRadius: '8px',
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{ color: '#f59e0b', fontWeight: 700, display: 'block', mb: 0.5 }}
-                        >
+                      <Box sx={{ p: 1, bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, display: 'block', mb: 0.5 }}>
                           📝 เปลี่ยนเวลาทำงาน ({modified.length} คน)
                         </Typography>
                         <Stack spacing={0.75}>
                           {modified.map((w, wi) => (
-                            <Box
-                              key={wi}
-                              sx={{ borderLeft: '2px solid rgba(245,158,11,0.5)', pl: 1 }}
-                            >
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: '#fef3c7',
-                                  fontWeight: 700,
-                                  display: 'block',
-                                  fontSize: '0.72rem',
-                                }}
-                              >
+                            <Box key={wi} sx={{ borderLeft: '2px solid rgba(245,158,11,0.5)', pl: 1 }}>
+                              <Typography variant="caption" sx={{ color: '#fef3c7', fontWeight: 700, display: 'block', fontSize: '0.72rem' }}>
                                 👷 {w.name}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: 'rgba(252,211,77,0.6)',
-                                  display: 'block',
-                                  fontSize: '0.67rem',
-                                }}
-                              >
+                              <Typography variant="caption" sx={{ color: 'rgba(252,211,77,0.6)', display: 'block', fontSize: '0.67rem' }}>
                                 จาก: {w.from}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: '#f59e0b',
-                                  display: 'block',
-                                  fontSize: '0.67rem',
-                                  fontWeight: 600,
-                                }}
-                              >
+                              <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', fontSize: '0.67rem', fontWeight: 600 }}>
                                 เป็น: {w.to}
                               </Typography>
                             </Box>
@@ -3790,26 +3710,12 @@ function ReportEditHistoryPanel({
                       </Box>
                     )}
                     {leaveChanges.length > 0 && (
-                      <Box
-                        sx={{
-                          p: 1,
-                          bgcolor: 'rgba(139,92,246,0.08)',
-                          border: '1px solid rgba(139,92,246,0.2)',
-                          borderRadius: '8px',
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{ color: '#a78bfa', fontWeight: 700, display: 'block', mb: 0.5 }}
-                        >
+                      <Box sx={{ p: 1, bgcolor: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px' }}>
+                        <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 700, display: 'block', mb: 0.5 }}>
                           ℹ️ การเปลี่ยนแปลงใบลา
                         </Typography>
                         {leaveChanges.map((c, ci) => (
-                          <Typography
-                            key={ci}
-                            variant="caption"
-                            sx={{ color: '#ddd6fe', display: 'block', fontSize: '0.7rem' }}
-                          >
+                          <Typography key={ci} variant="caption" sx={{ color: '#ddd6fe', display: 'block', fontSize: '0.7rem' }}>
                             {c}
                           </Typography>
                         ))}

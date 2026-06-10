@@ -9,6 +9,9 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authService } from '../../services/auth/AuthService';
 import { AppError } from '../middleware/errorHandler';
+import { auth as firebaseAuth } from '../../config/firebase';
+import { resolveUserProfile } from '../middleware/auth';
+import { activityService } from '../../services/activity/ActivityService';
 
 const router = Router();
 
@@ -31,6 +34,15 @@ router.post(
 
       const { username, password } = req.body;
       const result = await authService.login({ username, password });
+
+      // บันทึก activity log + ตั้ง presence (fire-and-forget)
+      activityService.recordLogin(
+        result.user.id,
+        result.user.name,
+        result.user.roleCode,
+        result.user.department,
+        req.ip || '',
+      ).catch(() => {});
 
       res.json({
         success: true,
@@ -64,6 +76,11 @@ router.post('/logout', async (req: Request, res: Response) => {
     const userId = req.body.userId;
 
     await authService.logout(userId);
+
+    // บันทึก logout activity (fire-and-forget)
+    if (userId) {
+      activityService.recordLogout(userId).catch(() => {});
+    }
 
     res.json({
       success: true,

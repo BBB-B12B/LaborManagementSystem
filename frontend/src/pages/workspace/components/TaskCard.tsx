@@ -20,6 +20,7 @@ import {
   Delete as DeleteIcon,
   Notifications as NotificationsIcon,
   Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { LinearProgress } from '@mui/material';
 import type { Task } from '@/services/taskService';
@@ -32,17 +33,11 @@ interface TaskCardProps {
   onDelete?: (task: Task) => void;
   onClick?: (task: Task) => void;
   onViewHistory?: (task: Task) => void;
+  onHide?: (task: Task) => void;
   hasUnread?: boolean;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({
-  task,
-  onEdit,
-  onDelete,
-  onClick,
-  onViewHistory,
-  hasUnread,
-}) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, onHide, hasUnread }) => {
   const theme = useTheme();
   const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -86,11 +81,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const getDueDateTooltip = () => {
-    if (!task.dueDate)
-      return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+    if (!task.dueDate) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
     const dueDateObj = new Date(task.dueDate);
-    if (isNaN(dueDateObj.getTime()))
-      return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+    if (isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -140,23 +133,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     if (!task.isSupportRequest) return false;
     if (user.department === 'WH') return true;
 
-    const uEmpId = String(user.employeeId || user.id || '')
-      .toLowerCase()
-      .trim();
-    const uId = String(user.id || '')
-      .toLowerCase()
-      .trim();
+    const uEmpId = String(user.employeeId || user.id || '').toLowerCase().trim();
+    const uId = String(user.id || '').toLowerCase().trim();
     const isSupportAssignee = task.supportAssignees?.some((a: any) => {
-      const aEmpId = String(a.employeeId || a.id || '')
-        .toLowerCase()
-        .trim();
+      const aEmpId = String(a.employeeId || a.id || '').toLowerCase().trim();
       return aEmpId === uEmpId || aEmpId === uId;
     });
     if (isSupportAssignee) return true;
 
-    const isViewingCrossProject = user.projectLocationIds
-      ? !user.projectLocationIds.includes(task.projectId)
-      : false;
+    const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
     return isViewingCrossProject && task.isPickedUpBySupport;
   })();
 
@@ -187,6 +172,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     event.stopPropagation();
     handleMenuClose();
     if (onViewHistory) onViewHistory(task);
+  };
+
+  const handleHide = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    if (onHide) onHide(task);
   };
 
   return (
@@ -248,12 +239,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             >
               <Typography
                 variant="caption"
-                sx={{
-                  fontWeight: 800,
-                  color: '#92400e',
+                sx={{ 
+                  fontWeight: 800, 
+                  color: '#92400e', 
                   fontSize: '0.625rem',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
+                  letterSpacing: '0.5px'
                 }}
               >
                 Support
@@ -263,11 +254,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </Stack>
 
         {(onEdit || onDelete || onViewHistory) && (
-          <IconButton
-            size="small"
-            onClick={handleMenuClick}
-            sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}
-          >
+          <IconButton size="small" onClick={handleMenuClick} sx={{ color: '#9ca3af', mt: -0.5, mr: -1 }}>
             <MoreVertIcon fontSize="small" />
           </IconButton>
         )}
@@ -305,14 +292,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <Typography variant="body2">Edit</Typography>
             </MenuItem>
           )}
+          {onHide && task.status === 'completed' && (
+            <MenuItem onClick={handleHide}>
+              <ListItemIcon>
+                <VisibilityOffIcon fontSize="small" sx={{ color: '#64748b' }} />
+              </ListItemIcon>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>ซ่อน</Typography>
+            </MenuItem>
+          )}
           {onDelete && task.isDeletable !== false && (
             <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
               <ListItemIcon>
                 <DeleteIcon fontSize="small" color="error" />
               </ListItemIcon>
-              <Typography variant="body2" color="error">
-                Delete
-              </Typography>
+              <Typography variant="body2" color="error">Delete</Typography>
             </MenuItem>
           )}
         </Menu>
@@ -353,41 +346,30 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       >
         {task.description}
       </Typography>
-
+      
       {/* Progress Section */}
       <Box sx={{ mb: 1.5 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
-          <Typography
-            variant="caption"
-            sx={{ fontWeight: 700, color: '#4b5563', fontSize: '0.7rem' }}
-          >
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563', fontSize: '0.7rem' }}>
             Progress
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              fontWeight: 800,
-              color: (task.dailyProgress || 0) >= 100 ? '#059669' : '#1c1e2b',
-              fontSize: '0.7rem',
-            }}
-          >
+          <Typography variant="caption" sx={{ fontWeight: 800, color: (task.dailyProgress || 0) >= 100 ? '#059669' : '#1c1e2b', fontSize: '0.7rem' }}>
             {task.dailyProgress || 0}%
           </Typography>
         </Stack>
-        <LinearProgress
-          variant="determinate"
-          value={Math.min(100, Math.max(0, task.dailyProgress || 0))}
+        <LinearProgress 
+          variant="determinate" 
+          value={Math.min(100, Math.max(0, task.dailyProgress || 0))} 
           sx={{
             height: 4,
             borderRadius: 2,
             backgroundColor: '#f1f3f6',
             '& .MuiLinearProgress-bar': {
               borderRadius: 2,
-              background:
-                (task.dailyProgress || 0) >= 100
-                  ? 'linear-gradient(90deg, #059669, #10b981)'
-                  : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-            },
+              background: (task.dailyProgress || 0) >= 100 
+                ? 'linear-gradient(90deg, #059669, #10b981)' 
+                : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+            }
           }}
         />
       </Box>
@@ -497,10 +479,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <Box sx={{ borderTop: '1px dashed #cbd5e1', my: 1.25 }} />
 
       {/* Assigned to Label */}
-      <Typography
-        variant="caption"
-        sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, fontSize: '0.7rem' }}
-      >
+      <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, fontSize: '0.7rem' }}>
         Assigned to:
       </Typography>
 
@@ -508,11 +487,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Stack direction="row" alignItems="center" spacing={1}>
           {(() => {
-            const displayAssignees =
-              isActingAsSupport && task.supportAssignees && task.supportAssignees.length > 0
-                ? task.supportAssignees
-                : task.assignees || [];
-
+            const displayAssignees = isActingAsSupport && task.supportAssignees && task.supportAssignees.length > 0
+              ? task.supportAssignees
+              : task.assignees || [];
+            
             return displayAssignees && displayAssignees.length > 0 ? (
               <AvatarGroup
                 max={4}
@@ -527,9 +505,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               >
                 {displayAssignees.map((assignee, idx) => (
                   <Tooltip key={idx} title={assignee.name} arrow>
-                    <Avatar
-                      alt={assignee.name}
-                      src={assignee.avatarUrl}
+                    <Avatar 
+                      alt={assignee.name} 
+                      src={assignee.avatarUrl} 
                       sx={{ bgcolor: 'primary.main' }}
                     >
                       {assignee.name.substring(0, 2).toUpperCase()}

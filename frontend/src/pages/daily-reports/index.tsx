@@ -50,6 +50,10 @@ import {
   Paper,
   Chip,
   Autocomplete,
+  Avatar,
+  AvatarGroup,
+  LinearProgress,
+  Tooltip,
   Checkbox,
   Stack,
   Fade,
@@ -72,9 +76,10 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { usePickerContext } from '@mui/x-date-pickers/hooks';
+import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { th as thLocale } from 'date-fns/locale/th';
+import thLocale from 'date-fns/locale/th';
 import { format, subDays, isBefore, isSameDay, isValid, isAfter, startOfDay } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
@@ -160,6 +165,7 @@ export default function DailyReportPage() {
   // --- 1. State Management ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [pageMode, setPageMode] = useState<'daily-report' | 'requests'>('daily-report');
   const [reportDate, setReportDate] = useState<Date>(new Date());
   const [progress, setProgress] = useState<number | string>(0);
   const [previousProgress, setPreviousProgress] = useState(0);
@@ -297,6 +303,8 @@ export default function DailyReportPage() {
       .filter(Boolean) as string[];
   }, [taskReportsData, selectedTask, isActingAsSupport]);
 
+
+
   const { data: allSiteReportsData } = useQuery({
     queryKey: ['task-reports-site', selectedTask?.id],
     queryFn: async () => {
@@ -390,6 +398,11 @@ export default function DailyReportPage() {
   }, [selectedTask, boundaryDate, earliestReportDateStr]);
 
   const calendarMinDate = useMemo(() => {
+    if (pageMode === 'requests') {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
     if (!effectiveBoundaryDate || isNaN(effectiveBoundaryDate.getTime())) return undefined;
     let minD = new Date(effectiveBoundaryDate);
 
@@ -409,7 +422,9 @@ export default function DailyReportPage() {
       });
     }
     return minD;
-  }, [effectiveBoundaryDate, selectedTask, isActingAsSupport]);
+  }, [pageMode, effectiveBoundaryDate, selectedTask, isActingAsSupport]);
+
+
 
   const completionDateStr = useMemo(() => {
     // Always use Site reports to determine completion date for locking purposes
@@ -447,6 +462,24 @@ export default function DailyReportPage() {
     return dates[dates.length - 1];
   }, [selectedTask, allSiteReportsData]);
 
+  const calendarMaxDate = useMemo(() => {
+    if (pageMode === 'requests') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 59, 59, 999);
+      return tomorrow;
+    }
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (completionDateStr) {
+      const compDate = new Date(completionDateStr);
+      compDate.setHours(23, 59, 59, 999);
+      return compDate < today ? compDate : today;
+    }
+    return today;
+  }, [pageMode, completionDateStr]);
+
+
   const isAfterCompletion = useMemo(() => {
     if (!completionDateStr || !reportDate) return false;
     const selectedDateStr = format(reportDate, 'yyyy-MM-dd');
@@ -474,15 +507,20 @@ export default function DailyReportPage() {
 
   const reportsSummaryMap = useMemo(() => {
     const map: Record<string, any> = {};
-    if (!taskReportsData || !Array.isArray(taskReportsData)) return map;
+    if (!taskReportsData || !Array.isArray(taskReportsData) || !selectedTask) return map;
+
+    let currentRevId = selectedTask.revisionId || selectedTask.currentRevision || 'rev00';
+    if (isActingAsSupport) {
+      currentRevId = currentRevId.replace('rev', 'help');
+    }
+
     taskReportsData.forEach((r: any) => {
+      const rRevId = r.revisionId || r._revisionId;
+      if (rRevId !== currentRevId) return;
+
       let rDate: Date;
       const rawDate = r.reportDate || r.id || r.date || r.reportDateId;
-      if (
-        rawDate &&
-        typeof rawDate === 'object' &&
-        ('_seconds' in rawDate || 'seconds' in rawDate)
-      ) {
+      if (rawDate && typeof rawDate === 'object' && ('_seconds' in rawDate || 'seconds' in rawDate)) {
         rDate = new Date((rawDate._seconds || rawDate.seconds) * 1000);
       } else if (typeof rawDate === 'string' && rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const [y, m, d] = rawDate.split('-').map(Number);
@@ -496,7 +534,7 @@ export default function DailyReportPage() {
       }
     });
     return map;
-  }, [taskReportsData]);
+  }, [taskReportsData, selectedTask, isActingAsSupport]);
 
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
@@ -515,12 +553,7 @@ export default function DailyReportPage() {
       }
     }
 
-    if (
-      effectiveBoundaryDate &&
-      !isNaN(effectiveBoundaryDate.getTime()) &&
-      !hasReport &&
-      !hasValidUnlock
-    ) {
+    if (effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) && !hasReport && !hasValidUnlock) {
       const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
       if (dateStr < boundDateStr) {
         return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
@@ -535,15 +568,10 @@ export default function DailyReportPage() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isPast = isBefore(day, today) && !isSameDay(day, today);
-    const boundDateStr =
-      effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime())
-        ? format(effectiveBoundaryDate, 'yyyy-MM-dd')
-        : '';
+    const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
     const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
 
-    const isLocked =
-      (isPast && isBefore(day, subDays(today, 3)) && !hasValidUnlock) ||
-      (isBeforeBound && !hasValidUnlock);
+    const isLocked = (isPast && isBefore(day, subDays(today, 3)) && !hasValidUnlock) || (isBeforeBound && !hasValidUnlock);
     const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
     const isRequested = selectedTask?.[requestsField] && selectedTask[requestsField][dateStr];
     const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
@@ -568,27 +596,24 @@ export default function DailyReportPage() {
           outsideCurrentMonth={outsideCurrentMonth}
           day={day}
           sx={{
-            ...(hasReport &&
-              !outsideCurrentMonth && {
-                fontWeight: 'bold',
-                '&:not(.Mui-selected)': {
-                  ...(isCompleted
-                    ? {
-                        backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
-                        color: '#059669 !important',
-                        '&:hover': {
-                          backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
-                        },
-                      }
-                    : {
-                        backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
-                        color: '#d97706 !important',
-                        '&:hover': {
-                          backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
-                        },
-                      }),
-                },
-              }),
+            ...(hasReport && !outsideCurrentMonth && {
+              fontWeight: 'bold',
+              '&:not(.Mui-selected)': {
+                ...(isCompleted ? {
+                  backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
+                  color: '#059669 !important',
+                  '&:hover': {
+                    backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
+                  },
+                } : {
+                  backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
+                  color: '#d97706 !important',
+                  '&:hover': {
+                    backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
+                  },
+                }),
+              },
+            }),
           }}
         />
         {badgeColor && (
@@ -611,6 +636,7 @@ export default function DailyReportPage() {
   };
 
   const CustomActionBar = (props: PickersActionBarProps) => {
+    const { acceptValueChanges } = usePickerContext();
     return (
       <Stack
         className={props.className}
@@ -622,44 +648,18 @@ export default function DailyReportPage() {
           alignItems: 'center',
           width: 320,
           boxSizing: 'border-box',
-          mx: 'auto',
+          mx: 'auto'
         }}
       >
         {/* Row 1: Reports Submitted (Background highlight) */}
         <Stack direction="row" spacing={1.5} justifyContent="center" flexWrap="wrap">
           <Stack direction="row" alignItems="center" spacing={0.5}>
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                bgcolor: 'rgba(5, 150, 105, 0.15)',
-                border: '1px solid #059669',
-                borderRadius: 0.5,
-              }}
-            />
-            <Typography
-              variant="caption"
-              sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}
-            >
-              ส่งแล้ว (ครบ 100%)
-            </Typography>
+            <Box sx={{ width: 12, height: 12, bgcolor: 'rgba(5, 150, 105, 0.15)', border: '1px solid #059669', borderRadius: 0.5 }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ส่งแล้ว (ครบ 100%)</Typography>
           </Stack>
           <Stack direction="row" alignItems="center" spacing={0.5}>
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                bgcolor: 'rgba(217, 119, 6, 0.15)',
-                border: '1px solid #d97706',
-                borderRadius: 0.5,
-              }}
-            />
-            <Typography
-              variant="caption"
-              sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}
-            >
-              ส่งแล้ว (กำลังทำ)
-            </Typography>
+            <Box sx={{ width: 12, height: 12, bgcolor: 'rgba(217, 119, 6, 0.15)', border: '1px solid #d97706', borderRadius: 0.5 }} />
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ส่งแล้ว (กำลังทำ)</Typography>
           </Stack>
         </Stack>
 
@@ -667,32 +667,36 @@ export default function DailyReportPage() {
         <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <Box sx={{ width: 6, height: 6, bgcolor: 'warning.main', borderRadius: '50%' }} />
-            <Typography
-              variant="caption"
-              sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}
-            >
-              ยังไม่ได้ลง (ส่งได้)
-            </Typography>
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ยังไม่ได้ลง (ส่งได้)</Typography>
           </Stack>
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <Box sx={{ width: 6, height: 6, bgcolor: 'error.main', borderRadius: '50%' }} />
-            <Typography
-              variant="caption"
-              sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}
-            >
-              ไม่มีข้อมูล (ล็อค)
-            </Typography>
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ไม่มีข้อมูล (ล็อค)</Typography>
           </Stack>
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <Box sx={{ width: 6, height: 6, bgcolor: '#a855f7', borderRadius: '50%' }} />
-            <Typography
-              variant="caption"
-              sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}
-            >
-              ขอปลดล็อคลงย้อนหลัง
-            </Typography>
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, fontSize: '10px' }}>ขอปลดล็อคลงย้อนหลัง</Typography>
           </Stack>
         </Stack>
+
+        {/* Confirm button — mobile only */}
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={acceptValueChanges}
+          sx={{
+            display: { xs: 'flex', md: 'none' },
+            bgcolor: '#f97316',
+            borderRadius: '10px',
+            fontWeight: 800,
+            fontSize: '0.9rem',
+            py: 1,
+            '&:hover': { bgcolor: '#ea6c0a' },
+            boxShadow: '0 4px 12px rgba(249,115,22,0.35)',
+          }}
+        >
+          ยืนยันวันที่เลือก
+        </Button>
       </Stack>
     );
   };
@@ -707,10 +711,18 @@ export default function DailyReportPage() {
     queryFn: async () => {
       if (!selectedTask || !dateStr) return null;
 
+      let currentRevId = selectedTask.revisionId || selectedTask.currentRevision || 'rev00';
+      if (isActingAsSupport) {
+        currentRevId = currentRevId.replace('rev', 'help');
+      }
+
       let lastPrevProgress = 0;
       if (taskReportsData && Array.isArray(taskReportsData)) {
         const sortedPastReports = [...taskReportsData]
           .filter((r: any) => {
+            const rRevId = r.revisionId || r._revisionId;
+            if (rRevId !== currentRevId) return false;
+
             const rDateRaw = r.reportDate || r.id;
             let rDate: Date;
             if (
@@ -743,13 +755,12 @@ export default function DailyReportPage() {
       if (taskReportsData && Array.isArray(taskReportsData)) {
         const sortedFutureReports = [...taskReportsData]
           .filter((r: any) => {
+            const rRevId = r.revisionId || r._revisionId;
+            if (rRevId !== currentRevId) return false;
+
             const rDateRaw = r.reportDate || r.id;
             let rDate: Date;
-            if (
-              rDateRaw &&
-              typeof rDateRaw === 'object' &&
-              ('_seconds' in rDateRaw || 'seconds' in rDateRaw)
-            ) {
+            if (rDateRaw && typeof rDateRaw === 'object' && ('_seconds' in rDateRaw || 'seconds' in rDateRaw)) {
               rDate = new Date((rDateRaw._seconds || rDateRaw.seconds) * 1000);
             } else {
               rDate = new Date(rDateRaw);
@@ -759,10 +770,8 @@ export default function DailyReportPage() {
           .sort((a, b) => {
             const aDateRaw = a.reportDate || a.id;
             const bDateRaw = b.reportDate || b.id;
-            const aTime =
-              aDateRaw?.seconds || aDateRaw?._seconds || new Date(aDateRaw).getTime() / 1000;
-            const bTime =
-              bDateRaw?.seconds || bDateRaw?._seconds || new Date(bDateRaw).getTime() / 1000;
+            const aTime = aDateRaw?.seconds || aDateRaw?._seconds || new Date(aDateRaw).getTime() / 1000;
+            const bTime = bDateRaw?.seconds || bDateRaw?._seconds || new Date(bDateRaw).getTime() / 1000;
             return aTime - bTime; // เรียงจากเก่าที่สุด (ใกล้ที่สุด)
           });
         if (sortedFutureReports.length > 0) {
@@ -791,28 +800,15 @@ export default function DailyReportPage() {
       let advanceRequest = null;
       try {
         const reqs = await taskService.getAdvanceRequests(selectedTask.id);
-        advanceRequest =
-          reqs.find((r: any) => {
-            const rDateStr = r.reportDate
-              ? format(parseSafeDate(r.reportDate) || new Date(), 'yyyy-MM-dd')
-              : r.requestId;
-            return (
-              rDateStr === dateStr &&
-              (isActingAsSupport ? r.isSupportReport === true : !r.isSupportReport)
-            );
-          }) || null;
+        advanceRequest = reqs.find((r: any) => {
+          const rDateStr = r.reportDate ? format(parseSafeDate(r.reportDate) || new Date(), 'yyyy-MM-dd') : r.requestId;
+          return rDateStr === dateStr && (isActingAsSupport ? r.isSupportReport === true : !r.isSupportReport);
+        }) || null;
       } catch (e) {
-        console.error('Failed to fetch advance request:', e);
+        console.error("Failed to fetch advance request:", e);
       }
 
-      return {
-        report,
-        siteReport,
-        supportReport,
-        lastPrevProgress,
-        lastNextProgress,
-        advanceRequest,
-      };
+      return { report, siteReport, supportReport, lastPrevProgress, lastNextProgress, advanceRequest };
     },
     enabled: !!selectedTask && !!dateStr,
     staleTime: remainingStaleTime,
@@ -824,16 +820,24 @@ export default function DailyReportPage() {
   const [selectedWorkers, setSelectedWorkers] = useState<any[]>([]);
   const [isAutofilledFromRequest, setIsAutofilledFromRequest] = useState(false);
 
+  const regularActiveSlots = useMemo(() => {
+    const defaultSlots = ['เข้า', 'พักเที่ยง', 'เข้าบ่าย', 'ออก'];
+    if (isActingAsSupport) return defaultSlots;
+    const activeRegularWorkers = selectedWorkers.filter((w) => w.times?.regular);
+    if (activeRegularWorkers.length === 0) return defaultSlots;
+    const regTimes = new Set(activeRegularWorkers.map((w) => w.times?.regTime || '08:00 - 17:00'));
+    if (regTimes.size === 1 && regTimes.has('08:00 - 12:00')) {
+      return ['เข้า', 'พักเที่ยง'];
+    }
+    if (regTimes.size === 1 && regTimes.has('13:00 - 17:00')) {
+      return ['เข้าบ่าย', 'ออก'];
+    }
+    return defaultSlots;
+  }, [selectedWorkers, isActingAsSupport]);
+
   useEffect(() => {
     if (reportDetailData) {
-      const {
-        report,
-        siteReport,
-        supportReport,
-        lastPrevProgress: lp,
-        lastNextProgress: ln,
-        advanceRequest,
-      } = reportDetailData;
+      const { report, siteReport, supportReport, lastPrevProgress: lp, lastNextProgress: ln, advanceRequest } = reportDetailData;
       setPreviousProgress(lp);
       setNextProgress(ln ?? null);
       setSiteReportData(siteReport);
@@ -942,7 +946,7 @@ export default function DailyReportPage() {
         }
 
         // Show auto-filled banner ONLY on reporting days (not future dates)
-        const isFuture = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+        const isFuture = pageMode === 'requests';
         if (!isFuture) {
           setIsAutofilledFromRequest(true);
         }
@@ -977,6 +981,7 @@ export default function DailyReportPage() {
       }
     }
   }, [isDetailFetching, showLoading, hideLoading]);
+
 
   const readonlySupportWorkers = useMemo(() => {
     if (!supportReportData) return [];
@@ -1082,7 +1087,7 @@ export default function DailyReportPage() {
           otMorning: [],
           otNoon: [],
           otEvening: [],
-        },
+        }
       };
     }
     const p = siteReportData.photos;
@@ -1108,11 +1113,25 @@ export default function DailyReportPage() {
             otMorning: [],
             otNoon: [],
             otEvening: [],
-          },
+          }
     };
   }, [siteReportData]);
 
+
   // --- 1.1 Derived States for Business Rules ---
+  const hasValidUnlock = useMemo(() => {
+    if (!reportDate || !selectedTask) return false;
+    const dateStr = format(reportDate, 'yyyy-MM-dd');
+    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+    const unlockedDates = selectedTask?.[unlockedDatesField];
+    if (unlockedDates && unlockedDates[dateStr]) {
+      const unlockInfo = unlockedDates[dateStr];
+      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
+      return unlockUntil > new Date();
+    }
+    return false;
+  }, [reportDate, selectedTask, isActingAsSupport]);
+
   const isRetroactiveOver3Days = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1124,20 +1143,16 @@ export default function DailyReportPage() {
 
     if (diffDays <= 3) return false;
 
-    // Check if it's unlocked
-    const dateStr = format(reportDate, 'yyyy-MM-dd');
-    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
-    const unlockedDates = selectedTask?.[unlockedDatesField];
-    if (unlockedDates && unlockedDates[dateStr]) {
-      const unlockInfo = unlockedDates[dateStr];
-      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
-      if (unlockUntil > new Date()) {
-        return false; // It's unlocked, so it's not locked
-      }
-    }
+    return !hasValidUnlock;
+  }, [reportDate, hasValidUnlock]);
 
-    return true;
-  }, [reportDate, selectedTask]);
+  const isReportSubmittedAndPast = useMemo(() => {
+    if (pageMode === 'requests') return false;
+    const reportStatus = reportDetailData?.report?.status;
+    const today = startOfDay(new Date());
+    const isPast = isBefore(reportDate, today);
+    return reportStatus === 'submitted' && isPast;
+  }, [pageMode, reportDetailData, reportDate]);
 
   // Simulated Wage Period Lock (T-902)
   // In a real scenario, this would check against an API or a list of approved periods
@@ -1160,8 +1175,8 @@ export default function DailyReportPage() {
     return false;
   }, [reportDetailData]);
 
-  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked;
-  const isAdvanceRequestUI = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked || (isReportSubmittedAndPast && !hasValidUnlock);
+  const isAdvanceRequestUI = pageMode === 'requests';
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
   // Bulk Time State for Popup (T-903)
@@ -1291,9 +1306,7 @@ export default function DailyReportPage() {
       midnight.setHours(24, 0, 0, 0); // Next midnight
       const timeToMidnight = midnight.getTime() - now.getTime();
 
-      console.log(
-        `[DailyReport] Midnight auto-refresh scheduled in ${Math.round(timeToMidnight / 1000 / 60)} minutes.`
-      );
+      console.log(`[DailyReport] Midnight auto-refresh scheduled in ${Math.round(timeToMidnight / 1000 / 60)} minutes.`);
 
       timeoutId = setTimeout(async () => {
         console.log('[DailyReport] Midnight automatic reset triggered!');
@@ -1318,6 +1331,13 @@ export default function DailyReportPage() {
     };
   }, [invalidateCache, queryClient, refetchTasks]);
 
+  // Open the sidebar automatically when no task is selected (selectedTask is null)
+  useEffect(() => {
+    if (!selectedTask) {
+      setIsSidebarOpen(true);
+    }
+  }, [selectedTask]);
+
   const { data: projectWorkers = [], isLoading: workersLoading } = useQuery({
     queryKey: ['workers', user?.roleCode, user?.department, user?.projectLocationIds?.[0]],
     queryFn: async () => {
@@ -1325,18 +1345,20 @@ export default function DailyReportPage() {
       // 1. If FM or Support FM (SFM): Fetch by department
       // 2. If Admin or others: Fetch by current project
       const isFM = user?.roleCode === 'FM';
+      const isGOD = user?.roleCode === 'GOD';
       let workers: any[] = [];
 
-      if (isFM) {
+      if (isGOD) {
+        // GOD เห็น DC ทั้งหมดในระบบ
+        workers = await dcService.getAllDCs({}).then(res => res.dailyContractors);
+      } else if (isFM) {
         const dept = user?.department;
         if (!dept) {
           console.warn('[DailyReport] FM has no department:', user?.name);
           return [];
         }
         console.log('[DailyReport] FM fetching workers by department:', dept);
-        workers = await dcService
-          .getAllDCs({ department: dept })
-          .then((res) => res.dailyContractors);
+        workers = await dcService.getAllDCs({ department: dept }).then(res => res.dailyContractors);
       } else {
         // Default: Fetch by Project Location
         const locationId = user?.projectLocationIds?.[0];
@@ -1357,7 +1379,7 @@ export default function DailyReportPage() {
           return bCount - aCount;
         });
       }
-
+      
       return workers;
     },
     enabled: !!user,
@@ -1371,7 +1393,15 @@ export default function DailyReportPage() {
     const items: any[] = [];
     if (!user) return items;
 
+    const isAdminRole = ['AM', 'GOD'].includes(String(user.roleCode || '').toUpperCase());
+
     allTasks.forEach((task: any) => {
+      // GOD / AM เห็นทุก task โดยไม่ต้องเช็ค assignee
+      if (isAdminRole) {
+        items.push({ ...task, isPastRevision: false });
+        return;
+      }
+
       const isCurrentAssignee = task.assignees?.some((a: any) => a.employeeId === user.employeeId);
       const isCurrentSupport = task.supportAssignees?.some(
         (a: any) => a.employeeId === user.employeeId
@@ -1438,20 +1468,37 @@ export default function DailyReportPage() {
     let filtered = processedTasks.filter(
       (t) =>
         t.taskName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.subtaskName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.categoryName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.taskId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.revisionName || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    if (pageMode === 'requests' && reportDate) {
+      const dateStr = format(reportDate, 'yyyy-MM-dd');
+      filtered = filtered.filter((t) => {
+        if (t.isPastRevision) return false;
+        if (t.startDate && dateStr < t.startDate) return false;
+        if (t.completionDate && dateStr > t.completionDate) return false;
+        return true;
+      });
+    }
+
     if (activeTab === 'pending') {
       // Show only current revision tasks that are not yet 100% AND not completed
       filtered = filtered.filter(
-        (t) => !t.isPastRevision && (t.dailyProgress || 0) < 100 && t.status !== 'completed'
+        (t) =>
+          !t.isPastRevision &&
+          (t.dailyProgress || 0) < 100 &&
+          t.status !== 'completed'
       );
     } else if (activeTab === 'finish') {
       // Show finished current revision (site 100%) OR status is completed OR any past revision
       filtered = filtered.filter(
-        (t) => t.isPastRevision || (t.dailyProgress || 0) >= 100 || t.status === 'completed'
+        (t) =>
+          t.isPastRevision ||
+          (t.dailyProgress || 0) >= 100 ||
+          t.status === 'completed'
       );
     }
 
@@ -1459,7 +1506,7 @@ export default function DailyReportPage() {
       if (a.isPastRevision !== b.isPastRevision) return a.isPastRevision ? 1 : -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
-  }, [processedTasks, searchTerm, activeTab]);
+  }, [processedTasks, searchTerm, activeTab, pageMode, reportDate]);
 
   // --- 3. Handlers ---
   const handleSelectTask = (task: any) => {
@@ -1485,9 +1532,19 @@ export default function DailyReportPage() {
     const dateStr = format(unlockRequestDate, 'yyyy-MM-dd');
     setIsSubmittingUnlockRequest(true);
     try {
-      await taskService.requestTaskReportUnlock(selectedTask.id, dateStr, isActingAsSupport);
+      await taskService.requestTaskReportUnlock(selectedTask.id, dateStr, isActingAsSupport, {
+        projectId: selectedTask.projectId || '',
+        projectName: selectedTask.projectName || '',
+        workOrderId: selectedTask.workOrderId || '',
+        workOrderName: selectedTask.workOrderName || '',
+        categoryId: selectedTask.categoryId || '',
+        categoryName: selectedTask.categoryName || '',
+        taskId: selectedTask.parentTaskId || selectedTask.id || '',
+        taskName: selectedTask.taskName || '',
+        subtaskName: selectedTask.subtaskName || '',
+      });
       toast.success(`ส่งคำขอปลดล็อคสิทธิ์สำหรับวันที่ ${dateStr} เรียบร้อยแล้ว`);
-
+      
       setSelectedTask((prev: any) => {
         if (!prev) return prev;
         const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
@@ -1498,9 +1555,9 @@ export default function DailyReportPage() {
             ...unlockRequests,
             [dateStr]: {
               requestedAt: new Date(),
-              requestedBy: user?.id || '',
-            },
-          },
+              requestedBy: user?.id || ''
+            }
+          }
         };
       });
 
@@ -1687,7 +1744,7 @@ export default function DailyReportPage() {
 
   const handleLaborShiftPhotoUpload = (files: FileList | null, shift: keyof ShiftPhotos) => {
     if (!files) return;
-    const maxPhotos = shift === 'regular' ? 4 : 2;
+    const maxPhotos = shift === 'regular' ? regularActiveSlots.length : 2;
     const newFiles = Array.from(files).slice(0, maxPhotos);
     const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
     setLaborPhotos((prev) => ({
@@ -1715,10 +1772,17 @@ export default function DailyReportPage() {
     }));
   };
 
-  const removePhoto = (index: number, type: 'site' | 'labor') => {
+  const removePhoto = (index: number, type: 'site' | 'labor', isExisting: boolean = false) => {
     if (type === 'site') {
-      setSitePhotos((prev) => prev.filter((_, i) => i !== index));
-      setSitePhotoPreviews((prev) => prev.filter((_, i) => i !== index));
+      if (isExisting) {
+        setExistingPhotos((prev) => ({
+          ...prev,
+          site: prev.site.filter((_, i) => i !== index),
+        }));
+      } else {
+        setSitePhotos((prev) => prev.filter((_, i) => i !== index));
+        setSitePhotoPreviews((prev) => prev.filter((_, i) => i !== index));
+      }
     }
   };
 
@@ -1727,7 +1791,7 @@ export default function DailyReportPage() {
     existingUrls: string[],
     previews: string[],
     onUpload: (f: FileList | null) => void,
-    onRemove: (i: number) => void,
+    onRemove: (i: number, isExisting: boolean) => void,
     type: 'site' | 'labor',
     disabled?: boolean
   ) => {
@@ -1772,7 +1836,7 @@ export default function DailyReportPage() {
             />
             <IconButton
               size="small"
-              onClick={() => onRemove(item.originalIndex)}
+              onClick={() => onRemove(item.originalIndex, item.isExisting)}
               sx={{
                 position: 'absolute',
                 top: 8,
@@ -1851,7 +1915,7 @@ export default function DailyReportPage() {
     const previews = isActingAsSupport ? [] : laborPhotoPreviews[shiftKey];
 
     const slotLabels =
-      shiftKey === 'regular' ? ['เข้า', 'พักเที่ยง', 'เข้าบ่าย', 'ออก'] : ['เข้า', 'ออก'];
+      shiftKey === 'regular' ? regularActiveSlots : ['เข้า', 'ออก'];
     const maxPhotos = slotLabels.length;
 
     const allPhotoItems = [
@@ -2042,18 +2106,21 @@ export default function DailyReportPage() {
     });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isFinalSubmit: boolean = true) => {
     // 1. Validation
     if (!selectedTask) return;
 
-    if (isFormDisabled) {
+    if (isDateLockedByWagePeriod) {
       enqueueSnackbar('ไม่สามารถบันทึกรายงานในวันที่งวดค่าแรงถูกปิดแล้ว', { variant: 'error' });
       return;
     }
 
-    const isAdvanceRequest = reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+    const isAdvanceRequest = pageMode === 'requests';
+    const isToday = isSameDay(reportDate, new Date());
+    const isFinalProgress = Number(progress) === 100;
+    const isPhotoRequired = isFinalSubmit && (!isToday || isFinalProgress);
 
-    if (!isActingAsSupport && !isAdvanceRequest) {
+    if (isFinalSubmit && !isActingAsSupport && !isAdvanceRequest && isPhotoRequired) {
       if (sitePhotos.length + existingPhotos.site.length < 2) {
         enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
         return;
@@ -2071,8 +2138,8 @@ export default function DailyReportPage() {
         if (activeShifts[shift.key]) {
           const totalPhotos =
             laborPhotos[shift.key].length + existingPhotos.labor[shift.key].length;
-          const required = shift.key === 'regular' ? 4 : 2;
-          const reqText = shift.key === 'regular' ? '(เข้า/พักเที่ยง/เข้าบ่าย/ออก)' : '(เข้า/ออก)';
+          const required = shift.key === 'regular' ? regularActiveSlots.length : 2;
+          const reqText = shift.key === 'regular' ? `(${regularActiveSlots.join('/')})` : '(เข้า/ออก)';
           if (totalPhotos < required) {
             enqueueSnackbar(
               `กรุณาแนบรูปถ่ายแรงงาน (${shift.label}) ให้ครบ ${required} รูป ${reqText}`,
@@ -2092,22 +2159,32 @@ export default function DailyReportPage() {
     }
 
     if (!isActingAsSupport && !isAdvanceRequest) {
-      if (progress === '') {
-        enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
-        return;
-      }
-      const numProgress = Number(progress);
-      if (numProgress <= previousProgress) {
-        enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
-          variant: 'error',
-        });
-        return;
-      }
-      if (nextProgress !== null && numProgress >= nextProgress) {
-        enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
-          variant: 'error',
-        });
-        return;
+      if (isFinalSubmit) {
+        if (progress === '') {
+          enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
+          return;
+        }
+        const numProgress = Number(progress);
+        if (numProgress <= previousProgress) {
+          enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
+            variant: 'error',
+          });
+          return;
+        }
+        if (nextProgress !== null && numProgress >= nextProgress) {
+          enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
+            variant: 'error',
+          });
+          return;
+        }
+      } else {
+        const numProgress = progress === '' ? previousProgress : Number(progress);
+        if (nextProgress !== null && numProgress >= nextProgress) {
+          enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
+            variant: 'error',
+          });
+          return;
+        }
       }
     }
 
@@ -2164,13 +2241,9 @@ export default function DailyReportPage() {
       });
 
       // Single Unified HTTP Upload request — extremely fast!
-      const uploadedUrls =
-        filesToUpload.length > 0
-          ? await dailyReportService.uploadPhotos(
-              filesToUpload,
-              `tasks/${selectedTask.taskId}/reports`
-            )
-          : [];
+      const uploadedUrls = filesToUpload.length > 0
+        ? await dailyReportService.uploadPhotos(filesToUpload, `tasks/${selectedTask.taskId}/reports`)
+        : [];
 
       // Redistribute URLs back to their original groups
       const newSitePhotoUrls: string[] = [];
@@ -2232,12 +2305,13 @@ export default function DailyReportPage() {
             custom: true,
           },
           medCertFileUrl: w.leave.medCertFileUrl || '',
-          leaveType: w.leave.medCertFileUrl || w.leave.medCertFile ? 'Paid' : 'Unpaid',
+          leaveType: (w.leave.medCertFileUrl || w.leave.medCertFile) ? 'Paid' : 'Unpaid',
         }));
 
       const payload = {
         reportDate: reportDate,
-        progress: Number(progress) || 0,
+        progress: progress === '' ? previousProgress : (Number(progress) || 0),
+        status: isAdvanceRequest ? undefined : (isFinalSubmit ? 'submitted' : 'draft'),
         note: note,
         photos: {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
@@ -2270,8 +2344,7 @@ export default function DailyReportPage() {
       };
 
       // ─── 4. Submit ───────────────────────────────────────────────────────
-      const isAdvanceRequestSubmit =
-        reportDate && isAfter(startOfDay(reportDate), startOfDay(new Date()));
+      const isAdvanceRequestSubmit = pageMode === 'requests';
       if (isAdvanceRequestSubmit) {
         await taskService.submitAdvanceRequest(selectedTask.id, {
           reportDate: format(reportDate, 'yyyy-MM-dd'),
@@ -2282,8 +2355,9 @@ export default function DailyReportPage() {
         toast.success('บันทึกแผนงานล่วงหน้าสำเร็จ');
       } else {
         await dailyReportService.submitTaskReport(selectedTask.id, payload, isActingAsSupport);
-        toast.success('บันทึกรายงานประจำวันลงใน Task สำเร็จ');
+        toast.success(isFinalSubmit ? 'ส่งรายงานประจำวันฉบับสมบูรณ์สำเร็จ' : 'บันทึกรายงานฉบับร่างสำเร็จ');
       }
+
 
       // Invalidate Cache once and perform a 100% Hard Refresh
       invalidateCache();
@@ -2310,8 +2384,7 @@ export default function DailyReportPage() {
       dailyReportService.clearCache(selectedTask.id);
     } catch (error) {
       console.error('Failed to submit report', error);
-      const errorMsg =
-        (error as any).response?.data?.error || (error as any).message || 'ไม่ทราบสาเหตุ';
+      const errorMsg = (error as any).response?.data?.error || (error as any).message || 'ไม่ทราบสาเหตุ';
       toast.error('เกิดข้อผิดพลาดในการบันทึกรายงาน: ' + errorMsg);
     } finally {
       loadingSource.current = null;
@@ -2322,7 +2395,7 @@ export default function DailyReportPage() {
 
   return (
     <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
-      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={thLocale}>
+      <LocalizationProvider dateAdapter={AdapterDateFnsV2} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box
             sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}
@@ -2338,39 +2411,43 @@ export default function DailyReportPage() {
                 alignItems: 'center',
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Typography variant="h4" fontWeight={900} color="#1e293b">
-                  Daily Report
-                </Typography>
-
-                {/* Tabs */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, width: { xs: '100%', lg: 'auto' } }}>
+                {/* Tabs: Dailyreport & Requests */}
                 <Stack
                   direction="row"
                   spacing={1}
-                  sx={{ bgcolor: '#f1f3f6', p: 0.5, borderRadius: '999px' }}
+                  sx={{
+                    bgcolor: '#f1f3f6',
+                    p: 0.5,
+                    borderRadius: '999px',
+                    width: { xs: '100%', lg: 320 },
+                  }}
                 >
                   {[
-                    { id: 'pending', label: 'Active Tasks' },
-                    { id: 'finish', label: 'Finish' },
+                    { id: 'daily-report', label: 'Dailyreport' },
+                    { id: 'requests', label: 'Requests' },
                   ].map((tab) => (
                     <Button
                       key={tab.id}
                       onClick={() => {
-                        setActiveTab(tab.id as 'pending' | 'finish');
-                        setSelectedTask(null); // Clear selected task when switching tabs
-                        setIsSidebarOpen(true); // Open the sidebar to show the filtered task list
+                        const targetMode = tab.id as 'daily-report' | 'requests';
+                        setPageMode(targetMode);
+                        setSelectedTask(null); // Clear selected task
+                        setReportDate(new Date()); // Reset date to today
+                        if (targetMode === 'requests') setActiveTab('pending'); // Requests mode only shows active tasks
                       }}
                       sx={{
+                        flex: 1,
                         px: 3,
                         py: 1,
                         borderRadius: '999px',
                         textTransform: 'none',
                         fontWeight: 700,
-                        color: activeTab === tab.id ? '#1c1e2b' : '#6b7280',
-                        bgcolor: activeTab === tab.id ? '#ffffff' : 'transparent',
-                        boxShadow: activeTab === tab.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                        color: pageMode === tab.id ? '#ffffff' : '#6b7280',
+                        bgcolor: pageMode === tab.id ? '#FF7F32' : 'transparent',
+                        boxShadow: pageMode === tab.id ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
                         '&:hover': {
-                          bgcolor: activeTab === tab.id ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                          bgcolor: pageMode === tab.id ? '#e06b24' : 'rgba(0, 0, 0, 0.04)',
                         },
                       }}
                     >
@@ -2380,20 +2457,26 @@ export default function DailyReportPage() {
                 </Stack>
               </Box>
 
-              <Button
-                variant="outlined"
-                startIcon={<History size={18} />}
-                onClick={() => router.push('/daily-reports/list')}
-                sx={{
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  px: 3,
-                  bgcolor: 'white',
-                }}
-              >
-                Backlog / History
-              </Button>
+              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                <Button
+                  variant="contained"
+                  startIcon={<History size={18} />}
+                  onClick={() => router.push('/daily-reports/list')}
+                  sx={{
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    px: 3,
+                    bgcolor: '#111827',
+                    color: '#ffffff',
+                    '&:hover': {
+                      bgcolor: '#000000',
+                    },
+                  }}
+                >
+                  Backlog
+                </Button>
+              </Box>
             </Box>
 
             {/* Content area */}
@@ -2402,11 +2485,14 @@ export default function DailyReportPage() {
                 <Grid
                   item
                   xs={12}
-                  lg={3.5}
+                  lg={isSidebarOpen ? 'auto' : 12}
                   sx={{
                     height: '100%',
                     display: isSidebarOpen ? 'block' : 'none',
                     transition: 'all 0.3s',
+                    width: { lg: 320 },
+                    maxWidth: { lg: 320 },
+                    flexBasis: { lg: 320 },
                   }}
                 >
                   <Paper
@@ -2416,12 +2502,12 @@ export default function DailyReportPage() {
                       display: 'flex',
                       flexDirection: 'column',
                       overflow: 'hidden',
-                      border: '1px solid #e2e8f0',
+                      border: 'none',
                       boxShadow: 'none',
-                      bgcolor: '#f8fafc',
+                      background: 'linear-gradient(180deg, #2c2437 0%, #201b2b 100%)',
                     }}
                   >
-                    <Box sx={{ p: 3, borderBottom: '1px solid #f1f5f9' }}>
+                    <Box sx={{ p: 3, borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
                       <Box
                         sx={{
                           display: 'flex',
@@ -2436,11 +2522,11 @@ export default function DailyReportPage() {
                               width: 36,
                               height: 36,
                               borderRadius: '10px',
-                              bgcolor: '#e2e8f0',
+                              bgcolor: 'rgba(255, 255, 255, 0.1)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: '#1e293b',
+                              color: '#FF7F32',
                               flexShrink: 0,
                             }}
                           >
@@ -2449,13 +2535,13 @@ export default function DailyReportPage() {
                           <Typography
                             variant="h6"
                             fontWeight={800}
-                            color="#1e293b"
+                            color="#ffffff"
                             sx={{ whiteSpace: 'nowrap' }}
                           >
                             My job{' '}
                             <Box
                               component="span"
-                              sx={{ color: '#94a3b8', fontSize: '0.85rem', ml: 1 }}
+                              sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.85rem', ml: 1 }}
                             >
                               ({filteredTasks.length})
                             </Box>
@@ -2466,24 +2552,106 @@ export default function DailyReportPage() {
                           placeholder="Search tasks..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          sx={{ flex: 1, minWidth: 120, maxWidth: 220 }}
+                          sx={{
+                            flex: 1,
+                            minWidth: 120,
+                            maxWidth: 220,
+                            '& .MuiInputBase-root': {
+                              color: '#ffffff',
+                              fontSize: '0.825rem',
+                            }
+                          }}
                           InputProps={{
                             startAdornment: (
                               <Search
                                 size={16}
-                                style={{ marginRight: 8, color: '#94a3b8', flexShrink: 0 }}
+                                style={{ marginRight: 8, color: 'rgba(255, 255, 255, 0.5)', flexShrink: 0 }}
                               />
                             ),
                             sx: {
                               borderRadius: '10px',
-                              bgcolor: '#ffffff',
+                              bgcolor: 'rgba(255, 255, 255, 0.08)',
+                              border: '1px solid rgba(255, 255, 255, 0.15)',
                               '& fieldset': { border: 'none' },
+                              '&:hover': {
+                                bgcolor: 'rgba(255, 255, 255, 0.12)',
+                              },
+                              '&.Mui-focused': {
+                                bgcolor: 'rgba(255, 255, 255, 0.15)',
+                                border: '1px solid #FF7F32',
+                              }
                             },
                           }}
                         />
                       </Box>
+
+                      {/* Active Tasks & Finish Segment Control */}
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                          bgcolor: 'rgba(255, 255, 255, 0.08)',
+                          p: 0.5,
+                          borderRadius: '999px',
+                          mt: 2,
+                          width: '100%',
+                        }}
+                      >
+                        {[
+                          { id: 'pending', label: 'Active Tasks' },
+                          { id: 'finish', label: 'Finish' },
+                        ].map((tab) => {
+                          const isFinishDisabled = tab.id === 'finish' && pageMode === 'requests';
+                          return (
+                            <Button
+                              key={tab.id}
+                              disabled={isFinishDisabled}
+                              onClick={() => {
+                                setActiveTab(tab.id as 'pending' | 'finish');
+                                setSelectedTask(null);
+                                setIsSidebarOpen(true);
+                              }}
+                              sx={{
+                                flex: 1,
+                                px: 2,
+                                py: 0.75,
+                                borderRadius: '999px',
+                                textTransform: 'none',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                color: isFinishDisabled
+                                  ? 'rgba(255,255,255,0.25)'
+                                  : activeTab === tab.id ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                bgcolor: activeTab === tab.id && !isFinishDisabled ? '#FF7F32' : 'transparent',
+                                boxShadow: activeTab === tab.id && !isFinishDisabled ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
+                                '&:hover': {
+                                  bgcolor: isFinishDisabled ? 'transparent' : activeTab === tab.id ? '#e06b24' : 'rgba(255, 255, 255, 0.08)',
+                                },
+                                '&.Mui-disabled': {
+                                  color: 'rgba(255,255,255,0.25)',
+                                  cursor: 'not-allowed',
+                                  pointerEvents: 'auto',
+                                },
+                              }}
+                            >
+                              {tab.label}
+                            </Button>
+                          );
+                        })}
+                      </Stack>
                     </Box>
-                    <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        p: 2,
+                        '&::-webkit-scrollbar': {
+                          display: 'none',
+                        },
+                        msOverflowStyle: 'none',
+                        scrollbarWidth: 'none',
+                      }}
+                    >
                       {tasksLoading ? (
                         <Box sx={{ textAlign: 'center', py: 5 }}>
                           <CircularProgress size={24} />
@@ -2507,8 +2675,14 @@ export default function DailyReportPage() {
                 <Grid
                   item
                   xs={12}
-                  lg={isSidebarOpen ? 8.5 : 12}
-                  sx={{ height: '100%', transition: 'all 0.3s' }}
+                  lg={isSidebarOpen ? 'auto' : 12}
+                  sx={{
+                    height: '100%',
+                    transition: 'all 0.3s',
+                    width: { lg: isSidebarOpen ? 'calc(100% - 320px)' : '100%' },
+                    maxWidth: { lg: isSidebarOpen ? 'calc(100% - 320px)' : '100%' },
+                    flexBasis: { lg: isSidebarOpen ? 'calc(100% - 320px)' : '100%' },
+                  }}
                 >
                   <Paper
                     sx={{
@@ -2541,22 +2715,17 @@ export default function DailyReportPage() {
                       <>
                         <Box
                           sx={{
-                            p: 3,
+                            p: { xs: 2, md: 3 },
                             borderBottom: '1px solid #f1f5f9',
                             display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
+                            flexDirection: { xs: 'column', md: 'row' },
+                            justifyContent: { xs: 'flex-start', md: 'space-between' },
+                            alignItems: { xs: 'stretch', md: 'center' },
+                            gap: { xs: 1.5, md: 0 },
+                            position: 'relative',
                           }}
                         >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 2,
-                              flex: 1,
-                              minWidth: 0,
-                            }}
-                          >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0, zIndex: 2 }}>
                             <IconButton
                               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                               sx={{
@@ -2566,16 +2735,21 @@ export default function DailyReportPage() {
                                 '&:hover': { bgcolor: '#e2e8f0' },
                               }}
                             >
-                              <Menu size={20} />
+                              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                                <Menu size={20} />
+                              </Box>
+                              <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                                <ChevronLeft size={20} />
+                              </Box>
                             </IconButton>
-
-                            {/* Progress Circle — เหมือน My Job card */}
+ 
+                            {/* Progress Circle — desktop only */}
                             <Box
                               sx={{
                                 width: 48,
                                 height: 48,
                                 borderRadius: '50%',
-                                display: 'flex',
+                                display: { xs: 'none', md: 'flex' },
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontSize: '0.7rem',
@@ -2599,107 +2773,180 @@ export default function DailyReportPage() {
                                 },
                               }}
                             >
-                              <span
-                                style={{
-                                  zIndex: 2,
-                                  color: selectedTask.dailyProgress > 0 ? '#2e7d32' : '#94a3b8',
-                                }}
-                              >
+                              <span style={{ zIndex: 2, color: selectedTask.dailyProgress > 0 ? '#2e7d32' : '#94a3b8' }}>
                                 {selectedTask.dailyProgress}%
                               </span>
                             </Box>
-
+ 
                             {/* Task info */}
                             <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  mb: 0.5,
-                                  flexWrap: 'wrap',
-                                }}
-                              >
-                                <Chip
-                                  label={selectedTask.taskId}
-                                  size="small"
-                                  sx={{
-                                    fontWeight: 900,
-                                    borderRadius: '6px',
-                                    bgcolor: '#1e293b',
-                                    color: 'white',
-                                    fontSize: '0.7rem',
-                                    flexShrink: 0,
-                                  }}
-                                />
+                              {/* Metadata line: ID + Category */}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                 <Typography
                                   variant="caption"
-                                  fontWeight={700}
-                                  color="primary"
-                                  noWrap
+                                  fontWeight={800}
+                                  sx={{
+                                    bgcolor: 'rgba(30, 41, 59, 0.06)',
+                                    color: '#475569',
+                                    px: 1,
+                                    py: 0.25,
+                                    borderRadius: '6px',
+                                    fontSize: '0.7rem',
+                                    letterSpacing: '0.02em',
+                                  }}
                                 >
-                                  {selectedTask.categoryName}
+                                  {selectedTask.taskId}
+                                  {selectedTask.revisionId && selectedTask.revisionId !== 'rev00' && `-${selectedTask.revisionId}`}
                                 </Typography>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={750}
+                                  color="text.secondary"
+                                  sx={{ fontSize: '0.7rem' }}
+                                >
+                                  • {selectedTask.categoryName}
+                                </Typography>
+
+                                {/* Request Mode Badge */}
+                                {isAdvanceRequestUI && (
+                                  <Tooltip title="คุณกำลังวางแผนกำลังพลและคาดการณ์ Progress สำหรับวันนี้ (รูปถ่ายหน้างานและรูปกะจะถูกยกเว้นในโหมดนี้)" arrow>
+                                    <Chip
+                                      label="โหมดวางแผนล่วงหน้า"
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(99, 102, 241, 0.12)',
+                                        color: '#4f46e5',
+                                        fontWeight: 800,
+                                        fontSize: '0.65rem',
+                                        height: '20px',
+                                        border: '1px solid rgba(99, 102, 241, 0.25)',
+                                        borderRadius: '4px',
+                                        cursor: 'help',
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
+
+                                {/* Autofilled Success Badge */}
+                                {!isAdvanceRequestUI && isAutofilledFromRequest && (
+                                  <Tooltip title="รายชื่อแรงงาน DC ชั่วโมงกะ และ Progress ถูกดึงมาจากแผนงานล่วงหน้าของเมื่อวานเรียบร้อยแล้ว กรุณาตรวจสอบความถูกต้องและแนบรูปถ่ายการทำงานจริงเพื่อส่งรายงานประจำวัน" arrow>
+                                    <Chip
+                                      label="ดึงแผนงานสำเร็จ"
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(16, 185, 129, 0.12)',
+                                        color: '#059669',
+                                        fontWeight: 800,
+                                        fontSize: '0.65rem',
+                                        height: '20px',
+                                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                                        borderRadius: '4px',
+                                        cursor: 'help',
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
                               </Box>
+ 
+                              {/* Title line: Subtask name as primary */}
                               <Typography
                                 variant="subtitle1"
                                 fontWeight={900}
                                 color="#1e293b"
                                 sx={{
-                                  lineHeight: 1.2,
+                                  lineHeight: 1.25,
+                                  fontSize: { xs: '0.9rem', md: '1.05rem' },
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
                                 }}
                               >
-                                {isActingAsSupport && selectedTask.supportTaskName
+                                {selectedTask.subtaskName || (isActingAsSupport && selectedTask.supportTaskName
                                   ? selectedTask.supportTaskName
-                                  : selectedTask.taskName}
+                                  : selectedTask.taskName)}
                               </Typography>
-                              {selectedTask.woName && (
-                                <Typography variant="caption" color="text.secondary" noWrap>
-                                  {selectedTask.woName}
+ 
+                              {/* Subtitle line: Parent task name as context */}
+                              {selectedTask.subtaskName && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{
+                                    display: 'block',
+                                    mt: 0.25,
+                                    fontSize: '0.75rem',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {isActingAsSupport && selectedTask.supportTaskName
+                                    ? selectedTask.supportTaskName
+                                    : selectedTask.taskName}
                                 </Typography>
                               )}
+ 
                             </Box>
                           </Box>
 
-                          <Box sx={{ flexShrink: 0 }}>
+                          {/* Mobile Linear Progress Bar */}
+                          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ flex: 1, height: 6, borderRadius: 3, bgcolor: '#e8f5e9', overflow: 'hidden' }}>
+                              <Box sx={{
+                                height: '100%',
+                                width: `${selectedTask.dailyProgress}%`,
+                                bgcolor: selectedTask.dailyProgress > 0 ? '#4caf50' : '#e2e8f0',
+                                borderRadius: 3,
+                                transition: 'width 0.3s ease',
+                              }} />
+                            </Box>
+                            <Typography variant="caption" fontWeight={800} sx={{ color: selectedTask.dailyProgress > 0 ? '#2e7d32' : '#94a3b8', flexShrink: 0 }}>
+                              {selectedTask.dailyProgress}%
+                            </Typography>
+                          </Box>
+
+                          <Box sx={{ flexShrink: 0, zIndex: 2, width: { xs: '100%', md: 'auto' } }}>
                             <DatePicker
                               value={reportDate}
                               onChange={(newValue) => {
-                                if (newValue) {
+                                if (newValue && isValid(newValue)) {
+                                  if (pageMode === 'requests') {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const tomorrow = new Date();
+                                    tomorrow.setDate(tomorrow.getDate() + 1);
+                                    tomorrow.setHours(0, 0, 0, 0);
+
+                                    const valDate = new Date(newValue);
+                                    valDate.setHours(0, 0, 0, 0);
+
+                                    if (valDate.getTime() !== today.getTime() && valDate.getTime() !== tomorrow.getTime()) {
+                                      return;
+                                    }
+                                  }
                                   const today = new Date();
                                   today.setHours(0, 0, 0, 0);
                                   const isPast =
                                     isBefore(newValue, today) && !isSameDay(newValue, today);
-                                  const boundDateStr =
-                                    effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime())
-                                      ? format(effectiveBoundaryDate, 'yyyy-MM-dd')
-                                      : '';
+                                  const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
                                   const dateStr = format(newValue, 'yyyy-MM-dd');
                                   const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
-                                  const isLocked =
-                                    (isPast && isBefore(newValue, subDays(today, 3))) ||
-                                    isBeforeBound;
+                                  const isLocked = (isPast && isBefore(newValue, subDays(today, 3))) || isBeforeBound;
                                   const hasReport = reportDates.includes(dateStr);
                                   const isMissingReport = (isPast || isBeforeBound) && !hasReport;
 
                                   let hasValidUnlock = false;
-                                  const unlockedDatesField = isActingAsSupport
-                                    ? 'supportUnlockedDates'
-                                    : 'unlockedDates';
+                                  const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
                                   const unlockedDates = selectedTask?.[unlockedDatesField];
                                   if (unlockedDates && unlockedDates[dateStr]) {
                                     const unlockInfo = unlockedDates[dateStr];
-                                    const unlockUntil =
-                                      parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
+                                    const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
                                     if (unlockUntil > new Date()) {
                                       hasValidUnlock = true;
                                     }
                                   }
 
-                                  if (isMissingReport && isLocked && !hasValidUnlock) {
+                                  if (isMissingReport && isLocked && !hasValidUnlock && pageMode !== 'requests') {
                                     setUnlockRequestDate(newValue);
                                     setIsUnlockRequestDialogOpen(true);
                                     return;
@@ -2708,20 +2955,12 @@ export default function DailyReportPage() {
                                 setReportDate(newValue || new Date());
                               }}
                               minDate={calendarMinDate}
-                              maxDate={
-                                completionDateStr
-                                  ? new Date(completionDateStr)
-                                  : (() => {
-                                      const tomorrow = new Date();
-                                      tomorrow.setDate(tomorrow.getDate() + 1);
-                                      return tomorrow;
-                                    })()
-                              }
+                              maxDate={calendarMaxDate}
                               slots={{ day: CustomPickersDay, actionBar: CustomActionBar }}
                               slotProps={{
                                 textField: {
                                   size: 'small',
-                                  sx: { width: 150 },
+                                  sx: { width: { xs: '100%', md: 150 } },
                                   error: isDateLockedByWagePeriod,
                                   helperText: isDateLockedByWagePeriod ? 'งวดค่าแรงถูกปิดแล้ว' : '',
                                 },
@@ -2765,33 +3004,7 @@ export default function DailyReportPage() {
                             </Box>
                           ) : (
                             <>
-                              {isAdvanceRequestUI && (
-                                <Box
-                                  sx={{
-                                    p: 2,
-                                    mb: 3,
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                                    color: '#ffffff',
-                                    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
-                                  }}
-                                >
-                                  <CalendarRange size={24} />
-                                  <Box>
-                                    <Typography variant="subtitle2" fontWeight={800}>
-                                      โหมดวางแผนงานล่วงหน้า (Request Mode)
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                      คุณกำลังวางแผนกำลังพลและคาดการณ์ Progress สำหรับวันที่{' '}
-                                      {format(reportDate, 'dd/MM/yyyy')}{' '}
-                                      (รูปถ่ายหน้างานและรูปกะจะถูกยกเว้นในโหมดนี้)
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              )}
+
 
                               {requestLocked && (
                                 <Box
@@ -2813,40 +3026,13 @@ export default function DailyReportPage() {
                                       แผนงานล่วงหน้านี้ถูกล็อกแล้ว
                                     </Typography>
                                     <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                      แผนงานได้รับการตรวจสอบหรือส่งออก (Export) โดยหัวหน้างานแล้ว
-                                      จึงไม่สามารถแก้ไขข้อมูลได้อีก
+                                      แผนงานได้รับการตรวจสอบหรือส่งออก (Export) โดยหัวหน้างานแล้ว จึงไม่สามารถแก้ไขข้อมูลได้อีก
                                     </Typography>
                                   </Box>
                                 </Box>
                               )}
 
-                              {!isAdvanceRequestUI && isAutofilledFromRequest && (
-                                <Box
-                                  sx={{
-                                    p: 2,
-                                    mb: 3,
-                                    borderRadius: '12px',
-                                    bgcolor: '#ecfdf5',
-                                    border: '1px solid #a7f3d0',
-                                    color: '#065f46',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
-                                  }}
-                                >
-                                  <Info size={24} color="#10b981" />
-                                  <Box>
-                                    <Typography variant="subtitle2" fontWeight={800}>
-                                      ระบบดึงข้อมูลจากแผนงานล่วงหน้าที่ FM ลงไว้เมื่อวานสำเร็จ!
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                      รายชื่อแรงงาน DC ชั่วโมงกะ และ Progress
-                                      ถูกดึงมาให้เรียบร้อยแล้ว
-                                      กรุณาตรวจสอบความถูกต้องและแนบรูปถ่ายการทำงานจริงเพื่อส่งรายงานประจำวัน
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              )}
+
                               <Box sx={{ mb: 4 }}>
                                 <Box
                                   sx={{
@@ -2872,7 +3058,7 @@ export default function DailyReportPage() {
                                       textTransform: 'none',
                                       bgcolor: '#3b82f6',
                                     }}
-                                    disabled={isFormDisabled}
+                                    disabled={isDateLockedByWagePeriod || isAfterCompletion || requestLocked}
                                   >
                                     เลือกแรงงาน DC
                                   </Button>
@@ -2892,6 +3078,35 @@ export default function DailyReportPage() {
                                       <Typography variant="body2">ยังไม่มีการเลือกคนงาน</Typography>
                                     </Box>
                                   ) : (
+                                    <>
+                                    {/* Mobile Cards — xs only */}
+                                    <Box sx={{ display: { xs: 'block', md: 'none' }, p: 1.5 }}>
+                                      {readonlySupportWorkers.map((worker: any, idx: number) => (
+                                        <WorkerMobileCard
+                                          key={`support-${worker.id}`}
+                                          worker={worker}
+                                          onUpdate={() => {}}
+                                          onUpdateLeave={() => {}}
+                                          onUploadCert={() => {}}
+                                          onRemove={() => {}}
+                                          index={idx + 1}
+                                          isReadOnly={true}
+                                        />
+                                      ))}
+                                      {selectedWorkers.map((worker: any, idx: number) => (
+                                        <WorkerMobileCard
+                                          key={worker.id}
+                                          worker={worker}
+                                          onUpdate={(f: string, v: any) => updateWorkerTime(worker.id, f, v)}
+                                          onUpdateLeave={(f: string, v: any) => updateWorkerLeave(worker.id, f, v)}
+                                          onUploadCert={(f: File | null) => handleCertUpload(worker.id, f)}
+                                          onRemove={() => removeWorker(worker.id)}
+                                          index={readonlySupportWorkers.length + idx + 1}
+                                        />
+                                      ))}
+                                    </Box>
+                                    {/* Desktop Table — md+ only */}
+                                    <Box sx={{ display: { xs: 'none', md: 'block' } }}>
                                     <Table
                                       size="small"
                                       sx={{
@@ -3017,387 +3232,341 @@ export default function DailyReportPage() {
                                         ))}
                                       </TableBody>
                                     </Table>
+                                    </Box>
+                                    </>
                                   )}
                                 </TableContainer>
                               </Box>
 
-                              <Grid container spacing={4} alignItems="flex-start">
-                                <Grid item xs={12} md={3}>
-                                  <Typography variant="h6" fontWeight={800} gutterBottom>
-                                    Progress
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    ความคืบหน้า
-                                  </Typography>
+                                <Grid container spacing={4} alignItems="flex-start">
+                                  <Grid item xs={12} md={3}>
+                                    <Typography variant="h6" fontWeight={800} gutterBottom>
+                                      Progress
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                                      ความคืบหน้า
+                                    </Typography>
 
-                                  {/* === Smart Progress Bar === */}
-                                  <Box sx={{ mb: 2 }}>
-                                    {/* Label Row */}
-                                    <Box
-                                      sx={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        mb: 0.5,
-                                      }}
-                                    >
-                                      <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                        fontWeight={600}
-                                      >
-                                        ล่าสุด: {previousProgress}%
-                                      </Typography>
-                                      {nextProgress !== null ? (
-                                        <Typography
-                                          variant="caption"
-                                          color="text.secondary"
-                                          fontWeight={600}
-                                        >
-                                          ถัดไป: {nextProgress}%
+                                    {/* === Smart Progress Bar === */}
+                                    <Box sx={{ mb: 2 }}>
+                                      {/* Label Row */}
+                                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                          ล่าสุด: {previousProgress}%
                                         </Typography>
-                                      ) : (
-                                        <Typography variant="caption" color="text.secondary">
-                                          สูงสุด: 100%
-                                        </Typography>
-                                      )}
-                                    </Box>
+                                        {nextProgress !== null ? (
+                                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                            ถัดไป: {nextProgress}%
+                                          </Typography>
+                                        ) : (
+                                          <Typography variant="caption" color="text.secondary">
+                                            สูงสุด: 100%
+                                          </Typography>
+                                        )}
+                                      </Box>
 
-                                    {/* Progress Bar Track */}
-                                    <Box
-                                      sx={{
-                                        position: 'relative',
-                                        height: '12px',
-                                        borderRadius: '99px',
-                                        bgcolor: '#e2e8f0',
-                                        overflow: 'visible',
-                                      }}
-                                    >
-                                      {/* Filled: previousProgress (สีเขียวเข้ม = ที่ผ่านมาแล้ว) */}
+                                      {/* Progress Bar Track */}
                                       <Box
                                         sx={{
-                                          position: 'absolute',
-                                          left: 0,
-                                          top: 0,
-                                          height: '100%',
-                                          width: `${previousProgress}%`,
+                                          position: 'relative',
+                                          height: '12px',
                                           borderRadius: '99px',
-                                          background: 'linear-gradient(90deg, #10b981, #059669)',
-                                          transition: 'width 0.5s ease',
+                                          bgcolor: '#e2e8f0',
+                                          overflow: 'visible',
                                         }}
-                                      />
-
-                                      {/* Range: ช่วงที่กรอกได้ (สีเขียวอ่อน) */}
-                                      {nextProgress !== null && nextProgress > previousProgress && (
+                                      >
+                                        {/* Filled: previousProgress (สีเขียวเข้ม = ที่ผ่านมาแล้ว) */}
                                         <Box
                                           sx={{
                                             position: 'absolute',
-                                            left: `${previousProgress}%`,
+                                            left: 0,
                                             top: 0,
                                             height: '100%',
-                                            width: `${nextProgress - previousProgress}%`,
-                                            bgcolor: '#bbf7d0',
-                                            transition: 'all 0.5s ease',
+                                            width: `${previousProgress}%`,
+                                            borderRadius: '99px',
+                                            background: 'linear-gradient(90deg, #10b981, #059669)',
+                                            transition: 'width 0.5s ease',
                                           }}
                                         />
-                                      )}
 
-                                      {/* Current Input Marker */}
-                                      {progress !== '' && Number(progress) > 0 && (
-                                        <Box
-                                          sx={{
-                                            position: 'absolute',
-                                            top: '50%',
-                                            left: `${Math.min(Number(progress), 100)}%`,
-                                            transform: 'translate(-50%, -50%)',
-                                            width: '18px',
-                                            height: '18px',
-                                            borderRadius: '50%',
-                                            bgcolor:
-                                              Number(progress) < previousProgress
-                                                ? '#ef4444'
-                                                : nextProgress !== null &&
-                                                    Number(progress) >= nextProgress
+                                        {/* Range: ช่วงที่กรอกได้ (สีเขียวอ่อน) */}
+                                        {nextProgress !== null && nextProgress > previousProgress && (
+                                          <Box
+                                            sx={{
+                                              position: 'absolute',
+                                              left: `${previousProgress}%`,
+                                              top: 0,
+                                              height: '100%',
+                                              width: `${nextProgress - previousProgress}%`,
+                                              bgcolor: '#bbf7d0',
+                                              transition: 'all 0.5s ease',
+                                            }}
+                                          />
+                                        )}
+
+                                        {/* Current Input Marker */}
+                                        {progress !== '' && Number(progress) > 0 && (
+                                          <Box
+                                            sx={{
+                                              position: 'absolute',
+                                              top: '50%',
+                                              left: `${Math.min(Number(progress), 100)}%`,
+                                              transform: 'translate(-50%, -50%)',
+                                              width: '18px',
+                                              height: '18px',
+                                              borderRadius: '50%',
+                                              bgcolor:
+                                                Number(progress) < previousProgress
+                                                  ? '#ef4444'
+                                                  : nextProgress !== null && Number(progress) >= nextProgress
                                                   ? '#f59e0b'
                                                   : '#2563eb',
-                                            border: '2.5px solid white',
-                                            boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                                            zIndex: 10,
-                                            transition: 'left 0.2s ease',
-                                          }}
-                                        />
-                                      )}
-                                    </Box>
+                                              border: '2.5px solid white',
+                                              boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                                              zIndex: 10,
+                                              transition: 'left 0.2s ease',
+                                            }}
+                                          />
+                                        )}
+                                      </Box>
 
-                                    {/* Range hint */}
-                                    <Box sx={{ mt: 0.75 }}>
-                                      {nextProgress !== null ? (
-                                        <Typography
-                                          variant="caption"
-                                          sx={{
-                                            color:
-                                              progress !== '' &&
-                                              (Number(progress) <= previousProgress ||
-                                                Number(progress) >= nextProgress)
-                                                ? '#ef4444'
-                                                : '#059669',
-                                            fontWeight: 600,
-                                          }}
-                                        >
-                                          ✅ กรอกได้: {previousProgress + 1}% – {nextProgress - 1}%
-                                        </Typography>
-                                      ) : previousProgress > 0 ? (
-                                        <Typography variant="caption" color="text.secondary">
-                                          กรอกได้: {previousProgress + 1}% – 100%
-                                        </Typography>
-                                      ) : null}
+                                      {/* Range hint */}
+                                      <Box sx={{ mt: 0.75 }}>
+                                        {nextProgress !== null ? (
+                                          <Typography
+                                            variant="caption"
+                                            sx={{
+                                              color:
+                                                progress !== '' &&
+                                                (Number(progress) <= previousProgress ||
+                                                  Number(progress) >= nextProgress)
+                                                  ? '#ef4444'
+                                                  : '#059669',
+                                              fontWeight: 600,
+                                            }}
+                                          >
+                                            ✅ กรอกได้: {previousProgress + 1}% – {nextProgress - 1}%
+                                          </Typography>
+                                        ) : previousProgress > 0 ? (
+                                          <Typography variant="caption" color="text.secondary">
+                                            กรอกได้: {previousProgress + 1}% – 100%
+                                          </Typography>
+                                        ) : null}
+                                      </Box>
                                     </Box>
-                                  </Box>
-                                  {/* ======================= */}
+                                    {/* ======================= */}
 
-                                  <TextField
-                                    fullWidth
-                                    placeholder="0-100%"
-                                    type="number"
-                                    value={progress}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val === '') {
-                                        setProgress('');
-                                      } else {
-                                        const num = Number(val);
-                                        if (num >= 0 && num <= 100) setProgress(num);
+                                    <TextField
+                                      fullWidth
+                                      placeholder="0-100%"
+                                      type="number"
+                                      value={progress}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') {
+                                          setProgress('');
+                                        } else {
+                                          const num = Number(val);
+                                          if (num >= 0 && num <= 100) setProgress(num);
+                                        }
+                                      }}
+                                      InputProps={{ endAdornment: '%' }}
+                                      error={
+                                        progress !== '' &&
+                                        (Number(progress) <= previousProgress ||
+                                          (nextProgress !== null && Number(progress) >= nextProgress))
                                       }
-                                    }}
-                                    InputProps={{ endAdornment: '%' }}
-                                    error={
-                                      progress !== '' &&
-                                      (Number(progress) <= previousProgress ||
-                                        (nextProgress !== null && Number(progress) >= nextProgress))
-                                    }
-                                    helperText={
-                                      progress !== '' && Number(progress) <= previousProgress
-                                        ? `ต้องมากกว่าค่าล่าสุด (${previousProgress}%)`
-                                        : progress !== '' &&
-                                            nextProgress !== null &&
-                                            Number(progress) >= nextProgress
+                                      helperText={
+                                        progress !== '' && Number(progress) <= previousProgress
+                                          ? `ต้องมากกว่าค่าล่าสุด (${previousProgress}%)`
+                                          : progress !== '' && nextProgress !== null && Number(progress) >= nextProgress
                                           ? `ต้องน้อยกว่ารายงานถัดไป (${nextProgress}%)`
                                           : isProgressLocked
-                                            ? 'ไม่สามารถแก้ไขความคืบหน้าย้อนหลังเกิน 3 วัน'
-                                            : 'ความคืบหน้าของงานทั้งหมด'
-                                    }
-                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
-                                    disabled={isProgressLocked || isActingAsSupport}
-                                  />
-                                </Grid>
+                                          ? 'ไม่สามารถแก้ไขความคืบหน้าย้อนหลังเกิน 3 วัน'
+                                          : 'ความคืบหน้าของงานทั้งหมด'
+                                      }
+                                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                                      disabled={isProgressLocked || isActingAsSupport}
+                                    />
+                                  </Grid>
 
-                                <Grid item xs={12} md={9}>
-                                  {!isAdvanceRequestUI && (
-                                    <Box ref={photoSectionRef}>
-                                      <Box
-                                        sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}
-                                      >
-                                        {[
-                                          {
-                                            id: 'site',
-                                            label: 'รูปถ่ายหน้างาน',
-                                            required: 2,
-                                            current: isActingAsSupport
-                                              ? siteReportPhotos.site.length
-                                              : sitePhotos.length + existingPhotos.site.length,
-                                          },
-                                          {
-                                            id: 'regular',
-                                            label: 'เวลาทำงานปกติ',
-                                            required: 4,
-                                            current: isActingAsSupport
-                                              ? siteReportPhotos.labor.regular.length
-                                              : laborPhotos.regular.length +
-                                                existingPhotos.labor.regular.length,
-                                          },
-                                          {
-                                            id: 'otMorning',
-                                            label: 'OT เช้า',
-                                            required: 2,
-                                            current: isActingAsSupport
-                                              ? siteReportPhotos.labor.otMorning.length
-                                              : laborPhotos.otMorning.length +
-                                                existingPhotos.labor.otMorning.length,
-                                          },
-                                          {
-                                            id: 'otNoon',
-                                            label: 'OT เที่ยง',
-                                            required: 2,
-                                            current: isActingAsSupport
-                                              ? siteReportPhotos.labor.otNoon.length
-                                              : laborPhotos.otNoon.length +
-                                                existingPhotos.labor.otNoon.length,
-                                          },
-                                          {
-                                            id: 'otEvening',
-                                            label: 'OT เย็น',
-                                            required: 2,
-                                            current: isActingAsSupport
-                                              ? siteReportPhotos.labor.otEvening.length
-                                              : laborPhotos.otEvening.length +
-                                                existingPhotos.labor.otEvening.length,
-                                          },
-                                        ]
-                                          .filter((tab) => {
-                                            if (isActingAsSupport) {
-                                              return tab.current > 0;
-                                            }
-                                            return (
-                                              tab.id === 'site' ||
-                                              activeShifts[tab.id as keyof typeof activeShifts]
-                                            );
-                                          })
-                                          .map((tab: any) => {
-                                            const isComplete = tab.current >= tab.required;
-                                            const isActive = activePhotoTab === tab.id;
-                                            return (
-                                              <Button
-                                                key={tab.id}
-                                                variant={isActive ? 'contained' : 'outlined'}
-                                                onClick={() =>
-                                                  setActivePhotoTab((prev) =>
-                                                    prev === tab.id
-                                                      ? null
-                                                      : (tab.id as PhotoTabType)
-                                                  )
-                                                }
+                                    <Grid item xs={12} md={9}>
+                                      {!isAdvanceRequestUI && (
+                                      <Box ref={photoSectionRef}>
+                                    <Box
+                                      sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}
+                                    >
+                                      {[
+                                        {
+                                          id: 'site',
+                                          label: 'รูปถ่ายหน้างาน',
+                                          required: 2,
+                                          current: isActingAsSupport ? siteReportPhotos.site.length : sitePhotos.length + existingPhotos.site.length,
+                                        },
+                                        {
+                                          id: 'regular',
+                                          label: 'เวลาทำงานปกติ',
+                                          required: regularActiveSlots.length,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.regular.length : laborPhotos.regular.length + existingPhotos.labor.regular.length,
+                                        },
+                                        {
+                                          id: 'otMorning',
+                                          label: 'OT เช้า',
+                                          required: 2,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.otMorning.length : laborPhotos.otMorning.length + existingPhotos.labor.otMorning.length,
+                                        },
+                                        {
+                                          id: 'otNoon',
+                                          label: 'OT เที่ยง',
+                                          required: 2,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.otNoon.length : laborPhotos.otNoon.length + existingPhotos.labor.otNoon.length,
+                                        },
+                                        {
+                                          id: 'otEvening',
+                                          label: 'OT เย็น',
+                                          required: 2,
+                                          current: isActingAsSupport ? siteReportPhotos.labor.otEvening.length : laborPhotos.otEvening.length + existingPhotos.labor.otEvening.length,
+                                        },
+                                      ]
+                                        .filter((tab) => {
+                                           if (isActingAsSupport) {
+                                             return tab.current > 0;
+                                           }
+                                           return tab.id === 'site' || activeShifts[tab.id as keyof typeof activeShifts];
+                                         })
+                                        .map((tab: any) => {
+                                          const isComplete = tab.current >= tab.required;
+                                          const isActive = activePhotoTab === tab.id;
+                                          return (
+                                            <Button
+                                              key={tab.id}
+                                              variant={isActive ? 'contained' : 'outlined'}
+                                              onClick={() =>
+                                                setActivePhotoTab((prev) =>
+                                                  prev === tab.id ? null : (tab.id as PhotoTabType)
+                                                )
+                                              }
+                                              sx={{
+                                                borderRadius: '12px',
+                                                px: 2,
+                                                py: 1.5,
+                                                minWidth: '200px',
+                                                justifyContent: 'flex-start',
+                                                textAlign: 'left',
+                                                textTransform: 'none',
+                                                border: '2px solid',
+                                                borderColor: isActive
+                                                  ? isComplete ? '#059669' : '#334155'
+                                                  : isComplete ? '#10b981' : '#cbd5e1',
+                                                bgcolor: isActive
+                                                  ? isComplete ? '#d1fae5' : '#f1f5f9'
+                                                  : isComplete ? '#ecfdf5' : '#ffffff',
+                                                color: isComplete ? '#059669' : '#475569',
+                                                boxShadow: isActive ? '0 4px 12px rgba(0,0,0,0.08)' : 'none',
+                                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                '&:hover': {
+                                                  bgcolor: isComplete ? '#d1fae5' : '#f8fafc',
+                                                  borderColor: isComplete ? '#059669' : '#94a3b8',
+                                                },
+                                                // Scale slightly when active
+                                                transform: isActive ? 'scale(1.02)' : 'scale(1)',
+                                              }}
+                                            >
+                                              <Box
                                                 sx={{
-                                                  borderRadius: '12px',
-                                                  px: 2,
-                                                  py: 1.5,
-                                                  minWidth: '200px',
-                                                  justifyContent: 'flex-start',
-                                                  textAlign: 'left',
-                                                  textTransform: 'none',
-                                                  border: '2px solid',
-                                                  borderColor: isActive
-                                                    ? isComplete
-                                                      ? '#059669'
-                                                      : '#334155'
-                                                    : isComplete
-                                                      ? '#10b981'
-                                                      : '#cbd5e1',
-                                                  bgcolor: isActive
-                                                    ? isComplete
-                                                      ? '#d1fae5'
-                                                      : '#f1f5f9'
-                                                    : isComplete
-                                                      ? '#ecfdf5'
-                                                      : '#ffffff',
-                                                  color: isComplete ? '#059669' : '#475569',
-                                                  boxShadow: isActive
-                                                    ? '0 4px 12px rgba(0,0,0,0.08)'
-                                                    : 'none',
-                                                  transition:
-                                                    'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                  '&:hover': {
-                                                    bgcolor: isComplete ? '#d1fae5' : '#f8fafc',
-                                                    borderColor: isComplete ? '#059669' : '#94a3b8',
-                                                  },
-                                                  // Scale slightly when active
-                                                  transform: isActive ? 'scale(1.02)' : 'scale(1)',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  mr: 1.5,
                                                 }}
                                               >
-                                                <Box
+                                                {isComplete ? (
+                                                  <CheckCircle2
+                                                    size={20}
+                                                    color={isActive ? '#ffffff' : '#059669'}
+                                                  />
+                                                ) : (
+                                                  <Upload
+                                                    size={20}
+                                                    color={isActive ? '#ffffff' : '#64748b'}
+                                                  />
+                                                )}
+                                              </Box>
+                                              <Box sx={{ flex: 1 }}>
+                                                <Typography variant="body2" fontWeight={700}>
+                                                  {tab.label}
+                                                </Typography>
+                                                <Typography
+                                                  variant="caption"
                                                   sx={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    mr: 1.5,
+                                                    display: 'block',
+                                                    color: isActive
+                                                      ? '#047857'
+                                                      : isComplete
+                                                        ? '#059669'
+                                                        : '#64748b',
                                                   }}
                                                 >
-                                                  {isComplete ? (
-                                                    <CheckCircle2
-                                                      size={20}
-                                                      color={isActive ? '#ffffff' : '#059669'}
-                                                    />
-                                                  ) : (
-                                                    <Upload
-                                                      size={20}
-                                                      color={isActive ? '#ffffff' : '#64748b'}
-                                                    />
-                                                  )}
-                                                </Box>
-                                                <Box sx={{ flex: 1 }}>
-                                                  <Typography variant="body2" fontWeight={700}>
-                                                    {tab.label}
-                                                  </Typography>
-                                                  <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                      display: 'block',
-                                                      color: isActive
-                                                        ? '#047857'
-                                                        : isComplete
-                                                          ? '#059669'
-                                                          : '#64748b',
-                                                    }}
-                                                  >
-                                                    แนบแล้ว {tab.current}/{tab.required} รูป{' '}
-                                                    {tab.id === 'site' && '(ขั้นต่ำ)'}
-                                                  </Typography>
-                                                </Box>
-                                                <ChevronRight size={18} style={{ opacity: 0.5 }} />
-                                              </Button>
-                                            );
-                                          })}
-                                      </Box>
-
-                                      <Box>
-                                        {activePhotoTab === 'site' && (
-                                          <Box>
-                                            <Typography
-                                              variant="subtitle2"
-                                              fontWeight={700}
-                                              sx={{ mb: 1 }}
-                                            >
-                                              รูปถ่ายหน้างาน
-                                            </Typography>
-                                            {renderPhotoGrid(
-                                              isActingAsSupport ? [] : sitePhotos,
-                                              isActingAsSupport
-                                                ? siteReportPhotos.site
-                                                : existingPhotos.site,
-                                              isActingAsSupport ? [] : sitePhotoPreviews,
-                                              (f) => handlePhotoUpload(f, 'site'),
-                                              (i) => removePhoto(i, 'site'),
-                                              'site',
-                                              isProgressLocked || isActingAsSupport
-                                            )}
-                                          </Box>
-                                        )}
-                                        {activePhotoTab === 'regular' &&
-                                          renderLaborShiftPhotoGrid(
-                                            'regular',
-                                            'เวลาทำงานปกติ',
-                                            isProgressLocked
-                                          )}
-                                        {activePhotoTab === 'otMorning' &&
-                                          renderLaborShiftPhotoGrid(
-                                            'otMorning',
-                                            'OT เช้า',
-                                            isProgressLocked
-                                          )}
-                                        {activePhotoTab === 'otNoon' &&
-                                          renderLaborShiftPhotoGrid(
-                                            'otNoon',
-                                            'OT เที่ยง',
-                                            isProgressLocked
-                                          )}
-                                        {activePhotoTab === 'otEvening' &&
-                                          renderLaborShiftPhotoGrid(
-                                            'otEvening',
-                                            'OT เย็น',
-                                            isProgressLocked
-                                          )}
-                                      </Box>
+                                                  แนบแล้ว {tab.current}/{tab.required} รูป{' '}
+                                                  {tab.id === 'site' && '(ขั้นต่ำ)'}
+                                                </Typography>
+                                              </Box>
+                                              <ChevronRight size={18} style={{ opacity: 0.5 }} />
+                                            </Button>
+                                          );
+                                        })}
                                     </Box>
-                                  )}
+
+                                    <Box>
+                                      {activePhotoTab === 'site' && (
+                                        <Box>
+                                          <Typography
+                                            variant="subtitle2"
+                                            fontWeight={700}
+                                            sx={{ mb: 1 }}
+                                          >
+                                            รูปถ่ายหน้างาน
+                                          </Typography>
+                                          {renderPhotoGrid(
+                                            isActingAsSupport ? [] : sitePhotos,
+                                            isActingAsSupport ? siteReportPhotos.site : existingPhotos.site,
+                                            isActingAsSupport ? [] : sitePhotoPreviews,
+                                            (f) => handlePhotoUpload(f, 'site'),
+                                            (i, isExisting) => removePhoto(i, 'site', isExisting),
+                                            'site',
+                                            isProgressLocked || isActingAsSupport
+                                          )}
+                                        </Box>
+                                      )}
+                                      {activePhotoTab === 'regular' &&
+                                        renderLaborShiftPhotoGrid(
+                                          'regular',
+                                          'เวลาทำงานปกติ',
+                                          isProgressLocked
+                                        )}
+                                      {activePhotoTab === 'otMorning' &&
+                                        renderLaborShiftPhotoGrid(
+                                          'otMorning',
+                                          'OT เช้า',
+                                          isProgressLocked
+                                        )}
+                                      {activePhotoTab === 'otNoon' &&
+                                        renderLaborShiftPhotoGrid(
+                                          'otNoon',
+                                          'OT เที่ยง',
+                                          isProgressLocked
+                                        )}
+                                      {activePhotoTab === 'otEvening' &&
+                                        renderLaborShiftPhotoGrid(
+                                          'otEvening',
+                                          'OT เย็น',
+                                          isProgressLocked
+                                        )}
+                                    </Box>
+                                    </Box>
+                                    )}
+                                  </Grid>
                                 </Grid>
-                              </Grid>
+
 
                               <Box sx={{ mt: 3 }}>
                                 <Typography variant="h6" fontWeight={800} gutterBottom>
@@ -3428,7 +3597,7 @@ export default function DailyReportPage() {
                             borderTop: '1px solid #f1f5f9',
                             display: 'flex',
                             justifyContent: 'center',
-                            gap: 2,
+                            gap: { xs: 1, md: 2 },
                           }}
                         >
                           <Button
@@ -3436,8 +3605,11 @@ export default function DailyReportPage() {
                             sx={{
                               bgcolor: '#ef4444',
                               borderRadius: '10px',
-                              px: 6,
+                              flex: 1,
+                              px: { xs: 1, md: 6 },
+                              fontSize: { xs: '0.78rem', md: '0.875rem' },
                               fontWeight: 800,
+                              minWidth: 0,
                               '&:hover': { bgcolor: '#dc2626' },
                             }}
                             onClick={() => setSelectedTask(null)}
@@ -3445,23 +3617,67 @@ export default function DailyReportPage() {
                           >
                             ยกเลิก
                           </Button>
-                          <Button
-                            variant="contained"
-                            sx={{
-                              bgcolor: isAdvanceRequestUI ? '#4f46e5' : '#10b981',
-                              borderRadius: '10px',
-                              px: 6,
-                              fontWeight: 800,
-                              '&:hover': { bgcolor: isAdvanceRequestUI ? '#4338ca' : '#059669' },
-                              boxShadow: isAdvanceRequestUI
-                                ? '0 4px 14px rgba(79, 70, 229, 0.4)'
-                                : '0 4px 14px rgba(16, 185, 129, 0.4)',
-                            }}
-                            disabled={isFormDisabled || isSubmitting}
-                            onClick={handleSubmit}
-                          >
-                            {isAdvanceRequestUI ? 'บันทึกแผนงานล่วงหน้า' : 'บันทึกรายงาน'}
-                          </Button>
+                          {!isAdvanceRequestUI ? (
+                            <>
+                              {isSameDay(reportDate, new Date()) && (
+                                <Button
+                                  variant="outlined"
+                                  sx={{
+                                    color: '#0284c7',
+                                    borderColor: '#0284c7',
+                                    borderRadius: '10px',
+                                    flex: 1,
+                                    px: { xs: 1, md: 4 },
+                                    fontSize: { xs: '0.78rem', md: '0.875rem' },
+                                    fontWeight: 800,
+                                    minWidth: 0,
+                                    '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0369a1' },
+                                  }}
+                                  disabled={isFormDisabled || isSubmitting}
+                                  onClick={() => handleSubmit(false)}
+                                >
+                                  บันทึกฉบับร่าง
+                                </Button>
+                              )}
+                              <Button
+                                variant="contained"
+                                sx={{
+                                  bgcolor: '#10b981',
+                                  borderRadius: '10px',
+                                  flex: 1,
+                                  px: { xs: 1, md: 4 },
+                                  fontSize: { xs: '0.78rem', md: '0.875rem' },
+                                  fontWeight: 800,
+                                  minWidth: 0,
+                                  '&:hover': { bgcolor: '#059669' },
+                                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                                }}
+                                disabled={isDateLockedByWagePeriod || isSubmitting}
+                                onClick={() => handleSubmit(true)}
+                              >
+                                ส่งรายงานสมบูรณ์
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="contained"
+                              sx={{
+                                bgcolor: '#4f46e5',
+                                borderRadius: '10px',
+                                flex: 1,
+                                px: { xs: 1, md: 6 },
+                                fontSize: { xs: '0.78rem', md: '0.875rem' },
+                                fontWeight: 800,
+                                minWidth: 0,
+                                '&:hover': { bgcolor: '#4338ca' },
+                                boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)',
+                              }}
+                              disabled={isFormDisabled || isSubmitting}
+                              onClick={() => handleSubmit(true)}
+                            >
+                              บันทึกแผนงานล่วงหน้า
+                            </Button>
+                          )}
                         </Box>
                       </>
                     )}
@@ -3737,86 +3953,75 @@ export default function DailyReportPage() {
             maxWidth="xs"
             fullWidth
             PaperProps={{
-              sx: { borderRadius: '12px', p: 1 },
+              sx: { borderRadius: '12px', p: 1 }
             }}
           >
-            {unlockRequestDate &&
-              (() => {
-                const reqDateStr = format(unlockRequestDate, 'yyyy-MM-dd');
-                const isAlreadyRequested =
-                  selectedTask?.unlockRequests && selectedTask.unlockRequests[reqDateStr];
-
-                if (isAlreadyRequested) {
-                  return (
-                    <>
-                      <DialogTitle
-                        sx={{ fontWeight: 800, textAlign: 'center', pb: 1, color: '#a855f7' }}
-                      >
-                        คำขออยู่ระหว่างรออนุมัติ
-                      </DialogTitle>
-                      <DialogContent sx={{ textAlign: 'center', py: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          คำขอปลดล็อคสิทธิ์ลงเวลาทำงานย้อนหลังสำหรับวันที่{' '}
-                          <strong>{reqDateStr}</strong> ได้ถูกส่งไปยังหัวหน้างานของคุณแล้ว
-                          กรุณารอหัวหน้างานอนุมัติ
-                        </Typography>
-                      </DialogContent>
-                      <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
-                        <Button
-                          onClick={() => setIsUnlockRequestDialogOpen(false)}
-                          variant="outlined"
-                          sx={{ borderRadius: '8px', px: 4, fontWeight: 700 }}
-                        >
-                          ตกลง
-                        </Button>
-                      </DialogActions>
-                    </>
-                  );
-                }
-
+            {unlockRequestDate && (() => {
+              const reqDateStr = format(unlockRequestDate, 'yyyy-MM-dd');
+              const isAlreadyRequested = selectedTask?.unlockRequests && selectedTask.unlockRequests[reqDateStr];
+              
+              if (isAlreadyRequested) {
                 return (
                   <>
-                    <DialogTitle sx={{ fontWeight: 800, textAlign: 'center', pb: 1 }}>
-                      ขอปลดล็อคสิทธิ์ลงข้อมูลย้อนหลัง
+                    <DialogTitle sx={{ fontWeight: 800, textAlign: 'center', pb: 1, color: '#a855f7' }}>
+                      คำขออยู่ระหว่างรออนุมัติ
                     </DialogTitle>
                     <DialogContent sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="body2" color="text.secondary">
-                        คุณต้องการส่งคำขอปลดล็อคสิทธิ์เพื่อลงรายงานย้อนหลังสำหรับวันที่{' '}
-                        <strong>{reqDateStr}</strong> ไปยังหัวหน้างานของคุณใช่หรือไม่?
+                        คำขอปลดล็อคสิทธิ์ลงเวลาทำงานย้อนหลังสำหรับวันที่ <strong>{reqDateStr}</strong> ได้ถูกส่งไปยังหัวหน้างานของคุณแล้ว กรุณารอหัวหน้างานอนุมัติ
                       </Typography>
                     </DialogContent>
-                    <DialogActions sx={{ justifyContent: 'space-around', pb: 2, px: 2 }}>
+                    <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
                       <Button
                         onClick={() => setIsUnlockRequestDialogOpen(false)}
                         variant="outlined"
-                        color="inherit"
-                        disabled={isSubmittingUnlockRequest}
-                        sx={{ borderRadius: '8px', px: 3, fontWeight: 700 }}
+                        sx={{ borderRadius: '8px', px: 4, fontWeight: 700 }}
                       >
-                        ยกเลิก
-                      </Button>
-                      <Button
-                        onClick={handleRequestUnlockSubmit}
-                        variant="contained"
-                        disabled={isSubmittingUnlockRequest}
-                        sx={{
-                          borderRadius: '8px',
-                          px: 3,
-                          fontWeight: 700,
-                          bgcolor: '#a855f7',
-                          '&:hover': { bgcolor: '#8b5cf6' },
-                        }}
-                      >
-                        {isSubmittingUnlockRequest ? (
-                          <CircularProgress size={20} color="inherit" />
-                        ) : (
-                          'ขอลงข้อมูลย้อนหลัง'
-                        )}
+                        ตกลง
                       </Button>
                     </DialogActions>
                   </>
                 );
-              })()}
+              }
+
+              return (
+                <>
+                  <DialogTitle sx={{ fontWeight: 800, textAlign: 'center', pb: 1 }}>
+                    ขอปลดล็อคสิทธิ์ลงข้อมูลย้อนหลัง
+                  </DialogTitle>
+                  <DialogContent sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      คุณต้องการส่งคำขอปลดล็อคสิทธิ์เพื่อลงรายงานย้อนหลังสำหรับวันที่ <strong>{reqDateStr}</strong> ไปยังหัวหน้างานของคุณใช่หรือไม่?
+                    </Typography>
+                  </DialogContent>
+                  <DialogActions sx={{ justifyContent: 'space-around', pb: 2, px: 2 }}>
+                    <Button
+                      onClick={() => setIsUnlockRequestDialogOpen(false)}
+                      variant="outlined"
+                      color="inherit"
+                      disabled={isSubmittingUnlockRequest}
+                      sx={{ borderRadius: '8px', px: 3, fontWeight: 700 }}
+                    >
+                      ยกเลิก
+                    </Button>
+                    <Button
+                      onClick={handleRequestUnlockSubmit}
+                      variant="contained"
+                      disabled={isSubmittingUnlockRequest}
+                      sx={{
+                        borderRadius: '8px',
+                        px: 3,
+                        fontWeight: 700,
+                        bgcolor: '#a855f7',
+                        '&:hover': { bgcolor: '#8b5cf6' }
+                      }}
+                    >
+                      {isSubmittingUnlockRequest ? <CircularProgress size={20} color="inherit" /> : 'ขอลงข้อมูลย้อนหลัง'}
+                    </Button>
+                  </DialogActions>
+                </>
+              );
+            })()}
           </Dialog>
 
           <Dialog
@@ -3982,116 +4187,284 @@ function TaskSidebarCard({
     isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName;
   const displayProgress = task.dailyProgress || 0;
 
+  const getDueDateColor = () => {
+    if (!task.dueDate) return displayProgress === 100 ? '#10b981' : '#9ca3af';
+    const dueDateObj = new Date(task.dueDate);
+    if (isNaN(dueDateObj.getTime())) return displayProgress === 100 ? '#10b981' : '#9ca3af';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    if (displayProgress === 100) {
+      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+      return diffDaysCompleted >= 0 ? '#10b981' : '#ef4444';
+    }
+
+    const diffTime = dueDateObj.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return '#ef4444';
+    } else if (diffDays <= 3) {
+      return '#f97316';
+    } else if (diffDays <= 7) {
+      return '#eab308';
+    } else if (
+      dueDateObj.getFullYear() === today.getFullYear() &&
+      dueDateObj.getMonth() === today.getMonth()
+    ) {
+      return '#3b82f6';
+    } else {
+      return '#9ca3af';
+    }
+  };
+
+  const getDueDateTooltip = () => {
+    if (!task.dueDate) return displayProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+    const dueDateObj = new Date(task.dueDate);
+    if (isNaN(dueDateObj.getTime())) return displayProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    if (displayProgress === 100) {
+      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      completionDate.setHours(0, 0, 0, 0);
+      const diff = dueDateObj.getTime() - completionDate.getTime();
+      const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+      const formattedDueDate = dueDateObj.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      const formattedCompletionDate = completionDate.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+
+      if (diffDaysCompleted > 0) {
+        return `เสร็จสิ้นก่อนกำหนด ${diffDaysCompleted} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+      } else if (diffDaysCompleted === 0) {
+        return `เสร็จสิ้นตรงตามแผนงาน (วันที่: ${formattedDueDate})`;
+      } else {
+        return `เสร็จสิ้นล่าช้ากว่ากำหนด ${Math.abs(diffDaysCompleted)} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+      }
+    }
+
+    return `Due: ${dueDateObj.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })}`;
+  };
+
   return (
-    <Box
+    <Paper
+      elevation={0}
       onClick={onClick}
       sx={{
         p: 2,
-        borderRadius: '16px',
-        cursor: 'pointer',
-        border: '1px solid',
-        borderColor: active ? '#3b82f6' : '#cbd5e1',
-        bgcolor: active ? '#eff6ff' : '#ffffff',
-        boxShadow: active ? '0 4px 14px rgba(59, 130, 246, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.04)',
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        display: 'flex',
-        gap: 2,
+        mb: 1.5,
+        borderRadius: '12px',
+        border: '1.5px solid',
+        borderColor: active ? '#3b82f6' : 'transparent',
+        backgroundColor: active ? '#eff6ff' : '#ffffff',
+        boxShadow: active ? '0 4px 16px rgba(59, 130, 246, 0.15)' : '0 4px 16px rgba(0,0,0,0.06)',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
         '&:hover': {
           transform: 'translateY(-2px)',
+          boxShadow: active ? '0 6px 20px rgba(59, 130, 246, 0.2)' : '0 8px 24px rgba(0,0,0,0.08)',
           borderColor: active ? '#3b82f6' : '#94a3b8',
-          boxShadow: active
-            ? '0 6px 20px rgba(59, 130, 246, 0.25)'
-            : '0 8px 16px rgba(0, 0, 0, 0.08)',
         },
+        cursor: 'pointer',
       }}
     >
-      <Box sx={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
-        <svg height="44" width="44" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="22" cy="22" r="19" stroke="#f1f5f9" strokeWidth="3" fill="none" />
-          <circle
-            cx="22"
-            cy="22"
-            r="19"
-            stroke="#10b981"
-            strokeWidth="3"
-            fill="none"
-            strokeDasharray={2 * Math.PI * 19}
-            strokeDashoffset={
-              2 * Math.PI * 19 - ((displayProgress || 0) / 100) * (2 * Math.PI * 19)
-            }
-            strokeLinecap="round"
-          />
-        </svg>
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Typography variant="caption" fontWeight={900} fontSize="0.65rem" color="#10b981">
-            {displayProgress || 0}%
-          </Typography>
-        </Box>
-      </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Box
-          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.2 }}
-        >
-          <Typography variant="caption" fontWeight={900} color="primary">
-            {task.taskId}
-          </Typography>
-          {task.isSupportRequest && (
-            <Chip
-              label="Support"
-              size="small"
-              sx={{
-                height: 18,
-                fontSize: '0.6rem',
-                fontWeight: 800,
-                bgcolor: '#fef08a',
-                color: '#854d0e',
-                borderRadius: '4px',
-              }}
-            />
-          )}
-        </Box>
-        {task.revisionId && task.revisionId !== 'rev00' && (
-          <Typography
-            variant="caption"
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {/* Task Code Badge */}
+          <Box
             sx={{
-              display: 'block',
-              fontWeight: 700,
-              color: '#ef4444',
-              mb: 0.5,
-              fontSize: '0.7rem',
-              letterSpacing: 0.3,
+              display: 'inline-flex',
+              px: 1,
+              py: 0.25,
+              borderRadius: 1.5,
+              backgroundColor: active ? '#dbeafe' : '#f1f3f6',
             }}
           >
-            {task.revisionId} : &quot;{task.revisionName || 'แก้ไขงาน'}&quot;
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, color: active ? '#1d4ed8' : '#6b7280', fontSize: '0.7rem', letterSpacing: 0.5 }}
+            >
+              {task.taskId}
+              {task.revisionId && task.revisionId !== 'rev00' && (
+                <Box component="span" sx={{ color: '#ef4444' }}>
+                  -{task.revisionId}
+                </Box>
+              )}
+            </Typography>
+          </Box>
+
+          {/* Support Label */}
+          {task.isSupportRequest && (
+            <Box
+              sx={{
+                display: 'inline-flex',
+                px: 0.8,
+                py: 0.2,
+                borderRadius: '4px',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
+                boxShadow: '0 2px 4px rgba(251, 191, 36, 0.1)',
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ 
+                  fontWeight: 800, 
+                  color: '#92400e', 
+                  fontSize: '0.625rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                Support
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+      </Stack>
+
+      {/* Title (Task Name) */}
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 700, color: '#111827', mb: 0.5, fontSize: '0.825rem', lineHeight: 1.2 }}
+      >
+        {displayTaskName}
+      </Typography>
+
+      {/* Subtask Name / Project Info */}
+      <Typography
+        variant="caption"
+        sx={{ display: 'block', color: '#6b7280', mb: 0.5, fontSize: '0.75rem', lineHeight: 1.3, fontWeight: 500 }}
+      >
+        {task.subtaskName || (task.subtasks && task.subtasks[0]?.subtaskName)}
+      </Typography>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        noWrap
+        sx={{ display: 'block', mb: 1.5, fontWeight: 600, fontSize: '0.7rem' }}
+      >
+        {getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}
+      </Typography>
+      
+      {/* Progress Section */}
+      <Box sx={{ mb: 1.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563', fontSize: '0.7rem' }}>
+            Progress
           </Typography>
-        )}
-        <Typography variant="body2" fontWeight={800} color="#1e293b" noWrap sx={{ mt: 0.2 }}>
-          {displayTaskName}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
-          sx={{ display: 'block', mt: 0.3, fontWeight: 600 }}
-        >
-          {getProjectFullName(task.projectName, task.projectCode)} • {task.categoryName}
-        </Typography>
-        <Typography variant="caption" color="#94a3b8" sx={{ fontSize: '0.65rem' }}>
-          Duedate :{' '}
-          {task.dueDate && !isNaN(new Date(task.dueDate).getTime())
-            ? format(new Date(task.dueDate), 'dd/MM/yyyy')
-            : '-'}
-        </Typography>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: (displayProgress || 0) >= 100 ? '#059669' : '#1c1e2b', fontSize: '0.7rem' }}>
+            {displayProgress || 0}%
+          </Typography>
+        </Stack>
+        <LinearProgress 
+          variant="determinate" 
+          value={Math.min(100, Math.max(0, displayProgress || 0))} 
+          sx={{
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: active ? '#dbeafe' : '#f1f3f6',
+            '& .MuiLinearProgress-bar': {
+              borderRadius: 2,
+              background: (displayProgress || 0) >= 100 
+                ? 'linear-gradient(90deg, #059669, #10b981)' 
+                : 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+            }
+          }}
+        />
       </Box>
-    </Box>
+
+      {/* Due Date Row */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0 }}>
+        <Tooltip title={getDueDateTooltip()} arrow placement="top">
+          <Box
+            sx={{
+              display: 'inline-flex',
+              backgroundColor: getDueDateColor(),
+              borderRadius: '999px',
+              px: 1,
+              py: 0.25,
+              alignItems: 'center',
+              boxShadow: '0 2px 6px rgba(28, 30, 43, 0.2)',
+              cursor: 'default',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                color: getDueDateColor() === '#eab308' ? '#1c1e2b' : '#ffffff',
+                fontSize: '0.7rem',
+                letterSpacing: 0.5,
+              }}
+            >
+              {(() => {
+                if (displayProgress === 100) {
+                  if (!task.dueDate) return 'ตรงตามแผน';
+                  const dueDateObj = new Date(task.dueDate);
+                  if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+
+                  const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+                  completionDate.setHours(0, 0, 0, 0);
+                  dueDateObj.setHours(0, 0, 0, 0);
+
+                  const diff = dueDateObj.getTime() - completionDate.getTime();
+                  const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+                  if (diffDaysCompleted > 0) {
+                    return `เสร็จก่อนแผน ${diffDaysCompleted} วัน`;
+                  } else if (diffDaysCompleted === 0) {
+                    return 'ตรงตามแผน';
+                  } else {
+                    return `เลยกำหนด ${Math.abs(diffDaysCompleted)} วัน`;
+                  }
+                }
+
+                if (!task.dueDate) return 'ไม่ระบุ';
+                const dueDateObj = new Date(task.dueDate);
+                if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                dueDateObj.setHours(0, 0, 0, 0);
+
+                const diffTime = dueDateObj.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays < 0) {
+                  return `เลยกำหนดส่ง ${Math.abs(diffDays)} วัน`;
+                } else if (diffDays <= 3) {
+                  return `ใกล้ถึงใน ${diffDays} วัน`;
+                } else if (diffDays <= 7) {
+                  return `ใกล้ถึงใน ${diffDays} วัน`;
+                } else {
+                  return `เหลือ ${diffDays} วัน`;
+                }
+              })()}
+            </Typography>
+          </Box>
+        </Tooltip>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -4520,5 +4893,165 @@ function WorkerTableRow({
         </Box>
       </TableCell>
     </TableRow>
+  );
+}
+
+function WorkerMobileCard({ worker, onUpdate, onUpdateLeave, onUploadCert, onRemove, index, isReadOnly }: any) {
+  const [expanded, setExpanded] = React.useState(false);
+  const initial = ((worker.name || worker.employeeId || '?')[0] || '?').toUpperCase();
+
+  const hasOT = worker.times?.otMorning || worker.times?.otNoon || worker.times?.otEvening;
+  const hasLeave = worker.leave?.active;
+
+  const timeRow = (
+    label: string,
+    checked: boolean,
+    onCheck: (v: boolean) => void,
+    disabled: boolean,
+    timeValue?: string,
+    onTimeChange?: (v: string) => void,
+    fixedTime?: string,
+  ) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75, borderBottom: '1px solid #f8fafc' }}>
+      <Checkbox size="small" sx={{ p: 0 }} checked={!!checked} onChange={(e) => onCheck(e.target.checked)} disabled={disabled} />
+      <Typography variant="caption" fontWeight={700} sx={{ minWidth: 58, color: '#475569', fontSize: '0.72rem' }}>
+        {label}
+      </Typography>
+      {checked && (
+        fixedTime ? (
+          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontSize: '0.7rem', bgcolor: '#f1f5f9', px: 1, py: 0.25, borderRadius: '6px' }}>{fixedTime}</Typography>
+        ) : (
+          <TimeRangePicker value={timeValue || ''} onChange={(val: string) => onTimeChange && onTimeChange(val)} disabled={disabled} />
+        )
+      )}
+    </Box>
+  );
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: expanded ? '#cbd5e1' : '#e2e8f0',
+        borderRadius: '12px',
+        bgcolor: '#fff',
+        mb: 1.5,
+        overflow: 'hidden',
+        transition: 'border-color 0.2s',
+        boxShadow: expanded ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+      }}
+    >
+      {/* Collapsed Header — always visible */}
+      <Box
+        onClick={() => setExpanded(!expanded)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          p: 1.5,
+          cursor: 'pointer',
+          userSelect: 'none',
+          bgcolor: expanded ? '#f8fafc' : '#fff',
+          transition: 'background 0.2s',
+        }}
+      >
+        {/* Avatar */}
+        <Box
+          sx={{
+            width: 36, height: 36, borderRadius: '50%',
+            bgcolor: isReadOnly ? '#94a3b8' : '#1e293b',
+            color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.85rem', fontWeight: 800, flexShrink: 0,
+          }}
+        >
+          {initial}
+        </Box>
+
+        {/* Name + ID */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.67rem', display: 'block', fontWeight: 700 }}>
+            {worker.employeeId}
+          </Typography>
+          <Typography variant="body2" fontWeight={700} color="#1e293b" sx={{ lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {worker.name}
+          </Typography>
+        </Box>
+
+        {/* Status dots */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+          {worker.times?.regular && (
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22c55e' }} title="ปกติ" />
+          )}
+          {hasOT && (
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#3b82f6' }} title="OT" />
+          )}
+          {hasLeave && (
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#f97316' }} title="ลา" />
+          )}
+        </Box>
+
+        {/* Chevron */}
+        <ChevronRight
+          size={16}
+          style={{
+            color: '#94a3b8',
+            flexShrink: 0,
+            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s',
+          }}
+        />
+
+        {/* Delete — stop propagation so click doesn't toggle expand */}
+        {isReadOnly ? (
+          <Chip label="Support" size="small" onClick={(e) => e.stopPropagation()} sx={{ fontSize: '0.62rem', height: 20, bgcolor: '#fef08a', color: '#854d0e', fontWeight: 800, flexShrink: 0 }} />
+        ) : (
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            sx={{ color: '#ef4444', bgcolor: '#fef2f2', borderRadius: '8px', p: 0.5, flexShrink: 0 }}
+          >
+            <X size={15} />
+          </IconButton>
+        )}
+      </Box>
+
+      {/* Expanded body */}
+      {expanded && (
+        <Box sx={{ px: 2, pb: 1.5, pt: 0.5, borderTop: '1px solid #f1f5f9' }}>
+          {timeRow('ปกติ', worker.times?.regular, (v) => onUpdate('regular', v), !!isReadOnly, worker.times?.regTime || '08:00 - 17:00', (v) => onUpdate('regTime', v))}
+          {timeRow('OT เช้า', worker.times?.otMorning, (v) => onUpdate('otMorning', v), !!isReadOnly || !worker.times?.regular, worker.times?.otMorningTime || '06:00 - 08:00', (v) => onUpdate('otMorningTime', v))}
+          {timeRow('OT เที่ยง', worker.times?.otNoon, (v) => onUpdate('otNoon', v), !!isReadOnly || !worker.times?.regular, undefined, undefined, '12:00 - 13:00')}
+          {timeRow('OT เย็น', worker.times?.otEvening, (v) => onUpdate('otEvening', v), !!isReadOnly || !worker.times?.regular, worker.times?.otEveningTime || '18:00 - 21:00', (v) => onUpdate('otEveningTime', v))}
+          {!isReadOnly && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75 }}>
+              <Checkbox size="small" sx={{ p: 0 }} checked={!!worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} />
+              <Typography variant="caption" fontWeight={700} sx={{ minWidth: 58, color: '#475569', fontSize: '0.72rem' }}>ลา</Typography>
+              {worker.leave?.active && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', flex: 1 }}>
+                  <TimeRangePicker value={worker.leave?.time || '08:00 - 17:00'} onChange={(val: string) => onUpdateLeave('time', val)} disabled={false} />
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    {worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl ? (
+                      <>
+                        <IconButton size="small" onClick={() => window.open(getImageUrl(worker.leave?.medCertFilePreview || worker.leave?.medCertFileUrl), '_blank')} sx={{ color: '#3b82f6', p: 0.5, bgcolor: '#eff6ff', borderRadius: '6px' }}>
+                          <Eye size={14} />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => { onUploadCert(null); onUpdateLeave('medCertFileUrl', ''); }} sx={{ color: '#ef4444', p: 0.5, bgcolor: '#fef2f2', borderRadius: '6px' }}>
+                          <Trash2 size={14} />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <IconButton component="label" size="small" sx={{ color: '#64748b', p: 0.5, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
+                        <Paperclip size={14} />
+                        <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
+                      </IconButton>
+                    )}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
   );
 }

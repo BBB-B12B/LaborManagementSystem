@@ -20,8 +20,11 @@ export default function Home() {
 
     // Redirect based on authentication status
     if (isAuthenticated) {
-      if (user?.roleCode === 'FM') {
+      const role = user?.roleCode || '';
+      if (role === 'FM' || role === 'SE') {
         router.push('/daily-reports');
+      } else if (['OE', 'PE', 'PM', 'PD'].includes(role)) {
+        router.push('/workspace');
       } else {
         router.push('/dashboard');
       }

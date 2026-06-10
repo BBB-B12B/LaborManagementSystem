@@ -1,0 +1,10 @@
+{
+  "session_id": "session_020_mobile_create_task_popup",
+  "associated_tasks": [
+    "mobile-popup-design"
+  ],
+  "status": "in_progress",
+  "estimated_tokens": 0,
+  "summary_context": "Redesigning mobile 'Create New Task' popup fields, font sizes, and dropdown layouts for consistent styling (/grill-me)",
+  "History": []
+}

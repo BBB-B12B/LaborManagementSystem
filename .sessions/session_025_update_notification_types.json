@@ -1,0 +1,10 @@
+{
+  "session_id": "session_025_update_notification_types",
+  "associated_tasks": [
+    "update-notification-types"
+  ],
+  "status": "completed",
+  "estimated_tokens": 16541,
+  "summary_context": "Updated frontend notification types in notificationService.ts to support 'task_assigned', 'management_submit', and 'unlock_request', made projectId and taskId optional in the interface, and added projectIds. Updated backend notification route GET /api/notifications in notifications.routes.ts to correctly scope these new notification types based on FM and Supervisor roles.",
+  "History": []
+}

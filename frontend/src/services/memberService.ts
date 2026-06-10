@@ -48,21 +48,26 @@ export interface UserFilterOptions {
   isActive?: boolean;
   page?: number;
   pageSize?: number;
+  projectId?: string;
 }
 
 /**
  * Get all users with optional filters
  * GET /api/users
  */
-export async function getAllUsers(filters?: UserFilterOptions): Promise<UserListResponse> {
+export async function getAllUsers(
+  filters?: UserFilterOptions
+): Promise<UserListResponse> {
   const params = new URLSearchParams();
 
   if (filters?.search) params.append('search', filters.search);
   if (filters?.roleId) params.append('roleId', filters.roleId);
   if (filters?.department) params.append('department', filters.department);
-  if (filters?.isActive !== undefined) params.append('isActive', String(filters.isActive));
+  if (filters?.isActive !== undefined)
+    params.append('isActive', String(filters.isActive));
   if (filters?.page) params.append('page', String(filters.page));
   if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
+  if (filters?.projectId) params.append('projectId', filters.projectId);
 
   const response = await api.get<UserListResponse>('/users', Object.fromEntries(params));
   return response;
@@ -73,7 +78,9 @@ export async function getAllUsers(filters?: UserFilterOptions): Promise<UserList
  * GET /api/users/:id
  */
 export async function getUserById(id: string): Promise<User> {
-  const response = await apiClient.get<{ success: boolean; data: User }>(`/users/${id}`);
+  const response = await apiClient.get<{ success: boolean; data: User }>(
+    `/users/${id}`
+  );
 
   return response.data.data;
 }
@@ -86,7 +93,10 @@ export async function getUserById(id: string): Promise<User> {
  * FR-M-006: Password must be >= 8 characters (validated in backend with bcrypt)
  */
 export async function createUser(data: UserCreateInput): Promise<User> {
-  const response = await apiClient.post<{ success: boolean; data: User }>('/users', data);
+  const response = await apiClient.post<{ success: boolean; data: User }>(
+    '/users',
+    data
+  );
 
   return response.data.data;
 }
@@ -98,7 +108,10 @@ export async function createUser(data: UserCreateInput): Promise<User> {
  * FR-M-003: แก้ไขข้อมูลผู้ใช้
  */
 export async function updateUser(id: string, data: UserEditInput): Promise<User> {
-  const response = await apiClient.put<{ success: boolean; data: User }>(`/users/${id}`, data);
+  const response = await apiClient.put<{ success: boolean; data: User }>(
+    `/users/${id}`,
+    data
+  );
 
   return response.data.data;
 }
@@ -113,9 +126,7 @@ export async function deleteUser(id: string): Promise<void> {
   await apiClient.delete(`/users/${id}`);
 }
 
-export async function importUsersFromFile(
-  file: File
-): Promise<{ success: number; failed: number }> {
+export async function importUsersFromFile(file: File): Promise<{ success: number; failed: number }> {
   const formData = new FormData();
   formData.append('file', file);
   return api.upload('/users/import', formData);

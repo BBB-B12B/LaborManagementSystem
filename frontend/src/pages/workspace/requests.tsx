@@ -76,6 +76,7 @@ import { format, subDays, addDays, parseISO, isValid } from 'date-fns';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import DatePicker from '@/components/forms/DatePicker';
 import { memberService } from '@/services/memberService';
+import * as XLSX from 'xlsx-js-style';
 
 // ฟังก์ชันคำนวณชั่วโมงจากช่วงเวลากะ
 const calculateHoursFromRange = (timeRange: string | null | undefined): number => {
@@ -119,11 +120,7 @@ const parseSafeDate = (val: any): Date | null => {
 };
 
 // ฟังก์ชันจัดรูปแบบค่าเก่า/ใหม่ในประวัติให้แสดงผลเข้าใจง่าย
-const formatFieldChange = (
-  field: string,
-  val: any,
-  resolveUser?: (uid: string) => string
-): string => {
+const formatFieldChange = (field: string, val: any, resolveUser?: (uid: string) => string): string => {
   if (val === null || val === undefined || val === '') return 'ไม่มีข้อมูล';
   if (field === 'dueDate') {
     const d = parseSafeDate(val);
@@ -138,15 +135,13 @@ const formatFieldChange = (
   if (field === 'assignees') {
     if (Array.isArray(val)) {
       if (val.length === 0) return 'ไม่มีผู้รับผิดชอบ';
-      return val
-        .map((a: any) => {
-          const id = typeof a === 'string' ? a : a.userId || a.username || a.name || '';
-          if (resolveUser && id) {
-            return resolveUser(id);
-          }
-          return a.name || a.userId || a.username || 'ไม่ระบุ';
-        })
-        .join(', ');
+      return val.map((a: any) => {
+        const id = typeof a === 'string' ? a : (a.userId || a.username || a.name || '');
+        if (resolveUser && id) {
+          return resolveUser(id);
+        }
+        return a.name || a.userId || a.username || 'ไม่ระบุ';
+      }).join(', ');
     }
     return String(val);
   }
@@ -180,33 +175,14 @@ const getShiftText = (shiftTimes: any): string => {
 // ฟังก์ชันแสดงผลรายชื่อกำลังพลและชั่วโมงใน Snapshot ประวัติ
 const renderLaborSnapshot = (laborList: any[]) => {
   if (!Array.isArray(laborList) || laborList.length === 0) {
-    return (
-      <Typography variant="caption" color="textSecondary" sx={{ fontStyle: 'italic' }}>
-        ไม่มีข้อมูลกำลังพลในขณะนั้น
-      </Typography>
-    );
+    return <Typography variant="caption" color="textSecondary" sx={{ fontStyle: 'italic' }}>ไม่มีข้อมูลกำลังพลในขณะนั้น</Typography>;
   }
   return (
     <Stack spacing={0.5} sx={{ mt: 1 }}>
       {laborList.map((worker: any, widx: number) => {
         return (
-          <Box
-            key={widx}
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              bgcolor: '#fff',
-              px: 1.5,
-              py: 0.5,
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 600, color: '#334155', fontSize: '0.75rem' }}
-            >
+          <Box key={widx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#fff', px: 1.5, py: 0.5, borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155', fontSize: '0.75rem' }}>
               {worker.name || worker.workerName || `แรงงาน #${widx + 1}`}
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
@@ -223,25 +199,8 @@ const renderLaborSnapshot = (laborList: any[]) => {
 const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
   if (!prevLabor) {
     return (
-      <Box
-        sx={{
-          mt: 1,
-          p: 1.5,
-          bgcolor: '#ecfdf5',
-          borderRadius: '8px',
-          border: '1px dashed #34d399',
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            color: '#065f46',
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-          }}
-        >
+      <Box sx={{ mt: 1, p: 1.5, bgcolor: '#ecfdf5', borderRadius: '8px', border: '1px dashed #34d399' }}>
+        <Typography variant="caption" sx={{ color: '#065f46', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5 }}>
           📝 บันทึกรายงานกำลังพลเริ่มต้น
         </Typography>
         <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -252,13 +211,13 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
   }
 
   const currentMap = new Map<string, any>();
-  currentLabor.forEach((w) => {
+  currentLabor.forEach(w => {
     const name = w.name || w.workerName || '';
     if (name) currentMap.set(name, w);
   });
 
   const prevMap = new Map<string, any>();
-  prevLabor.forEach((w) => {
+  prevLabor.forEach(w => {
     const name = w.name || w.workerName || '';
     if (name) prevMap.set(name, w);
   });
@@ -279,7 +238,7 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
         modified.push({
           name,
           prevShifts,
-          currShifts,
+          currShifts
         });
       }
     }
@@ -296,13 +255,8 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
 
   if (!hasChanges) {
     return (
-      <Box
-        sx={{ mt: 1, p: 1.5, bgcolor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ color: '#64748b', fontWeight: 600, display: 'block', fontStyle: 'italic' }}
-        >
+      <Box sx={{ mt: 1, p: 1.5, bgcolor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block', fontStyle: 'italic' }}>
           ไม่มีการเปลี่ยนแปลงข้อมูลกำลังพล (แก้ไขส่วนอื่น เช่น รายละเอียดงาน หรือใบแนบ)
         </Typography>
       </Box>
@@ -313,17 +267,7 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
     <Stack spacing={1} sx={{ mt: 1 }}>
       {added.length > 0 && (
         <Box sx={{ p: 1.5, bgcolor: '#ecfdf5', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: '#065f46',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 0.5,
-            }}
-          >
+          <Typography variant="caption" sx={{ color: '#065f46', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
             ➕ เพิ่มกำลังพล ({added.length} คน)
           </Typography>
           <Stack spacing={0.5}>
@@ -338,17 +282,7 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
 
       {removed.length > 0 && (
         <Box sx={{ p: 1.5, bgcolor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: '#991b1b',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 0.5,
-            }}
-          >
+          <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
             ➖ ลบกำลังพล ({removed.length} คน)
           </Typography>
           <Stack spacing={0.5}>
@@ -363,38 +297,19 @@ const renderLaborDiff = (currentLabor: any[], prevLabor: any[] | null) => {
 
       {modified.length > 0 && (
         <Box sx={{ p: 1.5, bgcolor: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a' }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: '#92400e',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 0.5,
-            }}
-          >
+          <Typography variant="caption" sx={{ color: '#92400e', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
             📝 แก้ไขเวลาทำงาน ({modified.length} คน)
           </Typography>
           <Stack spacing={1}>
             {modified.map((w, i) => (
               <Box key={i} sx={{ borderLeft: '3px solid #d97706', pl: 1, my: 0.2 }}>
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#78350f', fontWeight: 700, display: 'block' }}
-                >
+                <Typography variant="caption" sx={{ color: '#78350f', fontWeight: 700, display: 'block' }}>
                   {w.name}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#b45309', display: 'block', fontSize: '0.65rem' }}
-                >
+                <Typography variant="caption" sx={{ color: '#b45309', display: 'block', fontSize: '0.65rem' }}>
                   จาก: {w.prevShifts}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#d97706', display: 'block', fontSize: '0.65rem', fontWeight: 600 }}
-                >
+                <Typography variant="caption" sx={{ color: '#d97706', display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
                   เป็น: {w.currShifts}
                 </Typography>
               </Box>
@@ -414,7 +329,7 @@ const getLeaveText = (lv: any): string => {
     Business: 'ลากิจ',
     Vacation: 'ลาพักร้อน',
     Unpaid: 'ลาไม่รับค่าจ้าง',
-    Paid: 'ลาได้รับค่าจ้าง',
+    Paid: 'ลาได้รับค่าจ้าง'
   };
   return labelMap[lv.leaveType] || lv.leaveType || 'ไม่ระบุประเภท';
 };
@@ -425,13 +340,13 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
   const prevList = Array.isArray(prevLeave) ? prevLeave : [];
 
   const currentMap = new Map<string, any>();
-  currentLeave.forEach((lv) => {
+  currentLeave.forEach(lv => {
     const name = lv.name || lv.workerName || '';
     if (name) currentMap.set(name, lv);
   });
 
   const prevMap = new Map<string, any>();
-  prevList.forEach((lv) => {
+  prevList.forEach(lv => {
     const name = lv.name || lv.workerName || '';
     if (name) prevMap.set(name, lv);
   });
@@ -448,7 +363,7 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
       modified.push({
         name,
         prevType: getLeaveText(prevLeaveItem),
-        currType: getLeaveText(currLeave),
+        currType: getLeaveText(currLeave)
       });
     }
   });
@@ -462,20 +377,8 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
   if (added.length === 0 && removed.length === 0 && modified.length === 0) return null;
 
   return (
-    <Box
-      sx={{ mt: 1, p: 1.5, bgcolor: '#f5f3ff', borderRadius: '8px', border: '1px solid #ddd6fe' }}
-    >
-      <Typography
-        variant="caption"
-        sx={{
-          color: '#5b21b6',
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          mb: 0.5,
-        }}
-      >
+    <Box sx={{ mt: 1, p: 1.5, bgcolor: '#f5f3ff', borderRadius: '8px', border: '1px solid #ddd6fe' }}>
+      <Typography variant="caption" sx={{ color: '#5b21b6', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
         ℹ️ การขอลาหยุด ({added.length + removed.length + modified.length} รายการ)
       </Typography>
       <Stack spacing={0.5}>
@@ -497,6 +400,131 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
       </Stack>
     </Box>
   );
+};
+
+const getDueDateColor = (row: any) => {
+  if (!row.dueDate) return row.progress === 100 ? '#10b981' : '#9ca3af';
+  const dueDateObj = new Date(row.dueDate);
+  if (isNaN(dueDateObj.getTime())) return row.progress === 100 ? '#10b981' : '#9ca3af';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dueDateObj.setHours(0, 0, 0, 0);
+
+  // If progress is 100, compare completion date (updatedAt) with dueDate
+  if (row.progress === 100) {
+    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    completionDate.setHours(0, 0, 0, 0);
+    const diff = dueDateObj.getTime() - completionDate.getTime();
+    const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+    return diffDaysCompleted >= 0 ? '#10b981' : '#ef4444'; // Green for early/on-plan, Red for late
+  }
+
+  const diffTime = dueDateObj.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return '#ef4444'; // Red = Overdue
+  } else if (diffDays <= 3) {
+    return '#f97316'; // Orange = Within 3 days
+  } else if (diffDays <= 7) {
+    return '#eab308'; // Yellow = Within 7 days
+  } else if (
+    dueDateObj.getFullYear() === today.getFullYear() &&
+    dueDateObj.getMonth() === today.getMonth()
+  ) {
+    return '#3b82f6'; // Blue = Within the current month
+  } else {
+    return '#9ca3af'; // Grey = Outside conditions
+  }
+};
+
+const getDueDateTooltip = (row: any) => {
+  if (!row.dueDate) return row.progress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+  const dueDateObj = new Date(row.dueDate);
+  if (isNaN(dueDateObj.getTime())) return row.progress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dueDateObj.setHours(0, 0, 0, 0);
+
+  // If progress is 100, describe completion relative to dueDate
+  if (row.progress === 100) {
+    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    completionDate.setHours(0, 0, 0, 0);
+    const diff = dueDateObj.getTime() - completionDate.getTime();
+    const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+    const formattedDueDate = dueDateObj.toLocaleDateString('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    const formattedCompletionDate = completionDate.toLocaleDateString('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+
+    if (diffDaysCompleted > 0) {
+      return `เสร็จสิ้นก่อนกำหนด ${diffDaysCompleted} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+    } else if (diffDaysCompleted === 0) {
+      return `เสร็จสิ้นตรงตามแผนงาน (วันที่: ${formattedDueDate})`;
+    } else {
+      return `เสร็จสิ้นล่าช้ากว่ากำหนด ${Math.abs(diffDaysCompleted)} วัน (แผนงาน: ${formattedDueDate}, เสร็จจริง: ${formattedCompletionDate})`;
+    }
+  }
+
+  // Default for pending tasks: show the exact due date formatted in en-GB
+  return `Due: ${dueDateObj.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })}`;
+};
+
+const getDueDateText = (row: any) => {
+  if (row.progress === 100) {
+    if (!row.dueDate) return 'ตรงตามแผน';
+    const dueDateObj = new Date(row.dueDate);
+    if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+
+    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    completionDate.setHours(0, 0, 0, 0);
+    dueDateObj.setHours(0, 0, 0, 0);
+
+    const diff = dueDateObj.getTime() - completionDate.getTime();
+    const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
+
+    if (diffDaysCompleted > 0) {
+      return `เสร็จก่อนแผน ${diffDaysCompleted} วัน`;
+    } else if (diffDaysCompleted === 0) {
+      return 'ตรงตามแผน';
+    } else {
+      return `เลยกำหนด ${Math.abs(diffDaysCompleted)} วัน`;
+    }
+  }
+
+  if (!row.dueDate) return 'ไม่ระบุ';
+  const dueDateObj = new Date(row.dueDate);
+  if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dueDateObj.setHours(0, 0, 0, 0);
+
+  const diffTime = dueDateObj.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return `เลยกำหนดส่ง ${Math.abs(diffDays)} วัน`;
+  } else if (diffDays <= 3) {
+    return `ใกล้ถึงใน ${diffDays} วัน`;
+  } else if (diffDays <= 7) {
+    return `ใกล้ถึงใน ${diffDays} วัน`;
+  } else {
+    return `เหลือ ${diffDays} วัน`;
+  }
 };
 
 export default function WorkspaceRequestsPage() {
@@ -528,6 +556,7 @@ export default function WorkspaceRequestsPage() {
   // Pagination States
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+
 
   // 1. โหลดข้อมูลโครงการทั้งหมด
   const { data: allProjects = [], isLoading: isProjectsLoading } = useQuery<Project[]>({
@@ -563,14 +592,11 @@ export default function WorkspaceRequestsPage() {
   }, [allowedProjects, selectedProjectId, user]);
 
   // 2. ดึงข้อมูล Requests และ Reports
-  const fetchParams = useMemo(
-    () => ({
-      projectId: selectedProjectId,
-      startDate: startDate && isValid(startDate) ? format(startDate, 'yyyy-MM-dd') : '',
-      endDate: endDate && isValid(endDate) ? format(endDate, 'yyyy-MM-dd') : '',
-    }),
-    [selectedProjectId, startDate, endDate]
-  );
+  const fetchParams = useMemo(() => ({
+    projectId: selectedProjectId,
+    startDate: startDate && isValid(startDate) ? format(startDate, 'yyyy-MM-dd') : '',
+    endDate: endDate && isValid(endDate) ? format(endDate, 'yyyy-MM-dd') : '',
+  }), [selectedProjectId, startDate, endDate]);
 
   const {
     data: rawData = [],
@@ -587,14 +613,14 @@ export default function WorkspaceRequestsPage() {
       }
     },
     enabled: !!selectedProjectId,
-  }); // 3. แตกและจัดเรียงข้อมูลกำลังพลให้เป็นรายบรรทัด (1 แถวต่อ 1 Subtask)
+  });  // 3. แตกและจัดเรียงข้อมูลกำลังพลให้เป็นรายบรรทัด (1 แถวต่อ 1 Subtask)
   const unfilteredRows = useMemo(() => {
     const rows: any[] = [];
     if (!Array.isArray(rawData)) return rows;
 
     rawData.forEach((item: any) => {
       const laborList = item.labor || [];
-
+      
       // คำนวณชั่วโมงรวมของพนักงานทุกคนที่ส่งมาในวันนั้นแยกตามประเภทกะ
       let totalHours = 0;
       let normalHours = 0;
@@ -612,7 +638,7 @@ export default function WorkspaceRequestsPage() {
         otMorningHours += otMorningHrsVal;
         otNoonHours += otNoonHrsVal;
         otEveningHours += otEveningHrsVal;
-        totalHours += dayHrs + otMorningHrsVal + otNoonHrsVal + otEveningHrsVal;
+        totalHours += (dayHrs + otMorningHrsVal + otNoonHrsVal + otEveningHrsVal);
       });
 
       // ดึงเวลาเริ่มทำงานกะต่าง ๆ ของพนักงานคนแรกมาใช้เป็นตัวแทนของกลุ่ม
@@ -635,6 +661,7 @@ export default function WorkspaceRequestsPage() {
         totalHours: Number(totalHours.toFixed(2)),
         progress: item.progress || 0,
         status: item.status || 'pending',
+        dueDate: item.dueDate || null,
         isSupportReport: item.isSupportReport === true || item.isSupportRequest === true,
         reportEditHistory: item.editHistory || [],
         labor: item.labor || [],
@@ -730,9 +757,9 @@ export default function WorkspaceRequestsPage() {
   // ดึงประวัติรายงานกำลังพล
   const dailyReportEvents = useMemo(() => {
     if (!selectedRowHistory) return [];
-
+    
     const events: any[] = [];
-
+    
     // 1. เพิ่มรายการปัจจุบัน
     events.push({
       type: 'current',
@@ -760,9 +787,9 @@ export default function WorkspaceRequestsPage() {
 
   const subtaskHistoryEvents = useMemo(() => {
     if (!selectedSubtask) return [];
-
+    
     const events: any[] = [];
-
+    
     // 1. เพิ่มรายการสร้างงานย่อยเริ่มต้น
     events.push({
       isCreation: true,
@@ -770,7 +797,7 @@ export default function WorkspaceRequestsPage() {
       updatedBy: selectedSubtask.createdBy || 'ไม่ระบุ',
       assignees: selectedSubtask.assignees || [],
     });
-
+    
     // 2. เพิ่มการแก้ไขต่าง ๆ
     if (Array.isArray(selectedSubtaskHistory)) {
       selectedSubtaskHistory.forEach((record: any) => {
@@ -782,7 +809,7 @@ export default function WorkspaceRequestsPage() {
         });
       });
     }
-
+    
     return events;
   }, [selectedSubtask, selectedSubtaskHistory]);
 
@@ -794,9 +821,7 @@ export default function WorkspaceRequestsPage() {
     setHistoryLoading(true);
     try {
       const subtasks = await taskService.getSubtasks(row.taskId);
-      const subtask = subtasks.find(
-        (s: any) => s.id === row.subtaskId || s.subtaskId === row.subtaskId
-      );
+      const subtask = subtasks.find((s: any) => s.id === row.subtaskId || s.subtaskId === row.subtaskId);
       if (subtask) {
         setSelectedSubtask(subtask);
         setSelectedSubtaskHistory(subtask.editHistory || []);
@@ -820,61 +845,134 @@ export default function WorkspaceRequestsPage() {
     return flattenedRows.slice(startIndex, startIndex + rowsPerPage);
   }, [flattenedRows, page, rowsPerPage]);
 
-  // 5. ดาวน์โหลดไฟล์ CSV
-  const handleExportCSV = () => {
+  // 5. ดาวน์โหลดไฟล์ Excel (xlsx/SheetJS - browser compatible)
+  const handleExportExcel = () => {
     if (flattenedRows.length === 0) {
       showError('ไม่มีข้อมูลที่จะทำการส่งออก');
       return;
     }
 
-    const headers = [
-      'วันที่ (Date)',
-      'โครงการ (Project)',
-      'ชื่องาน (Task)',
-      'ผู้รายงาน (Foreman)',
-      'จำนวนแรงงาน (Laborers)',
-      'เวลาปกติ (Normal Shift)',
-      'OT เช้า (OT Morning)',
-      'OT เที่ยง (OT Noon)',
-      'OT เย็น (OT Evening)',
-      'ชั่วโมงรวม (Total Hours)',
-      'ความคืบหน้า (Progress %)',
-      'สถานะ (Status)',
-    ];
+    try {
+      const worksheetName = dataType === 'requests' ? 'Advance Plans' : 'Daily Reports';
 
-    const csvRows = [
-      headers.join(','),
-      ...flattenedRows.map((r) =>
-        [
-          `"${r.dateStr || ''}"`,
-          `"${r.projectName || ''}"`,
-          `"${r.taskName || ''}"`,
-          `"${r.createdBy || ''}"`,
-          `"${r.laborCount || 0}"`,
-          `"${r.shiftTimes?.day || ''}"`,
-          `"${r.shiftTimes?.otMorning || ''}"`,
-          `"${r.shiftTimes?.otNoon || ''}"`,
-          `"${r.shiftTimes?.otEvening || ''}"`,
-          `"${r.totalHours || 0}"`,
-          `"${r.progress || 0}%"`,
-          `"${dataType === 'requests' ? (r.status === 'exported' ? 'ส่งออกแล้ว (Locked)' : 'รอตรวจสอบ') : 'ส่งแล้ว'}"`,
-        ].join(',')
-      ),
-    ];
+      // สร้าง header row และ data rows
+      const headers = [
+        'วันที่ (Date)',
+        'โครงการ (Project)',
+        'ชื่องาน (Task)',
+        'ผู้รายงาน (Foreman)',
+        'จำนวนแรงงาน (Laborers)',
+        'เวลาปกติ (Normal Shift)',
+        'OT เช้า (OT Morning)',
+        'OT เที่ยง (OT Noon)',
+        'OT เย็น (OT Evening)',
+        'วันครบกำหนด (Due Date)',
+        'ความคืบหน้า (Progress %)',
+      ];
 
-    const csvContent = '\uFEFF' + csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
+      const dataRows = flattenedRows.map((r) => [
+        r.dateStr || '',
+        r.projectName || '',
+        r.taskName || '',
+        r.createdBy || '',
+        r.laborCount || 0,
+        r.shiftTimes?.day || '',
+        r.shiftTimes?.otMorning || '',
+        r.shiftTimes?.otNoon || '',
+        r.shiftTimes?.otEvening || '',
+        (() => {
+          if (!r.dueDate) return '-';
+          const d = new Date(r.dueDate);
+          return isValid(d) ? format(d, 'dd/MM/yyyy') : '-';
+        })(),
+        `${r.progress || 0}%`,
+      ]);
 
-    const filePrefix = dataType === 'requests' ? 'advance_plans' : 'daily_reports';
-    link.setAttribute('download', `${filePrefix}_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showSuccess('ดาวน์โหลดไฟล์ CSV เรียบร้อยแล้ว (สามารถเปิดใน Excel ได้)');
+      // รวม header + data เป็น array of arrays
+      const aoa = [headers, ...dataRows];
+
+      // สร้าง worksheet จาก AOA
+      const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+      // กำหนดความกว้างคอลัมน์ (wch = width in characters)
+      const colWidths = [
+        { wch: 14 }, // วันที่
+        { wch: 28 }, // โครงการ
+        { wch: 35 }, // ชื่องาน
+        { wch: 22 }, // ผู้รายงาน
+        { wch: 18 }, // จำนวนแรงงาน
+        { wch: 22 }, // เวลาปกติ
+        { wch: 18 }, // OT เช้า
+        { wch: 18 }, // OT เที่ยง
+        { wch: 18 }, // OT เย็น
+        { wch: 20 }, // วันครบกำหนด
+        { wch: 20 }, // ความคืบหน้า
+      ];
+      worksheet['!cols'] = colWidths;
+
+      // ใส่ Style สำหรับ header และ data rows ผ่าน !rows (row heights)
+      worksheet['!rows'] = [
+        { hpt: 32 }, // header row height
+        ...dataRows.map(() => ({ hpt: 20 })), // data row heights
+      ];
+
+      // ใส่ style ให้ cells ด้วย XLSX.utils.cell_set_number_format หรือ direct style assignment
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const headerCellAddr = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!worksheet[headerCellAddr]) worksheet[headerCellAddr] = { t: 's', v: '' };
+        worksheet[headerCellAddr].s = {
+          fill: { fgColor: { rgb: '16A34A' }, patternType: 'solid' }, // เขียวพรีเมียม (ไม่มี #)
+          font: { name: 'Segoe UI', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+          border: {
+            top: { style: 'thin', color: { rgb: '15803D' } },
+            bottom: { style: 'medium', color: { rgb: '15803D' } },
+            left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+            right: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          },
+        };
+      }
+
+      // Data rows style — zebra striping
+      for (let row = 1; row <= range.e.r; row++) {
+        const isEven = row % 2 === 0;
+        const rowBgColor = isEven ? 'FFFFFF' : 'F0FDF4'; // white vs green-50 (ไม่มี #)
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellAddr]) worksheet[cellAddr] = { t: 's', v: '' };
+          worksheet[cellAddr].s = {
+            fill: { fgColor: { rgb: rowBgColor }, patternType: 'solid' },
+            font: { name: 'Segoe UI', sz: 10 },
+            alignment: {
+              horizontal: [0, 4, 5, 6, 7, 8, 9, 10].includes(col) ? 'center' : 'left',
+              vertical: 'center',
+            },
+            border: {
+              bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+              left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+              right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+            },
+          };
+        }
+      }
+
+      // สร้าง workbook และดาวน์โหลด
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, worksheetName);
+
+      const filePrefix = dataType === 'requests' ? 'advance_plans' : 'daily_reports';
+      const fileName = `${filePrefix}_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
+
+      XLSX.writeFile(workbook, fileName, { bookType: 'xlsx', cellStyles: true });
+
+      showSuccess('ดาวน์โหลดไฟล์ Excel เรียบร้อยแล้ว');
+    } catch (err: unknown) {
+      console.error('Error generating Excel:', err);
+      showError('เกิดข้อผิดพลาดในการสร้างไฟล์ Excel');
+    }
   };
+
 
   const pageContent = (
     <Box sx={{ px: 4, py: 4, width: '100%', mb: 6 }}>
@@ -883,7 +981,7 @@ export default function WorkspaceRequestsPage() {
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           justifyContent="space-between"
-          alignItems={{ xs: 'stretch', md: 'flex-start' }}
+          alignItems={{ xs: 'stretch', md: 'center' }}
           spacing={2}
         >
           <Box>
@@ -900,32 +998,10 @@ export default function WorkspaceRequestsPage() {
           </Box>
 
           <Stack
-            direction={{ xs: 'column', sm: 'row', md: 'column' }}
-            alignItems={{ xs: 'stretch', sm: 'center', md: 'flex-end' }}
-            spacing={1.5}
+            direction={{ xs: 'column', sm: 'row' }}
+            alignItems="center"
+            spacing={2}
           >
-            <Button
-              variant="outlined"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportCSV}
-              sx={{
-                borderRadius: '8px',
-                borderColor: '#cbd5e1',
-                color: '#334155',
-                fontWeight: 600,
-                textTransform: 'none',
-                height: '40px',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  bgcolor: '#f8fafc',
-                  borderColor: '#94a3b8',
-                  color: '#0f172a',
-                },
-              }}
-            >
-              Export to Excel (CSV)
-            </Button>
-
             <ToggleButtonGroup
               value={dataType}
               exclusive
@@ -955,306 +1031,233 @@ export default function WorkspaceRequestsPage() {
                 },
               }}
             >
-              <ToggleButton
-                value="requests"
+              <ToggleButton 
+                value="requests" 
                 aria-label="requests"
                 sx={{
-                  px: 2,
+                  px: 3,
                   py: 0.5,
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   textTransform: 'none',
-                  color: '#64748b',
+                  color: '#6b7280',
                   borderRadius: '30px',
                   border: 'none',
                   transition: 'all 0.2s ease',
                   '&.Mui-selected': {
-                    bgcolor: '#fff',
-                    color: '#0f172a',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+                    bgcolor: '#FF7F32',
+                    color: '#ffffff',
+                    boxShadow: '0 4px 14px rgba(255, 127, 50, 0.3)',
                     fontWeight: 800,
                     '&:hover': {
-                      bgcolor: '#fff',
+                      bgcolor: '#e66a25',
                     },
                   },
                   '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.02)',
+                    bgcolor: 'rgba(0, 0, 0, 0.04)',
                     color: '#334155',
-                  },
+                  }
                 }}
               >
-                แผนงานล่วงหน้า (Requests)
+                Requests
               </ToggleButton>
-              <ToggleButton
-                value="reports"
+              <ToggleButton 
+                value="reports" 
                 aria-label="reports"
                 sx={{
-                  px: 2,
+                  px: 3,
                   py: 0.5,
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   textTransform: 'none',
-                  color: '#64748b',
+                  color: '#6b7280',
                   borderRadius: '30px',
                   border: 'none',
                   transition: 'all 0.2s ease',
                   '&.Mui-selected': {
-                    bgcolor: '#fff',
-                    color: '#0f172a',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+                    bgcolor: '#FF7F32',
+                    color: '#ffffff',
+                    boxShadow: '0 4px 14px rgba(255, 127, 50, 0.3)',
                     fontWeight: 800,
                     '&:hover': {
-                      bgcolor: '#fff',
+                      bgcolor: '#e66a25',
                     },
                   },
                   '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.02)',
+                    bgcolor: 'rgba(0, 0, 0, 0.04)',
                     color: '#334155',
-                  },
+                  }
                 }}
               >
-                รายงานประจำวันจริง (Daily Reports)
+                Daily Reports
               </ToggleButton>
             </ToggleButtonGroup>
+
+            <Button
+              variant="contained"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportExcel}
+              sx={{
+                display: { xs: 'none', md: 'inline-flex' },
+                bgcolor: '#22c55e',
+                color: '#fff',
+                borderRadius: '50px',
+                px: 3,
+                fontWeight: 700,
+                textTransform: 'none',
+                height: '38px',
+                boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+                '&:hover': {
+                  bgcolor: '#16a34a',
+                },
+              }}
+            >
+              Export to Excel
+            </Button>
           </Stack>
         </Stack>
       </Box>
 
       {/* ส่วนสรุปตัวเลขชั่วโมงทำงาน (Dashboard Summary) */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {/* การ์ด 1: ชั่วโมงรวมทั้งหมด */}
+      <Grid container spacing={2} sx={{ mb: 3 }} alignItems="stretch">
+        {/* การ์ด 1: ชั่วโมงกะปกติ */}
         <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
               p: 2.5,
               borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              bgcolor: '#ffffff',
-              color: '#1c1e2b',
+              border: 'none',
+              background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+              color: '#ffffff',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)',
+              boxShadow: '0 10px 20px -5px rgba(234, 88, 12, 0.3)',
+              height: '100%',
               minHeight: '142px',
             }}
           >
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
               <Box>
-                <Typography
-                  variant="subtitle2"
-                  color="textSecondary"
-                  sx={{ fontWeight: 600, mb: 0.5 }}
-                >
-                  ชั่วโมงทำงานรวมทั้งหมด
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#2563eb' }}>
-                  {summaryStats.totalHours} ชม.
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: '#eff6ff',
-                  borderRadius: '10px',
-                  color: '#2563eb',
-                  display: 'flex',
-                }}
-              >
-                <ScheduleIcon sx={{ fontSize: 22 }} />
-              </Box>
-            </Stack>
-            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-              ชั่วโมงรวมสะสมจากตัวกรอง
-            </Typography>
-          </Paper>
-        </Grid>
-
-        {/* การ์ด 2: ชั่วโมงกะปกติ */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2.5,
-              borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              bgcolor: '#ffffff',
-              color: '#1c1e2b',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)',
-              minHeight: '142px',
-            }}
-          >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <Box>
-                <Typography
-                  variant="subtitle2"
-                  color="textSecondary"
-                  sx={{ fontWeight: 600, mb: 0.5 }}
-                >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, color: 'rgba(255, 255, 255, 0.85)' }}>
                   ชั่วโมงทำงานกะปกติ
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ffffff' }}>
                   {summaryStats.normalHours} ชม.
                 </Typography>
               </Box>
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: '#f1f5f9',
-                  borderRadius: '10px',
-                  color: '#475569',
-                  display: 'flex',
-                }}
-              >
+              <Box sx={{ p: 1, bgcolor: 'rgba(255, 255, 255, 0.2)', borderRadius: '50%', color: '#ffffff', display: 'flex' }}>
                 <AccessTimeIcon sx={{ fontSize: 22 }} />
               </Box>
             </Stack>
-            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255, 255, 255, 0.7)' }}>
               เวลาปกติ (08:00 - 17:00)
             </Typography>
           </Paper>
         </Grid>
 
-        {/* การ์ด 3: ชั่วโมงโอทีรวม */}
+        {/* การ์ด 2: ชั่วโมงโอทีรวม */}
         <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
               p: 2.5,
               borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              bgcolor: '#ffffff',
-              color: '#1c1e2b',
+              border: 'none',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              color: '#ffffff',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)',
+              boxShadow: '0 10px 20px -5px rgba(37, 99, 235, 0.3)',
+              height: '100%',
               minHeight: '142px',
             }}
           >
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="flex-start"
-              sx={{ mb: 1 }}
-            >
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
               <Box>
-                <Typography
-                  variant="subtitle2"
-                  color="textSecondary"
-                  sx={{ fontWeight: 600, mb: 0.5 }}
-                >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, color: 'rgba(255, 255, 255, 0.85)' }}>
                   ชั่วโมงทำงานโอที (OT)
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ef4444' }}>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ffffff' }}>
                   {summaryStats.otTotalHours} ชม.
                 </Typography>
               </Box>
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: '#fff1f2',
-                  borderRadius: '10px',
-                  color: '#ef4444',
-                  display: 'flex',
-                }}
-              >
+              <Box sx={{ p: 1, bgcolor: 'rgba(255, 255, 255, 0.2)', borderRadius: '50%', color: '#ffffff', display: 'flex' }}>
                 <AccessTimeIcon sx={{ fontSize: 22 }} />
               </Box>
             </Stack>
-
+            
             <Grid container spacing={1} sx={{ mt: 0.5 }}>
               <Grid item xs={4}>
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                    py: 0.4,
-                    bgcolor: '#fff7ed',
-                    borderRadius: '6px',
-                    border: '1px solid #ffedd5',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: '#c2410c',
-                      fontWeight: 700,
-                      display: 'block',
-                      fontSize: '0.625rem',
-                    }}
-                  >
+                <Box sx={{ textAlign: 'center', py: 0.4, bgcolor: 'rgba(255, 255, 255, 0.12)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: 700, display: 'block', fontSize: '0.625rem' }}>
                     โอทีเช้า
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: '#9a3412', fontWeight: 800, fontSize: '0.75rem' }}
-                  >
+                  <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem' }}>
                     {summaryStats.otMorningHours} ชม.
                   </Typography>
                 </Box>
               </Grid>
               <Grid item xs={4}>
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                    py: 0.4,
-                    bgcolor: '#eff6ff',
-                    borderRadius: '6px',
-                    border: '1px solid #dbeafe',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: '#1d4ed8',
-                      fontWeight: 700,
-                      display: 'block',
-                      fontSize: '0.625rem',
-                    }}
-                  >
+                <Box sx={{ textAlign: 'center', py: 0.4, bgcolor: 'rgba(255, 255, 255, 0.12)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: 700, display: 'block', fontSize: '0.625rem' }}>
                     โอทีเที่ยง
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: '#1e40af', fontWeight: 800, fontSize: '0.75rem' }}
-                  >
+                  <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem' }}>
                     {summaryStats.otNoonHours} ชม.
                   </Typography>
                 </Box>
               </Grid>
               <Grid item xs={4}>
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                    py: 0.4,
-                    bgcolor: '#fff1f2',
-                    borderRadius: '6px',
-                    border: '1px solid #ffe4e6',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: '#be123c',
-                      fontWeight: 700,
-                      display: 'block',
-                      fontSize: '0.625rem',
-                    }}
-                  >
+                <Box sx={{ textAlign: 'center', py: 0.4, bgcolor: 'rgba(255, 255, 255, 0.12)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: 700, display: 'block', fontSize: '0.625rem' }}>
                     โอทีเย็น
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: '#9f1239', fontWeight: 800, fontSize: '0.75rem' }}
-                  >
+                  <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem' }}>
                     {summaryStats.otEveningHours} ชม.
                   </Typography>
                 </Box>
               </Grid>
             </Grid>
+          </Paper>
+        </Grid>
+
+        {/* การ์ด 3: ชั่วโมงรวมทั้งหมด */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: '16px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
+              color: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 10px 20px -5px rgba(124, 58, 237, 0.3)',
+              height: '100%',
+              minHeight: '142px',
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, color: 'rgba(255, 255, 255, 0.85)' }}>
+                  ชั่วโมงทำงานรวมทั้งหมด
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ffffff' }}>
+                  {summaryStats.totalHours} ชม.
+                </Typography>
+              </Box>
+              <Box sx={{ p: 1, bgcolor: 'rgba(255, 255, 255, 0.2)', borderRadius: '50%', color: '#ffffff', display: 'flex' }}>
+                <ScheduleIcon sx={{ fontSize: 22 }} />
+              </Box>
+            </Stack>
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255, 255, 255, 0.7)' }}>
+              ชั่วโมงรวมสะสมจากตัวกรอง
+            </Typography>
           </Paper>
         </Grid>
 
@@ -1265,42 +1268,31 @@ export default function WorkspaceRequestsPage() {
             sx={{
               p: 2.5,
               borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              bgcolor: '#ffffff',
-              color: '#1c1e2b',
+              border: 'none',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: '#ffffff',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)',
+              boxShadow: '0 10px 20px -5px rgba(5, 150, 105, 0.3)',
+              height: '100%',
               minHeight: '142px',
             }}
           >
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
               <Box>
-                <Typography
-                  variant="subtitle2"
-                  color="textSecondary"
-                  sx={{ fontWeight: 600, mb: 0.5 }}
-                >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, color: 'rgba(255, 255, 255, 0.85)' }}>
                   กำลังพลสะสม
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: '#7c3aed' }}>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: '#ffffff' }}>
                   {summaryStats.totalLaborCount} คน
                 </Typography>
               </Box>
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: '#f5f3ff',
-                  borderRadius: '10px',
-                  color: '#7c3aed',
-                  display: 'flex',
-                }}
-              >
+              <Box sx={{ p: 1, bgcolor: 'rgba(255, 255, 255, 0.2)', borderRadius: '50%', color: '#ffffff', display: 'flex' }}>
                 <PeopleIcon sx={{ fontSize: 22 }} />
               </Box>
             </Stack>
-            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255, 255, 255, 0.7)' }}>
               จำนวนแรงงานรวมในการกรอง
             </Typography>
           </Paper>
@@ -1387,13 +1379,13 @@ export default function WorkspaceRequestsPage() {
               onChange={(_event, newValue) => {
                 const hasAll = newValue.includes('ALL');
                 const hadAll = selectedForemen.includes('ALL');
-
+                
                 if (hasAll && !hadAll) {
                   setSelectedForemen(['ALL', ...foremanOptions]);
                 } else if (!hasAll && hadAll) {
                   setSelectedForemen([]);
                 } else {
-                  const normalSelections = newValue.filter((v) => v !== 'ALL');
+                  const normalSelections = newValue.filter(v => v !== 'ALL');
                   if (normalSelections.length === foremanOptions.length) {
                     setSelectedForemen(['ALL', ...foremanOptions]);
                   } else {
@@ -1402,7 +1394,7 @@ export default function WorkspaceRequestsPage() {
                 }
                 setPage(0);
               }}
-              getOptionLabel={(option) => (option === 'ALL' ? 'ทั้งหมด (Select All)' : option)}
+              getOptionLabel={(option) => option === 'ALL' ? 'ทั้งหมด (Select All)' : option}
               renderOption={(props, option, { selected }) => (
                 <li {...props}>
                   <Checkbox
@@ -1425,20 +1417,20 @@ export default function WorkspaceRequestsPage() {
                         setSelectedForemen([]);
                         setPage(0);
                       }}
-                    />,
+                    />
                   ];
                 }
                 return value.map((option, index) => (
-                  <Chip label={option} size="small" {...getTagProps({ index })} key={option} />
+                  <Chip
+                    label={option}
+                    size="small"
+                    {...getTagProps({ index })}
+                    key={option}
+                  />
                 ));
               }}
               renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="ผู้รายงาน (Foreman)"
-                  placeholder={selectedForemen.length === 0 ? 'ทั้งหมด' : ''}
-                  size="small"
-                />
+                <TextField {...params} label="ผู้รายงาน (Foreman)" placeholder={selectedForemen.length === 0 ? "ทั้งหมด" : ""} size="small" />
               )}
               fullWidth
             />
@@ -1455,13 +1447,13 @@ export default function WorkspaceRequestsPage() {
               onChange={(_event, newValue) => {
                 const hasAll = newValue.includes('ALL');
                 const hadAll = selectedTaskNames.includes('ALL');
-
+                
                 if (hasAll && !hadAll) {
                   setSelectedTaskNames(['ALL', ...taskNameOptions]);
                 } else if (!hasAll && hadAll) {
                   setSelectedTaskNames([]);
                 } else {
-                  const normalSelections = newValue.filter((v) => v !== 'ALL');
+                  const normalSelections = newValue.filter(v => v !== 'ALL');
                   if (normalSelections.length === taskNameOptions.length) {
                     setSelectedTaskNames(['ALL', ...taskNameOptions]);
                   } else {
@@ -1470,7 +1462,7 @@ export default function WorkspaceRequestsPage() {
                 }
                 setPage(0);
               }}
-              getOptionLabel={(option) => (option === 'ALL' ? 'ทั้งหมด (Select All)' : option)}
+              getOptionLabel={(option) => option === 'ALL' ? 'ทั้งหมด (Select All)' : option}
               renderOption={(props, option, { selected }) => (
                 <li {...props}>
                   <Checkbox
@@ -1493,20 +1485,20 @@ export default function WorkspaceRequestsPage() {
                         setSelectedTaskNames([]);
                         setPage(0);
                       }}
-                    />,
+                    />
                   ];
                 }
                 return value.map((option, index) => (
-                  <Chip label={option} size="small" {...getTagProps({ index })} key={option} />
+                  <Chip
+                    label={option}
+                    size="small"
+                    {...getTagProps({ index })}
+                    key={option}
+                  />
                 ));
               }}
               renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="ชื่องาน (Task Name)"
-                  placeholder={selectedTaskNames.length === 0 ? 'ทั้งหมด' : ''}
-                  size="small"
-                />
+                <TextField {...params} label="ชื่องาน (Task Name)" placeholder={selectedTaskNames.length === 0 ? "ทั้งหมด" : ""} size="small" />
               )}
               fullWidth
             />
@@ -1525,26 +1517,18 @@ export default function WorkspaceRequestsPage() {
         }}
       >
         {isDataLoading ? (
-          <Box
-            sx={{
-              py: 12,
-              display: 'flex',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
+          <Box sx={{ py: 12, display: 'flex', justifyContent: 'center', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <LoadingSpinner size="medium" />
             <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 600 }}>
               กำลังดึงข้อมูลกำลังพลและแผนงาน...
             </Typography>
           </Box>
         ) : (
-          <TableContainer>
-            <Table sx={{ minWidth: 1000 }} aria-label="labor workspace table">
-              <TableHead
-                sx={{
+          <>
+            {/* Desktop Table View */}
+            <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Table sx={{ minWidth: 1000 }} aria-label="labor workspace table">
+                <TableHead sx={{
                   '& .MuiTableCell-head': {
                     bgcolor: '#f8fafc',
                     color: '#475569',
@@ -1552,254 +1536,383 @@ export default function WorkspaceRequestsPage() {
                     fontSize: '0.825rem',
                     py: 2,
                     borderBottom: '2px solid #e2e8f0',
-                  },
-                }}
-              >
-                <TableRow>
-                  <TableCell>วันที่ (Date)</TableCell>
-                  <TableCell>โครงการ (Site)</TableCell>
-                  <TableCell>ชื่องาน (Task Name)</TableCell>
-                  <TableCell>ผู้รายงาน (Foreman)</TableCell>
-                  <TableCell align="center">จำนวนแรงงาน</TableCell>
-                  <TableCell sx={{ width: '100px' }}>เวลาปกติ</TableCell>
-                  <TableCell sx={{ width: '90px' }}>OT เช้า</TableCell>
-                  <TableCell sx={{ width: '90px' }}>OT เที่ยง</TableCell>
-                  <TableCell sx={{ width: '90px' }}>OT เย็น</TableCell>
-                  <TableCell sx={{ width: '110px' }} align="center">
-                    ชั่วโมงรวม
-                  </TableCell>
-                  <TableCell>ความคืบหน้า</TableCell>
-                  <TableCell align="center">สถานะ</TableCell>
-                  <TableCell align="center">ประวัติ</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedRows.length === 0 ? (
+                  }
+                }}>
                   <TableRow>
-                    <TableCell colSpan={13} align="center" sx={{ py: 10 }}>
-                      <WarningIcon sx={{ fontSize: 40, color: '#9ca3af', mb: 1.5 }} />
-                      <Typography variant="h6" color="textSecondary" sx={{ fontWeight: 600 }}>
-                        ไม่พบข้อมูลกำลังพลในเงื่อนไขการค้นหา
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        กรุณาลองเปลี่ยนตัวกรองโครงการหรือขยายช่วงวันที่ตรวจสอบ
-                      </Typography>
-                    </TableCell>
+                    <TableCell>วันที่ (Date)</TableCell>
+                    <TableCell>โครงการ (Site)</TableCell>
+                    <TableCell>ชื่องาน (Task Name)</TableCell>
+                    <TableCell>ผู้รายงาน (Foreman)</TableCell>
+                    <TableCell align="center">จำนวนแรงงาน</TableCell>
+                    <TableCell sx={{ width: '100px' }}>เวลาปกติ</TableCell>
+                    <TableCell sx={{ width: '90px' }}>OT เช้า</TableCell>
+                    <TableCell sx={{ width: '90px' }}>OT เที่ยง</TableCell>
+                    <TableCell sx={{ width: '90px' }}>OT เย็น</TableCell>
+                    <TableCell align="center" sx={{ width: '150px' }}>วันครบกำหนด</TableCell>
+                    <TableCell>ความคืบหน้า</TableCell>
+                    <TableCell align="center">ประวัติ</TableCell>
                   </TableRow>
-                ) : (
-                  paginatedRows.map((row) => {
-                    return (
-                      <TableRow
-                        key={row.key}
-                        hover
-                        sx={{
-                          transition: 'background-color 0.2s ease',
-                          '&:hover': {
-                            bgcolor: '#f8fafc',
-                          },
-                        }}
-                      >
-                        <TableCell sx={{ fontWeight: 600 }}>
-                          {row.dateStr ? format(parseISO(row.dateStr), 'dd/MM/yyyy') : '-'}
-                        </TableCell>
-                        <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
-                          {row.projectName || '-'}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 600, color: '#1f2937' }}>
-                          {row.taskName}
-                          {row.isSupportReport && (
-                            <Chip
-                              label="Support"
-                              size="small"
-                              color="info"
-                              variant="outlined"
-                              sx={{ ml: 1, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
-                          {row.createdBy}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#374151' }}>
-                            {row.laborCount} คน
-                          </Typography>
-                        </TableCell>
-
-                        {/* กะปกติ */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.day ? (
-                            <Chip
-                              label={row.shiftTimes.day}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                borderColor: '#22c55e',
-                                color: '#15803d',
-                                fontWeight: 600,
-                                height: 20,
-                              }}
-                            />
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-
-                        {/* OT เช้า */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.otMorning ? (
-                            <Chip
-                              label={row.shiftTimes.otMorning}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                borderColor: '#ef4444',
-                                color: '#b91c1c',
-                                fontWeight: 600,
-                                height: 20,
-                              }}
-                            />
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-
-                        {/* OT เที่ยง */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.otNoon ? (
-                            <Chip
-                              label={row.shiftTimes.otNoon}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                borderColor: '#3b82f6',
-                                color: '#1d4ed8',
-                                fontWeight: 600,
-                                height: 20,
-                              }}
-                            />
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-
-                        {/* OT เย็น */}
-                        <TableCell sx={{ fontSize: '0.825rem' }}>
-                          {row.shiftTimes?.otEvening ? (
-                            <Chip
-                              label={row.shiftTimes.otEvening}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                borderColor: '#f59e0b',
-                                color: '#b45309',
-                                fontWeight: 600,
-                                height: 20,
-                              }}
-                            />
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-
-                        {/* ชั่วโมงรวม */}
-                        <TableCell
-                          align="center"
-                          sx={{ fontWeight: 800, color: '#111827', fontSize: '0.95rem' }}
+                </TableHead>
+                <TableBody>
+                  {paginatedRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={12} align="center" sx={{ py: 10 }}>
+                        <WarningIcon sx={{ fontSize: 40, color: '#9ca3af', mb: 1.5 }} />
+                        <Typography variant="h6" color="textSecondary" sx={{ fontWeight: 600 }}>
+                          ไม่พบข้อมูลกำลังพลในเงื่อนไขการค้นหา
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          กรุณาลองเปลี่ยนตัวกรองโครงการหรือขยายช่วงวันที่ตรวจสอบ
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedRows.map((row) => {
+                      return (
+                        <TableRow
+                          key={row.key}
+                          hover
+                          sx={{
+                            transition: 'background-color 0.2s ease',
+                            '&:hover': {
+                              bgcolor: '#f8fafc',
+                            }
+                          }}
                         >
-                          {row.totalHours > 0 ? `${row.totalHours} ชม.` : '-'}
-                        </TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {row.dateStr ? format(parseISO(row.dateStr), 'dd/MM/yyyy') : '-'}
+                          </TableCell>
+                          <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
+                            {row.projectName || '-'}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 600, color: '#1f2937' }}>
+                            {row.taskName}
+                            {row.isSupportReport && (
+                              <Chip
+                                label="Support"
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                sx={{ ml: 1, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ color: '#4b5563', fontSize: '0.875rem' }}>
+                            {row.createdBy}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#374151' }}>
+                              {row.laborCount} คน
+                            </Typography>
+                          </TableCell>
+                          
+                          {/* กะปกติ */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.day ? (
+                              <Chip label={row.shiftTimes.day} size="small" variant="outlined" sx={{ borderColor: '#22c55e', color: '#15803d', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
 
-                        {/* ความคืบหน้า */}
-                        <TableCell sx={{ minWidth: 120 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: '100%', mr: 1 }}>
-                              <LinearProgress
-                                variant="determinate"
-                                value={Math.min(100, Math.max(0, row.progress))}
+                          {/* OT เช้า */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.otMorning ? (
+                              <Chip label={row.shiftTimes.otMorning} size="small" variant="outlined" sx={{ borderColor: '#ef4444', color: '#b91c1c', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
+
+                          {/* OT เที่ยง */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.otNoon ? (
+                              <Chip label={row.shiftTimes.otNoon} size="small" variant="outlined" sx={{ borderColor: '#3b82f6', color: '#1d4ed8', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
+
+                          {/* OT เย็น */}
+                          <TableCell sx={{ fontSize: '0.825rem' }}>
+                            {row.shiftTimes?.otEvening ? (
+                              <Chip label={row.shiftTimes.otEvening} size="small" variant="outlined" sx={{ borderColor: '#f59e0b', color: '#b45309', fontWeight: 600, height: 20 }} />
+                            ) : '-'}
+                          </TableCell>
+
+                          {/* วันครบกำหนด (Due Date Badge) */}
+                          <TableCell align="center">
+                            <Tooltip title={getDueDateTooltip(row)} arrow placement="top">
+                              <Box
                                 sx={{
-                                  height: 6,
-                                  borderRadius: 5,
-                                  bgcolor: '#e5e7eb',
-                                  '& .MuiLinearProgress-bar': {
-                                    bgcolor: row.progress >= 100 ? '#10b981' : '#3b82f6',
+                                  display: 'inline-flex',
+                                  backgroundColor: getDueDateColor(row),
+                                  borderRadius: '999px',
+                                  px: 1.5,
+                                  py: 0.5,
+                                  alignItems: 'center',
+                                  boxShadow: '0 2px 6px rgba(28, 30, 43, 0.15)',
+                                  cursor: 'default',
+                                }}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: getDueDateColor(row) === '#eab308' ? '#1c1e2b' : '#ffffff',
+                                    fontSize: '0.75rem',
+                                    letterSpacing: 0.5,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {getDueDateText(row)}
+                                </Typography>
+                              </Box>
+                            </Tooltip>
+                          </TableCell>
+
+                          {/* ความคืบหน้า */}
+                          <TableCell sx={{ minWidth: 120 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box sx={{ width: '100%', mr: 1 }}>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={Math.min(100, Math.max(0, row.progress))}
+                                  sx={{
+                                    height: 6,
+                                    borderRadius: 5,
+                                    bgcolor: '#e5e7eb',
+                                    '& .MuiLinearProgress-bar': {
+                                      bgcolor: row.progress >= 100 ? '#10b981' : '#3b82f6',
+                                    },
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700, minWidth: 35 }}>
+                                {row.progress}%
+                              </Typography>
+                            </Box>
+                          </TableCell>
+
+                          {/* ประวัติแก้ไข */}
+                          <TableCell align="center">
+                            <Tooltip title="ดูประวัติการบันทึก/แก้ไขข้อมูลงานย่อย">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenHistory(row)}
+                                sx={{
+                                  color: '#4b5563',
+                                  '&:hover': {
+                                    color: '#1c1e2b',
+                                    bgcolor: 'rgba(28, 30, 43, 0.05)',
                                   },
                                 }}
-                              />
-                            </Box>
-                            <Typography
-                              variant="body2"
-                              color="textSecondary"
-                              sx={{ fontWeight: 700, minWidth: 35 }}
-                            >
-                              {row.progress}%
-                            </Typography>
-                          </Box>
-                        </TableCell>
+                              >
+                                <HistoryIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-                        {/* สถานะ */}
-                        <TableCell align="center">
-                          {dataType === 'requests' ? (
-                            row.status === 'exported' ? (
-                              <Chip
-                                icon={<TaskAltIcon style={{ color: '#047857' }} />}
-                                label="ส่งออกแล้ว"
-                                size="small"
-                                sx={{
-                                  bgcolor: '#d1fae5',
-                                  color: '#065f46',
-                                  fontWeight: 700,
-                                  border: '1px solid #a7f3d0',
-                                }}
-                              />
-                            ) : (
-                              <Chip
-                                label="รอตรวจสอบ"
-                                size="small"
-                                sx={{
-                                  bgcolor: '#fef3c7',
-                                  color: '#92400e',
-                                  fontWeight: 700,
-                                  border: '1px solid #fde68a',
-                                }}
-                              />
-                            )
-                          ) : (
-                            <Chip
-                              label="ส่งรายงานแล้ว"
-                              size="small"
-                              color="success"
-                              variant="outlined"
-                              sx={{ fontWeight: 700 }}
-                            />
-                          )}
-                        </TableCell>
+            {/* Mobile Card-Based List View */}
+            <Box sx={{ display: { xs: 'block', md: 'none' }, p: 1.5, bgcolor: '#f8fafc' }}>
+              {paginatedRows.length === 0 ? (
+                <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', px: 2 }}>
+                  <WarningIcon sx={{ fontSize: 40, color: '#9ca3af', mb: 1.5 }} />
+                  <Typography variant="h6" color="textSecondary" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                    ไม่พบข้อมูลกำลังพลในเงื่อนไขการค้นหา
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontSize: '0.825rem', mt: 0.5 }}>
+                    กรุณาลองเปลี่ยนตัวกรองโครงการหรือขยายช่วงวันที่ตรวจสอบ
+                  </Typography>
+                </Box>
+              ) : (
+                paginatedRows.map((row) => (
+                  <Paper
+                    key={row.key}
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      borderRadius: '16px',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)',
+                      bgcolor: '#ffffff',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        borderColor: '#FF7F32',
+                        boxShadow: '0 6px 16px rgba(255, 127, 50, 0.06)',
+                      }
+                    }}
+                  >
+                    {/* Header: Date & Due Date Badge */}
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '8px' }}>
+                        {row.dateStr ? format(parseISO(row.dateStr), 'dd/MM/yyyy') : '-'}
+                      </Typography>
+                      
+                      <Tooltip title={getDueDateTooltip(row)} arrow placement="top">
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            backgroundColor: getDueDateColor(row),
+                            borderRadius: '999px',
+                            px: 1.5,
+                            py: 0.5,
+                            alignItems: 'center',
+                            boxShadow: '0 2px 6px rgba(28, 30, 43, 0.15)',
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: getDueDateColor(row) === '#eab308' ? '#1c1e2b' : '#ffffff',
+                              fontSize: '0.7rem',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {getDueDateText(row)}
+                          </Typography>
+                        </Box>
+                      </Tooltip>
+                    </Stack>
 
-                        {/* ประวัติแก้ไข */}
-                        <TableCell align="center">
-                          <Tooltip title="ดูประวัติการบันทึก/แก้ไขข้อมูลงานย่อย">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenHistory(row)}
-                              sx={{
-                                color: '#4b5563',
-                                '&:hover': {
-                                  color: '#1c1e2b',
-                                  bgcolor: 'rgba(28, 30, 43, 0.05)',
-                                },
-                              }}
-                            >
-                              <HistoryIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    {/* Task Title */}
+                    <Box sx={{ mb: 1.5 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '0.925rem', lineHeight: 1.4 }}>
+                        {row.taskName}
+                        {row.isSupportReport && (
+                          <Chip
+                            label="Support"
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                            sx={{ ml: 1, height: 18, fontSize: '0.6rem', fontWeight: 700 }}
+                          />
+                        )}
+                      </Typography>
+                    </Box>
+
+                    {/* Metadata: Site & Foreman */}
+                    <Stack spacing={1} sx={{ mb: 1.8 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, minWidth: '60px' }}>
+                          โครงการ:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500, fontSize: '0.825rem' }}>
+                          {row.projectName || '-'}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, minWidth: '60px' }}>
+                          ผู้รายงาน:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#334155', fontWeight: 600, fontSize: '0.825rem' }}>
+                          {row.createdBy}
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    {/* Divider */}
+                    <Box sx={{ borderTop: '1px solid #f1f5f9', my: 1.5 }} />
+
+                    {/* Labor Count & Shift Chips */}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                      {/* Labor Count Chip */}
+                      <Chip
+                        label={`${row.laborCount} คน`}
+                        size="small"
+                        sx={{ bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}
+                      />
+
+                      {/* Day Shift */}
+                      {row.shiftTimes?.day && (
+                        <Chip
+                          label={`กะปกติ: ${row.shiftTimes.day}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#22c55e', color: '#15803d', fontWeight: 600 }}
+                        />
+                      )}
+
+                      {/* OT Morning */}
+                      {row.shiftTimes?.otMorning && (
+                        <Chip
+                          label={`OT เช้า: ${row.shiftTimes.otMorning}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#ef4444', color: '#b91c1c', fontWeight: 600 }}
+                        />
+                      )}
+
+                      {/* OT Noon */}
+                      {row.shiftTimes?.otNoon && (
+                        <Chip
+                          label={`OT เที่ยง: ${row.shiftTimes.otNoon}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#3b82f6', color: '#1d4ed8', fontWeight: 600 }}
+                        />
+                      )}
+
+                      {/* OT Evening */}
+                      {row.shiftTimes?.otEvening && (
+                        <Chip
+                          label={`OT เย็น: ${row.shiftTimes.otEvening}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ borderColor: '#f59e0b', color: '#b45309', fontWeight: 600 }}
+                        />
+                      )}
+                    </Box>
+
+                    {/* Footer: Progress & History Button */}
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ pt: 1, borderTop: '1px dashed #f1f5f9' }}>
+                      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(100, Math.max(0, row.progress))}
+                          sx={{
+                            height: 6,
+                            borderRadius: 5,
+                            width: '100%',
+                            bgcolor: '#e5e7eb',
+                            '& .MuiLinearProgress-bar': {
+                              bgcolor: row.progress >= 100 ? '#10b981' : '#3b82f6',
+                            },
+                          }}
+                        />
+                        <Typography variant="body2" sx={{ fontWeight: 800, color: '#334155', minWidth: 35 }}>
+                          {row.progress}%
+                        </Typography>
+                      </Box>
+                      
+                      <Tooltip title="ดูประวัติการบันทึก/แก้ไขข้อมูล">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenHistory(row)}
+                          sx={{
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            color: '#475569',
+                            '&:hover': {
+                              color: '#ffffff',
+                              bgcolor: '#FF7F32',
+                              borderColor: '#FF7F32',
+                            },
+                          }}
+                        >
+                          <HistoryIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Paper>
+                ))
+              )}
+            </Box>
+          </>
         )}
         <TablePagination
           rowsPerPageOptions={[10, 25, 50, 100]}
@@ -1827,19 +1940,10 @@ export default function WorkspaceRequestsPage() {
           sx: {
             borderRadius: '20px',
             p: 1.5,
-          },
+          }
         }}
       >
-        <DialogTitle
-          sx={{
-            fontWeight: 800,
-            color: '#0f172a',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            pb: 1,
-          }}
-        >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
           <HistoryIcon sx={{ color: '#0f172a' }} />
           ประวัติการลงข้อมูลและแก้ไข
         </DialogTitle>
@@ -1848,76 +1952,29 @@ export default function WorkspaceRequestsPage() {
             งานย่อย: {selectedSubtaskName}
           </Typography>
 
-          <Paper
-            elevation={0}
-            sx={{
-              bgcolor: '#f8fafc',
-              p: 1.5,
-              borderRadius: '12px',
-              border: '1px solid #e2e8f0',
-              mb: 2.5,
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 700,
-                color: '#1e293b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.8,
-                mb: 1,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
+          <Paper elevation={0} sx={{ bgcolor: '#f8fafc', p: 1.5, borderRadius: '12px', border: '1px solid #e2e8f0', mb: 2.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 0.8, mb: 1, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               📋 รายละเอียดการสร้างและมอบหมายงาน
             </Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 1.5,
-                fontSize: '0.75rem',
-              }}
-            >
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, fontSize: '0.75rem' }}>
               <Box>
-                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>
-                  ผู้สร้างงานหลัก:
-                </Typography>
+                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>ผู้สร้างงานหลัก:</Typography>
+                <Typography sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>{selectedRowHistory?.taskCreatedBy || 'ไม่ระบุ'}</Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>วันที่สร้างงานหลัก:</Typography>
                 <Typography sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>
-                  {selectedRowHistory?.taskCreatedBy || 'ไม่ระบุ'}
+                  {selectedRowHistory?.taskCreatedAt && parseSafeDate(selectedRowHistory.taskCreatedAt) ? format(parseSafeDate(selectedRowHistory.taskCreatedAt)!, 'dd/MM/yyyy') : 'ไม่ระบุ'}
                 </Typography>
               </Box>
               <Box>
-                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>
-                  วันที่สร้างงานหลัก:
-                </Typography>
-                <Typography sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>
-                  {selectedRowHistory?.taskCreatedAt &&
-                  parseSafeDate(selectedRowHistory.taskCreatedAt)
-                    ? format(parseSafeDate(selectedRowHistory.taskCreatedAt)!, 'dd/MM/yyyy')
-                    : 'ไม่ระบุ'}
-                </Typography>
+                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>ผู้สร้างงานย่อย:</Typography>
+                <Typography sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>{selectedSubtask?.createdBy ? resolveUserName(selectedSubtask.createdBy) : 'ไม่ระบุ'}</Typography>
               </Box>
               <Box>
-                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>
-                  ผู้สร้างงานย่อย:
-                </Typography>
+                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>วันที่สร้างงานย่อย:</Typography>
                 <Typography sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>
-                  {selectedSubtask?.createdBy
-                    ? resolveUserName(selectedSubtask.createdBy)
-                    : 'ไม่ระบุ'}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: '0.7rem', color: '#64748b', mb: 0.2 }}>
-                  วันที่สร้างงานย่อย:
-                </Typography>
-                <Typography sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>
-                  {selectedSubtask?.createdAt && parseSafeDate(selectedSubtask.createdAt)
-                    ? format(parseSafeDate(selectedSubtask.createdAt)!, 'dd/MM/yyyy')
-                    : 'ไม่ระบุ'}
+                  {selectedSubtask?.createdAt && parseSafeDate(selectedSubtask.createdAt) ? format(parseSafeDate(selectedSubtask.createdAt)!, 'dd/MM/yyyy') : 'ไม่ระบุ'}
                 </Typography>
               </Box>
             </Box>
@@ -1949,8 +2006,8 @@ export default function WorkspaceRequestsPage() {
               },
             }}
           >
-            <ToggleButton
-              value="report"
+            <ToggleButton 
+              value="report" 
               sx={{
                 py: 0.5,
                 fontSize: '0.75rem',
@@ -1961,14 +2018,14 @@ export default function WorkspaceRequestsPage() {
                   bgcolor: '#fff',
                   color: '#2563eb',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                  '&:hover': { bgcolor: '#fff' },
-                },
+                  '&:hover': { bgcolor: '#fff' }
+                }
               }}
             >
               ประวัติชั่วโมงทำงานจริง
             </ToggleButton>
-            <ToggleButton
-              value="subtask"
+            <ToggleButton 
+              value="subtask" 
               sx={{
                 py: 0.5,
                 fontSize: '0.75rem',
@@ -1979,8 +2036,8 @@ export default function WorkspaceRequestsPage() {
                   bgcolor: '#fff',
                   color: '#2563eb',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                  '&:hover': { bgcolor: '#fff' },
-                },
+                  '&:hover': { bgcolor: '#fff' }
+                }
               }}
             >
               ประวัติการตั้งค่าภารกิจ
@@ -1988,16 +2045,7 @@ export default function WorkspaceRequestsPage() {
           </ToggleButtonGroup>
 
           {historyLoading ? (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                py: 8,
-                flexDirection: 'column',
-                gap: 2,
-              }}
-            >
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8, flexDirection: 'column', gap: 2 }}>
               <CircularProgress size={35} sx={{ color: '#0f172a' }} />
               <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
                 กำลังดึงประวัติการแก้ไข...
@@ -2005,32 +2053,11 @@ export default function WorkspaceRequestsPage() {
             </Box>
           ) : activeHistoryTab === 'report' ? (
             dailyReportEvents.length === 0 ? (
-              <Box
-                sx={{
-                  textAlign: 'center',
-                  py: 6,
-                  px: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                <Box
-                  sx={{
-                    p: 2,
-                    bgcolor: '#f3f4f6',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    color: '#9ca3af',
-                  }}
-                >
+              <Box sx={{ textAlign: 'center', py: 6, px: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ p: 2, bgcolor: '#f3f4f6', borderRadius: '50%', display: 'flex', color: '#9ca3af' }}>
                   <HistoryIcon sx={{ fontSize: 32 }} />
                 </Box>
-                <Typography
-                  variant="body1"
-                  sx={{ fontWeight: 700, color: '#374151', textAlign: 'center' }}
-                >
+                <Typography variant="body1" sx={{ fontWeight: 700, color: '#374151', textAlign: 'center' }}>
                   ไม่มีประวัติการบันทึกรายงานกำลังพล
                 </Typography>
               </Box>
@@ -2044,32 +2071,32 @@ export default function WorkspaceRequestsPage() {
                   const prevEvent = dailyReportEvents[idx + 1] || null;
 
                   return (
-                    <Box
-                      key={idx}
-                      sx={{
-                        position: 'relative',
-                        pl: 3.5,
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          left: 8,
-                          top: 8,
-                          bottom: idx === dailyReportEvents.length - 1 ? 'auto' : -30,
-                          width: 2,
-                          bgcolor: '#e5e7eb',
-                          zIndex: 1,
-                        },
-                        '&::after': {
-                          content: '""',
-                          position: 'absolute',
-                          left: 4,
-                          top: 8,
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          bgcolor: event.type === 'current' ? '#22c55e' : '#eab308',
-                          zIndex: 2,
-                        },
+                    <Box 
+                      key={idx} 
+                      sx={{ 
+                        position: 'relative', 
+                        pl: 3.5, 
+                        '&::before': { 
+                          content: '""', 
+                          position: 'absolute', 
+                          left: 8, 
+                          top: 8, 
+                          bottom: idx === dailyReportEvents.length - 1 ? 'auto' : -30, 
+                          width: 2, 
+                          bgcolor: '#e5e7eb', 
+                          zIndex: 1 
+                        }, 
+                        '&::after': { 
+                          content: '""', 
+                          position: 'absolute', 
+                          left: 4, 
+                          top: 8, 
+                          width: 10, 
+                          height: 10, 
+                          borderRadius: '50%', 
+                          bgcolor: event.type === 'current' ? '#22c55e' : '#eab308', 
+                          zIndex: 2 
+                        } 
                       }}
                     >
                       <Stack direction="row" spacing={1} alignItems="center">
@@ -2077,95 +2104,50 @@ export default function WorkspaceRequestsPage() {
                           {formattedDate}
                         </Typography>
                         {event.type === 'current' ? (
-                          <Chip
-                            label="ล่าสุด (ปัจจุบัน)"
-                            size="small"
-                            color="success"
-                            sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700 }}
-                          />
+                          <Chip label="ล่าสุด (ปัจจุบัน)" size="small" color="success" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700 }} />
                         ) : (
-                          <Chip
-                            label="ประวัติการแก้ไข"
-                            size="small"
-                            color="warning"
-                            variant="outlined"
-                            sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700 }}
-                          />
+                          <Chip label="ประวัติการแก้ไข" size="small" color="warning" variant="outlined" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700 }} />
                         )}
                       </Stack>
-                      <Typography
-                        variant="subtitle2"
-                        sx={{ fontWeight: 800, color: '#1f2937', mt: 0.5 }}
-                      >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1f2937', mt: 0.5 }}>
                         ผู้บันทึก: {resolveUserName(event.by)}
                       </Typography>
 
-                      <Paper
-                        elevation={0}
-                        sx={{
-                          bgcolor: '#f9fafb',
-                          p: 1.5,
-                          borderRadius: '12px',
-                          border: '1px solid #f3f4f6',
-                          mt: 1,
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{ fontWeight: 800, color: '#1e293b', display: 'block', mb: 0.5 }}
-                        >
+                      <Paper elevation={0} sx={{ bgcolor: '#f9fafb', p: 1.5, borderRadius: '12px', border: '1px solid #f3f4f6', mt: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e293b', display: 'block', mb: 0.5 }}>
                           🔄 รายละเอียดการเปลี่ยนแปลงข้อมูล
                         </Typography>
-
+                        
                         {renderLaborDiff(event.labor, prevEvent ? prevEvent.labor : null)}
                         {renderLeaveDiff(event.leave, prevEvent ? prevEvent.leave : null)}
 
-                        <Accordion
-                          elevation={0}
-                          sx={{
-                            bgcolor: 'transparent',
+                        <Accordion 
+                          elevation={0} 
+                          sx={{ 
+                            bgcolor: 'transparent', 
                             '&::before': { display: 'none' },
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px !important',
-                            mt: 1.5,
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '8px !important', 
+                            mt: 1.5 
                           }}
                         >
                           <AccordionSummary
-                            expandIcon={
-                              <ExpandMoreIcon sx={{ fontSize: '0.9rem', color: '#64748b' }} />
-                            }
-                            sx={{
-                              minHeight: '32px !important',
-                              height: '32px',
-                              px: 1.5,
+                            expandIcon={<ExpandMoreIcon sx={{ fontSize: '0.9rem', color: '#64748b' }} />}
+                            sx={{ 
+                              minHeight: '32px !important', 
+                              height: '32px', 
+                              px: 1.5, 
                               bgcolor: '#f8fafc',
                               borderTopLeftRadius: '8px',
                               borderTopRightRadius: '8px',
-                              '& .MuiAccordionSummary-content': { my: '0 !important' },
+                              '& .MuiAccordionSummary-content': { my: '0 !important' }
                             }}
                           >
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontWeight: 700,
-                                color: '#475569',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                              }}
-                            >
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               👥 รายชื่อทั้งหมด ({event.labor.length} คน)
                             </Typography>
                           </AccordionSummary>
-                          <AccordionDetails
-                            sx={{
-                              p: 1,
-                              bgcolor: '#f8fafc',
-                              borderBottomLeftRadius: '8px',
-                              borderBottomRightRadius: '8px',
-                              borderTop: '1px solid #e2e8f0',
-                            }}
-                          >
+                          <AccordionDetails sx={{ p: 1, bgcolor: '#f8fafc', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', borderTop: '1px solid #e2e8f0' }}>
                             {renderLaborSnapshot(event.labor)}
                           </AccordionDetails>
                         </Accordion>
@@ -2176,32 +2158,11 @@ export default function WorkspaceRequestsPage() {
               </Stack>
             )
           ) : subtaskHistoryEvents.length === 0 ? (
-            <Box
-              sx={{
-                textAlign: 'center',
-                py: 6,
-                px: 2,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 1.5,
-              }}
-            >
-              <Box
-                sx={{
-                  p: 2,
-                  bgcolor: '#f3f4f6',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  color: '#9ca3af',
-                }}
-              >
+            <Box sx={{ textAlign: 'center', py: 6, px: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ p: 2, bgcolor: '#f3f4f6', borderRadius: '50%', display: 'flex', color: '#9ca3af' }}>
                 <HistoryIcon sx={{ fontSize: 32 }} />
               </Box>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 700, color: '#374151', textAlign: 'center' }}
-              >
+              <Typography variant="body1" sx={{ fontWeight: 700, color: '#374151', textAlign: 'center' }}>
                 ไม่มีประวัติการตั้งค่าภารกิจสำหรับงานย่อยนี้
               </Typography>
               <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center' }}>
@@ -2217,122 +2178,44 @@ export default function WorkspaceRequestsPage() {
                   : 'ไม่ระบุเวลา';
 
                 return (
-                  <Box
-                    key={idx}
-                    sx={{
-                      position: 'relative',
-                      pl: 3.5,
-                      '&::before': {
-                        content: '""',
-                        position: 'absolute',
-                        left: 8,
-                        top: 8,
-                        bottom: idx === subtaskHistoryEvents.length - 1 ? 'auto' : -24,
-                        width: 2,
-                        bgcolor: '#e5e7eb',
-                        zIndex: 1,
-                      },
-                      '&::after': {
-                        content: '""',
-                        position: 'absolute',
-                        left: 4,
-                        top: 8,
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: record.isCreation ? '#10b981' : '#2563eb',
-                        zIndex: 2,
-                      },
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{ color: '#9ca3af', fontWeight: 600, display: 'block' }}
-                    >
+                  <Box key={idx} sx={{ position: 'relative', pl: 3.5, '&::before': { content: '""', position: 'absolute', left: 8, top: 8, bottom: idx === subtaskHistoryEvents.length - 1 ? 'auto' : -24, width: 2, bgcolor: '#e5e7eb', zIndex: 1 }, '&::after': { content: '""', position: 'absolute', left: 4, top: 8, width: 10, height: 10, borderRadius: '50%', bgcolor: record.isCreation ? '#10b981' : '#2563eb', zIndex: 2 } }}>
+                    <Typography variant="caption" sx={{ color: '#9ca3af', fontWeight: 600, display: 'block' }}>
                       {formattedDate}
                     </Typography>
-                    <Typography
-                      variant="subtitle2"
-                      sx={{ fontWeight: 800, color: '#1f2937', mt: 0.5 }}
-                    >
-                      {record.isCreation ? 'สร้างภารกิจโดย' : 'แก้ไขโดย'}:{' '}
-                      {resolveUserName(record.updatedBy)}
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1f2937', mt: 0.5 }}>
+                      {record.isCreation ? 'สร้างภารกิจโดย' : 'แก้ไขโดย'}: {resolveUserName(record.updatedBy)}
                     </Typography>
-
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        bgcolor: '#f9fafb',
-                        p: 1.5,
-                        borderRadius: '12px',
-                        border: '1px solid #f3f4f6',
-                        mt: 1,
-                      }}
-                    >
+                    
+                    <Paper elevation={0} sx={{ bgcolor: '#f9fafb', p: 1.5, borderRadius: '12px', border: '1px solid #f3f4f6', mt: 1 }}>
                       <Stack spacing={1}>
                         {record.isCreation ? (
                           <Box sx={{ fontSize: '0.8rem' }}>
-                            <Typography
-                              variant="caption"
-                              sx={{ fontWeight: 700, color: '#059669', display: 'block', mb: 0.5 }}
-                            >
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: '#059669', display: 'block', mb: 0.5 }}>
                               ✨ สร้างภารกิจและมอบหมายงานเริ่มต้น
                             </Typography>
                             <Typography variant="body2" sx={{ pl: 1.5, color: '#374151', mt: 0.2 }}>
-                              รายชื่อผู้รับมอบหมาย:{' '}
-                              <span style={{ fontWeight: 600 }}>
-                                {record.assignees
-                                  .map((a: any) => a.name || a.employeeId)
-                                  .join(', ') || 'ไม่มี'}
-                              </span>
+                              รายชื่อผู้รับมอบหมาย: <span style={{ fontWeight: 600 }}>{record.assignees.map((a: any) => a.name || a.employeeId).join(', ') || 'ไม่มี'}</span>
                             </Typography>
                           </Box>
                         ) : record.changes && record.changes.length > 0 ? (
                           record.changes.map((change: any, cidx: number) => {
                             const fieldThai = getFieldNameThai(change.field);
-                            const oldValFmt = formatFieldChange(
-                              change.field,
-                              change.oldValue,
-                              resolveUserName
-                            );
-                            const newValFmt = formatFieldChange(
-                              change.field,
-                              change.newValue,
-                              resolveUserName
-                            );
+                            const oldValFmt = formatFieldChange(change.field, change.oldValue, resolveUserName);
+                            const newValFmt = formatFieldChange(change.field, change.newValue, resolveUserName);
 
                             return (
                               <Box key={cidx} sx={{ fontSize: '0.8rem' }}>
-                                <Typography
-                                  variant="caption"
-                                  sx={{ fontWeight: 700, color: '#4b5563', display: 'block' }}
-                                >
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#4b5563', display: 'block' }}>
                                   • {fieldThai}
                                 </Typography>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ pl: 1.5, color: '#374151', mt: 0.2 }}
-                                >
-                                  จาก{' '}
-                                  <span
-                                    style={{ color: '#9ca3af', textDecoration: 'line-through' }}
-                                  >
-                                    {oldValFmt}
-                                  </span>{' '}
-                                  เป็น{' '}
-                                  <span style={{ color: '#15803d', fontWeight: 600 }}>
-                                    {newValFmt}
-                                  </span>
+                                <Typography variant="body2" sx={{ pl: 1.5, color: '#374151', mt: 0.2 }}>
+                                  จาก <span style={{ color: '#9ca3af', textDecoration: 'line-through' }}>{oldValFmt}</span> เป็น <span style={{ color: '#15803d', fontWeight: 600 }}>{newValFmt}</span>
                                 </Typography>
                               </Box>
                             );
                           })
                         ) : (
-                          <Typography
-                            variant="body2"
-                            color="textSecondary"
-                            sx={{ fontSize: '0.8rem' }}
-                          >
+                          <Typography variant="body2" color="textSecondary" sx={{ fontSize: '0.8rem' }}>
                             ลงบันทึกข้อมูลครั้งแรก หรือไม่มีฟิลด์ระบุความเปลี่ยนแปลง
                           </Typography>
                         )}
@@ -2357,7 +2240,7 @@ export default function WorkspaceRequestsPage() {
               textTransform: 'none',
               '&:hover': {
                 bgcolor: '#1e293b',
-              },
+              }
             }}
           >
             ปิดหน้าต่าง
@@ -2369,9 +2252,7 @@ export default function WorkspaceRequestsPage() {
 
   return (
     <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD']}>
-      <Layout maxWidth={false} disablePadding>
-        {pageContent}
-      </Layout>
+      <Layout maxWidth={false} disablePadding>{pageContent}</Layout>
     </ProtectedRoute>
   );
 }

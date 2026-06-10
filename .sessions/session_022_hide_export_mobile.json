@@ -1,0 +1,10 @@
+{
+  "session_id": "session_022_hide_export_mobile",
+  "associated_tasks": [
+    "hide-export-mobile"
+  ],
+  "status": "completed",
+  "estimated_tokens": 0,
+  "summary_context": "Hid the 'Export to Excel' button on mobile viewports on the requests workspace page.",
+  "History": []
+}

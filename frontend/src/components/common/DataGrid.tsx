@@ -50,6 +50,8 @@ export interface DataGridProps {
   hideFooter?: boolean;
   initialState?: any;
   sx?: any;
+  headerHeight?: number;
+  paperSx?: any;
 }
 
 /**
@@ -90,6 +92,8 @@ export const DataGrid: React.FC<DataGridProps> = ({
   hideFooter = false,
   initialState,
   sx,
+  headerHeight,
+  paperSx,
 }) => {
   const { t } = useTranslation();
 
@@ -184,12 +188,13 @@ export const DataGrid: React.FC<DataGridProps> = ({
 
       {/* DataGrid */}
       <Paper
-        elevation={2}
+        elevation={paperSx?.boxShadow === 'none' || paperSx?.boxShadow === 'none !important' ? 0 : 2}
         sx={{
           p: 1,
           borderRadius: 12,
           boxShadow: '0 10px 20px rgba(23,24,36,0.08)',
           border: '1px solid #e5e7ed',
+          ...paperSx,
         }}
       >
         <MuiDataGrid
@@ -273,6 +278,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
           disableColumnMenu={false}
           hideFooter={hideFooter}
           initialState={initialState}
+          headerHeight={headerHeight}
         />
       </Paper>
     </Box>

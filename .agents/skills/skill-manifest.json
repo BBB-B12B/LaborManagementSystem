@@ -1,46 +1,873 @@
 {
-  "version": "2.0",
-  "default_skill": "editor",
+  "version": "2.1",
+  "_comment": "Machine-readable skill routing. Agent reads at Boot B2 (grep keywords only) to match intent → load skill. on_demand_files = lookup table for G2 only — NOT auto-loaded at B3.",
+  "_schema_note": "context_files renamed to on_demand_files v2.1. Each entry: { path, when, how }. 'how' values: grep_only | targeted (offset+limit) | full_ok (small files ≤30 lines only).",
+  "always_loaded": [
+    "token_tracker",
+    "identity"
+  ],
+  "boot_read_policy": {
+    "_note": "Files that MAY be read at boot — all others are on_demand only",
+    "B1_bash_only": [
+      ".sessions/active_thread.md",
+      ".sessions/session_tokens.md",
+      "docs/master_roadmap.md (grep [/] only — never full read)",
+      "CODING_FAILURE_PATTERNS.md (grep -c only)"
+    ],
+    "B3_sections_only": "Read SKILL.md offset=1 limit=80 — sections[] and skill name only",
+    "never_at_boot": [
+      "knowledge/index_variables.json",
+      "knowledge/index_files.json",
+      "knowledge/index_sessions.json",
+      "INVARIANTS.md",
+      "REPO_MAP.md",
+      "CODING_FAILURE_PATTERNS.md (full read)",
+      "docs/master_roadmap.md (full read)"
+    ]
+  },
   "skills": {
-    "editor": {
-      "path": ".agents/skills/editor/SKILL.md",
-      "keywords": ["แก้", "fix", "bug", "edit", "debug", "เปลี่ยน", "ปรับ", "อัปเดต", "update", "modify"]
+    "mece": {
+      "path": ".agents/skills/mece/SKILL.md",
+      "bucket": "stable",
+      "trigger": "Loop Phase 2 — runs once per task after Info Gather Loop. Builds section-based plan mapping 1:1 to target Skill sections[].",
+      "keywords": [
+        "implement",
+        "refactor",
+        "restructure",
+        "build",
+        "multi-step",
+        "rename all",
+        "migrate",
+        "plan task",
+        "task plan",
+        "organize steps",
+        "วางแผน",
+        "ขั้นตอน",
+        "ปรับโครงสร้าง"
+      ],
+      "on_demand_files": [],
+      "skip_when": "read-only task OR single file edit with backlinks=0 AND no ERR documentation needed",
+      "activates_at": [
+        "Phase2-M1"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Write"
+        ],
+        "avoid": [
+          "WebFetch",
+          "WebSearch",
+          "Workflow"
+        ]
+      }
     },
     "coder": {
       "path": ".agents/skills/coder/SKILL.md",
-      "keywords": ["สร้าง", "create", "new file", "implement", "feature", "add", "เพิ่ม"]
+      "bucket": "stable",
+      "trigger": "Creating new files, scaffolding features, adding new pages or API routes",
+      "keywords": [
+        "create",
+        "new file",
+        "scaffold",
+        "add page",
+        "add component",
+        "new api",
+        "new route",
+        "build",
+        "implement",
+        "new feature",
+        "สร้าง",
+        "ไฟล์ใหม่",
+        "เพิ่มหน้า",
+        "สร้าง component"
+      ],
+      "lookup_oracle": {
+        "script": "python scripts/lookup.py \"<query>\" --json",
+        "when": "T0 — run before creating to check if symbol/file already exists",
+        "note": "High score match = file may already exist · prevents duplicate scaffolding"
+      },
+      "on_demand_files": [
+        {
+          "path": "knowledge/index_files.json",
+          "when": "T1 fallback — checking file exists or backlinks before creating",
+          "how": "grep_only"
+        },
+        {
+          "path": "docs/master_roadmap.md",
+          "when": "assigning new T-ID (check for duplicates)",
+          "how": "grep_only"
+        },
+        {
+          "path": "INVARIANTS.md",
+          "when": "R14/R15 gate fires (DB change or destructive op)",
+          "how": "targeted"
+        },
+        {
+          "path": "REPO_MAP.md",
+          "when": "determining correct directory for new file",
+          "how": "full_ok"
+        }
+      ],
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Edit",
+          "Bash",
+          "Write",
+          "Agent"
+        ],
+        "avoid": []
+      }
+    },
+    "editor": {
+      "path": ".agents/skills/editor/SKILL.md",
+      "bucket": "stable",
+      "trigger": "Modifying, debugging, or fixing existing files",
+      "keywords": [
+        "fix",
+        "bug",
+        "error",
+        "broken",
+        "edit",
+        "modify",
+        "update",
+        "change",
+        "debug",
+        "not working",
+        "issue",
+        "wrong",
+        "fail",
+        "แก้",
+        "แก้ไข",
+        "ไม่ทำงาน",
+        "ซ่อม",
+        "บัค",
+        "ผิดพลาด"
+      ],
+      "lookup_oracle": {
+        "script": "python scripts/lookup.py \"<query>\" --json",
+        "when": "T0 — ALWAYS run before any grep or Read · returns file+line+read_hint+keywords+sessions",
+        "note": "T0 returns symbols + files + sessions in one call — session results show prior fix history"
+      },
+      "on_demand_files": [
+        {
+          "path": "knowledge/index_variables.json",
+          "when": "T1/T2 fallback if lookup.py returns empty — grep symbol name or used_in list",
+          "how": "grep_only"
+        },
+        {
+          "path": "knowledge/index_files.json",
+          "when": "T1/T2 fallback — checking backlinks before editing a file",
+          "how": "grep_only"
+        },
+        {
+          "path": "knowledge/index_sessions.json",
+          "when": "T1 fallback for session history — grep task ID or topic keyword",
+          "how": "grep_only"
+        },
+        {
+          "path": "INVARIANTS.md",
+          "when": "R14/R15 gate fires (DB change or destructive op)",
+          "how": "targeted"
+        },
+        {
+          "path": "REPO_MAP.md",
+          "when": "checking directory structure rules",
+          "how": "full_ok"
+        },
+        {
+          "path": "CODING_FAILURE_PATTERNS.md",
+          "when": "writing a new CFP entry only",
+          "how": "grep_headers_then_append"
+        }
+      ],
+      "activates_at": [
+        "B2"
+      ],
+      "tools": {
+        "primary": [
+          "Edit",
+          "Read"
+        ],
+        "avoid": [
+          "Workflow",
+          "WebFetch"
+        ]
+      }
     },
     "file_manager": {
       "path": ".agents/skills/file_manager/SKILL.md",
-      "keywords": ["move", "rename", "delete file", "restructure", "ย้าย", "ลบ", "เปลี่ยนชื่อ"]
+      "bucket": "stable",
+      "trigger": "MANDATORY after any file is created, moved, deleted, or has imports changed",
+      "keywords": [
+        "move file",
+        "delete file",
+        "rename file",
+        "restructure",
+        "new file created"
+      ],
+      "on_demand_files": [
+        {
+          "path": "knowledge/index_files.json",
+          "when": "updating backlinks for changed file",
+          "how": "grep_only"
+        }
+      ],
+      "auto_after": [
+        "coder"
+      ],
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Write",
+          "Edit"
+        ],
+        "avoid": [
+          "Workflow"
+        ]
+      }
     },
     "variable_manager": {
       "path": ".agents/skills/variable_manager/SKILL.md",
-      "keywords": ["rename symbol", "refactor", "export", "symbol", "function name"]
+      "bucket": "stable",
+      "trigger": "MANDATORY after any symbol is created, renamed, deleted, or its body is edited",
+      "keywords": [
+        "new function",
+        "new component",
+        "rename symbol",
+        "delete function",
+        "refactor",
+        "new hook",
+        "new type"
+      ],
+      "on_demand_files": [
+        {
+          "path": "knowledge/index_variables.json",
+          "when": "updating symbol entry after code change",
+          "how": "grep_only"
+        }
+      ],
+      "auto_after": [
+        "coder",
+        "editor"
+      ],
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash"
+        ],
+        "avoid": [
+          "Workflow"
+        ]
+      }
     },
     "session_manager": {
       "path": ".agents/skills/session_manager/SKILL.md",
-      "keywords": ["จบ session", "close", "end session", "สรุป session", "ปิด session"]
-    },
-    "mece": {
-      "path": ".agents/skills/mece/SKILL.md",
-      "keywords": ["plan", "วางแผน", "mece", "orchestrate", "phases"]
-    },
-    "agent": {
-      "path": ".agents/skills/agent/SKILL.md",
-      "keywords": ["orchestrate", "multi-step", "coordinate", "spawn", "จัดการหลายขั้นตอน", "cycle", "fan-out", "orchestrate cycles"]
-    },
-    "identity": {
-      "path": ".agents/skills/identity/SKILL.md",
-      "keywords": ["identity", "session state", "who am i", "current skill", "ตัวตน"]
-    },
-    "token_auditor": {
-      "path": ".agents/skills/token_auditor/SKILL.md",
-      "keywords": ["token limit", "context full", "approaching limit", "token threshold"]
+      "bucket": "stable",
+      "trigger": "Token pause, blocked halt, session rotation, task completion, or user-requested close",
+      "keywords": [
+        "new session",
+        "switch task",
+        "done",
+        "complete",
+        "wrap up",
+        "start over",
+        "continue",
+        "resume",
+        "close session",
+        "end session",
+        "end",
+        "ปิด session",
+        "ปิด",
+        "จบ session",
+        "จบงาน",
+        "close",
+        "finish"
+      ],
+      "lookup_oracle": {
+        "script": "python scripts/lookup.py \"<task or topic>\" --session --json",
+        "when": "resuming — find prior session for this task; or checking what was done on a topic",
+        "note": "Returns session path + summary excerpt — read the JSON file for full history"
+      },
+      "on_demand_files": [
+        {
+          "path": ".sessions/active_thread.md",
+          "when": "checking current phase at routing",
+          "how": "full_ok"
+        },
+        {
+          "path": ".sessions/session_handoff.md",
+          "when": "resume flow or blocked state",
+          "how": "full_ok"
+        },
+        {
+          "path": ".sessions/session_tokens.md",
+          "when": "writing SESSION_TOTAL at checkpoint",
+          "how": "full_ok"
+        },
+        {
+          "path": "knowledge/index_sessions.json",
+          "when": "T1 fallback if lookup.py --session returns empty",
+          "how": "grep_only"
+        }
+      ],
+      "activates_at": [
+        "C3",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Write"
+        ],
+        "avoid": [
+          "Workflow",
+          "Agent"
+        ]
+      }
     },
     "token_tracker": {
       "path": ".agents/skills/token_tracker/SKILL.md",
-      "keywords": ["token count", "session total", "how many tokens", "นับ token"]
+      "bucket": "stable",
+      "trigger": "Boot-load only — SESSION_TOTAL read once at Boot, tracked in memory per turn, written at checkpoints",
+      "keywords": [
+        "__always__"
+      ],
+      "on_demand_files": [
+        {
+          "path": ".sessions/session_tokens.md",
+          "when": "Boot B1 read (once) and checkpoint write",
+          "how": "full_ok"
+        }
+      ],
+      "activates_at": [
+        "B1"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read"
+        ],
+        "avoid": [
+          "Workflow",
+          "Agent"
+        ]
+      }
+    },
+    "token_auditor": {
+      "path": ".agents/skills/token_auditor/SKILL.md",
+      "bucket": "stable",
+      "trigger": "When SESSION_TOTAL > 60k (R3 threshold)",
+      "keywords": [
+        "token overflow",
+        "session limit",
+        "too long"
+      ],
+      "on_demand_files": [
+        {
+          "path": ".sessions/session_tokens.md",
+          "when": "reading current total for audit",
+          "how": "full_ok"
+        }
+      ],
+      "activates_at": [
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read"
+        ],
+        "avoid": [
+          "Workflow",
+          "Agent"
+        ]
+      }
+    },
+    "self_improve": {
+      "path": ".agents/skills/self_improve/SKILL.md",
+      "bucket": "stable",
+      "trigger": "At every session close (auto-called by session_manager §3 Step 0), OR user asks to review failure patterns or improve harness",
+      "keywords": [
+        "review CFP",
+        "improve harness",
+        "ดู pattern",
+        "พัฒนา harness",
+        "ปัญหาซ้ำ",
+        "failure pattern",
+        "self improve",
+        "harness update",
+        "cfp analysis"
+      ],
+      "on_demand_files": [
+        {
+          "path": "CODING_FAILURE_PATTERNS.md",
+          "when": "reading CFP headers for analysis (grep -c first, then Read per entry)",
+          "how": "targeted"
+        },
+        {
+          "path": "CLAUDE.md",
+          "when": "proposing rule injection into CLAUDE.md",
+          "how": "targeted"
+        },
+        {
+          "path": "AGENTS.md",
+          "when": "proposing rule injection into AGENTS.md",
+          "how": "targeted"
+        }
+      ],
+      "auto_trigger": "session_manager §3 Step 0 — always called before session close writes",
+      "activates_at": [
+        "C0",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Edit",
+          "Bash"
+        ],
+        "avoid": [
+          "Workflow",
+          "WebFetch"
+        ]
+      }
+    },
+    "ascii_flow": {
+      "path": ".agents/skills/ascii_flow/SKILL.md",
+      "bucket": "draft",
+      "trigger": "Creating or updating ASCII flow diagrams, architecture charts, flow documentation in .md files",
+      "keywords": [
+        "flow diagram",
+        "ascii flow",
+        "flowchart",
+        "architecture diagram",
+        "flow doc",
+        "create flow",
+        "update flow",
+        "draw diagram",
+        "draw flow",
+        "วาด",
+        "แผนภาพ",
+        "flow chart",
+        "diagram"
+      ],
+      "on_demand_files": [
+        {
+          "path": "knowledge/harness_flow_20260525.md",
+          "when": "reading existing flow as style reference",
+          "how": "targeted"
+        }
+      ],
+      "invoke_from": "Any skill that creates/edits a .md file containing box diagrams must call this skill",
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Write",
+          "Edit"
+        ],
+        "avoid": [
+          "Workflow",
+          "WebFetch",
+          "WebSearch"
+        ]
+      }
+    },
+    "agent": {
+      "path": ".agents/skills/agent/SKILL.md",
+      "bucket": "stable",
+      "trigger": "Orchestrating multi-section tasks, spawning sub-agents, Cycle fan-out, multi-skill delegation",
+      "keywords": [
+        "orchestrate",
+        "sub-agent",
+        "spawn",
+        "cycle",
+        "multi-section",
+        "fan-out",
+        "parallel sections",
+        "delegate",
+        "parallel tasks",
+        "มอบหมาย",
+        "ทำพร้อมกัน",
+        "แบ่งงาน"
+      ],
+      "on_demand_files": [],
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Agent",
+          "Bash"
+        ],
+        "avoid": []
+      }
+    },
+    "harness_doctor": {
+      "path": ".agents/skills/harness_doctor/SKILL.md",
+      "bucket": "draft",
+      "trigger": "CFP pattern recurred after a fix was applied — structural harness repair needed",
+      "keywords": [
+        "harness doctor",
+        "fix harness pattern",
+        "recurring cfp",
+        "ซ่อม harness",
+        "cfp recurred",
+        "structural fix",
+        "fix-escalated",
+        "recurred_after_fix"
+      ],
+      "on_demand_files": [
+        {
+          "path": "knowledge/index_cfp_fix.json",
+          "when": "loading recurrence data for top recurring CFP",
+          "how": "full_ok"
+        },
+        {
+          "path": "CODING_FAILURE_PATTERNS.md",
+          "when": "reading CFP entry details (grep + targeted Read)",
+          "how": "targeted"
+        }
+      ],
+      "activates_at": [
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read",
+          "Edit"
+        ],
+        "avoid": [
+          "Workflow",
+          "WebFetch"
+        ]
+      }
+    },
+    "harness_editor": {
+      "path": ".agents/skills/harness_editor/SKILL.md",
+      "bucket": "stable",
+      "trigger": "Task edits harness config files (CLAUDE.md, AGENTS.md, SKILL.md, knowledge/, Implement/) OR adds/converts/selects enforcement rules (BC, hook, signal contract, tier)",
+      "keywords": [
+        "แก้ harness",
+        "update harness",
+        "improve skill",
+        "เพิ่ม rule",
+        "แก้ rule",
+        "edit skill",
+        "update SKILL.md",
+        "harness edit",
+        "update Implement",
+        "เพิ่ม BC",
+        "แก้ BC",
+        "ลด BC",
+        "convert BC",
+        "เพิ่ม hook",
+        "PreToolUse",
+        "PostToolUse",
+        "signal contract",
+        "seam gate",
+        "เลือก tier",
+        "ใช้ BC",
+        "enforcement rule",
+        "เพิ่ม enforcement"
+      ],
+      "on_demand_files": [
+        {
+          "path": "knowledge/harness_flow_20260526.md",
+          "when": "Step 5 — updating flow doc after harness edit",
+          "how": "targeted"
+        },
+        {
+          "path": "knowledge/topic_registry.json",
+          "when": "Step 4 — assigning topics[] to new knowledge/ or Implement/ files added to index_files.json",
+          "how": "full_ok"
+        }
+      ],
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Edit",
+          "Bash",
+          "Write"
+        ],
+        "avoid": [
+          "Workflow",
+          "WebFetch",
+          "WebSearch"
+        ]
+      }
+    },
+    "skeptical_reviewer": {
+      "path": ".agents/skills/skeptical_reviewer/SKILL.md",
+      "bucket": "draft",
+      "trigger": "Phase 2 M4.5 — optional plan scrutiny gate after MECE plan confirmed, before Phase 3 execution",
+      "keywords": [
+        "skeptical review",
+        "challenge plan",
+        "plan scrutiny",
+        "go/revise/reject",
+        "M4.5"
+      ],
+      "on_demand_files": [
+        {
+          "path": ".sessions/mece_plan.md",
+          "when": "loading plan to scrutinize",
+          "how": "full_ok"
+        }
+      ],
+      "skip_when": "low-risk task · single-file edit · read-only · user explicitly skips",
+      "activates_at": [
+        "Phase2-M4.5",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read"
+        ],
+        "avoid": [
+          "Edit",
+          "Write",
+          "Workflow"
+        ]
+      }
+    },
+    "repo_researcher": {
+      "path": ".agents/skills/repo_researcher/SKILL.md",
+      "name": "Repo Researcher",
+      "bucket": "on_demand",
+      "trigger": "user wants to analyze/research an external git repo — clone, map, synthesize 3 .md outputs",
+      "keywords": [
+        "วิจัย",
+        "analyze",
+        "research",
+        "explore",
+        "สรุป repo",
+        "repo researcher",
+        "github",
+        "clone",
+        "repository"
+      ],
+      "on_demand_files": [
+        {
+          "path": "docs/session_templates/research_summary.md",
+          "when": "writing summary output",
+          "how": "full_ok"
+        },
+        {
+          "path": "docs/session_templates/research_improvement.md",
+          "when": "writing improvement output",
+          "how": "full_ok"
+        },
+        {
+          "path": "docs/session_templates/research_repo_map.md",
+          "when": "writing repo_map output",
+          "how": "full_ok"
+        }
+      ],
+      "skip_when": "task is about harness source code (not external repos)",
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "WebFetch",
+          "WebSearch",
+          "Write"
+        ],
+        "avoid": [
+          "Workflow"
+        ]
+      }
+    },
+    "doc_builder": {
+      "path": ".agents/skills/doc_builder/SKILL.md",
+      "name": "Doc Builder",
+      "bucket": "on_demand",
+      "trigger": "user wants to generate HTML manual pages, screenshot plan, or Playwright capture script for a web app project",
+      "keywords": [
+        "manual",
+        "คู่มือ",
+        "doc",
+        "screenshot",
+        "playwright",
+        "present",
+        "สร้างคู่มือ",
+        "ทำคู่มือ",
+        "user guide",
+        "doc/manual",
+        "capture"
+      ],
+      "on_demand_files": [
+        {
+          "path": ".agents/skills/doc_builder/SKILL_detail.md",
+          "when": "executing §3 screenshot plan, §4 playwright script, §5 MECE update, or §6 build HTML",
+          "how": "full_ok"
+        }
+      ],
+      "skip_when": "user only wants to read/explain existing docs, not generate new manual pages",
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Write",
+          "Bash",
+          "WebFetch"
+        ],
+        "avoid": [
+          "Workflow"
+        ]
+      }
+    },
+    "project_presenter": {
+      "path": ".agents/skills/project_presenter/SKILL.md",
+      "name": "Project Presenter",
+      "bucket": "on_demand",
+      "trigger": "user wants to create a sales presentation, HTML pitch pages, or story-telling page for a web app project",
+      "keywords": [
+        "present",
+        "presentation",
+        "sales page",
+        "นำเสนองาน",
+        "present project",
+        "สร้าง present",
+        "project presenter",
+        "demo page",
+        "pitch",
+        "นำเสนอ",
+        "HTML present",
+        "สร้าง presentation"
+      ],
+      "on_demand_files": [
+        {
+          "path": ".agents/skills/project_presenter/SKILL_detail.md",
+          "when": "executing §2 interview loop, §4 storytelling .md, or §5 HTML generation",
+          "how": "full_ok"
+        },
+        {
+          "path": "docs/session_templates/storytelling_template.md",
+          "when": "writing knowledge/storytelling_<slug>.md in §4",
+          "how": "full_ok"
+        }
+      ],
+      "skip_when": "user only wants to read/explain existing presentation files, not generate new ones",
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Write",
+          "Bash",
+          "WebFetch"
+        ],
+        "avoid": [
+          "Workflow"
+        ]
+      }
+    },
+    "skill_auditor": {
+      "path": ".agents/skills/skill_auditor/SKILL.md",
+      "bucket": "stable",
+      "trigger": "Auditing SKILL.md files for missing or weak framework components — gap analysis, quality check, BC over-enforcement detection",
+      "keywords": [
+        "audit this skill",
+        "review SKILL.md",
+        "skill gap analysis",
+        "what is missing in this skill",
+        "check skill quality",
+        "is this skill complete",
+        "ตรวจ skill",
+        "skill ขาดอะไร",
+        "audit harness skill",
+        "skill over-enforcement"
+      ],
+      "activates_at": [
+        "Phase3",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read"
+        ],
+        "avoid": [
+          "Edit",
+          "Write"
+        ]
+      },
+      "on_demand_files": [
+        {
+          "path": "knowledge/9arm-skills-skill-building-framework-2026-06-04.md",
+          "when": "Step 1 load before any assessment"
+        }
+      ]
+    },
+    "user-coach": {
+      "path": ".agents/skills/user-coach/SKILL.md",
+      "bucket": "stable",
+      "trigger": "After completing a substantial task — quiz the user (2-3 plain-Thai questions), record results to a JSON proficiency profile, and adapt glossing depth to their tracked strengths/weaknesses",
+      "keywords": [
+        "quiz me",
+        "ควิซ",
+        "ทดสอบความเข้าใจ",
+        "post-task quiz",
+        "learning profile",
+        "how am i progressing",
+        "coach me",
+        "user-coach",
+        "เก่งขึ้น",
+        "สอนเพิ่ม"
+      ],
+      "activates_at": [
+        "Phase3",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read"
+        ],
+        "avoid": []
+      }
     }
+  },
+  "fallback": {
+    "path": ".agents/skills/agent/SKILL.md",
+    "trigger": "No keyword matches any skill — use as default orchestration skill",
+    "on_demand_files": [
+      {
+        "path": ".agents/skills/registry.md",
+        "when": "re-routing after failed keyword match",
+        "how": "full_ok"
+      }
+    ],
+    "note": "Load registry.md fast-match table, re-evaluate intent, then route manually"
+  },
+  "learned_routes": {
+    "_comment": "Agent appends confirmed keyword→skill pairs here after repeated use",
+    "examples": []
   }
 }

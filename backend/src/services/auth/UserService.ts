@@ -23,19 +23,19 @@ export class UserService extends BaseCrudService<User> {
    */
   async findByUsername(username: string): Promise<User | null> {
     const normalizedUsername = username.trim().toLowerCase();
-
+    
     // 1. Try modern username field
     let users = await this.query([
-      { field: 'username', operator: '==', value: normalizedUsername },
+      { field: 'username', operator: '==', value: normalizedUsername }
     ]);
-
+    
     // 2. Fallback to legacy UsernameLower field
     if (users.length === 0) {
       users = await this.query([
-        { field: 'UsernameLower', operator: '==', value: normalizedUsername },
+        { field: 'UsernameLower', operator: '==', value: normalizedUsername }
       ]);
     }
-
+    
     return users.length > 0 ? users[0] : null;
   }
 
@@ -45,7 +45,9 @@ export class UserService extends BaseCrudService<User> {
   async findByEmployeeId(employeeId: string): Promise<User | null> {
     // If we enforce ID=EmployeeID, we could just use getById.
     // But to be safe and support query by field:
-    const users = await this.query([{ field: 'employeeId', operator: '==', value: employeeId }]);
+    const users = await this.query([
+      { field: 'employeeId', operator: '==', value: employeeId }
+    ]);
     return users.length > 0 ? users[0] : null;
   }
 
@@ -60,7 +62,7 @@ export class UserService extends BaseCrudService<User> {
     if (user.passwordHash) {
       return bcrypt.compare(plainPassword, user.passwordHash);
     }
-
+    
     // Legacy support: plain text password comparison
     if ((user as any).Password) {
       return (user as any).Password === plainPassword;
@@ -135,21 +137,56 @@ export class UserService extends BaseCrudService<User> {
 
     return this.update(id, updates);
   }
-  /**
-   * Get all users with pagination
-   */
-  async getAllUsers(options?: PaginationOptions): Promise<PaginatedResult<User>> {
-    const result = await this.getAll(options);
+  async getAllUsers(options?: PaginationOptions & {
+    roleId?: string;
+    department?: string;
+    isActive?: boolean;
+    projectId?: string;
+  }): Promise<PaginatedResult<User>> {
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 50;
+
+    let queryRef: any = this.collection;
+
+    if (options?.roleId) {
+      queryRef = queryRef.where('roleId', '==', options.roleId);
+    }
+    if (options?.department) {
+      queryRef = queryRef.where('department', '==', options.department);
+    }
+    if (options?.isActive !== undefined) {
+      queryRef = queryRef.where('isActive', '==', options.isActive);
+    }
+    if (options?.projectId) {
+      queryRef = queryRef.where('projectLocationIds', 'array-contains', options.projectId);
+    }
+
+    const snapshot = await queryRef.get();
+    let users = snapshot.docs.map((doc: any) => doc.data() as User);
+
+    // Sort by createdAt desc in-memory
+    users.sort((a: User, b: User) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    const total = users.length;
+    const startIndex = (page - 1) * pageSize;
+    const paginatedItems = users.slice(startIndex, startIndex + pageSize);
 
     // Remove passwordHash from results
-    const items = result.items.map((user) => {
+    const items = paginatedItems.map((user: User) => {
       const { passwordHash, ...userWithoutPassword } = user;
       return userWithoutPassword as User;
     });
 
     return {
-      ...result,
       items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
     };
   }
 }

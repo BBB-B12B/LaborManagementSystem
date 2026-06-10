@@ -1,3 +1,3 @@
-task: Optimize หน้า คำนวณค่าแรง — audit, fix P1-P4 + extract components
+task: ทำไมผมลองทดสอบเเล้ว Assign งานไปทำไมไม่ เเจ้งเตือนมันไม่เตือน FM หรือ SE เลยหรอครับ
 phase: done
 next: none
