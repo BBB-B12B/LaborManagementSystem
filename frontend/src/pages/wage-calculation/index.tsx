@@ -34,12 +34,8 @@ import {
 } from '@mui/material';
 import {
   Add,
-  Calculate,
   Delete,
-  Download,
   Visibility,
-  CheckCircle,
-  CloudUpload,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,8 +44,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { wageService, type WagePeriod, type PeriodStatus } from '../../services/wageService';
 import { wagePeriodCreateSchema, type WagePeriodCreateInput } from '../../validation/wageSchema';
 
-import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
-import type { ImportResult } from '../../services/scanDataService';
+// [PHASE-1] ScanDataUploadDialog hidden — will be restored in Phase 2
+// import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
+// import type { ImportResult } from '../../services/scanDataService';
 
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
@@ -74,9 +71,11 @@ export default function WageCalculationPage() {
     useDeleteConfirmDialog();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [calculatingId, setCalculatingId] = useState<string | null>(null);
-  const [exportingId, setExportingId] = useState<string | null>(null);
+  // [PHASE-1] uploadDialogOpen hidden — will be restored in Phase 2
+  // const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  // [PHASE-1] calculatingId/exportingId state hooks hidden — will be restored in Phase 2
+  // const [calculatingId, setCalculatingId] = useState<string | null>(null);
+  // const [exportingId, setExportingId] = useState<string | null>(null);
 
   // Fetch wage periods
   const { data, isLoading, error } = useQuery({
@@ -99,18 +98,19 @@ export default function WageCalculationPage() {
   });
 
   // Calculate mutation
-  const calculateMutation = useMutation({
-    mutationFn: wageService.calculateWages,
-    onSuccess: () => {
-      showSuccess('คำนวณค่าแรงสำเร็จ');
-      queryClient.invalidateQueries({ queryKey: ['wagePeriods'] });
-      setCalculatingId(null);
-    },
-    onError: (error: any) => {
-      showError(error.message || 'เกิดข้อผิดพลาดในการคำนวณค่าแรง');
-      setCalculatingId(null);
-    },
-  });
+  // [PHASE-1] calculateMutation hidden — will be restored in Phase 2
+  // const calculateMutation = useMutation({
+  //   mutationFn: wageService.calculateWages,
+  //   onSuccess: () => {
+  //     showSuccess('คำนวณค่าแรงสำเร็จ');
+  //     queryClient.invalidateQueries({ queryKey: ['wagePeriods'] });
+  //     setCalculatingId(null);
+  //   },
+  //   onError: (error: any) => {
+  //     showError(error.message || 'เกิดข้อผิดพลาดในการคำนวณค่าแรง');
+  //     setCalculatingId(null);
+  //   },
+  // });
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -150,23 +150,24 @@ export default function WageCalculationPage() {
     await createMutation.mutateAsync(data);
   };
 
-  const handleCalculateWages = async (id: string) => {
-    setCalculatingId(id);
-    await calculateMutation.mutateAsync(id);
-  };
+  // [PHASE-1] handleCalculateWages & handleExportExcel hidden — will be restored in Phase 2
+  // const handleCalculateWages = async (id: string) => {
+  //   setCalculatingId(id);
+  //   await calculateMutation.mutateAsync(id);
+  // };
 
-  const handleExportExcel = async (id: string, periodCode: string) => {
-    try {
-      setExportingId(id);
-      const blob = await wageService.exportWagePeriodToExcel(id);
-      wageService.downloadExcelFile(blob, `${periodCode}-wages.xlsx`);
-      showSuccess('Export Excel สำเร็จ');
-    } catch (error: any) {
-      showError(error.message || 'เกิดข้อผิดพลาดใน Export Excel');
-    } finally {
-      setExportingId(null);
-    }
-  };
+  // const handleExportExcel = async (id: string, periodCode: string) => {
+  //   try {
+  //     setExportingId(id);
+  //     const blob = await wageService.exportWagePeriodToExcel(id);
+  //     wageService.downloadExcelFile(blob, `${periodCode}-wages.xlsx`);
+  //     showSuccess('Export Excel สำเร็จ');
+  //   } catch (error: any) {
+  //     showError(error.message || 'เกิดข้อผิดพลาดใน Export Excel');
+  //   } finally {
+  //     setExportingId(null);
+  //   }
+  // };
 
   const handleViewDetails = (id: string) => {
     router.push(`/wage-calculation/${id}`);
@@ -178,11 +179,12 @@ export default function WageCalculationPage() {
     });
   };
 
-  const handleUploadSuccess = (result: ImportResult) => {
-    showSuccess(
-      `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
-    );
-  };
+  // [PHASE-1] handleUploadSuccess hidden — will be restored in Phase 2
+  // const handleUploadSuccess = (result: ImportResult) => {
+  //   showSuccess(
+  //     `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ`
+  //   );
+  // };
 
   // Status color mapping
   const getStatusColor = (status: PeriodStatus) => {
@@ -264,13 +266,14 @@ export default function WageCalculationPage() {
         />
       ),
     },
-    {
-      field: 'totalNetWages',
-      headerName: 'ค่าแรงรวม',
-      width: 130,
-      align: 'right',
-      valueFormatter: (params) => `${params.value.toLocaleString()} บาท`,
-    },
+    // [PHASE-1] totalNetWages column hidden — will be restored in Phase 2
+    // {
+    //   field: 'totalNetWages',
+    //   headerName: 'ค่าแรงรวม',
+    //   width: 130,
+    //   align: 'right',
+    //   valueFormatter: (params) => `${params.value.toLocaleString()} บาท`,
+    // },
     {
       field: 'actions',
       headerName: 'จัดการ',
@@ -289,39 +292,7 @@ export default function WageCalculationPage() {
             </IconButton>
           </Tooltip>
 
-          {params.row.status === 'draft' && (
-            <Tooltip title="คำนวณค่าแรง">
-              <IconButton
-                size="small"
-                onClick={() => handleCalculateWages(params.row.id)}
-                color="info"
-                disabled={calculatingId === params.row.id}
-              >
-                {calculatingId === params.row.id ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <Calculate fontSize="small" />
-                )}
-              </IconButton>
-            </Tooltip>
-          )}
-
-          {params.row.status === 'calculated' && (
-            <Tooltip title="Export Excel">
-              <IconButton
-                size="small"
-                onClick={() => handleExportExcel(params.row.id, params.row.periodCode)}
-                color="success"
-                disabled={exportingId === params.row.id}
-              >
-                {exportingId === params.row.id ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <Download fontSize="small" />
-                )}
-              </IconButton>
-            </Tooltip>
-          )}
+          {/* [PHASE-1] Calculate & Export per-row hidden — will be restored in Phase 2 */}
 
           {(params.row.status === 'draft' || params.row.status === 'calculated') && (
             <Tooltip title="ลบ">
@@ -337,7 +308,8 @@ export default function WageCalculationPage() {
         </Box>
       ),
     },
-  ], [calculatingId, exportingId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
 
   const renderContent = () => {
     if (error) {
@@ -363,19 +335,7 @@ export default function WageCalculationPage() {
             คำนวณค่าแรง
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<CloudUpload />}
-              onClick={() => setUploadDialogOpen(true)}
-              sx={{
-                borderRadius: 1,
-                textTransform: 'none',
-                fontWeight: 600,
-              }}
-            >
-              Upload ScanData
-            </Button>
+            {/* [PHASE-1] Upload ScanData button removed permanently */}
             <Button
               variant="contained"
               color="primary"
@@ -556,11 +516,7 @@ export default function WageCalculationPage() {
       <Layout maxWidth={false} disablePadding>
         {renderContent()}
         <DeleteConfirmDialog />
-        <ScanDataUploadDialog
-          open={uploadDialogOpen}
-          onClose={() => setUploadDialogOpen(false)}
-          onSuccess={handleUploadSuccess}
-        />
+        {/* [PHASE-1] ScanDataUploadDialog hidden — will be restored in Phase 2 */}
       </Layout>
     </ProtectedRoute>
   );

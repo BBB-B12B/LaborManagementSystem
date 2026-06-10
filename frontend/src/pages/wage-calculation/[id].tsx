@@ -24,12 +24,7 @@ import {
   Chip,
   Alert,
   Divider,
-  Tabs,
-  Tab,
-  Drawer,
   Tooltip,
-  IconButton,
-  Stack,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -39,23 +34,20 @@ import {
 import {
   ArrowBack,
   Download,
-  Calculate,
   AccessTime,
-  Add,
   CheckCircle,
-  Payment,
-  Visibility,
-  VisibilityOff,
-  Close,
   InfoOutlined,
+  Sync,
 } from '@mui/icons-material';
+// [PHASE-1] Removed: Calculate, Add, Payment, Visibility, VisibilityOff, Close — will be restored in Phase 2
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { wageService, type DCWageSummary } from '../../services/wageService';
+import { wageService } from '../../services/wageService'; // [PHASE-1] DCWageSummary commented out
 import { getLateRecords } from '../../services/scanDataService';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useToast } from '../../components/common/Toast';
-import AdditionalItemsDrawer from '../../components/wage/AdditionalItemsDrawer';
+// [PHASE-1] AdditionalItemsDrawer hidden — will be restored in Phase 2
+// import AdditionalItemsDrawer from '../../components/wage/AdditionalItemsDrawer';
 
 /**
  * Wage Calculation Details Page
@@ -70,12 +62,17 @@ export default function WageCalculationDetailsPage() {
   const { success: showSuccess, error: showError } = useToast();
 
   // State for Manage Dialog
-  const [openDialog, setOpenDialog] = React.useState(false);
-  const [selectedDC, setSelectedDC] = React.useState<DCWageSummary | null>(null);
-  const [showDetails, setShowDetails] = React.useState(false);
+  // [PHASE-1] openDialog/selectedDC hidden — will be restored in Phase 2
+  // const [openDialog, setOpenDialog] = React.useState(false);
+  // const [selectedDC, setSelectedDC] = React.useState<DCWageSummary | null>(null);
+  // [PHASE-1] showDetails hidden — will be restored in Phase 2
+  // const [showDetails, setShowDetails] = React.useState(false);
 
   // State for confirm action dialogs — replaces blocking window.confirm()
-  const [confirmAction, setConfirmAction] = React.useState<'approve' | 'paid' | null>(null);
+  const [confirmAction, setConfirmAction] = React.useState<'approve' | null>(null);
+
+  // State for 2-step export progress
+  const [exportStep, setExportStep] = React.useState<null | 'syncing' | 'building'>(null);
 
   // Fetch wage period
   const {
@@ -127,28 +124,91 @@ export default function WageCalculationDetailsPage() {
     },
   });
 
-  // Mark as Paid mutation
-  const markPaidMutation = useMutation({
-    mutationFn: () => wageService.markAsPaid(id as string),
-    onSuccess: () => {
-      showSuccess('บันทึกการจ่ายเงินสำเร็จ');
-      queryClient.invalidateQueries({ queryKey: ['wagePeriod', id] });
-    },
-    onError: (error: any) => {
-      showError(error.message || 'เกิดข้อผิดพลาดในการบันทึกการจ่ายเงิน');
-    },
-  });
+  // [PHASE-1] Mark as Paid mutation hidden — will be restored in Phase 2
+  // const markPaidMutation = useMutation({
+  //   mutationFn: () => wageService.markAsPaid(id as string),
+  //   onSuccess: () => {
+  //     showSuccess('บันทึกการจ่ายเงินสำเร็จ');
+  //     queryClient.invalidateQueries({ queryKey: ['wagePeriod', id] });
+  //   },
+  //   onError: (error: any) => {
+  //     showError(error.message || 'เกิดข้อผิดพลาดในการบันทึกการจ่ายเงิน');
+  //   },
+  // });
 
   // Export Excel
-  const handleExportExcel = async () => {
-    if (!period) return;
+  // [PHASE-1] handleExportExcel (wage export) hidden — will be restored in Phase 2
+  // const handleExportExcel = async () => { ... };
 
+  // Export Attendance — force-sync then build client-side Excel
+  // Always uses fresh data: calculateWages() is called before building the file
+  const handleExportAttendance = async () => {
+    if (!period) return;
     try {
-      const blob = await wageService.exportWagePeriodToExcel(period.id);
-      wageService.downloadExcelFile(blob, `${period.periodCode}-wages.xlsx`);
-      showSuccess('Export Excel สำเร็จ');
-    } catch (error: any) {
-      showError(error.message || 'เกิดข้อผิดพลาดใน Export Excel');
+      // Step 1: sync latest attendance data
+      setExportStep('syncing');
+      const synced = await wageService.calculateWages(period.id);
+      queryClient.invalidateQueries({ queryKey: ['wagePeriod', id] });
+
+      // Step 2: build Excel from synced summaries
+      setExportStep('building');
+      const { default: ExcelJS } = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('สรุปการทำงาน');
+
+      ws.columns = [
+        { header: 'ลำดับ',                    key: 'no',              width: 8  },
+        { header: 'รหัส DC',                  key: 'employeeId',      width: 12 },
+        { header: 'ชื่อ-นามสกุล',              key: 'name',            width: 25 },
+        { header: 'ตำแหน่ง',                  key: 'skillName',       width: 20 },
+        { header: 'วันทำงานปกติ',              key: 'regularDays',     width: 15 },
+        { header: 'วันลา (Paid)',              key: 'paidLeaveDays',   width: 14 },
+        { header: 'วันลา (Unpaid)',            key: 'unpaidLeaveDays', width: 16 },
+        { header: 'ชม.รวม OT',               key: 'totalOtHours',    width: 12 },
+        { header: 'สาย/ออกก่อน (นาที)',        key: 'penaltyMinutes',  width: 20 },
+      ];
+
+      // Style header row
+      ws.getRow(1).eachCell((cell) => {
+        cell.font      = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border    = { bottom: { style: 'medium', color: { argb: 'FF0D47A1' } } };
+      });
+
+      // Data rows
+      (synced?.dcSummaries ?? period.dcSummaries).forEach((dc, idx) => {
+        const row = ws.addRow({
+          no:              idx + 1,
+          employeeId:      dc.employeeId,
+          name:            dc.name,
+          skillName:       dc.skillName,
+          regularDays:     Number(dc.regularDays.toFixed(2)),
+          paidLeaveDays:   Number(dc.paidLeaveDays.toFixed(2)),
+          unpaidLeaveDays: Number(dc.unpaidLeaveDays.toFixed(2)),
+          totalOtHours:    Number(dc.totalOtHours.toFixed(2)),
+          penaltyMinutes:  dc.penaltyMinutes,
+        });
+        row.eachCell((cell) => {
+          cell.border = { bottom: { style: 'thin', color: { argb: 'FFBDBDBD' } } };
+        });
+        if (idx % 2 === 1) {
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+          });
+        }
+      });
+
+      const buf  = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      wageService.downloadExcelFile(blob, `${period.periodCode}-attendance.xlsx`);
+      showSuccess('Export ข้อมูลการทำงานสำเร็จ');
+    } catch (err: any) {
+      showError(err.message || 'เกิดข้อผิดพลาดในการ Export');
+    } finally {
+      setExportStep(null);
     }
   };
 
@@ -161,10 +221,10 @@ export default function WageCalculationDetailsPage() {
   };
 
   const handleApprove = () => setConfirmAction('approve');
-  const handleMarkPaid = () => setConfirmAction('paid');
+  // [PHASE-1] handleMarkPaid hidden — will be restored in Phase 2
+  // const handleMarkPaid = () => setConfirmAction('paid');
   const handleConfirmAction = () => {
     if (confirmAction === 'approve') approveMutation.mutate();
-    else if (confirmAction === 'paid') markPaidMutation.mutate();
     setConfirmAction(null);
   };
 
@@ -626,6 +686,7 @@ export default function WageCalculationDetailsPage() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 2 }}>
+            {/* คำนวณวันเวลาทำงาน — syncs attendance data; also runs automatically before export */}
             {(period.status === 'draft' || period.status === 'calculated') && (
               <Button
                 variant="contained"
@@ -633,13 +694,14 @@ export default function WageCalculationDetailsPage() {
                   backgroundColor: '#1976d2',
                   '&:hover': { backgroundColor: '#115293' },
                 }}
-                startIcon={<Calculate />}
+                startIcon={<Sync />}
                 onClick={handleCalculate}
                 disabled={calculateMutation.isPending}
               >
-                {period.status === 'draft' ? 'คำนวณค่าแรง' : 'คำนวณใหม่'}
+                คำนวณวันเวลาทำงาน
               </Button>
             )}
+            {/* อนุมัติ — locks period to prevent scan data edits after approval */}
             {period.status === 'calculated' && (
               <Button
                 variant="contained"
@@ -651,45 +713,30 @@ export default function WageCalculationDetailsPage() {
                 อนุมัติ
               </Button>
             )}
-            {period.status === 'approved' && (
-              <Button
-                variant="contained"
-                color="warning"
-                startIcon={<Payment />}
-                onClick={handleMarkPaid}
-                disabled={markPaidMutation.isPending}
-              >
-                จ่ายเงินแล้ว
-              </Button>
-            )}
-            {(period.status === 'calculated' ||
-              period.status === 'approved' ||
-              period.status === 'paid') && (
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<Download />}
-                onClick={handleExportExcel}
-              >
-                Export Excel
-              </Button>
-            )}
+            {/* [PHASE-1] จ่ายเงินแล้ว button hidden — will be restored in Phase 2 */}
+            {/* Export ข้อมูลการทำงาน — always visible, auto-syncs before download */}
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<Download />}
+              onClick={handleExportAttendance}
+              disabled={!!exportStep}
+            >
+              {exportStep === 'syncing'
+                ? 'กำลังซิงค์ข้อมูล... (1/2)'
+                : exportStep === 'building'
+                  ? 'กำลังสร้างไฟล์... (2/2)'
+                  : 'Export ข้อมูลการทำงาน'}
+            </Button>
           </Box>
         </Box>
       </Box>
 
-      {/* Integrated Logic Info */}
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2">
-          <strong>การคำนวณแบบบูรณาการ (Integrated):</strong> เมื่อกดคำนวณ
-          ระบบจะทำการตรวจสอบความถูกต้องระหว่าง Daily Report และ Finger Scan อัตโนมัติ
-          รวมถึงสร้างรายการหักเงินมาสายหากพบการสแกนนิ้วหลัง 08:00 น.
-        </Typography>
-      </Alert>
+      {/* [PHASE-1] Integrated Logic Info hidden — will be restored in Phase 2 */}
 
-      {/* Summary Cards */}
+      {/* Summary Cards — Phase 1: show DC count + working days/OT only */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="body2" color="text.secondary">
               จำนวน DC
@@ -697,7 +744,7 @@ export default function WageCalculationDetailsPage() {
             <Typography variant="h5">{period.dcSummaries.length} คน</Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="body2" color="text.secondary">
               วันทำงานรวม / OT รวม
@@ -707,99 +754,34 @@ export default function WageCalculationDetailsPage() {
             </Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              รายได้รวม
-            </Typography>
-            <Typography variant="h5">{period.totalGrossWages.toLocaleString()} ฿</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              ค่าแรงสุทธิ
-            </Typography>
-            <Typography variant="h5" color="primary">
-              {period.totalNetWages.toLocaleString()} ฿
-            </Typography>
-          </Paper>
-        </Grid>
+        {/* [PHASE-1] รายได้รวม + ค่าแรงสุทธิ cards hidden — will be restored in Phase 2 */}
       </Grid>
 
-      {/* Social Security Info */}
-      <Paper sx={{ p: 2, mb: 3, bgcolor: 'info.light' }}>
-        <Typography variant="h6" gutterBottom>
-          ข้อมูลประกันสังคม
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}>
-            <Typography variant="body2">ฐานคำนวณ: 5% ของค่าแรงรวม</Typography>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Typography variant="body2">เพดาน: 750 บาท/เดือน</Typography>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Typography variant="body2">ขั้นต่ำ: 83 บาท</Typography>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Typography variant="body2">ยกเว้น: รหัสพนักงานขึ้นต้น &quot;9&quot;</Typography>
-          </Grid>
-        </Grid>
-      </Paper>
+      {/* [PHASE-1] Social Security Info hidden — will be restored in Phase 2 */}
 
       {/* DC Wage Summaries Table */}
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">รายละเอียดค่าแรงรายคน</Typography>
-          <Button
-            size="small"
-            startIcon={showDetails ? <VisibilityOff /> : <Visibility />}
-            onClick={() => setShowDetails(!showDetails)}
-            variant="outlined"
-            color="primary"
-          >
-            {showDetails ? 'ซ่อนรายละเอียดเงิน' : 'แสดงรายละเอียดเงิน'}
-          </Button>
+          <Typography variant="h6">รายละเอียดวันเวลาทำงานรายคน</Typography>
+          {/* [PHASE-1] Toggle money details button hidden — will be restored in Phase 2 */}
         </Box>
         <Divider />
         <DataGrid
           rows={period.dcSummaries}
-          columns={[
-            ...columns,
-            {
-              field: 'actions',
-              headerName: 'จัดการ',
-              width: 120,
-              sortable: false,
-              renderCell: (params: GridRenderCellParams) => (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => {
-                    setSelectedDC(params.row);
-                    setOpenDialog(true);
-                  }}
-                  disabled={period.status === 'approved' || period.status === 'paid'}
-                >
-                  แก้ไข
-                </Button>
-              ),
-            },
-          ]}
+          columns={columns}
           columnVisibilityModel={{
-            regularWages: showDetails,
-            otWages: showDetails,
-            professionalFees: showDetails,
-            totalIncome: showDetails,
-            accommodationCost: showDetails,
-            welfareDeductions: showDetails,
-            phoneAllowance: showDetails,
-            lateDeductions: showDetails,
-            socialSecurityDeduction: showDetails,
-            totalExpenses: showDetails,
-            netWages: showDetails,
-            actions: showDetails,
+            regularWages: false,
+            otWages: false,
+            professionalFees: false,
+            totalIncome: false,
+            accommodationCost: false,
+            welfareDeductions: false,
+            phoneAllowance: false,
+            lateDeductions: false,
+            socialSecurityDeduction: false,
+            totalExpenses: false,
+            netWages: false,
+            actions: false,
           }}
           autoHeight
           disableSelectionOnClick
@@ -839,14 +821,14 @@ export default function WageCalculationDetailsPage() {
         />
       </Paper>
 
-      {/* Additional Items Drawer */}
-      <AdditionalItemsDrawer
+      {/* [PHASE-1] Additional Items Drawer hidden — will be restored in Phase 2 */}
+      {/* <AdditionalItemsDrawer
         open={openDialog}
         onClose={() => setOpenDialog(false)}
         dc={selectedDC}
         period={period}
         onUpdate={() => queryClient.invalidateQueries({ queryKey: ['wagePeriod', id] })}
-      />
+      /> */}
 
       {/* Late Records Section */}
       {lateRecordsData && lateRecordsData.data.length > 0 && (
@@ -918,17 +900,6 @@ export default function WageCalculationDetailsPage() {
                     <Chip label={`${params.value} นาที`} color="warning" size="small" />
                   ),
                 },
-                {
-                  field: 'deductionAmount',
-                  headerName: 'หักค่าแรง',
-                  width: 100,
-                  align: 'right',
-                  renderCell: (params: GridRenderCellParams) => (
-                    <Typography variant="body2" color="error.main" fontWeight="bold">
-                      -{params.value?.toLocaleString() || 0} ฿
-                    </Typography>
-                  ),
-                },
               ]}
               autoHeight
               disableSelectionOnClick
@@ -974,13 +945,11 @@ export default function WageCalculationDetailsPage() {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700 }}>
-          {confirmAction === 'approve' ? '✅ ยืนยันการอนุมัติ' : '💸 ยืนยันการจ่ายเงิน'}
+          ✅ ยืนยันการอนุมัติ
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {confirmAction === 'approve'
-              ? 'เมื่ออนุมัติแล้วข้อมูลจะถูกล็อก ไม่สามารถแก้ไขได้อีก'
-              : 'ยืนยันว่าได้จ่ายเงินสำหรับงวดนี้แล้ว?'}
+            เมื่ออนุมัติแล้วข้อมูลจะถูกล็อก ไม่สามารถแก้ไขได้อีก
           </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -990,12 +959,14 @@ export default function WageCalculationDetailsPage() {
           <Button
             onClick={handleConfirmAction}
             variant="contained"
-            color={confirmAction === 'approve' ? 'secondary' : 'warning'}
-            disabled={approveMutation.isPending || markPaidMutation.isPending}
+            color="secondary"
+            disabled={approveMutation.isPending}
           >
-            {(approveMutation.isPending || markPaidMutation.isPending) ? (
+            {approveMutation.isPending ? (
               <CircularProgress size={20} />
-            ) : confirmAction === 'approve' ? 'อนุมัติ' : 'ยืนยันจ่ายเงิน'}
+            ) : (
+              'อนุมัติ'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
