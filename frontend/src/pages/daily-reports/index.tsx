@@ -1345,9 +1345,13 @@ export default function DailyReportPage() {
       // 1. If FM or Support FM (SFM): Fetch by department
       // 2. If Admin or others: Fetch by current project
       const isFM = user?.roleCode === 'FM';
+      const isGOD = user?.roleCode === 'GOD';
       let workers: any[] = [];
-      
-      if (isFM) {
+
+      if (isGOD) {
+        // GOD เห็น DC ทั้งหมดในระบบ
+        workers = await dcService.getAllDCs({}).then(res => res.dailyContractors);
+      } else if (isFM) {
         const dept = user?.department;
         if (!dept) {
           console.warn('[DailyReport] FM has no department:', user?.name);
@@ -1389,7 +1393,15 @@ export default function DailyReportPage() {
     const items: any[] = [];
     if (!user) return items;
 
+    const isAdminRole = ['AM', 'GOD'].includes(String(user.roleCode || '').toUpperCase());
+
     allTasks.forEach((task: any) => {
+      // GOD / AM เห็นทุก task โดยไม่ต้องเช็ค assignee
+      if (isAdminRole) {
+        items.push({ ...task, isPastRevision: false });
+        return;
+      }
+
       const isCurrentAssignee = task.assignees?.some((a: any) => a.employeeId === user.employeeId);
       const isCurrentSupport = task.supportAssignees?.some(
         (a: any) => a.employeeId === user.employeeId
