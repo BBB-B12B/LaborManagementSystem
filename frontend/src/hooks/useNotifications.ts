@@ -12,9 +12,8 @@ export const useNotifications = () => {
   const { data: notifications = [], isLoading, error } = useQuery<Notification[]>({
     queryKey: ['notifications'],
     queryFn: notificationService.getNotifications,
-    refetchInterval: 30000,          // background polling every 30s
-    refetchOnWindowFocus: true,     // refetch when user switches back to browser tab
-    staleTime: 15000,               // notifications are considered fresh for 15s
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   // Mutation: Mark a notification as read

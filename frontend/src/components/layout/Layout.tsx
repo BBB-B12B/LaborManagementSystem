@@ -35,6 +35,7 @@ const Topbar: React.FC = () => {
 
   const { notifications, markAsRead, markAllAsRead } = useNotifications();
   const [bellAnchorEl, setBellAnchorEl] = useState<null | HTMLElement>(null);
+  const [syncCooldown, setSyncCooldown] = useState(false);
   const queryClient = useQueryClient();
 
   const unreadCount = useMemo(() => {
@@ -53,15 +54,41 @@ const Topbar: React.FC = () => {
     window.dispatchEvent(new CustomEvent('globalSync'));
 
     // Navigate based on role and notification type
-    if (noti.type === 'unlock_granted' || user?.roleCode === 'FM') {
-      // FM: navigate to Daily Report list page
+    const FM_ROLES = ['FM', 'SE'];
+    const SUPERVISOR_ROLES = ['LD', 'OE', 'PE', 'PM'];
+    const userRole = user?.roleCode || '';
+
+    if (noti.type === 'unlock_requested' && SUPERVISOR_ROLES.includes(userRole)) {
+      // Supervisor: go to workspace and open the daily report modal at the requested date
+      // noti.subtaskId for unlock_requested is already a full composite ID (e.g. woId__catId__taskId__subtaskDocId)
+      const compositeSubtaskId = noti.subtaskId?.includes('__')
+        ? noti.subtaskId
+        : noti.subtaskId && noti.workOrderId && noti.categoryId && noti.taskId
+          ? `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}__${noti.subtaskId}`
+          : null;
+
+      if (compositeSubtaskId) {
+        router.push({
+          pathname: '/workspace',
+          query: {
+            subtaskId: compositeSubtaskId,
+            date: noti.reportDate || '',
+          },
+        });
+      } else {
+        router.push('/workspace');
+      }
+    } else if (noti.type === 'unlock_granted' || FM_ROLES.includes(userRole)) {
+      // FM/SE: navigate to Daily Report list page
       router.push('/daily-reports');
     } else {
-      // Supervisors: navigate to Workspace
+      // Others (daily_report_submit, task_assigned, etc.): navigate to Workspace
       if (noti.workOrderId && noti.categoryId && noti.taskId) {
-        const compositeSubtaskId = noti.subtaskId
-          ? `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}__${noti.subtaskId}`
-          : `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}`;
+        const compositeSubtaskId = noti.subtaskId?.includes('__')
+          ? noti.subtaskId
+          : noti.subtaskId
+            ? `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}__${noti.subtaskId}`
+            : `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}`;
         router.push({
           pathname: '/workspace',
           query: {
@@ -84,12 +111,13 @@ const Topbar: React.FC = () => {
   };
 
   const handleGlobalSync = () => {
-    // แค่ invalidate cache และยิง event
-    // DailyReport page จะรับ event นี้ และเป็นเจ้าของ Spinner + refetch ทั้งหมด
+    if (syncCooldown) return;
     dailyReportService.clearCache();
     useTaskCacheStore.getState().invalidate();
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
     window.dispatchEvent(new CustomEvent('globalSync'));
+    setSyncCooldown(true);
+    setTimeout(() => setSyncCooldown(false), 10000);
   };
 
   const englishInitial = useMemo(() => {
@@ -102,8 +130,18 @@ const Topbar: React.FC = () => {
     return '';
   }, [user?.fullNameEn, user?.name, user?.username]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setAnchorEl(null);
+    // บันทึก logout activity ก่อน clear state
+    if (user?.id) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        });
+      } catch {} // fire-and-forget
+    }
     logout();
     router.push('/login');
   };
@@ -170,7 +208,7 @@ const Topbar: React.FC = () => {
         <Stack direction="row" alignItems="center" spacing={1}>
           <IconButton
             onClick={handleGlobalSync}
-            disabled={isLoading}
+            disabled={isLoading || syncCooldown}
             sx={{
               width: 36,
               height: 36,
@@ -375,8 +413,28 @@ export const Layout: React.FC<LayoutProps> = ({
   disableTopGap = false,
 }) => {
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const taskCache = useTaskCacheStore();
+
+  // Heartbeat: อัปเดต presence ทุก 60 วินาที (ใช้ fetch ตรงเพื่อไม่ trigger global spinner)
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    const sendHeartbeat = async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/activity/heartbeat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+      } catch {} // fire-and-forget
+    };
+    sendHeartbeat(); // ส่งทันทีเมื่อ load
+    const interval = setInterval(sendHeartbeat, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
     if (isAuthenticated && !taskCache.isCacheValid() && !taskCache.isLoading) {

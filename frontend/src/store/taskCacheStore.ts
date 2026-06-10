@@ -32,6 +32,8 @@ export interface TaskCacheState {
    * ทำให้ Page รู้ว่าต้อง fetch ใหม่ในรอบถัดไป
    */
   invalidate: () => void;
+  /** อัปเดต Task เดียวใน cache โดยไม่ต้อง refetch ทั้งหมด */
+  patchTask: (updatedTask: Task) => void;
   /** ตรวจว่า Cache ยังใช้ได้อยู่หรือไม่ */
   isCacheValid: () => boolean;
 }
@@ -61,17 +63,19 @@ export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
       error: null,
     }),
 
+  patchTask: (updatedTask: Task) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
+    })),
+
   isCacheValid: () => {
     const { lastFetchedAt } = get();
     if (!lastFetchedAt) return false;
-    
-    const now = new Date();
-    const last = new Date(lastFetchedAt);
-    
-    // Cache remains valid as long as it's the same calendar day (Reset at midnight)
-    return now.getFullYear() === last.getFullYear() &&
-           now.getMonth() === last.getMonth() &&
-           now.getDate() === last.getDate();
+    // Cache expires at midnight (00:00) of the day it was fetched
+    const fetchedDate = new Date(lastFetchedAt);
+    const midnight = new Date(fetchedDate);
+    midnight.setHours(24, 0, 0, 0);
+    return Date.now() < midnight.getTime();
   },
 }));
 

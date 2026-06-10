@@ -1520,7 +1520,17 @@ export default function DailyReportPage() {
     const dateStr = format(unlockRequestDate, 'yyyy-MM-dd');
     setIsSubmittingUnlockRequest(true);
     try {
-      await taskService.requestTaskReportUnlock(selectedTask.id, dateStr, isActingAsSupport);
+      await taskService.requestTaskReportUnlock(selectedTask.id, dateStr, isActingAsSupport, {
+        projectId: selectedTask.projectId || '',
+        projectName: selectedTask.projectName || '',
+        workOrderId: selectedTask.workOrderId || '',
+        workOrderName: selectedTask.workOrderName || '',
+        categoryId: selectedTask.categoryId || '',
+        categoryName: selectedTask.categoryName || '',
+        taskId: selectedTask.parentTaskId || selectedTask.id || '',
+        taskName: selectedTask.taskName || '',
+        subtaskName: selectedTask.subtaskName || '',
+      });
       toast.success(`ส่งคำขอปลดล็อคสิทธิ์สำหรับวันที่ ${dateStr} เรียบร้อยแล้ว`);
       
       setSelectedTask((prev: any) => {

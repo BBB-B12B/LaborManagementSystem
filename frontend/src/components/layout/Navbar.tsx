@@ -9,6 +9,7 @@ import {
   ManageAccounts as ManageAccountsIcon,
   ViewKanban as ViewKanbanIcon,
   MoreHoriz as MoreHorizIcon,
+  AdminPanelSettings as AdminPanelSettingsIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
@@ -78,6 +79,12 @@ export const Navbar: React.FC = () => {
       path: '/workspace',
       icon: <ViewKanbanIcon />,
       roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'],
+    },
+    {
+      label: 'Activity Monitor',
+      path: '/activity-monitor',
+      icon: <AdminPanelSettingsIcon />,
+      roles: ['GOD' as UserRole],
     },
   ];
 

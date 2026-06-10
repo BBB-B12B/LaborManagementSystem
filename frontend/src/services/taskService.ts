@@ -151,6 +151,14 @@ export const taskService = {
   },
 
   /**
+   * Fetch a single parent task by composite subtask ID (woId__catId__taskId__subtaskId)
+   * Used for partial cache update after mutations
+   */
+  getTaskById: async (compositeId: string): Promise<Task> => {
+    return await api.get<Task>(`/tasks/${encodeURIComponent(compositeId)}`);
+  },
+
+  /**
    * Fetch assigned subtasks with optional filters (used by Daily Reports)
    */
   getAssignedSubtasks: async (filters?: { projectId?: string }): Promise<Task[]> => {
@@ -234,8 +242,8 @@ export const taskService = {
   /**
    * Request daily report unlock for a specific past date
    */
-  requestTaskReportUnlock: async (id: string, dateStr: string, isSupportReport?: boolean): Promise<void> => {
-    await api.post(`/tasks/${id}/request-unlock`, { dateStr, isSupportReport });
+  requestTaskReportUnlock: async (id: string, dateStr: string, isSupportReport?: boolean, taskContext?: Record<string, string>): Promise<void> => {
+    await api.post(`/tasks/${id}/request-unlock`, { dateStr, isSupportReport, taskContext });
   },
 
   /**

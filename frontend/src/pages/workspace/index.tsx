@@ -33,6 +33,10 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Popover,
+  List,
+  ListItem,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,6 +55,8 @@ import {
   KeyboardArrowDown as KeyboardArrowDownIcon,
   CalendarToday as CalendarTodayIcon,
   AccountTree as AccountTreeIcon,
+  VisibilityOff as VisibilityOffIcon,
+  RestoreFromTrash as RestoreIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -109,6 +115,7 @@ export default function WorkspacePage() {
   const tasksInCache = useTaskCacheStore((s) => s.tasks);
   const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
   const invalidateCache = useTaskCacheStore((s) => s.invalidate);
+  const patchTaskInCache = useTaskCacheStore((s) => s.patchTask);
   const setTasksInCache = useTaskCacheStore((s) => s.setTasks);
   const setCacheLoading = useTaskCacheStore((s) => s.setLoading);
   const setCacheError = useTaskCacheStore((s) => s.setError);
@@ -141,6 +148,36 @@ export default function WorkspacePage() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
   const [selectedReportDate, setSelectedReportDate] = useState<Date | null>(null);
+
+  // Hidden completed cards (per-user, persisted in localStorage)
+  const [hiddenCompletedIds, setHiddenCompletedIds] = useState<string[]>([]);
+  const [hiddenPopoverAnchor, setHiddenPopoverAnchor] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const stored = localStorage.getItem(`workspace_hidden_completed_${user.id}`);
+      if (stored) setHiddenCompletedIds(JSON.parse(stored));
+    } catch {}
+  }, [user?.id]);
+
+  const handleHideCard = useCallback((task: Task) => {
+    if (!user?.id) return;
+    setHiddenCompletedIds(prev => {
+      const next = prev.includes(task.id) ? prev : [...prev, task.id];
+      localStorage.setItem(`workspace_hidden_completed_${user.id}`, JSON.stringify(next));
+      return next;
+    });
+  }, [user?.id]);
+
+  const handleUnhideCard = useCallback((taskId: string) => {
+    if (!user?.id) return;
+    setHiddenCompletedIds(prev => {
+      const next = prev.filter(id => id !== taskId);
+      localStorage.setItem(`workspace_hidden_completed_${user.id}`, JSON.stringify(next));
+      return next;
+    });
+  }, [user?.id]);
 
   // Left Tree Filter state
   const [selectedNode, setSelectedNode] = useState<{ type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null>(null);
@@ -455,9 +492,20 @@ export default function WorkspacePage() {
       );
       toast.show('แก้ไขงานย่อยสำเร็จ', 'success');
       setIsSubtaskEditOpen(false);
+      const parentIdForPatch = editingSubtaskCard?.parentTaskId;
       setEditingSubtaskCard(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      if (parentIdForPatch) {
+        try {
+          const refreshed = await taskService.getTaskById(parentIdForPatch);
+          patchTaskInCache(refreshed);
+        } catch {
+          invalidateCache();
+          fetchFromAPI(true);
+        }
+      } else {
+        invalidateCache();
+        fetchFromAPI(true);
+      }
     } catch (error: any) {
       console.error('Failed to update subtask', error);
       setSubtaskEditError(error.message || 'ไม่สามารถแก้ไขงานย่อยได้');
@@ -1491,7 +1539,10 @@ export default function WorkspacePage() {
                     else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
                     else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
                     else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
-                    return effectiveStatus === column.id;
+                    if (effectiveStatus !== column.id) return false;
+                    // Exclude hidden completed cards from tab count
+                    if (column.id === 'completed' && hiddenCompletedIds.includes(t.id)) return false;
+                    return true;
                   }).length;
                   const isActive = mobileActiveColumn === column.id;
                   return (
@@ -1561,7 +1612,7 @@ export default function WorkspacePage() {
               }}
             >
               {COLUMNS.filter((col) => col.id === mobileActiveColumn).map((column) => {
-                const columnTasks = filteredSubtasks
+                const allMobileColTasks = filteredSubtasks
                   .filter((t) => {
                     let effectiveStatus = t.status;
                     const progress = t.dailyProgress || 0;
@@ -1574,8 +1625,34 @@ export default function WorkspacePage() {
                   })
                   .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
+                const isMobileCompletedCol = column.id === 'completed';
+                const columnTasks = isMobileCompletedCol
+                  ? allMobileColTasks.filter(t => !hiddenCompletedIds.includes(t.id))
+                  : allMobileColTasks;
+                const mobileHiddenTasks = isMobileCompletedCol
+                  ? allMobileColTasks.filter(t => hiddenCompletedIds.includes(t.id))
+                  : [];
+
                 return (
                   <Box key={column.id}>
+                    {/* Mobile: "ดูที่ซ่อน" chip for completed column */}
+                    {isMobileCompletedCol && mobileHiddenTasks.length > 0 && (
+                      <Chip
+                        icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
+                        label={`ซ่อนไว้ ${mobileHiddenTasks.length} รายการ — กดดู`}
+                        size="small"
+                        onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
+                        sx={{
+                          mb: 1.5,
+                          bgcolor: '#f1f5f9',
+                          border: '1px dashed #94a3b8',
+                          color: '#64748b',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: '#e2e8f0' },
+                        }}
+                      />
+                    )}
                     {loading ? (
                       Array.from(new Array(3)).map((_, idx) => (
                         <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '12px' }} />
@@ -1593,6 +1670,7 @@ export default function WorkspacePage() {
                             onDelete={canEditWorkspace ? handleDeleteClick : undefined}
                             onViewHistory={handleViewHistoryClick}
                             onClick={handleSubtaskCardClick}
+                            onHide={isMobileCompletedCol ? handleHideCard : undefined}
                             hasUnread={!!hasUnread}
                           />
                         );
@@ -1628,21 +1706,18 @@ export default function WorkspacePage() {
             }}
           >
             {COLUMNS.map((column) => {
-              const columnTasks = filteredSubtasks
+              const allColumnTasks = filteredSubtasks
                 .filter((t) => {
                   let effectiveStatus = t.status;
                   const progress = t.dailyProgress || 0;
 
-                  // Force UI column alignment if backend status is out of sync with progress
                   if (progress >= 100 && effectiveStatus !== 'completed') {
                     effectiveStatus = 'for-checking';
                   } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
                     effectiveStatus = 'in-progress';
                   } else if (effectiveStatus === 'rework' && progress === 0) {
-                    // Rejected subtask with 0 progress → show in Upcoming
                     effectiveStatus = 'upcoming';
                   } else if (effectiveStatus === 'rework' && progress > 0) {
-                    // Rejected subtask with some progress → show in In Progress
                     effectiveStatus = 'in-progress';
                   }
 
@@ -1650,6 +1725,15 @@ export default function WorkspacePage() {
                   return effectiveStatus === column.id;
                 })
                 .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+              // For completed column: separate visible vs hidden
+              const isCompletedCol = column.id === 'completed';
+              const columnTasks = isCompletedCol
+                ? allColumnTasks.filter(t => !hiddenCompletedIds.includes(t.id))
+                : allColumnTasks;
+              const hiddenTasks = isCompletedCol
+                ? allColumnTasks.filter(t => hiddenCompletedIds.includes(t.id))
+                : [];
 
               return (
                 <Box
@@ -1662,53 +1746,48 @@ export default function WorkspacePage() {
                     flexDirection: 'column',
                     bgcolor: '#f1f5f9',
                     borderRadius: '8px',
-                    p: 1.5,
                     mt: 2,
                     maxHeight: 'calc(100vh - 200px)',
-                    overflowY: 'auto',
-                    msOverflowStyle: 'none',
-                    scrollbarWidth: 'none',
-                    '&::-webkit-scrollbar': {
-                      display: 'none',
-                    },
+                    overflow: 'hidden',
                   }}
                 >
                   {/* Column Header */}
-                  <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5, position: 'sticky', top: 0, zIndex: 1, bgcolor: '#f1f5f9', pb: 1 }}>
-                    <Box
-                      sx={{
-                        width: 4,
-                        height: 18,
-                        bgcolor: column.color,
-                        borderRadius: 2,
-                      }}
-                    />
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1.5, pt: 1.5, pb: 1, flexShrink: 0, bgcolor: '#f1f5f9' }}>
+                    <Box sx={{ width: 4, height: 18, bgcolor: column.color, borderRadius: 2 }} />
                     <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1c1e2b' }}>
                       {column.label}
                     </Typography>
                     <Chip
                       label={columnTasks.length}
                       size="small"
-                      sx={{
-                        bgcolor: '#e2e8f0',
-                        color: '#475569',
-                        fontWeight: 700,
-                        height: 24,
-                        '& .MuiChip-label': { px: 1.2 },
-                      }}
+                      sx={{ bgcolor: '#e2e8f0', color: '#475569', fontWeight: 700, height: 24, '& .MuiChip-label': { px: 1.2 } }}
                     />
+                    {isCompletedCol && hiddenTasks.length > 0 && (
+                      <Chip
+                        icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
+                        label={`ซ่อน ${hiddenTasks.length}`}
+                        size="small"
+                        onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
+                        sx={{
+                          ml: 'auto !important',
+                          bgcolor: '#f1f5f9',
+                          border: '1px dashed #94a3b8',
+                          color: '#64748b',
+                          fontWeight: 700,
+                          height: 24,
+                          cursor: 'pointer',
+                          '& .MuiChip-label': { px: 1 },
+                          '&:hover': { bgcolor: '#e2e8f0' },
+                        }}
+                      />
+                    )}
                   </Stack>
 
                   {/* Column Content */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 100 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 100, flexGrow: 1, overflowY: 'auto', px: 1.5, pb: 1.5, msOverflowStyle: 'none', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
                     {loading ? (
                       Array.from(new Array(2)).map((_, idx) => (
-                        <Skeleton
-                          key={idx}
-                          variant="rounded"
-                          height={160}
-                          sx={{ mb: 2, borderRadius: '8px' }}
-                        />
+                        <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '8px' }} />
                       ))
                     ) : columnTasks.length > 0 ? (
                       columnTasks.map((task) => {
@@ -1723,21 +1802,13 @@ export default function WorkspacePage() {
                             onDelete={canEditWorkspace ? handleDeleteClick : undefined}
                             onViewHistory={handleViewHistoryClick}
                             onClick={handleSubtaskCardClick}
+                            onHide={isCompletedCol ? handleHideCard : undefined}
                             hasUnread={!!hasUnread}
                           />
                         );
                       })
                     ) : (
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          py: 5,
-                          opacity: 0.45,
-                        }}
-                      >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 5, opacity: 0.45 }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           No Tasks
                         </Typography>
@@ -2313,11 +2384,115 @@ export default function WorkspacePage() {
         }}
         task={selectedTaskForReport}
         initialDate={selectedReportDate}
-        onTaskUpdated={() => {
-          invalidateCache();
-          fetchFromAPI(true);
+        onTaskUpdated={async () => {
+          const parentId = selectedTaskForReport?.parentTaskId;
+          if (parentId) {
+            try {
+              const refreshed = await taskService.getTaskById(parentId);
+              patchTaskInCache(refreshed);
+            } catch {
+              invalidateCache();
+              fetchFromAPI(true);
+            }
+          } else {
+            invalidateCache();
+            fetchFromAPI(true);
+          }
         }}
       />
+
+      {/* Hidden completed cards popover */}
+      <Popover
+        open={Boolean(hiddenPopoverAnchor)}
+        anchorEl={hiddenPopoverAnchor}
+        onClose={() => setHiddenPopoverAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            minWidth: 280,
+            maxWidth: 360,
+            maxHeight: 420,
+            display: 'flex',
+            flexDirection: 'column',
+          }
+        }}
+      >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <VisibilityOffIcon sx={{ fontSize: 18, color: '#64748b' }} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b', flex: 1 }}>
+            งานที่ซ่อนไว้
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+            {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length} รายการ
+          </Typography>
+        </Box>
+        <List sx={{ p: 0, overflowY: 'auto', flexGrow: 1, '&::-webkit-scrollbar': { display: 'none' }, scrollbarWidth: 'none' }}>
+          {subtaskCards
+            .filter(t => hiddenCompletedIds.includes(t.id))
+            .map(task => (
+              <ListItem
+                key={task.id}
+                sx={{ px: 2, py: 1, borderBottom: '1px solid #f8fafc', '&:last-child': { borderBottom: 'none' } }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: '#64748b', fontFamily: 'monospace', display: 'block' }}
+                  >
+                    {task.taskId}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.8rem', lineHeight: 1.3,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {task.taskName}
+                  </Typography>
+                  {task.subtaskName && (
+                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
+                      {task.subtaskName}
+                    </Typography>
+                  )}
+                </Box>
+                <Tooltip title="เอากลับมาแสดง">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleUnhideCard(task.id)}
+                    sx={{ color: '#00aa5c', bgcolor: '#dcfce7', '&:hover': { bgcolor: '#bbf7d0' }, flexShrink: 0 }}
+                  >
+                    <RestoreIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </ListItem>
+            ))}
+          {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length === 0 && (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>ไม่มีงานที่ซ่อนไว้</Typography>
+            </Box>
+          )}
+        </List>
+        {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length > 0 && (
+          <Box sx={{ p: 1.5, borderTop: '1px solid #f1f5f9' }}>
+            <Button
+              fullWidth
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                if (!user?.id) return;
+                setHiddenCompletedIds([]);
+                localStorage.removeItem(`workspace_hidden_completed_${user.id}`);
+                setHiddenPopoverAnchor(null);
+              }}
+              sx={{ borderRadius: 2, fontWeight: 700, color: '#64748b', borderColor: '#e2e8f0' }}
+            >
+              แสดงทั้งหมดกลับมา
+            </Button>
+          </Box>
+        )}
+      </Popover>
 
       {/* Delete Confirmation Dialog */}
       <Dialog

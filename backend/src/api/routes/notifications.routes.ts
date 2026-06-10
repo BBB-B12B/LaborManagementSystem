@@ -16,6 +16,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userRole = authReq.user?.roleCode;
     const userUid = authReq.user?.uid;
+    const userId = authReq.user?.id;
     const userProjectIds = authReq.user?.projectLocationIds || [];
 
     const sevenDaysAgo = new Date();
@@ -37,18 +38,30 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     // -------------------------------------------
     // Role-based scoping:
-    //   FM → see 'unlock_granted' and 'task_assigned' targeted at their own uid
+    //   FM/SE → see 'unlock_granted' and 'task_assigned' targeted at their own uid
+    //   LD/OE/PE/PM → see 'unlock_requested' targeted at their own uid, plus project-based types
     //   AM/WH/GOD/etc. → see 'daily_report_submit', 'management_submit', 'unlock_request' for projects they manage
     //                   and 'task_assigned' targeted at their own uid
     // -------------------------------------------
-    if ((userRole as string) === 'FM') {
+    const FM_ROLES = ['FM', 'SE'];
+    if (FM_ROLES.includes(userRole as string)) {
       notifications = notifications.filter((n: any) =>
-        (n.type === 'unlock_granted' || n.type === 'task_assigned') && n.targetUserId === userUid
+        (n.type === 'unlock_granted' || n.type === 'task_assigned') &&
+        (n.targetUserId === userUid || n.targetUserId === userId)
       );
     } else if ((userRole as string) !== 'GOD') {
       notifications = notifications.filter((n: any) => {
         if (n.type === 'task_assigned') {
-          return n.targetUserId === userUid;
+          return n.targetUserId === userUid || n.targetUserId === userId;
+        }
+
+        // unlock_requested: any supervisor in the same project can see it
+        if (n.type === 'unlock_requested') {
+          const SUPERVISOR_ROLES = ['LD', 'OE', 'PE', 'PM'];
+          if (SUPERVISOR_ROLES.includes(userRole as string) && n.projectId && userProjectIds.includes(n.projectId)) {
+            return true;
+          }
+          return n.targetUserId === userUid || n.targetUserId === userId;
         }
 
         if (['daily_report_submit', 'management_submit', 'unlock_request'].includes(n.type)) {

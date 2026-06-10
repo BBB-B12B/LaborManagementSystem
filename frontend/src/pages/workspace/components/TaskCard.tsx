@@ -13,13 +13,14 @@ import {
   ListItemIcon,
   Tooltip,
 } from '@mui/material';
-import { 
+import {
   AttachFile as AttachFileIcon,
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Notifications as NotificationsIcon,
   Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { LinearProgress } from '@mui/material';
 import type { Task } from '@/services/taskService';
@@ -32,10 +33,11 @@ interface TaskCardProps {
   onDelete?: (task: Task) => void;
   onClick?: (task: Task) => void;
   onViewHistory?: (task: Task) => void;
+  onHide?: (task: Task) => void;
   hasUnread?: boolean;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, hasUnread }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, onHide, hasUnread }) => {
   const theme = useTheme();
   const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -172,6 +174,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
     if (onViewHistory) onViewHistory(task);
   };
 
+  const handleHide = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    if (onHide) onHide(task);
+  };
+
   return (
     <Paper
       elevation={0}
@@ -282,6 +290,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                 <EditIcon fontSize="small" />
               </ListItemIcon>
               <Typography variant="body2">Edit</Typography>
+            </MenuItem>
+          )}
+          {onHide && task.status === 'completed' && (
+            <MenuItem onClick={handleHide}>
+              <ListItemIcon>
+                <VisibilityOffIcon fontSize="small" sx={{ color: '#64748b' }} />
+              </ListItemIcon>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>ซ่อน</Typography>
             </MenuItem>
           )}
           {onDelete && task.isDeletable !== false && (

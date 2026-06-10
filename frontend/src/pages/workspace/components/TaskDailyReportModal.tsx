@@ -136,6 +136,10 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const queryClient = useQueryClient();
 
+  // Roles that can approve/grant unlock requests
+  const UNLOCK_APPROVER_ROLES = ['LD', 'OE', 'PE', 'PM'];
+  const canApproveUnlock = UNLOCK_APPROVER_ROLES.includes(String(user?.roleCode || user?.roleId || '').toUpperCase());
+
   const fetchReports = useCallback(async (forceRefresh = false) => {
     if (!task?.id || !open) return;
     setLoading(true);
@@ -315,6 +319,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           categoryName: task.categoryName,
           taskId: task.taskId,
           taskName: task.taskName,
+          subtaskName: task.subtaskName,
         });
         enqueueSnackbar('ปลดล็อคสิทธิ์เรียบร้อยแล้ว', { variant: 'success' });
         
@@ -590,16 +595,32 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
       fullWidth 
       PaperProps={{ sx: { borderRadius: 4, minHeight: 600 } }}
     >
-      <DialogTitle sx={{ pb: 1, pt: 3, px: 3, borderBottom: '1px solid #eef0f4' }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box sx={{ minWidth: 0, flex: 1, pr: 1 }}>
+      <DialogTitle sx={{ pb: 1, pt: { xs: 2, md: 3 }, px: { xs: 2, md: 3 }, borderBottom: '1px solid #eef0f4', position: 'relative', pr: { xs: 6, md: 7 } }}>
+        {/* Mobile: column layout — title on top, actions on bottom */}
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'stretch', md: 'center' }}
+          gap={{ xs: 1, md: 0 }}
+        >
+          {/* Left: Title block */}
+          <Box sx={{ minWidth: 0, flex: 1, pr: { xs: 0, md: 1 } }}>
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', fontWeight: 700, fontSize: { xs: '0.7rem', md: '0.75rem' }, letterSpacing: 0.2 }}
+              sx={{
+                color: 'text.secondary',
+                fontWeight: 700,
+                fontSize: { xs: '0.68rem', md: '0.75rem' },
+                letterSpacing: 0.2,
+                display: 'block',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
             >
               {task?.projectName} - {task?.categoryName}
             </Typography>
-            <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mt: 0.25, flexWrap: 'wrap', gap: 0.5 }}>
+            <Stack direction="row" alignItems="flex-start" sx={{ mt: 0.25, flexWrap: 'wrap', gap: 0.5 }}>
               <Typography
                 sx={{
                   fontWeight: 800,
@@ -639,19 +660,28 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
               </Box>
             </Stack>
           </Box>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            {pendingUnlockDates.length > 0 && (
+
+          {/* Right: Action row — wraps naturally on mobile */}
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            flexWrap="wrap"
+            gap={0.75}
+            justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
+          >
+            {canApproveUnlock && pendingUnlockDates.length > 0 && (
               <Box
                 onClick={handleJumpToFirstUnlockRequest}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 1,
+                  gap: 0.5,
                   bgcolor: '#fef9c3',
                   color: '#92400e',
                   border: '1.5px solid #fde047',
-                  px: 1.5,
-                  py: 0.75,
+                  px: 1.25,
+                  py: 0.6,
                   borderRadius: 2,
                   cursor: 'pointer',
                   transition: 'all 0.15s',
@@ -659,26 +689,27 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                 }}
               >
                 <Badge badgeContent={pendingUnlockDates.length} color="warning" sx={{ '& .MuiBadge-badge': { fontWeight: 700 } }}>
-                  <NotificationsActiveIcon sx={{ fontSize: 20 }} />
+                  <NotificationsActiveIcon sx={{ fontSize: 18 }} />
                 </Badge>
-                <Typography variant="caption" sx={{ fontWeight: 700, ml: 1, whiteSpace: 'nowrap' }}>
-                  คำขอปลดล็อค {pendingUnlockDates.length} รายการ — กดดูคำขอ
+                <Typography variant="caption" sx={{ fontWeight: 700, ml: 0.75, whiteSpace: 'nowrap', display: { xs: 'none', sm: 'block' } }}>
+                  คำขอปลดล็อค {pendingUnlockDates.length} รายการ
                 </Typography>
               </Box>
             )}
 
             {isActingAsSupport && task?.status === 'for-checking' && (
-              <Box sx={{ bgcolor: '#fef3c7', color: '#d97706', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #fde68a' }}>
-                <InfoIcon sx={{ fontSize: 18, mr: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>กำลังรอดำเนินตรวจสอบ</Typography>
+              <Box sx={{ bgcolor: '#fef3c7', color: '#d97706', px: 1.5, py: 0.6, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #fde68a' }}>
+                <InfoIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>รอตรวจสอบ</Typography>
               </Box>
             )}
 
             {task?.status === 'completed' && (
-              <Box sx={{ bgcolor: '#dcfce7', color: '#166534', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #bbf7d0' }}>
-                <CheckCircleIcon sx={{ fontSize: 18, mr: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  อนุมัติแล้วเมื่อ: {task.updatedAt ? format(new Date(task.updatedAt), 'dd/MM/yyyy HH:mm', { locale: th }) : '-'}
+              <Box sx={{ bgcolor: '#dcfce7', color: '#166534', px: 1.5, py: 0.6, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #bbf7d0', gap: 0.5 }}>
+                <CheckCircleIcon sx={{ fontSize: 16 }} />
+                <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>อนุมัติแล้วเมื่อ: </Box>
+                  {task.updatedAt ? format(new Date(task.updatedAt), 'dd/MM/yy HH:mm', { locale: th }) : '-'}
                 </Typography>
               </Box>
             )}
@@ -691,7 +722,8 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   startIcon={<CancelIcon />}
                   onClick={handleReject}
                   disabled={actionLoading}
-                  sx={{ borderRadius: 2, fontWeight: 700, px: 2 }}
+                  size="small"
+                  sx={{ borderRadius: 2, fontWeight: 700, px: { xs: 1.5, md: 2 }, minWidth: 0 }}
                 >
                   Reject
                 </Button>
@@ -701,18 +733,30 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   startIcon={<CheckCircleIcon />}
                   onClick={handleApprove}
                   disabled={actionLoading}
-                  sx={{ borderRadius: 2, fontWeight: 700, px: 2, boxShadow: 'none' }}
+                  size="small"
+                  sx={{ borderRadius: 2, fontWeight: 700, px: { xs: 1.5, md: 2 }, boxShadow: 'none', minWidth: 0 }}
                 >
                   Approve
                 </Button>
-                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
               </>
             )}
-            <IconButton onClick={onClose} size="small" sx={{ bgcolor: '#f1f5f9' }}>
-              <CloseIcon />
-            </IconButton>
           </Stack>
         </Stack>
+
+        {/* Close button — fixed at top-right corner */}
+        <IconButton
+          onClick={onClose}
+          size="small"
+          sx={{
+            position: 'absolute',
+            top: { xs: 10, md: 14 },
+            right: { xs: 10, md: 14 },
+            bgcolor: '#f1f5f9',
+            '&:hover': { bgcolor: '#e2e8f0' },
+          }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </DialogTitle>
 
       <DialogContent sx={{ px: 3, pb: 4, pt: 3, overflowX: 'hidden' }}>
@@ -729,6 +773,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                     Daily Report Log
                   </Typography>
                   {(() => {
+                    if (!canApproveUnlock) return null;
                     const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
                     const hasRequest = task?.[requestsField] && task[requestsField][selectedDateStr];
                     return hasRequest ? (

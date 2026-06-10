@@ -1024,6 +1024,100 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+// GET /api/tasks/:id — fetch single parent task with its subtasks by composite ID
+// Accepts 3-part (woId__catId__taskId) or 4-part (woId__catId__taskId__subtaskId) composite ID
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parts = req.params.id.split('__');
+    if (parts.length < 3) {
+      res.status(400).json({ success: false, message: 'Invalid composite task ID' });
+      return;
+    }
+    const [woId, catId, taskId] = parts;
+
+    const taskRef = afterSaleDb
+      .collection('workOrders').doc(woId)
+      .collection('categories').doc(catId)
+      .collection('tasks').doc(taskId)
+      .withConverter(taskConverter);
+
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+      res.status(404).json({ success: false, message: 'Task not found' });
+      return;
+    }
+
+    const data = taskSnap.data() as any;
+
+    const safeDate = (val: any): Date => {
+      if (!val) return new Date();
+      if (typeof val.toDate === 'function') return val.toDate();
+      if (typeof val === 'string') return new Date(val);
+      return val;
+    };
+
+    const subtasksSnapshot = await taskRef.collection('subtasks').get();
+    data.subtasks = subtasksSnapshot.docs.map((subDoc) => {
+      const subData = subDoc.data() as any;
+      return {
+        id: subData.id || `${woId}__${catId}__${taskId}__${subDoc.id}`,
+        subtaskId: subData.subtaskId || '',
+        subtaskName: subData.subtaskName || '',
+        status: subData.status || 'upcoming',
+        assignees: subData.assignees || [],
+        dailyProgress: subData.dailyProgress || 0,
+        currentRevision: subData.currentRevision || 'rev00',
+        revisionId: subData.revisionId || subData.currentRevision || 'rev00',
+        revisionName: subData.revisionName || '',
+        revisionCreatedAt: subData.revisionCreatedAt ? safeDate(subData.revisionCreatedAt) : safeDate(subData.createdAt),
+        isSupportRequest: subData.isSupportRequest || false,
+        isPickedUpBySupport: subData.isPickedUpBySupport || false,
+        supportTaskName: subData.supportTaskName || '',
+        supportDailyProgress: subData.supportDailyProgress || 0,
+        supportAssignees: subData.supportAssignees || [],
+        supportCreatedAt: subData.supportCreatedAt ? safeDate(subData.supportCreatedAt) : safeDate(subData.createdAt),
+        supportedRevisionIds: subData.supportedRevisionIds || [],
+        unlockedDates: subData.unlockedDates ? Object.keys(subData.unlockedDates).reduce((acc: Record<string, any>, key: string) => {
+          acc[key] = { ...subData.unlockedDates[key], unlockedUntil: safeDate(subData.unlockedDates[key].unlockedUntil) };
+          return acc;
+        }, {}) : {},
+        unlockRequests: subData.unlockRequests ? Object.keys(subData.unlockRequests).reduce((acc: Record<string, any>, key: string) => {
+          acc[key] = { ...subData.unlockRequests[key], requestedAt: safeDate(subData.unlockRequests[key].requestedAt) };
+          return acc;
+        }, {}) : {},
+        supportUnlockedDates: subData.supportUnlockedDates ? Object.keys(subData.supportUnlockedDates).reduce((acc: Record<string, any>, key: string) => {
+          acc[key] = { ...subData.supportUnlockedDates[key], unlockedUntil: safeDate(subData.supportUnlockedDates[key].unlockedUntil) };
+          return acc;
+        }, {}) : {},
+        supportUnlockRequests: subData.supportUnlockRequests ? Object.keys(subData.supportUnlockRequests).reduce((acc: Record<string, any>, key: string) => {
+          acc[key] = { ...subData.supportUnlockRequests[key], requestedAt: safeDate(subData.supportUnlockRequests[key].requestedAt) };
+          return acc;
+        }, {}) : {},
+        dueDate: subData.dueDate ? safeDate(subData.dueDate) : safeDate(data.dueDate || new Date()),
+        editHistory: subData.editHistory ? subData.editHistory.map((h: any) => ({
+          ...h,
+          updatedAt: safeDate(h.updatedAt),
+          changes: Array.isArray(h.changes) ? h.changes.map((c: any) => ({
+            ...c,
+            oldValue: c.field === 'dueDate' && c.oldValue ? safeDate(c.oldValue) : c.oldValue,
+            newValue: c.field === 'dueDate' && c.newValue ? safeDate(c.newValue) : c.newValue,
+          })) : []
+        })) : [],
+        createdAt: safeDate(subData.createdAt),
+        updatedAt: safeDate(subData.updatedAt),
+        createdBy: subData.createdBy || '',
+        updatedBy: subData.updatedBy || '',
+        historicalAssigneeIds: subData.historicalAssigneeIds || [],
+        isDeletable: subData.isDeletable !== undefined ? subData.isDeletable : ((subData.dailyProgress || 0) === 0),
+      };
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/tasks/import-wbs/template
 router.get('/import-wbs/template', async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -1607,12 +1701,90 @@ router.post('/:id/request-unlock', async (req: Request, res: Response, next: Nex
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
-    const { dateStr, isSupportReport } = req.body;
+    const { dateStr, isSupportReport, taskContext } = req.body;
     if (!dateStr) {
       throw new AppError('dateStr is required', 400);
     }
 
     await taskService.requestDailyReportUnlock(id, dateStr, userId, isSupportReport === true);
+
+    // --- Send 'unlock_requested' notifications to supervisors (LD, OE, PE, PM) ---
+    try {
+      // Resolve requester name
+      let requesterName = 'พนักงาน';
+      const requesterDoc = await db.collection('users').doc(userId).get();
+      if (requesterDoc.exists) {
+        const rd = requesterDoc.data();
+        requesterName = rd?.name || rd?.username || requesterName;
+      }
+
+      // Get projectId from taskContext (passed by frontend) or parse from composite id
+      const ctx = taskContext || {};
+      let projectId: string = ctx.projectId || '';
+      let subtaskName: string = ctx.subtaskName || '';
+
+      // Fallback: resolve from Firestore if not provided
+      if (!projectId) {
+        const idParts = id.split('__');
+        if (idParts.length >= 4) {
+          const [woId, catId, taskId, subtaskId] = idParts;
+          const subtaskRef = afterSaleDb
+            .collection('workOrders').doc(woId)
+            .collection('categories').doc(catId)
+            .collection('tasks').doc(taskId)
+            .collection('subtasks').doc(subtaskId);
+          const subtaskSnap = await subtaskRef.get();
+          if (subtaskSnap.exists) {
+            const sd = subtaskSnap.data();
+            projectId = sd?.projectId || '';
+            subtaskName = subtaskName || sd?.subtaskName || '';
+          }
+        }
+      }
+
+      if (projectId) {
+        // Query all supervisors with roles LD, OE, PE, PM in the same project
+        const SUPERVISOR_ROLES = ['LD', 'OE', 'PE', 'PM'];
+        const usersSnap = await db.collection('users')
+          .where('projectLocationIds', 'array-contains', projectId)
+          .get();
+
+        const supervisors = usersSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(u => SUPERVISOR_ROLES.includes(u.roleId || u.roleCode || ''));
+
+        const message = `${requesterName} ขอปลดล็อคสิทธิ์สำหรับวันที่ ${dateStr}${subtaskName ? ` ในงาน "${subtaskName}"` : ''}`;
+
+        const batch = afterSaleDb.batch();
+        for (const supervisor of supervisors) {
+          const notifRef = afterSaleDb.collection('notifications').doc();
+          batch.set(notifRef, {
+            type: 'unlock_requested',
+            projectId: ctx.projectId || projectId,
+            projectName: ctx.projectName || '',
+            workOrderId: ctx.workOrderId || '',
+            workOrderName: ctx.workOrderName || '',
+            categoryId: ctx.categoryId || '',
+            categoryName: ctx.categoryName || '',
+            taskId: ctx.taskId || '',
+            taskName: ctx.taskName || '',
+            subtaskId: id,
+            subtaskName,
+            reportDate: dateStr,
+            message,
+            createdAt: new Date(),
+            createdBy: userId,
+            createdByName: requesterName,
+            readBy: [],
+            targetUserId: supervisor.id,
+          });
+        }
+        await batch.commit();
+        console.log(`[tasks.routes] Sent unlock_requested notifications to ${supervisors.length} supervisors`);
+      }
+    } catch (notiErr: any) {
+      console.error('[tasks.routes] Failed to send unlock_requested notifications:', notiErr.message);
+    }
 
     res.status(200).json({
       success: true,

@@ -1,10 +1,11 @@
 import { api } from './api/client';
 
-export type NotificationType = 
-  | 'daily_report_submit' 
-  | 'unlock_granted' 
-  | 'task_assigned' 
-  | 'management_submit' 
+export type NotificationType =
+  | 'daily_report_submit'
+  | 'unlock_granted'
+  | 'unlock_requested'
+  | 'task_assigned'
+  | 'management_submit'
   | 'unlock_request';
 
 export interface Notification {

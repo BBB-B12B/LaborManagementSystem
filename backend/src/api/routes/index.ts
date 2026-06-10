@@ -19,6 +19,7 @@ import socialSecurityRulesRoutes from './socialSecurityRules.routes';
 import taskRoutes from './tasks.routes';
 import mediaRoutes from './media.routes';
 import notificationRoutes from './notifications.routes';
+import activityRoutes from './activity.routes';
 
 const router = Router();
 
@@ -60,5 +61,8 @@ router.use('/media', mediaRoutes);
 
 // Notification routes
 router.use('/notifications', notificationRoutes);
+
+// Activity Monitor routes (GOD only)
+router.use('/activity', activityRoutes);
 
 export default router;
