@@ -118,11 +118,11 @@ const StyledTableContainer = styled(TableContainer)({
   },
   // Sub-headers for OT
   '& .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root:nth-of-type(3), & .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root:nth-of-type(4), & .MuiTableHead-root .MuiTableRow-root:nth-of-type(3) .MuiTableCell-root:nth-of-type(5)':
-  {
-    backgroundColor: '#01497c',
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: '0.7rem',
-  },
+    {
+      backgroundColor: '#01497c',
+      color: 'rgba(255, 255, 255, 0.9)',
+      fontSize: '0.7rem',
+    },
   '& .MuiTableBody-root .MuiTableRow-root': {
     transition: 'all 0.2s ease',
     '&:hover': {
@@ -450,8 +450,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           ...old,
           pendingCount: Math.max(0, (old.pendingCount ?? 1) - 1),
           normalCount: (old.normalCount ?? 0) + 1,
-          matchedCount: (old.matchedCount ?? 0) + 1,  // record กลายเป็น MATCHED
-          resolvedCount: (old.resolvedCount ?? 0) + 1,  // เพิ่ม resolution count ทันที
+          matchedCount: (old.matchedCount ?? 0) + 1, // record กลายเป็น MATCHED
+          resolvedCount: (old.resolvedCount ?? 0) + 1, // เพิ่ม resolution count ทันที
           resolvedMatchedCount: (old.resolvedMatchedCount ?? 0) + 1, // เพิ่ม resolved matched count ทันที
         };
       });
@@ -652,16 +652,44 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
     if (isOverQuota) {
       return (
-        <Box sx={{ width: 'fit-content', mx: 'auto', mt: 1, mb: 1, p: 1.5, bgcolor: '#fee2e2', borderRadius: 2, border: '1px solid #f87171', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-          <Typography variant="body2" sx={{ color: '#991b1b', fontWeight: 800, textAlign: 'center' }}>
-            🔴 ลาป่วยแบบได้เงิน: {paidLeaveCount}/30 วัน (รายการนี้คือครั้งที่ {paidLeaveCount + 1} — เกินโควตา)
+        <Box
+          sx={{
+            width: 'fit-content',
+            mx: 'auto',
+            mt: 1,
+            mb: 1,
+            p: 1.5,
+            bgcolor: '#fee2e2',
+            borderRadius: 2,
+            border: '1px solid #f87171',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{ color: '#991b1b', fontWeight: 800, textAlign: 'center' }}
+          >
+            🔴 ลาป่วยแบบได้เงิน: {paidLeaveCount}/30 วัน (รายการนี้คือครั้งที่ {paidLeaveCount + 1}{' '}
+            — เกินโควตา)
           </Typography>
         </Box>
       );
     }
 
     return (
-      <Box sx={{ width: 'fit-content', mx: 'auto', mt: 1, mb: 1, p: 1.5, bgcolor: '#dcfce7', borderRadius: 2, border: '1px solid #4ade80', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+      <Box
+        sx={{
+          width: 'fit-content',
+          mx: 'auto',
+          mt: 1,
+          mb: 1,
+          p: 1.5,
+          bgcolor: '#dcfce7',
+          borderRadius: 2,
+          border: '1px solid #4ade80',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+        }}
+      >
         <Typography variant="body2" sx={{ color: '#166534', fontWeight: 800, textAlign: 'center' }}>
           🟢 ลาป่วยแบบได้เงิน: {paidLeaveCount}/30 วัน (รายการนี้คือครั้งที่ {paidLeaveCount + 1})
         </Typography>
@@ -967,7 +995,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       if (closestOut !== -1 && minOutDiff <= 90) {
         const segIdx = baseSegments.indexOf(seg);
         const nextSeg = baseSegments[segIdx + 1];
-        const isBoundaryShared = nextSeg && closestOut === nextSeg.expectedStart;
+        const isBoundaryShared = nextSeg && seg.expectedEnd === nextSeg.expectedStart;
         if (!isBoundaryShared) {
           usedPunches.add(closestOut);
         }
@@ -979,6 +1007,19 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         actualOut: closestOut !== -1 && minOutDiff <= 90 ? closestOut : null,
       };
     });
+
+    // Clear shared transition punches in the display to avoid admin confusion (showing same punch twice)
+    for (let i = 0; i < segments.length - 1; i++) {
+      const seg = segments[i];
+      const nextSeg = segments[i + 1];
+      if (
+        seg.actualOut !== null &&
+        nextSeg.actualIn !== null &&
+        seg.actualOut === nextSeg.actualIn
+      ) {
+        nextSeg.actualIn = null;
+      }
+    }
 
     // Calculate results and remarks for each segment
     return segments.map((seg) => {
@@ -994,12 +1035,46 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       let photoIn = seg.photoIn;
       let photoOut = seg.photoOut;
 
+      // Transition scan bypass rules (OT เช้า ↔ กะปกติ)
+      const otMorningSeg = segments.find((s) => s.key === 'otMorning');
+      const isMorningTransition = seg.key === 'morning' && !!otMorningSeg;
+      const isOtMorningTransition = seg.key === 'otMorning' && segments.some((s) => s.key === 'morning');
+
+      let isBypassed = false;
+      let bypassReason = '';
+
+      if (isMorningTransition && !hasIn) {
+        // Check if there is a valid scan in at 06:00 (otMorning expectedStart)
+        const otMorningStart = otMorningSeg!.expectedStart;
+        const prevHasIn = scanMinsList.some((t: number) => t <= 480 + 90 && t >= otMorningStart - 90);
+        if (prevHasIn) {
+          isBypassed = true;
+          bypassReason = 'ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)';
+        }
+      }
+
+      if (isOtMorningTransition && !hasOut) {
+        // Check if there is a valid scan out at 12:00 or 17:00
+        const morningSeg = segments.find((s) => s.key === 'morning');
+        if (morningSeg) {
+          const nextHasOut = scanMinsList.some((t: number) => t >= 480 - 90 && t <= morningSeg.expectedEnd + 90);
+          if (nextHasOut) {
+            isBypassed = true;
+            bypassReason = 'ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)';
+          }
+        }
+      }
+
       if (isThisSegmentLeave) {
         result = '✓ ลางาน';
         remark = 'บันทึกการลางาน (Leave)';
         statusColor = { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };
         photoIn = null;
         photoOut = null;
+      } else if (isBypassed) {
+        result = '✓ ปกติ';
+        remark = bypassReason;
+        statusColor = { bg: '#dcfce7', text: '#166534', border: '#86efac' };
       } else if (!hasIn && !hasOut) {
         result = '✗ ขาดสแกน';
         const hasPhotoIn = !!seg.photoIn;
@@ -1024,8 +1099,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         statusColor = { bg: '#fee2e2', text: '#ef4444', border: '#fca5a5' };
       } else {
         // Both IN & OUT exist
-        const inDiff = seg.actualIn! - seg.expectedStart;
+        let inDiff = seg.actualIn! - seg.expectedStart;
         const outDiff = seg.expectedEnd - seg.actualOut!;
+
+        // 5-minute late buffer for morning shift starting at 08:00
+        if (isMorningTransition && inDiff > 0 && inDiff <= 5) {
+          inDiff = 0;
+        }
 
         if (inDiff > 0 && outDiff > 0) {
           result = '⚠ สาย & ออกก่อน';
@@ -1046,6 +1126,26 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         }
       }
 
+      let devicePunches = row.devicePunches || [];
+      if (devicePunches.length === 0) {
+        // Fallback for historic data: if no edits, assume all scanPunches are original.
+        // If edited, we look at the first snapshot in scanEditHistory to retrieve the original punches.
+        if (row.scanEditHistory && row.scanEditHistory.length > 0) {
+          const sortedHistory = [...row.scanEditHistory].sort((a: any, b: any) => {
+            const dateA = a.editedAt?.toDate ? a.editedAt.toDate() : new Date(a.editedAt);
+            const dateB = b.editedAt?.toDate ? b.editedAt.toDate() : new Date(b.editedAt);
+            return dateA.getTime() - dateB.getTime();
+          });
+          const earliestEdit = sortedHistory[0];
+          devicePunches = earliestEdit?.snapshot?.punches || earliestEdit?.snapshot?.devicePunches || [];
+        } else {
+          devicePunches = row.scanPunches || [];
+        }
+      }
+
+      const isOriginalIn = seg.actualIn !== null && devicePunches.some((p: any) => toMins(p) === seg.actualIn);
+      const isOriginalOut = seg.actualOut !== null && devicePunches.some((p: any) => toMins(p) === seg.actualOut);
+
       return {
         ...seg,
         photoIn,
@@ -1057,6 +1157,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         result,
         remark,
         statusColor,
+        isOriginalIn,
+        isOriginalOut,
       };
     });
   };
@@ -1339,10 +1441,14 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     <TableCell>
                       <ActionButton
                         variant="outlined"
-                        actionType={(isLocked || row.isLocked || row.status === 'MATCHED') ? 'view' : 'check'}
+                        actionType={
+                          isLocked || row.isLocked || row.status === 'MATCHED' ? 'view' : 'check'
+                        }
                         onClick={() => handleOpenCheckDialog(row)}
                       >
-                        {(isLocked || row.isLocked || row.status === 'MATCHED') ? 'ดูข้อมูล' : 'ตรวจสอบ'}
+                        {isLocked || row.isLocked || row.status === 'MATCHED'
+                          ? 'ดูข้อมูล'
+                          : 'ตรวจสอบ'}
                       </ActionButton>
                     </TableCell>
                   </TableRow>
@@ -1432,64 +1538,71 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
                 {selectedRow?.employeeId} — {selectedRow?.employeeName} &nbsp;|&nbsp; วันที่{' '}
                 {selectedRow?.workDate}
-                {selectedRow?.workLogs && selectedRow.workLogs.length > 0 && (() => {
-                  // กรอง ID-like strings เช่น "DBD-0001-001", "ABC-0001-001-0001"
-                  const isIdLike = (s: string) => /^[A-Z]{2,}-\d{3,}/.test(s);
-                  const seen = new Set<string>();
-                  const taskLabels = selectedRow.workLogs
-                    .filter((log: any) => {
-                      const name = log.taskName;
-                      const sub = log.subtaskName;
-                      if (!name && !sub) return false;
-                      // กรองออกถ้า taskName ดูเหมือน ID (เช่น "DBD-0001-001")
-                      if (name && isIdLike(name)) return false;
-                      return true;
-                    })
-                    .map((log: any) => {
-                      const taskPart = log.taskName && !isIdLike(log.taskName) ? log.taskName : null;
-                      const subPart = log.subtaskName && !isIdLike(log.subtaskName) ? log.subtaskName : null;
-                      if (taskPart && subPart) return `${taskPart}_${subPart}`;
-                      return taskPart || subPart;
-                    })
-                    .filter((label: string | null): label is string => {
-                      if (!label) return false;
-                      if (seen.has(label)) return false;
-                      seen.add(label);
-                      return true;
-                    });
-                  if (taskLabels.length === 0) return null;
-                  return (
-                    <>&nbsp;|&nbsp;
-                      <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>
-                        {taskLabels.join(', ')}
-                      </span>
-                    </>
-                  );
-                })()}
+                {selectedRow?.workLogs &&
+                  selectedRow.workLogs.length > 0 &&
+                  (() => {
+                    // กรอง ID-like strings เช่น "DBD-0001-001", "ABC-0001-001-0001"
+                    const isIdLike = (s: string) => /^[A-Z]{2,}-\d{3,}/.test(s);
+                    const seen = new Set<string>();
+                    const taskLabels = selectedRow.workLogs
+                      .filter((log: any) => {
+                        const name = log.taskName;
+                        const sub = log.subtaskName;
+                        if (!name && !sub) return false;
+                        // กรองออกถ้า taskName ดูเหมือน ID (เช่น "DBD-0001-001")
+                        if (name && isIdLike(name)) return false;
+                        return true;
+                      })
+                      .map((log: any) => {
+                        const taskPart =
+                          log.taskName && !isIdLike(log.taskName) ? log.taskName : null;
+                        const subPart =
+                          log.subtaskName && !isIdLike(log.subtaskName) ? log.subtaskName : null;
+                        if (taskPart && subPart) return `${taskPart}_${subPart}`;
+                        return taskPart || subPart;
+                      })
+                      .filter((label: string | null): label is string => {
+                        if (!label) return false;
+                        if (seen.has(label)) return false;
+                        seen.add(label);
+                        return true;
+                      });
+                    if (taskLabels.length === 0) return null;
+                    return (
+                      <>
+                        &nbsp;|&nbsp;
+                        <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>
+                          {taskLabels.join(', ')}
+                        </span>
+                      </>
+                    );
+                  })()}
               </Typography>
             </Box>
             <Stack direction="row" spacing={1.5} alignItems="center">
               {((selectedRow?.dailyReportHistory && selectedRow.dailyReportHistory.length > 0) ||
                 (selectedRow?.scanEditHistory && selectedRow.scanEditHistory.length > 0)) && (
-                  <IconButton
-                    onClick={() => setHistoryOpen(!historyOpen)}
-                    sx={{
-                      color: '#fff',
-                      backgroundColor: historyOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                      border: '1px solid rgba(255, 255, 255, 0.25)',
-                      '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                      },
-                      width: 36,
-                      height: 36,
-                      borderRadius: '8px',
-                      transition: 'all 0.2s',
-                    }}
-                    title="ประวัติการแก้ไขและตรวจสอบข้อมูล (Audit Trail)"
-                  >
-                    <HistoryIcon sx={{ fontSize: 20 }} />
-                  </IconButton>
-                )}
+                <IconButton
+                  onClick={() => setHistoryOpen(!historyOpen)}
+                  sx={{
+                    color: '#fff',
+                    backgroundColor: historyOpen
+                      ? 'rgba(255, 255, 255, 0.2)'
+                      : 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                    },
+                    width: 36,
+                    height: 36,
+                    borderRadius: '8px',
+                    transition: 'all 0.2s',
+                  }}
+                  title="ประวัติการแก้ไขและตรวจสอบข้อมูล (Audit Trail)"
+                >
+                  <HistoryIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              )}
               <Box sx={getStatusStyle(selectedRow?.status || 'ALL')}>
                 {getStatusLabel(selectedRow?.status)}
               </Box>
@@ -1833,11 +1946,18 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                               <TableCell
                                 sx={{
                                   fontWeight: 800,
-                                  color: seg.actualIn || seg.actualOut ? '#1e293b' : '#ef4444',
                                   textAlign: 'center',
                                 }}
                               >
-                                {seg.inText} → {seg.outText}
+                                <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, width: '100%' }}>
+                                  <span style={{ color: seg.actualIn !== null ? (seg.isOriginalIn ? '#1e293b' : '#ea580c') : '#94a3b8' }}>
+                                    {seg.inText}
+                                  </span>
+                                  <span style={{ color: '#94a3b8' }}>→</span>
+                                  <span style={{ color: seg.actualOut !== null ? (seg.isOriginalOut ? '#1e293b' : '#ea580c') : '#94a3b8' }}>
+                                    {seg.outText}
+                                  </span>
+                                </Box>
                               </TableCell>
 
                               {/* Photo OUT */}
@@ -1956,6 +2076,25 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     </Table>
                   </TableContainer>
 
+                  {/* Legend explaining time font colors */}
+                  <Box sx={{ mt: 1.5, mb: 1, display: 'flex', gap: 3, alignItems: 'center', px: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      ความหมายของสีเวลา:
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1e293b' }} />
+                      <Typography variant="caption" sx={{ color: '#1e293b', fontWeight: 700 }}>
+                        เวลาสแกนจริงจากเครื่อง (Original)
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#ea580c' }} />
+                      <Typography variant="caption" sx={{ color: '#ea580c', fontWeight: 700 }}>
+                        เติมเวลา/ยืนยันตาม Daily Report (Admin Added/Edited)
+                      </Typography>
+                    </Box>
+                  </Box>
+
                   {/* Medical Certificate / Leave Evidence */}
                   {selectedRow?.medCertFileUrl && (
                     <Box
@@ -1990,7 +2129,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                       </Button>
                     </Box>
                   )}
-
                 </Box>
               );
             })()}
@@ -2057,7 +2195,15 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   return (
                     <>
                       {(isLocked || selectedRow?.isLocked) && (
-                        <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 800, alignSelf: 'center', mr: 'auto' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: '#ef4444',
+                            fontWeight: 800,
+                            alignSelf: 'center',
+                            mr: 'auto',
+                          }}
+                        >
                           🔒 งวดงานนี้ถูกอนุมัติแล้ว ไม่สามารถแก้ไขข้อมูลการทำงานได้
                         </Typography>
                       )}
@@ -2141,7 +2287,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             คุณต้องการยืนยันการปรับข้อมูลสแกนนิ้วตาม Daily Report ใช่หรือไม่?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            ระบบจะทำการเติมเวลาสแกนนิ้วที่ขาดหายไปตาม Daily Report โดยจะรักษาข้อมูลการสแกนเดิมที่มีอยู่ไว้ และอัปเดตสถานะเป็น &quot;ปกติ&quot; ทันที
+            ระบบจะทำการเติมเวลาสแกนนิ้วที่ขาดหายไปตาม Daily Report
+            โดยจะรักษาข้อมูลการสแกนเดิมที่มีอยู่ไว้ และอัปเดตสถานะเป็น &quot;ปกติ&quot; ทันที
           </Typography>
 
           <Stack direction="row" spacing={2} justifyContent="center">
@@ -2175,7 +2322,10 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       {/* Evidence Viewer Dialog (Images, PDFs & Other files) */}
       <Dialog
         open={viewerOpen}
-        onClose={() => { setViewerOpen(false); setImageZoom(1); }}
+        onClose={() => {
+          setViewerOpen(false);
+          setImageZoom(1);
+        }}
         maxWidth={false}
         PaperProps={{
           sx: {
@@ -2188,249 +2338,349 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       >
         {/* Close button */}
         <IconButton
-          onClick={() => { setViewerOpen(false); setImageZoom(1); }}
-          sx={{ position: 'fixed', top: 16, right: 16, color: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10, '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}
+          onClick={() => {
+            setViewerOpen(false);
+            setImageZoom(1);
+          }}
+          sx={{
+            position: 'fixed',
+            top: 16,
+            right: 16,
+            color: '#fff',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 10,
+            '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
+          }}
         >
           <CloseIcon />
         </IconButton>
 
-        {viewerImages.length > 0 && (() => {
-          const currentUrl = viewerImages[viewerIndex];
-          const cleanUrl = currentUrl ? currentUrl.split('?')[0].toLowerCase() : '';
-          const isPdf = cleanUrl.endsWith('.pdf');
-          const isImage =
-            cleanUrl.endsWith('.jpg') ||
-            cleanUrl.endsWith('.jpeg') ||
-            cleanUrl.endsWith('.png') ||
-            cleanUrl.endsWith('.gif') ||
-            cleanUrl.endsWith('.webp');
-          const isOther = !isPdf && !isImage;
+        {viewerImages.length > 0 &&
+          (() => {
+            const currentUrl = viewerImages[viewerIndex];
+            const cleanUrl = currentUrl ? currentUrl.split('?')[0].toLowerCase() : '';
+            const isPdf = cleanUrl.endsWith('.pdf');
+            const isImage =
+              cleanUrl.endsWith('.jpg') ||
+              cleanUrl.endsWith('.jpeg') ||
+              cleanUrl.endsWith('.png') ||
+              cleanUrl.endsWith('.gif') ||
+              cleanUrl.endsWith('.webp');
+            const isOther = !isPdf && !isImage;
 
-          return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', width: '92vw', maxHeight: '95vh' }}>
-
-              {/* ── Scrollable Content Area ── */}
-              {isImage && (
-                <Box
-                  ref={scrollRef}
-                  sx={{
-                    height: '65vh',
-                    overflow: 'auto',
-                    backgroundColor: 'rgba(0,0,0,0.85)',
-                    borderRadius: '12px 12px 0 0',
-                    cursor: imageZoom > 1 ? 'grab' : 'default',
-                  }}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUpOrLeave}
-                  onMouseLeave={handleMouseUpOrLeave}
-                >
-                  {/* Inner wrapper: grows to fit zoomed image so scroll covers all edges */}
-                  <Box sx={{
-                    minWidth: fitSize && imageZoom > 1 ? `${fitSize.w * imageZoom}px` : '100%',
-                    minHeight: '100%',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: imageZoom > 1 ? 'flex-start' : 'center',
-                    py: imageZoom > 1 ? 1 : 0,
-                  }}>
-                    <img
-                      ref={imgRef}
-                      src={currentUrl}
-                      alt={`Image ${viewerIndex + 1}`}
-                      draggable={false}
-                      onLoad={handleImgLoad}
-                      style={
-                        imageZoom === 1 || !fitSize
-                          ? {
-                            display: 'block',
-                            maxWidth: '100%',
-                            maxHeight: '65vh',
-                            width: 'auto',
-                            height: 'auto',
-                            borderRadius: '8px',
-                          }
-                          : {
-                            display: 'block',
-                            width: `${fitSize.w * imageZoom}px`,
-                            height: `${fitSize.h * imageZoom}px`,
-                            borderRadius: '8px',
-                            flexShrink: 0,
-                          }
-                      }
-                    />
-                  </Box>
-                </Box>
-              )}
-
-              {isPdf && (
-                <Box
-                  sx={{
-                    height: '70vh',
-                    backgroundColor: 'rgba(0,0,0,0.85)',
-                    borderRadius: '12px 12px 0 0',
-                    p: 1.5,
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <iframe
-                    src={`${currentUrl}#toolbar=1`}
-                    width="100%"
-                    height="100%"
-                    style={{
-                      border: 'none',
-                      backgroundColor: '#fff',
-                      borderRadius: '8px',
+            return (
+              <Box
+                sx={{ display: 'flex', flexDirection: 'column', width: '92vw', maxHeight: '95vh' }}
+              >
+                {/* ── Scrollable Content Area ── */}
+                {isImage && (
+                  <Box
+                    ref={scrollRef}
+                    sx={{
+                      height: '65vh',
+                      overflow: 'auto',
+                      backgroundColor: 'rgba(0,0,0,0.85)',
+                      borderRadius: '12px 12px 0 0',
+                      cursor: imageZoom > 1 ? 'grab' : 'default',
                     }}
-                    title="PDF Evidence Viewer"
-                  />
-                </Box>
-              )}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUpOrLeave}
+                    onMouseLeave={handleMouseUpOrLeave}
+                  >
+                    {/* Inner wrapper: grows to fit zoomed image so scroll covers all edges */}
+                    <Box
+                      sx={{
+                        minWidth: fitSize && imageZoom > 1 ? `${fitSize.w * imageZoom}px` : '100%',
+                        minHeight: '100%',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: imageZoom > 1 ? 'flex-start' : 'center',
+                        py: imageZoom > 1 ? 1 : 0,
+                      }}
+                    >
+                      <img
+                        ref={imgRef}
+                        src={currentUrl}
+                        alt={`Image ${viewerIndex + 1}`}
+                        draggable={false}
+                        onLoad={handleImgLoad}
+                        style={
+                          imageZoom === 1 || !fitSize
+                            ? {
+                                display: 'block',
+                                maxWidth: '100%',
+                                maxHeight: '65vh',
+                                width: 'auto',
+                                height: 'auto',
+                                borderRadius: '8px',
+                              }
+                            : {
+                                display: 'block',
+                                width: `${fitSize.w * imageZoom}px`,
+                                height: `${fitSize.h * imageZoom}px`,
+                                borderRadius: '8px',
+                                flexShrink: 0,
+                              }
+                        }
+                      />
+                    </Box>
+                  </Box>
+                )}
 
-              {isOther && (
-                <Box
-                  sx={{
-                    height: '65vh',
-                    backgroundColor: 'rgba(0,0,0,0.85)',
-                    borderRadius: '12px 12px 0 0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    color: '#fff',
-                    p: 4,
-                    textAlign: 'center',
-                  }}
-                >
+                {isPdf && (
                   <Box
                     sx={{
-                      width: 100,
-                      height: 100,
-                      borderRadius: '50%',
-                      backgroundColor: 'rgba(255,255,255,0.1)',
+                      height: '70vh',
+                      backgroundColor: 'rgba(0,0,0,0.85)',
+                      borderRadius: '12px 12px 0 0',
+                      p: 1.5,
                       display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <iframe
+                      src={`${currentUrl}#toolbar=1`}
+                      width="100%"
+                      height="100%"
+                      style={{
+                        border: 'none',
+                        backgroundColor: '#fff',
+                        borderRadius: '8px',
+                      }}
+                      title="PDF Evidence Viewer"
+                    />
+                  </Box>
+                )}
+
+                {isOther && (
+                  <Box
+                    sx={{
+                      height: '65vh',
+                      backgroundColor: 'rgba(0,0,0,0.85)',
+                      borderRadius: '12px 12px 0 0',
+                      display: 'flex',
+                      flexDirection: 'column',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      mb: 3,
+                      color: '#fff',
+                      p: 4,
+                      textAlign: 'center',
                     }}
                   >
-                    <InsertDriveFileIcon sx={{ fontSize: 60, color: '#38bdf8' }} />
-                  </Box>
-                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 1, maxWidth: '600px' }}>
-                    เอกสารแนบ: {currentUrl.split('/').pop()?.split('?')[0] || 'evidence_file'}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#94a3b8', mb: 4, maxWidth: '500px' }}>
-                    เบราว์เซอร์ไม่สามารถเปิดพรีวิวไฟล์ประเภทนี้ได้โดยตรงในหน้าต่างนี้ โปรดดาวน์โหลดหรือเปิดดูในแท็บใหม่เพื่อทำการตรวจสอบ
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    href={currentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    startIcon={<FileDownloadIcon />}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 800,
-                      borderRadius: '10px',
-                      px: 4,
-                      py: 1.5,
-                      backgroundColor: '#0284c7',
-                      '&:hover': { backgroundColor: '#0369a1' },
-                      boxShadow: '0 10px 15px -3px rgba(2,132,199,0.3)',
-                    }}
-                  >
-                    ดาวน์โหลด / เปิดไฟล์เพื่อตรวจสอบ
-                  </Button>
-                </Box>
-              )}
-
-              {/* ── Bottom toolbar: zoom controls + action buttons ── */}
-              <Box
-                sx={{
-                  flexShrink: 0,
-                  backgroundColor: 'rgba(15,23,42,0.95)',
-                  borderRadius: '0 0 12px 12px',
-                  px: 3,
-                  py: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                {/* Zoom bar (Only for images) */}
-                {isImage && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, backgroundColor: 'rgba(255,255,255,0.08)', px: 2, py: 0.5, borderRadius: 4 }}>
-                    <IconButton size="small" onClick={() => setImageZoom(z => Math.max(1, +(z - 0.25).toFixed(2)))} sx={{ color: '#fff' }}>
-                      <ZoomOutIcon fontSize="small" />
-                    </IconButton>
-                    <Typography variant="body2" sx={{ color: '#fff', minWidth: '44px', textAlign: 'center', fontWeight: 'bold' }}>
-                      {Math.round(imageZoom * 100)}%
+                    <Box
+                      sx={{
+                        width: 100,
+                        height: 100,
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        mb: 3,
+                      }}
+                    >
+                      <InsertDriveFileIcon sx={{ fontSize: 60, color: '#38bdf8' }} />
+                    </Box>
+                    <Typography variant="h6" fontWeight="bold" sx={{ mb: 1, maxWidth: '600px' }}>
+                      เอกสารแนบ: {currentUrl.split('/').pop()?.split('?')[0] || 'evidence_file'}
                     </Typography>
-                    <IconButton size="small" onClick={() => setImageZoom(z => Math.min(5, +(z + 0.25).toFixed(2)))} sx={{ color: '#fff' }}>
-                      <ZoomInIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => setImageZoom(1)} sx={{ color: '#94a3b8', ml: 1 }} title="รีเซ็ต">
-                      <ResetZoomIcon fontSize="small" />
-                    </IconButton>
-                    {viewerImages.length > 1 && (
+                    <Typography variant="body2" sx={{ color: '#94a3b8', mb: 4, maxWidth: '500px' }}>
+                      เบราว์เซอร์ไม่สามารถเปิดพรีวิวไฟล์ประเภทนี้ได้โดยตรงในหน้าต่างนี้
+                      โปรดดาวน์โหลดหรือเปิดดูในแท็บใหม่เพื่อทำการตรวจสอบ
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      href={currentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download
+                      startIcon={<FileDownloadIcon />}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 800,
+                        borderRadius: '10px',
+                        px: 4,
+                        py: 1.5,
+                        backgroundColor: '#0284c7',
+                        '&:hover': { backgroundColor: '#0369a1' },
+                        boxShadow: '0 10px 15px -3px rgba(2,132,199,0.3)',
+                      }}
+                    >
+                      ดาวน์โหลด / เปิดไฟล์เพื่อตรวจสอบ
+                    </Button>
+                  </Box>
+                )}
+
+                {/* ── Bottom toolbar: zoom controls + action buttons ── */}
+                <Box
+                  sx={{
+                    flexShrink: 0,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderRadius: '0 0 12px 12px',
+                    px: 3,
+                    py: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 1.5,
+                  }}
+                >
+                  {/* Zoom bar (Only for images) */}
+                  {isImage && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        px: 2,
+                        py: 0.5,
+                        borderRadius: 4,
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={() => setImageZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)))}
+                        sx={{ color: '#fff' }}
+                      >
+                        <ZoomOutIcon fontSize="small" />
+                      </IconButton>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: '#fff',
+                          minWidth: '44px',
+                          textAlign: 'center',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {Math.round(imageZoom * 100)}%
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => setImageZoom((z) => Math.min(5, +(z + 0.25).toFixed(2)))}
+                        sx={{ color: '#fff' }}
+                      >
+                        <ZoomInIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => setImageZoom(1)}
+                        sx={{ color: '#94a3b8', ml: 1 }}
+                        title="รีเซ็ต"
+                      >
+                        <ResetZoomIcon fontSize="small" />
+                      </IconButton>
+                      {viewerImages.length > 1 && (
+                        <>
+                          <Box
+                            sx={{ width: '1px', height: '20px', backgroundColor: '#475569', mx: 1 }}
+                          />
+                          <IconButton size="small" onClick={handlePrevImage} sx={{ color: '#fff' }}>
+                            <PrevIcon fontSize="small" />
+                          </IconButton>
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 'bold' }}>
+                            {viewerIndex + 1}/{viewerImages.length}
+                          </Typography>
+                          <IconButton size="small" onClick={handleNextImage} sx={{ color: '#fff' }}>
+                            <NextIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      )}
+                    </Box>
+                  )}
+
+                  {/* For multi-files navigation if they are PDF or other formats */}
+                  {!isImage && viewerImages.length > 1 && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        px: 2,
+                        py: 0.5,
+                        borderRadius: 4,
+                      }}
+                    >
+                      <IconButton size="small" onClick={handlePrevImage} sx={{ color: '#fff' }}>
+                        <PrevIcon fontSize="small" />
+                      </IconButton>
+                      <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                        {viewerIndex + 1}/{viewerImages.length}
+                      </Typography>
+                      <IconButton size="small" onClick={handleNextImage} sx={{ color: '#fff' }}>
+                        <NextIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  )}
+
+                  {/* Leave quota + approve buttons */}
+                  {(selectedRow?.status === 'PENDING_LEAVE_REVIEW' ||
+                    (selectedRow?.medCertFileUrl && !selectedRow?.isLeaveReviewed)) &&
+                    !(isLocked || selectedRow?.isLocked) && (
                       <>
-                        <Box sx={{ width: '1px', height: '20px', backgroundColor: '#475569', mx: 1 }} />
-                        <IconButton size="small" onClick={handlePrevImage} sx={{ color: '#fff' }}><PrevIcon fontSize="small" /></IconButton>
-                        <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 'bold' }}>{viewerIndex + 1}/{viewerImages.length}</Typography>
-                        <IconButton size="small" onClick={handleNextImage} sx={{ color: '#fff' }}><NextIcon fontSize="small" /></IconButton>
+                        {leaveQuotaElement}
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                          <Button
+                            variant="contained"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  'ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่? ระบบจะทำการอัปเดตไปที่ระบบยื่นรายงานประจำวันด้วย'
+                                )
+                              ) {
+                                reviewLeaveMutation.mutate({
+                                  id: selectedRow.id,
+                                  isApproved: false,
+                                });
+                                setViewerOpen(false);
+                              }
+                            }}
+                            disabled={reviewLeaveMutation.isPending}
+                            sx={{
+                              textTransform: 'none',
+                              fontWeight: 800,
+                              borderRadius: '10px',
+                              px: 4,
+                              py: 1.5,
+                              backgroundColor: '#ef4444',
+                              color: '#fff',
+                              boxShadow: '0 10px 15px -3px rgba(239,68,68,0.4)',
+                              '&:hover': { backgroundColor: '#dc2626' },
+                            }}
+                          >
+                            ไม่อนุมัติ (Unpaid)
+                          </Button>
+                          <Button
+                            variant="contained"
+                            onClick={() => {
+                              reviewLeaveMutation.mutate({ id: selectedRow.id, isApproved: true });
+                              setViewerOpen(false);
+                            }}
+                            disabled={reviewLeaveMutation.isPending}
+                            sx={{
+                              textTransform: 'none',
+                              fontWeight: 800,
+                              borderRadius: '10px',
+                              px: 4,
+                              py: 1.5,
+                              backgroundColor: '#22c55e',
+                              color: '#fff',
+                              boxShadow: '0 10px 15px -3px rgba(34,197,94,0.4)',
+                              '&:hover': { backgroundColor: '#16a34a' },
+                            }}
+                          >
+                            อนุมัติ (Paid)
+                          </Button>
+                        </Box>
                       </>
                     )}
-                  </Box>
-                )}
-
-                {/* For multi-files navigation if they are PDF or other formats */}
-                {!isImage && viewerImages.length > 1 && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, backgroundColor: 'rgba(255,255,255,0.08)', px: 2, py: 0.5, borderRadius: 4 }}>
-                    <IconButton size="small" onClick={handlePrevImage} sx={{ color: '#fff' }}><PrevIcon fontSize="small" /></IconButton>
-                    <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>{viewerIndex + 1}/{viewerImages.length}</Typography>
-                    <IconButton size="small" onClick={handleNextImage} sx={{ color: '#fff' }}><NextIcon fontSize="small" /></IconButton>
-                  </Box>
-                )}
-
-                {/* Leave quota + approve buttons */}
-                {(selectedRow?.status === 'PENDING_LEAVE_REVIEW' || (selectedRow?.medCertFileUrl && !selectedRow?.isLeaveReviewed)) && !(isLocked || selectedRow?.isLocked) && (
-                  <>
-                    {leaveQuotaElement}
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <Button
-                        variant="contained"
-                        onClick={() => {
-                          if (window.confirm('ยืนยันไม่อนุมัติ (เป็นลาแบบไม่จ่ายเงิน) ใช่หรือไม่? ระบบจะทำการอัปเดตไปที่ระบบยื่นรายงานประจำวันด้วย')) {
-                            reviewLeaveMutation.mutate({ id: selectedRow.id, isApproved: false });
-                            setViewerOpen(false);
-                          }
-                        }}
-                        disabled={reviewLeaveMutation.isPending}
-                        sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1.5, backgroundColor: '#ef4444', color: '#fff', boxShadow: '0 10px 15px -3px rgba(239,68,68,0.4)', '&:hover': { backgroundColor: '#dc2626' } }}
-                      >
-                        ไม่อนุมัติ (Unpaid)
-                      </Button>
-                      <Button
-                        variant="contained"
-                        onClick={() => {
-                          reviewLeaveMutation.mutate({ id: selectedRow.id, isApproved: true });
-                          setViewerOpen(false);
-                        }}
-                        disabled={reviewLeaveMutation.isPending}
-                        sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 4, py: 1.5, backgroundColor: '#22c55e', color: '#fff', boxShadow: '0 10px 15px -3px rgba(34,197,94,0.4)', '&:hover': { backgroundColor: '#16a34a' } }}
-                      >
-                        อนุมัติ (Paid)
-                      </Button>
-                    </Box>
-                  </>
-                )}
+                </Box>
               </Box>
-            </Box>
-          );
-        })()}
+            );
+          })()}
       </Dialog>
 
       {/* ประวัติการแก้ไข Daily Report Drawer */}
@@ -2492,17 +2742,47 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             const getStatusLabel = (status: string) => {
               switch (status) {
                 case 'MISSING_SCAN':
-                  return { text: 'ขาดสแกนนิ้ว ❌', color: '#ef4444', bgColor: '#fef2f2', borderColor: '#fee2e2' };
+                  return {
+                    text: 'ขาดสแกนนิ้ว ❌',
+                    color: '#ef4444',
+                    bgColor: '#fef2f2',
+                    borderColor: '#fee2e2',
+                  };
                 case 'DISCREPANCY':
-                  return { text: 'ชั่วโมงไม่ตรงกัน ⚠️', color: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fef3c7' };
+                  return {
+                    text: 'ชั่วโมงไม่ตรงกัน ⚠️',
+                    color: '#f59e0b',
+                    bgColor: '#fffbeb',
+                    borderColor: '#fef3c7',
+                  };
                 case 'MATCHED':
-                  return { text: 'ข้อมูลตรงกัน ✅', color: '#10b981', bgColor: '#ecfdf5', borderColor: '#d1fae5' };
+                  return {
+                    text: 'ข้อมูลตรงกัน ✅',
+                    color: '#10b981',
+                    bgColor: '#ecfdf5',
+                    borderColor: '#d1fae5',
+                  };
                 case 'ABSENT':
-                  return { text: 'ขาดงาน ❌', color: '#6b7280', bgColor: '#f3f4f6', borderColor: '#e5e7eb' };
+                  return {
+                    text: 'ขาดงาน ❌',
+                    color: '#6b7280',
+                    bgColor: '#f3f4f6',
+                    borderColor: '#e5e7eb',
+                  };
                 case 'NO_DAILY_REPORT':
-                  return { text: 'ไม่มีรายงานประจำวัน ⚠️', color: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fef3c7' };
+                  return {
+                    text: 'ไม่มีรายงานประจำวัน ⚠️',
+                    color: '#f59e0b',
+                    bgColor: '#fffbeb',
+                    borderColor: '#fef3c7',
+                  };
                 default:
-                  return { text: status, color: '#6b7280', bgColor: '#f3f4f6', borderColor: '#e5e7eb' };
+                  return {
+                    text: status,
+                    color: '#6b7280',
+                    bgColor: '#f3f4f6',
+                    borderColor: '#e5e7eb',
+                  };
               }
             };
 
@@ -2520,7 +2800,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               if (!prevEntry) {
                 beforeTitle = 'ข้อมูลก่อนการตรวจสอบ';
                 if (currentStatus === 'MISSING_SCAN') {
-                  beforeDesc = 'ตรวจพบพนักงานมีชั่วโมงใน Daily Report แต่ไม่มีเวลาสแกนนิ้วรูดบัตร (ขาดสแกนนิ้ว)';
+                  beforeDesc =
+                    'ตรวจพบพนักงานมีชั่วโมงใน Daily Report แต่ไม่มีเวลาสแกนนิ้วรูดบัตร (ขาดสแกนนิ้ว)';
                 } else if (currentStatus === 'DISCREPANCY') {
                   beforeDesc = `ตรวจพบชั่วโมงการทำงานขัดแย้งกันระหว่าง Daily Report (${record?.dailyReportHours || 0} ชม.) และสแกนนิ้ว (${record?.scanDataHours || 0} ชม.)`;
                 } else if (currentStatus === 'NO_DAILY_REPORT') {
@@ -2538,7 +2819,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
               if (reason.includes('Admin ยืนยันตาม Daily Report')) {
                 beforeTitle = 'ก่อนแก้ไข: ขาดเวลารูดบัตร';
-                beforeDesc = 'พนักงานไม่ได้สแกนนิ้ว/ลืมสแกน แต่มีหลักฐานยืนยันการปฏิบัติงานจริงในใบลงเวลา (Daily Report)';
+                beforeDesc =
+                  'พนักงานไม่ได้สแกนนิ้ว/ลืมสแกน แต่มีหลักฐานยืนยันการปฏิบัติงานจริงในใบลงเวลา (Daily Report)';
                 afterTitle = 'หลังแก้ไข: เติมสแกนนิ้วและอนุมัติ';
                 afterDesc = `อนุมัติชั่วโมงทำงานตามข้อมูล Daily Report (${record?.dailyReportHours || 0} ชม.) และจำลอง/เติมเวลาสแกนนิ้วให้อัตโนมัติในประวัติเพื่อใช้ในการคิดเงิน`;
               } else if (reason.includes('Admin แก้ไขชั่วโมงด้วยตนเอง')) {
@@ -2556,7 +2838,8 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                 beforeTitle = 'ก่อนแก้ไข: มีข้อมูลรูดบัตรต้องสงสัย';
                 beforeDesc = `มีข้อมูลรูดบัตร (${record?.scanDataHours || 0} ชม.) แต่ตรวจพบว่าไม่ได้มาปฏิบัติงานจริงในพื้นที่โครงการ (Ghost Scan)`;
                 afterTitle = 'หลังแก้ไข: ลบสแกนนิ้วและลงขาดงาน';
-                afterDesc = 'ระบบทำการลบประวัติการสแกนนิ้วที่ผิดพลาดออกทั้งหมดตามคำสั่งแอดมิน และทำรายการบันทึกเป็นขาดงาน (ABSENT) ❌';
+                afterDesc =
+                  'ระบบทำการลบประวัติการสแกนนิ้วที่ผิดพลาดออกทั้งหมดตามคำสั่งแอดมิน และทำรายการบันทึกเป็นขาดงาน (ABSENT) ❌';
               } else if (currentEntry.changedBy === 'system') {
                 beforeTitle = `ก่อนแก้ไข: สถานะเดิม [${getStatusLabel(prevStatus).text}]`;
                 beforeDesc = 'ระบบจัดเก็บสถานะรอความถูกต้องของข้อมูลจากแหล่งต้นทาง';
@@ -2599,12 +2882,18 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             }
 
             // Sort newest first
-            const sortedEvents = events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+            const sortedEvents = events.sort(
+              (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+            );
 
             if (sortedEvents.length === 0) {
               return (
-                <Typography variant="body2" sx={{ color: '#64748b', py: 2, fontStyle: 'italic', fontWeight: 600 }}>
-                  ยังไม่มีการบันทึกประวัติการแก้ไขข้อมูล Daily Report หรือการยืนยันเวลาสำหรับพนักงานคนนี้
+                <Typography
+                  variant="body2"
+                  sx={{ color: '#64748b', py: 2, fontStyle: 'italic', fontWeight: 600 }}
+                >
+                  ยังไม่มีการบันทึกประวัติการแก้ไขข้อมูล Daily Report
+                  หรือการยืนยันเวลาสำหรับพนักงานคนนี้
                 </Typography>
               );
             }
@@ -2644,43 +2933,97 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                             backgroundColor: '#0288d1',
                           }}
                         />
-                        <Typography variant="body2" fontWeight={800} sx={{ color: '#1e293b', mb: 0.5 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={800}
+                          sx={{ color: '#1e293b', mb: 0.5 }}
+                        >
                           [ {formattedDate} ] แก้ไขโดย Foreman รหัส: {event.by}
                         </Typography>
 
-                        <Box sx={{ bgcolor: '#f8fafc', p: 2, borderRadius: '8px', border: '1px solid #e2e8f0', mt: 1 }}>
-                          <Typography variant="caption" fontWeight={750} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        <Box
+                          sx={{
+                            bgcolor: '#f8fafc',
+                            p: 2,
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            mt: 1,
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            fontWeight={750}
+                            color="text.secondary"
+                            sx={{ display: 'block', mb: 1 }}
+                          >
                             ชั่วโมงทำงานดิบในอดีต (Snapshot ก่อนแก้ไข):
                           </Typography>
                           <Box sx={{ pl: 1 }}>
                             {(() => {
-                              const filteredLabor = (hist.snapshot?.labor || []).filter((lab: any) => {
-                                return (
-                                  lab.employeeId === selectedRow.employeeId ||
-                                  lab.workerId === `DC-${selectedRow.employeeId}` ||
-                                  lab.workerId === selectedRow.employeeId
-                                );
-                              });
+                              const filteredLabor = (hist.snapshot?.labor || []).filter(
+                                (lab: any) => {
+                                  return (
+                                    lab.employeeId === selectedRow.employeeId ||
+                                    lab.workerId === `DC-${selectedRow.employeeId}` ||
+                                    lab.workerId === selectedRow.employeeId
+                                  );
+                                }
+                              );
 
                               if (filteredLabor.length > 0) {
                                 return filteredLabor.map((lab: any, lIdx: number) => {
-                                  const showNormal = lab.shifts?.normal ? `ปกติ (${lab.shiftTimes?.day || '08:00 - 17:00'})` : null;
-                                  const showOtOtMorning = lab.shifts?.otMorning ? `OT เช้า (${lab.shiftTimes?.otMorning || '05:00 - 08:00'})` : null;
-                                  const showOtOtNoon = lab.shifts?.otNoon ? `OT กลางวัน (${lab.shiftTimes?.otNoon || '12:00 - 13:00'})` : null;
-                                  const showOtOtEvening = lab.shifts?.otEvening ? `OT เย็น (${lab.shiftTimes?.otEvening || '18:00 - 21:00'})` : null;
+                                  const showNormal = lab.shifts?.normal
+                                    ? `ปกติ (${lab.shiftTimes?.day || '08:00 - 17:00'})`
+                                    : null;
+                                  const showOtOtMorning = lab.shifts?.otMorning
+                                    ? `OT เช้า (${lab.shiftTimes?.otMorning || '05:00 - 08:00'})`
+                                    : null;
+                                  const showOtOtNoon = lab.shifts?.otNoon
+                                    ? `OT กลางวัน (${lab.shiftTimes?.otNoon || '12:00 - 13:00'})`
+                                    : null;
+                                  const showOtOtEvening = lab.shifts?.otEvening
+                                    ? `OT เย็น (${lab.shiftTimes?.otEvening || '18:00 - 21:00'})`
+                                    : null;
 
-                                  const shiftDetails = [showNormal, showOtOtMorning, showOtOtNoon, showOtOtEvening].filter(Boolean).join(', ');
+                                  const shiftDetails = [
+                                    showNormal,
+                                    showOtOtMorning,
+                                    showOtOtNoon,
+                                    showOtOtEvening,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(', ');
 
                                   return (
-                                    <Typography key={lIdx} variant="caption" sx={{ display: 'block', fontWeight: 650, color: '#334155', fontSize: '0.75rem', mb: 0.5 }}>
-                                      • {lab.workerName || lab.employeeId}: {shiftDetails || 'ไม่มีการลงเวลากะทำงาน'}
+                                    <Typography
+                                      key={lIdx}
+                                      variant="caption"
+                                      sx={{
+                                        display: 'block',
+                                        fontWeight: 650,
+                                        color: '#334155',
+                                        fontSize: '0.75rem',
+                                        mb: 0.5,
+                                      }}
+                                    >
+                                      • {lab.workerName || lab.employeeId}:{' '}
+                                      {shiftDetails || 'ไม่มีการลงเวลากะทำงาน'}
                                     </Typography>
                                   );
                                 });
                               } else {
-                                const hasOtherLabor = hist.snapshot?.labor && hist.snapshot.labor.length > 0;
+                                const hasOtherLabor =
+                                  hist.snapshot?.labor && hist.snapshot.labor.length > 0;
                                 return (
-                                  <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontWeight: 600 }}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      display: 'block',
+                                      fontStyle: 'italic',
+                                      color: '#64748b',
+                                      fontWeight: 600,
+                                    }}
+                                  >
                                     {hasOtherLabor
                                       ? '• พนักงานท่านนี้ยังไม่มีชื่อในระบบก่อนการแก้ไข (เพิ่งถูกเพิ่มชื่อเข้าทำงานใหม่)'
                                       : '• ไม่มีข้อมูล Snapshot ของพนักงาน'}
@@ -2689,21 +3032,34 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                               }
                             })()}
 
-                            {hist.snapshot?.leave && hist.snapshot.leave.length > 0 && hist.snapshot.leave
-                              .filter((lv: any) => {
-                                return (
-                                  lv.employeeId === selectedRow.employeeId ||
-                                  lv.workerId === `DC-${selectedRow.employeeId}` ||
-                                  lv.workerId === selectedRow.employeeId
-                                );
-                              })
-                              .map((lv: any, lvIdx: number) => {
-                                return (
-                                  <Typography key={lvIdx} variant="caption" sx={{ display: 'block', fontWeight: 650, color: RECON_COLORS.ORANGE.text, fontSize: '0.75rem' }}>
-                                    • แจ้งลา ({lv.leaveType || 'ลางาน'}): {lv.leaveTimes?.custom || '08:00 - 17:00'} {lv.medCertFileUrl ? '(แนบใบรับรองแพทย์ 📄)' : ''}
-                                  </Typography>
-                                );
-                              })}
+                            {hist.snapshot?.leave &&
+                              hist.snapshot.leave.length > 0 &&
+                              hist.snapshot.leave
+                                .filter((lv: any) => {
+                                  return (
+                                    lv.employeeId === selectedRow.employeeId ||
+                                    lv.workerId === `DC-${selectedRow.employeeId}` ||
+                                    lv.workerId === selectedRow.employeeId
+                                  );
+                                })
+                                .map((lv: any, lvIdx: number) => {
+                                  return (
+                                    <Typography
+                                      key={lvIdx}
+                                      variant="caption"
+                                      sx={{
+                                        display: 'block',
+                                        fontWeight: 650,
+                                        color: RECON_COLORS.ORANGE.text,
+                                        fontSize: '0.75rem',
+                                      }}
+                                    >
+                                      • แจ้งลา ({lv.leaveType || 'ลางาน'}):{' '}
+                                      {lv.leaveTimes?.custom || '08:00 - 17:00'}{' '}
+                                      {lv.medCertFileUrl ? '(แนบใบรับรองแพทย์ 📄)' : ''}
+                                    </Typography>
+                                  );
+                                })}
                           </Box>
                         </Box>
                       </Box>
@@ -2711,11 +3067,33 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   } else if (event.type === 'scan_edit') {
                     const hist = event.data;
                     const actionLabel = {
-                      manual_fill: { text: 'เติมสแกนนิ้ว (Admin)', color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
-                      manual_create: { text: 'สร้างสแกนนิ้วใหม่ (Admin)', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
-                      delete_ghost: { text: 'ลบ Ghost Scan (Admin)', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
-                      modify: { text: 'แก้ไขสแกนนิ้ว (Admin)', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
-                    }[hist.action as 'manual_fill' | 'manual_create' | 'delete_ghost' | 'modify'] || { text: hist.action, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' };
+                      manual_fill: {
+                        text: 'เติมสแกนนิ้ว (Admin)',
+                        color: '#b45309',
+                        bg: '#fffbeb',
+                        border: '#fde68a',
+                      },
+                      manual_create: {
+                        text: 'สร้างสแกนนิ้วใหม่ (Admin)',
+                        color: '#7c3aed',
+                        bg: '#f5f3ff',
+                        border: '#ddd6fe',
+                      },
+                      delete_ghost: {
+                        text: 'ลบ Ghost Scan (Admin)',
+                        color: '#dc2626',
+                        bg: '#fef2f2',
+                        border: '#fecaca',
+                      },
+                      modify: {
+                        text: 'แก้ไขสแกนนิ้ว (Admin)',
+                        color: '#0369a1',
+                        bg: '#f0f9ff',
+                        border: '#bae6fd',
+                      },
+                    }[
+                      hist.action as 'manual_fill' | 'manual_create' | 'delete_ghost' | 'modify'
+                    ] || { text: hist.action, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' };
 
                     return (
                       <Box
@@ -2739,10 +3117,22 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                             backgroundColor: '#f97316',
                           }}
                         />
-                        <Typography variant="body2" fontWeight={800} sx={{ color: '#ea580c', mb: 0.5 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={800}
+                          sx={{ color: '#ea580c', mb: 0.5 }}
+                        >
                           [ {formattedDate} ] แก้ไขสแกนนิ้วโดย Admin รหัส: {event.by}
                         </Typography>
-                        <Box sx={{ bgcolor: '#fff7ed', p: 2, borderRadius: '12px', border: '1px solid #fed7aa', mt: 1 }}>
+                        <Box
+                          sx={{
+                            bgcolor: '#fff7ed',
+                            p: 2,
+                            borderRadius: '12px',
+                            border: '1px solid #fed7aa',
+                            mt: 1,
+                          }}
+                        >
                           {/* action badge */}
                           <Box
                             sx={{
@@ -2764,28 +3154,62 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                           {/* snapshot punches before */}
                           {hist.snapshot?.punches && hist.snapshot.punches.length > 0 && (
                             <Box sx={{ mb: 1 }}>
-                              <Typography variant="caption" fontWeight={750} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                              <Typography
+                                variant="caption"
+                                fontWeight={750}
+                                color="text.secondary"
+                                sx={{ display: 'block', mb: 0.5 }}
+                              >
                                 ⏱ เวลาสแกนนิ้วก่อนแก้ไข (Snapshot):
                               </Typography>
-                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#7c3aed', fontSize: '0.8rem' }}>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontWeight: 700, color: '#7c3aed', fontSize: '0.8rem' }}
+                              >
                                 {hist.snapshot.punches.join(' → ')}
                               </Typography>
                               {hist.snapshot.regularHours !== undefined && (
-                                <Typography variant="caption" sx={{ display: 'block', color: '#64748b', fontSize: '0.72rem', mt: 0.25 }}>
-                                  ชั่วโมงเดิม: ปกติ {hist.snapshot.regularHours} ชม. · OT เช้า {hist.snapshot.otMorningHours || 0} ชม. · OT เย็น {hist.snapshot.otEveningHours || 0} ชม.
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: 'block',
+                                    color: '#64748b',
+                                    fontSize: '0.72rem',
+                                    mt: 0.25,
+                                  }}
+                                >
+                                  ชั่วโมงเดิม: ปกติ {hist.snapshot.regularHours} ชม. · OT เช้า{' '}
+                                  {hist.snapshot.otMorningHours || 0} ชม. · OT เย็น{' '}
+                                  {hist.snapshot.otEveningHours || 0} ชม.
                                 </Typography>
                               )}
                             </Box>
                           )}
                           {(!hist.snapshot?.punches || hist.snapshot.punches.length === 0) && (
-                            <Typography variant="caption" sx={{ display: 'block', color: '#64748b', fontStyle: 'italic', mb: 1 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                display: 'block',
+                                color: '#64748b',
+                                fontStyle: 'italic',
+                                mb: 1,
+                              }}
+                            >
                               ไม่มีข้อมูลสแกนนิ้วก่อนหน้า
                             </Typography>
                           )}
 
                           {/* reason */}
                           <Box sx={{ pt: 1, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
-                            <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: '#64748b', fontSize: '0.7rem' }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                display: 'block',
+                                fontStyle: 'italic',
+                                color: '#64748b',
+                                fontSize: '0.7rem',
+                              }}
+                            >
                               เหตุผล: {hist.reason}
                             </Typography>
                           </Box>

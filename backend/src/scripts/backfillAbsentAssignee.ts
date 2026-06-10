@@ -73,7 +73,8 @@ async function getFallbackAssignee(employeeId: string): Promise<FallbackAssignee
   data = await tryDoc(`DC-${employeeId}`);
   if (!data) data = await tryDoc(employeeId);
   if (!data) {
-    const qSnap = await db.collection(DC_COLLECTION)
+    const qSnap = await db
+      .collection(DC_COLLECTION)
       .where('employeeId', '==', employeeId)
       .limit(1)
       .get();
@@ -85,7 +86,9 @@ async function getFallbackAssignee(employeeId: string): Promise<FallbackAssignee
   return await extractBestForeman(data);
 }
 
-async function extractBestForeman(data: admin.firestore.DocumentData): Promise<FallbackAssignee | null> {
+async function extractBestForeman(
+  data: admin.firestore.DocumentData
+): Promise<FallbackAssignee | null> {
   const foremanUsage = data['foremanUsage'];
   if (!foremanUsage || typeof foremanUsage !== 'object') return null;
 
@@ -106,12 +109,23 @@ async function extractBestForeman(data: admin.firestore.DocumentData): Promise<F
     let finalName = bestName;
     if (!finalName || finalName === 'Unknown') {
       try {
-        const userSnap = await db.collection('users').where('Employeeid', '==', bestId).limit(1).get();
+        const userSnap = await db
+          .collection('users')
+          .where('Employeeid', '==', bestId)
+          .limit(1)
+          .get();
         if (!userSnap.empty) {
           const uData = userSnap.docs[0].data();
-          finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+          finalName =
+            uData['Fullname'] ||
+            uData['name'] ||
+            uData['fullNameEn'] ||
+            uData['Fullnameen'] ||
+            'Unknown';
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     return { id: bestId, name: finalName || 'Unknown' };
   }
@@ -135,10 +149,7 @@ async function backfill() {
   while (true) {
     // ดึง records ทั้งหมดแบบ paginate แล้วกรอง ABSENT ใน code
     // (หลีกเลี่ยงการสร้าง composite index สำหรับ status + workDate)
-    let query = db
-      .collection(RECON_COLLECTION)
-      .orderBy('workDate', 'desc')
-      .limit(PAGE_SIZE);
+    let query = db.collection(RECON_COLLECTION).orderBy('workDate', 'desc').limit(PAGE_SIZE);
 
     if (lastDoc) {
       query = query.startAfter(lastDoc);
@@ -197,7 +208,7 @@ async function backfill() {
 
     console.log(
       `   📄 Scanned ${totalScanned} total records | ` +
-      `Eligible this batch: ${toUpdate.length} | No fallback so far: ${totalNoFallback}`
+        `Eligible this batch: ${toUpdate.length} | No fallback so far: ${totalNoFallback}`
     );
 
     if (!isDryRun && toUpdate.length > 0) {

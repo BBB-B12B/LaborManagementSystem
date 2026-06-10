@@ -35,7 +35,10 @@ import { useToast } from '../../components/common/Toast';
 import { RoleSelect } from '../../components/forms/RoleSelect';
 import { DepartmentSelect } from '../../components/forms/DepartmentSelect';
 import { UserDrawer } from './components/UserDrawer';
-import type { UserCreateFormData as UserCreateInput, UserUpdateFormData as UserEditInput } from '@/validation/userManagementSchema';
+import type {
+  UserCreateFormData as UserCreateInput,
+  UserUpdateFormData as UserEditInput,
+} from '@/validation/userManagementSchema';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { UserImportDialog } from './components/UserImportDialog';
 

@@ -57,6 +57,6 @@ export const notificationService = {
     } catch (error) {
       console.error(`Error marking subtask ${subtaskId} notifications as read:`, error);
     }
-  }
+  },
 };
 export default notificationService;

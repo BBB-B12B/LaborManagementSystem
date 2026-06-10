@@ -16,7 +16,6 @@ import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
 
-
 /**
  * WagePeriodService
  * Extends CrudService with wage calculation operations
@@ -75,10 +74,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Create new wage period
    */
-  async createWagePeriod(
-    input: CreateWagePeriodInput,
-    createdBy: string
-  ): Promise<WagePeriod> {
+  async createWagePeriod(input: CreateWagePeriodInput, createdBy: string): Promise<WagePeriod> {
     try {
       const diffTime = Math.abs(input.endDate.getTime() - input.startDate.getTime());
       const periodDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Inclusive
@@ -135,10 +131,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Calculate wages for a period
    */
-  async calculateWages(
-    periodId: string,
-    calculatedBy: string
-  ): Promise<WagePeriod | null> {
+  async calculateWages(periodId: string, calculatedBy: string): Promise<WagePeriod | null> {
     try {
       const period = await this.getById(periodId);
       if (!period) {
@@ -146,8 +139,10 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       }
 
       // [T-360] Get project UUID for querying related collections
-      let projects = await collections.projectLocations.where('projectCode', '==', period.projectCode).get();
-      
+      let projects = await collections.projectLocations
+        .where('projectCode', '==', period.projectCode)
+        .get();
+
       // Fallback to legacy 'code' field if 'projectCode' is not found
       if (projects.empty) {
         projects = await collections.projectLocations.where('code', '==', period.projectCode).get();
@@ -190,9 +185,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const monthPrefix = period.periodCode.split('-')[0]; // e.g. "202401"
       const otherPeriodsInMonth = await this.query([
         { field: 'periodCode', operator: '>=', value: `${monthPrefix}-P1` },
-        { field: 'periodCode', operator: '<=', value: `${monthPrefix}-P2` }
+        { field: 'periodCode', operator: '<=', value: `${monthPrefix}-P2` },
       ]);
-      const pastPeriodsInMonth = otherPeriodsInMonth.filter(p => p.id !== periodId && p.status === 'paid' || p.status === 'approved');
+      const pastPeriodsInMonth = otherPeriodsInMonth.filter(
+        (p) => (p.id !== periodId && p.status === 'paid') || p.status === 'approved'
+      );
 
       // [T-401] Trigger Work Verification Sync
       const { workVerificationService } = await import('./WorkVerificationService');
@@ -213,18 +210,20 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const compensationMap = new Map<string, any>();
       for (let i = 0; i < dcs.length; i += 50) {
         const batch = dcs.slice(i, i + 50);
-        await Promise.all(batch.map(async (dc) => {
-          const comp = await dailyContractorService.getCompensationDetails(dc.id);
-          compensationMap.set(dc.id, comp);
-        }));
+        await Promise.all(
+          batch.map(async (dc) => {
+            const comp = await dailyContractorService.getCompensationDetails(dc.id);
+            compensationMap.set(dc.id, comp);
+          })
+        );
       }
 
       // 6. Calculate for each DC
       for (const dc of dcs) {
         // Filter reconciliation records for this DC and only process valid statuses
-        const dcRecons = reconRecords.filter((r: any) => 
-          r.employeeId === dc.employeeId && 
-          ['MATCHED', 'LEAVE', 'HOLIDAY'].includes(r.status)
+        const dcRecons = reconRecords.filter(
+          (r: any) =>
+            r.employeeId === dc.employeeId && ['MATCHED', 'LEAVE', 'HOLIDAY'].includes(r.status)
         );
 
         let regularHours = 0;
@@ -275,13 +274,14 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         const professionalFees = regularDays * income.professionalRate;
 
         // Sum additional income for this DC
-        const dcAddIncomeList = additionalIncomes.filter(i => i.dailyContractorId === dc.id);
+        const dcAddIncomeList = additionalIncomes.filter((i) => i.dailyContractorId === dc.id);
         const totalAddIncome = dcAddIncomeList.reduce((sum, i) => sum + i.amount, 0);
 
-        const totalIncome = regularWages + otWages + professionalFees + (income.phoneAllowance || 0) + totalAddIncome;
+        const totalIncome =
+          regularWages + otWages + professionalFees + (income.phoneAllowance || 0) + totalAddIncome;
 
         // Sum additional expenses
-        const dcAddExpenseList = additionalExpenses.filter(e => e.dailyContractorId === dc.id);
+        const dcAddExpenseList = additionalExpenses.filter((e) => e.dailyContractorId === dc.id);
         const totalAddExpense = dcAddExpenseList.reduce((sum, e) => sum + e.amount, 0);
 
         // Calculate late deductions based on penalty minutes
@@ -289,11 +289,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
         // Calculate Social Security (SS) dynamically using the new Rules engine
         let ssDeduction = 0;
-        
+
         // Deduct what was already paid this month
         let ssPaidInMonth = 0;
         for (const pastPeriod of pastPeriodsInMonth) {
-          const pastSummary = pastPeriod.dcSummaries.find(s => s.dailyContractorId === dc.id);
+          const pastSummary = pastPeriod.dcSummaries.find((s) => s.dailyContractorId === dc.id);
           if (pastSummary) {
             ssPaidInMonth += pastSummary.socialSecurityDeduction;
           }
@@ -301,18 +301,22 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
         // Evaluate current period's raw deduction based on Admin rules
         const { socialSecurityRuleService } = await import('./SocialSecurityRuleService');
-        const rawSSDeduction = await socialSecurityRuleService.calculateDeduction(totalIncome, dc.employeeId);
-        
+        const rawSSDeduction = await socialSecurityRuleService.calculateDeduction(
+          totalIncome,
+          dc.employeeId
+        );
+
         // Apply logic: max SS per month is typically 750 combined
         if (rawSSDeduction > 0) {
-            if (rawSSDeduction + ssPaidInMonth > 750) {
-                ssDeduction = Math.max(0, 750 - ssPaidInMonth);
-            } else {
-                ssDeduction = rawSSDeduction;
-            }
+          if (rawSSDeduction + ssPaidInMonth > 750) {
+            ssDeduction = Math.max(0, 750 - ssPaidInMonth);
+          } else {
+            ssDeduction = rawSSDeduction;
+          }
         }
 
-        const totalExpense = (expense?.accommodationCost || 0) +
+        const totalExpense =
+          (expense?.accommodationCost || 0) +
           (expense?.followerAccommodation || 0) +
           (expense?.refrigeratorCost || 0) +
           (expense?.soundSystemCost || 0) +
@@ -360,8 +364,8 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           lateDeductions,
           totalExpenses: totalExpense,
           netWages,
-          additionalIncomeIds: dcAddIncomeList.map(i => i.id),
-          additionalExpenseIds: dcAddExpenseList.map(e => e.id)
+          additionalIncomeIds: dcAddIncomeList.map((i) => i.id),
+          additionalExpenseIds: dcAddExpenseList.map((e) => e.id),
         });
 
         // Global totals
@@ -391,7 +395,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
         logger.info(`Wages calculated for period: ${period.periodCode}`, {
           periodId,
           workerCount: dcSummaries.length,
-          totalNetWages
+          totalNetWages,
         });
       }
 
@@ -405,10 +409,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Approve wage period
    */
-  async approvePeriod(
-    periodId: string,
-    approvedBy: string
-  ): Promise<WagePeriod | null> {
+  async approvePeriod(periodId: string, approvedBy: string): Promise<WagePeriod | null> {
     try {
       const period = await this.getById(periodId);
       if (!period) {
@@ -442,10 +443,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
   /**
    * Mark period as paid
    */
-  async markAsPaid(
-    periodId: string,
-    paidBy: string
-  ): Promise<WagePeriod | null> {
+  async markAsPaid(periodId: string, paidBy: string): Promise<WagePeriod | null> {
     try {
       const period = await this.getById(periodId);
       if (!period) {
@@ -512,9 +510,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
 
       // Check for date overlap in memory
       // Two ranges [A,B] and [C,D] overlap when A <= D AND B >= C
-      const overlapping = existing.find(
-        (p) => p.startDate <= newEnd && p.endDate >= newStart
-      );
+      const overlapping = existing.find((p) => p.startDate <= newEnd && p.endDate >= newStart);
 
       return overlapping || null;
     } catch (error: any) {
@@ -573,14 +569,15 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
     try {
       const results = await this.query([
         { field: 'projectCode', operator: '==', value: projectCode },
-        { field: 'startDate', operator: '<=', value: date }
+        { field: 'startDate', operator: '<=', value: date },
       ]);
 
       // Filter in memory: endDate >= date AND status is approved/paid
-      const lockedPeriod = results.find(p => 
-        p.isDeleted !== true &&
-        p.endDate >= date &&
-        (p.status === 'approved' || p.status === 'paid' || p.status === 'locked')
+      const lockedPeriod = results.find(
+        (p) =>
+          p.isDeleted !== true &&
+          p.endDate >= date &&
+          (p.status === 'approved' || p.status === 'paid' || p.status === 'locked')
       );
 
       return !!lockedPeriod;

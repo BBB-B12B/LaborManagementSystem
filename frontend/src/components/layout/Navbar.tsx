@@ -184,7 +184,10 @@ export const Navbar: React.FC = () => {
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Typography variant="body1" sx={{ fontWeight: isActive ? 700 : 500, fontSize: '0.9rem' }}>
+                  <Typography
+                    variant="body1"
+                    sx={{ fontWeight: isActive ? 700 : 500, fontSize: '0.9rem' }}
+                  >
                     {item.label}
                   </Typography>
                 }

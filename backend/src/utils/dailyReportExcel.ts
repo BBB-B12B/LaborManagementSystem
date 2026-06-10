@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
  * Excel Column Headers (Thai) - v3 (15 Columns Split Format)
  */
 export const DAILY_REPORT_COLUMNS = {
-  DATE: 'วันที่', 
+  DATE: 'วันที่',
   EMPLOYEE_ID: 'รหัสพนักงาน',
   WORKER_NAME: 'ชื่อพนักงาน',
   // Regular
@@ -53,13 +53,13 @@ export interface ExcelDailyReportRowV2 {
 export function parseExcelRowV2(row: any): ExcelDailyReportRowV2 | null {
   // Normalize row keys (Trim whitespace from headers)
   const cleanRow: any = {};
-  Object.keys(row).forEach(key => {
+  Object.keys(row).forEach((key) => {
     cleanRow[String(key).trim()] = row[key];
   });
 
   const dateVal = cleanRow[DAILY_REPORT_COLUMNS.DATE];
   const employeeId = cleanRow[DAILY_REPORT_COLUMNS.EMPLOYEE_ID];
-  
+
   if (!dateVal || !employeeId) {
     return null;
   }
@@ -100,19 +100,27 @@ export function parseExcelRowV2(row: any): ExcelDailyReportRowV2 | null {
     employeeId: String(employeeId).trim(),
     workerName: String(cleanRow[DAILY_REPORT_COLUMNS.WORKER_NAME] || '').trim(),
     // Regular
-    hoursRegular: cleanRow[DAILY_REPORT_COLUMNS.HOURS_REGULAR] ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_REGULAR]) : undefined,
+    hoursRegular: cleanRow[DAILY_REPORT_COLUMNS.HOURS_REGULAR]
+      ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_REGULAR])
+      : undefined,
     taskRegular: String(cleanRow[DAILY_REPORT_COLUMNS.TASK_REGULAR] || '').trim(),
     projectRegular: String(cleanRow[DAILY_REPORT_COLUMNS.PROJECT_REGULAR] || '').trim(),
     // OT Morning
-    hoursOTMorning: cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_MORNING] ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_MORNING]) : undefined,
+    hoursOTMorning: cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_MORNING]
+      ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_MORNING])
+      : undefined,
     taskOTMorning: String(cleanRow[DAILY_REPORT_COLUMNS.TASK_OT_MORNING] || '').trim(),
     projectOTMorning: String(cleanRow[DAILY_REPORT_COLUMNS.PROJECT_OT_MORNING] || '').trim(),
     // OT Noon
-    hoursOTNoon: cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_NOON] ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_NOON]) : undefined,
+    hoursOTNoon: cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_NOON]
+      ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_NOON])
+      : undefined,
     taskOTNoon: String(cleanRow[DAILY_REPORT_COLUMNS.TASK_OT_NOON] || '').trim(),
     projectOTNoon: String(cleanRow[DAILY_REPORT_COLUMNS.PROJECT_OT_NOON] || '').trim(),
     // OT Evening
-    hoursOTEvening: cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_EVENING] ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_EVENING]) : undefined,
+    hoursOTEvening: cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_EVENING]
+      ? Number(cleanRow[DAILY_REPORT_COLUMNS.HOURS_OT_EVENING])
+      : undefined,
     taskOTEvening: String(cleanRow[DAILY_REPORT_COLUMNS.TASK_OT_EVENING] || '').trim(),
     projectOTEvening: String(cleanRow[DAILY_REPORT_COLUMNS.PROJECT_OT_EVENING] || '').trim(),
   };

@@ -1,4 +1,3 @@
-
 export type ProjectStatus = 'active' | 'completed' | 'suspended';
 
 export interface ProjectLocation {
@@ -73,7 +72,7 @@ export const projectLocationConverter = {
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
       createdBy: project.createdBy,
-      updatedBy: project.updatedBy
+      updatedBy: project.updatedBy,
     };
   },
   fromFirestore: (snapshot: any): ProjectLocation => {
@@ -101,11 +100,12 @@ export const projectLocationConverter = {
       description: data.description,
       isActive: data.isActive !== undefined ? data.isActive : true,
       workDays: data.workDays !== undefined ? data.workDays : [1, 2, 3, 4, 5, 6], // Default Mon-Sat
-      followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true, // Default to true
+      followCompanyHoliday:
+        data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true, // Default to true
       createdAt: safeDate(data.createdAt) || new Date(),
       updatedAt: safeDate(data.updatedAt) || new Date(),
       createdBy: data.createdBy,
-      updatedBy: data.updatedBy
+      updatedBy: data.updatedBy,
     };
-  }
+  },
 };

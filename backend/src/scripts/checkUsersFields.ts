@@ -1,12 +1,12 @@
 import { db } from '../config/firebase';
 
 async function main() {
-  console.log("=== EXAMINING USERS FIELDS ===");
+  console.log('=== EXAMINING USERS FIELDS ===');
   const snap = await db.collection('users').get();
   let matchCount = 0;
   let mismatchCount = 0;
 
-  snap.forEach(doc => {
+  snap.forEach((doc) => {
     const data = doc.data();
     const docId = doc.id;
     const lowercaseEmpId = data.employeeId;
@@ -16,7 +16,9 @@ async function main() {
       matchCount++;
     } else {
       mismatchCount++;
-      console.log(`Mismatch! Doc ID: "${docId}" | employeeId: "${lowercaseEmpId}" | Employeeid: "${uppercaseEmpId}"`);
+      console.log(
+        `Mismatch! Doc ID: "${docId}" | employeeId: "${lowercaseEmpId}" | Employeeid: "${uppercaseEmpId}"`
+      );
     }
   });
 
@@ -24,4 +26,9 @@ async function main() {
   console.log(`Mismatches docId: ${mismatchCount}`);
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

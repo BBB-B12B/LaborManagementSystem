@@ -183,6 +183,8 @@ function classifyBySegments(params) {
     const usedPunches = new Set();
     const conflictNotes = [];
     for (const seg of segments) {
+        const segIndex = segments.indexOf(seg);
+        const nextSeg = segments[segIndex + 1];
         const available = sortedScans.filter(t => !usedPunches.has(t));
         let closestIn = -1;
         let minInDiff = Infinity;
@@ -216,29 +218,47 @@ function classifyBySegments(params) {
             usedPunches.add(closestIn);
         // Allow boundary-shared punches to be reused as IN of the next segment
         if (closestOut !== -1) {
-            const segIndex = segments.indexOf(seg);
-            const nextSeg = segments[segIndex + 1];
-            const isBoundaryShared = nextSeg && closestOut === nextSeg.start;
+            const isBoundaryShared = nextSeg && seg.end === nextSeg.start;
             if (!isBoundaryShared) {
                 usedPunches.add(closestOut);
             }
         }
+        let late = 0;
+        let early = 0;
+        // ── Transition scan bypass rules (OT เช้า ↔ กะปกติ) ──
+        const isMorningTransition = seg.start === 480 && otMorning; // กะเช้าปกติที่ทำ OT ต่อเนื่อง
+        const isOtMorningTransition = seg.type === 'otMorning' && nextSeg && seg.end === nextSeg.start; // กะ OT เช้าที่ทำเชื่อมต่อกะปกติ
         if (closestIn === -1 || minInDiff > 90) {
-            isConflicted = true;
-            conflictNotes.push(`ไม่พบสแกน IN สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
-            continue;
+            // ถ้ายินยอมให้ข้ามรอยต่อ 08:00 และพนักงานมีสแกนเข้างานจริงตอน 06:00
+            const prevHasIn = isMorningTransition && sortedScans.some((t) => t <= 480 + 90 && t >= otMorning.start - 90);
+            if (!isMorningTransition || !prevHasIn) {
+                isConflicted = true;
+                conflictNotes.push(`ไม่พบสแกน IN สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
+                continue;
+            }
+        }
+        else {
+            // มีสแกน IN: เช็คเรื่องลบเวลาสายไม่เกิน 5 นาที
+            const rawLate = closestIn - seg.start;
+            // ถ้าเป็นช่วงกะปกติ (08:00) และมี OT เช้าเชื่อมต่อ และสายไม่เกิน 5 นาที -> ปรับเป็นไม่สาย
+            if (isMorningTransition && rawLate <= 5) {
+                late = 0;
+            }
+            else {
+                late = Math.max(0, rawLate);
+            }
         }
         if (closestOut === -1 || minOutDiff > 90) {
-            isConflicted = true;
-            conflictNotes.push(`ไม่พบสแกน OUT สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
-            continue;
+            // ถ้ายินยอมให้ข้ามรอยต่อ 08:00 และพนักงานมีสแกนออกงานจริงช่วงเลิกงาน (12:00 หรือ 17:00)
+            const nextHasOut = isOtMorningTransition && sortedScans.some((t) => t >= seg.end - 90 && t <= nextSeg.end + 90);
+            if (!isOtMorningTransition || !nextHasOut) {
+                isConflicted = true;
+                conflictNotes.push(`ไม่พบสแกน OUT สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
+                continue;
+            }
         }
-        const late = closestIn - seg.start;
-        const early = seg.end - closestOut;
-        if (Math.abs(late) > 90 || Math.abs(early) > 90) {
-            isConflicted = true;
-            conflictNotes.push(`ไม่พบสแกนเข้า/ออกที่สอดคล้องกับช่วงเวลา ${formatTime(seg.start)} - ${formatTime(seg.end)}`);
-            continue;
+        else {
+            early = Math.max(0, seg.end - closestOut);
         }
         if (late > 30) {
             isConflicted = true;
@@ -250,8 +270,9 @@ function classifyBySegments(params) {
         }
         if (late > 0) {
             totalLateMinutes += late;
-            if (seg.type === 'otMorning')
+            if (seg.type === 'otMorning' || (otMorning && seg.start === otMorning.start)) {
                 penaltyOtMorning += late;
+            }
         }
         if (early > 0) {
             totalEarlyLeaveMinutes += early;
@@ -541,6 +562,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
     let scanOtEvening = 0;
     let scanDataId;
     let scanPunches = [];
+    let devicePunches = [];
     // Anomaly Detection: เช็คว่ามีการสแกนจากหลายโครงการในวันเดียวกันหรือไม่
     let isMultipleProjects = false;
     let multipleProjectsReason = '';
@@ -554,9 +576,10 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
     }
     // วนลูปบวกเวลาทั้งหมด (รองรับเคสทำงาน 2 โครงการในวันเดียว เช่น เช้า 4 ชม. บ่าย 4 ชม.)
     for (const doc of activeScanDocs) {
-        const data = doc.data();
+        const data = (doc.id === triggerDocId && triggerDocData) ? triggerDocData : doc.data();
         if (!scanDataId) {
             scanDataId = doc.id; // ใช้ ID ของตัวแรกเป็นตัวแทน
+            devicePunches = data['devicePunches'] || data['punches'] || [];
             // ── อ่าน punch times ─────────────────────────────────────────────
             // punches (HH:mm) = primary | allScans (HH:mm:ss) = fallback
             if (Array.isArray(data['punches']) && data['punches'].length > 0) {
@@ -649,6 +672,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         else if (Array.isArray(triggerDocData['allScans']) && triggerDocData['allScans'].length > 0) {
             scanPunches = triggerDocData['allScans'].map((t) => t.slice(0, 5));
         }
+        devicePunches = triggerDocData['devicePunches'] || triggerDocData['punches'] || [];
         const storedHours = (triggerDocData['regularHours'] || 0) + (triggerDocData['otMorningHours'] || 0)
             + (triggerDocData['otNoonHours'] || 0) + (triggerDocData['otEveningHours'] || 0);
         if (storedHours > 0) {
@@ -692,6 +716,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
         scanOtEvening = existingRecord['scanOtEveningHours'] || 0;
         totalScanHours = existingRecord['scanDataHours'] || 0;
         scanDataId = existingRecord['scanDataId'] || scanDataId;
+        devicePunches = existingRecord['devicePunches'] || [];
     }
     // ── 2. เช็ควันหยุดบริษัท (companyHolidays) ────────────────────────────────
     // Document ID = YYYY-MM-DD หรือ query by date field
@@ -982,6 +1007,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             scanOtNoonHours: hasScan ? scanOtNoon : null,
             scanOtEveningHours: hasScan ? scanOtEvening : null,
             scanPunches: hasScan ? scanPunches : [],
+            devicePunches: hasScan ? devicePunches : [],
             // ── Timesheet hours (แยก field) ──────────────────────────────────────
             timesheetHours: hasTimesheet ? totalTimesheetHours : null, // ยอดรวม
             timesheetNormalHours: hasTimesheet ? tsNormalHours : null,
@@ -1053,6 +1079,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             scanOtNoonHours: hasScan ? scanOtNoon : null,
             scanOtEveningHours: hasScan ? scanOtEvening : null,
             scanPunches: hasScan ? scanPunches : [],
+            devicePunches: hasScan ? devicePunches : [],
             // ── Timesheet hours ──────────────────────────────────────────────────
             timesheetHours: hasTimesheet ? totalTimesheetHours : null,
             timesheetNormalHours: hasTimesheet ? tsNormalHours : null,

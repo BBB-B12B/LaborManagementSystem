@@ -31,13 +31,12 @@ if (!admin.apps.length) {
 
 // ── Import service หลังจาก Firebase init แล้วเท่านั้น ─────────────────────
 import('../services/scanData/ScanDataService').then(async ({ scanDataService }) => {
-
   // ══════════════════════════════════════════════════════
   // 🔧 ปรับค่าตรงนี้ก่อนรัน
-  const EMPLOYEE_ID       = '200030';
-  const WORK_DATE         = '2026-05-02';
+  const EMPLOYEE_ID = '200030';
+  const WORK_DATE = '2026-05-02';
   const PROJECT_LOCATION_ID = 'P002';
-  const ADMIN_USER_ID     = 'test-script';
+  const ADMIN_USER_ID = 'test-script';
   // ══════════════════════════════════════════════════════
 
   console.log('═══════════════════════════════════════════════════');
@@ -76,7 +75,6 @@ import('../services/scanData/ScanDataService').then(async ({ scanDataService }) 
     console.log('\n🔖 Flags:');
     console.log(`   isManuallyEdited: ${(result as any).isManuallyEdited}`);
     console.log(`   scanData doc ID : ${result.id}`);
-
   } catch (err: any) {
     console.error('❌ เกิด Error:', err.message || err);
     if (err.statusCode === 404) {

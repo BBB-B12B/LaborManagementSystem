@@ -21,14 +21,21 @@ interface Props {
   endDate?: Date | null;
 }
 
-const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, startDate, endDate }) => {
+const AbnormalBreakdown: React.FC<Props> = ({
+  onCardClick,
+  activeId,
+  project,
+  startDate,
+  endDate,
+}) => {
   const { data: stats } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
-    queryFn: () => reconciliationService.getStats({
-      homeProjectId: project !== 'all' ? project : undefined,
-      startDate: startDate ? startDate.toISOString() : undefined,
-      endDate: endDate ? endDate.toISOString() : undefined,
-    }),
+    queryFn: () =>
+      reconciliationService.getStats({
+        homeProjectId: project !== 'all' ? project : undefined,
+        startDate: startDate ? startDate.toISOString() : undefined,
+        endDate: endDate ? endDate.toISOString() : undefined,
+      }),
     staleTime: 60000,
   });
 
@@ -88,7 +95,7 @@ const AbnormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, st
       <Grid container spacing={1.5}>
         {items.map((item) => (
           <Grid item xs={12} sm={6} md={2} key={item.id}>
-            <BreakdownCard 
+            <BreakdownCard
               active={activeId === item.id}
               colorTheme={item.colorTheme}
               title={item.title}

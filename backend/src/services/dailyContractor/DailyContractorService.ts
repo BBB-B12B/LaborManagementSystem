@@ -198,7 +198,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
 
       if (input.projectLocationId !== undefined) {
         updateData.projectLocationId = input.projectLocationId;
-        
+
         // Update department if project changes
         if (!input.projectLocationId) {
           updateData.department = '';
@@ -229,9 +229,11 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       }
 
       if (input.dailyWageRate !== undefined) updateData.dailyWageRate = input.dailyWageRate;
-      if (input.professionalRate !== undefined) updateData.professionalRate = input.professionalRate;
+      if (input.professionalRate !== undefined)
+        updateData.professionalRate = input.professionalRate;
       if (input.phoneAllowance !== undefined) updateData.phoneAllowance = input.phoneAllowance;
-      if (input.mouDeductionRate !== undefined) updateData.mouDeductionRate = input.mouDeductionRate;
+      if (input.mouDeductionRate !== undefined)
+        updateData.mouDeductionRate = input.mouDeductionRate;
       if (input.nationality !== undefined) updateData.nationality = input.nationality;
       if (input.otherIncome !== undefined) updateData.otherIncome = input.otherIncome;
       if (input.housingFee !== undefined) updateData.housingFee = input.housingFee;
@@ -368,7 +370,13 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
   async searchByKeyword(
     keyword: string,
     options?: PaginationOptions
-  ): Promise<{ items: DailyContractor[]; total: number; page: number; pageSize: number; totalPages: number }> {
+  ): Promise<{
+    items: DailyContractor[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> {
     const trimmed = keyword.trim();
     const page = options?.page || 1;
     const pageSize = options?.pageSize || 200;
@@ -401,7 +409,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
 
     // Also check for direct query matches on employeeId
     const queryByEmpId = await this.query([
-      { field: 'employeeId', operator: '==', value: trimmed }
+      { field: 'employeeId', operator: '==', value: trimmed },
     ]);
     if (queryByEmpId.length > 0) {
       return {
@@ -446,9 +454,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     );
   }
 
-  private async getIncomeDetailsRecord(
-    dailyContractorId: string
-  ): Promise<DCIncomeDetails | null> {
+  private async getIncomeDetailsRecord(dailyContractorId: string): Promise<DCIncomeDetails | null> {
     // T-DB-001: Sub-collection Logic
     const snapshot = await collections.dailyContractors
       .doc(dailyContractorId)
@@ -648,10 +654,7 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
   /**
    * Verify password for DC login
    */
-  async verifyPassword(
-    username: string,
-    password: string
-  ): Promise<boolean> {
+  async verifyPassword(username: string, password: string): Promise<boolean> {
     try {
       const dc = await this.findByUsername(username);
       if (!dc || !dc.passwordHash) {

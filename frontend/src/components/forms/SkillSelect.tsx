@@ -6,10 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import {
-  Autocomplete,
-  TextField,
-} from '@mui/material';
+import { Autocomplete, TextField } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { getActiveDCs } from '@/services/dcService';
 
@@ -50,7 +47,7 @@ export const SkillSelect: React.FC<SkillSelectProps> = ({
         // Ignore legacy Firestore IDs (20 chars alphanumeric) and legacy POS_XXX codes
         if (val.length === 20 && /^[a-zA-Z0-9]{20}$/.test(val)) return;
         if (/^POS_\d{3,}$/.test(val)) return;
-        
+
         skillSet.add(val);
       }
     });

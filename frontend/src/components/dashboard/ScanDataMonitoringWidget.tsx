@@ -10,7 +10,8 @@ const ScanDataMonitoringWidget: React.FC = () => {
           ระบบได้ถูกอัปเกรดเป็น Event-Driven Reconciliation เรียบร้อยแล้ว
         </Alert>
         <Typography variant="body2" color="text.secondary">
-          โปรดไปที่หน้าจอ <strong>ระบบติดตามและจัดการชั่วโมงทำงาน</strong> เพื่อดูรายละเอียดและอนุมัติการกระทบยอด
+          โปรดไปที่หน้าจอ <strong>ระบบติดตามและจัดการชั่วโมงทำงาน</strong>{' '}
+          เพื่อดูรายละเอียดและอนุมัติการกระทบยอด
         </Typography>
       </CardContent>
     </Card>

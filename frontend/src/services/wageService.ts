@@ -66,7 +66,7 @@ export interface DCWageSummary {
 
   // Net calculation
   netWages: number;
-  
+
   // Penalty
   penaltyMinutes: number;
 }

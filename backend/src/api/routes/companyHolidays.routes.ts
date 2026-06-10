@@ -90,16 +90,20 @@ router.put(
  * DELETE /api/company-holidays/:year/:id
  * Delete a company holiday from its year subcollection.
  */
-router.delete('/:year/:id', authorize(['AM', 'MD', 'PM', 'PD']), async (req: Request, res: Response) => {
-  try {
-    const year = parseInt(req.params.year);
-    if (isNaN(year)) throw new AppError('Invalid year parameter', 400);
+router.delete(
+  '/:year/:id',
+  authorize(['AM', 'MD', 'PM', 'PD']),
+  async (req: Request, res: Response) => {
+    try {
+      const year = parseInt(req.params.year);
+      if (isNaN(year)) throw new AppError('Invalid year parameter', 400);
 
-    await companyHolidayService.delete(req.params.id, year);
-    res.json({ success: true, message: 'Deleted successfully' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+      await companyHolidayService.delete(req.params.id, year);
+      res.json({ success: true, message: 'Deleted successfully' });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
-});
+);
 
 export default router;

@@ -14,7 +14,6 @@ import {
   dailyReportConverter,
   editHistoryConverter,
   wagePeriodConverter,
-
   additionalIncomeConverter,
   additionalExpenseConverter,
   socialSecurityCalculationConverter,

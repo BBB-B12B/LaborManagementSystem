@@ -66,33 +66,21 @@ router.get('/:id', getProjectByIdHandler);
  * Create a new project
  * Requires: FM, PM, AM roles
  */
-router.post(
-  '/',
-  authorize(['FM', 'PM', 'AM']),
-  createProjectHandler
-);
+router.post('/', authorize(['FM', 'PM', 'AM']), createProjectHandler);
 
 /**
  * PUT /api/projects/:id
  * Update an existing project
  * Requires: FM, PM, AM roles
  */
-router.put(
-  '/:id',
-  authorize(['FM', 'PM', 'AM']),
-  updateProjectHandler
-);
+router.put('/:id', authorize(['FM', 'PM', 'AM']), updateProjectHandler);
 
 /**
  * DELETE /api/projects/:id
  * Delete a project (soft delete)
  * Requires: PM, AM roles (higher privileges)
  */
-router.delete(
-  '/:id',
-  authorize(['PM', 'AM']),
-  deleteProjectHandler
-);
+router.delete('/:id', authorize(['PM', 'AM']), deleteProjectHandler);
 
 /**
  * Nested routes for Project Configs (Work Orders & Categories)

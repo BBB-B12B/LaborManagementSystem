@@ -90,6 +90,12 @@
 ---
 > **Status:** `[ ]` (ยังไม่เริ่ม) → `[/]` (กำลังทำ/รอตรวจ) → `[X]` (เสร็จ/ตรวจผ่าน)
 - [X] T-018-01: Update conflict data modal button to auto-fill missing scan times without overwriting
+  - [X] T-018-01-01: Fix confirmation by daily report reverting to CONFLICTED and overwriting devicePunches (→ ERR-011) · attempts: 1 · tool_calls: 11
+  - [X] T-018-01-02: Merge adjacent OT Morning shift with Day shift to eliminate transition scan at 08:00 (→ ERR-012) · attempts: 1 · tool_calls: 10
+  - [X] T-018-01-03: Align frontend monitoring modal detail to display transition scans at 8:00 normally if present (→ ERR-013) · attempts: 2 · tool_calls: 9
+  - [X] T-018-01-04: Fix Cloud Function eventual consistency race condition causing reversion to CONFLICTED (→ ERR-014) · attempts: 1 · tool_calls: 14
+  - [X] T-018-01-05: Preserve original seconds for finger scan data during Daily Report fill and edit (→ ERR-015) · attempts: 1 · tool_calls: 11
 - [X] T-007: เพิ่มแท็บแสดงสถิติการขาด ลา มาสาย ใน Modal จัดการแรงงานรายวัน (DC) แบบ Pre-calculated
 - [X] T-008: ปรับปรุงประสิทธิภาพและ UX ความลื่นไหลของระบบในฝั่งหน้าบ้าน (Phase 1) · attempts: 1 · tool_calls: 5
 - [X] T-008: ปรับปรุงประสิทธิภาพและ UX ความลื่นไหลของระบบในฝั่งหลังบ้าน (Phase 2)
+- [X] T-009: ปรับปรุงความเร็วการดึงข้อมูลและอัปโหลดไฟล์ในระบบข้อมูลสแกนนิ้ว (Biometric Scan Data Optimizations)

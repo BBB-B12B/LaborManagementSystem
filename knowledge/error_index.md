@@ -88,3 +88,55 @@
 - **Symptom:** Next.js frontend build fails with error `Cannot find name 'currentTab'`.
 - **Root Cause:** A pre-existing tab interface in `ScanDataMonitoringPage` was deprecated and the `currentTab` state variable was removed, but the `handleDeleteRow` function still checked `if (currentTab === 0)` when attempting to prevent deleting reconciliation records.
 - **Resolution:** Removed the check `if (currentTab === 0)` from `handleDeleteRow` since the page now only manages scan data, making the call to `deleteScanDataById` direct and resolving the compiler error.
+
+## ERR-011: Confirm by Daily Report Overwrites Raw Scan Data and Reverts to CONFLICTED
+- **Task:** T-018-01-01 · **Session:** session_022
+- **File:** backend/src/services/scanData/ScanDataService.ts & backend/src/services/reconciliation/ReconciliationService.ts · **Line:** 1197, 1730
+- **Symptom:** When clicking "Confirm by Daily Report" in the Work Hour Monitoring page, the employee's original scan punches are overwritten/wiped out, and the record's status reverts back to CONFLICTED shortly after showing MATCHED.
+- **Root Cause:**
+  1. `ScanDataService.fillFromDailyReport` queried the `scanData` collection using UTC ranges, which missed the Bangkok timezone midnight timestamp. It returned an empty result, making the service overwrite the existing scan data as if it were a new record, thus clearing `devicePunches` and inserting all expected punches.
+  2. `ReconciliationService.confirmByDailyReport` did not write the updated `scanPunches` and breakdown hours to the `ReconciliationRecord`. When the `ScanData` document update triggered the automated Cloud Function `reconcile`, the function restored the outdated `scanPunches` from the `ReconciliationRecord` and re-evaluated the status to CONFLICTED.
+- **Resolution:**
+  1. Updated `ScanDataService.ts` to first query by the exact doc key `SCAN_{employeeNumber}_{workDateStr}` and use Bangkok (+07:00) timezone ranges as a fallback query.
+  2. Updated `ReconciliationService.ts` to retrieve the updated scan returned by `fillFromDailyReport` and write `scanPunches` and the computed hours directly into the `ReconciliationRecord`.
+
+## ERR-012: Adjacent OT Morning and Day Shifts Conflict due to Strict Boundary-Sharing and Strict Lateness Check
+- **Task:** T-018-01-02 · **Session:** session_022
+- **File:** backend/src/services/reconciliation/ReconciliationService.ts & functions/src/index.ts · **Line:** 356, 223
+- **Symptom:** Reconciliation results revert to CONFLICTED after confirmation with the note "ไม่พบสแกน IN สำหรับ segment 08:00–12:00", even though the employee has scanned times close to boundaries (e.g. 08:03).
+- **Root Cause:**
+  1. The boundary-sharing logic `isBoundaryShared` checked for strict minute equality (`closestOut === nextSeg.start`), meaning if a punch at e.g. 08:03 was used as OUT of OT Morning, it could not be shared as IN of the next segment (since 08:03 != 08:00), leading to a missing scan conflict.
+  2. More fundamentally, adjacent shifts (OT Morning 06:00 - 08:00 and Day Shift 08:00 - 17:00) are continuous work. Treating them as separate segments forced employees to scan at exactly 08:00, which is physically impossible and unnecessary.
+- **Resolution:**
+  1. Modified `classifyBySegments` in both `ReconciliationService.ts` and `functions/src/index.ts` to check if `seg.end === nextSeg.start` to determine boundary sharing, allowing transition punches to be shared.
+  2. Merged the adjacent OT Morning shift directly into the morning work segment (making it a single continuous `06:00 - 12:00` segment) when `otMorning.end === dayShift.start`. This completely eliminates the need to scan at 08:00, resolving both the 5-minute lateness buffer and the heights-working no-scan conditions requested by the user.
+
+## ERR-013: Frontend Monitoring Modal Mismatches Backend Status due to Missing Segment Bypass and Late Buffer Rules
+- **Task:** T-018-01-03 · **Session:** session_022
+- **File:** frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx · **Line:** 1021
+- **Symptom:** The Work Hour Monitoring details modal displays transition scans at 8:00 as conflicts (e.g., "✗ ขาด IN" or "✗ ขาด OUT") even after successful backend reconciliation, and labels slightly late transition scans (e.g. 08:03) as "⚠ สาย" instead of "✓ ปกติ".
+- **Root Cause:** The segment classification logic inside the frontend's `buildSegmentRows` was out of sync with the backend. It lacked the 5-minute late buffer for morning shifts, used a strict punch time match for boundary sharing, and did not implement transition scan bypass rules for adjacent shifts.
+- **Resolution:** Updated `buildSegmentRows` and JSX rendering in `WorkHourComparisonTable.tsx` to:
+  1. Determine boundary sharing based on segment adjacency (`seg.expectedEnd === nextSeg.expectedStart`).
+  2. Implement transition bypass rules for `otMorning` and `morning` segments, marking them as "✓ ปกติ" with remark "ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)" if outer boundary punches exist.
+  3. Introduce a 5-minute late buffer for the morning shift starting at 08:00 when preceded by an OT Morning shift.
+  4. Clear the display of the same shared transition scan (e.g. `08:03`) on the next segment's check-in (showing `—`) to prevent admin confusion while keeping the segment marked as normal/bypassed.
+  5. Check each scan in the details table against `row.devicePunches` to color-code original device scans in black and admin-filled/reconciled scans in orange, accompanied by a color legend in the modal.
+
+## ERR-014: Stale Cloud Functions on GCP causing Reversion to CONFLICTED Status
+- **Task:** T-018-01-04 · **Session:** session_022
+- **File:** functions/src/index.ts · **Line:** 707, 794-853
+- **Symptom:** Reconciliation records manually resolved by the Admin are overwritten back to CONFLICTED by the system with note "ไม่พบสแกน IN สำหรับ segment 08:00–12:00".
+- **Root Cause:**
+  1. The local fixes for eventual consistency (prioritizing `triggerDocData`) and segment boundary sharing (`seg.end === nextSeg.start`) inside `functions/src/index.ts` were compiled but not deployed to the production Google Cloud Platform (GCP).
+  2. The production Cloud Function on GCP, running stale code, triggered on the scanData change and executed the old classification logic using stale data, resulting in a false conflict and overwriting the record status.
+- **Resolution:**
+  1. Advised the user to run the build and deploy commands (`firebase deploy --only functions`) to update GCP Cloud Functions with the latest fixes.
+
+## ERR-015: ScanData display loses seconds and reverts to 2-digit format after Admin confirmation or edit
+- **Task:** T-018-01-05 · **Session:** session_022
+- **File:** backend/src/services/scanData/ScanDataService.ts · **Line:** 972, 1186
+- **Symptom:** After the admin confirms a daily report or manually edits scans, the ScanData monitoring page renders the entire row of times in 2-digit format (e.g. `17:00`) instead of keeping the original 3-digit format (`07:59:00`). Original scans lose their seconds, becoming `HH:mm`.
+- **Root Cause:** When `fillFromDailyReport` and `updateDailyPunches` run, they merge punches in 2-digit `HH:mm` format and overwrite both `allScans` and `Time1`-`Time10`. This strips the original seconds from unmodified scans, and saves new admin punches as `HH:mm` instead of `HH:mm:00`.
+- **Resolution:** Modified both `fillFromDailyReport` and `updateDailyPunches` to fetch the existing document, extract `allScans` (which preserves seconds), and match them against incoming `HH:mm` edits. Unchanged punches keep their original seconds, and new admin-added punches are formatted with `:00` padded, preserving the `HH:mm:ss` format for consistent frontend rendering.
+

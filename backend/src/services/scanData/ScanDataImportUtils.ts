@@ -1,10 +1,7 @@
 import { parse, isValid as isValidDate } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import XLSX from 'xlsx';
-import type {
-  BulkImportRecord,
-  ImportErrorEntry,
-} from './ScanDataService';
+import type { BulkImportRecord, ImportErrorEntry } from './ScanDataService';
 import { AppError } from '../../api/middleware/errorHandler';
 
 const DATE_FORMATS = [
@@ -73,7 +70,10 @@ function normalizeHeader(value: unknown): string {
     return '';
   }
 
-  return value.trim().toLowerCase().replace(/[\s_\-]/g, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-]/g, '');
 }
 
 function looksLikeHeader(value: string): boolean {
@@ -82,19 +82,34 @@ function looksLikeHeader(value: string): boolean {
     return false;
   }
 
-  return (
-    HEADER_ALIASES.employee.includes(normalized) ||
-    HEADER_ALIASES.date.includes(normalized)
-  );
+  return HEADER_ALIASES.employee.includes(normalized) || HEADER_ALIASES.date.includes(normalized);
 }
 
 const THAI_MONTHS: Record<string, string> = {
-  'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04',
-  'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08',
-  'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12',
-  'มกราคม': '01', 'กุมภาพันธ์': '02', 'มีนาคม': '03', 'เมษายน': '04',
-  'พฤษภาคม': '05', 'มิถุนายน': '06', 'กรกฎาคม': '07', 'สิงหาคม': '08',
-  'กันยายน': '09', 'ตุลาคม': '10', 'พฤศจิกายน': '11', 'ธันวาคม': '12'
+  'ม.ค.': '01',
+  'ก.พ.': '02',
+  'มี.ค.': '03',
+  'เม.ย.': '04',
+  'พ.ค.': '05',
+  'มิ.ย.': '06',
+  'ก.ค.': '07',
+  'ส.ค.': '08',
+  'ก.ย.': '09',
+  'ต.ค.': '10',
+  'พ.ย.': '11',
+  'ธ.ค.': '12',
+  มกราคม: '01',
+  กุมภาพันธ์: '02',
+  มีนาคม: '03',
+  เมษายน: '04',
+  พฤษภาคม: '05',
+  มิถุนายน: '06',
+  กรกฎาคม: '07',
+  สิงหาคม: '08',
+  กันยายน: '09',
+  ตุลาคม: '10',
+  พฤศจิกายน: '11',
+  ธันวาคม: '12',
 };
 
 function normalizeThaiDate(dateStr: string): string {
@@ -124,10 +139,23 @@ function normalizeThaiDate(dateStr: string): string {
     // If yr is between 60 and 99, it's likely Buddhist Era (BE) 256x-259x
     if (yr >= 60 && yr <= 99) {
       const fullYear = 2500 + yr - 543; // Convert to AD
-      normalized = normalized.substring(0, shortYearMatch.index! + shortYearMatch[0].length - 2) + fullYear.toString().substring(2);
+      normalized =
+        normalized.substring(0, shortYearMatch.index! + shortYearMatch[0].length - 2) +
+        fullYear.toString().substring(2);
       // Wait, let's just use the full 4 digit year for clarity before parsing
-      normalized = normalized.substring(0, shortYearMatch.index! + shortYearMatch[0].length - 2 - (shortYearMatch[1].length + 1 + shortYearMatch[2].length + 1)) 
-                 + shortYearMatch[1] + '/' + shortYearMatch[2] + '/' + fullYear;
+      normalized =
+        normalized.substring(
+          0,
+          shortYearMatch.index! +
+            shortYearMatch[0].length -
+            2 -
+            (shortYearMatch[1].length + 1 + shortYearMatch[2].length + 1)
+        ) +
+        shortYearMatch[1] +
+        '/' +
+        shortYearMatch[2] +
+        '/' +
+        fullYear;
     }
   }
 
@@ -141,7 +169,8 @@ function parseDateValue(raw: unknown): Date | null {
 
   if (typeof raw === 'number') {
     // Excel serial date support
-    const parseDateCode = (XLSX.SSF as unknown as { parse_date_code?: (value: number) => any }).parse_date_code;
+    const parseDateCode = (XLSX.SSF as unknown as { parse_date_code?: (value: number) => any })
+      .parse_date_code;
     const excelDate = parseDateCode ? parseDateCode(raw) : null;
     if (excelDate) {
       const d = new Date(
@@ -171,7 +200,9 @@ function parseDateValue(raw: unknown): Date | null {
 
   // Robust parsing: If we have a common timestamp pattern followed by extra data/numbers,
   // truncate the value to just the timestamp part.
-  const timestampMatch = value.match(/^(\d{2,4}[-/\.]\d{1,2}[-/\.]\d{2,4}\s+\d{1,2}:\d{2}(:\d{2})?)/);
+  const timestampMatch = value.match(
+    /^(\d{2,4}[-/\.]\d{1,2}[-/\.]\d{2,4}\s+\d{1,2}:\d{2}(:\d{2})?)/
+  );
   if (timestampMatch) {
     value = timestampMatch[1];
   }
@@ -209,12 +240,12 @@ function parseDatLine(line: string): DatLineParseResult | null {
   let tokens: string[] = [];
 
   if (hasComma) {
-    tokens = line.split(',').map(t => t.trim());
+    tokens = line.split(',').map((t) => t.trim());
   } else if (hasTab) {
-    tokens = line.split('\t').map(t => t.trim());
+    tokens = line.split('\t').map((t) => t.trim());
   } else {
     // Split by any consecutive whitespace (including tabs/spaces)
-    tokens = line.split(/\s+/).map(t => t.trim());
+    tokens = line.split(/\s+/).map((t) => t.trim());
   }
 
   tokens = tokens.filter((token) => token.length > 0);
@@ -234,7 +265,7 @@ function parseDatLine(line: string): DatLineParseResult | null {
     const dateToken = tokens[1];
     const timeToken = tokens[2];
     const extras = tokens.slice(3);
-    
+
     // Validate if the 3rd token contains a colon (Time separator)
     if (timeToken.includes(':')) {
       return {
@@ -243,7 +274,7 @@ function parseDatLine(line: string): DatLineParseResult | null {
         timeTokens: [timeToken],
         extras,
         // CRITICAL: originalRemaining should only include Date and Time
-        originalRemaining: [dateToken, timeToken]
+        originalRemaining: [dateToken, timeToken],
       };
     }
   }
@@ -258,7 +289,7 @@ function parseDatLine(line: string): DatLineParseResult | null {
     timeTokens: [],
     extras,
     // CRITICAL: originalRemaining should only include the Date/DateTime part
-    originalRemaining: [dateToken]
+    originalRemaining: [dateToken],
   };
 }
 
@@ -302,14 +333,14 @@ export function parseNotepadText(content: string): ParsedFileResult {
 
     if (timeTokens.length > 0) {
       let insertedCount = 0;
-      
+
       const rowData: any = {
         EmployeeNumber: employeeNumber,
         Date: dateToken,
       };
-      
+
       timeTokens.forEach((t, i) => {
-        rowData[`Time${i+1}`] = t;
+        rowData[`Time${i + 1}`] = t;
       });
 
       timeTokens.forEach((timeStr, i) => {
@@ -322,11 +353,11 @@ export function parseNotepadText(content: string): ParsedFileResult {
             employeeNumber,
             scanDateTime,
             rawLine,
-            rawData: { extras, timeColumn: `Time${i+1}` },
+            rawData: { extras, timeColumn: `Time${i + 1}` },
             rowData: {
               ...rowData,
-              Date: scanDateTime.toISOString().split('T')[0] // Format for UI mapping
-            }
+              Date: scanDateTime.toISOString().split('T')[0], // Format for UI mapping
+            },
           });
           insertedCount++;
         } else {
@@ -339,12 +370,12 @@ export function parseNotepadText(content: string): ParsedFileResult {
           row: rowNumber,
           employeeNumber,
           error: `รูปแบบวันที่/เวลาไม่ถูกต้องในแถวนี้ ("${dateToken}")`,
-          rowData
+          rowData,
         });
       }
     } else {
       // Single date/time combo or missing time
-      let dateValue = "";
+      let dateValue = '';
       if (extras.length === 0) {
         dateValue = dateToken;
       } else {
@@ -362,7 +393,7 @@ export function parseNotepadText(content: string): ParsedFileResult {
           row: rowNumber,
           employeeNumber,
           error: `ไม่สามารถอ่านเวลาสแกน "${dateValue}"`,
-          rowData
+          rowData,
         });
         return;
       }
@@ -373,7 +404,7 @@ export function parseNotepadText(content: string): ParsedFileResult {
         scanDateTime,
         rawLine,
         rawData: extras.length ? { extras } : undefined,
-        rowData
+        rowData,
       });
     }
   });
@@ -410,9 +441,7 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
   const employeeIndex = normalizedHeaders.findIndex((value) =>
     HEADER_ALIASES.employee.includes(value)
   );
-  const dateIndex = normalizedHeaders.findIndex((value) =>
-    HEADER_ALIASES.date.includes(value)
-  );
+  const dateIndex = normalizedHeaders.findIndex((value) => HEADER_ALIASES.date.includes(value));
 
   if (employeeIndex === -1 || dateIndex === -1) {
     throw new AppError('ไม่พบคอลัมน์ EmployeeNumber หรือ Date ในไฟล์ Excel', 400);
@@ -421,14 +450,14 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
   // Find Time columns (Time1, Time2, ..., Time10)
   const timeIndexes: number[] = [];
   for (let i = 1; i <= 10; i++) {
-    const idx = normalizedHeaders.findIndex(h => h === `time${i}`);
+    const idx = normalizedHeaders.findIndex((h) => h === `time${i}`);
     if (idx !== -1) timeIndexes.push(idx);
   }
 
   // Find Extra columns
-  const normalStatusIndex = normalizedHeaders.findIndex(h => h === 'normalstatus');
-  const lunchStatusIndex = normalizedHeaders.findIndex(h => h === 'lunchstatus');
-  const morningOTIndex = normalizedHeaders.findIndex(h => h === 'morningot');
+  const normalStatusIndex = normalizedHeaders.findIndex((h) => h === 'normalstatus');
+  const lunchStatusIndex = normalizedHeaders.findIndex((h) => h === 'lunchstatus');
+  const morningOTIndex = normalizedHeaders.findIndex((h) => h === 'morningot');
 
   const records: BulkImportRecord[] = [];
   const errors: ImportErrorEntry[] = [];
@@ -459,7 +488,7 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
         row: rowNumber,
         employeeNumber,
         error: `รูปแบบวันที่ไม่ถูกต้อง "${dateValue}"`,
-        rowData
+        rowData,
       });
       return;
     }
@@ -472,7 +501,7 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
     const extras = {
       normalStatus,
       lunchStatus,
-      morningOT
+      morningOT,
     };
 
     // If Time columns exist, iterate through them
@@ -497,12 +526,12 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
                 rawData: {
                   ...extras,
                   timeColumn: `Time${i + 1}`,
-                  originalTime: timeStr
+                  originalTime: timeStr,
                 },
                 rowData: {
                   ...rowData,
-                  Date: scanDateTime.toISOString().split('T')[0]
-                }
+                  Date: scanDateTime.toISOString().split('T')[0],
+                },
               });
             } else {
               warnings.push(`แถว ${rowNumber}: ไม่สามารถอ่านเวลา Time${i + 1} "${timeStr}"`);
@@ -521,8 +550,8 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
             rawData: extras,
             rowData: {
               ...rowData,
-              Date: baseDate.toISOString().split('T')[0]
-            }
+              Date: baseDate.toISOString().split('T')[0],
+            },
           });
         } else {
           // If no time found, we still push a record but with warning or handle as failure in service
@@ -533,13 +562,12 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
             rawData: extras,
             rowData: {
               ...rowData,
-              Date: baseDate.toISOString().split('T')[0]
-            }
+              Date: baseDate.toISOString().split('T')[0],
+            },
           });
           warnings.push(`แถว ${rowNumber}: ไม่พบเวลาสแกนในคอลัมน์ Time1-10`);
         }
       }
-
     } else {
       // Legacy behavior: Date column contains full datetime
       records.push({
@@ -549,8 +577,8 @@ export function parseExcelFile(buffer: Buffer): ParsedFileResult {
         rawData: extras,
         rowData: {
           ...rowData,
-          Date: baseDate.toISOString().split('T')[0] // Standardize for UI
-        }
+          Date: baseDate.toISOString().split('T')[0], // Standardize for UI
+        },
       });
     }
   });

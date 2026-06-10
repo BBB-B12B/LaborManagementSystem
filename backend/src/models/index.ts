@@ -12,7 +12,6 @@ export * from './Role';
 // DC & Skill Models
 export * from './DailyContractor';
 
-
 // Project Models
 export * from './ProjectLocation';
 

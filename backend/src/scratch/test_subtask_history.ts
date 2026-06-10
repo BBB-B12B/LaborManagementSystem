@@ -14,7 +14,7 @@ const taskService = new TaskService();
 
 async function runTest() {
   console.log('=== STARTING SUBTASK EDIT HISTORY TEST ===');
-  
+
   const testUserId = 'test-admin-123';
 
   // Fetch a real task to copy valid project, work order, and category details
@@ -24,7 +24,9 @@ async function runTest() {
     throw new Error('No tasks found in database to clone metadata');
   }
   const realTask = realTasks.docs[0].data();
-  console.log(`Cloning metadata from task: ${realTask.taskName} (Project: ${realTask.projectName}, ID: ${realTask.projectId})`);
+  console.log(
+    `Cloning metadata from task: ${realTask.taskName} (Project: ${realTask.projectName}, ID: ${realTask.projectId})`
+  );
 
   // 1. Create a dummy task with 1 subtask using cloned metadata
   const createTaskInput: CreateTaskInput = {
@@ -40,13 +42,11 @@ async function runTest() {
     subtasks: [
       {
         subtaskName: 'Initial Subtask Name',
-        assignees: [
-          { employeeId: 'EMP-001', name: 'Worker One', roleId: 'Staff' }
-        ],
+        assignees: [{ employeeId: 'EMP-001', name: 'Worker One', roleId: 'Staff' }],
         isSupportRequest: false,
-        dueDate: new Date(Date.now() + 86400000 * 5)
-      }
-    ]
+        dueDate: new Date(Date.now() + 86400000 * 5),
+      },
+    ],
   };
 
   console.log('1. Creating test task and subtask...');
@@ -59,7 +59,9 @@ async function runTest() {
     throw new Error('Failed to retrieve created subtask');
   }
   const subtask = subtasks[0];
-  console.log(`Subtask ID: ${subtask.subtaskId} | Name: ${subtask.subtaskName} | Assignees: ${JSON.stringify(subtask.assignees)}`);
+  console.log(
+    `Subtask ID: ${subtask.subtaskId} | Name: ${subtask.subtaskName} | Assignees: ${JSON.stringify(subtask.assignees)}`
+  );
 
   // 2. Edit the subtask (change name and add/remove assignees)
   const updateTaskInput: UpdateTaskInput = {
@@ -69,12 +71,12 @@ async function runTest() {
         subtaskName: 'Updated Subtask Name', // Changed
         assignees: [
           { employeeId: 'EMP-001', name: 'Worker One', roleId: 'Staff' },
-          { employeeId: 'EMP-002', name: 'Worker Two', roleId: 'Staff' } // Added
+          { employeeId: 'EMP-002', name: 'Worker Two', roleId: 'Staff' }, // Added
         ],
         isSupportRequest: true, // Changed
-        dueDate: new Date(Date.now() + 86400000 * 10) // Set due date
-      }
-    ]
+        dueDate: new Date(Date.now() + 86400000 * 10), // Set due date
+      },
+    ],
   };
 
   console.log('\n2. Updating subtask details (triggering editHistory)...');
@@ -106,7 +108,7 @@ async function runTest() {
   console.log('\nChanges recorded for fields:', changedFields);
 
   const expectedFields = ['subtaskName', 'assignees', 'dueDate', 'isSupportRequest'];
-  expectedFields.forEach(field => {
+  expectedFields.forEach((field) => {
     if (!changedFields.includes(field)) {
       throw new Error(`Test failed: Expected change log for field "${field}" was not recorded`);
     }
@@ -118,11 +120,11 @@ async function runTest() {
   console.log('\n4. Cleaning up test data...');
   await taskService.softDeleteTask(task.id, testUserId);
   console.log('Test task deleted successfully.');
-  
+
   console.log('=== TEST PASSED SUCCESSFULLY ===');
 }
 
-runTest().catch(err => {
+runTest().catch((err) => {
   console.error('=== TEST FAILED ===');
   console.error(err);
   process.exit(1);

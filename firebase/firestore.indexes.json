@@ -481,6 +481,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "scanData",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "projectLocationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "workDate",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

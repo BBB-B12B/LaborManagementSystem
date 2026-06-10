@@ -170,7 +170,7 @@ export const taskService = {
   updateTaskStatus: async (id: string, status: TaskStatus): Promise<void> => {
     await api.patch(`/tasks/${id}/status`, { status });
   },
-  
+
   /**
    * Update task details (including progress)
    */
@@ -188,7 +188,11 @@ export const taskService = {
   /**
    * Reject a task (creates a new revision and assigns back)
    */
-  rejectTask: async (id: string, revisionName: string, assignees: TaskAssignee[]): Promise<void> => {
+  rejectTask: async (
+    id: string,
+    revisionName: string,
+    assignees: TaskAssignee[]
+  ): Promise<void> => {
     await api.post(`/tasks/${id}/reject`, { revisionName, assignees });
   },
 
@@ -202,7 +206,12 @@ export const taskService = {
   /**
    * Support team joins an existing task
    */
-  joinSupportTask: async (id: string, supportTaskName: string, assignees: TaskAssignee[], subtaskId?: string): Promise<void> => {
+  joinSupportTask: async (
+    id: string,
+    supportTaskName: string,
+    assignees: TaskAssignee[],
+    subtaskId?: string
+  ): Promise<void> => {
     await api.post(`/tasks/${id}/support`, { supportTaskName, assignees, subtaskId });
   },
 
@@ -227,21 +236,32 @@ export const taskService = {
       subtaskName?: string;
     }
   ): Promise<void> => {
-    await api.post(`/tasks/${id}/unlock-report`, { dateStr, daysToUnlock, isSupportReport, taskContext });
+    await api.post(`/tasks/${id}/unlock-report`, {
+      dateStr,
+      daysToUnlock,
+      isSupportReport,
+      taskContext,
+    });
   },
-
 
   /**
    * Request daily report unlock for a specific past date
    */
-  requestTaskReportUnlock: async (id: string, dateStr: string, isSupportReport?: boolean): Promise<void> => {
+  requestTaskReportUnlock: async (
+    id: string,
+    dateStr: string,
+    isSupportReport?: boolean
+  ): Promise<void> => {
     await api.post(`/tasks/${id}/request-unlock`, { dateStr, isSupportReport });
   },
 
   /**
    * Fetch daily report backlog/history in a date range for foreman workers
    */
-  getBacklog: async (startDate: string, endDate: string): Promise<{
+  getBacklog: async (
+    startDate: string,
+    endDate: string
+  ): Promise<{
     dates: string[];
     grid: Array<{
       workerId: string;
@@ -269,7 +289,12 @@ export const taskService = {
   /**
    * Create a new subtask
    */
-  createSubtask: async (id: string, subtaskName: string, assignees: TaskAssignee[], dueDate?: string | Date): Promise<Subtask> => {
+  createSubtask: async (
+    id: string,
+    subtaskName: string,
+    assignees: TaskAssignee[],
+    dueDate?: string | Date
+  ): Promise<Subtask> => {
     return await api.post<Subtask>(`/tasks/${id}/subtasks`, { subtaskName, assignees, dueDate });
   },
 
@@ -290,21 +315,34 @@ export const taskService = {
   /**
    * Update advance request status
    */
-  updateAdvanceRequestStatus: async (id: string, dateStr: string, status: string, isSupportReport?: boolean): Promise<void> => {
+  updateAdvanceRequestStatus: async (
+    id: string,
+    dateStr: string,
+    status: string,
+    isSupportReport?: boolean
+  ): Promise<void> => {
     await api.patch(`/tasks/${id}/requests/${dateStr}/status`, { status, isSupportReport });
   },
 
   /**
    * Get all advance requests across projects and date range
    */
-  getAdvanceRequestsAll: async (filters: { projectId?: string; startDate?: string; endDate?: string }): Promise<any[]> => {
+  getAdvanceRequestsAll: async (filters: {
+    projectId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any[]> => {
     return await api.get<any[]>('/tasks/requests-all', filters);
   },
 
   /**
    * Get all daily reports across projects and date range
    */
-  getDailyReportsAll: async (filters: { projectId?: string; startDate?: string; endDate?: string }): Promise<any[]> => {
+  getDailyReportsAll: async (filters: {
+    projectId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any[]> => {
     return await api.get<any[]>('/tasks/reports-all', filters);
   },
 
@@ -318,14 +356,28 @@ export const taskService = {
   /**
    * Update a subtask
    */
-  updateSubtask: async (id: string, subtaskId: string, subtaskData: { subtaskName: string; assignees: TaskAssignee[]; dueDate?: string | Date | null; isSupportRequest?: boolean }): Promise<Subtask> => {
+  updateSubtask: async (
+    id: string,
+    subtaskId: string,
+    subtaskData: {
+      subtaskName: string;
+      assignees: TaskAssignee[];
+      dueDate?: string | Date | null;
+      isSupportRequest?: boolean;
+    }
+  ): Promise<Subtask> => {
     return await api.patch<Subtask>(`/tasks/${id}/subtasks/${subtaskId}`, subtaskData);
   },
 
   /**
    * Delete a subtask
    */
-  deleteSubtask: async (id: string, subtaskId: string): Promise<{ message: string; type: 'soft' | 'hard' }> => {
-    return await api.delete<{ message: string; type: 'soft' | 'hard' }>(`/tasks/${id}/subtasks/${subtaskId}`);
+  deleteSubtask: async (
+    id: string,
+    subtaskId: string
+  ): Promise<{ message: string; type: 'soft' | 'hard' }> => {
+    return await api.delete<{ message: string; type: 'soft' | 'hard' }>(
+      `/tasks/${id}/subtasks/${subtaskId}`
+    );
   },
 };

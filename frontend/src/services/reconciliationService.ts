@@ -40,23 +40,22 @@ export interface ScanEditHistoryEntry {
   };
 }
 
-
 export interface ReconciliationRecord {
   id: string;
   employeeId: string;
   employeeName?: string;
   workDate: string;
-  projectLocationId: string;   // โครงการที่ทำงานวันนั้น (work location)
-  homeProjectId?: string;      // สังกัดถาวรของพนักงาน (ใช้ RBAC filter)
-  workLocationIds?: string[];  // ทุกโครงการที่ทำงานในวันนั้น (แสดงใน UI)
+  projectLocationId: string; // โครงการที่ทำงานวันนั้น (work location)
+  homeProjectId?: string; // สังกัดถาวรของพนักงาน (ใช้ RBAC filter)
+  workLocationIds?: string[]; // ทุกโครงการที่ทำงานในวันนั้น (แสดงใน UI)
   projectName?: string;
-  dailyReportHours?: number;   // ยอดรวม (alias ใช้ใน UI)
-  timesheetHours?: number;      // field จริงที่ Cloud Function เขียนลง Firestore
+  dailyReportHours?: number; // ยอดรวม (alias ใช้ใน UI)
+  timesheetHours?: number; // field จริงที่ Cloud Function เขียนลง Firestore
   timesheetNormalHours?: number;
   timesheetOtMorning?: number;
   timesheetOtNoon?: number;
   timesheetOtEvening?: number;
-  scanDataHours?: number;       // ยอดรวม scan
+  scanDataHours?: number; // ยอดรวม scan
   scanNormalHours?: number;
   scanOtMorningHours?: number;
   scanOtNoonHours?: number;
@@ -71,8 +70,8 @@ export interface ReconciliationRecord {
   status: ReconciliationStatus;
   originalStatus?: ReconciliationStatus;
   isLocked?: boolean;
-  resolvedAt?: string;          // Timestamp ISO string — set เมื่อ Admin แก้ไขสำเร็จ
-  resolvedBy?: string;          // userId ของ Admin ที่แก้ไข
+  resolvedAt?: string; // Timestamp ISO string — set เมื่อ Admin แก้ไขสำเร็จ
+  resolvedBy?: string; // userId ของ Admin ที่แก้ไข
   statusHistory: StatusHistoryEntry[];
   dailyReportId?: string;
   scanDataId?: string;
@@ -130,10 +129,9 @@ export interface ReconciliationRecord {
   scanEditHistory?: ScanEditHistoryEntry[];
 }
 
-
 export interface ReconciliationFilter {
-  projectLocationId?: string;   // กรองตาม work location (fallback)
-  homeProjectId?: string;       // กรองตามสังกัด (RBAC หลัก)
+  projectLocationId?: string; // กรองตาม work location (fallback)
+  homeProjectId?: string; // กรองตามสังกัด (RBAC หลัก)
   status?: string;
   startDate?: string;
   endDate?: string;
@@ -233,7 +231,7 @@ export const reconciliationService = {
   deleteGhostScan: async (id: string, reason: string): Promise<void> => {
     await apiClient.post(`/reconciliation/${id}/delete-scan`, { reason });
   },
-  
+
   /**
    * Admin แก้ไขเวลาสแกนนิ้ว
    */
@@ -270,8 +268,8 @@ export const reconciliationService = {
    */
   exportToExcel: async (params: {
     filterStatus?: string;
-    homeProjectId?: string;       // กรองตามสังกัด (RBAC หลัก)
-    projectLocationId?: string;  // backward compat
+    homeProjectId?: string; // กรองตามสังกัด (RBAC หลัก)
+    projectLocationId?: string; // backward compat
     startDate?: string;
     endDate?: string;
   }): Promise<Blob> => {
@@ -281,8 +279,6 @@ export const reconciliationService = {
     });
     return response.data as Blob;
   },
-
-
 
   /**
    * Helper: Trigger การดาวน์โหลดไฟล์ Excel จาก Blob
@@ -303,8 +299,8 @@ export const reconciliationService = {
    * ใช้ Firestore Count Aggregate — ไม่โหลดข้อมูลทั้งหมด
    */
   getStats: async (params: {
-    homeProjectId?: string;       // กรองตามสังกัด (RBAC หลัก)
-    projectLocationId?: string;  // backward compat
+    homeProjectId?: string; // กรองตามสังกัด (RBAC หลัก)
+    projectLocationId?: string; // backward compat
     startDate?: string;
     endDate?: string;
   }): Promise<{
@@ -348,5 +344,4 @@ export const reconciliationService = {
     }>('/reconciliation/stats', { params });
     return response.data.data;
   },
-
 };

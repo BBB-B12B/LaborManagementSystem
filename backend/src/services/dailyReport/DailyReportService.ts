@@ -2,7 +2,7 @@ import {
   DailyReport,
   DailyReportEntry,
   DailyWorkerReport,
-  dailyReportConverter
+  dailyReportConverter,
 } from '../../models/DailyReport';
 import * as XLSX from 'xlsx';
 import { parseExcelRowV2 } from '../../utils/dailyReportExcel';
@@ -13,7 +13,8 @@ import { BaseCrudService } from '../base/BaseCrudService';
 // Helper for UUID generation (simple fallback)
 function generateUuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    var r = (Math.random() * 16) | 0,
+      v = c == 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
@@ -48,16 +49,20 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       otHoursDelta: number;
     }
   ) {
-    t.set(reportRef, {
-      summary: {
-        workerCount: admin.firestore.FieldValue.increment(deltas.workerCountDelta),
-        totalNetHours: admin.firestore.FieldValue.increment(deltas.totalNetHoursDelta),
-        regularHours: admin.firestore.FieldValue.increment(deltas.regularHoursDelta),
-        otHours: admin.firestore.FieldValue.increment(deltas.otHoursDelta),
-        lastImportAt: new Date()
+    t.set(
+      reportRef,
+      {
+        summary: {
+          workerCount: admin.firestore.FieldValue.increment(deltas.workerCountDelta),
+          totalNetHours: admin.firestore.FieldValue.increment(deltas.totalNetHoursDelta),
+          regularHours: admin.firestore.FieldValue.increment(deltas.regularHoursDelta),
+          otHours: admin.firestore.FieldValue.increment(deltas.otHoursDelta),
+          lastImportAt: new Date(),
+        },
+        updatedAt: new Date(),
       },
-      updatedAt: new Date()
-    }, { merge: true });
+      { merge: true }
+    );
   }
 
   /**
@@ -76,7 +81,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
     const newEntry: DailyReportEntry = {
       id: generateUuid(),
       ...entryInput,
-      createdAt: now
+      createdAt: now,
     };
 
     const reportRef = collections.dailyReports.doc(reportId);
@@ -98,7 +103,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
         workerCountDelta: 0,
         totalNetHoursDelta: newEntry.hours,
         regularHoursDelta: newEntry.workType === 'regular' ? newEntry.hours : 0,
-        otHoursDelta: newEntry.workType !== 'regular' ? newEntry.hours : 0
+        otHoursDelta: newEntry.workType !== 'regular' ? newEntry.hours : 0,
       };
 
       if (!reportDoc.exists) {
@@ -112,7 +117,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
           updatedAt: now,
           createdBy: user,
           updatedBy: user,
-          version: 1
+          version: 1,
         };
         t.set(reportRef, dailyReportConverter.toFirestore(newReport));
       }
@@ -140,13 +145,15 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
           otEveningHours: hDelta.otEvening,
           totalNetHours: newEntry.hours,
           entries: [newEntry],
-          editHistory: [{
-            action: 'create',
-            timestamp: now,
-            userId: user,
-            details: `Initial ${newEntry.workType}: ${newEntry.hours}h`
-          }],
-          updatedAt: now
+          editHistory: [
+            {
+              action: 'create',
+              timestamp: now,
+              userId: user,
+              details: `Initial ${newEntry.workType}: ${newEntry.hours}h`,
+            },
+          ],
+          updatedAt: now,
         };
         t.set(workerRef, newWorkerReport);
       } else {
@@ -162,8 +169,8 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
             action: 'update',
             timestamp: now,
             userId: user,
-            details: `Added ${newEntry.workType}: ${newEntry.hours}h`
-          })
+            details: `Added ${newEntry.workType}: ${newEntry.hours}h`,
+          }),
         });
       }
 
@@ -193,14 +200,14 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       if (!workerDoc.exists) return;
 
       const workerData = workerDoc.data() as DailyWorkerReport;
-      const entryToRemove = workerData.entries.find(e => e.id === entryId);
+      const entryToRemove = workerData.entries.find((e) => e.id === entryId);
       if (!entryToRemove) return;
 
       const deltas = {
         workerCountDelta: 0,
         totalNetHoursDelta: -entryToRemove.hours,
         regularHoursDelta: entryToRemove.workType === 'regular' ? -entryToRemove.hours : 0,
-        otHoursDelta: entryToRemove.workType !== 'regular' ? -entryToRemove.hours : 0
+        otHoursDelta: entryToRemove.workType !== 'regular' ? -entryToRemove.hours : 0,
       };
 
       const hDelta = {
@@ -210,7 +217,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
         otEvening: entryToRemove.workType === 'ot_evening' ? -entryToRemove.hours : 0,
       };
 
-      const remainingEntries = workerData.entries.filter(e => e.id !== entryId);
+      const remainingEntries = workerData.entries.filter((e) => e.id !== entryId);
 
       if (remainingEntries.length === 0) {
         deltas.workerCountDelta = -1;
@@ -228,8 +235,8 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
             action: 'delete',
             timestamp: new Date(),
             userId: user,
-            details: `Removed ${entryToRemove.workType}: ${entryToRemove.hours}h`
-          })
+            details: `Removed ${entryToRemove.workType}: ${entryToRemove.hours}h`,
+          }),
         });
       }
 
@@ -243,17 +250,17 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
   async getByProjectAndDate(projectId: string, date: Date): Promise<DailyReport | null> {
     const reportId = this.generateId(projectId, date);
     const reportRef = collections.dailyReports.doc(reportId);
-    
+
     const doc = await reportRef.get();
     if (!doc.exists) return null;
 
     const report = dailyReportConverter.fromFirestore(doc);
-    
+
     // Fetch all worker entries to rebuild the legacy combined view
     const workerSnapshot = await reportRef.collection('workerEntries').get();
     const allEntries: DailyReportEntry[] = [];
-    
-    workerSnapshot.forEach(wDoc => {
+
+    workerSnapshot.forEach((wDoc) => {
       const wData = wDoc.data() as DailyWorkerReport;
       if (wData.entries) {
         allEntries.push(...wData.entries);
@@ -268,7 +275,11 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
   /**
    * Get Reports by Month (Uses Summary Cache - Fast!)
    */
-  async getByProjectAndMonth(projectId: string, year: number, month: number): Promise<DailyReport[]> {
+  async getByProjectAndMonth(
+    projectId: string,
+    year: number,
+    month: number
+  ): Promise<DailyReport[]> {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
 
@@ -278,7 +289,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       .where('date', '<=', endDate)
       .get();
 
-    return snapshot.docs.map(doc => dailyReportConverter.fromFirestore(doc));
+    return snapshot.docs.map((doc) => dailyReportConverter.fromFirestore(doc));
   }
 
   /**
@@ -297,7 +308,6 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
 
     return reports;
   }
-
 
   /**
    * ดึง Daily Reports ตามวันที่ (ทุกโครงการ)
@@ -322,18 +332,22 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
     for (const sheetName of workbook.SheetNames) {
       const worksheet = workbook.Sheets[sheetName];
       const fullRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-      
+
       let headerRowIndex = -1;
-      
+
       // T-710: Fuzzy Header Detection (Fuzzy scan up to 30 rows)
       for (let i = 0; i < Math.min(fullRows.length, 30); i++) {
         const row = fullRows[i];
         if (!row || !Array.isArray(row)) continue;
-        
+
         const rowStr = row.join('|').toLowerCase();
-        
+
         // Match Keywords: รหัสพนักงาน, รหัส, Employee, ID, Code, วันที่, Date
-        const matchesEmp = rowStr.includes('รหัส') || rowStr.includes('emp') || rowStr.includes('id') || rowStr.includes('code');
+        const matchesEmp =
+          rowStr.includes('รหัส') ||
+          rowStr.includes('emp') ||
+          rowStr.includes('id') ||
+          rowStr.includes('code');
         const matchesDate = rowStr.includes('วันท') || rowStr.includes('date');
 
         if (matchesEmp && matchesDate) {
@@ -350,7 +364,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
 
       // Parse starting from the detected header row
       const rows = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
-      
+
       for (const [index, row] of rows.entries()) {
         const parsed = parseExcelRowV2(row);
         if (!parsed) continue;
@@ -360,10 +374,10 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
           .where('employeeId', '==', parsed.employeeId)
           .limit(1)
           .get();
-        
+
         const dcDoc = dcSnapshot.empty ? null : dcSnapshot.docs[0];
         const dcData = dcDoc?.data() as any;
-        
+
         // Add more metadata for the preview UI
         allResults.push({
           ...parsed,
@@ -372,7 +386,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
           projectLocationId: dcData?.projectLocationId,
           isValid: !!dcDoc,
           row: headerRowIndex + index + 2, // Excel 1-indexed row number
-          error: dcDoc ? null : 'ไม่พบรหัสพนักงานในฐานข้อมูล'
+          error: dcDoc ? null : 'ไม่พบรหัสพนักงานในฐานข้อมูล',
         });
       }
 
@@ -403,18 +417,23 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
   async bulkCreateDailyReports(data: any[], user: string, importFileUrl?: string): Promise<number> {
     let successCount = 0;
     console.log(`[BulkCreate] Received ${data.length} items from frontend.`);
-    
-    // 1. Group by Report (Project + Date)
-    const itemsByReport = data.reduce((acc: Record<string, any[]>, item: any) => {
-      // T-712: Ensure date is parsed correctly from string or date object
-      const itemDate = new Date(item.date);
-      const reportId = this.generateId(item.projectLocationId, itemDate);
-      if (!acc[reportId]) acc[reportId] = [];
-      acc[reportId].push(item);
-      return acc;
-    }, {} as Record<string, any[]>);
 
-    console.log(`[BulkCreate] Grouped into ${Object.keys(itemsByReport).length} reports (Project-Day docs).`);
+    // 1. Group by Report (Project + Date)
+    const itemsByReport = data.reduce(
+      (acc: Record<string, any[]>, item: any) => {
+        // T-712: Ensure date is parsed correctly from string or date object
+        const itemDate = new Date(item.date);
+        const reportId = this.generateId(item.projectLocationId, itemDate);
+        if (!acc[reportId]) acc[reportId] = [];
+        acc[reportId].push(item);
+        return acc;
+      },
+      {} as Record<string, any[]>
+    );
+
+    console.log(
+      `[BulkCreate] Grouped into ${Object.keys(itemsByReport).length} reports (Project-Day docs).`
+    );
 
     for (const reportId in itemsByReport) {
       const items = itemsByReport[reportId];
@@ -431,15 +450,18 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
         await db.runTransaction(async (t) => {
           // 1. ALL READS FIRST (Firestore Rule)
           const reportDoc = await t.get(reportRef);
-          
-          const itemsByWorker = items.reduce((acc: Record<string, any[]>, item: any) => {
-            if (!item.isValid) return acc;
-            const workerId = item.dailyContractorId;
-            if (!workerId) return acc;
-            if (!acc[workerId]) acc[workerId] = [];
-            acc[workerId].push(item);
-            return acc;
-          }, {} as Record<string, any[]>);
+
+          const itemsByWorker = items.reduce(
+            (acc: Record<string, any[]>, item: any) => {
+              if (!item.isValid) return acc;
+              const workerId = item.dailyContractorId;
+              if (!workerId) return acc;
+              if (!acc[workerId]) acc[workerId] = [];
+              acc[workerId].push(item);
+              return acc;
+            },
+            {} as Record<string, any[]>
+          );
 
           const workerIds = Object.keys(itemsByWorker);
           const workerDocsMap = new Map<string, FirebaseFirestore.DocumentSnapshot>();
@@ -459,12 +481,18 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
               projectLocationId: projectId,
               date: date,
               status: 'draft',
-              summary: { workerCount: 0, totalNetHours: 0, regularHours: 0, otHours: 0, lastImportAt: new Date() },
+              summary: {
+                workerCount: 0,
+                totalNetHours: 0,
+                regularHours: 0,
+                otHours: 0,
+                lastImportAt: new Date(),
+              },
               createdAt: new Date(),
               updatedAt: new Date(),
               createdBy: user,
               updatedBy: user,
-              version: 1
+              version: 1,
             };
             t.set(reportRef, dailyReportConverter.toFirestore(newReport));
           }
@@ -473,7 +501,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
             workerCountDelta: 0,
             totalNetHoursDelta: 0,
             regularHoursDelta: 0,
-            otHoursDelta: 0
+            otHoursDelta: 0,
           };
 
           for (const workerId of workerIds) {
@@ -488,12 +516,12 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
               otMorning: 0,
               otNoon: 0,
               otEvening: 0,
-              total: 0
+              total: 0,
             };
 
             const newEntries: DailyReportEntry[] = workerItems.map((item: any) => {
               const hours = Number(item.hours || 0);
-              
+
               hDelta.total += hours;
               if (item.workType === 'regular') {
                 hDelta.regular += hours;
@@ -514,7 +542,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
                 workType: item.workType,
                 hours,
                 notes: item.notes || '',
-                createdAt: new Date()
+                createdAt: new Date(),
               };
             });
 
@@ -525,24 +553,29 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
                 id: workerId,
                 dailyContractorId: workerId,
                 employeeId: workerItems[0].employeeId || '',
-                workerName: workerItems[0].matchedWorkerName || workerItems[0].workerName || 'Unknown',
+                workerName:
+                  workerItems[0].matchedWorkerName || workerItems[0].workerName || 'Unknown',
                 regularHours: hDelta.regular,
                 otMorningHours: hDelta.otMorning,
                 otNoonHours: hDelta.otNoon,
                 otEveningHours: hDelta.otEvening,
                 totalNetHours: hDelta.total,
                 entries: newEntries,
-                editHistory: [{
-                  action: 'import',
-                  timestamp: new Date(),
-                  userId: user,
-                  details: `Bulk Import: ${newEntries.length} entries`
-                }],
-                updatedAt: new Date()
+                editHistory: [
+                  {
+                    action: 'import',
+                    timestamp: new Date(),
+                    userId: user,
+                    details: `Bulk Import: ${newEntries.length} entries`,
+                  },
+                ],
+                updatedAt: new Date(),
               };
               t.set(workerRef, newWorkerReport);
             } else {
-              console.log(`[BulkCreate] Worker ${workerId}: Appending to existing worker report doc.`);
+              console.log(
+                `[BulkCreate] Worker ${workerId}: Appending to existing worker report doc.`
+              );
               t.update(workerRef, {
                 regularHours: admin.firestore.FieldValue.increment(hDelta.regular),
                 otMorningHours: admin.firestore.FieldValue.increment(hDelta.otMorning),
@@ -555,8 +588,8 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
                   action: 'import',
                   timestamp: new Date(),
                   userId: user,
-                  details: `Bulk Import Append: ${newEntries.length} entries`
-                })
+                  details: `Bulk Import Append: ${newEntries.length} entries`,
+                }),
               });
             }
             successCount += newEntries.length;
@@ -567,10 +600,14 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
 
           if (importFileUrl) {
             console.log(`[BulkCreate] Linking import source file: ${importFileUrl}`);
-            t.set(reportRef, {
-              importFileUrls: admin.firestore.FieldValue.arrayUnion(importFileUrl),
-              updatedAt: new Date()
-            }, { merge: true });
+            t.set(
+              reportRef,
+              {
+                importFileUrls: admin.firestore.FieldValue.arrayUnion(importFileUrl),
+                updatedAt: new Date(),
+              },
+              { merge: true }
+            );
           }
         });
         console.log(`[BulkCreate] Transaction successfully committed for ${reportId}.`);

@@ -81,14 +81,11 @@ export interface UpdateUserInput {
  */
 export const userConverter = {
   toFirestore: (user: Omit<User, 'id'>): any => {
-    const timestampOrDate = (value: Date): any =>
-      value instanceof Date ? value : new Date(value);
+    const timestampOrDate = (value: Date): any => (value instanceof Date ? value : new Date(value));
 
     const usernameValue = (user.username || '').trim();
     const usernameLower = usernameValue.toLowerCase();
-    const projectLocations = Array.isArray(user.projectLocationIds)
-      ? user.projectLocationIds
-      : [];
+    const projectLocations = Array.isArray(user.projectLocationIds) ? user.projectLocationIds : [];
 
     return {
       employeeId: user.employeeId,
@@ -140,12 +137,20 @@ export const userConverter = {
     const updatedAtValue = data.updatedAt || data.UpdatedAt || new Date();
 
     let projectIds: string[] = [];
-    const rawProjectIds = data.projectLocation || data.projectLocationIds || data.ProjectLocationIds || data.projectIds || data.projectId;
-    
+    const rawProjectIds =
+      data.projectLocation ||
+      data.projectLocationIds ||
+      data.ProjectLocationIds ||
+      data.projectIds ||
+      data.projectId;
+
     if (Array.isArray(rawProjectIds)) {
       projectIds = rawProjectIds;
     } else if (typeof rawProjectIds === 'string') {
-      projectIds = rawProjectIds.split(/[|,]/).map(item => item.trim()).filter(Boolean);
+      projectIds = rawProjectIds
+        .split(/[|,]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
     }
 
     return {
@@ -160,8 +165,7 @@ export const userConverter = {
       dateOfBirth: data.dateOfBirth ? parseDate(data.dateOfBirth) : undefined,
       startDate: parseDate(startDateValue),
       projectLocationIds: projectIds,
-      isActive:
-        data.isActive !== undefined ? Boolean(data.isActive) : parseActive(data.Active),
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : parseActive(data.Active),
       createdAt: parseDate(createdAtValue),
       updatedAt: parseDate(updatedAtValue),
       createdBy: data.createdBy || data.CreatedBy || 'system',

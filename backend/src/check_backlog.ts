@@ -6,9 +6,14 @@ async function checkBacklog() {
   for (const doc of tasksSnapshot.docs) {
     const task = doc.data();
     if (task.unlockRequests) {
-      console.log(`Task [${task.taskId}] ${task.taskName} unlockRequests:`, JSON.stringify(task.unlockRequests));
+      console.log(
+        `Task [${task.taskId}] ${task.taskName} unlockRequests:`,
+        JSON.stringify(task.unlockRequests)
+      );
     }
   }
 }
 
-checkBacklog().then(() => console.log('Done')).catch(err => console.error(err));
+checkBacklog()
+  .then(() => console.log('Done'))
+  .catch((err) => console.error(err));

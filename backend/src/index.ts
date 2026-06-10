@@ -26,7 +26,7 @@ app.use(
 );
 
 // CORS
-const corsOrigins = config.corsOrigin.split(',').map(origin => origin.trim());
+const corsOrigins = config.corsOrigin.split(',').map((origin) => origin.trim());
 app.use(
   cors({
     origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0],
@@ -154,7 +154,6 @@ if (!isRunningAsCloudFunction) {
 }
 
 export default app;
-
 
 // ============================================
 // Firebase Cloud Functions

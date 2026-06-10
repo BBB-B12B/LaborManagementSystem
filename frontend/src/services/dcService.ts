@@ -13,21 +13,27 @@ import type { DCCreateInput, DCEditInput } from '../validation/dcSchema';
  * Daily Contractor data type (DTO from backend)
  */
 export interface AttendanceStats {
-  yearly: Record<string, {
-    paidLeave: number;
-    unpaidLeave: number;
-    lateMinutes: number;
-    earlyLeaveMinutes: number;
-    absentDays: number;
-  }>;
-  periods: Record<string, {
-    name: string;
-    paidLeave: number;
-    unpaidLeave: number;
-    lateMinutes: number;
-    earlyLeaveMinutes: number;
-    absentDays: number;
-  }>;
+  yearly: Record<
+    string,
+    {
+      paidLeave: number;
+      unpaidLeave: number;
+      lateMinutes: number;
+      earlyLeaveMinutes: number;
+      absentDays: number;
+    }
+  >;
+  periods: Record<
+    string,
+    {
+      name: string;
+      paidLeave: number;
+      unpaidLeave: number;
+      lateMinutes: number;
+      earlyLeaveMinutes: number;
+      absentDays: number;
+    }
+  >;
 }
 
 export interface DailyContractor {
@@ -127,19 +133,14 @@ export interface DCFilterOptions {
  * Get all DCs with optional filters
  * GET /api/daily-contractors
  */
-export async function getAllDCs(
-  filters?: DCFilterOptions
-): Promise<DCListResponse> {
+export async function getAllDCs(filters?: DCFilterOptions): Promise<DCListResponse> {
   const params = new URLSearchParams();
 
   if (filters?.search) params.append('search', filters.search);
   if (filters?.skillId) params.append('skillId', filters.skillId);
-  if (filters?.projectLocationId)
-    params.append('projectLocationId', filters.projectLocationId);
-  if (filters?.department)
-    params.append('department', filters.department);
-  if (filters?.isActive !== undefined)
-    params.append('isActive', String(filters.isActive));
+  if (filters?.projectLocationId) params.append('projectLocationId', filters.projectLocationId);
+  if (filters?.department) params.append('department', filters.department);
+  if (filters?.isActive !== undefined) params.append('isActive', String(filters.isActive));
   if (filters?.page) params.append('page', String(filters.page));
   if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
 
@@ -197,10 +198,7 @@ export async function createDC(data: DCCreateInput): Promise<DailyContractor> {
  *
  * FR-DC-001: Update DC data
  */
-export async function updateDC(
-  id: string,
-  data: DCEditInput
-): Promise<DailyContractor> {
+export async function updateDC(id: string, data: DCEditInput): Promise<DailyContractor> {
   const response = await apiClient.put<{
     success: boolean;
     data: DailyContractor;
@@ -236,10 +234,7 @@ export async function importDailyContractorsFromFile(file: File): Promise<DCImpo
  * FR-DC-003: DC Auto Complete search
  * SC-008: Search performance <0.5s
  */
-export async function searchDCs(
-  query: string,
-  limit: number = 10
-): Promise<DailyContractor[]> {
+export async function searchDCs(query: string, limit: number = 10): Promise<DailyContractor[]> {
   const params = new URLSearchParams();
   params.append('search', query);
   params.append('pageSize', String(limit));
@@ -271,9 +266,7 @@ export async function getDCsBySkill(skillId: string): Promise<DailyContractor[]>
  *
  * FR-DC-004: DC linked to authorized projects
  */
-export async function getDCsByProject(
-  projectLocationId: string
-): Promise<DailyContractor[]> {
+export async function getDCsByProject(projectLocationId: string): Promise<DailyContractor[]> {
   const response = await apiClient.get<{
     success: boolean;
     data: DCListResponse;
@@ -286,9 +279,7 @@ export async function getDCsByProject(
  * Get DC compensation (income & expense) details
  * GET /api/daily-contractors/:id/compensation
  */
-export async function getDCCompensation(
-  id: string
-): Promise<DCCompensationDetails> {
+export async function getDCCompensation(id: string): Promise<DCCompensationDetails> {
   const response = await apiClient.get<{
     success: boolean;
     data: DCCompensationDetails;
@@ -374,5 +365,3 @@ export const dcService = {
 };
 
 export default dcService;
-
-

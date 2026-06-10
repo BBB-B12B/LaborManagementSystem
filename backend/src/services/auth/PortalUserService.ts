@@ -36,10 +36,7 @@ class PortalUserService {
     const normalized = this.normalizeUsername(username);
 
     // ลองค้นหาโดยใช้ฟิลด์ normalized ก่อน
-    let snapshot = await this.collection
-      .where('UsernameLower', '==', normalized)
-      .limit(1)
-      .get();
+    let snapshot = await this.collection.where('UsernameLower', '==', normalized).limit(1).get();
 
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];

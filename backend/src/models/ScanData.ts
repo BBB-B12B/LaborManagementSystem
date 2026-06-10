@@ -12,19 +12,20 @@
 // ---------------------------------------------------------------------------
 
 export type ScanEditAction =
-  | 'manual_fill'    // Admin เติม scan times ที่ขาดหายไป
-  | 'manual_create'  // Admin สร้าง document ใหม่ทั้งหมด (ไม่มี scan เดิมเลย)
-  | 'delete_ghost'   // Admin ลบ Ghost Scan (สแกนนิ้วที่ไม่ได้ทำงานจริง)
-  | 'modify';        // Admin แก้ไข scan times อื่นๆ
+  | 'manual_fill' // Admin เติม scan times ที่ขาดหายไป
+  | 'manual_create' // Admin สร้าง document ใหม่ทั้งหมด (ไม่มี scan เดิมเลย)
+  | 'delete_ghost' // Admin ลบ Ghost Scan (สแกนนิ้วที่ไม่ได้ทำงานจริง)
+  | 'modify'; // Admin แก้ไข scan times อื่นๆ
 
 export interface ScanEditEntry {
   editedAt: Date;
-  editedBy: string;                // Admin userId
+  editedBy: string; // Admin userId
   action: ScanEditAction;
-  reason: string;                  // เหตุผลที่แก้ไข (บังคับกรอก)
+  reason: string; // เหตุผลที่แก้ไข (บังคับกรอก)
   reconciliationRecordId?: string; // ref กลับไปที่ ReconciliationRecord
-  snapshot: {                      // state ก่อนแก้ไข
-    punches: string[];             // ['08:01', '12:00', '13:00', '17:02']
+  snapshot: {
+    // state ก่อนแก้ไข
+    punches: string[]; // ['08:01', '12:00', '13:00', '17:02']
     firstIn?: string | null;
     lastOut?: string | null;
     regularHours?: number;
@@ -89,8 +90,8 @@ export interface ScanData {
   deletedBy?: string;
 
   // Audit Trail (mirrors Daily Report editHistory pattern)
-  isManualEntry?: boolean;     // true = Admin สร้าง document ทั้งหมดด้วยตัวเอง
-  isManuallyEdited?: boolean;  // true = มีการแก้ไขโดย Admin อย่างน้อย 1 ครั้ง
+  isManualEntry?: boolean; // true = Admin สร้าง document ทั้งหมดด้วยตัวเอง
+  isManuallyEdited?: boolean; // true = มีการแก้ไขโดย Admin อย่างน้อย 1 ครั้ง
   editHistory?: ScanEditEntry[]; // ประวัติการแก้ไขทั้งหมด
 
   // Metadata
@@ -126,7 +127,7 @@ export function roundDownToFiveMinutes(date: Date): Date {
 
 /**
  * การจำแนกพฤติกรรมการสแกนพื้นฐาน (Stateless Time-based Classification)
- * Contextual classification (e.g., differentiating 'in' vs 'out' for OT) 
+ * Contextual classification (e.g., differentiating 'in' vs 'out' for OT)
  * will be handled by analyzeDailyScans later.
  */
 export function classifyScanBehavior(scanTime: Date): ScanBehavior {
@@ -232,7 +233,7 @@ export const scanDataConverter = {
     };
 
     // Strip undefined out so {merge: true} works correctly without overwriting fields
-    Object.keys(data).forEach(k => {
+    Object.keys(data).forEach((k) => {
       if (data[k] === undefined) {
         delete data[k];
       }
@@ -250,19 +251,43 @@ export const scanDataConverter = {
       position: data.position,
       projectLocationId: data.projectLocationId,
       projectLocationIds: data.projectLocationIds || [],
-      scanDateTime: data.scanDateTime?.toDate ? data.scanDateTime.toDate() : (data.scanDateTime instanceof Date ? data.scanDateTime : new Date()),
+      scanDateTime: data.scanDateTime?.toDate
+        ? data.scanDateTime.toDate()
+        : data.scanDateTime instanceof Date
+          ? data.scanDateTime
+          : new Date(),
       scanDate: data.scanDate,
       scanBehavior: data.scanBehavior || 'regular_in',
-      workDate: data.workDate?.toDate ? data.workDate.toDate() : (data.workDate instanceof Date ? data.workDate : new Date()),
-      roundedTime: data.roundedTime?.toDate ? data.roundedTime.toDate() : (data.roundedTime instanceof Date ? data.roundedTime : new Date()),
+      workDate: data.workDate?.toDate
+        ? data.workDate.toDate()
+        : data.workDate instanceof Date
+          ? data.workDate
+          : new Date(),
+      roundedTime: data.roundedTime?.toDate
+        ? data.roundedTime.toDate()
+        : data.roundedTime instanceof Date
+          ? data.roundedTime
+          : new Date(),
       isLate: data.isLate || false,
       lateMinutes: data.lateMinutes || 0,
       matchedDailyReportId: data.matchedDailyReportId,
       hasDiscrepancy: data.hasDiscrepancy || false,
       notes: data.notes,
-      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt instanceof Date ? data.createdAt : new Date()),
-      updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt instanceof Date ? data.updatedAt : new Date()),
-      importedAt: data.importedAt?.toDate ? data.importedAt.toDate() : (data.importedAt instanceof Date ? data.importedAt : new Date()),
+      createdAt: data.createdAt?.toDate
+        ? data.createdAt.toDate()
+        : data.createdAt instanceof Date
+          ? data.createdAt
+          : new Date(),
+      updatedAt: data.updatedAt?.toDate
+        ? data.updatedAt.toDate()
+        : data.updatedAt instanceof Date
+          ? data.updatedAt
+          : new Date(),
+      importedAt: data.importedAt?.toDate
+        ? data.importedAt.toDate()
+        : data.importedAt instanceof Date
+          ? data.importedAt
+          : new Date(),
       importedBy: data.importedBy,
       importBatchId: data.importBatchId,
       importSource: data.importSource || undefined,
@@ -288,7 +313,11 @@ export const scanDataConverter = {
       otNoonHours: data.otNoonHours,
       otEveningHours: data.otEveningHours,
       isDeleted: data.isDeleted || false,
-      deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : (data.deletedAt instanceof Date ? data.deletedAt : undefined),
+      deletedAt: data.deletedAt?.toDate
+        ? data.deletedAt.toDate()
+        : data.deletedAt instanceof Date
+          ? data.deletedAt
+          : undefined,
       deletedBy: data.deletedBy,
       isManualEntry: data.isManualEntry || false,
       isManuallyEdited: data.isManuallyEdited || false,

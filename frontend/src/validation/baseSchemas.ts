@@ -171,17 +171,20 @@ export const numberWithRange = (min: number, max: number, fieldName?: string) =>
  * Date schema with Thai error messages
  */
 export const baseDate = (fieldName?: string) =>
-  z.preprocess((val) => {
-    if (val instanceof Date) return val;
-    if (typeof val === 'string') {
-      const parsed = new Date(val);
-      return isNaN(parsed.getTime()) ? val : parsed;
-    }
-    return val;
-  }, z.date({
-    required_error: fieldName ? errorMessages.requiredField(fieldName) : errorMessages.required,
-    invalid_type_error: errorMessages.invalidDate,
-  }));
+  z.preprocess(
+    (val) => {
+      if (val instanceof Date) return val;
+      if (typeof val === 'string') {
+        const parsed = new Date(val);
+        return isNaN(parsed.getTime()) ? val : parsed;
+      }
+      return val;
+    },
+    z.date({
+      required_error: fieldName ? errorMessages.requiredField(fieldName) : errorMessages.required,
+      invalid_type_error: errorMessages.invalidDate,
+    })
+  );
 
 /**
  * Optional date

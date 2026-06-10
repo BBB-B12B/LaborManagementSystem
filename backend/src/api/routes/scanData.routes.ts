@@ -35,10 +35,7 @@ const upload = multer({
  */
 router.get('/template', (_req: Request, res: Response) => {
   try {
-    const headers = [
-      'EmployeeNumber',
-      'Date'
-    ];
+    const headers = ['EmployeeNumber', 'Date'];
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers]);
@@ -49,23 +46,27 @@ router.get('/template', (_req: Request, res: Response) => {
       { wch: 80 }, // Note
     ];
 
-    XLSX.utils.sheet_add_aoa(ws, [
+    XLSX.utils.sheet_add_aoa(
+      ws,
       [
-        '200022',
-        '2025-08-25 07:35:22'
+        ['200022', '2025-08-25 07:35:22'],
+        [],
+        [
+          '',
+          '',
+          'หมายเหตุ: กรุณาวางข้อมูลในรูปแบบรหัสพนักงาน (EmployeeNumber) และ วันเวลา (YYYY-MM-DD HH:mm:ss)',
+        ],
       ],
-      [],
-      [
-        '',
-        '',
-        'หมายเหตุ: กรุณาวางข้อมูลในรูปแบบรหัสพนักงาน (EmployeeNumber) และ วันเวลา (YYYY-MM-DD HH:mm:ss)'
-      ]
-    ], { origin: -1 });
+      { origin: -1 }
+    );
 
     XLSX.utils.book_append_sheet(wb, ws, 'ScanDataTemplate');
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', 'attachment; filename=ScanData_Template.xlsx');
     res.send(buffer);
   } catch (error: any) {
@@ -92,20 +93,27 @@ router.get(
       const errors = validationResult(req);
       if (!errors.isEmpty()) throw new AppError('Validation failed', 400);
 
-      const { projectId, contractorId, startDate, endDate, enriched } = req.query;
+      const {
+        projectId,
+        projectLocationId,
+        contractorId,
+        employeeNumber,
+        startDate,
+        endDate,
+        enriched,
+      } = req.query;
       let result;
 
       const options = {
-        projectId: projectId as string,
-        contractorId: contractorId as string,
+        projectId: (projectId || projectLocationId) as string,
+        contractorId: (contractorId || employeeNumber) as string,
         startDate: startDate ? new Date(startDate as string) : undefined,
         endDate: endDate ? new Date(endDate as string) : undefined,
         page: parseInt(req.query.page as string) || 1,
         pageSize: parseInt(req.query.pageSize as string) || 50,
         onlyDeleted: req.query.onlyDeleted === 'true',
-        enriched: req.query.enriched === 'true'
+        enriched: req.query.enriched === 'true',
       };
-
 
       if (enriched === 'true') {
         result = await scanDataService.getDetailedScanReport(options);
@@ -134,14 +142,6 @@ router.get(
     }
   }
 );
-
-
-
-
-
-
-
-
 
 /**
  * GET /api/scan-data/late
@@ -184,42 +184,63 @@ router.get(
 router.get('/export', async (req: Request, res: Response) => {
   try {
     const { projectLocationId, startDate, endDate, employeeNumber } = req.query;
-    
+
     if (!projectLocationId || !startDate || !endDate) {
-       throw new AppError('กรุณาระบุโครงการและช่วงวันที่', 400);
+      throw new AppError('กรุณาระบุโครงการและช่วงวันที่', 400);
     }
 
     const rows = await scanDataService.getAggregatedDataForExport({
       projectLocationId: projectLocationId as string,
       startDate: new Date(startDate as string),
       endDate: new Date(endDate as string),
-      onlyDeleted: req.query.onlyDeleted === 'true'
+      onlyDeleted: req.query.onlyDeleted === 'true',
     });
-
 
     let filteredRows = rows;
     if (employeeNumber) {
-      filteredRows = rows.filter((r: any) => 
+      filteredRows = rows.filter((r: any) =>
         String(r.EmployeeNumber).includes(employeeNumber as string)
       );
     }
 
-    if (!filteredRows || filteredRows.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับเงื่อนไขนี้', 404);
+    if (!filteredRows || filteredRows.length === 0)
+      throw new AppError('ไม่พบข้อมูลสำหรับเงื่อนไขนี้', 404);
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(filteredRows, { 
+    const ws = XLSX.utils.json_to_sheet(filteredRows, {
       header: [
-        'EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6',
-        'NormalStatus', 'RegularHours', 'LunchStatus', 'MorningOT', 'EveningOT', 'LateMinutes',
-        'DiffMorning', 'DiffLunch', 'DiffEvening', 'Department'
-      ] 
+        'EmployeeNumber',
+        'Date',
+        'Time1',
+        'Time2',
+        'Time3',
+        'Time4',
+        'Time5',
+        'Time6',
+        'NormalStatus',
+        'RegularHours',
+        'LunchStatus',
+        'MorningOT',
+        'EveningOT',
+        'LateMinutes',
+        'DiffMorning',
+        'DiffLunch',
+        'DiffEvening',
+        'Department',
+      ],
     });
 
     XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=ScanData_Export_${new Date().getTime()}.xlsx`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=ScanData_Export_${new Date().getTime()}.xlsx`
+    );
     res.send(buffer);
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message || 'Export failed' });
@@ -233,22 +254,40 @@ router.get('/batch/:batchId/export', async (req: Request, res: Response) => {
   try {
     const { batchId } = req.params;
     const rows = await scanDataService.getAggregatedDataForExport({ batchId });
-    
+
     if (!rows || rows.length === 0) throw new AppError('ไม่พบข้อมูลสำหรับ Batch นี้', 404);
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows, { 
+    const ws = XLSX.utils.json_to_sheet(rows, {
       header: [
-        'EmployeeNumber', 'Date', 'Time1', 'Time2', 'Time3', 'Time4', 'Time5', 'Time6',
-        'NormalStatus', 'RegularHours', 'LunchStatus', 'MorningOT', 'EveningOT', 'LateMinutes',
-        'DiffMorning', 'DiffLunch', 'DiffEvening', 'Department'
-      ] 
+        'EmployeeNumber',
+        'Date',
+        'Time1',
+        'Time2',
+        'Time3',
+        'Time4',
+        'Time5',
+        'Time6',
+        'NormalStatus',
+        'RegularHours',
+        'LunchStatus',
+        'MorningOT',
+        'EveningOT',
+        'LateMinutes',
+        'DiffMorning',
+        'DiffLunch',
+        'DiffEvening',
+        'Department',
+      ],
     });
 
     XLSX.utils.book_append_sheet(wb, ws, 'ScanData_Export');
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', `attachment; filename=ScanData_Batch_${batchId}.xlsx`);
     res.send(buffer);
   } catch (error: any) {
@@ -287,47 +326,58 @@ router.post(
       const fileType = detectFileType(req.file.originalname);
       if (!fileType) throw new AppError('รองรับเฉพาะไฟล์ .dat หรือ Excel (.xlsx, .xls)', 400);
 
-      const parseResult = fileType === 'dat' ? parseDatFile(req.file.buffer) : parseExcelFile(req.file.buffer);
+      const parseResult =
+        fileType === 'dat' ? parseDatFile(req.file.buffer) : parseExcelFile(req.file.buffer);
       const parseErrors = parseResult.errors ?? [];
       const warnings = parseResult.warnings ?? [];
 
-      const failedParseRowSummaries = parseErrors.map(err => ({
+      const failedParseRowSummaries = parseErrors.map((err) => ({
         row: err.row,
         status: 'failed' as const,
         employeeNumber: err.employeeNumber || '',
         data: err.rowData || {},
-        error: err.error
+        error: err.error,
       }));
 
       if (parseResult.records.length === 0) {
         return res.status(200).json({
           success: false,
-          data: { totalRecords: parseErrors.length, successfulRecords: 0, failedRecords: parseErrors.length, errors: parseErrors, warnings, records: failedParseRowSummaries },
+          data: {
+            totalRecords: parseErrors.length,
+            successfulRecords: 0,
+            failedRecords: parseErrors.length,
+            errors: parseErrors,
+            warnings,
+            records: failedParseRowSummaries,
+          },
         });
       }
 
-      const importedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+      const importedBy =
+        authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
       const dryRun = req.query.dryRun === 'true';
       const importSummary = await scanDataService.bulkImport(parseResult.records, {
         projectLocationId: req.body.projectLocationId,
         importedBy,
         importNote: req.body.importNote,
         source: fileType,
-        dryRun
+        dryRun,
       });
 
-      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort((a, b) => {
-        const empA = String(a.employeeNumber || '');
-        const empB = String(b.employeeNumber || '');
-        
-        if (empA && empB && empA !== empB) {
-          return empA.localeCompare(empB, undefined, { numeric: true });
+      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort(
+        (a, b) => {
+          const empA = String(a.employeeNumber || '');
+          const empB = String(b.employeeNumber || '');
+
+          if (empA && empB && empA !== empB) {
+            return empA.localeCompare(empB, undefined, { numeric: true });
+          }
+
+          const rowA = Number(a.row) || 0;
+          const rowB = Number(b.row) || 0;
+          return rowA - rowB;
         }
-        
-        const rowA = Number(a.row) || 0;
-        const rowB = Number(b.row) || 0;
-        return rowA - rowB;
-      });
+      );
 
       const totalParseErrors = parseErrors.length;
       const combinedTotalRecords = importSummary.totalRecords + totalParseErrors;
@@ -348,7 +398,11 @@ router.post(
       });
     } catch (error: any) {
       console.error('CRASH IN /import ROUTE:', error);
-      return res.status(error.statusCode || 500).json({ success: false, error: error.stack || error.message || 'Import failed', stack: error.stack });
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.stack || error.message || 'Import failed',
+        stack: error.stack,
+      });
     }
   }
 );
@@ -376,22 +430,30 @@ router.post(
       const parseErrors = parseResult.errors ?? [];
       const warnings = parseResult.warnings ?? [];
 
-      const failedParseRowSummaries = parseErrors.map(err => ({
+      const failedParseRowSummaries = parseErrors.map((err) => ({
         row: err.row,
         status: 'failed' as const,
         employeeNumber: err.employeeNumber || '',
         data: err.rowData || {},
-        error: err.error
+        error: err.error,
       }));
 
       if (parseResult.records.length === 0) {
         return res.status(200).json({
           success: false,
-          data: { totalRecords: parseErrors.length, successfulRecords: 0, failedRecords: parseErrors.length, errors: parseErrors, warnings, records: failedParseRowSummaries },
+          data: {
+            totalRecords: parseErrors.length,
+            successfulRecords: 0,
+            failedRecords: parseErrors.length,
+            errors: parseErrors,
+            warnings,
+            records: failedParseRowSummaries,
+          },
         });
       }
 
-      const importedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+      const importedBy =
+        authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
       const importSummary = await scanDataService.bulkImport(parseResult.records, {
         projectLocationId,
         importedBy,
@@ -399,14 +461,16 @@ router.post(
         source: 'text',
       });
 
-      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort((a, b) => {
-        if (a.employeeNumber && b.employeeNumber) {
-          if (a.employeeNumber !== b.employeeNumber) {
-            return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
+      const combinedRecords = [...failedParseRowSummaries, ...importSummary.records].sort(
+        (a, b) => {
+          if (a.employeeNumber && b.employeeNumber) {
+            if (a.employeeNumber !== b.employeeNumber) {
+              return a.employeeNumber.localeCompare(b.employeeNumber, undefined, { numeric: true });
+            }
           }
+          return a.row - b.row;
         }
-        return a.row - b.row;
-      });
+      );
 
       return res.json({
         success: importSummary.errors.length === 0,
@@ -420,7 +484,9 @@ router.post(
         },
       });
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Import failed' });
+      return res
+        .status(error.statusCode || 500)
+        .json({ success: false, error: error.message || 'Import failed' });
     }
   }
 );
@@ -428,19 +494,15 @@ router.post(
 /**
  * POST /api/scan-data/:id/match
  */
-router.post(
-  '/:id/match',
-  authorize(['AM', 'MD']),
-  async (req: Request, res: Response) => {
-    try {
-      const scan = await scanDataService.matchToDailyReport(req.params.id, req.body.dailyReportId);
-      if (!scan) throw new AppError('Scan data not found', 404);
-      return res.json({ success: true, data: scan });
-    } catch (error: any) {
-      return res.status(error.statusCode || 500).json({ success: false, error: error.message });
-    }
+router.post('/:id/match', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
+  try {
+    const scan = await scanDataService.matchToDailyReport(req.params.id, req.body.dailyReportId);
+    if (!scan) throw new AppError('Scan data not found', 404);
+    return res.json({ success: true, data: scan });
+  } catch (error: any) {
+    return res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
-);
+});
 
 /**
  * POST /api/scan-data/fill-from-daily-report
@@ -462,7 +524,8 @@ router.post(
       }
 
       const { employeeId, workDate, projectLocationId } = req.body;
-      const adminUserId = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+      const adminUserId =
+        authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
 
       const scan = await scanDataService.fillFromDailyReport(
         employeeId,
@@ -473,7 +536,7 @@ router.post(
 
       // Optimally reconcile only this specific employee after update
       const reconciliationService = new ReconciliationService();
-      await reconciliationService.generateForEmployee(employeeId, workDate, projectLocationId);
+      await reconciliationService.generateForEmployee(employeeId, workDate, projectLocationId, scan);
 
       res.json({
         success: true,
@@ -522,15 +585,14 @@ router.post(
   }
 );
 
-
-
 /**
  * DELETE /api/scan-data/:id
  */
 router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   try {
-    const deletedBy = authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
+    const deletedBy =
+      authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
     await scanDataService.softDelete(req.params.id, deletedBy);
     res.json({ success: true, message: 'Scan data deleted successfully' });
   } catch (error: any) {
@@ -555,8 +617,6 @@ router.post('/:id/restore', authorize(['AM', 'MD']), async (req: Request, res: R
     return;
   }
 });
-
-
 
 /**
  * Add a manual scan record
@@ -586,8 +646,6 @@ router.post('/manual', async (req: Request, res: Response) => {
   }
 });
 
-
-
 /**
  * Update a scan record
  */
@@ -605,26 +663,19 @@ router.patch('/:id', async (req: Request, res: Response) => {
   }
 });
 
-
-
-
 /**
  * PUT /api/scan-data/punches
  * แก้ไขรายการสแกนนิ้วรายวัน (Manual Correction)
  */
 router.put(
   '/punches',
-  [
-    body('contractorId').isString(),
-    body('date').isISO8601(),
-    body('punches').isArray(),
-  ],
+  [body('contractorId').isString(), body('date').isISO8601(), body('punches').isArray()],
   async (req: Request, res: Response) => {
     try {
       const authReq = req as AuthRequest;
       const { id, contractorId, date, punches } = req.body;
       const updatedBy = authReq.user?.name || authReq.user?.username || 'admin';
-      
+
       const result = await scanDataService.updateDailyPunches(
         contractorId,
         new Date(date),
@@ -632,7 +683,7 @@ router.put(
         updatedBy,
         id
       );
-      
+
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });

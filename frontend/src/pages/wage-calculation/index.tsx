@@ -13,7 +13,7 @@
  * User Story: US7 - Wage Calculation (Priority 7)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   Box,
@@ -46,10 +46,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { wageService, type WagePeriod, type PeriodStatus } from '../../services/wageService';
-import {
-  wagePeriodCreateSchema,
-  type WagePeriodCreateInput,
-} from '../../validation/wageSchema';
+import { wagePeriodCreateSchema, type WagePeriodCreateInput } from '../../validation/wageSchema';
 
 import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
 import type { ImportResult } from '../../services/scanDataService';
@@ -224,7 +221,8 @@ export default function WageCalculationPage() {
   };
 
   // DataGrid columns
-  const columns: GridColDef[] = [
+  // Memoized — only recreate when calculatingId/exportingId change (controls CircularProgress)
+  const columns = useMemo<GridColDef[]>(() => [
     {
       field: 'periodCode',
       headerName: 'รหัสงวด',
@@ -339,15 +337,7 @@ export default function WageCalculationPage() {
         </Box>
       ),
     },
-  ];
-
-  if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography color="error">เกิดข้อผิดพลาด: {(error as Error).message}</Typography>
-      </Container>
-    );
-  }
+  ], [calculatingId, exportingId]);
 
   const renderContent = () => {
     if (error) {
@@ -388,12 +378,7 @@ export default function WageCalculationPage() {
             </Button>
             <Button
               variant="contained"
-              sx={{
-                backgroundColor: '#1976d2', // Blue color
-                '&:hover': {
-                  backgroundColor: '#115293',
-                },
-              }}
+              color="primary"
               startIcon={<Add />}
               onClick={() => setCreateDialogOpen(true)}
             >

@@ -33,7 +33,7 @@ export interface DailyWorkerReport {
   dailyContractorId: string;
   employeeId: string;
   workerName: string;
-  
+
   // [ALIGNMENT] ฟิลด์ที่สอดคล้องกับ ScanData ของทีม
   regularHours: number;
   otMorningHours: number;
@@ -84,7 +84,9 @@ class DailyReportService {
    */
   async getByProjectAndDate(projectId: string, date: Date): Promise<DailyReport | null> {
     const dateStr = date.toISOString().split('T')[0];
-    const { data } = await apiClient.get<DailyReport | null>(`/daily-reports/project/${projectId}/date/${dateStr}`);
+    const { data } = await apiClient.get<DailyReport | null>(
+      `/daily-reports/project/${projectId}/date/${dateStr}`
+    );
     return data;
   }
 
@@ -97,8 +99,8 @@ class DailyReportService {
       date: input.date.toISOString(),
       entry: {
         ...input.entry,
-        hours: Number(input.entry.hours || 0)
-      }
+        hours: Number(input.entry.hours || 0),
+      },
     });
     return data;
   }
@@ -106,16 +108,29 @@ class DailyReportService {
   /**
    * Remove Work Entry
    */
-  async removeWorkEntry(projectId: string, date: Date, workerId: string, entryId: string): Promise<void> {
+  async removeWorkEntry(
+    projectId: string,
+    date: Date,
+    workerId: string,
+    entryId: string
+  ): Promise<void> {
     const dateStr = date.toISOString().split('T')[0];
-    await apiClient.delete(`/daily-reports/project/${projectId}/date/${dateStr}/worker/${workerId}/entry/${entryId}`);
+    await apiClient.delete(
+      `/daily-reports/project/${projectId}/date/${dateStr}/worker/${workerId}/entry/${entryId}`
+    );
   }
 
   /**
    * Get Reports by Month (For List/Calendar)
    */
-  async getByProjectAndMonth(projectId: string, year: number, month: number): Promise<DailyReport[]> {
-    const { data } = await apiClient.get<DailyReport[]>(`/daily-reports/project/${projectId}/month/${year}/${month}`);
+  async getByProjectAndMonth(
+    projectId: string,
+    year: number,
+    month: number
+  ): Promise<DailyReport[]> {
+    const { data } = await apiClient.get<DailyReport[]>(
+      `/daily-reports/project/${projectId}/month/${year}/${month}`
+    );
     return data;
   }
 
@@ -137,13 +152,13 @@ class DailyReportService {
         taskName: data.taskName,
         workType: data.workType || 'regular',
         hours: Number(data.workHours || 0),
-        notes: data.notes
+        notes: data.notes,
       };
 
       const result = await this.addWorkEntry({
         projectId: data.projectLocationId,
         date: data.workDate,
-        entry: entryData as any
+        entry: entryData as any,
       });
       results.push(result);
     }
@@ -161,7 +176,11 @@ class DailyReportService {
       if (report) reports.push(report);
     } else if (filters?.projectId) {
       const now = new Date();
-      reports = await this.getByProjectAndMonth(filters.projectId, now.getFullYear(), now.getMonth() + 1);
+      reports = await this.getByProjectAndMonth(
+        filters.projectId,
+        now.getFullYear(),
+        now.getMonth() + 1
+      );
     } else {
       return [];
     }
@@ -182,7 +201,7 @@ class DailyReportService {
           workHours: entry.hours,
           workType: entry.workType,
           createdAt: entry.createdAt,
-          entryId: entry.id
+          entryId: entry.id,
         });
       }
     }
@@ -234,11 +253,10 @@ class DailyReportService {
         workType: entry.workType,
         notes: entry.notes,
         createdAt: entry.createdAt,
-        status: report?.status
+        status: report?.status,
       };
-
     } catch (error) {
-      console.error("Failed to get report by ID", error);
+      console.error('Failed to get report by ID', error);
       return null;
     }
   }
@@ -251,14 +269,16 @@ class DailyReportService {
     return [];
   }
 
-
-
   /**
    * Upload and Commit Daily Report Excel
    * กระบวนการ 2 จังหวะ: Upload (Preview) -> Commit (Bulk Create)
    * เพื่อความสอดคล้องกับ UX ของ ScanData
    */
-  async uploadDailyReportFile(file: File, projectId: string, note?: string): Promise<DailyReportImportResult> {
+  async uploadDailyReportFile(
+    file: File,
+    projectId: string,
+    note?: string
+  ): Promise<DailyReportImportResult> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('projectId', projectId);
@@ -285,11 +305,14 @@ class DailyReportService {
         totalRecords: 0,
         successfulRecords: 0,
         failedRecords: 0,
-        errors: [{
-          row: 0,
-          error: 'ไม่พบ Sheet ที่มีหัวตารางที่ถูกต้อง (เช่น รหัสพนักงาน, วันที่) กรุณาตรวจสอบไฟล์อีกครั้ง'
-        }],
-        warnings: []
+        errors: [
+          {
+            row: 0,
+            error:
+              'ไม่พบ Sheet ที่มีหัวตารางที่ถูกต้อง (เช่น รหัสพนักงาน, วันที่) กรุณาตรวจสอบไฟล์อีกครั้ง',
+          },
+        ],
+        warnings: [],
       };
     }
 
@@ -305,14 +328,14 @@ class DailyReportService {
         successfulRecords: 0,
         failedRecords: failedData.length,
         errors: [{ row: 0, error: 'ไม่พบรายการที่มีชั่วโมงทำงาน กรุณาตรวจสอบข้อมูลในไฟล์ Excel' }],
-        warnings: []
+        warnings: [],
       };
     }
 
     // Step 2: Commit (Bulk Create) ด้วย expanded items
     const { data: commitResp } = await apiClient.post('/daily-reports/bulk-create', {
       data: expandedItems,
-      importFileUrl: importFileUrl
+      importFileUrl: importFileUrl,
     });
 
     return {
@@ -323,10 +346,10 @@ class DailyReportService {
       errors: failedData.map((row: any) => ({
         row: row.row || 0,
         error: 'ข้อมูลโครงการหรือพนักงานไม่ถูกต้อง',
-        employeeNumber: row.employeeId
+        employeeNumber: row.employeeId,
       })),
       warnings: [],
-      importBatchId: importFileUrl
+      importBatchId: importFileUrl,
     };
   }
 
@@ -401,7 +424,11 @@ class DailyReportService {
    * Submit Daily Report for a specific Task (Task-Centric)
    * [F-015] workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}
    */
-  async submitTaskReport(taskId: string, data: any, isSupportReport: boolean = false): Promise<any> {
+  async submitTaskReport(
+    taskId: string,
+    data: any,
+    isSupportReport: boolean = false
+  ): Promise<any> {
     const payload = { ...data, isSupportReport };
     const { data: response } = await apiClient.post(`/tasks/${taskId}/reports`, payload);
     return response;
@@ -410,20 +437,32 @@ class DailyReportService {
   /**
    * Fetch Daily Report for a specific Task and Date
    */
-  async getTaskReport(taskId: string, dateStr: string, isSupportReport: boolean = false): Promise<any> {
-    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports/${dateStr}?isSupportReport=${isSupportReport}`);
+  async getTaskReport(
+    taskId: string,
+    dateStr: string,
+    isSupportReport: boolean = false
+  ): Promise<any> {
+    const { data: response } = await apiClient.get(
+      `/tasks/${taskId}/reports/${dateStr}?isSupportReport=${isSupportReport}`
+    );
     return response.data;
   }
 
   /**
    * Fetch all Daily Reports for a specific Task (with cache support)
    */
-  async getAllTaskReports(taskId: string, forceRefresh: boolean = false, isSupportReport: boolean = false): Promise<any[]> {
+  async getAllTaskReports(
+    taskId: string,
+    forceRefresh: boolean = false,
+    isSupportReport: boolean = false
+  ): Promise<any[]> {
     const cacheKey = `${taskId}_${isSupportReport}`;
     if (!forceRefresh && this.reportsCache[cacheKey]) {
       return this.reportsCache[cacheKey];
     }
-    const { data: response } = await apiClient.get(`/tasks/${taskId}/reports?isSupportReport=${isSupportReport}`);
+    const { data: response } = await apiClient.get(
+      `/tasks/${taskId}/reports?isSupportReport=${isSupportReport}`
+    );
     this.reportsCache[cacheKey] = response.data || [];
     return this.reportsCache[cacheKey];
   }
@@ -445,22 +484,20 @@ class DailyReportService {
    */
   async uploadPhotos(files: File[], folder: string = 'daily-reports'): Promise<string[]> {
     if (files.length === 0) return [];
-    
+
     const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
+    files.forEach((file) => formData.append('files', file));
     formData.append('folder', folder);
 
     const { data: response } = await apiClient.post('/media/upload-multiple', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
 
     if (!response.success) throw new Error(response.error || 'Failed to upload photos');
-    
+
     return response.data.map((item: any) => item.url);
   }
 }
 
-
 export const dailyReportService = new DailyReportService();
 export default dailyReportService;
-

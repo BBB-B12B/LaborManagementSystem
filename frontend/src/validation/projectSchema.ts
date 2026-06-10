@@ -39,7 +39,10 @@ export const projectSchema = z.object({
     .optional()
     .transform((val) => (val ? val.trim() : val)),
 
-  workDays: z.array(z.number()).min(1, 'ต้องเลือกวันทำงานอย่างน้อย 1 วัน').default([1, 2, 3, 4, 5, 6]),
+  workDays: z
+    .array(z.number())
+    .min(1, 'ต้องเลือกวันทำงานอย่างน้อย 1 วัน')
+    .default([1, 2, 3, 4, 5, 6]),
   followCompanyHoliday: z.boolean().default(true),
 });
 

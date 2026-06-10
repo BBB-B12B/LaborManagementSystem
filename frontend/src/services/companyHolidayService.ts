@@ -46,7 +46,11 @@ export const companyHolidayService = {
    * @param year   The year the document currently lives in (for subcollection lookup)
    * @param data   Fields to update
    */
-  update: async (id: string, year: number, data: UpdateCompanyHolidayInput): Promise<CompanyHoliday> => {
+  update: async (
+    id: string,
+    year: number,
+    data: UpdateCompanyHolidayInput
+  ): Promise<CompanyHoliday> => {
     const response = await apiClient.put<{ success: boolean; data: CompanyHoliday }>(
       `/company-holidays/${year}/${id}`,
       data

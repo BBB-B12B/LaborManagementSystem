@@ -282,7 +282,8 @@ router.post(
         throw new AppError('Unauthorized', 401);
       }
 
-      const { additionalIncomeService } = await import('../../services/wage/AdditionalIncomeService');
+      const { additionalIncomeService } =
+        await import('../../services/wage/AdditionalIncomeService');
       const item = await additionalIncomeService.create({
         wagePeriodId: req.params.id,
         dailyContractorId: req.body.dailyContractorId,
@@ -291,13 +292,13 @@ router.post(
         amount: Number(req.body.amount),
         notes: req.body.notes,
         createdAt: new Date(),
-        createdBy
+        createdBy,
       });
 
       res.status(201).json({
         success: true,
         data: item,
-        message: 'Additional income added. Please re-calculate wage period.'
+        message: 'Additional income added. Please re-calculate wage period.',
       });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
@@ -314,12 +315,13 @@ router.delete(
   authorize(['AM', 'PM', 'PD', 'MD']),
   async (req: Request, res: Response) => {
     try {
-      const { additionalIncomeService } = await import('../../services/wage/AdditionalIncomeService');
+      const { additionalIncomeService } =
+        await import('../../services/wage/AdditionalIncomeService');
       await additionalIncomeService.delete(req.params.itemId);
 
       res.json({
         success: true,
-        message: 'Additional income deleted. Please re-calculate wage period.'
+        message: 'Additional income deleted. Please re-calculate wage period.',
       });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
@@ -352,7 +354,8 @@ router.post(
         throw new AppError('Unauthorized', 401);
       }
 
-      const { additionalExpenseService } = await import('../../services/wage/AdditionalExpenseService');
+      const { additionalExpenseService } =
+        await import('../../services/wage/AdditionalExpenseService');
       const item = await additionalExpenseService.create({
         wagePeriodId: req.params.id,
         dailyContractorId: req.body.dailyContractorId,
@@ -361,13 +364,13 @@ router.post(
         amount: Number(req.body.amount),
         notes: req.body.notes,
         createdAt: new Date(),
-        createdBy
+        createdBy,
       });
 
       res.status(201).json({
         success: true,
         data: item,
-        message: 'Additional expense added. Please re-calculate wage period.'
+        message: 'Additional expense added. Please re-calculate wage period.',
       });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
@@ -384,12 +387,13 @@ router.delete(
   authorize(['AM', 'PM', 'PD', 'MD']),
   async (req: Request, res: Response) => {
     try {
-      const { additionalExpenseService } = await import('../../services/wage/AdditionalExpenseService');
+      const { additionalExpenseService } =
+        await import('../../services/wage/AdditionalExpenseService');
       await additionalExpenseService.delete(req.params.itemId);
 
       res.json({
         success: true,
-        message: 'Additional expense deleted. Please re-calculate wage period.'
+        message: 'Additional expense deleted. Please re-calculate wage period.',
       });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });

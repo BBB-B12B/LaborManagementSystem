@@ -9,14 +9,19 @@ let afterSaleDb: admin.firestore.Firestore;
 
 try {
   const serviceAccount = require(serviceAccountPath);
-  afterSaleApp = admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    storageBucket: 'after-sale-system.firebasestorage.app'
-  }, 'afterSaleDb'); // ตั้งชื่อ App ที่ 2 ป้องกันการชนกับ App หลัก
+  afterSaleApp = admin.initializeApp(
+    {
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: 'after-sale-system.firebasestorage.app',
+    },
+    'afterSaleDb'
+  ); // ตั้งชื่อ App ที่ 2 ป้องกันการชนกับ App หลัก
   afterSaleDb = afterSaleApp.firestore();
   console.log('[firebaseProjectB] Initialized After-Sale Firebase connection');
 } catch (error) {
-  console.warn('[firebaseProjectB] Missing after-sale-key.json. Falling back to default Firebase app.');
+  console.warn(
+    '[firebaseProjectB] Missing after-sale-key.json. Falling back to default Firebase app.'
+  );
   // Fallback if file doesn't exist (e.g. CI/CD or before placing the file)
   afterSaleApp = admin.app();
   afterSaleDb = admin.firestore();

@@ -12,7 +12,7 @@ import {
   getByProjectAndMonth,
   importExcel,
   bulkCreate,
-  downloadTemplate
+  downloadTemplate,
 } from '../../controllers/dailyReportController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
@@ -25,11 +25,7 @@ const router = Router();
 router.use(authenticate);
 
 /** Add/Update Work Entry */
-router.post(
-  '/entry',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']),
-  addWorkEntry
-);
+router.post('/entry', authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']), addWorkEntry);
 
 /** Remove Work Entry */
 router.delete(
@@ -39,22 +35,13 @@ router.delete(
 );
 
 /** Get Report by Date */
-router.get(
-  '/project/:projectId/date/:date',
-  getByProjectAndDate
-);
+router.get('/project/:projectId/date/:date', getByProjectAndDate);
 
 /** Get Reports by Month */
-router.get(
-  '/project/:projectId/month/:year/:month',
-  getByProjectAndMonth
-);
+router.get('/project/:projectId/month/:year/:month', getByProjectAndMonth);
 
 /** Download Excel Template */
-router.get(
-  '/template',
-  downloadTemplate
-);
+router.get('/template', downloadTemplate);
 
 /** Import Excel (Preview Mode) */
 router.post(
@@ -65,10 +52,6 @@ router.post(
 );
 
 /** Bulk Create (Commit Mode) */
-router.post(
-  '/bulk-create',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']),
-  bulkCreate
-);
+router.post('/bulk-create', authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM', 'LD']), bulkCreate);
 
 export default router;

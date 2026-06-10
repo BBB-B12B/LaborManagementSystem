@@ -62,7 +62,9 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
       </Box>
       <DialogContent sx={{ p: { xs: 2.5, md: 4 }, overflow: 'visible' }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}
+          >
             <CircularProgress />
           </Box>
         ) : (

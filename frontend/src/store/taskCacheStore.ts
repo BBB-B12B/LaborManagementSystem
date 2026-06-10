@@ -64,14 +64,16 @@ export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
   isCacheValid: () => {
     const { lastFetchedAt } = get();
     if (!lastFetchedAt) return false;
-    
+
     const now = new Date();
     const last = new Date(lastFetchedAt);
-    
+
     // Cache remains valid as long as it's the same calendar day (Reset at midnight)
-    return now.getFullYear() === last.getFullYear() &&
-           now.getMonth() === last.getMonth() &&
-           now.getDate() === last.getDate();
+    return (
+      now.getFullYear() === last.getFullYear() &&
+      now.getMonth() === last.getMonth() &&
+      now.getDate() === last.getDate()
+    );
   },
 }));
 

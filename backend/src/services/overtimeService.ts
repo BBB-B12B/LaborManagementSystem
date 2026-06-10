@@ -76,10 +76,7 @@ export async function createOvertimeRecord(
     throw new Error('Invalid OT period');
   }
 
-  if (
-    data.startTime < periodConfig.start ||
-    data.endTime > periodConfig.end
-  ) {
+  if (data.startTime < periodConfig.start || data.endTime > periodConfig.end) {
     throw new Error('OT time is outside the configured period');
   }
 
@@ -288,9 +285,7 @@ export async function getAllOvertimeRecords(filters?: {
     const endOfDay = new Date(filters.date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    query = query
-      .where('reportDate', '>=', startOfDay)
-      .where('reportDate', '<=', endOfDay);
+    query = query.where('reportDate', '>=', startOfDay).where('reportDate', '<=', endOfDay);
   }
 
   if (filters?.dcId) {
@@ -356,13 +351,8 @@ export async function checkOTTimeOverlap(
 
   const overlappingOTRecords: OvertimeRecordWithId[] = otRecordsSnapshot.docs
     .filter((doc) => doc.id !== excludeRecordId)
-    .map(
-      (doc) =>
-        ({ id: doc.id, ...(doc.data() as OvertimeData) } as OvertimeRecordWithId)
-    )
-    .filter((record) =>
-      timeRangesOverlap(startTime, endTime, record.startTime, record.endTime)
-    );
+    .map((doc) => ({ id: doc.id, ...(doc.data() as OvertimeData) }) as OvertimeRecordWithId)
+    .filter((record) => timeRangesOverlap(startTime, endTime, record.startTime, record.endTime));
 
   // Check overlap with regular work hours (daily_reports)
   const dailyReportsSnapshot = await db
@@ -378,7 +368,7 @@ export async function checkOTTimeOverlap(
         ({
           id: doc.id,
           ...(doc.data() as Record<string, unknown>),
-        } as DailyReportRecordWithId)
+        }) as DailyReportRecordWithId
     )
     .filter(
       (report) =>
@@ -443,12 +433,7 @@ async function uploadImages(imageUrls: string[]): Promise<string[]> {
 /**
  * Check if two time ranges overlap
  */
-function timeRangesOverlap(
-  start1: string,
-  end1: string,
-  start2: string,
-  end2: string
-): boolean {
+function timeRangesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
   const [h1Start, m1Start] = start1.split(':').map(Number);
   const [h1End, m1End] = end1.split(':').map(Number);
   const [h2Start, m2Start] = start2.split(':').map(Number);

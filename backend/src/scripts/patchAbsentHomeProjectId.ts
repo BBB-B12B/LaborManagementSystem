@@ -54,10 +54,7 @@ async function patch() {
 
   while (true) {
     // Query ทุก records แล้วกรอง ABSENT ใน code (หลีกเลี่ยงการต้องสร้าง composite index)
-    let query = db
-      .collection(COLLECTION)
-      .orderBy('workDate')
-      .limit(BATCH_SIZE);
+    let query = db.collection(COLLECTION).orderBy('workDate').limit(BATCH_SIZE);
 
     if (lastDoc) {
       query = query.startAfter(lastDoc);
@@ -94,8 +91,7 @@ async function patch() {
     totalEligible += toUpdate.length;
 
     console.log(
-      `   📄 Scanned ${totalScanned} ABSENT docs | ` +
-      `Need patch this batch: ${toUpdate.length}`
+      `   📄 Scanned ${totalScanned} ABSENT docs | ` + `Need patch this batch: ${toUpdate.length}`
     );
 
     if (!isDryRun && toUpdate.length > 0) {

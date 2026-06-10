@@ -1,5 +1,5 @@
 import { db } from './firebase/config';
-// หมายเหตุ: ในอนาคตหากต้องแยก Firebase Instance ของ Sales System ต่างหาก 
+// หมายเหตุ: ในอนาคตหากต้องแยก Firebase Instance ของ Sales System ต่างหาก
 // เราจะ import salesDb มาแทน db ของโปรเจกต์เรา
 
 /**
@@ -28,7 +28,7 @@ export interface SalesDailyReportPayload {
   workType: 'regular' | 'ot-morning' | 'ot-evening';
   timeRange: {
     start: string; // HH:mm
-    end: string;   // HH:mm
+    end: string; // HH:mm
   };
   workers: Array<{
     workerId: string;
@@ -48,16 +48,18 @@ export interface SalesDailyReportPayload {
  */
 
 export const salesSyncService = {
-  
   /**
    * [Read] ดึงข้อมูล Task จาก Sales System
    * Path: workOrders/{workOrderId}/categories/{categoryId}/tasks
    */
-  getTasks: async (workOrderId: string, categoryId: string): Promise<(SalesTaskPayload & { id: string })[]> => {
+  getTasks: async (
+    workOrderId: string,
+    categoryId: string
+  ): Promise<(SalesTaskPayload & { id: string })[]> => {
     try {
       // TODO: Implement Firebase getDocs() using salesDb
       console.log(`Fetching tasks for WorkOrder: ${workOrderId}, Category: ${categoryId}`);
-      
+
       // Mock Data (รอต่อเชื่อมจริง)
       return [
         {
@@ -69,8 +71,8 @@ export const salesSyncService = {
           assignees: [{ id: 'u1', name: 'นาย ก.' }],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          sourceSystem: 'SalesSystem'
-        }
+          sourceSystem: 'SalesSystem',
+        },
       ];
     } catch (error) {
       console.error('Error fetching Sales System Tasks:', error);
@@ -82,11 +84,18 @@ export const salesSyncService = {
    * [Write] สร้าง Task ใหม่ส่งไป Sales System
    * Path: workOrders/{workOrderId}/categories/{categoryId}/tasks
    */
-  createTask: async (workOrderId: string, categoryId: string, payload: SalesTaskPayload): Promise<string> => {
+  createTask: async (
+    workOrderId: string,
+    categoryId: string,
+    payload: SalesTaskPayload
+  ): Promise<string> => {
     try {
       // TODO: Implement Firebase addDoc() using salesDb
-      console.log(`Writing new Task to WorkOrder: ${workOrderId}, Category: ${categoryId}`, payload);
-      
+      console.log(
+        `Writing new Task to WorkOrder: ${workOrderId}, Category: ${categoryId}`,
+        payload
+      );
+
       // คืนค่า Mock ID กลับไปก่อน
       return `sync-task-${Date.now()}`;
     } catch (error) {
@@ -100,20 +109,20 @@ export const salesSyncService = {
    * Path: workOrders/{workOrderId}/categories/{categoryId}/tasks/{taskId}/dailyreport
    */
   createDailyReport: async (
-    workOrderId: string, 
-    categoryId: string, 
-    taskId: string, 
+    workOrderId: string,
+    categoryId: string,
+    taskId: string,
     payload: SalesDailyReportPayload
   ): Promise<string> => {
     try {
       // TODO: Implement Firebase addDoc() using salesDb
       console.log(`Writing Daily Report to Task: ${taskId}`, payload);
-      
+
       // คืนค่า Mock ID
       return `sync-report-${Date.now()}`;
     } catch (error) {
       console.error('Error creating Sales System Daily Report:', error);
       throw error;
     }
-  }
+  },
 };

@@ -45,33 +45,21 @@ router.get('/:id', getOTRecordById);
  * Create a new overtime record
  * Requires: SE, OE, PE, PM, PD, AM roles
  */
-router.post(
-  '/',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
-  createOTRecord
-);
+router.post('/', authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']), createOTRecord);
 
 /**
  * PUT /api/overtime/:id
  * Update an existing overtime record
  * Requires: SE, OE, PE, PM, PD, AM roles
  */
-router.put(
-  '/:id',
-  authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']),
-  updateOTRecord
-);
+router.put('/:id', authorize(['SE', 'OE', 'PE', 'PM', 'PD', 'AM']), updateOTRecord);
 
 /**
  * DELETE /api/overtime/:id
  * Delete an overtime record
  * Requires: PM, PD, AM roles (higher privileges)
  */
-router.delete(
-  '/:id',
-  authorize(['PM', 'PD', 'AM']),
-  deleteOTRecord
-);
+router.delete('/:id', authorize(['PM', 'PD', 'AM']), deleteOTRecord);
 
 /**
  * GET /api/overtime/:id/history

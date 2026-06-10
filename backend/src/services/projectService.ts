@@ -61,8 +61,9 @@ const incrementProjectCode = (currentCode: string): string => {
   return formatProjectCode(currentNumber + 1);
 };
 
-const PROJECT_CACHE_TTL_MS =
-  Number(process.env.PROJECT_CACHE_TTL_MS ?? process.env.PROJECT_CACHE_TTL ?? 5 * 60 * 1000);
+const PROJECT_CACHE_TTL_MS = Number(
+  process.env.PROJECT_CACHE_TTL_MS ?? process.env.PROJECT_CACHE_TTL ?? 5 * 60 * 1000
+);
 const isCacheEnabled = PROJECT_CACHE_TTL_MS > 0;
 type CacheEntry<T> = { data: T; expires: number };
 const projectCache = new Map<string, CacheEntry<any>>();
@@ -98,10 +99,7 @@ const isCodeTaken = async (code: string): Promise<boolean> => {
     return true;
   }
 
-  const existing = await getProjectCollection()
-    .where('code', '==', code)
-    .limit(1)
-    .get();
+  const existing = await getProjectCollection().where('code', '==', code).limit(1).get();
   return !existing.empty;
 };
 
@@ -121,10 +119,7 @@ const resolveProjectCode = async (preferred?: string): Promise<string> => {
 /**
  * Create a new project
  */
-export async function createProject(
-  data: ProjectData,
-  createdBy: string
-): Promise<any> {
+export async function createProject(data: ProjectData, createdBy: string): Promise<any> {
   const codeUpper = await resolveProjectCode(data.code);
   const projectCodeValue = data.projectCode ? data.projectCode.trim() : '';
   const projectNameValue = data.projectName ? data.projectName.trim() : '';
@@ -151,7 +146,8 @@ export async function createProject(
     projectManager: data.projectManager ? data.projectManager.trim() : null,
     status: normalizeStatusValue(data.status),
     workDays: data.workDays !== undefined ? data.workDays : [1, 2, 3, 4, 5, 6],
-    followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true,
+    followCompanyHoliday:
+      data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true,
     createdBy,
     updatedBy: createdBy,
     createdAt: FieldValue.serverTimestamp(),
@@ -219,7 +215,8 @@ export async function updateProject(
         : undefined,
     status: data.status ? normalizeStatusValue(data.status) : undefined,
     workDays: data.workDays !== undefined ? data.workDays : undefined,
-    followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : undefined,
+    followCompanyHoliday:
+      data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : undefined,
     updatedBy,
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -315,10 +312,11 @@ export async function getAllProjects(filters?: {
   // Apply search filter (client-side for now)
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase();
-    projects = projects.filter((p: any) => 
-      (p.projectName || '').toLowerCase().includes(searchLower) ||
-      p.code.toLowerCase().includes(searchLower) ||
-      (p.projectCode || '').toLowerCase().includes(searchLower)
+    projects = projects.filter(
+      (p: any) =>
+        (p.projectName || '').toLowerCase().includes(searchLower) ||
+        p.code.toLowerCase().includes(searchLower) ||
+        (p.projectCode || '').toLowerCase().includes(searchLower)
     );
   }
 

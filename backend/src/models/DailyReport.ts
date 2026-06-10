@@ -16,7 +16,7 @@ export interface DailyReportEntry {
   employeeId?: string;
   taskId?: string; // [T-400] เชื่อมโยงกับ Task ID
   workOrderId?: string; // [NEW] เชื่อมโยงกับ Work Order (AS System)
-  categoryId?: string;  // [NEW] เชื่อมโยงกับ Category (AS System)
+  categoryId?: string; // [NEW] เชื่อมโยงกับ Category (AS System)
   taskName: string;
   workType: WorkType;
   hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
@@ -25,11 +25,11 @@ export interface DailyReportEntry {
 }
 
 export interface DailyReportSummary {
-  workerCount: number;         // จำนวนคน
-  totalNetHours: number;       // ชั่วโมงสุทธิรวม
-  regularHours: number;        // ชั่วโมงปกติรวม
-  otHours: number;             // ชั่วโมง OT ทุกประเภท
-  lastImportAt?: Date;         // วันที่นำเข้าล่าสุด
+  workerCount: number; // จำนวนคน
+  totalNetHours: number; // ชั่วโมงสุทธิรวม
+  regularHours: number; // ชั่วโมงปกติรวม
+  otHours: number; // ชั่วโมง OT ทุกประเภท
+  lastImportAt?: Date; // วันที่นำเข้าล่าสุด
 }
 
 export interface DailyReport {
@@ -61,7 +61,7 @@ export interface DailyWorkerReport {
   dailyContractorId: string;
   employeeId: string;
   workerName: string;
-  
+
   // [ALIGNMENT] ฟิลด์ที่สอดคล้องกับ ScanData ของทีม
   regularHours: number;
   otMorningHours: number;
@@ -91,10 +91,7 @@ export interface UpdateDailyReportInput {
 /**
  * คำนวณจำนวนชั่วโมงทั้งหมด (รวมการปัดเศษลง 5 นาที)
  */
-export function calculateTotalHours(
-  startTime: Date,
-  endTime: Date
-): number {
+export function calculateTotalHours(startTime: Date, endTime: Date): number {
   const milliseconds = endTime.getTime() - startTime.getTime();
   const hours = milliseconds / (1000 * 60 * 60);
 
@@ -158,7 +155,7 @@ export const dailyReportConverter = {
         workerCount: 0,
         totalNetHours: 0,
         regularHours: 0,
-        otHours: 0
+        otHours: 0,
       },
       status: data.status,
       notes: data.notes,

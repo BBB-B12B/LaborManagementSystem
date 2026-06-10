@@ -2,7 +2,7 @@ import { db } from '../config/firebase';
 
 async function main() {
   const ids = ['REC_200022_2026-05-21', 'REC_200030_2026-05-21'];
-  
+
   for (const id of ids) {
     const doc = await db.collection('reconciliationRecords').doc(id).get();
     if (doc.exists) {
@@ -14,4 +14,9 @@ async function main() {
   }
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

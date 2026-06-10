@@ -30,9 +30,9 @@ export const storage = {
     try {
       const bucket = afterSaleApp.storage().bucket();
       const file = bucket.file(key);
-      
+
       await file.save(buffer, {
-        metadata: { contentType: mimeType }
+        metadata: { contentType: mimeType },
       });
 
       return buildPublicUrl(bucket.name, key);
@@ -42,7 +42,12 @@ export const storage = {
     }
   },
 
-  async uploadBuffer(buffer: Buffer, folder: string, filename: string, mimeType: string): Promise<string> {
+  async uploadBuffer(
+    buffer: Buffer,
+    folder: string,
+    filename: string,
+    mimeType: string
+  ): Promise<string> {
     const sanitizedFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, '-');
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '-');
     const key = `${sanitizedFolder.replace(/\/+$/g, '')}/${Date.now()}-${sanitizedFilename}`;
@@ -52,7 +57,7 @@ export const storage = {
       const file = bucket.file(key);
 
       await file.save(buffer, {
-        metadata: { contentType: mimeType }
+        metadata: { contentType: mimeType },
       });
 
       return buildPublicUrl(bucket.name, key);

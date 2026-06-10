@@ -33,7 +33,9 @@ const APPLY = process.argv.includes('--apply');
 
 if (!csvFilePath) {
   console.error('ERROR: กรุณาระบุ path ของ CSV file');
-  console.error('Usage: npx ts-node --transpile-only src/scripts/fixDumpedProjectLocationIds.ts "<csv-path>" [--apply]');
+  console.error(
+    'Usage: npx ts-node --transpile-only src/scripts/fixDumpedProjectLocationIds.ts "<csv-path>" [--apply]'
+  );
   process.exit(1);
 }
 
@@ -42,9 +44,18 @@ if (!csvFilePath) {
 // ---------------------------------------------------------------------------
 
 const THAI_MONTHS: Record<string, string> = {
-  'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04',
-  'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08',
-  'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12',
+  'ม.ค.': '01',
+  'ก.พ.': '02',
+  'มี.ค.': '03',
+  'เม.ย.': '04',
+  'พ.ค.': '05',
+  'มิ.ย.': '06',
+  'ก.ค.': '07',
+  'ส.ค.': '08',
+  'ก.ย.': '09',
+  'ต.ค.': '10',
+  'พ.ย.': '11',
+  'ธ.ค.': '12',
 };
 
 function parseThaiDate(thaiDateStr: string): string | null {
@@ -109,7 +120,9 @@ function extractDocIdsFromCsv(filePath: string): Set<string> {
     docIds.add(`${matcId}_${isoDate}`);
   }
 
-  console.log(`  อ่าน CSV: ${lines.length - 1} rows → ${docIds.size} unique doc IDs (ข้าม ${skipped} แถว ไม่มี MatcID)`);
+  console.log(
+    `  อ่าน CSV: ${lines.length - 1} rows → ${docIds.size} unique doc IDs (ข้าม ${skipped} แถว ไม่มี MatcID)`
+  );
   return docIds;
 }
 
@@ -120,7 +133,7 @@ function extractDocIdsFromCsv(filePath: string): Set<string> {
 function initProjectBApp(): admin.firestore.Firestore {
   const serviceAccount = require(PROJECT_B_KEY_PATH);
   const appName = 'fix-location-ids';
-  const existing = admin.apps.find(a => a?.name === appName);
+  const existing = admin.apps.find((a) => a?.name === appName);
   if (existing) return existing.firestore();
   const app = admin.initializeApp({ credential: admin.credential.cert(serviceAccount) }, appName);
   return app.firestore();
@@ -159,18 +172,16 @@ async function run() {
   const chunkSize = 30;
   for (let i = 0; i < docIdList.length; i += chunkSize) {
     const chunk = docIdList.slice(i, i + chunkSize);
-    const snap = await colRef
-      .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
-      .get();
+    const snap = await colRef.where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
 
     // ตรวจสอบว่าเจอครบไหม
-    const foundIds = new Set(snap.docs.map(d => d.id));
+    const foundIds = new Set(snap.docs.map((d) => d.id));
     for (const id of chunk) {
       if (!foundIds.has(id)) notFound.push(id);
     }
 
     // แยก: ต้องแก้ vs ถูกอยู่แล้ว
-    snap.docs.forEach(doc => {
+    snap.docs.forEach((doc) => {
       const data = doc.data();
       if (data.projectLocationId === TARGET_LOCATION_ID) {
         alreadyCorrect.push(doc.id);
@@ -189,9 +200,9 @@ async function run() {
   if (notFound.length > 0) {
     console.log(`  ไม่พบใน Firestore         : ${notFound.length}`);
     if (notFound.length <= 10) {
-      notFound.forEach(id => console.log(`    ⚠️  ${id}`));
+      notFound.forEach((id) => console.log(`    ⚠️  ${id}`));
     } else {
-      notFound.slice(0, 5).forEach(id => console.log(`    ⚠️  ${id}`));
+      notFound.slice(0, 5).forEach((id) => console.log(`    ⚠️  ${id}`));
       console.log(`    ... และอีก ${notFound.length - 5} รายการ`);
     }
   }
@@ -202,13 +213,15 @@ async function run() {
   }
 
   // แสดง unique location ที่จะถูกแทนที่
-  const uniqueLocations = [...new Set(toUpdate.map(d => d.data()!.projectLocationId as string))];
+  const uniqueLocations = [...new Set(toUpdate.map((d) => d.data()!.projectLocationId as string))];
   console.log(`\n  Location ที่จะถูกเปลี่ยนเป็น "${TARGET_LOCATION_ID}":`);
-  uniqueLocations.forEach(loc => console.log(`    • "${loc}"`));
+  uniqueLocations.forEach((loc) => console.log(`    • "${loc}"`));
 
   if (!APPLY) {
     console.log('\n💡 ถ้าถูกต้อง รัน --apply เพื่อแก้จริง:');
-    console.log(`   npx ts-node --transpile-only src/scripts/fixDumpedProjectLocationIds.ts "${csvFilePath}" --apply`);
+    console.log(
+      `   npx ts-node --transpile-only src/scripts/fixDumpedProjectLocationIds.ts "${csvFilePath}" --apply`
+    );
     return;
   }
 
@@ -260,7 +273,7 @@ async function run() {
   console.log('='.repeat(60));
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('\n❌ Fatal error:', err.message || err);
   process.exit(1);
 });

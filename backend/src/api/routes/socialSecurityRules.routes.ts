@@ -16,23 +16,23 @@ router.get('/', authorize(['AM', 'MD']), async (req: Request, res: Response) => 
   try {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 100;
-    
+
     // Admin dashboard fetch, allow pulling everything easily
     const result = await socialSecurityRuleService.getAll({
-        page,
-        pageSize,
-        orderBy: 'order',
-        orderDirection: 'asc'
+      page,
+      pageSize,
+      orderBy: 'order',
+      orderDirection: 'asc',
     });
 
     res.json({
-        success: true,
-        data: result.items,
-        pagination: {
-            total: result.total,
-            page: result.page,
-            pageSize: result.pageSize,
-        }
+      success: true,
+      data: result.items,
+      pagination: {
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -43,15 +43,15 @@ router.get('/', authorize(['AM', 'MD']), async (req: Request, res: Response) => 
  * GET /api/social-security-rules/evaluate (optional, for testing)
  */
 router.get('/evaluate', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
-    try {
-        const amount = parseFloat(req.query.amount as string) || 0;
-        const employeeId = req.query.employeeId as string || 'Unknown';
-        
-        const deduction = await socialSecurityRuleService.calculateDeduction(amount, employeeId);
-        res.json({ success: true, data: { deduction } });
-    } catch (error: any) {
-        res.status(500).json({ success: false, error: error.message });
-    }
+  try {
+    const amount = parseFloat(req.query.amount as string) || 0;
+    const employeeId = (req.query.employeeId as string) || 'Unknown';
+
+    const deduction = await socialSecurityRuleService.calculateDeduction(amount, employeeId);
+    res.json({ success: true, data: { deduction } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
@@ -89,13 +89,13 @@ router.post(
  */
 router.put('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
   try {
-      const user = (req as any).user;
-      const updatedBy = user?.username || user?.employeeId || 'system';
+    const user = (req as any).user;
+    const updatedBy = user?.username || user?.employeeId || 'system';
 
-      const rule = await socialSecurityRuleService.updateRule(req.params.id, req.body, updatedBy);
-      res.json({ success: true, data: rule });
+    const rule = await socialSecurityRuleService.updateRule(req.params.id, req.body, updatedBy);
+    res.json({ success: true, data: rule });
   } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -104,11 +104,11 @@ router.put('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) 
  */
 router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
   try {
-      // Instead of soft delete, hard delete for rules or set inactive
-      await socialSecurityRuleService.updateRule(req.params.id, { isActive: false }, 'system');
-      res.json({ success: true, message: 'Rule deactivated successfully' });
+    // Instead of soft delete, hard delete for rules or set inactive
+    await socialSecurityRuleService.updateRule(req.params.id, { isActive: false }, 'system');
+    res.json({ success: true, message: 'Rule deactivated successfully' });
   } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

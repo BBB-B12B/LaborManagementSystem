@@ -14,7 +14,9 @@ const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: serviceAccount ? admin.credential.cert(serviceAccount) : admin.credential.applicationDefault(),
+    credential: serviceAccount
+      ? admin.credential.cert(serviceAccount)
+      : admin.credential.applicationDefault(),
     projectId: process.env.FIREBASE_PROJECT_ID || 'demo-project',
   });
 }
@@ -29,23 +31,23 @@ async function backfillDCDepartment() {
     console.log('Fetching projects...');
     const projectsSnapshot = await db.collection('Project').get();
     const projectDepartmentMap = new Map<string, string>();
-    
+
     projectsSnapshot.docs.forEach((doc) => {
       const data = doc.data();
       if (data.department) {
         projectDepartmentMap.set(doc.id, data.department);
       }
     });
-    
+
     console.log(`Loaded ${projectDepartmentMap.size} projects with departments.`);
 
     // 2. Fetch all daily contractors
     console.log('Fetching daily contractors...');
     const dcSnapshot = await db.collection('dailyContractors').get();
-    
+
     let updatedCount = 0;
     let skippedCount = 0;
-    
+
     // 3. Update each contractor in batches
     const batchSize = 500;
     let batch = db.batch();
@@ -54,16 +56,16 @@ async function backfillDCDepartment() {
     for (const doc of dcSnapshot.docs) {
       const data = doc.data();
       const projectId = data.projectLocationId;
-      
+
       // We overwrite it if there's a projectId, just to be safe.
       // If it doesn't have a projectId, we leave department as empty.
-      const department = projectId ? (projectDepartmentMap.get(projectId) || '') : '';
-      
+      const department = projectId ? projectDepartmentMap.get(projectId) || '' : '';
+
       // Update if department is missing or different
       if (data.department !== department) {
-        batch.update(doc.ref, { 
+        batch.update(doc.ref, {
           department,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         currentBatchCount++;
         updatedCount++;
@@ -90,7 +92,6 @@ async function backfillDCDepartment() {
     console.log(`Updated DCs: ${updatedCount}`);
     console.log(`Skipped DCs: ${skippedCount}`);
     console.log('------------------------');
-
   } catch (error) {
     console.error('Error during backfill:', error);
   } finally {

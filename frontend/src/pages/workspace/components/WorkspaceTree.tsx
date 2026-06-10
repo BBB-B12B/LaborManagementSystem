@@ -25,11 +25,12 @@ import {
 import type { Task, Subtask } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
 
-
 interface WorkspaceTreeProps {
   tasks: Task[];
   selectedNode: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null;
-  onSelectNode: (node: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null) => void;
+  onSelectNode: (
+    node: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null
+  ) => void;
   onSubtaskClick: (task: Task, subtask: Subtask) => void;
   onQuickCreateSubtask?: (taskId: string) => void;
   onQuickAssignSubtask?: (task: Task, subtask: Subtask) => void;
@@ -59,9 +60,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   const isWH = user?.department === 'WH';
 
   const isWorkOrderDeletable = (woId: string) => {
-    const woTasks = tasks.filter(t => t.workOrderId === woId || (woId === 'general-wo' && !t.workOrderId));
+    const woTasks = tasks.filter(
+      (t) => t.workOrderId === woId || (woId === 'general-wo' && !t.workOrderId)
+    );
     for (const t of woTasks) {
-      const activeSubtasks = (t.subtasks || []).filter(sub => sub.isActive !== false);
+      const activeSubtasks = (t.subtasks || []).filter((sub) => sub.isActive !== false);
       for (const sub of activeSubtasks) {
         if (sub.isDeletable === false || (sub.dailyProgress || 0) > 0) {
           return false;
@@ -72,9 +75,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   };
 
   const isCategoryDeletable = (catId: string) => {
-    const catTasks = tasks.filter(t => t.categoryId === catId || (catId === 'general-cat' && !t.categoryId));
+    const catTasks = tasks.filter(
+      (t) => t.categoryId === catId || (catId === 'general-cat' && !t.categoryId)
+    );
     for (const t of catTasks) {
-      const activeSubtasks = (t.subtasks || []).filter(sub => sub.isActive !== false);
+      const activeSubtasks = (t.subtasks || []).filter((sub) => sub.isActive !== false);
       for (const sub of activeSubtasks) {
         if (sub.isDeletable === false || (sub.dailyProgress || 0) > 0) {
           return false;
@@ -121,17 +126,21 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
     }
   };
 
-  const getNodeDueDateStatus = (subtasks: Subtask[], taskDueDate?: string | Date, taskProgress: number = 0) => {
+  const getNodeDueDateStatus = (
+    subtasks: Subtask[],
+    taskDueDate?: string | Date,
+    taskProgress: number = 0
+  ) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     let hasOverdue = false;
     let hasCurrentMonth = false;
 
-    const activeSubtasks = (subtasks || []).filter(sub => sub.isActive !== false);
+    const activeSubtasks = (subtasks || []).filter((sub) => sub.isActive !== false);
 
     if (activeSubtasks.length > 0) {
-      activeSubtasks.forEach(sub => {
+      activeSubtasks.forEach((sub) => {
         // Only focus on incomplete subtasks
         if ((sub.dailyProgress || 0) === 100) return;
         if (!sub.dueDate) return;
@@ -179,7 +188,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
     let hasOverdue = false;
     let hasCurrentMonth = false;
 
-    categoryTasks.forEach(tItem => {
+    categoryTasks.forEach((tItem) => {
       if (tItem.dueDateStatus === 'red') {
         hasOverdue = true;
       } else if (tItem.dueDateStatus === 'blue') {
@@ -252,15 +261,31 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
 
   // Helper to build hierarchy based on a subtask filter
   const buildTree = (subtaskFilter: (sub: Subtask) => boolean, checkTask: (t: Task) => boolean) => {
-    const woMap = new Map<string, { id: string; name: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
+    const woMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        categories: Map<
+          string,
+          {
+            id: string;
+            name: string;
+            tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }>;
+          }
+        >;
+      }
+    >();
 
     tasks.forEach((task) => {
-      const activeSubtasks = (task.subtasks || []).filter(sub => sub.isActive !== false);
+      const activeSubtasks = (task.subtasks || []).filter((sub) => sub.isActive !== false);
       const hasActiveSubtasks = activeSubtasks.length > 0;
-      
+
       let subtasks: Subtask[] = [];
       if (hasActiveSubtasks) {
-        subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
+        subtasks = activeSubtasks.filter(
+          (sub) => subtaskFilter(sub) && checkDateMatch(sub.dueDate)
+        );
         // If the task has active subtasks, but none match the filter, do not show this task
         if (subtasks.length === 0) return;
       } else {
@@ -290,65 +315,98 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
       tItem.subtasks.push(...subtasks);
     });
 
-    return Array.from(woMap.values()).map(wo => {
-      const categoriesArray = Array.from(wo.categories.values()).map(cat => {
-        const tasksArray = Array.from(cat.tasks.values()).map(tItem => {
-          const sortedSubtasks = tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName));
-          const taskProgress = tItem.task.supportDailyProgress !== undefined ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
-          const dueDateStatus = getNodeDueDateStatus(sortedSubtasks, tItem.task.dueDate, taskProgress);
-          return {
-            ...tItem,
-            subtasks: sortedSubtasks,
-            dueDateStatus
-          };
-        }).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(woMap.values())
+      .map((wo) => {
+        const categoriesArray = Array.from(wo.categories.values())
+          .map((cat) => {
+            const tasksArray = Array.from(cat.tasks.values())
+              .map((tItem) => {
+                const sortedSubtasks = tItem.subtasks.sort((a, b) =>
+                  a.subtaskName.localeCompare(b.subtaskName)
+                );
+                const taskProgress =
+                  tItem.task.supportDailyProgress !== undefined
+                    ? tItem.task.supportDailyProgress || 0
+                    : tItem.task.dailyProgress || 0;
+                const dueDateStatus = getNodeDueDateStatus(
+                  sortedSubtasks,
+                  tItem.task.dueDate,
+                  taskProgress
+                );
+                return {
+                  ...tItem,
+                  subtasks: sortedSubtasks,
+                  dueDateStatus,
+                };
+              })
+              .sort((a, b) => a.name.localeCompare(b.name));
 
-        const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
-        const assignedSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.filter(sub => sub.assignees && sub.assignees.length > 0).length, 0);
-        const catDueDateStatus = getCategoryDueDateStatus(tasksArray);
+            const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
+            const assignedSubtaskCount = tasksArray.reduce(
+              (sum, t) =>
+                sum + t.subtasks.filter((sub) => sub.assignees && sub.assignees.length > 0).length,
+              0
+            );
+            const catDueDateStatus = getCategoryDueDateStatus(tasksArray);
+            return {
+              id: cat.id,
+              name: cat.name,
+              tasks: tasksArray,
+              totalSubtaskCount,
+              assignedSubtaskCount,
+              dueDateStatus: catDueDateStatus,
+            };
+          })
+          .filter((cat) => cat.tasks.length > 0)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        const totalSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.totalSubtaskCount, 0);
+        const assignedSubtaskCount = categoriesArray.reduce(
+          (sum, c) => sum + c.assignedSubtaskCount,
+          0
+        );
         return {
-          id: cat.id,
-          name: cat.name,
-          tasks: tasksArray,
+          id: wo.id,
+          name: wo.name,
+          categories: categoriesArray,
           totalSubtaskCount,
           assignedSubtaskCount,
-          dueDateStatus: catDueDateStatus
         };
-      }).filter(cat => cat.tasks.length > 0).sort((a, b) => a.name.localeCompare(b.name));
-
-      const totalSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.totalSubtaskCount, 0);
-      const assignedSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.assignedSubtaskCount, 0);
-      return {
-        id: wo.id,
-        name: wo.name,
-        categories: categoriesArray,
-        totalSubtaskCount,
-        assignedSubtaskCount
-      };
-    }).filter(wo => wo.categories.length > 0).sort((a, b) => a.name.localeCompare(b.name));
+      })
+      .filter((wo) => wo.categories.length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const mainTree = useMemo(() => {
     if (!isWH) {
       // สำหรับผู้ใช้ที่ไม่ใช่ WH (เช่น Site User) แสดงงานย่อยทั้งหมดรวมถึงงานช่วยเหลือในหมวดหลัก
-      return buildTree(() => true, () => true);
+      return buildTree(
+        () => true,
+        () => true
+      );
     }
-    return buildTree(sub => !sub.isSupportRequest, task => !task.isSupportRequest);
+    return buildTree(
+      (sub) => !sub.isSupportRequest,
+      (task) => !task.isSupportRequest
+    );
   }, [tasks, isWH, activeTab]);
 
   const supportTree = useMemo(() => {
     if (!isWH) return [];
-    return buildTree(sub => !!sub.isSupportRequest, task => !!task.isSupportRequest);
+    return buildTree(
+      (sub) => !!sub.isSupportRequest,
+      (task) => !!task.isSupportRequest
+    );
   }, [tasks, isWH, activeTab]);
 
   const totalAll = useMemo(() => {
     let total = 0;
     let assigned = 0;
-    
-    mainTree.forEach(wo => {
-      wo.categories.forEach(cat => {
-        cat.tasks.forEach(t => {
-          t.subtasks.forEach(sub => {
+
+    mainTree.forEach((wo) => {
+      wo.categories.forEach((cat) => {
+        cat.tasks.forEach((t) => {
+          t.subtasks.forEach((sub) => {
             total++;
             if (sub.assignees && sub.assignees.length > 0) {
               assigned++;
@@ -358,10 +416,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
       });
     });
 
-    supportTree.forEach(wo => {
-      wo.categories.forEach(cat => {
-        cat.tasks.forEach(t => {
-          t.subtasks.forEach(sub => {
+    supportTree.forEach((wo) => {
+      wo.categories.forEach((cat) => {
+        cat.tasks.forEach((t) => {
+          t.subtasks.forEach((sub) => {
             total++;
             if (sub.assignees && sub.assignees.length > 0) {
               assigned++;
@@ -370,10 +428,9 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
         });
       });
     });
-    
+
     return { assigned, total };
   }, [mainTree, supportTree]);
-
 
   const isAllSelected = selectedNode === null || selectedNode.type === 'all';
 
@@ -419,11 +476,17 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
               {isWoExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
             </IconButton>
             {isWoExpanded ? (
-              <FolderOpen sx={{ fontSize: 18, mr: 1, color: isWoSelected ? '#2563eb' : '#6b7280' }} />
+              <FolderOpen
+                sx={{ fontSize: 18, mr: 1, color: isWoSelected ? '#2563eb' : '#6b7280' }}
+              />
             ) : (
               <Folder sx={{ fontSize: 18, mr: 1, color: isWoSelected ? '#2563eb' : '#6b7280' }} />
             )}
-            <Typography variant="body2" noWrap sx={{ fontWeight: isWoSelected ? 700 : 600, fontSize: '0.85rem' }}>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{ fontWeight: isWoSelected ? 700 : 600, fontSize: '0.85rem' }}
+            >
               {wo.name}
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
@@ -484,7 +547,8 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
             <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #e2e8f0', ml: 2 }}>
               {wo.categories.map((category: any) => {
                 const isCatExpanded = !!expandedCats[category.id];
-                const isCatSelected = selectedNode?.type === 'category' && selectedNode.id === category.id;
+                const isCatSelected =
+                  selectedNode?.type === 'category' && selectedNode.id === category.id;
 
                 return (
                   <Box key={category.id} sx={{ mb: 0.5 }}>
@@ -517,18 +581,41 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setExpandedCats((prev) => ({ ...prev, [category.id]: !prev[category.id] }));
+                          setExpandedCats((prev) => ({
+                            ...prev,
+                            [category.id]: !prev[category.id],
+                          }));
                         }}
                         sx={{ p: 0.25, mr: 0.5, color: isCatSelected ? '#2563eb' : '#6b7280' }}
                       >
-                        {isCatExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
+                        {isCatExpanded ? (
+                          <ExpandMore fontSize="small" />
+                        ) : (
+                          <ChevronRight fontSize="small" />
+                        )}
                       </IconButton>
                       {isCatExpanded ? (
-                        <FolderOpen sx={{ fontSize: 16, mr: 0.75, color: isCatSelected ? '#2563eb' : '#6b7280' }} />
+                        <FolderOpen
+                          sx={{
+                            fontSize: 16,
+                            mr: 0.75,
+                            color: isCatSelected ? '#2563eb' : '#6b7280',
+                          }}
+                        />
                       ) : (
-                        <Folder sx={{ fontSize: 16, mr: 0.75, color: isCatSelected ? '#2563eb' : '#6b7280' }} />
+                        <Folder
+                          sx={{
+                            fontSize: 16,
+                            mr: 0.75,
+                            color: isCatSelected ? '#2563eb' : '#6b7280',
+                          }}
+                        />
                       )}
-                      <Typography variant="body2" noWrap sx={{ fontWeight: isCatSelected ? 700 : 500, fontSize: '0.8rem' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        sx={{ fontWeight: isCatSelected ? 700 : 500, fontSize: '0.8rem' }}
+                      >
                         {category.name}
                       </Typography>
                       <Box sx={{ flexGrow: 1 }} />
@@ -550,7 +637,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                               <IconButton
                                 size="small"
                                 onClick={() => onEditCategory(category.id, category.name)}
-                                sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                                sx={{
+                                  p: 0.25,
+                                  color: '#4b5563',
+                                  '&:hover': { bgcolor: '#e2e8f0' },
+                                }}
                               >
                                 <EditIcon sx={{ fontSize: 14 }} />
                               </IconButton>
@@ -561,7 +652,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                               <IconButton
                                 size="small"
                                 onClick={() => onDeleteCategory(category.id, category.name)}
-                                  sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
+                                sx={{
+                                  p: 0.25,
+                                  color: '#ef4444',
+                                  '&:hover': { bgcolor: '#fee2e2' },
+                                }}
                               >
                                 <DeleteIcon sx={{ fontSize: 14 }} />
                               </IconButton>
@@ -589,7 +684,8 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                       <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #e2e8f0', ml: 1.75 }}>
                         {category.tasks.map((tItem: any) => {
                           const isTaskExpanded = !!expandedTasks[tItem.id];
-                          const isTaskSelected = selectedNode?.type === 'task' && selectedNode.id === tItem.id;
+                          const isTaskSelected =
+                            selectedNode?.type === 'task' && selectedNode.id === tItem.id;
                           const subtasks = tItem.subtasks || [];
 
                           return (
@@ -608,7 +704,9 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                   borderRadius: 1.5,
                                   cursor: 'pointer',
                                   bgcolor: isTaskSelected ? '#f0fdf4' : 'transparent',
-                                  borderLeft: isTaskSelected ? '3px solid #22c55e' : '3px solid transparent',
+                                  borderLeft: isTaskSelected
+                                    ? '3px solid #22c55e'
+                                    : '3px solid transparent',
                                   color: isTaskSelected ? '#15803d' : '#475569',
                                   '&:hover': {
                                     bgcolor: isTaskSelected ? '#f0fdf4' : '#f8fafc',
@@ -621,13 +719,30 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                   size="small"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setExpandedTasks((prev) => ({ ...prev, [tItem.id]: !prev[tItem.id] }));
+                                    setExpandedTasks((prev) => ({
+                                      ...prev,
+                                      [tItem.id]: !prev[tItem.id],
+                                    }));
                                   }}
-                                  sx={{ p: 0.25, mr: 0.5, color: isTaskSelected ? '#22c55e' : '#6b7280' }}
+                                  sx={{
+                                    p: 0.25,
+                                    mr: 0.5,
+                                    color: isTaskSelected ? '#22c55e' : '#6b7280',
+                                  }}
                                 >
-                                  {isTaskExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
+                                  {isTaskExpanded ? (
+                                    <ExpandMore fontSize="small" />
+                                  ) : (
+                                    <ChevronRight fontSize="small" />
+                                  )}
                                 </IconButton>
-                                <Assignment sx={{ fontSize: 14, mr: 0.75, color: isTaskSelected ? '#22c55e' : '#6b7280' }} />
+                                <Assignment
+                                  sx={{
+                                    fontSize: 14,
+                                    mr: 0.75,
+                                    color: isTaskSelected ? '#22c55e' : '#6b7280',
+                                  }}
+                                />
                                 <Typography
                                   variant="body2"
                                   noWrap
@@ -657,7 +772,11 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                       <IconButton
                                         size="small"
                                         onClick={() => onEditTask(tItem.id, tItem.name)}
-                                        sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                                        sx={{
+                                          p: 0.25,
+                                          color: '#4b5563',
+                                          '&:hover': { bgcolor: '#e2e8f0' },
+                                        }}
                                       >
                                         <EditIcon sx={{ fontSize: 14 }} />
                                       </IconButton>
@@ -665,7 +784,9 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                   </Stack>
                                 )}
                                 {(() => {
-                                  const taskProgress = isSupportTree ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
+                                  const taskProgress = isSupportTree
+                                    ? tItem.task.supportDailyProgress || 0
+                                    : tItem.task.dailyProgress || 0;
                                   return (
                                     <Typography
                                       variant="caption"
@@ -684,7 +805,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                     </Typography>
                                   );
                                 })()}
-                                
+
                                 <Stack direction="row" alignItems="center" spacing={0.5}>
                                   {/* Quick Add Subtask Button */}
                                   {!isSupportTree && onQuickCreateSubtask && (
@@ -705,7 +826,7 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                       </IconButton>
                                     </Tooltip>
                                   )}
-                                  
+
                                   <Box
                                     sx={{
                                       px: 0.8,
@@ -724,7 +845,9 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
 
                               {/* Subtasks under Task */}
                               <Collapse in={isTaskExpanded} timeout="auto" unmountOnExit>
-                                <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #cbd5e1', ml: 1.5 }}>
+                                <Box
+                                  sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #cbd5e1', ml: 1.5 }}
+                                >
                                   {subtasks.map((subtask: Subtask) => (
                                     <Box
                                       key={subtask.id}
@@ -744,10 +867,22 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                         },
                                       }}
                                     >
-                                      <Circle sx={{ fontSize: 5, mr: 1, color: getSubtaskDueDateColor(subtask) }} />
+                                      <Circle
+                                        sx={{
+                                          fontSize: 5,
+                                          mr: 1,
+                                          color: getSubtaskDueDateColor(subtask),
+                                        }}
+                                      />
                                       {subtask.assignees && subtask.assignees.length > 0 && (
-                                        <Tooltip title={`ผู้รับผิดชอบ: ${subtask.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
-                                          <Person sx={{ fontSize: 13, color: '#3b82f6', mr: 0.5 }} />
+                                        <Tooltip
+                                          title={`ผู้รับผิดชอบ: ${subtask.assignees.map((a: any) => a.name).join(', ')}`}
+                                          arrow
+                                          placement="top"
+                                        >
+                                          <Person
+                                            sx={{ fontSize: 13, color: '#3b82f6', mr: 0.5 }}
+                                          />
                                         </Tooltip>
                                       )}
                                       <Typography
@@ -763,24 +898,25 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                       </Typography>
 
                                       <Stack direction="row" alignItems="center" spacing={0.5}>
-                                        {(!subtask.assignees || subtask.assignees.length === 0) && onQuickAssignSubtask && (
-                                          <Tooltip title="มอบหมายงานย่อยด่วน" arrow>
-                                            <IconButton
-                                              size="small"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                onQuickAssignSubtask(tItem.task, subtask);
-                                              }}
-                                              sx={{
-                                                p: 0.1,
-                                                color: '#3b82f6',
-                                                '&:hover': { bgcolor: '#eff6ff' },
-                                              }}
-                                            >
-                                              <AddIcon sx={{ fontSize: 13 }} />
-                                            </IconButton>
-                                          </Tooltip>
-                                        )}
+                                        {(!subtask.assignees || subtask.assignees.length === 0) &&
+                                          onQuickAssignSubtask && (
+                                            <Tooltip title="มอบหมายงานย่อยด่วน" arrow>
+                                              <IconButton
+                                                size="small"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onQuickAssignSubtask(tItem.task, subtask);
+                                                }}
+                                                sx={{
+                                                  p: 0.1,
+                                                  color: '#3b82f6',
+                                                  '&:hover': { bgcolor: '#eff6ff' },
+                                                }}
+                                              >
+                                                <AddIcon sx={{ fontSize: 13 }} />
+                                              </IconButton>
+                                            </Tooltip>
+                                          )}
 
                                         {subtask.dailyProgress > 0 && (
                                           <Typography
@@ -788,8 +924,14 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                             sx={{
                                               fontSize: '0.6rem',
                                               fontWeight: 700,
-                                              color: subtask.dailyProgress >= 100 ? '#10b981' : '#6366f1',
-                                              bgcolor: subtask.dailyProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
+                                              color:
+                                                subtask.dailyProgress >= 100
+                                                  ? '#10b981'
+                                                  : '#6366f1',
+                                              bgcolor:
+                                                subtask.dailyProgress >= 100
+                                                  ? '#ecfdf5'
+                                                  : '#e0e7ff',
                                               px: 0.6,
                                               py: 0.05,
                                               borderRadius: '3px',
@@ -802,7 +944,17 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                                     </Box>
                                   ))}
                                   {subtasks.length === 0 && (
-                                    <Typography variant="caption" sx={{ display: 'block', pl: 2, py: 0.5, color: '#94a3b8', fontStyle: 'italic', fontSize: '0.7rem' }}>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        display: 'block',
+                                        pl: 2,
+                                        py: 0.5,
+                                        color: '#94a3b8',
+                                        fontStyle: 'italic',
+                                        fontSize: '0.7rem',
+                                      }}
+                                    >
                                       ไม่มีงานย่อย
                                     </Typography>
                                   )}
@@ -838,7 +990,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
     >
       {/* Title */}
       <Box sx={{ p: 2, pb: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1c1e2b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 800, color: '#1c1e2b', textTransform: 'uppercase', letterSpacing: 0.5 }}
+        >
           โครงสร้างงาน (Structure Tree)
         </Typography>
       </Box>
@@ -907,7 +1062,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
         {mainTree.length > 0 ? (
           renderTreeNodes(mainTree, false)
         ) : (
-          <Typography variant="caption" sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}>
+          <Typography
+            variant="caption"
+            sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}
+          >
             ไม่มีงานหลัก
           </Typography>
         )}
@@ -939,7 +1097,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
             {supportTree.length > 0 ? (
               renderTreeNodes(supportTree, true)
             ) : (
-              <Typography variant="caption" sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}>
+              <Typography
+                variant="caption"
+                sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}
+              >
                 ไม่มีงานช่วยเหลือ
               </Typography>
             )}

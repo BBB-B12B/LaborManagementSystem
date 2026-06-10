@@ -6,7 +6,7 @@ if (admin.apps.length === 0) {
   // Use emulator if configured
   process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
   admin.initializeApp({
-    projectId: 'after-sale-system'
+    projectId: 'after-sale-system',
   });
 }
 
@@ -23,4 +23,9 @@ async function main() {
   }
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

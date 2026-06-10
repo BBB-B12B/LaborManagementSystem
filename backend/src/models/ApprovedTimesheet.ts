@@ -17,26 +17,26 @@ import type { ApprovalSource } from './ReconciliationRecord';
 // ---------------------------------------------------------------------------
 
 export interface ApprovedTimesheet {
-  id: string;                        // ATS_{employeeId}_{workDate}
+  id: string; // ATS_{employeeId}_{workDate}
   employeeId: string;
-  employeeName?: string;             // Cache สำหรับ UI / Export
-  workDate: string;                  // YYYY-MM-DD
+  employeeName?: string; // Cache สำหรับ UI / Export
+  workDate: string; // YYYY-MM-DD
   projectLocationId: string;
-  projectName?: string;              // Cache สำหรับ UI / Export
+  projectName?: string; // Cache สำหรับ UI / Export
 
   // --- ชั่วโมงที่ใช้คำนวณค่าจ้าง ---
-  approvedHours: number;             // ชม. รวมสุทธิ
-  regularHours?: number;             // ชม. ปกติ (breakdown)
-  otMorningHours?: number;           // ชม. OT เช้า
-  otNoonHours?: number;              // ชม. OT เที่ยง
-  otEveningHours?: number;           // ชม. OT เย็น
+  approvedHours: number; // ชม. รวมสุทธิ
+  regularHours?: number; // ชม. ปกติ (breakdown)
+  otMorningHours?: number; // ชม. OT เช้า
+  otNoonHours?: number; // ชม. OT เที่ยง
+  otEveningHours?: number; // ชม. OT เย็น
 
   // --- Traceability ---
-  approvalSource: ApprovalSource;    // แหล่งข้อมูลที่ใช้
-  reconciliationRecordId: string;    // ref → reconciliationRecords
+  approvalSource: ApprovalSource; // แหล่งข้อมูลที่ใช้
+  reconciliationRecordId: string; // ref → reconciliationRecords
 
   // --- Audit ---
-  approvedBy: string;                // Admin userId เท่านั้น (ไม่มี 'system')
+  approvedBy: string; // Admin userId เท่านั้น (ไม่มี 'system')
   approvedAt: Date;
   note?: string;
 

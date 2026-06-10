@@ -18,12 +18,18 @@ const StyledPaper = styled(Paper, {
 })<{ active?: boolean; colorTheme: string }>(({ active, colorTheme }) => {
   const getThemeColors = () => {
     switch (colorTheme) {
-      case 'red': return RECON_COLORS.RED;
-      case 'orange': return RECON_COLORS.ORANGE;
-      case 'green': return RECON_COLORS.GREEN;
-      case 'blue': return RECON_COLORS.BLUE;
-      case 'purple': return { bg: '#f5f3ff', border: '#ddd6fe', text: '#7c3aed', accent: '#7c3aed' }; // Purple as exception or add to RECON_COLORS
-      default: return RECON_COLORS.BLUE;
+      case 'red':
+        return RECON_COLORS.RED;
+      case 'orange':
+        return RECON_COLORS.ORANGE;
+      case 'green':
+        return RECON_COLORS.GREEN;
+      case 'blue':
+        return RECON_COLORS.BLUE;
+      case 'purple':
+        return { bg: '#f5f3ff', border: '#ddd6fe', text: '#7c3aed', accent: '#7c3aed' }; // Purple as exception or add to RECON_COLORS
+      default:
+        return RECON_COLORS.BLUE;
     }
   };
 
@@ -59,85 +65,82 @@ const StyledPaper = styled(Paper, {
         width: '4px',
         height: '100%',
         backgroundColor: colors.accent,
-      }
-    })
+      },
+    }),
   };
 });
 
-const BreakdownCard: React.FC<BreakdownCardProps> = ({ 
-  active, 
-  colorTheme, 
-  title, 
-  description, 
-  count, 
-  icon, 
-  onClick 
+const BreakdownCard: React.FC<BreakdownCardProps> = ({
+  active,
+  colorTheme,
+  title,
+  description,
+  count,
+  icon,
+  onClick,
 }) => {
   return (
-    <StyledPaper 
-      active={active} 
-      colorTheme={colorTheme} 
-      onClick={onClick}
-      elevation={0}
-    >
+    <StyledPaper active={active} colorTheme={colorTheme} onClick={onClick} elevation={0}>
       <Stack direction="row" spacing={1.5} alignItems="center">
-        <Box sx={{ 
-          width: 36, 
-          height: 36, 
-          borderRadius: '50%', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          backgroundColor: active ? '#fff' : 'transparent',
-          transition: 'all 0.3s',
-          flexShrink: 0
-        }}>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: active ? '#fff' : 'transparent',
+            transition: 'all 0.3s',
+            flexShrink: 0,
+          }}
+        >
           {icon}
         </Box>
         <Box sx={{ flex: 1 }}>
-          <Typography 
-            variant="caption" 
-            fontWeight={900} 
-            sx={{ 
-              lineHeight: 1.1, 
-              mb: 0.2, 
-              display: 'block', 
+          <Typography
+            variant="caption"
+            fontWeight={900}
+            sx={{
+              lineHeight: 1.1,
+              mb: 0.2,
+              display: 'block',
               fontSize: '0.75rem',
-              color: RECON_COLORS.NEUTRAL.textPrimary
+              color: RECON_COLORS.NEUTRAL.textPrimary,
             }}
           >
             {title}
           </Typography>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              color: RECON_COLORS.NEUTRAL.textSecondary, 
-              display: 'block', 
-              lineHeight: 1.2, 
-              mb: 0.5, 
-              fontSize: MIN_FONT_SIZE.SECONDARY 
+          <Typography
+            variant="caption"
+            sx={{
+              color: RECON_COLORS.NEUTRAL.textSecondary,
+              display: 'block',
+              lineHeight: 1.2,
+              mb: 0.5,
+              fontSize: MIN_FONT_SIZE.SECONDARY,
             }}
           >
             {description}
           </Typography>
           <Stack direction="row" justifyContent="flex-end" alignItems="flex-end">
             <Box sx={{ textAlign: 'right' }}>
-              <Typography 
-                variant="h6" 
-                fontWeight={900} 
-                sx={{ 
-                  lineHeight: 1, 
-                  color: RECON_COLORS.NEUTRAL.textPrimary 
+              <Typography
+                variant="h6"
+                fontWeight={900}
+                sx={{
+                  lineHeight: 1,
+                  color: RECON_COLORS.NEUTRAL.textPrimary,
                 }}
               >
                 {count}
               </Typography>
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  fontSize: '0.65rem', 
-                  fontWeight: 800, 
-                  color: RECON_COLORS.NEUTRAL.textTertiary 
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  color: RECON_COLORS.NEUTRAL.textTertiary,
                 }}
               >
                 รายการ

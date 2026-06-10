@@ -14,7 +14,7 @@ const taskService = new TaskService();
 
 async function runTest() {
   console.log('=== STARTING WORKSPACE DELETE & DELETABILITY TEST ===');
-  
+
   const testUserId = 'test-admin-123';
   const projectId = 'test-proj-delete-123';
   const woCode = 'WO-DEL-101';
@@ -158,7 +158,7 @@ async function runTest() {
 
   // 3. Test updateSubtaskDeletability
   console.log('\n--- 3. Testing updateSubtaskDeletability ---');
-  
+
   const deletableA = await taskService.updateSubtaskDeletability(subtaskARef, 'SUB-A');
   console.log(`Subtask A deletable? Expected: false, Got: ${deletableA}`);
   if (deletableA !== false) throw new Error('Subtask A should not be deletable');
@@ -190,7 +190,7 @@ async function runTest() {
   const subtaskCReportSnap = await repCRef.get();
   console.log(`Subtask C exists? Expected: false, Got: ${subtaskCSnap.exists}`);
   console.log(`Subtask C report exists? Expected: false, Got: ${subtaskCReportSnap.exists}`);
-  
+
   if (subtaskCSnap.exists || subtaskCReportSnap.exists) {
     throw new Error('Subtask C or its report was not hard-deleted!');
   }
@@ -264,7 +264,7 @@ async function runTest() {
   console.log('=== ALL TESTS PASSED SUCCESSFULLY ===');
 }
 
-runTest().catch(err => {
+runTest().catch((err) => {
   console.error('=== TEST FAILED ===');
   console.error(err);
   process.exit(1);

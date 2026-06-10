@@ -18,14 +18,16 @@ const sa = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
   : undefined;
 
 if (!admin.apps.length) {
-  admin.initializeApp({ credential: sa ? admin.credential.cert(sa) : admin.credential.applicationDefault() });
+  admin.initializeApp({
+    credential: sa ? admin.credential.cert(sa) : admin.credential.applicationDefault(),
+  });
 }
 const db = admin.firestore();
 
 // ══════════════════════════════════════
-const SCAN_DOC_ID    = 'SCAN_200030_WH_2026-05-02';
-const EMPLOYEE_NUM   = '200030';
-const WORK_DATE      = '2026-05-02';
+const SCAN_DOC_ID = 'SCAN_200030_WH_2026-05-02';
+const EMPLOYEE_NUM = '200030';
+const WORK_DATE = '2026-05-02';
 // ══════════════════════════════════════
 
 async function verify() {
@@ -44,15 +46,23 @@ async function verify() {
     console.log('   punches   :', sd.punches || sd.allScans);
     console.log('   Time1     :', sd.Time1 || '-');
     console.log('   Time2     :', sd.Time2 || '-');
-    console.log('   Time3     :', sd.Time3 || '-',  '← ควรเป็น "-" ถ้า fix ถูกต้อง');
+    console.log('   Time3     :', sd.Time3 || '-', '← ควรเป็น "-" ถ้า fix ถูกต้อง');
     console.log('   Time4     :', sd.Time4 || '-');
     console.log('   isManual  :', sd.isManuallyEdited);
-    console.log('   regularHrs:', sd.regularHours, '| OT morning:', sd.otMorningHours, '| OT evening:', sd.otEveningHours);
+    console.log(
+      '   regularHrs:',
+      sd.regularHours,
+      '| OT morning:',
+      sd.otMorningHours,
+      '| OT evening:',
+      sd.otEveningHours
+    );
   }
 
   // ── ตรวจ Reconciliation ────────────────────────────
   console.log('\n🔄 Reconciliation');
-  const recSnap = await db.collection('reconciliationRecords')
+  const recSnap = await db
+    .collection('reconciliationRecords')
     .where('employeeNumber', '==', EMPLOYEE_NUM)
     .where('workDate', '==', WORK_DATE)
     .limit(1)
@@ -71,7 +81,9 @@ async function verify() {
   }
 }
 
-verify().then(() => process.exit(0)).catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
+verify()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });

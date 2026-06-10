@@ -156,7 +156,7 @@ export interface UpdateTaskInput {
   supportedRevisionIds?: string[]; // [NEW] Revisions that had support team
   unlockedDates?: Record<string, { unlockedUntil: Date; unlockedBy: string }>;
   isSupportRequest?: boolean;
-    subtasks?: {
+  subtasks?: {
     id?: string;
     subtaskId?: string;
     subtaskName: string;
@@ -236,7 +236,9 @@ export const taskConverter = {
       currentRevision: data.currentRevision || 'rev00',
       revisionId: data.revisionId || data.currentRevision || 'rev00',
       revisionName: data.revisionName || '',
-      revisionCreatedAt: data.revisionCreatedAt ? safeDate(data.revisionCreatedAt) : safeDate(data.createdAt),
+      revisionCreatedAt: data.revisionCreatedAt
+        ? safeDate(data.revisionCreatedAt)
+        : safeDate(data.createdAt),
       dailyProgress: data.dailyProgress || 0,
       attachmentsCount: data.attachmentsCount || 0,
       isActive: data.isActive !== false,
@@ -245,35 +247,57 @@ export const taskConverter = {
       supportTaskName: data.supportTaskName || '',
       supportDailyProgress: data.supportDailyProgress || 0,
       supportAssignees: data.supportAssignees || [],
-      supportCreatedAt: data.supportCreatedAt ? safeDate(data.supportCreatedAt) : safeDate(data.createdAt),
-      unlockedDates: data.unlockedDates ? Object.keys(data.unlockedDates).reduce((acc, key) => {
-        acc[key] = {
-          ...data.unlockedDates[key],
-          unlockedUntil: safeDate(data.unlockedDates[key].unlockedUntil),
-        };
-        return acc;
-      }, {} as Record<string, any>) : {},
-      unlockRequests: data.unlockRequests ? Object.keys(data.unlockRequests).reduce((acc, key) => {
-        acc[key] = {
-          ...data.unlockRequests[key],
-          requestedAt: safeDate(data.unlockRequests[key].requestedAt),
-        };
-        return acc;
-      }, {} as Record<string, any>) : {},
-      supportUnlockedDates: data.supportUnlockedDates ? Object.keys(data.supportUnlockedDates).reduce((acc, key) => {
-        acc[key] = {
-          ...data.supportUnlockedDates[key],
-          unlockedUntil: safeDate(data.supportUnlockedDates[key].unlockedUntil),
-        };
-        return acc;
-      }, {} as Record<string, any>) : {},
-      supportUnlockRequests: data.supportUnlockRequests ? Object.keys(data.supportUnlockRequests).reduce((acc, key) => {
-        acc[key] = {
-          ...data.supportUnlockRequests[key],
-          requestedAt: safeDate(data.supportUnlockRequests[key].requestedAt),
-        };
-        return acc;
-      }, {} as Record<string, any>) : {},
+      supportCreatedAt: data.supportCreatedAt
+        ? safeDate(data.supportCreatedAt)
+        : safeDate(data.createdAt),
+      unlockedDates: data.unlockedDates
+        ? Object.keys(data.unlockedDates).reduce(
+            (acc, key) => {
+              acc[key] = {
+                ...data.unlockedDates[key],
+                unlockedUntil: safeDate(data.unlockedDates[key].unlockedUntil),
+              };
+              return acc;
+            },
+            {} as Record<string, any>
+          )
+        : {},
+      unlockRequests: data.unlockRequests
+        ? Object.keys(data.unlockRequests).reduce(
+            (acc, key) => {
+              acc[key] = {
+                ...data.unlockRequests[key],
+                requestedAt: safeDate(data.unlockRequests[key].requestedAt),
+              };
+              return acc;
+            },
+            {} as Record<string, any>
+          )
+        : {},
+      supportUnlockedDates: data.supportUnlockedDates
+        ? Object.keys(data.supportUnlockedDates).reduce(
+            (acc, key) => {
+              acc[key] = {
+                ...data.supportUnlockedDates[key],
+                unlockedUntil: safeDate(data.supportUnlockedDates[key].unlockedUntil),
+              };
+              return acc;
+            },
+            {} as Record<string, any>
+          )
+        : {},
+      supportUnlockRequests: data.supportUnlockRequests
+        ? Object.keys(data.supportUnlockRequests).reduce(
+            (acc, key) => {
+              acc[key] = {
+                ...data.supportUnlockRequests[key],
+                requestedAt: safeDate(data.supportUnlockRequests[key].requestedAt),
+              };
+              return acc;
+            },
+            {} as Record<string, any>
+          )
+        : {},
       createdAt: safeDate(data.createdAt),
       updatedAt: safeDate(data.updatedAt),
       createdBy: data.createdBy || '',

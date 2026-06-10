@@ -32,7 +32,6 @@ export type { ProjectSelectProps, ProjectLocation } from './ProjectSelect';
 export { SkillSelect } from './SkillSelect';
 export type { SkillSelectProps } from './SkillSelect';
 
-
 export { RoleSelect, ROLES, getRoleByCode, getRoleName } from './RoleSelect';
 export type { RoleSelectProps, Role } from './RoleSelect';
 

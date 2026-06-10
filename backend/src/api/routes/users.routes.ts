@@ -198,13 +198,11 @@ router.post(
     body('name').notEmpty().withMessage('Name is required'),
     body('employeeId').notEmpty().withMessage('Employee ID is required'),
     body('roleId').notEmpty().withMessage('Role ID is required'),
-    body('department').isIn(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH']).withMessage('Invalid department'),
+    body('department')
+      .isIn(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'])
+      .withMessage('Invalid department'),
     body('projectLocationIds').isArray().withMessage('Project location IDs must be an array'),
-    body('startDate')
-      .optional()
-      .isISO8601()
-      .withMessage('Start date must be a valid ISO8601 date'),
-
+    body('startDate').optional().isISO8601().withMessage('Start date must be a valid ISO8601 date'),
   ],
   async (req: Request, res: Response) => {
     try {
@@ -222,8 +220,6 @@ router.post(
       if (Number.isNaN(startDate.getTime())) {
         throw new AppError('Invalid start date', 400);
       }
-
-
 
       const payload: CreateUserInput = {
         username: req.body.username,
@@ -255,117 +251,135 @@ router.post(
   }
 );
 
-router.post('/import', authorize(['AM']), upload.single('file'), async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      throw new AppError('กรุณาอัปโหลดไฟล์ CSV', 400);
-    }
-
-    const csvContent = req.file.buffer.toString('utf-8');
-    const rows = parseCsv(csvContent);
-
-    if (rows.length === 0) {
-      throw new AppError('ไฟล์ไม่มีข้อมูล', 400);
-    }
-
-    const headers = rows[0];
-    const dataRows = rows.slice(1);
-
-    if (dataRows.length === 0) {
-      throw new AppError('ไม่พบข้อมูลผู้ใช้ในไฟล์', 400);
-    }
-
-    const getValue = createAccessor(headers);
-
-    const summary = {
-      success: 0,
-      failed: 0,
-    };
-
-    for (let index = 0; index < dataRows.length; index += 1) {
-      const row = dataRows[index];
-      const rowNumber = index + 2;
-
-      const employeeId = getValue(row, 'Employee ID');
-      const username = getValue(row, 'Username');
-      const password = getValue(row, 'Password');
-      const fullName = getValue(row, 'Full Name');
-      const roleIdRaw = getValue(row, 'Role ID');
-      const departmentRaw = getValue(row, 'Department');
-      const projectIdsRaw = getValue(row, 'Project Location IDs (comma-separated)');
-      const startDateValue = getValue(row, 'Start Date (YYYY-MM-DD)');
-
-      const isActive = toBoolean(getValue(row, 'Is Active (TRUE/FALSE)'));
-
-      const requiredMissing = [employeeId, username, password, fullName, roleIdRaw, departmentRaw, startDateValue].some(
-        (value) => !value
-      );
-
-      if (requiredMissing) {
-        summary.failed += 1;
-        logger.warn('User import skipped: missing required fields', { rowNumber, employeeId });
-        continue;
+router.post(
+  '/import',
+  authorize(['AM']),
+  upload.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        throw new AppError('กรุณาอัปโหลดไฟล์ CSV', 400);
       }
 
-      const roleId = roleIdRaw.toUpperCase();
-      const department = departmentRaw.toUpperCase();
-      if (!['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'].includes(roleId)) {
-        summary.failed += 1;
-        logger.warn('User import skipped: invalid role', { rowNumber, employeeId, roleId });
-        continue;
-      }
-      if (!['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'].includes(department)) {
-        summary.failed += 1;
-        logger.warn('User import skipped: invalid department', { rowNumber, employeeId, department });
-        continue;
+      const csvContent = req.file.buffer.toString('utf-8');
+      const rows = parseCsv(csvContent);
+
+      if (rows.length === 0) {
+        throw new AppError('ไฟล์ไม่มีข้อมูล', 400);
       }
 
-      const startDate = toDate(startDateValue);
-      if (!startDate) {
-        summary.failed += 1;
-        logger.warn('User import skipped: invalid start date', { rowNumber, employeeId, startDateValue });
-        continue;
+      const headers = rows[0];
+      const dataRows = rows.slice(1);
+
+      if (dataRows.length === 0) {
+        throw new AppError('ไม่พบข้อมูลผู้ใช้ในไฟล์', 400);
       }
 
+      const getValue = createAccessor(headers);
 
-      const payload: CreateUserInput = {
-        employeeId,
-        username,
-        password,
-        name: fullName,
-        roleId,
-        department: department as CreateUserInput['department'],
-        projectLocationIds: toProjectIds(projectIdsRaw),
-        startDate,
-
-        isActive,
+      const summary = {
+        success: 0,
+        failed: 0,
       };
 
-      try {
-        await userService.createUser(payload, 'import-csv');
-        summary.success += 1;
-      } catch (error: any) {
-        summary.failed += 1;
-        logger.error('Failed to import user row', {
-          rowNumber,
-          employeeId,
-          error: error?.message,
-        });
-      }
-    }
+      for (let index = 0; index < dataRows.length; index += 1) {
+        const row = dataRows[index];
+        const rowNumber = index + 2;
 
-    res.json({
-      success: true,
-      data: summary,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: error.message || 'ไม่สามารถนำเข้าข้อมูลผู้ใช้ได้',
-    });
+        const employeeId = getValue(row, 'Employee ID');
+        const username = getValue(row, 'Username');
+        const password = getValue(row, 'Password');
+        const fullName = getValue(row, 'Full Name');
+        const roleIdRaw = getValue(row, 'Role ID');
+        const departmentRaw = getValue(row, 'Department');
+        const projectIdsRaw = getValue(row, 'Project Location IDs (comma-separated)');
+        const startDateValue = getValue(row, 'Start Date (YYYY-MM-DD)');
+
+        const isActive = toBoolean(getValue(row, 'Is Active (TRUE/FALSE)'));
+
+        const requiredMissing = [
+          employeeId,
+          username,
+          password,
+          fullName,
+          roleIdRaw,
+          departmentRaw,
+          startDateValue,
+        ].some((value) => !value);
+
+        if (requiredMissing) {
+          summary.failed += 1;
+          logger.warn('User import skipped: missing required fields', { rowNumber, employeeId });
+          continue;
+        }
+
+        const roleId = roleIdRaw.toUpperCase();
+        const department = departmentRaw.toUpperCase();
+        if (!['AM', 'FM', 'SE', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'].includes(roleId)) {
+          summary.failed += 1;
+          logger.warn('User import skipped: invalid role', { rowNumber, employeeId, roleId });
+          continue;
+        }
+        if (!['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'].includes(department)) {
+          summary.failed += 1;
+          logger.warn('User import skipped: invalid department', {
+            rowNumber,
+            employeeId,
+            department,
+          });
+          continue;
+        }
+
+        const startDate = toDate(startDateValue);
+        if (!startDate) {
+          summary.failed += 1;
+          logger.warn('User import skipped: invalid start date', {
+            rowNumber,
+            employeeId,
+            startDateValue,
+          });
+          continue;
+        }
+
+        const payload: CreateUserInput = {
+          employeeId,
+          username,
+          password,
+          name: fullName,
+          roleId,
+          department: department as CreateUserInput['department'],
+          projectLocationIds: toProjectIds(projectIdsRaw),
+          startDate,
+
+          isActive,
+        };
+
+        try {
+          await userService.createUser(payload, 'import-csv');
+          summary.success += 1;
+        } catch (error: any) {
+          summary.failed += 1;
+          logger.error('Failed to import user row', {
+            rowNumber,
+            employeeId,
+            error: error?.message,
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: summary,
+      });
+    } catch (error: any) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error.message || 'ไม่สามารถนำเข้าข้อมูลผู้ใช้ได้',
+      });
+    }
   }
-});
+);
 
 /**
  * PUT /api/users/:id

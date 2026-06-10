@@ -26,7 +26,7 @@ async function checkScan() {
   if (snap.empty) {
     console.log('NO SCAN DATA FOR 410481');
   } else {
-    snap.forEach(d => console.log('Scan:', d.id, d.data().workDate));
+    snap.forEach((d) => console.log('Scan:', d.id, d.data().workDate));
   }
 }
 

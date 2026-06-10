@@ -4,10 +4,7 @@
  */
 
 import apiClient from './api/client';
-import type {
-  ScanDataFilter,
-  LateRecordFilter,
-} from '../validation/scanDataSchema';
+import type { ScanDataFilter, LateRecordFilter } from '../validation/scanDataSchema';
 
 /**
  * ScanData Interface
@@ -22,15 +19,15 @@ export interface ScanData {
   scanDateTime: Date;
   scanDate: Date;
   scanType:
-  | 'ot_morning_in'
-  | 'ot_morning_out'
-  | 'regular_in'
-  | 'late'
-  | 'lunch_break'
-  | 'regular_out'
-  | 'ot_noon'
-  | 'ot_evening_in'
-  | 'ot_evening_out';
+    | 'ot_morning_in'
+    | 'ot_morning_out'
+    | 'regular_in'
+    | 'late'
+    | 'lunch_break'
+    | 'regular_out'
+    | 'ot_noon'
+    | 'ot_evening_in'
+    | 'ot_evening_out';
   scanTimeSlot: string;
   isFirstScanOfDay: boolean;
   isLastScanOfDay: boolean;
@@ -58,7 +55,6 @@ export interface ScanData {
   punches?: string[];
   devicePunches?: string[]; // เวลาสแกนดิบจากเครื่องสแกนนิ้ว (ห้ามแก้ไข)
 }
-
 
 /**
  * Late Record Interface
@@ -108,7 +104,6 @@ export interface ImportResult {
   }>;
 }
 
-
 /**
  * Upload ScanData file (.dat หรือ Excel) และ import เข้าระบบ
  */
@@ -130,11 +125,12 @@ export async function uploadScanDataFile(
     formData,
     {
       params: {
-        dryRun: dryRun ? 'true' : 'false'
+        dryRun: dryRun ? 'true' : 'false',
       },
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 300000, // 5 minutes timeout override
     }
   );
   return response.data.data;
@@ -160,13 +156,10 @@ export async function getAllScanData(
   params.append('pageSize', String(pageSize));
 
   if (filter) {
-    if (filter.projectLocationId)
-      params.append('projectLocationId', filter.projectLocationId);
-    if (filter.dailyContractorId)
-      params.append('dailyContractorId', filter.dailyContractorId);
+    if (filter.projectLocationId) params.append('projectLocationId', filter.projectLocationId);
+    if (filter.dailyContractorId) params.append('dailyContractorId', filter.dailyContractorId);
     if (filter.employeeNumber) params.append('employeeNumber', filter.employeeNumber);
-    if (filter.startDate)
-      params.append('startDate', filter.startDate.toISOString());
+    if (filter.startDate) params.append('startDate', filter.startDate.toISOString());
     if (filter.endDate) params.append('endDate', filter.endDate.toISOString());
     if (filter.scanType) params.append('scanType', filter.scanType);
     if (filter.hasDiscrepancy !== undefined)
@@ -175,7 +168,6 @@ export async function getAllScanData(
     if (filter.enriched) params.append('enriched', 'true');
     if (filter.onlyDeleted) params.append('onlyDeleted', 'true');
   }
-
 
   const response = await apiClient.get<{
     success: boolean;
@@ -195,16 +187,16 @@ export async function getAllScanData(
  * Get scan data by ID
  */
 export async function getScanDataById(id: string): Promise<ScanData> {
-  const response = await apiClient.get<{ success: boolean; data: ScanData }>(
-    `/scan-data/${id}`
-  );
+  const response = await apiClient.get<{ success: boolean; data: ScanData }>(`/scan-data/${id}`);
   return response.data.data;
 }
 
 /**
  * Delete scan data (ลบทั้ง batch)
  */
-export async function deleteScanDataBatch(importBatchId: string): Promise<{ deletedCount: number }> {
+export async function deleteScanDataBatch(
+  importBatchId: string
+): Promise<{ deletedCount: number }> {
   const response = await apiClient.delete<{
     success: boolean;
     data: { deletedCount: number };
@@ -232,7 +224,6 @@ export async function deleteScanDataBulk(
   return response.data.data;
 }
 
-
 /**
  * Get late records with filtering
  */
@@ -251,20 +242,14 @@ export async function getLateRecords(
   params.append('pageSize', String(pageSize));
 
   if (filter) {
-    if (filter.projectLocationId)
-      params.append('projectLocationId', filter.projectLocationId);
-    if (filter.dailyContractorId)
-      params.append('dailyContractorId', filter.dailyContractorId);
+    if (filter.projectLocationId) params.append('projectLocationId', filter.projectLocationId);
+    if (filter.dailyContractorId) params.append('dailyContractorId', filter.dailyContractorId);
     if (filter.employeeNumber) params.append('employeeNumber', filter.employeeNumber);
-    if (filter.startDate)
-      params.append('startDate', filter.startDate.toISOString());
+    if (filter.startDate) params.append('startDate', filter.startDate.toISOString());
     if (filter.endDate) params.append('endDate', filter.endDate.toISOString());
     if (filter.wagePeriodId) params.append('wagePeriodId', filter.wagePeriodId);
     if (filter.includedInWageCalculation !== undefined)
-      params.append(
-        'includedInWageCalculation',
-        String(filter.includedInWageCalculation)
-      );
+      params.append('includedInWageCalculation', String(filter.includedInWageCalculation));
   }
 
   const response = await apiClient.get<{
@@ -287,7 +272,6 @@ export async function getLateRecords(
 export async function softDeleteScanData(id: string): Promise<void> {
   await apiClient.delete(`/scan-data/${id}`);
 }
-
 
 /**
  * Add a manual scan record
@@ -338,7 +322,6 @@ export async function fillFromDailyReport(
   return response.data.data;
 }
 
-
 /**
  * Update all punches for a specific contractor and date (Manual correction)
  */
@@ -348,18 +331,14 @@ export async function updateDailyPunches(
   punches: string[],
   scanDataId?: string
 ): Promise<{ success: boolean; count: number }> {
-  const response = await apiClient.put<{ success: boolean; count: number }>(
-    '/scan-data/punches',
-    {
-      id: scanDataId,
-      contractorId,
-      date: date.toISOString(),
-      punches
-    }
-  );
+  const response = await apiClient.put<{ success: boolean; count: number }>('/scan-data/punches', {
+    id: scanDataId,
+    contractorId,
+    date: date.toISOString(),
+    punches,
+  });
   return response.data;
 }
-
 
 /**
  * Export scan data to Excel
@@ -383,7 +362,6 @@ export async function exportScanData(params: {
     responseType: 'blob',
   });
 
-
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
   link.href = url;
@@ -403,7 +381,6 @@ export async function deleteScanDataById(id: string): Promise<{ success: boolean
   return response.data;
 }
 
-
 /**
  * Restore a single scan data record by ID
  * POST /api/scan-data/:id/restore
@@ -412,4 +389,3 @@ export async function restoreScanDataById(id: string): Promise<{ success: boolea
   const response = await apiClient.post(`/scan-data/${id}/restore`);
   return response.data;
 }
-

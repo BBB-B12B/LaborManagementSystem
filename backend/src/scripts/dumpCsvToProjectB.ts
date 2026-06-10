@@ -23,7 +23,7 @@ if (!fs.existsSync(PROJECT_B_KEY_PATH)) {
 // Initialize Firebase Admin for Project B
 const serviceAccount = require(PROJECT_B_KEY_PATH);
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
@@ -79,7 +79,7 @@ const parseThaiDate = (thaiDateStr: string): string | null => {
     'ก.ย.': '09',
     'ต.ค.': '10',
     'พ.ย.': '11',
-    'ธ.ค.': '12'
+    'ธ.ค.': '12',
   };
 
   const month = thaiMonths[monthStr.trim()];
@@ -90,12 +90,12 @@ const parseThaiDate = (thaiDateStr: string): string | null => {
 
 async function run() {
   console.log(`Starting CSV parsing...`);
-  
+
   const parseCsvLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
-    
+
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
       if (char === '"') {
@@ -113,7 +113,7 @@ async function run() {
 
   const fileContent = fs.readFileSync(path.resolve(csvFilePath), 'utf-8');
   const lines = fileContent.split(/\r?\n/);
-  
+
   // Maps to aggregate multiple rows for the same employee+date
   const aggregationMap = new Map<string, ParsedTimesheet>();
   const TARGET_START_DATE = '2025-08-25';
@@ -133,14 +133,14 @@ async function run() {
     const normalTime = columns[2];
     const taskName = columns[3];
     const location = columns[4];
-    
+
     const otMorningHrs = parseFloat(columns[5] || '0');
     const otMorningTask = columns[6];
     const otNoonHrs = parseFloat(columns[8] || '0');
     const otNoonTask = columns[9];
     const otEveningHrs = parseFloat(columns[11] || '0');
     const otEveningTask = columns[12];
-    
+
     const matcId = columns[15]?.trim();
     const normalHrs = parseFloat(columns[17] || '0');
 
@@ -181,7 +181,7 @@ async function run() {
           otEvening: 0,
         },
         shiftTimes: {},
-        workLogs: []
+        workLogs: [],
       };
       aggregationMap.set(docId, record);
     }
@@ -216,7 +216,7 @@ async function run() {
       location: location,
       otMorningTask,
       otNoonTask,
-      otEveningTask
+      otEveningTask,
     });
   }
 
@@ -233,7 +233,7 @@ async function run() {
   }
 
   console.log(`Connecting to Project B to dump data...`);
-  
+
   let batch = db.batch();
   let operationCount = 0;
   let successCount = 0;
@@ -241,10 +241,10 @@ async function run() {
   for (const record of finalRecords) {
     const docId = `${record.employeeNumber}_${record.date}`;
     const docRef = db.collection(TARGET_COLLECTION).doc(docId);
-    
+
     batch.set(docRef, {
       ...record,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
     });
 
     operationCount++;
@@ -267,7 +267,7 @@ async function run() {
   process.exit(0);
 }
 
-run().catch(error => {
+run().catch((error) => {
   console.error('Fatal error during dump:', error);
   process.exit(1);
 });

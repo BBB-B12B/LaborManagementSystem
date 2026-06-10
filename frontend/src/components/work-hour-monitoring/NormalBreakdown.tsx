@@ -18,21 +18,31 @@ interface Props {
   endDate?: Date | null;
 }
 
-const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, startDate, endDate }) => {
+const NormalBreakdown: React.FC<Props> = ({
+  onCardClick,
+  activeId,
+  project,
+  startDate,
+  endDate,
+}) => {
   const { data: stats } = useQuery({
     queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
-    queryFn: () => reconciliationService.getStats({
-      homeProjectId: project !== 'all' ? project : undefined,
-      startDate: startDate ? startDate.toISOString() : undefined,
-      endDate: endDate ? endDate.toISOString() : undefined,
-    }),
+    queryFn: () =>
+      reconciliationService.getStats({
+        homeProjectId: project !== 'all' ? project : undefined,
+        startDate: startDate ? startDate.toISOString() : undefined,
+        endDate: endDate ? endDate.toISOString() : undefined,
+      }),
     staleTime: 60000,
   });
 
   // แยก "ปกติตั้งแต่แรก" ออกจาก "แก้ไขแล้วจนปกติ"
   // matchedCount = MATCHED ทั้งหมดในปัจจุบัน (รวมทั้งที่ถูก resolve มาแล้ว)
   // resolvedMatchedCount = รายการที่เคยผิดปกติแล้วถูกแก้ไขจนกลายเป็น MATCHED (เฉพาะ status: MATCHED)
-  const pureMatchedCount = Math.max(0, (stats?.matchedCount ?? 0) - (stats?.resolvedMatchedCount ?? 0));
+  const pureMatchedCount = Math.max(
+    0,
+    (stats?.matchedCount ?? 0) - (stats?.resolvedMatchedCount ?? 0)
+  );
 
   const items = [
     {
@@ -46,9 +56,10 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
     {
       id: 'leave',
       title: 'ลา',
-      description: stats?.resolvedLeaveCount && stats.resolvedLeaveCount > 0
-        ? `พนักงานแจ้งลาหยุดในระบบ (แก้ไขจากขาดงาน ${stats.resolvedLeaveCount} รายการ)`
-        : 'พนักงานแจ้งลาหยุดในระบบ Daily Report',
+      description:
+        stats?.resolvedLeaveCount && stats.resolvedLeaveCount > 0
+          ? `พนักงานแจ้งลาหยุดในระบบ (แก้ไขจากขาดงาน ${stats.resolvedLeaveCount} รายการ)`
+          : 'พนักงานแจ้งลาหยุดในระบบ Daily Report',
       icon: <LeaveIcon sx={{ fontSize: 28, color: RECON_COLORS.ORANGE.text }} />,
       colorTheme: 'orange' as const,
       count: stats?.leaveCount ?? 0,
@@ -68,7 +79,7 @@ const NormalBreakdown: React.FC<Props> = ({ onCardClick, activeId, project, star
       <Grid container spacing={1.5}>
         {items.map((item) => (
           <Grid item xs={12} sm={6} md={2.4} key={item.id}>
-            <BreakdownCard 
+            <BreakdownCard
               active={activeId === item.id}
               colorTheme={item.colorTheme}
               title={item.title}

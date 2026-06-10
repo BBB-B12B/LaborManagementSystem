@@ -6,290 +6,324 @@
  */
 
 import type {
-    CollectionReference,
-    Query,
-    WhereFilterOp,
-    FieldPath,
+  CollectionReference,
+  Query,
+  WhereFilterOp,
+  FieldPath,
 } from 'firebase-admin/firestore';
 
 export interface PaginationOptions {
-    page?: number;
-    pageSize?: number;
-    orderBy?: string;
-    orderDirection?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+  orderBy?: string;
+  orderDirection?: 'asc' | 'desc';
 }
 
 export interface PaginatedResult<T> {
-    items: T[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export class BaseCrudService<T extends { id: string }> {
-    constructor(
-        protected collection: CollectionReference<T>,
-        protected collectionName?: string
-    ) { }
+  constructor(
+    protected collection: CollectionReference<T>,
+    protected collectionName?: string
+  ) {}
 
-    async create(data: Omit<T, 'id'>): Promise<T> {
-        const docRef = await this.collection.add(data as any);
-        const doc = await docRef.get();
-        return doc.data() as T;
+  async create(data: Omit<T, 'id'>): Promise<T> {
+    const docRef = await this.collection.add(data as any);
+    const doc = await docRef.get();
+    return doc.data() as T;
+  }
+
+  async createWithId(id: string, data: Omit<T, 'id'>): Promise<T> {
+    const docRef = this.collection.doc(id);
+    await docRef.set(data as any);
+    const doc = await docRef.get();
+    return doc.data() as T;
+  }
+
+  async getById(id: string): Promise<T | null> {
+    const doc = await this.collection.doc(id).get();
+    return doc.exists ? (doc.data() as T) : null;
+  }
+
+  async getAll(options?: PaginationOptions): Promise<PaginatedResult<T>> {
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 50;
+    const orderBy = options?.orderBy || 'createdAt';
+    const orderDirection = options?.orderDirection || 'desc';
+
+    try {
+      // [P1] Scalability Optimization: Use count aggregation O(1)
+      let total = 0;
+      try {
+        const totalResult = await this.collection.count().get();
+        total = totalResult.data().count;
+      } catch (countError: any) {
+        console.warn(
+          `[BaseCrudService] Error getting count for ${this.collectionName || 'collection'}, falling back to get().size:`,
+          countError.message
+        );
+        const snapshot = await this.collection.get();
+        total = snapshot.size;
+      }
+
+      let query = this.collection.orderBy(orderBy, orderDirection);
+
+      const offset = (page - 1) * pageSize;
+      if (offset > 0) {
+        query = query.offset(offset) as any;
+      }
+
+      query = query.limit(pageSize) as any;
+      const snapshot = await query.get();
+      const items = snapshot.docs.map((doc) => doc.data());
+
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
+    } catch (error: any) {
+      // [P0] Error Resilience: Catch Firestore Index errors
+      if (error.code === 9 || error.message.includes('FAILED_PRECONDITION')) {
+        console.error(
+          `[BaseCrudService] Missing Index for ${this.collectionName || 'collection'}:`,
+          error.message
+        );
+        throw new Error(`ระบบต้องการการสร้าง Index: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  async update(id: string, data: Partial<Omit<T, 'id'>>): Promise<T | null> {
+    const docRef = this.collection.doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return null;
     }
 
-    async createWithId(id: string, data: Omit<T, 'id'>): Promise<T> {
-        const docRef = this.collection.doc(id);
-        await docRef.set(data as any);
-        const doc = await docRef.get();
-        return doc.data() as T;
+    await docRef.update({
+      ...data,
+      updatedAt: new Date(),
+    } as any);
+
+    const updatedDoc = await docRef.get();
+    return updatedDoc.data() as T;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const docRef = this.collection.doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return false;
     }
 
-    async getById(id: string): Promise<T | null> {
-        const doc = await this.collection.doc(id).get();
-        return doc.exists ? (doc.data() as T) : null;
+    await docRef.delete();
+    return true;
+  }
+
+  async softDelete(id: string, deletedBy?: string): Promise<boolean> {
+    const docRef = this.collection.doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return false;
     }
 
-    async getAll(options?: PaginationOptions): Promise<PaginatedResult<T>> {
-        const page = options?.page || 1;
-        const pageSize = options?.pageSize || 50;
-        const orderBy = options?.orderBy || 'createdAt';
-        const orderDirection = options?.orderDirection || 'desc';
+    const updateData: any = {
+      isDeleted: true,
+      deletedAt: new Date(),
+    };
 
-        try {
-            // [P1] Scalability Optimization: Use count aggregation O(1)
-            let total = 0;
-            try {
-                const totalResult = await this.collection.count().get();
-                total = totalResult.data().count;
-            } catch (countError: any) {
-                console.warn(`[BaseCrudService] Error getting count for ${this.collectionName || 'collection'}, falling back to get().size:`, countError.message);
-                const snapshot = await this.collection.get();
-                total = snapshot.size;
-            }
+    if (deletedBy) {
+      updateData.deletedBy = deletedBy;
+    }
 
-            let query = this.collection.orderBy(orderBy, orderDirection);
+    await docRef.update(updateData);
 
-            const offset = (page - 1) * pageSize;
-            if (offset > 0) {
-                query = query.offset(offset) as any;
-            }
+    return true;
+  }
 
-            query = query.limit(pageSize) as any;
-            const snapshot = await query.get();
-            const items = snapshot.docs.map((doc) => doc.data());
+  async query(
+    filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
+    options?: PaginationOptions
+  ): Promise<T[]> {
+    console.log(
+      `[BaseCrudService] Querying ${this.collectionName || 'unknown'} with filters: ${JSON.stringify(filters)}`
+    );
 
-            return {
-                items,
-                total,
-                page,
-                pageSize,
-                totalPages: Math.ceil(total / pageSize),
-            };
-        } catch (error: any) {
-            // [P0] Error Resilience: Catch Firestore Index errors
-            if (error.code === 9 || error.message.includes('FAILED_PRECONDITION')) {
-                console.error(`[BaseCrudService] Missing Index for ${this.collectionName || 'collection'}:`, error.message);
-                throw new Error(`ระบบต้องการการสร้าง Index: ${error.message}`);
-            }
-            throw error;
+    let query: Query<T> = this.collection as any;
+
+    filters.forEach((filter) => {
+      query = query.where(filter.field, filter.operator, filter.value);
+    });
+
+    if (options?.orderBy) {
+      query = query.orderBy(options.orderBy, options.orderDirection || 'asc');
+    }
+
+    if (options?.page && options?.pageSize) {
+      const offset = (options.page - 1) * options.pageSize;
+      if (offset > 0) {
+        query = query.offset(offset) as any;
+      }
+    }
+
+    if (options?.pageSize) {
+      query = query.limit(options.pageSize);
+    }
+
+    try {
+      const snapshot = await query.get();
+      console.log(
+        `[BaseCrudService] Found ${snapshot.size} documents in ${this.collectionName || 'unknown'} (for filters: ${JSON.stringify(filters)})`
+      );
+      return snapshot.docs.map((doc) => doc.data());
+    } catch (error: any) {
+      // [P0] Error Resilience: Catch Firestore Index errors
+      if (error.code === 9 || error.message.includes('FAILED_PRECONDITION')) {
+        console.error(
+          `[BaseCrudService] Missing Index for ${this.collectionName || 'collection'}:`,
+          error.message
+        );
+        throw new Error(`ระบบต้องการการสร้าง Index: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * ค้นหาข้อมูลพร้อมระบบสำรองหากไม่มี Index (Fallback)
+   * Queries with fallback to in-memory filtering if Firestore index is missing
+   */
+  async queryWithFallback(
+    filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
+    options?: PaginationOptions
+  ): Promise<T[]> {
+    try {
+      // Try standard query first
+      return await this.query(filters, options);
+    } catch (error: any) {
+      // Check if it's a missing index error (FAILED_PRECONDITION)
+      if (
+        error?.code === 9 ||
+        error?.message?.includes('FAILED_PRECONDITION') ||
+        error?.message?.includes('index')
+      ) {
+        console.warn(
+          `[BaseCrudService] Missing index for ${this.collectionName || 'unknown'}. Falling back to in-memory filtering.`
+        );
+
+        // Fallback: Use only the first filter (usually an ID or something with a single-field index)
+        if (filters.length === 0) {
+          const all = await this.getAll({ ...options, pageSize: 5000 });
+          return all.items;
         }
-    }
 
-    async update(id: string, data: Partial<Omit<T, 'id'>>): Promise<T | null> {
-        const docRef = this.collection.doc(id);
-        const doc = await docRef.get();
+        const firstFilter = filters[0];
+        let fallbackQuery = this.collection.where(
+          firstFilter.field,
+          firstFilter.operator,
+          firstFilter.value
+        );
 
-        if (!doc.exists) {
-            return null;
-        }
+        const LIMIT = 5000;
+        const snapshot = await fallbackQuery.limit(LIMIT).get();
+        let results = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as T);
 
-        await docRef.update({
-            ...data,
-            updatedAt: new Date(),
-        } as any);
-
-        const updatedDoc = await docRef.get();
-        return updatedDoc.data() as T;
-    }
-
-    async delete(id: string): Promise<boolean> {
-        const docRef = this.collection.doc(id);
-        const doc = await docRef.get();
-
-        if (!doc.exists) {
-            return false;
-        }
-
-        await docRef.delete();
-        return true;
-    }
-
-    async softDelete(id: string, deletedBy?: string): Promise<boolean> {
-        const docRef = this.collection.doc(id);
-        const doc = await docRef.get();
-
-        if (!doc.exists) {
-            return false;
-        }
-
-        const updateData: any = {
-            isDeleted: true,
-            deletedAt: new Date(),
+        // Helper to normalize values (Dates, Timestamps, etc.)
+        const normalize = (v: any) => {
+          if (v instanceof Date) return v.getTime();
+          if (v && typeof v === 'object' && typeof v.toDate === 'function')
+            return v.toDate().getTime();
+          return v;
         };
 
-        if (deletedBy) {
-            updateData.deletedBy = deletedBy;
-        }
+        // Apply remaining filters in memory
+        const remainingFilters = filters.slice(1);
+        remainingFilters.forEach((f) => {
+          const filterVal = normalize(f.value);
+          results = results.filter((item) => {
+            const itemVal = normalize((item as any)[f.field as string]);
 
-        await docRef.update(updateData);
-
-        return true;
-    }
-
-    async query(
-        filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
-        options?: PaginationOptions
-    ): Promise<T[]> {
-        console.log(`[BaseCrudService] Querying ${this.collectionName || 'unknown'} with filters: ${JSON.stringify(filters)}`);
-
-        let query: Query<T> = this.collection as any;
-
-        filters.forEach((filter) => {
-            query = query.where(filter.field, filter.operator, filter.value);
+            switch (f.operator) {
+              case '==':
+                return itemVal === filterVal;
+              case '!=':
+                return itemVal !== filterVal;
+              case '>':
+                return itemVal > filterVal;
+              case '>=':
+                return itemVal >= filterVal;
+              case '<':
+                return itemVal < filterVal;
+              case '<=':
+                return itemVal <= filterVal;
+              default:
+                return true;
+            }
+          });
         });
 
+        // Apply sorting if requested
         if (options?.orderBy) {
-            query = query.orderBy(options.orderBy, options.orderDirection || 'asc');
+          const field = options.orderBy;
+          const direction = options.orderDirection || 'asc';
+          results.sort((a, b) => {
+            const valA = normalize((a as any)[field]);
+            const valB = normalize((b as any)[field]);
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+          });
         }
 
-        if (options?.page && options?.pageSize) {
-            const offset = (options.page - 1) * options.pageSize;
-            if (offset > 0) {
-                query = query.offset(offset) as any;
-            }
-        }
-
+        // Apply simple pagination slice
         if (options?.pageSize) {
-            query = query.limit(options.pageSize);
+          const page = options.page || 1;
+          const offset = (page - 1) * options.pageSize;
+          results = results.slice(offset, offset + options.pageSize);
         }
 
-        try {
-            const snapshot = await query.get();
-            console.log(`[BaseCrudService] Found ${snapshot.size} documents in ${this.collectionName || 'unknown'} (for filters: ${JSON.stringify(filters)})`);
-            return snapshot.docs.map((doc) => doc.data());
-        } catch (error: any) {
-            // [P0] Error Resilience: Catch Firestore Index errors
-            if (error.code === 9 || error.message.includes('FAILED_PRECONDITION')) {
-                console.error(`[BaseCrudService] Missing Index for ${this.collectionName || 'collection'}:`, error.message);
-                throw new Error(`ระบบต้องการการสร้าง Index: ${error.message}`);
-            }
-            throw error;
-        }
+        return results;
+      }
+
+      // Re-throw if it's a different kind of error
+      throw error;
+    }
+  }
+
+  async count(
+    filters?: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>
+  ): Promise<number> {
+    let query: Query<T> = this.collection as any;
+
+    if (filters) {
+      filters.forEach((filter) => {
+        query = query.where(filter.field, filter.operator, filter.value);
+      });
     }
 
-    /**
-     * ค้นหาข้อมูลพร้อมระบบสำรองหากไม่มี Index (Fallback)
-     * Queries with fallback to in-memory filtering if Firestore index is missing
-     */
-    async queryWithFallback(
-        filters: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>,
-        options?: PaginationOptions
-    ): Promise<T[]> {
-        try {
-            // Try standard query first
-            return await this.query(filters, options);
-        } catch (error: any) {
-            // Check if it's a missing index error (FAILED_PRECONDITION)
-            if (error?.code === 9 || error?.message?.includes('FAILED_PRECONDITION') || error?.message?.includes('index')) {
-                console.warn(`[BaseCrudService] Missing index for ${this.collectionName || 'unknown'}. Falling back to in-memory filtering.`);
-                
-                // Fallback: Use only the first filter (usually an ID or something with a single-field index)
-                if (filters.length === 0) {
-                    const all = await this.getAll({ ...options, pageSize: 5000 });
-                    return all.items;
-                }
-
-                const firstFilter = filters[0];
-                let fallbackQuery = this.collection.where(firstFilter.field, firstFilter.operator, firstFilter.value);
-                
-                const LIMIT = 5000;
-                const snapshot = await fallbackQuery.limit(LIMIT).get();
-                let results = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
-
-                // Helper to normalize values (Dates, Timestamps, etc.)
-                const normalize = (v: any) => {
-                    if (v instanceof Date) return v.getTime();
-                    if (v && typeof v === 'object' && typeof v.toDate === 'function') return v.toDate().getTime();
-                    return v;
-                };
-
-                // Apply remaining filters in memory
-                const remainingFilters = filters.slice(1);
-                remainingFilters.forEach(f => {
-                    const filterVal = normalize(f.value);
-                    results = results.filter(item => {
-                        const itemVal = normalize((item as any)[f.field as string]);
-
-                        switch (f.operator) {
-                            case '==': return itemVal === filterVal;
-                            case '!=': return itemVal !== filterVal;
-                            case '>':  return itemVal > filterVal;
-                            case '>=': return itemVal >= filterVal;
-                            case '<':  return itemVal < filterVal;
-                            case '<=': return itemVal <= filterVal;
-                            default: return true;
-                        }
-                    });
-                });
-
-                // Apply sorting if requested
-                if (options?.orderBy) {
-                    const field = options.orderBy;
-                    const direction = options.orderDirection || 'asc';
-                    results.sort((a, b) => {
-                        const valA = normalize((a as any)[field]);
-                        const valB = normalize((b as any)[field]);
-                        if (valA < valB) return direction === 'asc' ? -1 : 1;
-                        if (valA > valB) return direction === 'asc' ? 1 : -1;
-                        return 0;
-                    });
-                }
-
-                // Apply simple pagination slice
-                if (options?.pageSize) {
-                    const page = options.page || 1;
-                    const offset = (page - 1) * options.pageSize;
-                    results = results.slice(offset, offset + options.pageSize);
-                }
-
-                return results;
-            }
-            
-            // Re-throw if it's a different kind of error
-            throw error;
-        }
+    try {
+      const totalResult = await query.count().get();
+      return totalResult.data().count;
+    } catch (error: any) {
+      console.warn(
+        `[BaseCrudService] Error getting count, falling back to get().size:`,
+        error.message
+      );
+      const snapshot = await query.get();
+      return snapshot.size;
     }
-
-    async count(
-        filters?: Array<{ field: string | FieldPath; operator: WhereFilterOp; value: any }>
-    ): Promise<number> {
-        let query: Query<T> = this.collection as any;
-
-        if (filters) {
-            filters.forEach((filter) => {
-                query = query.where(filter.field, filter.operator, filter.value);
-            });
-        }
-
-        try {
-            const totalResult = await query.count().get();
-            return totalResult.data().count;
-        } catch (error: any) {
-            console.warn(`[BaseCrudService] Error getting count, falling back to get().size:`, error.message);
-            const snapshot = await query.get();
-            return snapshot.size;
-        }
-    }
+  }
 }

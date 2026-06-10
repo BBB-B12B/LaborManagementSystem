@@ -122,10 +122,14 @@ export async function authenticate(
           const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
           const jsonPayload = Buffer.from(base64, 'base64').toString('utf-8');
           decoded = JSON.parse(jsonPayload);
-          logger.debug(`[Auth] Emulator Mode: Signature verification bypassed for UID: ${decoded.uid}`);
+          logger.debug(
+            `[Auth] Emulator Mode: Signature verification bypassed for UID: ${decoded.uid}`
+          );
         }
       } catch (decodeError) {
-        logger.warn(`[Auth] Failed to manual decode token in emulator mode, falling back to verifyIdToken`);
+        logger.warn(
+          `[Auth] Failed to manual decode token in emulator mode, falling back to verifyIdToken`
+        );
       }
     }
 
@@ -134,7 +138,9 @@ export async function authenticate(
         decoded = await firebaseAuth.verifyIdToken(token);
         logger.debug(`[Auth] Token verified for UID: ${decoded.uid}`);
       } catch (verifyError: any) {
-        logger.error(`[Auth] Token verification failed: ${verifyError.message}`, { error: verifyError });
+        logger.error(`[Auth] Token verification failed: ${verifyError.message}`, {
+          error: verifyError,
+        });
         throw new AppError(`Authentication failed: ${verifyError.message}`, 401);
       }
     }
@@ -201,10 +207,7 @@ export function checkRole(allowedRoles: UserRole[]) {
         logger.warn(
           `Access denied: User ${authReq.user.username} (${userRole}) attempted to access resource requiring roles: ${allowedRoles.join(', ')}`
         );
-        throw new AppError(
-          `Access denied - Required roles: ${allowedRoles.join(', ')}`,
-          403
-        );
+        throw new AppError(`Access denied - Required roles: ${allowedRoles.join(', ')}`, 403);
       }
 
       logger.debug(
@@ -226,11 +229,7 @@ export function checkRole(allowedRoles: UserRole[]) {
  * @example
  * router.get('/projects', authenticate, checkDepartmentAccess, getProjects);
  */
-export function checkDepartmentAccess(
-  req: AuthRequest,
-  _res: Response,
-  next: NextFunction
-): void {
+export function checkDepartmentAccess(req: AuthRequest, _res: Response, next: NextFunction): void {
   try {
     if (!req.user) {
       throw new AppError('Unauthorized - Please login', 401);
@@ -251,9 +250,7 @@ export function checkDepartmentAccess(
       // Add department filter to query params
       req.query.department = userDepartment;
 
-      logger.debug(
-        `PD ${req.user.username} restricted to department ${userDepartment}`
-      );
+      logger.debug(`PD ${req.user.username} restricted to department ${userDepartment}`);
     }
 
     next();
@@ -269,11 +266,7 @@ export function checkDepartmentAccess(
  * @example
  * router.get('/projects/:id', authenticate, checkProjectAccess, getProjectById);
  */
-export function checkProjectAccess(
-  req: AuthRequest,
-  _res: Response,
-  next: NextFunction
-): void {
+export function checkProjectAccess(req: AuthRequest, _res: Response, next: NextFunction): void {
   try {
     if (!req.user) {
       throw new AppError('Unauthorized - Please login', 401);

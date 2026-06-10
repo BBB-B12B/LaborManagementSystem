@@ -80,8 +80,6 @@ import { reconciliationService } from '../../services/reconciliationService';
 import { wageService } from '../../services/wageService';
 import WorkHourComparisonTable from '../../components/work-hour-monitoring/WorkHourComparisonTable';
 
-
-
 import {
   type DiscrepancyFilter,
   getDiscrepancyTypeLabel,
@@ -93,7 +91,7 @@ import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { DatePicker } from '../../components/forms/DatePicker';
 import { TimePicker } from '../../components/forms/TimePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import ScanDataUploadDialog from './components/ScanDataUploadDialog';
+import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
 import { ScanDataEditDialog } from './components/ScanDataEditDialog';
 import type { ImportResult } from '../../services/scanDataService';
 import { useToast } from '../../components/common/Toast';
@@ -163,7 +161,13 @@ export default function ScanDataMonitoringPage() {
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
   // Filter form
-  const { control, watch, reset, setValue, handleSubmit: handleFilterSubmit } = useForm<DiscrepancyFilter>({
+  const {
+    control,
+    watch,
+    reset,
+    setValue,
+    handleSubmit: handleFilterSubmit,
+  } = useForm<DiscrepancyFilter>({
     defaultValues: {
       status: 'pending', // แสดงเฉพาะรอแก้ไขตอนเริ่มต้น
       startDate: startOfMonth,
@@ -187,12 +191,12 @@ export default function ScanDataMonitoringPage() {
     if (wagePeriods.length > 0) {
       let periods = wagePeriods;
       if (filter.projectLocationId) {
-        periods = wagePeriods.filter(p => p.projectCode === filter.projectLocationId);
+        periods = wagePeriods.filter((p) => p.projectCode === filter.projectLocationId);
       }
 
       // Automatically find and select the active period
       const today = new Date();
-      const currentPeriod = periods.find(p => {
+      const currentPeriod = periods.find((p) => {
         const start = new Date(p.startDate);
         const end = new Date(p.endDate);
         start.setHours(0, 0, 0, 0);
@@ -210,7 +214,7 @@ export default function ScanDataMonitoringPage() {
         setValue('startDate', startOfMonth);
         setValue('endDate', endOfMonth);
       }
-      
+
       if (!hasSetDefaultPeriod) {
         setHasSetDefaultPeriod(true);
       }
@@ -225,19 +229,22 @@ export default function ScanDataMonitoringPage() {
   const {
     data: allScanData,
     isLoading: isAllScanLoading,
-    refetch: refetchAllScans
+    refetch: refetchAllScans,
   } = useQuery({
     queryKey: ['allScanData', filter, page, pageSize],
-    queryFn: () => getAllScanData({
-      projectLocationId: filter.projectLocationId,
-      employeeNumber: filter.employeeNumber,
-      startDate: filter.startDate,
-      endDate: filter.endDate,
-      enriched: true,
-    }, page + 1, pageSize),
+    queryFn: () =>
+      getAllScanData(
+        {
+          projectLocationId: filter.projectLocationId,
+          employeeNumber: filter.employeeNumber,
+          startDate: filter.startDate,
+          endDate: filter.endDate,
+          enriched: true,
+        },
+        page + 1,
+        pageSize
+      ),
   });
-
-
 
   const handleViewDetails = (id: string) => {
     router.push(`/scan-data-monitoring/${id}`);
@@ -254,46 +261,47 @@ export default function ScanDataMonitoringPage() {
 
   const handleRefresh = () => {
     refetchAllScans();
-    
+
     // Invalidate stats to ensure the Breakdown UI gets the latest counts
     queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
     queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
   };
 
-
   const handleUploadSuccess = (result: ImportResult) => {
     showSuccess(
       `Upload ScanData สำเร็จ: ${result.successfulRecords}/${result.totalRecords} รายการ` +
-      (result.duplicateRecords ? ` (ข้ามข้อมูลที่ซ้ำ ${result.duplicateRecords} รายการ)` : '')
+        (result.duplicateRecords ? ` (ข้ามข้อมูลที่ซ้ำ ${result.duplicateRecords} รายการ)` : '')
     );
     handleRefresh();
   };
 
-
-
   const handleOpenEdit = (row: any) => {
-
     const baseRow = row.detailedView || row;
     const punches = [
-      baseRow.time1, baseRow.time2, baseRow.time3, 
-      baseRow.time4, baseRow.time5, baseRow.time6,
-      baseRow.time7, baseRow.time8, baseRow.time9, baseRow.time10
-    ].filter(p => p && p !== '-' && p !== '');
+      baseRow.time1,
+      baseRow.time2,
+      baseRow.time3,
+      baseRow.time4,
+      baseRow.time5,
+      baseRow.time6,
+      baseRow.time7,
+      baseRow.time8,
+      baseRow.time9,
+      baseRow.time10,
+    ].filter((p) => p && p !== '-' && p !== '');
 
-    
     setSelectedRecord({
       id: row.id,
       contractorId: row.dailyContractorId || row.employeeNumber,
       contractorName: row.dailyContractorName || '-',
       employeeNumber: row.employeeNumber,
       workDate: new Date(row.workDate || row.scanDate || row.date),
-      punches
+      punches,
     });
     setEditDialogOpen(true);
   };
 
   const handleDeleteRow = async (row: any) => {
-
     const empNo = row.employeeNumber || row.detailedView?.employeeNumber || '-';
     let dateStr = '-';
     try {
@@ -306,18 +314,15 @@ export default function ScanDataMonitoringPage() {
       /* ignore */
     }
 
-    await confirmDelete(
-      `ข้อมูลสแกนของพนักงาน ${empNo} วันที่ ${dateStr}`,
-      async () => {
-        try {
-          await deleteScanDataById(row.id);
-          showSuccess('ลบข้อมูลสำเร็จ');
-          handleRefresh();
-        } catch (err: any) {
-          alert(`เกิดข้อผิดพลาด: ${err.message}`);
-        }
+    await confirmDelete(`ข้อมูลสแกนของพนักงาน ${empNo} วันที่ ${dateStr}`, async () => {
+      try {
+        await deleteScanDataById(row.id);
+        showSuccess('ลบข้อมูลสำเร็จ');
+        handleRefresh();
+      } catch (err: any) {
+        alert(`เกิดข้อผิดพลาด: ${err.message}`);
       }
-    );
+    });
   };
 
   const handleRestoreRow = async (row: any) => {
@@ -333,7 +338,11 @@ export default function ScanDataMonitoringPage() {
       /* ignore */
     }
 
-    if (window.confirm(`คุณต้องการกู้คืนข้อมูลของพนักงาน ${empNo} วันที่ ${dateStr} กลับมาแสดงในตารางหลักใช่หรือไม่?`)) {
+    if (
+      window.confirm(
+        `คุณต้องการกู้คืนข้อมูลของพนักงาน ${empNo} วันที่ ${dateStr} กลับมาแสดงในตารางหลักใช่หรือไม่?`
+      )
+    ) {
       try {
         await restoreScanDataById(row.id);
         showSuccess('กู้คืนข้อมูลสำเร็จ');
@@ -343,9 +352,6 @@ export default function ScanDataMonitoringPage() {
       }
     }
   };
-
-
-
 
   // Status color mapping
   const getStatusColor = (
@@ -385,7 +391,7 @@ export default function ScanDataMonitoringPage() {
   const tableHeaders = [
     { label: 'แถว', width: 60, sticky: 'left', left: 0 },
     { label: 'EmployeeNumber', width: 130, sticky: 'left', left: 60 },
-    { label: 'Date', width: 110 },
+    { label: 'Date', width: 110, sticky: 'left', left: 190 },
     { label: 'Time1', width: 90 },
     { label: 'Time2', width: 90 },
     { label: 'Time3', width: 90 },
@@ -398,15 +404,13 @@ export default function ScanDataMonitoringPage() {
     { label: 'Time10', width: 90 },
   ];
 
-
   // All Scan Data columns
   const scanColumns: GridColDef[] = [
     {
       field: 'scanDateTime',
       headerName: 'วันเวลา',
       width: 180,
-      valueFormatter: (params) =>
-        new Date(params.value).toLocaleString('th-TH'),
+      valueFormatter: (params) => new Date(params.value).toLocaleString('th-TH'),
     },
     {
       field: 'employeeNumber',
@@ -447,10 +451,7 @@ export default function ScanDataMonitoringPage() {
       renderCell: (params: GridRenderCellParams) => (
         <Box>
           <Tooltip title="ดูรายละเอียด/แก้ไข">
-            <IconButton
-              size="small"
-              color="primary"
-            >
+            <IconButton size="small" color="primary">
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -484,29 +485,36 @@ export default function ScanDataMonitoringPage() {
     });
   };
 
-  const { control: manualControl, handleSubmit: handleManualSubmit, reset: resetManual } = useForm();
+  const {
+    control: manualControl,
+    handleSubmit: handleManualSubmit,
+    reset: resetManual,
+  } = useForm();
 
   const renderContent = () => (
-    <Container maxWidth="xl" sx={{ 
-      mt: 0, 
-      mb: 0, 
-      pt: isFullscreen ? 0 : 2,
-      px: isFullscreen ? 0 : { xs: 2, md: 4 },
-      height: isFullscreen ? '100vh' : 'calc(100vh - 76px)',
-      display: 'flex', 
-      flexDirection: 'column', 
-      overflow: isFullscreen ? 'hidden' : 'visible',
-      maxWidth: isFullscreen ? '100% !important' : 'xl',
-      position: isFullscreen ? 'fixed' : 'relative',
-      top: isFullscreen ? 0 : 'auto',
-      left: isFullscreen ? { xs: 0, md: SIDEBAR_WIDTH } : 'auto',
-      width: isFullscreen ? { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` } : '100%',
-      right: isFullscreen ? 0 : 'auto',
-      bottom: isFullscreen ? 0 : 'auto',
-      zIndex: isFullscreen ? 1250 : 1,
-      bgcolor: '#f5f7f9',
-      transition: 'all 0.3s ease',
-    }}>
+    <Container
+      maxWidth="xl"
+      sx={{
+        mt: 0,
+        mb: 0,
+        pt: isFullscreen ? 0 : 2,
+        px: isFullscreen ? 0 : { xs: 2, md: 4 },
+        height: isFullscreen ? '100vh' : 'calc(100vh - 76px)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: isFullscreen ? 'hidden' : 'visible',
+        maxWidth: isFullscreen ? '100% !important' : 'xl',
+        position: isFullscreen ? 'fixed' : 'relative',
+        top: isFullscreen ? 0 : 'auto',
+        left: isFullscreen ? { xs: 0, md: SIDEBAR_WIDTH } : 'auto',
+        width: isFullscreen ? { xs: '100%', md: `calc(100% - ${SIDEBAR_WIDTH}px)` } : '100%',
+        right: isFullscreen ? 0 : 'auto',
+        bottom: isFullscreen ? 0 : 'auto',
+        zIndex: isFullscreen ? 1250 : 1,
+        bgcolor: '#f5f7f9',
+        transition: 'all 0.3s ease',
+      }}
+    >
       {/* Header & Actions Row */}
       <Box
         sx={{
@@ -524,14 +532,14 @@ export default function ScanDataMonitoringPage() {
         }}
       >
         <Box>
-          <Typography 
-            variant="h4" 
-            component="h1" 
-            sx={{ 
-              fontWeight: 800, 
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 800,
               color: '#1a333c',
               letterSpacing: '-0.02em',
-              mb: 0.5
+              mb: 0.5,
             }}
           >
             ScanData Monitoring
@@ -556,9 +564,9 @@ export default function ScanDataMonitoringPage() {
               });
               setManualScanOpen(true);
             }}
-            sx={{ 
-              borderRadius: 2.5, 
-              height: 42, 
+            sx={{
+              borderRadius: 2.5,
+              height: 42,
               px: 2.5,
               textTransform: 'none',
               fontWeight: 600,
@@ -567,7 +575,7 @@ export default function ScanDataMonitoringPage() {
               '&:hover': {
                 transform: 'translateY(-2px)',
                 boxShadow: '0 6px 20px rgba(25, 118, 210, 0.4)',
-              }
+              },
             }}
           >
             เพิ่มข้อมูลสแกน (Manual)
@@ -578,41 +586,38 @@ export default function ScanDataMonitoringPage() {
             size="medium"
             startIcon={<CloudUpload />}
             onClick={() => setUploadDialogOpen(true)}
-            sx={{ 
-              borderRadius: 2.5, 
-              height: 42, 
+            sx={{
+              borderRadius: 2.5,
+              height: 42,
               px: 2.5,
               textTransform: 'none',
               fontWeight: 600,
               bgcolor: '#1a333c', // Theme consistent dark color
-              color: '#fff', 
+              color: '#fff',
               boxShadow: '0 4px 14px rgba(26, 51, 60, 0.3)',
               transition: 'all 0.3s ease',
-              '&:hover': { 
+              '&:hover': {
                 bgcolor: '#2a4d5a',
                 transform: 'translateY(-2px)',
                 boxShadow: '0 6px 20px rgba(26, 51, 60, 0.4)',
-              } 
+              },
             }}
           >
             Upload ScanData
           </Button>
 
-
-
-          
           <Box sx={{ borderLeft: '1px solid rgba(0,0,0,0.1)', ml: 1, pl: 2 }}>
             <Tooltip title="รีเฟรชข้อมูล">
-              <IconButton 
-                onClick={handleRefresh} 
+              <IconButton
+                onClick={handleRefresh}
                 color="primary"
-                sx={{ 
+                sx={{
                   bgcolor: 'rgba(25, 118, 210, 0.08)',
                   transition: 'all 0.3s ease',
                   '&:hover': {
                     bgcolor: 'rgba(25, 118, 210, 0.15)',
                     transform: 'rotate(180deg)',
-                  }
+                  },
                 }}
               >
                 <Refresh />
@@ -622,15 +627,14 @@ export default function ScanDataMonitoringPage() {
         </Box>
       </Box>
 
-
       {/* Filters Section */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          p: 2, 
-          mb: 0, 
+        sx={{
+          p: 2,
+          mb: 0,
           flexShrink: 0,
-          borderRadius: 3, 
+          borderRadius: 3,
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
           border: '1px solid rgba(0,0,0,0.06)',
           display: showFilters ? 'block' : 'none',
@@ -638,17 +642,21 @@ export default function ScanDataMonitoringPage() {
           '&:hover': {
             boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
             borderColor: 'primary.light',
-          }
+          },
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <FilterList sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>พารามิเตอร์การกรอง</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              พารามิเตอร์การกรอง
+            </Typography>
           </Box>
-          <Button 
-            size="small" 
-            variant="text" 
+          <Button
+            size="small"
+            variant="text"
             onClick={() => setShowFilters(false)}
             startIcon={<ExpandLess />}
           >
@@ -656,12 +664,14 @@ export default function ScanDataMonitoringPage() {
           </Button>
         </Box>
 
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 2, 
-          alignItems: 'flex-end',
-          flexWrap: { xs: 'wrap', md: 'nowrap' }
-        }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            alignItems: 'flex-end',
+            flexWrap: { xs: 'wrap', md: 'nowrap' },
+          }}
+        >
           {/* Project Filter - Now equal width with others */}
           <Box sx={{ flex: 1, minWidth: { xs: '100%', md: '150px' } }}>
             <Controller
@@ -671,7 +681,9 @@ export default function ScanDataMonitoringPage() {
                 <ProjectSelect
                   label="เลือกโครงการ"
                   value={field.value || ''}
-                  onChange={(value: string | string[] | null) => field.onChange(Array.isArray(value) ? value[0] ?? '' : value)}
+                  onChange={(value: string | string[] | null) =>
+                    field.onChange(Array.isArray(value) ? (value[0] ?? '') : value)
+                  }
                   fullWidth
                 />
               )}
@@ -738,9 +750,9 @@ export default function ScanDataMonitoringPage() {
               variant="outlined"
               fullWidth
               onClick={handleResetFilters}
-              sx={{ 
-                height: '40px', 
-                borderRadius: 2, 
+              sx={{
+                height: '40px',
+                borderRadius: 2,
                 textTransform: 'none',
                 color: 'text.secondary',
                 borderColor: 'divider',
@@ -748,8 +760,8 @@ export default function ScanDataMonitoringPage() {
                 '&:hover': {
                   borderColor: 'primary.main',
                   color: 'primary.main',
-                  bgcolor: 'rgba(25, 118, 210, 0.04)'
-                }
+                  bgcolor: 'rgba(25, 118, 210, 0.04)',
+                },
               }}
             >
               ล้างค่า
@@ -758,11 +770,11 @@ export default function ScanDataMonitoringPage() {
         </Box>
       </Paper>
 
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          width: '100%', 
-          borderRadius: isFullscreen ? 0 : 4, 
+        sx={{
+          width: '100%',
+          borderRadius: isFullscreen ? 0 : 4,
           overflow: 'hidden',
           boxShadow: isFullscreen ? 'none' : '0 10px 30px rgba(0, 0, 0, 0.08)',
           border: isFullscreen ? 'none' : '1px solid rgba(0, 0, 0, 0.05)',
@@ -773,25 +785,41 @@ export default function ScanDataMonitoringPage() {
           minHeight: 0,
         }}
       >
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+        <Box
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            px: 2,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            py: 1.5,
+          }}
+        >
           {/* Legend */}
           <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>ความหมายของสี:</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+              ความหมายของสี:
+            </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#16a34a' }} />
-              <Typography variant="body2" sx={{ color: '#16a34a', fontWeight: 700 }}>ข้อมูลที่พนักงานสแกนจริง</Typography>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'text.primary' }} />
+              <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 700 }}>
+                ข้อมูลสแกนจริงจากเครื่อง (Original)
+              </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ea580c' }} />
-              <Typography variant="body2" sx={{ color: '#ea580c', fontWeight: 700 }}>เพิ่ม/ยืนยันโดย Admin</Typography>
+              <Typography variant="body2" sx={{ color: '#ea580c', fontWeight: 700 }}>
+                เพิ่ม/แก้ไขโดย Admin (Admin Added/Edited)
+              </Typography>
             </Box>
           </Box>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
             {!showFilters && !isFullscreen && (
-              <Button 
-                size="small" 
-                startIcon={<ExpandMore />} 
+              <Button
+                size="small"
+                startIcon={<ExpandMore />}
                 onClick={() => setShowFilters(true)}
                 sx={{ borderRadius: 2 }}
               >
@@ -799,9 +827,9 @@ export default function ScanDataMonitoringPage() {
               </Button>
             )}
             {isFullscreen && (
-              <Button 
-                size="small" 
-                startIcon={showFilters ? <ExpandLess /> : <ExpandMore />} 
+              <Button
+                size="small"
+                startIcon={showFilters ? <ExpandLess /> : <ExpandMore />}
                 onClick={() => setShowFilters(!showFilters)}
                 sx={{ borderRadius: 2 }}
               >
@@ -813,9 +841,9 @@ export default function ScanDataMonitoringPage() {
               size="small"
               startIcon={isFullscreen ? <FullscreenExit /> : <Fullscreen />}
               onClick={toggleFullscreen}
-              color={isFullscreen ? "secondary" : "primary"}
-              sx={{ 
-                borderRadius: 2, 
+              color={isFullscreen ? 'secondary' : 'primary'}
+              sx={{
+                borderRadius: 2,
                 fontWeight: 600,
                 borderColor: 'divider',
               }}
@@ -830,19 +858,26 @@ export default function ScanDataMonitoringPage() {
             <LoadingSpinner size="large" />
           </Box>
         ) : (
-
-          <Box sx={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <TableContainer 
-              sx={{ 
+          <Box
+            sx={{
+              width: '100%',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <TableContainer
+              sx={{
                 flex: 1,
                 overflow: 'auto',
                 '&::-webkit-scrollbar': { width: 8, height: 8 },
                 '&::-webkit-scrollbar-track': { bgcolor: 'rgba(0,0,0,0.02)' },
-                '&::-webkit-scrollbar-thumb': { 
-                  bgcolor: 'rgba(26, 51, 60, 0.1)', 
+                '&::-webkit-scrollbar-thumb': {
+                  bgcolor: 'rgba(26, 51, 60, 0.1)',
                   borderRadius: 4,
-                  '&:hover': { bgcolor: 'rgba(26, 51, 60, 0.2)' }
-                }
+                  '&:hover': { bgcolor: 'rgba(26, 51, 60, 0.2)' },
+                },
               }}
             >
               <Table stickyHeader size="small" sx={{ minWidth: 1800 }}>
@@ -864,7 +899,10 @@ export default function ScanDataMonitoringPage() {
                           right: 'auto',
                           zIndex: header.sticky ? 12 : 11, // Headers need higher zIndex than body cells
                           borderRight: '1px solid rgba(255, 255, 255, 0.1)',
-                          boxShadow: header.sticky === 'left' ? 'inset -1px 0 0 rgba(255,255,255,0.1)' : 'none',
+                          boxShadow:
+                            header.sticky === 'left'
+                              ? 'inset -1px 0 0 rgba(255,255,255,0.1)'
+                              : 'none',
                         }}
                       >
                         {header.label}
@@ -873,154 +911,311 @@ export default function ScanDataMonitoringPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                 {(allScanData?.data || []).map((row: any, rowIndex: number) => {
+                  {(allScanData?.data || []).map((row: any, rowIndex: number) => {
+                    // Map raw scan fields to the same UI structure
+                    const baseRow = row.detailedView || row;
+                    const raw = baseRow.rawData || baseRow.data || baseRow;
 
-                      // Map raw scan fields to the same UI structure
-                      const baseRow = row.detailedView || row;
-                      const raw = baseRow.rawData || baseRow.data || baseRow;
+                    const displayRow = {
+                      row: baseRow.row || rowIndex + 1 + page * pageSize,
+                      status: 'success',
+                      employeeNumber: getValueByKeys(
+                        raw,
+                        [
+                          'EmployeeNumber',
+                          'EmployeeId',
+                          'EmpNo',
+                          'รหัสพนักงาน',
+                          'employeeid',
+                          'employee_no',
+                        ],
+                        baseRow.employeeNumber ||
+                          baseRow.employeeId ||
+                          baseRow.EmployeeNumber ||
+                          baseRow.EmployeeId ||
+                          baseRow.empNo ||
+                          '-'
+                      ),
+                      date:
+                        baseRow.workDate ||
+                        baseRow.scanDate ||
+                        baseRow.scanDateTime ||
+                        baseRow.Date, // Keep as date/string for Date format
+                      time1: getValueByKeys(
+                        raw,
+                        ['Time1', 'เวลา1'],
+                        baseRow.Time1 ||
+                          baseRow.time1 ||
+                          (baseRow.allScans && baseRow.allScans[0]) ||
+                          (baseRow.timeScans && baseRow.timeScans[0]) ||
+                          (baseRow.punches && baseRow.punches[0]) ||
+                          '-'
+                      ),
+                      time2: getValueByKeys(
+                        raw,
+                        ['Time2', 'เวลา2'],
+                        baseRow.Time2 ||
+                          baseRow.time2 ||
+                          (baseRow.allScans && baseRow.allScans[1]) ||
+                          (baseRow.timeScans && baseRow.timeScans[1]) ||
+                          (baseRow.punches && baseRow.punches[1]) ||
+                          '-'
+                      ),
+                      time3: getValueByKeys(
+                        raw,
+                        ['Time3', 'เวลา3'],
+                        baseRow.Time3 ||
+                          baseRow.time3 ||
+                          (baseRow.allScans && baseRow.allScans[2]) ||
+                          (baseRow.timeScans && baseRow.timeScans[2]) ||
+                          (baseRow.punches && baseRow.punches[2]) ||
+                          '-'
+                      ),
+                      time4: getValueByKeys(
+                        raw,
+                        ['Time4', 'เวลา4'],
+                        baseRow.Time4 ||
+                          baseRow.time4 ||
+                          (baseRow.allScans && baseRow.allScans[3]) ||
+                          (baseRow.timeScans && baseRow.timeScans[3]) ||
+                          (baseRow.punches && baseRow.punches[3]) ||
+                          '-'
+                      ),
+                      time5: getValueByKeys(
+                        raw,
+                        ['Time5', 'เวลา5'],
+                        baseRow.Time5 ||
+                          baseRow.time5 ||
+                          (baseRow.allScans && baseRow.allScans[4]) ||
+                          (baseRow.timeScans && baseRow.timeScans[4]) ||
+                          (baseRow.punches && baseRow.punches[4]) ||
+                          '-'
+                      ),
+                      time6: getValueByKeys(
+                        raw,
+                        ['Time6', 'เวลา6'],
+                        baseRow.Time6 ||
+                          baseRow.time6 ||
+                          (baseRow.allScans && baseRow.allScans[5]) ||
+                          (baseRow.timeScans && baseRow.timeScans[5]) ||
+                          (baseRow.punches && baseRow.punches[5]) ||
+                          '-'
+                      ),
+                      time7: getValueByKeys(
+                        raw,
+                        ['Time7', 'เวลา7'],
+                        baseRow.Time7 ||
+                          baseRow.time7 ||
+                          (baseRow.allScans && baseRow.allScans[6]) ||
+                          (baseRow.timeScans && baseRow.timeScans[6]) ||
+                          (baseRow.punches && baseRow.punches[6]) ||
+                          '-'
+                      ),
+                      time8: getValueByKeys(
+                        raw,
+                        ['Time8', 'เวลา8'],
+                        baseRow.Time8 ||
+                          baseRow.time8 ||
+                          (baseRow.allScans && baseRow.allScans[7]) ||
+                          (baseRow.timeScans && baseRow.timeScans[7]) ||
+                          (baseRow.punches && baseRow.punches[7]) ||
+                          '-'
+                      ),
+                      time9: getValueByKeys(
+                        raw,
+                        ['Time9', 'เวลา9'],
+                        baseRow.Time9 ||
+                          baseRow.time9 ||
+                          (baseRow.allScans && baseRow.allScans[8]) ||
+                          (baseRow.timeScans && baseRow.timeScans[8]) ||
+                          (baseRow.punches && baseRow.punches[8]) ||
+                          '-'
+                      ),
+                      time10: getValueByKeys(
+                        raw,
+                        ['Time10', 'เวลา10'],
+                        baseRow.Time10 ||
+                          baseRow.time10 ||
+                          (baseRow.allScans && baseRow.allScans[9]) ||
+                          (baseRow.timeScans && baseRow.timeScans[9]) ||
+                          (baseRow.punches && baseRow.punches[9]) ||
+                          '-'
+                      ),
+                      scanNormalStatus: getValueByKeys(
+                        raw,
+                        ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'],
+                        String(
+                          baseRow.normalStatus ??
+                            baseRow.NormalStatus ??
+                            baseRow.scanNormalStatus ??
+                            0
+                        )
+                      ),
+                      regularHours: getValueByKeys(
+                        raw,
+                        ['RegularHours', 'regularHours', 'WorkingHours', 'ชั่วโมงทำงาน'],
+                        String(
+                          baseRow.regularHours ??
+                            baseRow.scanRegularHours ??
+                            baseRow.WorkingHours ??
+                            0
+                        )
+                      ),
+                      scanLunchStatus: getValueByKeys(
+                        raw,
+                        ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'],
+                        String(
+                          baseRow.lunchStatus ?? baseRow.LunchStatus ?? baseRow.scanLunchStatus ?? 0
+                        )
+                      ),
+                      scanOTMorning: baseRow.scanOTMorning ?? (baseRow.OT_Morning || 0),
+                      scanOTEvening: baseRow.scanOTEvening ?? (baseRow.OT_Evening || 0),
+                      lateMinutes: getValueByKeys(
+                        raw,
+                        ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'],
+                        String(baseRow.lateMinutes ?? baseRow.LateMinutes ?? 0)
+                      ),
+                      projectName: getValueByKeys(
+                        raw,
+                        ['Department', 'ส่วนงาน', 'department'],
+                        baseRow.projectName || baseRow.projectCode || baseRow.Department || '-'
+                      ),
+                    };
 
-                      const displayRow = {
-                          row: baseRow.row || (rowIndex + 1 + (page * pageSize)),
-                          status: 'success',
-                          employeeNumber: getValueByKeys(raw, ['EmployeeNumber', 'EmployeeId', 'EmpNo', 'รหัสพนักงาน', 'employeeid', 'employee_no'], baseRow.employeeNumber || baseRow.employeeId || baseRow.EmployeeNumber || baseRow.EmployeeId || baseRow.empNo || '-'),
-                          date: baseRow.workDate || baseRow.scanDate || baseRow.scanDateTime || baseRow.Date, // Keep as date/string for Date format
-                          time1: getValueByKeys(raw, ['Time1', 'เวลา1'], baseRow.Time1 || baseRow.time1 || (baseRow.allScans && baseRow.allScans[0]) || (baseRow.timeScans && baseRow.timeScans[0]) || (baseRow.punches && baseRow.punches[0]) || '-'),
-                          time2: getValueByKeys(raw, ['Time2', 'เวลา2'], baseRow.Time2 || baseRow.time2 || (baseRow.allScans && baseRow.allScans[1]) || (baseRow.timeScans && baseRow.timeScans[1]) || (baseRow.punches && baseRow.punches[1]) || '-'),
-                          time3: getValueByKeys(raw, ['Time3', 'เวลา3'], baseRow.Time3 || baseRow.time3 || (baseRow.allScans && baseRow.allScans[2]) || (baseRow.timeScans && baseRow.timeScans[2]) || (baseRow.punches && baseRow.punches[2]) || '-'),
-                          time4: getValueByKeys(raw, ['Time4', 'เวลา4'], baseRow.Time4 || baseRow.time4 || (baseRow.allScans && baseRow.allScans[3]) || (baseRow.timeScans && baseRow.timeScans[3]) || (baseRow.punches && baseRow.punches[3]) || '-'),
-                          time5: getValueByKeys(raw, ['Time5', 'เวลา5'], baseRow.Time5 || baseRow.time5 || (baseRow.allScans && baseRow.allScans[4]) || (baseRow.timeScans && baseRow.timeScans[4]) || (baseRow.punches && baseRow.punches[4]) || '-'),
-                          time6: getValueByKeys(raw, ['Time6', 'เวลา6'], baseRow.Time6 || baseRow.time6 || (baseRow.allScans && baseRow.allScans[5]) || (baseRow.timeScans && baseRow.timeScans[5]) || (baseRow.punches && baseRow.punches[5]) || '-'),
-                          time7: getValueByKeys(raw, ['Time7', 'เวลา7'], baseRow.Time7 || baseRow.time7 || (baseRow.allScans && baseRow.allScans[6]) || (baseRow.timeScans && baseRow.timeScans[6]) || (baseRow.punches && baseRow.punches[6]) || '-'),
-                          time8: getValueByKeys(raw, ['Time8', 'เวลา8'], baseRow.Time8 || baseRow.time8 || (baseRow.allScans && baseRow.allScans[7]) || (baseRow.timeScans && baseRow.timeScans[7]) || (baseRow.punches && baseRow.punches[7]) || '-'),
-                          time9: getValueByKeys(raw, ['Time9', 'เวลา9'], baseRow.Time9 || baseRow.time9 || (baseRow.allScans && baseRow.allScans[8]) || (baseRow.timeScans && baseRow.timeScans[8]) || (baseRow.punches && baseRow.punches[8]) || '-'),
-                          time10: getValueByKeys(raw, ['Time10', 'เวลา10'], baseRow.Time10 || baseRow.time10 || (baseRow.allScans && baseRow.allScans[9]) || (baseRow.timeScans && baseRow.timeScans[9]) || (baseRow.punches && baseRow.punches[9]) || '-'),
-                          scanNormalStatus: getValueByKeys(raw, ['NormalStatus', 'สถานะเวลางานปกติ', 'normalStatus'], String(baseRow.normalStatus ?? baseRow.NormalStatus ?? baseRow.scanNormalStatus ?? 0)),
-                          regularHours: getValueByKeys(raw, ['RegularHours', 'regularHours', 'WorkingHours', 'ชั่วโมงทำงาน'], String(baseRow.regularHours ?? baseRow.scanRegularHours ?? baseRow.WorkingHours ?? 0)),
-                          scanLunchStatus: getValueByKeys(raw, ['LunchStatus', 'สถานะผ่าเที่ยง', 'lunchStatus'], String(baseRow.lunchStatus ?? baseRow.LunchStatus ?? baseRow.scanLunchStatus ?? 0)),
-                          scanOTMorning: baseRow.scanOTMorning ?? (baseRow.OT_Morning || 0),
-                          scanOTEvening: baseRow.scanOTEvening ?? (baseRow.OT_Evening || 0),
-                          lateMinutes: getValueByKeys(raw, ['LateMinutes', 'จำนวนนาทีมาสาย', 'lateMinutes'], String(baseRow.lateMinutes ?? baseRow.LateMinutes ?? 0)),
-                          projectName: getValueByKeys(raw, ['Department', 'ส่วนงาน', 'department'], baseRow.projectName || baseRow.projectCode || baseRow.Department || '-'),
-                      };
+                    const rowBgColor = '#ffffff';
+                    const rowHoverColor = '#f5f9fa';
 
-                      const timeValues = [
-                        displayRow.time1, displayRow.time2, displayRow.time3,
-                        displayRow.time4, displayRow.time5, displayRow.time6
-                      ].filter(v => v && v !== '' && v !== '-');
-                      
-                      const isIncomplete = timeValues.length > 0 && timeValues.length < 2;
-                      const isNormalStatusZero = displayRow.scanNormalStatus === '0';
-                      const hasWarning = isIncomplete || isNormalStatusZero;
-
-                      const rowBgColor = hasWarning ? '#fff8e1' : '#ffffff';
-                      const rowHoverColor = hasWarning ? '#fff3cd' : '#f5f9fa';
-
-                      return (
-                        <TableRow 
-                          key={row.id} 
-                          hover 
-                          sx={{ 
-                            '&:last-child td, &:last-child th': { border: 0 },
+                    return (
+                      <TableRow
+                        key={row.id}
+                        hover
+                        sx={{
+                          '&:last-child td, &:last-child th': { border: 0 },
+                          bgcolor: rowBgColor,
+                          transition: 'background-color 0.2s ease',
+                          '&:hover': {
+                            bgcolor: `${rowHoverColor} !important`,
+                          },
+                          '&:hover td[data-sticky]': {
+                            bgcolor: `${rowHoverColor} !important`,
+                          },
+                        }}
+                      >
+                        {/* 1. แถว */}
+                        <TableCell
+                          data-sticky="true"
+                          sx={{
+                            position: 'sticky',
+                            left: 0,
                             bgcolor: rowBgColor,
-                            transition: 'background-color 0.2s ease',
-                            '&:hover': {
-                              bgcolor: `${rowHoverColor} !important`
-                            },
-                            '&:hover td[data-sticky]': {
-                              bgcolor: `${rowHoverColor} !important`
-                            }
+                            zIndex: 5,
+                            borderRight: '1px solid #eee',
                           }}
+                          align="center"
                         >
-                          {/* 1. แถว */}
-                          <TableCell data-sticky="true" sx={{ position: 'sticky', left: 0, bgcolor: rowBgColor, zIndex: 5, borderRight: '1px solid #eee' }} align="center">
-                            {displayRow.row || rowIndex + 1}
-                          </TableCell>
+                          {displayRow.row || rowIndex + 1}
+                        </TableCell>
 
-                          {/* 3. EmployeeNumber */}
-                          <TableCell data-sticky="true" sx={{ position: 'sticky', left: 60, bgcolor: rowBgColor, zIndex: 5, borderRight: '1px solid #eee', fontWeight: 'bold' }} align="center">
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                              {displayRow.employeeNumber || row.employeeNumber}
-                              {hasWarning && (
-                                <Tooltip title={isIncomplete ? "สแกนเพียง 1 ครั้ง (ข้อมูลอาจไม่ครบ)" : "สถานะงานผิดปกติ"}>
-                                  <WarningIcon color="warning" sx={{ fontSize: 16 }} />
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
+                        {/* 3. EmployeeNumber */}
+                        <TableCell
+                          data-sticky="true"
+                          sx={{
+                            position: 'sticky',
+                            left: 60,
+                            bgcolor: rowBgColor,
+                            zIndex: 5,
+                            borderRight: '1px solid #eee',
+                            fontWeight: 'bold',
+                          }}
+                          align="center"
+                        >
+                          {displayRow.employeeNumber || row.employeeNumber}
+                        </TableCell>
 
+                        {/* 4. Date */}
+                        <TableCell
+                          data-sticky="true"
+                          sx={{
+                            position: 'sticky',
+                            left: 190,
+                            bgcolor: rowBgColor,
+                            zIndex: 5,
+                            borderRight: '1px solid #eee',
+                          }}
+                          align="center"
+                        >
+                          {(() => {
+                            const d = new Date(displayRow.date || row.workDate);
+                            if (isNaN(d.getTime())) return '-';
+                            const year = d.getFullYear();
+                            const month = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            return `${year}-${month}-${day}`;
+                          })()}
+                        </TableCell>
 
-  
-                          {/* 4. Date */}
-                          <TableCell align="center">
-                            {(() => {
-                              const d = new Date(displayRow.date || row.workDate);
-                              if (isNaN(d.getTime())) return '-';
-                              const year = d.getFullYear();
-                              const month = String(d.getMonth() + 1).padStart(2, '0');
-                              const day = String(d.getDate()).padStart(2, '0');
-                              return `${year}-${month}-${day}`;
-                            })()}
-                          </TableCell>
-  
-                          {/* 4-13. Time1-Time10 */}
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => {
+                        {/* 4-13. Time1-Time10 */}
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => {
+                          const val = (displayRow as any)?.[`time${i}`] || '-';
+                          const display = val && val !== '-' ? val.toString().substring(0, 8) : '-';
+                          const isEdited =
+                            row.isManuallyEdited ||
+                            baseRow.isManuallyEdited ||
+                            (row.scanSummary && row.scanSummary.isManuallyEdited);
 
-                            const val = (displayRow as any)?.[`time${i}`] || '-';
-                            const display = val && val !== '-' ? val.toString().substring(0, 8) : '-';
-                            const isEdited = row.isManuallyEdited || baseRow.isManuallyEdited || (row.scanSummary && row.scanSummary.isManuallyEdited);
-                            
-                            let textColor = 'inherit';
-                            let textWeight: number | string = 'normal';
-                            
-                            if (display !== '-') {
-                              // ตรวจสอบว่าเวลานี้เป็นเวลาดั้งเดิมจากเครื่องสแกนหรือไม่
-                              const devicePunches = row.devicePunches || baseRow.devicePunches || [];
-                              const isOriginal = Array.isArray(devicePunches) && devicePunches.some((p: string) => p.startsWith(display.substring(0, 5)));
-                              
-                              if (isEdited) {
-                                if (isOriginal) {
-                                  // เวลาดั้งเดิมที่พนักงานสแกนจริง (Original Data)
-                                  textColor = '#16a34a'; // Green
-                                  textWeight = 700;
-                                } else {
-                                  // เวลาที่ Admin เติมให้/ยืนยันให้ (Admin Added/Confirmed Data)
-                                  textColor = '#ea580c'; // Orange
-                                  textWeight = 800;
-                                }
-                              } else {
-                                // ถ้าไม่มีการแก้ไขเลย ก็ให้เป็นสี default หรือถ้าอยากให้เป็นสีเขียวทั้งหมดก็สามารถปรับได้
-                                // textColor = '#16a34a'; // Uncomment ถ้าต้องการให้เวลาที่สแกนครบปกติเป็นสีเขียวด้วย
-                                textWeight = 500;
-                              }
+                          let textColor = 'inherit';
+                          let textWeight: number | string = 'normal';
+
+                          if (display !== '-') {
+                            // ตรวจสอบว่าเวลานี้เป็นเวลาดั้งเดิมจากเครื่องสแกนหรือไม่
+                            const devicePunches = row.devicePunches || baseRow.devicePunches || [];
+                            const isOriginal =
+                              Array.isArray(devicePunches) &&
+                              devicePunches.some((p: string) =>
+                                p.startsWith(display.substring(0, 5))
+                              );
+
+                            if (isEdited && !isOriginal) {
+                              // เวลาที่ Admin เติมให้/แก้ไขให้ (Admin Added/Modified)
+                              textColor = '#ea580c'; // Orange
+                              textWeight = 700; // Bold
+                            } else {
+                              // เวลาสแกนดั้งเดิม หรือไม่มีการแก้ไข
+                              textColor = 'inherit';
+                              textWeight = 500;
                             }
+                          }
 
-                            return (
-                              <TableCell 
-                                key={i} 
-                                align="center"
-                                sx={{ 
-                                  color: textColor,
-                                  fontWeight: textWeight
-                                }}
-                              >
-                                {display}
-                              </TableCell>
-                            );
-                          })}
-  
-
-                        </TableRow>
-                      );
-                   })}
+                          return (
+                            <TableCell
+                              key={i}
+                              align="center"
+                              sx={{
+                                color: textColor,
+                                fontWeight: textWeight,
+                              }}
+                            >
+                              {display}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
-            <Box sx={{ p: 2, borderTop: '1px solid rgba(0,0,0,0.05)', bgcolor: 'rgba(26, 51, 60, 0.01)' }}>
+            <Box
+              sx={{
+                p: 2,
+                borderTop: '1px solid rgba(0,0,0,0.05)',
+                bgcolor: 'rgba(26, 51, 60, 0.01)',
+              }}
+            >
               <TablePagination
                 rowsPerPageOptions={[25, 50, 100]}
                 component="div"
                 count={allScanData?.total || 0}
-
                 rowsPerPage={pageSize}
                 page={page}
                 onPageChange={(_: any, newPage: number) => setPage(newPage)}
@@ -1032,21 +1227,20 @@ export default function ScanDataMonitoringPage() {
                   '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
                     fontSize: '0.85rem',
                     color: 'text.secondary',
-                    fontWeight: 500
+                    fontWeight: 500,
                   },
                   '& .MuiTablePagination-select': {
                     borderRadius: 1,
                     bgcolor: 'white',
                     border: '1px solid rgba(0,0,0,0.1)',
-                    px: 1
-                  }
+                    px: 1,
+                  },
                 }}
               />
             </Box>
           </Box>
         )}
       </Paper>
-
     </Container>
   );
 
@@ -1066,7 +1260,6 @@ export default function ScanDataMonitoringPage() {
               setEditDialogOpen(false);
               setSelectedRecord(null);
             }}
-
             contractorId={selectedRecord.contractorId}
             contractorName={selectedRecord.contractorName}
             employeeNumber={selectedRecord.employeeNumber}
@@ -1076,7 +1269,12 @@ export default function ScanDataMonitoringPage() {
         )}
 
         {/* Manual Scan Dialog */}
-        <Dialog open={manualScanOpen} onClose={() => setManualScanOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={manualScanOpen}
+          onClose={() => setManualScanOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
           <DialogTitle>เพิ่มข้อมูลสแกน (Manual)</DialogTitle>
           <form onSubmit={handleManualSubmit(onAddManualScan)}>
             <DialogContent>

@@ -36,7 +36,16 @@ import {
   Card,
   CardContent,
 } from '@mui/material';
-import { Info, Person, AttachMoney, EventBusy, LocalHotel, AccessTime, DirectionsRun, ExitToApp } from '@mui/icons-material';
+import {
+  Info,
+  Person,
+  AttachMoney,
+  EventBusy,
+  LocalHotel,
+  AccessTime,
+  DirectionsRun,
+  ExitToApp,
+} from '@mui/icons-material';
 import {
   dcCreateSchema,
   dcEditSchema,
@@ -92,7 +101,9 @@ export function DCForm({
 
   // Attendance Stats State
   const [statsViewMode, setStatsViewMode] = useState<'yearly' | 'period'>('yearly');
-  const [statsSelectedYear, setStatsSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [statsSelectedYear, setStatsSelectedYear] = useState<string>(
+    new Date().getFullYear().toString()
+  );
   const [statsSelectedPeriod, setStatsSelectedPeriod] = useState<string>('');
 
   const schema = mode === 'create' ? dcCreateSchema : dcEditSchema;
@@ -102,20 +113,20 @@ export function DCForm({
       isActive: true,
       projectLocationId: '',
       dateOfBirth: null,
-      dailyWageRate: ('' as any),
-      professionalRate: ('' as any),
-      phoneAllowance: ('' as any),
-      allowance: ('' as any),
-      otherIncome: ('' as any),
-      housingFee: ('' as any),
-      followerCount: ('' as any),
-      refrigeratorFee: ('' as any),
-      soundSystemFee: ('' as any),
-      tvFee: ('' as any),
-      laundryFee: ('' as any),
-      airConFee: ('' as any),
-      otherDeduction: ('' as any),
-      mouDeductionRate: ('' as any),
+      dailyWageRate: '' as any,
+      professionalRate: '' as any,
+      phoneAllowance: '' as any,
+      allowance: '' as any,
+      otherIncome: '' as any,
+      housingFee: '' as any,
+      followerCount: '' as any,
+      refrigeratorFee: '' as any,
+      soundSystemFee: '' as any,
+      tvFee: '' as any,
+      laundryFee: '' as any,
+      airConFee: '' as any,
+      otherDeduction: '' as any,
+      mouDeductionRate: '' as any,
       ...defaultValues,
     }),
     [defaultValues]
@@ -158,8 +169,14 @@ export function DCForm({
 
   // Prepare stats data
   const stats = defaultValues?.attendanceStats;
-  const availableYears = stats?.yearly ? Object.keys(stats.yearly).sort((a, b) => b.localeCompare(a)) : [new Date().getFullYear().toString()];
-  const availablePeriods = stats?.periods ? Object.entries(stats.periods).map(([id, data]) => ({ id, name: data.name })).sort((a, b) => b.name.localeCompare(a.name)) : [];
+  const availableYears = stats?.yearly
+    ? Object.keys(stats.yearly).sort((a, b) => b.localeCompare(a))
+    : [new Date().getFullYear().toString()];
+  const availablePeriods = stats?.periods
+    ? Object.entries(stats.periods)
+        .map(([id, data]) => ({ id, name: data.name }))
+        .sort((a, b) => b.name.localeCompare(a.name))
+    : [];
 
   // Auto-select first period if empty
   React.useEffect(() => {
@@ -168,7 +185,13 @@ export function DCForm({
     }
   }, [statsViewMode, availablePeriods, statsSelectedPeriod]);
 
-  let currentStats = { paidLeave: 0, unpaidLeave: 0, lateMinutes: 0, earlyLeaveMinutes: 0, absentDays: 0 };
+  let currentStats = {
+    paidLeave: 0,
+    unpaidLeave: 0,
+    lateMinutes: 0,
+    earlyLeaveMinutes: 0,
+    absentDays: 0,
+  };
   if (statsViewMode === 'yearly' && stats?.yearly?.[statsSelectedYear]) {
     currentStats = { ...currentStats, ...stats.yearly[statsSelectedYear] };
   } else if (statsViewMode === 'period' && stats?.periods?.[statsSelectedPeriod]) {
@@ -184,10 +207,31 @@ export function DCForm({
       )}
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 1.5 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="DC Form Tabs" variant="fullWidth">
-          <Tab icon={<Person />} iconPosition="start" label="ข้อมูลส่วนตัว" sx={{ minHeight: 48 }} />
-          <Tab icon={<EventBusy />} iconPosition="start" label="สถิติ ขาด/ลา/มาสาย" sx={{ minHeight: 48 }} disabled={mode === 'create'} />
-          <Tab icon={<AttachMoney />} iconPosition="start" label="ข้อมูลการเงิน" sx={{ minHeight: 48 }} />
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          aria-label="DC Form Tabs"
+          variant="fullWidth"
+        >
+          <Tab
+            icon={<Person />}
+            iconPosition="start"
+            label="ข้อมูลส่วนตัว"
+            sx={{ minHeight: 48 }}
+          />
+          <Tab
+            icon={<EventBusy />}
+            iconPosition="start"
+            label="สถิติ ขาด/ลา/มาสาย"
+            sx={{ minHeight: 48 }}
+            disabled={mode === 'create'}
+          />
+          <Tab
+            icon={<AttachMoney />}
+            iconPosition="start"
+            label="ข้อมูลการเงิน"
+            sx={{ minHeight: 48 }}
+          />
         </Tabs>
       </Box>
 
@@ -200,7 +244,9 @@ export function DCForm({
       >
         {/* Tab 1: Personal Information */}
         <TabPanel value={tabValue} index={0}>
-          <Grid container spacing={1}> {/* Reduce spacing for compact look */}
+          <Grid container spacing={1}>
+            {' '}
+            {/* Reduce spacing for compact look */}
             {/* Employee ID */}
             <Grid item xs={6}>
               <Controller
@@ -221,7 +267,6 @@ export function DCForm({
                 )}
               />
             </Grid>
-
             <Grid item xs={6}>
               <Controller
                 name="name"
@@ -240,7 +285,6 @@ export function DCForm({
                 )}
               />
             </Grid>
-
             <Grid item xs={6}>
               <Controller
                 name="dateOfBirth"
@@ -257,7 +301,6 @@ export function DCForm({
                 )}
               />
             </Grid>
-
             <Grid item xs={6}>
               <Controller
                 name="skillId"
@@ -273,7 +316,6 @@ export function DCForm({
                 )}
               />
             </Grid>
-
             <Grid item xs={6}>
               <Controller
                 name="startDate"
@@ -290,7 +332,6 @@ export function DCForm({
                 )}
               />
             </Grid>
-
             <Grid item xs={12}>
               <Controller
                 name="projectLocationId"
@@ -306,14 +347,20 @@ export function DCForm({
                 )}
               />
             </Grid>
-
             <Grid item xs={12}>
               <Controller
                 name="isActive"
                 control={control}
                 render={({ field }) => (
                   <FormControlLabel
-                    control={<Switch checked={field.value} onChange={field.onChange} disabled={isLoading || isSubmitting} size="small" />}
+                    control={
+                      <Switch
+                        checked={field.value}
+                        onChange={field.onChange}
+                        disabled={isLoading || isSubmitting}
+                        size="small"
+                      />
+                    }
                     label="ใช้งาน (Active)"
                   />
                 )}
@@ -325,7 +372,9 @@ export function DCForm({
         {/* Tab 2: Attendance Stats */}
         <TabPanel value={tabValue} index={1}>
           {mode === 'create' ? (
-            <Alert severity="info">ข้อมูลสถิติจะแสดงเมื่อมีการบันทึกพนักงานและมีการคำนวณงวดงานแล้ว</Alert>
+            <Alert severity="info">
+              ข้อมูลสถิติจะแสดงเมื่อมีการบันทึกพนักงานและมีการคำนวณงวดงานแล้ว
+            </Alert>
           ) : (
             <Grid container spacing={2}>
               <Grid item xs={12}>
@@ -352,8 +401,10 @@ export function DCForm({
                         label="ปี"
                         onChange={(e) => setStatsSelectedYear(e.target.value)}
                       >
-                        {availableYears.map(year => (
-                          <MenuItem key={year} value={year}>{year}</MenuItem>
+                        {availableYears.map((year) => (
+                          <MenuItem key={year} value={year}>
+                            {year}
+                          </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
@@ -367,9 +418,13 @@ export function DCForm({
                         onChange={(e) => setStatsSelectedPeriod(e.target.value)}
                         disabled={availablePeriods.length === 0}
                       >
-                        {availablePeriods.length === 0 && <MenuItem value="">ไม่มีข้อมูลงวดงาน</MenuItem>}
-                        {availablePeriods.map(period => (
-                          <MenuItem key={period.id} value={period.id}>{period.name}</MenuItem>
+                        {availablePeriods.length === 0 && (
+                          <MenuItem value="">ไม่มีข้อมูลงวดงาน</MenuItem>
+                        )}
+                        {availablePeriods.map((period) => (
+                          <MenuItem key={period.id} value={period.id}>
+                            {period.name}
+                          </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
@@ -380,11 +435,20 @@ export function DCForm({
               {/* Stat Cards */}
               <Grid item xs={6}>
                 <Card sx={{ bgcolor: '#e3f2fd', boxShadow: 'none', border: '1px solid #bbdefb' }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                  <CardContent
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
+                  >
                     <LocalHotel sx={{ color: '#1976d2', fontSize: 40 }} />
                     <Box>
-                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ลาได้เงิน (Paid Leave)</Typography>
-                      <Typography variant="h5" color="#1565c0" fontWeight="bold">{currentStats.paidLeave} <Typography component="span" variant="body1">วัน</Typography></Typography>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">
+                        ลาได้เงิน (Paid Leave)
+                      </Typography>
+                      <Typography variant="h5" color="#1565c0" fontWeight="bold">
+                        {currentStats.paidLeave}{' '}
+                        <Typography component="span" variant="body1">
+                          วัน
+                        </Typography>
+                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
@@ -392,11 +456,20 @@ export function DCForm({
 
               <Grid item xs={6}>
                 <Card sx={{ bgcolor: '#fff3e0', boxShadow: 'none', border: '1px solid #ffe0b2' }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                  <CardContent
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
+                  >
                     <EventBusy sx={{ color: '#f57c00', fontSize: 40 }} />
                     <Box>
-                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ลาไม่ได้เงิน (Unpaid Leave)</Typography>
-                      <Typography variant="h5" color="#e65100" fontWeight="bold">{currentStats.unpaidLeave} <Typography component="span" variant="body1">วัน</Typography></Typography>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">
+                        ลาไม่ได้เงิน (Unpaid Leave)
+                      </Typography>
+                      <Typography variant="h5" color="#e65100" fontWeight="bold">
+                        {currentStats.unpaidLeave}{' '}
+                        <Typography component="span" variant="body1">
+                          วัน
+                        </Typography>
+                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
@@ -404,11 +477,20 @@ export function DCForm({
 
               <Grid item xs={6}>
                 <Card sx={{ bgcolor: '#ffebee', boxShadow: 'none', border: '1px solid #ffcdd2' }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                  <CardContent
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
+                  >
                     <AccessTime sx={{ color: '#d32f2f', fontSize: 40 }} />
                     <Box>
-                      <Typography variant="body2" color="text.secondary" fontWeight="bold">มาสาย (Late)</Typography>
-                      <Typography variant="h5" color="#c62828" fontWeight="bold">{currentStats.lateMinutes} <Typography component="span" variant="body1">นาที</Typography></Typography>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">
+                        มาสาย (Late)
+                      </Typography>
+                      <Typography variant="h5" color="#c62828" fontWeight="bold">
+                        {currentStats.lateMinutes}{' '}
+                        <Typography component="span" variant="body1">
+                          นาที
+                        </Typography>
+                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
@@ -416,11 +498,20 @@ export function DCForm({
 
               <Grid item xs={6}>
                 <Card sx={{ bgcolor: '#fce4ec', boxShadow: 'none', border: '1px solid #f8bbd0' }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                  <CardContent
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
+                  >
                     <ExitToApp sx={{ color: '#c2185b', fontSize: 40 }} />
                     <Box>
-                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ออกก่อน (Early Leave)</Typography>
-                      <Typography variant="h5" color="#880e4f" fontWeight="bold">{currentStats.earlyLeaveMinutes} <Typography component="span" variant="body1">นาที</Typography></Typography>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">
+                        ออกก่อน (Early Leave)
+                      </Typography>
+                      <Typography variant="h5" color="#880e4f" fontWeight="bold">
+                        {currentStats.earlyLeaveMinutes}{' '}
+                        <Typography component="span" variant="body1">
+                          นาที
+                        </Typography>
+                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
@@ -428,11 +519,20 @@ export function DCForm({
 
               <Grid item xs={6}>
                 <Card sx={{ bgcolor: '#f3e5f5', boxShadow: 'none', border: '1px solid #e1bee7' }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}>
+                  <CardContent
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
+                  >
                     <DirectionsRun sx={{ color: '#7b1fa2', fontSize: 40 }} />
                     <Box>
-                      <Typography variant="body2" color="text.secondary" fontWeight="bold">ขาดงาน (Absent)</Typography>
-                      <Typography variant="h5" color="#4a148c" fontWeight="bold">{currentStats.absentDays} <Typography component="span" variant="body1">วัน</Typography></Typography>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">
+                        ขาดงาน (Absent)
+                      </Typography>
+                      <Typography variant="h5" color="#4a148c" fontWeight="bold">
+                        {currentStats.absentDays}{' '}
+                        <Typography component="span" variant="body1">
+                          วัน
+                        </Typography>
+                      </Typography>
                     </Box>
                   </CardContent>
                 </Card>
@@ -465,7 +565,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -485,7 +587,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -505,7 +609,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -525,7 +631,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -545,7 +653,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -576,7 +686,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -595,8 +707,12 @@ export function DCForm({
                     type="number"
                     fullWidth
                     size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">คน</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">คน</InputAdornment>,
+                    }}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -613,7 +729,7 @@ export function DCForm({
                 variant="outlined" // Use outlined for consistency
                 InputProps={{
                   endAdornment: <InputAdornment position="end">฿</InputAdornment>,
-                  readOnly: true
+                  readOnly: true,
                 }}
                 sx={{ bgcolor: '#F5F5F5', '& .MuiInputBase-input': { cursor: 'not-allowed' } }}
               />
@@ -631,7 +747,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -651,7 +769,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -671,7 +791,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -691,7 +813,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -711,7 +835,9 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
@@ -731,14 +857,15 @@ export function DCForm({
                     fullWidth
                     size="small"
                     InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) => field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
+                    }
                     value={field.value ?? ''}
                     disabled={isLoading || isSubmitting}
                   />
                 )}
               />
             </Grid>
-
           </Grid>
         </TabPanel>
       </Box>

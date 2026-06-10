@@ -41,7 +41,6 @@ router.use('/overtime', overtimeRoutes);
 // Project routes
 router.use('/projects', projectRoutes);
 
-
 // Daily Contractor routes
 router.use('/daily-contractors', dailyContractorRoutes);
 

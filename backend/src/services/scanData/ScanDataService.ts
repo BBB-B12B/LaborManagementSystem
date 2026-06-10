@@ -7,11 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import { BaseCrudService, PaginatedResult } from '../base/BaseCrudService';
-import {
-  ScanData,
-  CreateScanDataInput,
-  classifyScanBehavior,
-} from '../../models/ScanData';
+import { ScanData, CreateScanDataInput, classifyScanBehavior } from '../../models/ScanData';
 // Legacy ScanDataDiscrepancy has been removed in favor of ReconciliationRecord
 import { collections } from '../../config/collections';
 import { AppError } from '../../api/middleware/errorHandler';
@@ -82,10 +78,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
   /**
    * Import scan data (Single Record - merges into daily summary)
    */
-  async importScanData(
-    input: CreateScanDataInput,
-    importedBy: string
-  ): Promise<ScanData> {
+  async importScanData(input: CreateScanDataInput, importedBy: string): Promise<ScanData> {
     try {
       const contractor = await dailyContractorService.getById(input.dailyContractorId!);
       if (!contractor) {
@@ -93,17 +86,14 @@ class ScanDataService extends BaseCrudService<ScanData> {
       }
 
       const scanDate = this.formatDate(input.scanDateTime);
-      const uniqueKey = ScanDataService.generateScanDocKey(
-        input.employeeId,
-        scanDate,
-      );
+      const uniqueKey = ScanDataService.generateScanDocKey(input.employeeId, scanDate);
 
       const docRef = collections.scanData.doc(uniqueKey);
       const existingDoc = await docRef.get();
-      
+
       let allScans: string[] = [];
       let existingData: Partial<ScanData> = {};
-      
+
       if (existingDoc.exists) {
         existingData = existingDoc.data() as ScanData;
         allScans = (existingData as any).allScans || [];
@@ -122,7 +112,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
       // punches = HH:mm (ตัดวินาทีออก) ใช้ใน Reconciliation เปรียบเทียบกับ dailyReportPunches
       // allScans = HH:mm:ss (เก็บวินาทีไว้) ใช้คำนวณสาย/OT ได้ละเอียด
-      const punches = allScans.map(t => t.slice(0, 5));
+      const punches = allScans.map((t) => t.slice(0, 5));
 
       let devicePunches = (existingData as any).devicePunches;
       if (existingDoc.exists && Array.isArray(devicePunches)) {
@@ -153,7 +143,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
         createdAt: existingDoc.exists ? (existingData as any).createdAt : new Date(),
         importedAt: new Date(),
         importedBy,
-        importBatchId: existingDoc.exists ? (existingData as any).importBatchId : `manual-${Date.now()}`,
+        importBatchId: existingDoc.exists
+          ? (existingData as any).importBatchId
+          : `manual-${Date.now()}`,
         importNote: input.importNote,
         ...timeSlots,
         allScans,
@@ -176,7 +168,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
       timeZone: 'Asia/Bangkok',
       year: 'numeric',
       month: '2-digit',
-      day: '2-digit'
+      day: '2-digit',
     }).format(d);
   }
 
@@ -186,8 +178,51 @@ class ScanDataService extends BaseCrudService<ScanData> {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false
+      hour12: false,
     }).format(d);
+  }
+
+  /**
+   * Merge new punches with original scans to preserve original seconds for unchanged punches.
+   * New punches from expected shifts or manual entries will have ":00" appended.
+   */
+  private mergePunchesWithOriginalSeconds(newPunches: string[], originalScans: string[]): string[] {
+    const toMins = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const usedOriginal = new Set<number>();
+    const scansList = originalScans || [];
+
+    return newPunches.map((np) => {
+      const npMins = toMins(np);
+
+      let bestMatch = '';
+      let minDiff = 2; // match within 1 minute (same minute or ±1 min)
+      let bestIdx = -1;
+
+      for (let i = 0; i < scansList.length; i++) {
+        if (usedOriginal.has(i)) continue;
+        const os = scansList[i];
+        if (!os || os === '-') continue;
+        const diff = Math.abs(toMins(os) - npMins);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatch = os;
+          bestIdx = i;
+        }
+      }
+
+      if (bestIdx !== -1) {
+        usedOriginal.add(bestIdx);
+        // Keep the original scan time (preserving original seconds)
+        return bestMatch.length === 5 ? `${bestMatch}:00` : bestMatch;
+      } else {
+        // It's a new punch added by admin, pad with :00
+        return np.length === 5 ? `${np}:00` : np;
+      }
+    });
   }
 
   /**
@@ -205,7 +240,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         { field: 'workDate', operator: '<=', value: endDate },
       ]);
       // Filter in-memory to include documents where isDeleted is missing or false
-      return scans.filter(s => (s as any).isDeleted !== true);
+      return scans.filter((s) => (s as any).isDeleted !== true);
     } catch (error: any) {
       logger.error('Error getting scan data by contractor:', error);
       throw error;
@@ -228,7 +263,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
         { field: 'workDate', operator: '<=', value: endDate },
       ]);
       // Filter in-memory to include documents based on onlyDeleted flag
-      return scans.filter(s => onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true);
+      return scans.filter((s) =>
+        onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true
+      );
     } catch (error: any) {
       logger.error('Error getting scan data by project:', error);
       throw error;
@@ -248,7 +285,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
         { field: 'workDate', operator: '>=', value: startDate },
         { field: 'workDate', operator: '<=', value: endDate },
       ]);
-      return scans.filter(s => onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true);
+      return scans.filter((s) =>
+        onlyDeleted ? (s as any).isDeleted === true : (s as any).isDeleted !== true
+      );
     } catch (error: any) {
       logger.error('Error getting scan data by date range:', error);
       throw error;
@@ -277,7 +316,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
   ): Promise<ScanData[]> {
     try {
       const filters: any[] = [{ field: 'isLate', operator: '==', value: true }];
-      if (projectLocationId) filters.push({ field: 'projectLocationId', operator: '==', value: projectLocationId });
+      if (projectLocationId)
+        filters.push({ field: 'projectLocationId', operator: '==', value: projectLocationId });
       if (startDate) filters.push({ field: 'workDate', operator: '>=', value: startDate });
       if (endDate) filters.push({ field: 'workDate', operator: '<=', value: endDate });
       return await this.query(filters);
@@ -307,10 +347,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
   /**
    * Match scan data to daily report
    */
-  async matchToDailyReport(
-    scanId: string,
-    dailyReportId: string
-  ): Promise<ScanData | null> {
+  async matchToDailyReport(scanId: string, dailyReportId: string): Promise<ScanData | null> {
     try {
       return await this.update(scanId, { matchedDailyReportId: dailyReportId });
     } catch (error: any) {
@@ -330,27 +367,37 @@ class ScanDataService extends BaseCrudService<ScanData> {
     const onlyDeleted = options.onlyDeleted === true || options.onlyDeleted === 'true';
 
     const filters: any[] = [];
-    if (options.projectId) filters.push({ field: 'projectLocationId', operator: '==', value: options.projectId });
-    if (options.startDate) filters.push({ field: 'workDate', operator: '>=', value: options.startDate });
-    if (options.endDate) filters.push({ field: 'workDate', operator: '<=', value: options.endDate });
-    
+    if (options.projectId)
+      filters.push({ field: 'projectLocationId', operator: '==', value: options.projectId });
+    if (options.contractorId || options.employeeNumber) {
+      filters.push({
+        field: 'employeeNumber',
+        operator: '==',
+        value: options.contractorId || options.employeeNumber,
+      });
+    }
+    if (options.startDate)
+      filters.push({ field: 'workDate', operator: '>=', value: options.startDate });
+    if (options.endDate)
+      filters.push({ field: 'workDate', operator: '<=', value: options.endDate });
+
     // Total count for these filters
     // Note: We use queryWithFallback style logic if needed, but for now we'll assume indexes exist or use base query
     const total = await this.count([
       ...filters,
-      { field: 'isDeleted', operator: '==', value: onlyDeleted }
+      { field: 'isDeleted', operator: '==', value: onlyDeleted },
     ]).catch(() => this.count(filters)); // Fallback if isDeleted index is missing
 
     // Get paginated items
-    const items = await this.queryWithFallback([
-      ...filters,
-      { field: 'isDeleted', operator: '==', value: onlyDeleted }
-    ], {
-      page,
-      pageSize,
-      orderBy,
-      orderDirection
-    });
+    const items = await this.queryWithFallback(
+      [...filters, { field: 'isDeleted', operator: '==', value: onlyDeleted }],
+      {
+        page,
+        pageSize,
+        orderBy,
+        orderDirection,
+      }
+    );
 
     return {
       items,
@@ -406,34 +453,76 @@ class ScanDataService extends BaseCrudService<ScanData> {
     let failedRecords = 0;
 
     // ── Step 1: Fetch all employees in parallel and cache homeProjectId ──────
-    const uniqueEmployeeNumbers = Array.from(new Set(records.map(r => r.employeeNumber).filter(Boolean)));
+    const uniqueEmployeeNumbers = Array.from(
+      new Set(records.map((r) => r.employeeNumber).filter(Boolean))
+    );
     const homeProjectCache = new Map<string, string>(); // empNo → homeProjectId
+
+    // Build document references for bulk lookup
+    const dcRefs = uniqueEmployeeNumbers.map((empNum) =>
+      collections.dailyContractors.doc(`DC-${empNum}`)
+    );
+
+    // Fetch all matching contractors in chunks of 500
+    const fetchedContractorsMap = new Map<string, any>();
+    const CHUNK_DB = 500;
+    if (dcRefs.length > 0) {
+      for (let i = 0; i < dcRefs.length; i += CHUNK_DB) {
+        const chunkRefs = dcRefs.slice(i, i + CHUNK_DB);
+        try {
+          const snapshots = await db.getAll(...chunkRefs);
+          snapshots.forEach((snap) => {
+            if (snap.exists) {
+              const data = snap.data();
+              fetchedContractorsMap.set(snap.id, { id: snap.id, ...data });
+            }
+          });
+        } catch (e) {
+          logger.warn(
+            `[bulkImport] Batch employee fetch chunk ${i} failed, will use fallback query`,
+            e
+          );
+        }
+      }
+    }
 
     const CHUNK_EMP = 50;
     for (let i = 0; i < uniqueEmployeeNumbers.length; i += CHUNK_EMP) {
       const chunk = uniqueEmployeeNumbers.slice(i, i + CHUNK_EMP);
-      await Promise.all(chunk.map(async (empNum) => {
-        if (!employeeCache.has(empNum)) {
-          try {
-            const contractor = await dailyContractorService.findByEmployeeIdOrHistory(empNum);
-            employeeCache.set(empNum, contractor ? contractor.id : null);
-            const homeProj = (contractor as any)?.projectLocationId || (contractor as any)?.homeProjectId || '';
-            homeProjectCache.set(empNum, homeProj);
-          } catch (e: any) {
-            employeeCache.set(empNum, null);
-            homeProjectCache.set(empNum, '');
+      await Promise.all(
+        chunk.map(async (empNum) => {
+          if (!employeeCache.has(empNum)) {
+            try {
+              const docId = `DC-${empNum}`;
+              let contractor = fetchedContractorsMap.get(docId) || null;
+
+              // Fallback to query history only if direct ID lookup fails
+              if (!contractor) {
+                contractor = await dailyContractorService.findByEmployeeIdOrHistory(empNum);
+              }
+
+              employeeCache.set(empNum, contractor ? contractor.id : null);
+              const homeProj =
+                (contractor as any)?.projectLocationId || (contractor as any)?.homeProjectId || '';
+              homeProjectCache.set(empNum, homeProj);
+            } catch (e: any) {
+              employeeCache.set(empNum, null);
+              homeProjectCache.set(empNum, '');
+            }
           }
-        }
-      }));
+        })
+      );
     }
 
     // ── Step 2: Aggregate raw records into daily groups ────────────────────
     const aggregatedDailyRows = ScanDataAggregator.aggregate(records);
 
     // Build all document refs for pre-fetch
-    const allDocRefs = aggregatedDailyRows.map(group => ({
+    const allDocRefs = aggregatedDailyRows.map((group) => ({
       key: ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate),
-      ref: collections.scanData.doc(ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate)),
+      ref: collections.scanData.doc(
+        ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate)
+      ),
     }));
 
     // ── Step 3: Chunked getAll() to find which docs already exist ──────────
@@ -443,27 +532,30 @@ class ScanDataService extends BaseCrudService<ScanData> {
     if (allDocRefs.length > 0) {
       const chunks: FirebaseFirestore.DocumentReference[][] = [];
       for (let i = 0; i < allDocRefs.length; i += CHUNK_SIZE) {
-        chunks.push(allDocRefs.slice(i, i + CHUNK_SIZE).map(d => d.ref));
+        chunks.push(allDocRefs.slice(i, i + CHUNK_SIZE).map((d) => d.ref));
       }
       const snapshots: FirebaseFirestore.DocumentSnapshot[][] = [];
       for (const chunk of chunks) {
         const snap = await db.getAll(...chunk);
         snapshots.push(snap);
       }
-      snapshots.flat().forEach(doc => {
+      snapshots.flat().forEach((doc) => {
         if (doc.exists) existingIds.add(doc.id);
       });
-      logger.info(`[bulkImport] Pre-fetch: ${existingIds.size} existing docs found out of ${allDocRefs.length} total`);
+      logger.info(
+        `[bulkImport] Pre-fetch: ${existingIds.size} existing docs found out of ${allDocRefs.length} total`
+      );
     }
 
     // ── Step 3.5: Fetch approved Wage Periods to block locked dates ────────
-    let lockedRanges: { start: Date, end: Date }[] = [];
+    let lockedRanges: { start: Date; end: Date }[] = [];
     try {
-      const approvedPeriodsSnap = await db.collection('wagePeriods')
+      const approvedPeriodsSnap = await db
+        .collection('wagePeriods')
         .where('status', 'in', ['approve', 'approved'])
         .get();
-        
-      lockedRanges = approvedPeriodsSnap.docs.map(doc => {
+
+      lockedRanges = approvedPeriodsSnap.docs.map((doc) => {
         const data = doc.data();
         const start = data.startDate?.toDate ? data.startDate.toDate() : new Date(data.startDate);
         const end = data.endDate?.toDate ? data.endDate.toDate() : new Date(data.endDate);
@@ -477,7 +569,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     const isLockedDate = (dateStr: string) => {
       const date = new Date(dateStr);
-      return lockedRanges.some(range => date >= range.start && date <= range.end);
+      return lockedRanges.some((range) => date >= range.start && date <= range.end);
     };
 
     // ── Step 4: Write only NEW records using BulkWriter ───────────────────
@@ -488,8 +580,14 @@ class ScanDataService extends BaseCrudService<ScanData> {
       try {
         const contractorId = employeeCache.get(group.employeeNumber);
         if (!contractorId) {
-          if (!warnings.includes(`ไม่พบข้อมูลพนักงานรหัส ${group.employeeNumber} ในระบบ (บันทึกไว้ชั่วคราว)`)) {
-            warnings.push(`ไม่พบข้อมูลพนักงานรหัส ${group.employeeNumber} ในระบบ (บันทึกไว้ชั่วคราว)`);
+          if (
+            !warnings.includes(
+              `ไม่พบข้อมูลพนักงานรหัส ${group.employeeNumber} ในระบบ (บันทึกไว้ชั่วคราว)`
+            )
+          ) {
+            warnings.push(
+              `ไม่พบข้อมูลพนักงานรหัส ${group.employeeNumber} ในระบบ (บันทึกไว้ชั่วคราว)`
+            );
           }
         }
 
@@ -512,7 +610,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
           importErrors.push({
             row: group.sourceRowNumbers[0] || 0,
             employeeNumber: group.employeeNumber,
-            error: errorMsg
+            error: errorMsg,
           });
           if (!warnings.includes(errorMsg)) {
             warnings.push(errorMsg);
@@ -531,15 +629,16 @@ class ScanDataService extends BaseCrudService<ScanData> {
         if (!maxDate || workDate > maxDate) maxDate = new Date(workDate);
 
         const primaryScan = group.timeScans.length > 0 ? group.timeScans[0] : null;
-        const scanDateTime = (primaryScan && !isNaN(primaryScan.getTime())) ? primaryScan : workDate;
+        const scanDateTime = primaryScan && !isNaN(primaryScan.getTime()) ? primaryScan : workDate;
 
         // Resolve projectLocationId: use provided value OR auto-lookup from contractor's home project
-        const resolvedProjectId = options.projectLocationId
-          || homeProjectCache.get(group.employeeNumber)
-          || '';
+        const resolvedProjectId =
+          options.projectLocationId || homeProjectCache.get(group.employeeNumber) || '';
 
         if (!resolvedProjectId) {
-          logger.warn(`[bulkImport] No projectLocationId for ${group.employeeNumber} — saving without project, reconciliation will be skipped`);
+          logger.warn(
+            `[bulkImport] No projectLocationId for ${group.employeeNumber} — saving without project, reconciliation will be skipped`
+          );
         }
 
         const scanData: any = {
@@ -569,7 +668,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
           Time8: group.time8 || '',
           Time9: group.time9 || '',
           Time10: group.time10 || '',
-          allScans: group.timeScans.map(t => isNaN(t.getTime()) ? '??:??:??' : this.formatTime(t)),
+          allScans: group.timeScans.map((t) =>
+            isNaN(t.getTime()) ? '??:??:??' : this.formatTime(t)
+          ),
           // punches = HH:mm (ตัดวินาทีออก) ใช้ใน Reconciliation เปรียบเทียบกับ dailyReportPunches
           // allScans = HH:mm:ss (เก็บวินาทีไว้) ใช้คำนวณสาย/OT ได้ละเอียด
           punches: group.punches, // HH:mm จาก ScanDataAggregator
@@ -585,8 +686,11 @@ class ScanDataService extends BaseCrudService<ScanData> {
         };
 
         // Strip undefined/NaN fields before writing to Firestore
-        Object.keys(scanData).forEach(key => {
-          if (scanData[key] === undefined || (typeof scanData[key] === 'number' && isNaN(scanData[key]))) {
+        Object.keys(scanData).forEach((key) => {
+          if (
+            scanData[key] === undefined ||
+            (typeof scanData[key] === 'number' && isNaN(scanData[key]))
+          ) {
             delete scanData[key];
           }
         });
@@ -596,7 +700,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
           newlyInsertedIds.add(uniqueKey);
         }
         successfulRecords++;
-
       } catch (err: any) {
         logger.error(`Failed to process record ${group.employeeNumber}:`, err);
         failedRecords++;
@@ -608,7 +711,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
       await writer.close();
     }
 
-    logger.info(`[bulkImport] Done: ${successfulRecords} success, ${skippedRecords} skipped, ${failedRecords} failed`);
+    logger.info(
+      `[bulkImport] Done: ${successfulRecords} success, ${skippedRecords} skipped, ${failedRecords} failed`
+    );
 
     // ── Step 5: Reconciliation is triggered automatically via Firebase Cloud Functions ──
 
@@ -616,10 +721,14 @@ class ScanDataService extends BaseCrudService<ScanData> {
     for (const group of aggregatedDailyRows) {
       const rowDepartment = projectCode || projectDepartmentName || '-';
       const uniqueKey = ScanDataService.generateScanDocKey(group.employeeNumber, group.workDate);
-      
+
       rowSummaries.push({
         row: group.sourceRowNumbers[0] || 0,
-        status: isLockedDate(group.workDate) ? 'failed' : (existingIds.has(uniqueKey) ? 'duplicate' : 'success'),
+        status: isLockedDate(group.workDate)
+          ? 'failed'
+          : existingIds.has(uniqueKey)
+            ? 'duplicate'
+            : 'success',
         employeeNumber: group.employeeNumber,
         data: {
           EmployeeNumber: group.employeeNumber,
@@ -684,7 +793,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-
   /**
    * GET /api/scan-data/detailed
    */
@@ -722,7 +830,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
           const allReports = await dailyReportService.getByProjectAndDateRange(
             projectLocationId,
             new Date(startDate),
-            new Date(endDate),
+            new Date(endDate)
           );
           (allReports || []).forEach((r: any) => {
             const rDate = r.date instanceof Date ? r.date : r.date?.toDate?.();
@@ -738,20 +846,20 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
       // ── Map lookup per record — O(1) instead of 1 Firestore call per row ──
       const enriched = scans.map((scan) => {
-        const workDate = scan.workDate instanceof Date
-          ? scan.workDate
-          : (scan.workDate as any)?.toDate?.()
-            ?? new Date(scan.workDate as any);
+        const workDate =
+          scan.workDate instanceof Date
+            ? scan.workDate
+            : ((scan.workDate as any)?.toDate?.() ?? new Date(scan.workDate as any));
 
         const dateKey = workDate.toISOString().split('T')[0];
         const dayReports: any[] = reportMap.get(`${projectLocationId}_${dateKey}`) || [];
 
         const reportData = {
-          regular:  dayReports.some((r: any) => r.workType === 'regular') ? 1 : 0,
+          regular: dayReports.some((r: any) => r.workType === 'regular') ? 1 : 0,
           otMorning: dayReports
             .filter((r: any) => r.workType === 'ot_morning')
             .reduce((sum: number, r: any) => sum + (r.netHours || 0), 0),
-          otNoon:  dayReports.some((r: any) => r.workType === 'ot_noon') ? 1 : 0,
+          otNoon: dayReports.some((r: any) => r.workType === 'ot_noon') ? 1 : 0,
           otEvening: dayReports
             .filter((r: any) => r.workType === 'ot_evening')
             .reduce((sum: number, r: any) => sum + (r.netHours || 0), 0),
@@ -764,32 +872,32 @@ class ScanDataService extends BaseCrudService<ScanData> {
             status: scan.hasDiscrepancy ? 'pending' : 'verified',
             employeeNumber: scan.employeeNumber,
             date: workDate,
-            time1:  (scan as any).Time1  || '-',
-            time2:  (scan as any).Time2  || '-',
-            time3:  (scan as any).Time3  || '-',
-            time4:  (scan as any).Time4  || '-',
-            time5:  (scan as any).Time5  || '-',
-            time6:  (scan as any).Time6  || '-',
-            time7:  (scan as any).Time7  || '-',
-            time8:  (scan as any).Time8  || '-',
-            time9:  (scan as any).Time9  || '-',
+            time1: (scan as any).Time1 || '-',
+            time2: (scan as any).Time2 || '-',
+            time3: (scan as any).Time3 || '-',
+            time4: (scan as any).Time4 || '-',
+            time5: (scan as any).Time5 || '-',
+            time6: (scan as any).Time6 || '-',
+            time7: (scan as any).Time7 || '-',
+            time8: (scan as any).Time8 || '-',
+            time9: (scan as any).Time9 || '-',
             time10: (scan as any).Time10 || '-',
             scanNormalStatus: (scan as any).normalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
             scanRegularHours: (scan as any).regularHours || 0,
-            regularHours:     (scan as any).regularHours || 0,
-            scanLunchStatus:  String((scan as any).lunchStatus || 0),
-            scanOTMorning:    (scan as any).otMorningHours || 0,
-            scanOTEvening:    (scan as any).otEveningHours || 0,
-            lateMinutes:      scan.lateMinutes || 0,
+            regularHours: (scan as any).regularHours || 0,
+            scanLunchStatus: String((scan as any).lunchStatus || 0),
+            scanOTMorning: (scan as any).otMorningHours || 0,
+            scanOTEvening: (scan as any).otEveningHours || 0,
+            lateMinutes: scan.lateMinutes || 0,
             reportRegularStatus: reportData.regular === 1 ? 'ปกติ' : 'ไม่มีข้อมูล',
-            reportOTMorning:  reportData.otMorning,
-            reportOTEvening:  reportData.otEvening,
-            reportOTNoon:     reportData.otNoon,
+            reportOTMorning: reportData.otMorning,
+            reportOTEvening: reportData.otEvening,
+            reportOTNoon: reportData.otNoon,
             morningOTDiff: '-',
             eveningOTDiff: '-',
-            lunchOTDiff:   '-',
-            projectName:   scan.projectName || '-',
-            errorNote:     scan.importNote  || '-',
+            lunchOTDiff: '-',
+            projectName: scan.projectName || '-',
+            errorNote: scan.importNote || '-',
             isManuallyEdited: (scan as any).isManuallyEdited || false,
           },
         };
@@ -814,8 +922,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-
-
   /**
    * Delete by batch
    */
@@ -823,7 +929,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     const scans = await this.getByBatchId(batchId);
     if (scans.length === 0) return 0;
     const batch = db.batch();
-    scans.forEach(s => batch.delete(collections.scanData.doc(s.id)));
+    scans.forEach((s) => batch.delete(collections.scanData.doc(s.id)));
     await batch.commit();
     return scans.length;
   }
@@ -831,11 +937,15 @@ class ScanDataService extends BaseCrudService<ScanData> {
   /**
    * Delete by project and date range
    */
-  async deleteByProjectAndDateRange(projectLocationId: string, startDate: Date, endDate: Date): Promise<number> {
+  async deleteByProjectAndDateRange(
+    projectLocationId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<number> {
     const scans = await this.getByProjectAndDate(projectLocationId, startDate, endDate);
     if (scans.length === 0) return 0;
     const batch = db.batch();
-    scans.forEach(s => batch.delete(collections.scanData.doc(s.id)));
+    scans.forEach((s) => batch.delete(collections.scanData.doc(s.id)));
     await batch.commit();
     return scans.length;
   }
@@ -871,6 +981,13 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const uniqueKey = scanDataId || `SCAN_${contractorId}_${scanDate}`;
       const docRef = collections.scanData.doc(uniqueKey);
 
+      // Fetch existing document to get original scans for preserving seconds
+      const existingDoc = await docRef.get();
+      const existingData = existingDoc.exists ? existingDoc.data() : null;
+      const originalScans: string[] = existingData
+        ? existingData.allScans || existingData.punches || []
+        : [];
+
       // Recalculate metrics based on new punches
       let metrics: any = {
         normalStatus: 0,
@@ -878,7 +995,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         lunchStatus: 0,
         otMorningHours: 0,
         otEveningHours: 0,
-        lateMinutes: 0
+        lateMinutes: 0,
       };
 
       if (punches.length > 0) {
@@ -889,7 +1006,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
           return {
             rowNumber: i,
             employeeNumber: contractorId,
-            scanDateTime: scanTime
+            scanDateTime: scanTime,
           };
         });
 
@@ -902,27 +1019,37 @@ class ScanDataService extends BaseCrudService<ScanData> {
             lunchStatus: agg.lunchStatus,
             otMorningHours: agg.otMorningHours,
             otEveningHours: agg.otEveningHours,
-            lateMinutes: agg.lateMinutes
+            lateMinutes: agg.lateMinutes,
           };
         }
       }
 
-      const updateData: any = { 
-        ...Object.fromEntries(punches.map((p, i) => [`Time${i+1}`, p])),
-        // Clear remaining slots if any
-        ...Object.fromEntries(Array.from({ length: 10 - punches.length }, (_, i) => [`Time${punches.length + i + 1}`, '-'])),
+      // Merge new punches with original scans to preserve seconds
+      const finalPunches = this.mergePunchesWithOriginalSeconds(punches, originalScans);
+
+      const timeSlots: any = {};
+      finalPunches.forEach((p, i) => {
+        if (i < 10) timeSlots[`Time${i + 1}`] = p;
+      });
+      // Clear remaining slots if any
+      for (let i = finalPunches.length + 1; i <= 10; i++) {
+        timeSlots[`Time${i}`] = '-';
+      }
+
+      const updateData: any = {
+        ...timeSlots,
         ...metrics,
-        punches: punches,
-        allScans: punches.map(p => `${p}:00`),
+        punches: punches.map((p) => p.slice(0, 5)), // Keep punches as HH:mm
+        allScans: finalPunches,
         isManuallyEdited: true, // Flag for highlighting in UI
         updatedAt: new Date(),
-        updatedBy
+        updatedBy,
       };
 
       await docRef.set(updateData, { merge: true });
       const updatedScan = await docRef.get();
       const updatedScanData = updatedScan.data() as ScanData;
-      
+
       return { ...updatedScanData, id: updatedScan.id } as ScanData;
     } catch (error: any) {
       logger.error('Error updating daily punches:', error);
@@ -949,17 +1076,33 @@ class ScanDataService extends BaseCrudService<ScanData> {
     let lateMinutes = 0;
 
     if (!dayScans || dayScans.length < 2) {
-      return { scannedRegularHours, scannedMorningOT, scannedEveningOT, scannedNoonOT, isLate, lateMinutes };
+      return {
+        scannedRegularHours,
+        scannedMorningOT,
+        scannedEveningOT,
+        scannedNoonOT,
+        isLate,
+        lateMinutes,
+      };
     }
 
     // Sort scans by time
     const sorted = [...dayScans].sort((a, b) => {
-      const timeA = a.scanDateTime instanceof Date ? a.scanDateTime.getTime() : (a.scanDateTime as any).toDate().getTime();
-      const timeB = b.scanDateTime instanceof Date ? b.scanDateTime.getTime() : (b.scanDateTime as any).toDate().getTime();
+      const timeA =
+        a.scanDateTime instanceof Date
+          ? a.scanDateTime.getTime()
+          : (a.scanDateTime as any).toDate().getTime();
+      const timeB =
+        b.scanDateTime instanceof Date
+          ? b.scanDateTime.getTime()
+          : (b.scanDateTime as any).toDate().getTime();
       return timeA - timeB;
     });
 
-    const firstScan = sorted[0].scanDateTime instanceof Date ? sorted[0].scanDateTime : (sorted[0].scanDateTime as any).toDate();
+    const firstScan =
+      sorted[0].scanDateTime instanceof Date
+        ? sorted[0].scanDateTime
+        : (sorted[0].scanDateTime as any).toDate();
 
     // Check lateness (08:00 threshold)
     const startOfDay = new Date(firstScan);
@@ -971,16 +1114,23 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     // Logic for hours (Simplified for now to match the existing behavior)
     scannedRegularHours = 8.0;
-    
+
     // Check for lunch scan (12:00-13:00)
-    const hasLunchScan = sorted.some(s => {
+    const hasLunchScan = sorted.some((s) => {
       const d = s.scanDateTime instanceof Date ? s.scanDateTime : (s.scanDateTime as any).toDate();
       const h = d.getHours();
       return h >= 12 && h < 13;
     });
     if (!hasLunchScan) scannedNoonOT = 1.0;
 
-    return { scannedRegularHours, scannedMorningOT, scannedEveningOT, scannedNoonOT, isLate, lateMinutes };
+    return {
+      scannedRegularHours,
+      scannedMorningOT,
+      scannedEveningOT,
+      scannedNoonOT,
+      isLate,
+      lateMinutes,
+    };
   }
 
   /**
@@ -996,14 +1146,16 @@ class ScanDataService extends BaseCrudService<ScanData> {
     addedBy: string
   ): Promise<ScanData> {
     try {
-      const contractor = await dailyContractorService.findByEmployeeIdOrHistory(payload.employeeNumber);
+      const contractor = await dailyContractorService.findByEmployeeIdOrHistory(
+        payload.employeeNumber
+      );
       if (!contractor) throw new AppError(`ไม่พบข้อมูลพนักงานรหัส ${payload.employeeNumber}`, 404);
 
       // Resolve projectLocationId: use provided value, fallback to employee's home project
       const resolvedProjectLocationId =
-        (payload.projectLocationId && payload.projectLocationId.trim() !== '')
+        payload.projectLocationId && payload.projectLocationId.trim() !== ''
           ? payload.projectLocationId.trim()
-          : (contractor.projectLocationId || '');
+          : contractor.projectLocationId || '';
 
       let projectCode = '';
       if (resolvedProjectLocationId) {
@@ -1028,8 +1180,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-
-
   /**
    * Fill scan data from Daily Report (Project B)
    */
@@ -1040,7 +1190,10 @@ class ScanDataService extends BaseCrudService<ScanData> {
     adminUserId: string
   ): Promise<ScanData> {
     try {
-      const timesheet = await projectBDailyReportService.getDailyTimesheet(employeeNumber, workDateStr);
+      const timesheet = await projectBDailyReportService.getDailyTimesheet(
+        employeeNumber,
+        workDateStr
+      );
       if (!timesheet) {
         throw new AppError('ไม่พบข้อมูล Daily Report ใน Aftersale System สำหรับวันนี้', 404);
       }
@@ -1062,15 +1215,15 @@ class ScanDataService extends BaseCrudService<ScanData> {
       const punchSet = new Set<string>();
       const shifts = timesheet.expectedShifts;
 
-      const hasOtMorning  = !shifts || shifts.otMorning;
-      const hasDay        = !shifts || shifts.normal;
-      const hasOtNoon     = !shifts || shifts.otNoon;
-      const hasOtEvening  = !shifts || shifts.otEvening;
+      const hasOtMorning = !shifts || shifts.otMorning;
+      const hasDay = !shifts || shifts.normal;
+      const hasOtNoon = !shifts || shifts.otNoon;
+      const hasOtEvening = !shifts || shifts.otEvening;
 
       const extractPunches = (timeStr?: string, defaultStr?: string) => {
         const target = timeStr || defaultStr;
         if (!target) return;
-        const parts = target.split('-').map(s => s.trim());
+        const parts = target.split('-').map((s) => s.trim());
         if (parts.length === 2 && parts[0] && parts[1]) {
           punchSet.add(parts[0].slice(0, 5));
           punchSet.add(parts[1].slice(0, 5));
@@ -1080,7 +1233,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
       if (hasOtMorning) extractPunches(timesheet.shiftTimes?.otMorning, '06:00 - 08:00');
       if (hasDay) {
         extractPunches(timesheet.shiftTimes?.day, '08:00 - 17:00');
-        // ถ้าปกติทำทั้งวัน (day) และไม่มีการระบุแยกกะ OT เที่ยงไว้ต่างหาก 
+        // ถ้าปกติทำทั้งวัน (day) และไม่มีการระบุแยกกะ OT เที่ยงไว้ต่างหาก
         // ให้ซอยย่อย 12:00 และ 13:00 เพื่อให้ตรงตาม segment การพักเที่ยงแบบสากล
         if (!hasOtNoon) {
           punchSet.add('12:00');
@@ -1097,26 +1250,32 @@ class ScanDataService extends BaseCrudService<ScanData> {
       }
 
       const scanDateStart = new Date(`${workDateStr}T00:00:00.000Z`);
-      const scanDateEnd = new Date(`${workDateStr}T23:59:59.999Z`);
+      const uniqueKey = ScanDataService.generateScanDocKey(employeeNumber, workDateStr);
+      let docRef = collections.scanData.doc(uniqueKey);
+      const scanDoc = await docRef.get();
 
-      const scanQuery = await collections.scanData
-        .where('employeeNumber', '==', employeeNumber)
-        .where('workDate', '>=', scanDateStart)
-        .where('workDate', '<=', scanDateEnd)
-        .where('isDeleted', '==', false)
-        .get();
-
-      let docRef: FirebaseFirestore.DocumentReference;
       let existingData: Partial<ScanData> = {};
       let action: any = 'manual_fill';
 
-      if (!scanQuery.empty) {
-        docRef = scanQuery.docs[0].ref;
-        existingData = scanQuery.docs[0].data() as ScanData;
+      if (scanDoc.exists && !scanDoc.data()?.isDeleted) {
+        existingData = scanDoc.data() as ScanData;
       } else {
-        const uniqueKey = ScanDataService.generateScanDocKey(employeeNumber, workDateStr);
-        docRef = collections.scanData.doc(uniqueKey);
-        action = 'manual_create';
+        // Fallback: Query by Bangkok timezone offset (+07:00) to find legacy documents
+        const scanDateStart = new Date(`${workDateStr}T00:00:00.000+07:00`);
+        const scanDateEnd = new Date(`${workDateStr}T23:59:59.999+07:00`);
+        const scanQuery = await collections.scanData
+          .where('employeeNumber', '==', employeeNumber)
+          .where('workDate', '>=', scanDateStart)
+          .where('workDate', '<=', scanDateEnd)
+          .where('isDeleted', '==', false)
+          .get();
+
+        if (!scanQuery.empty) {
+          docRef = scanQuery.docs[0].ref;
+          existingData = scanQuery.docs[0].data() as ScanData;
+        } else {
+          action = 'manual_create';
+        }
       }
 
       const regularHours = timesheet.expectedHours?.normal ?? 0;
@@ -1136,7 +1295,8 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
       // ── Merge existing punches with expected punches ──
       // To preserve original scan data, we only add expected punches if there isn't an existing punch within 60 minutes.
-      const existingPunches: string[] = snapshot.punches;
+      const existingPunches: string[] =
+        (existingData as any).allScans || (existingData as any).punches || [];
       const mergedPunches = [...existingPunches];
       const availableExisting = [...existingPunches];
 
@@ -1147,10 +1307,10 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
       for (const ep of expectedPunches) {
         const epMins = toMins(ep);
-        
+
         let closestIdx = -1;
         let minDiff = 61; // Maximum allowed difference is 60 minutes
-        
+
         for (let i = 0; i < availableExisting.length; i++) {
           const diff = Math.abs(toMins(availableExisting[i]) - epMins);
           if (diff <= 60 && diff < minDiff) {
@@ -1158,13 +1318,13 @@ class ScanDataService extends BaseCrudService<ScanData> {
             closestIdx = i;
           }
         }
-        
+
         if (closestIdx !== -1) {
           // Found a close existing punch, mark it as used
           availableExisting.splice(closestIdx, 1);
         } else {
-          // No close existing punch, add the expected punch
-          mergedPunches.push(ep);
+          // No close existing punch, add the expected punch with padded seconds
+          mergedPunches.push(ep.length === 5 ? `${ep}:00` : ep);
         }
       }
 
@@ -1200,7 +1360,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
         roundedTime: (existingData as any).roundedTime || workDateObj,
         isManuallyEdited: true,
         allScans: finalPunches,
-        punches: finalPunches,
+        punches: finalPunches.map((p) => p.slice(0, 5)), // Convert punches back to HH:mm
         devicePunches: (existingData as any).devicePunches || (existingData as any).punches || [],
         firstIn: finalPunches[0],
         lastOut: finalPunches[finalPunches.length - 1],
@@ -1228,6 +1388,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
           employeeNumber,
           workDateStr,
           projectLocationId,
+          savedScan
         );
       } catch (recErr: any) {
         // Non-critical: log but don't fail the fill operation
@@ -1240,7 +1401,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
       throw error;
     }
   }
-
 
   /**
    * Get aggregated data for export
@@ -1255,32 +1415,38 @@ class ScanDataService extends BaseCrudService<ScanData> {
     let scans: ScanData[] = [];
     if (params.batchId) scans = await this.getByBatchId(params.batchId);
     else if (params.projectLocationId && params.startDate && params.endDate) {
-      scans = await this.getByProjectAndDate(params.projectLocationId, params.startDate, params.endDate, params.onlyDeleted);
+      scans = await this.getByProjectAndDate(
+        params.projectLocationId,
+        params.startDate,
+        params.endDate,
+        params.onlyDeleted
+      );
     }
 
     if (scans.length === 0) return [];
 
     const records: BulkImportRecord[] = [];
     scans.forEach((s, sIdx) => {
-      const baseDate = s.scanDateTime instanceof Date ? s.scanDateTime : (s.scanDateTime as any).toDate();
+      const baseDate =
+        s.scanDateTime instanceof Date ? s.scanDateTime : (s.scanDateTime as any).toDate();
       const empNo = s.employeeNumber || s.employeeId;
-      
+
       // Look for Time1 through Time10 fields in the record
       for (let i = 1; i <= 10; i++) {
         const timeKey = `Time${i}`;
         const timeStr = (s as any)[timeKey];
-        
+
         if (timeStr && timeStr !== '-' && timeStr !== '') {
           try {
             const [hours, minutes] = timeStr.split(':').map(Number);
             if (!isNaN(hours) && !isNaN(minutes)) {
               const punchDate = new Date(baseDate);
               punchDate.setHours(hours, minutes, 0, 0);
-              
+
               records.push({
                 rowNumber: sIdx * 10 + i,
                 employeeNumber: empNo,
-                scanDateTime: punchDate
+                scanDateTime: punchDate,
               });
             }
           } catch (e) {
@@ -1288,26 +1454,26 @@ class ScanDataService extends BaseCrudService<ScanData> {
           }
         }
       }
-      
+
       // fallback if no TimeX fields found, use scanDateTime
-      if (records.filter(r => r.employeeNumber === empNo).length === 0) {
+      if (records.filter((r) => r.employeeNumber === empNo).length === 0) {
         records.push({
           rowNumber: sIdx + 1,
           employeeNumber: empNo,
-          scanDateTime: baseDate
+          scanDateTime: baseDate,
         });
       }
     });
 
-
     const aggregated = ScanDataAggregator.aggregate(records);
     const results: any[] = [];
-    
+
     let projectCode = '';
     let fallbackDepartment = '#N/A';
-    
+
     try {
-      const resolvedProjectLocId = params.projectLocationId || (scans.length > 0 ? (scans[0] as any).projectLocationId : null);
+      const resolvedProjectLocId =
+        params.projectLocationId || (scans.length > 0 ? (scans[0] as any).projectLocationId : null);
       if (resolvedProjectLocId) {
         const loc = await projectLocationService.getById(resolvedProjectLocId);
         if (loc) {
@@ -1325,69 +1491,87 @@ class ScanDataService extends BaseCrudService<ScanData> {
 
     for (let i = 0; i < aggregated.length; i += CHUNK_SIZE) {
       const chunk = aggregated.slice(i, i + CHUNK_SIZE);
-      
-      const chunkResults = await Promise.all(chunk.map(async (group) => {
-        let contractor = contractorCache.get(group.employeeNumber);
-        if (contractor === undefined) {
-          contractor = await dailyContractorService.findByEmployeeIdOrHistory(group.employeeNumber);
-          contractorCache.set(group.employeeNumber, contractor);
-        }
 
-        let reportMorningOT = 0, reportEveningOT = 0, reportLunchOT = 0, reportNormalStatus = 0;
-        let department = fallbackDepartment, hasReport = false;
+      const chunkResults = await Promise.all(
+        chunk.map(async (group) => {
+          let contractor = contractorCache.get(group.employeeNumber);
+          if (contractor === undefined) {
+            contractor = await dailyContractorService.findByEmployeeIdOrHistory(
+              group.employeeNumber
+            );
+            contractorCache.set(group.employeeNumber, contractor);
+          }
 
-        if (contractor) {
-          const dateStr = group.workDate;
-          const tsKey = `${group.employeeNumber}_${dateStr}`;
-          
-          let timesheet = timesheetCache.get(tsKey);
-          if (timesheet === undefined) {
-            try {
-              timesheet = await projectBDailyReportService.getDailyTimesheet(group.employeeNumber, dateStr);
-              timesheetCache.set(tsKey, timesheet);
-            } catch (e) {
-              console.error('Error fetching Project B timesheet:', e);
-              timesheetCache.set(tsKey, null);
-              timesheet = null;
+          let reportMorningOT = 0,
+            reportEveningOT = 0,
+            reportLunchOT = 0,
+            reportNormalStatus = 0;
+          let department = fallbackDepartment,
+            hasReport = false;
+
+          if (contractor) {
+            const dateStr = group.workDate;
+            const tsKey = `${group.employeeNumber}_${dateStr}`;
+
+            let timesheet = timesheetCache.get(tsKey);
+            if (timesheet === undefined) {
+              try {
+                timesheet = await projectBDailyReportService.getDailyTimesheet(
+                  group.employeeNumber,
+                  dateStr
+                );
+                timesheetCache.set(tsKey, timesheet);
+              } catch (e) {
+                console.error('Error fetching Project B timesheet:', e);
+                timesheetCache.set(tsKey, null);
+                timesheet = null;
+              }
+            }
+
+            if (timesheet) {
+              hasReport = true;
+              if (timesheet.expectedShifts?.normal) reportNormalStatus = 1;
+              reportMorningOT = timesheet.expectedHours?.otMorning || 0;
+              reportLunchOT = timesheet.expectedHours?.otNoon || 0;
+              reportEveningOT = timesheet.expectedHours?.otEvening || 0;
             }
           }
 
-          if (timesheet) {
-             hasReport = true;
-             if (timesheet.expectedShifts?.normal) reportNormalStatus = 1;
-             reportMorningOT = timesheet.expectedHours?.otMorning || 0;
-             reportLunchOT = timesheet.expectedHours?.otNoon || 0;
-             reportEveningOT = timesheet.expectedHours?.otEvening || 0;
-          }
-        }
+          const diffLunch = !hasReport ? '-' : group.lunchStatus - reportLunchOT;
+          const diffMorning = !hasReport ? '-' : group.otMorningHours - reportMorningOT;
+          const diffEvening = !hasReport ? '-' : group.otEveningHours - reportEveningOT;
+          const rowDepartment = projectCode || department || '-';
 
-        const diffLunch = !hasReport ? '-' : (group.lunchStatus - reportLunchOT);
-        const diffMorning = !hasReport ? '-' : (group.otMorningHours - reportMorningOT);
-        const diffEvening = !hasReport ? '-' : (group.otEveningHours - reportEveningOT);
-        const rowDepartment = projectCode || department || '-';
-
-        return {
-          EmployeeNumber: group.employeeNumber,
-          Date: group.workDate,
-          Time1: group.time1 || '', Time2: group.time2 || '', Time3: group.time3 || '',
-          Time4: group.time4 || '', Time5: group.time5 || '', Time6: group.time6 || '',
-          Time7: group.time7 || '', Time8: group.time8 || '', Time9: group.time9 || '', Time10: group.time10 || '',
-          NormalStatus: group.normalStatus,
-          RegularHours: group.regularHours,
-          LunchStatus: group.lunchStatus,
-          MorningOT: group.otMorningHours,
-          EveningOT: group.otEveningHours,
-          LateMinutes: group.lateMinutes,
-          ReportNormalStatus: reportNormalStatus,
-          ReportMorningOT: reportMorningOT,
-          ReportLunchOT: reportLunchOT,
-          ReportEveningOT: reportEveningOT,
-          DiffLunch: diffLunch,
-          DiffMorning: diffMorning,
-          DiffEvening: diffEvening,
-          Department: rowDepartment
-        };
-      }));
+          return {
+            EmployeeNumber: group.employeeNumber,
+            Date: group.workDate,
+            Time1: group.time1 || '',
+            Time2: group.time2 || '',
+            Time3: group.time3 || '',
+            Time4: group.time4 || '',
+            Time5: group.time5 || '',
+            Time6: group.time6 || '',
+            Time7: group.time7 || '',
+            Time8: group.time8 || '',
+            Time9: group.time9 || '',
+            Time10: group.time10 || '',
+            NormalStatus: group.normalStatus,
+            RegularHours: group.regularHours,
+            LunchStatus: group.lunchStatus,
+            MorningOT: group.otMorningHours,
+            EveningOT: group.otEveningHours,
+            LateMinutes: group.lateMinutes,
+            ReportNormalStatus: reportNormalStatus,
+            ReportMorningOT: reportMorningOT,
+            ReportLunchOT: reportLunchOT,
+            ReportEveningOT: reportEveningOT,
+            DiffLunch: diffLunch,
+            DiffMorning: diffMorning,
+            DiffEvening: diffEvening,
+            Department: rowDepartment,
+          };
+        })
+      );
       results.push(...chunkResults);
     }
     return results;
@@ -1405,14 +1589,19 @@ class ScanDataService extends BaseCrudService<ScanData> {
    */
   static generateScanDocKey(
     employeeNumber: string,
-    workDate: string | Date, // accepts YYYY-MM-DD string or Date
+    workDate: string | Date // accepts YYYY-MM-DD string or Date
   ): string {
-    const dateStr = typeof workDate === 'string'
-      ? workDate
-      : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(workDate);
+    const dateStr =
+      typeof workDate === 'string'
+        ? workDate
+        : new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Bangkok',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(workDate);
     return `SCAN_${employeeNumber}_${dateStr}`;
   }
-
 }
 
 export const scanDataService = new ScanDataService();

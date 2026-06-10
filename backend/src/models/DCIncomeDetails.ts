@@ -11,11 +11,11 @@
 export interface DCIncomeDetails {
   id: string;
   dailyContractorId: string;
-  dailyWageRate: number;   // ค่าแรงต่อวัน (hourlyRate = dailyWageRate / 8)
+  dailyWageRate: number; // ค่าแรงต่อวัน (hourlyRate = dailyWageRate / 8)
   professionalRate: number; // ค่าช่าง/ค่าฝีมือต่อวัน
-  phoneAllowance: number;   // ค่าโทรศัพท์ต่องวด
-  allowance: number;        // เบี้ยเลี้ยงต่องวด
-  otherIncome: number;      // รายได้อื่นๆ ต่องวด
+  phoneAllowance: number; // ค่าโทรศัพท์ต่องวด
+  allowance: number; // เบี้ยเลี้ยงต่องวด
+  otherIncome: number; // รายได้อื่นๆ ต่องวด
   mouDeductionRate: number; // อัตราหัก MOU (%)
   isActive: boolean;
   effectiveDate: Date;

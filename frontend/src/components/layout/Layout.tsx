@@ -10,7 +10,11 @@ import {
   Typography,
   Button,
 } from '@mui/material';
-import { Logout as LogoutIcon, ArrowBack as ArrowBackIcon, Menu as MenuIcon } from '@mui/icons-material';
+import {
+  Logout as LogoutIcon,
+  ArrowBack as ArrowBackIcon,
+  Menu as MenuIcon,
+} from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'react-i18next';
 import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';

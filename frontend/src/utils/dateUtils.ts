@@ -142,6 +142,9 @@ export const isToday = (date: Date | string): boolean => {
 /**
  * Format date with time for display (alias used by history pages)
  */
-export const formatDateTime = (date: Date | string, formatStr: string = 'dd/MM/yyyy HH:mm'): string => {
+export const formatDateTime = (
+  date: Date | string,
+  formatStr: string = 'dd/MM/yyyy HH:mm'
+): string => {
   return formatDate(date, formatStr);
 };

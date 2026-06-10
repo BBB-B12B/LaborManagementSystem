@@ -17,10 +17,10 @@ import fs from 'fs';
 // ---------------------------------------------------------------------------
 
 export interface ProjectBExpectedHours {
-  normal: number;      // ชม. ปกติ
-  otMorning: number;   // ชม. OT เช้า
-  otNoon: number;      // ชม. OT เที่ยง (ผ่าเที่ยง)
-  otEvening: number;   // ชม. OT เย็น
+  normal: number; // ชม. ปกติ
+  otMorning: number; // ชม. OT เช้า
+  otNoon: number; // ชม. OT เที่ยง (ผ่าเที่ยง)
+  otEvening: number; // ชม. OT เย็น
 }
 
 export interface ProjectBExpectedShifts {
@@ -31,10 +31,10 @@ export interface ProjectBExpectedShifts {
 }
 
 export interface ProjectBShiftTimes {
-  day?: string;       // เช่น "08:00 - 17:00"
+  day?: string; // เช่น "08:00 - 17:00"
   otEvening?: string; // เช่น "18:00 - 21:00"
   otMorning?: string;
-  otNoon?: string;    // เช่น "12:00 - 13:00"
+  otNoon?: string; // เช่น "12:00 - 13:00"
 }
 
 export interface ProjectBWorkLog {
@@ -55,9 +55,9 @@ export interface ProjectBWorkLog {
  * Doc ID: {employeeNumber}_{date}  e.g. "200022_2025-08-25"
  */
 export interface DailyEmployeeTimesheet {
-  employeeNumber: string;          // รหัสพนักงาน
-  date: string;                    // YYYY-MM-DD
-  projectLocationId: string;       // เช่น "WH1 : คลังสินค้า MOTORWAY"
+  employeeNumber: string; // รหัสพนักงาน
+  date: string; // YYYY-MM-DD
+  projectLocationId: string; // เช่น "WH1 : คลังสินค้า MOTORWAY"
   expectedHours: ProjectBExpectedHours;
   expectedShifts: ProjectBExpectedShifts;
   shiftTimes?: ProjectBShiftTimes;
@@ -89,7 +89,7 @@ export interface DailyEmployeeTimesheet {
     };
   };
   AssigneesID?: string;
-  lastUpdated?: string;            // ISO string
+  lastUpdated?: string; // ISO string
   editHistory?: any[];
 }
 
@@ -104,7 +104,7 @@ export interface DailyTimesheetSummary {
   otMorningHours: number;
   otNoonHours: number;
   otEveningHours: number;
-  totalHours: number;              // sum ทั้งหมด = regularHours + otMorning + otNoon + otEvening
+  totalHours: number; // sum ทั้งหมด = regularHours + otMorning + otNoon + otEvening
   isActive: boolean;
   isLeave: boolean;
   leaveHours: number;
@@ -116,8 +116,8 @@ export interface DailyTimesheetSummary {
     otMorning?: { in?: string; out?: string };
     otNoon?: { in?: string; out?: string };
     otEvening?: { in?: string; out?: string };
-  };    // ดึงมาจาก photos.laborByShift
-  dailyReportPunches?: string[];   // ดึงมาจาก shiftTimes
+  }; // ดึงมาจาก photos.laborByShift
+  dailyReportPunches?: string[]; // ดึงมาจาก shiftTimes
   shiftTimes?: {
     day?: string;
     otEvening?: string;
@@ -157,12 +157,12 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
       if (shifts?.afternoon) leaveHours += 4;
       if (shifts?.custom) {
         if (times?.custom) {
-          const parts = times.custom.split('-').map(s => s.trim());
+          const parts = times.custom.split('-').map((s) => s.trim());
           if (parts.length === 2) {
             const [startH, startM] = parts[0].split(':').map(Number);
             const [endH, endM] = parts[1].split(':').map(Number);
             if (!isNaN(startH) && !isNaN(endH)) {
-              let diff = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+              let diff = endH + (endM || 0) / 60 - (startH + (startM || 0) / 60);
               // หักพักเที่ยง (12:00-13:00) ถ้าระยะเวลาครอบคลุม
               if (startH < 12 && endH >= 13) {
                 diff -= 1;
@@ -178,25 +178,27 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
   }
   const isLeave = leaveHours > 0;
 
-  let leaveEntries: { type: string; hours: number; description?: string; timeRange?: string }[] | undefined = undefined;
+  let leaveEntries:
+    | { type: string; hours: number; description?: string; timeRange?: string }[]
+    | undefined = undefined;
   if (isLeave) {
     const lType = doc.leaveStatus?.leaveType || doc.leaveType || 'Leave';
     const shifts = doc.leaveStatus?.leaveShifts || doc.leaveShifts;
-    const times  = doc.leaveStatus?.leaveTimes  || doc.leaveTimes;
+    const times = doc.leaveStatus?.leaveTimes || doc.leaveTimes;
 
-    let desc      = 'Full Day';
+    let desc = 'Full Day';
     let timeRange: string | undefined = undefined;
 
     if (doc.leaveStatus?.isFullDay) {
       timeRange = '08:00-17:00';
     } else if (times?.custom) {
-      desc      = times.custom;
+      desc = times.custom;
       timeRange = times.custom.replace(/\s/g, ''); // normalise: "13:00 - 17:00" → "13:00-17:00"
     } else if (shifts?.morning) {
-      desc      = 'Morning';
+      desc = 'Morning';
       timeRange = '08:00-12:00';
     } else if (shifts?.afternoon) {
-      desc      = 'Afternoon';
+      desc = 'Afternoon';
       timeRange = '13:00-17:00';
     } else {
       desc = 'Partial';
@@ -215,7 +217,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     const punches: string[] = [];
     const extractPunches = (timeStr?: string) => {
       if (!timeStr) return;
-      const parts = timeStr.split('-').map(s => s.trim());
+      const parts = timeStr.split('-').map((s) => s.trim());
       if (parts.length === 2 && parts[0] && parts[1]) {
         punches.push(parts[0], parts[1]);
       }
@@ -291,13 +293,16 @@ class ProjectBDailyReportService {
       if (!fs.existsSync(keyPath)) {
         console.warn(
           `[ProjectBDailyReportService] Service account key not found at ${keyPath}. ` +
-            'Cross-project fetching will fail.',
+            'Cross-project fetching will fail.'
         );
         return;
       }
 
       const serviceAccount = require(keyPath);
-      const app = admin.initializeApp({ credential: admin.credential.cert(serviceAccount) }, this.APP_NAME);
+      const app = admin.initializeApp(
+        { credential: admin.credential.cert(serviceAccount) },
+        this.APP_NAME
+      );
       this.db = app.firestore();
       console.log('[ProjectBDailyReportService] Connected to After-Sale-System (Project B)');
     } catch (error) {
@@ -327,7 +332,7 @@ class ProjectBDailyReportService {
    */
   public async getDailyTimesheet(
     employeeNumber: string,
-    dateStr: string,
+    dateStr: string
   ): Promise<DailyEmployeeTimesheet | null> {
     const db = this.ensureDb();
     const docId = this.generateDocId(employeeNumber, dateStr);
@@ -343,7 +348,7 @@ class ProjectBDailyReportService {
    */
   public async getBulkDailyTimesheets(
     employeeNumbers: string[],
-    dateStr: string,
+    dateStr: string
   ): Promise<Record<string, DailyEmployeeTimesheet>> {
     const db = this.ensureDb();
     if (employeeNumbers.length === 0) return {};
@@ -380,7 +385,7 @@ class ProjectBDailyReportService {
   public async getTimesheetsByProjectAndDateRange(
     projectLocationId: string,
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<DailyEmployeeTimesheet[]> {
     const db = this.ensureDb();
 
@@ -394,7 +399,13 @@ class ProjectBDailyReportService {
 
     return snap.docs
       .map((doc) => doc.data() as DailyEmployeeTimesheet)
-      .filter((ts) => ts.isActive !== false || ts.leaveStatus != null || ts.leaveType != null || (ts.leave && ts.leave.length > 0));
+      .filter(
+        (ts) =>
+          ts.isActive !== false ||
+          ts.leaveStatus != null ||
+          ts.leaveType != null ||
+          (ts.leave && ts.leave.length > 0)
+      );
   }
 
   /**
@@ -405,14 +416,17 @@ class ProjectBDailyReportService {
     const db = this.ensureDb();
 
     // NOTE: ไม่ใช้ isActive filter ใน Firestore query เพราะต้องการ composite index — filter ใน memory แทน
-    const snap = await db
-      .collection(this.COLLECTION)
-      .where('date', '==', dateStr)
-      .get();
+    const snap = await db.collection(this.COLLECTION).where('date', '==', dateStr).get();
 
     return snap.docs
       .map((doc) => doc.data() as DailyEmployeeTimesheet)
-      .filter((ts) => ts.isActive !== false || ts.leaveStatus != null || ts.leaveType != null || (ts.leave && ts.leave.length > 0));
+      .filter(
+        (ts) =>
+          ts.isActive !== false ||
+          ts.leaveStatus != null ||
+          ts.leaveType != null ||
+          (ts.leave && ts.leave.length > 0)
+      );
   }
 
   // =========================================================================
@@ -424,7 +438,7 @@ class ProjectBDailyReportService {
    */
   public async getTimesheetsByDateRange(
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<DailyEmployeeTimesheet[]> {
     const db = this.ensureDb();
     const snap = await db
@@ -435,7 +449,13 @@ class ProjectBDailyReportService {
 
     return snap.docs
       .map((doc) => doc.data() as DailyEmployeeTimesheet)
-      .filter((ts) => ts.isActive !== false || ts.leaveStatus != null || ts.leaveType != null || (ts.leave && ts.leave.length > 0));
+      .filter(
+        (ts) =>
+          ts.isActive !== false ||
+          ts.leaveStatus != null ||
+          ts.leaveType != null ||
+          (ts.leave && ts.leave.length > 0)
+      );
   }
 
   /**
@@ -443,7 +463,7 @@ class ProjectBDailyReportService {
    */
   public async getSummariesByDateRange(
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<DailyTimesheetSummary[]> {
     const timesheets = await this.getTimesheetsByDateRange(startDate, endDate);
     return timesheets.map(toTimesheetSummary);
@@ -455,12 +475,12 @@ class ProjectBDailyReportService {
   public async getSummariesByProjectAndDateRange(
     projectLocationId: string,
     startDate: string,
-    endDate: string,
+    endDate: string
   ): Promise<DailyTimesheetSummary[]> {
     const timesheets = await this.getTimesheetsByProjectAndDateRange(
       projectLocationId,
       startDate,
-      endDate,
+      endDate
     );
     return timesheets.map(toTimesheetSummary);
   }

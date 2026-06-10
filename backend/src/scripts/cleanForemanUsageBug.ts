@@ -26,7 +26,7 @@ const db = admin.firestore();
 async function cleanForemanUsageBug() {
   console.log('Starting cleanup of broken foremanUsage fields...');
   const snapshot = await db.collection('dailyContractors').get();
-  
+
   let batch = db.batch();
   let updatedDocsCount = 0;
   let batchCount = 0;
@@ -68,7 +68,9 @@ async function cleanForemanUsageBug() {
   }
 
   if (updatedDocsCount > 0) {
-    console.log(`✅ Successfully cleaned up broken fields in ${updatedDocsCount} contractor documents.`);
+    console.log(
+      `✅ Successfully cleaned up broken fields in ${updatedDocsCount} contractor documents.`
+    );
   } else {
     console.log('✅ No broken fields found. Everything is clean!');
   }

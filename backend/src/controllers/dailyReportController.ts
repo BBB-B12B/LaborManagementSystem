@@ -36,7 +36,7 @@ export async function addWorkEntry(req: Request, res: Response): Promise<Respons
       {
         ...entry,
         startTime: new Date(entry.startTime),
-        endTime: new Date(entry.endTime)
+        endTime: new Date(entry.endTime),
       },
       userId
     );
@@ -57,13 +57,7 @@ export async function removeWorkEntry(req: Request, res: Response): Promise<Resp
     const { projectId, date, workerId, entryId } = req.params;
     const userId = (req as any).user?.uid;
 
-    await dailyReportService.removeWorkEntry(
-      projectId,
-      new Date(date),
-      workerId,
-      entryId,
-      userId
-    );
+    await dailyReportService.removeWorkEntry(projectId, new Date(date), workerId, entryId, userId);
 
     return res.status(204).send();
   } catch (error) {
@@ -131,10 +125,10 @@ export async function importExcel(req: Request, res: Response): Promise<Response
       logger.error('Failed to upload import source file', { error });
     }
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       data: preview,
-      importFileUrl 
+      importFileUrl,
     });
   } catch (error) {
     console.error('Error importing Excel:', error);
@@ -197,7 +191,10 @@ export async function downloadTemplate(_req: Request, res: Response): Promise<vo
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', 'attachment; filename=daily_report_template.xlsx');
     res.send(buffer);
   } catch (error) {
@@ -216,16 +213,22 @@ export async function syncDailyReport(req: Request, res: Response): Promise<Resp
     const { employeeId, workDate, projectLocationId } = req.body;
 
     if (!employeeId || !workDate || !projectLocationId) {
-      return res.status(400).json({ error: 'Missing required fields: employeeId, workDate, projectLocationId' });
+      return res
+        .status(400)
+        .json({ error: 'Missing required fields: employeeId, workDate, projectLocationId' });
     }
-    
+
     // In a real implementation, we would save the DailyReport to Firestore here.
     logger.info(`Received sync payload for ${employeeId} on ${workDate}`);
-    
+
     // Trigger reconciliation — ใช้ generateForEmployee (engine ใหม่) แทน matcherService.reconcile (engine เก่า)
     // generateForEmployee มี logic ครบ: isLocked, homeProjectId, HOLIDAY, LEAVE, employeeName lookup
-    const record = await reconciliationService.generateForEmployee(employeeId, workDate, projectLocationId);
-    
+    const record = await reconciliationService.generateForEmployee(
+      employeeId,
+      workDate,
+      projectLocationId
+    );
+
     return res.status(200).json({ success: true, record });
   } catch (error) {
     logger.error('Error syncing daily report:', error);

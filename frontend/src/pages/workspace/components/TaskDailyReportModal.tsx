@@ -41,7 +41,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { format, isBefore, subDays, startOfDay, isSameDay } from 'date-fns';
-import { th } from "date-fns/locale/th";
+import { th } from 'date-fns/locale/th';
 import { dailyReportService } from '@/services/dailyReportService';
 import { taskService, type Task } from '@/services/taskService';
 import { useSnackbar } from 'notistack';
@@ -90,10 +90,16 @@ const getImageUrl = (url: string) => {
   return url;
 };
 
-export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdated, initialDate }: TaskDailyReportModalProps) {
+export default function TaskDailyReportModal({
+  open,
+  onClose,
+  task,
+  onTaskUpdated,
+  initialDate,
+}: TaskDailyReportModalProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useAuthStore();
-  
+
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
 
   useEffect(() => {
@@ -120,167 +126,186 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     if (!task.isSupportRequest) return false;
 
     // 1. Explicit assignee check
-    const uEmpId = String(user.employeeId || user.id || '').toLowerCase().trim();
-    const uId = String(user.id || '').toLowerCase().trim();
+    const uEmpId = String(user.employeeId || user.id || '')
+      .toLowerCase()
+      .trim();
+    const uId = String(user.id || '')
+      .toLowerCase()
+      .trim();
     const isSupportAssignee = task.supportAssignees?.some((a: any) => {
-      const aEmpId = String(a.employeeId || a.id || '').toLowerCase().trim();
+      const aEmpId = String(a.employeeId || a.id || '')
+        .toLowerCase()
+        .trim();
       return aEmpId === uEmpId || aEmpId === uId;
     });
     if (isSupportAssignee) return true;
 
     // 2. Cross-project + Support Request check
-    const isViewingCrossProject = user.projectLocationIds ? !user.projectLocationIds.includes(task.projectId) : false;
+    const isViewingCrossProject = user.projectLocationIds
+      ? !user.projectLocationIds.includes(task.projectId)
+      : false;
     return isViewingCrossProject;
   }, [task, user]);
 
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const queryClient = useQueryClient();
 
-  const fetchReports = useCallback(async (forceRefresh = false) => {
-    if (!task?.id || !open) return;
-    setLoading(true);
-    try {
-      const isSupportTask = task.isSupportRequest && task.isPickedUpBySupport;
+  const fetchReports = useCallback(
+    async (forceRefresh = false) => {
+      if (!task?.id || !open) return;
+      setLoading(true);
+      try {
+        const isSupportTask = task.isSupportRequest && task.isPickedUpBySupport;
 
-      // Always fetch both if it's a support task
-      let siteReports: any[] = [];
-      let supportReports: any[] = [];
+        // Always fetch both if it's a support task
+        let siteReports: any[] = [];
+        let supportReports: any[] = [];
 
-      if (isSupportTask) {
-        const [siteRes, supportRes] = await Promise.all([
-          dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []),
-          dailyReportService.getAllTaskReports(task.id, forceRefresh, true).catch(() => [])
-        ]);
-        siteReports = siteRes;
-        supportReports = supportRes;
-      } else {
-        siteReports = await dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []);
-      }
-
-      // The reports to determine the current user's calendar dots
-      const currentUserReports = isActingAsSupport ? supportReports : siteReports;
-      const currentUserDates: string[] = [];
-      const availableDatesSet = new Set<string>();
-
-      // Build a unified map of dates
-      const combinedReportsMap = new Map<string, { site: any, support: any }>();
-
-      const addToMap = (report: any, type: 'site' | 'support') => {
-        if (!report.reportDate) return;
-        let rDate: Date;
-        if (typeof report.reportDate === 'object' && ('_seconds' in report.reportDate || 'seconds' in report.reportDate)) {
-          rDate = new Date((report.reportDate._seconds || report.reportDate.seconds) * 1000);
+        if (isSupportTask) {
+          const [siteRes, supportRes] = await Promise.all([
+            dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []),
+            dailyReportService.getAllTaskReports(task.id, forceRefresh, true).catch(() => []),
+          ]);
+          siteReports = siteRes;
+          supportReports = supportRes;
         } else {
-          rDate = new Date(report.reportDate);
-        }
-        const dateStr = format(rDate, 'yyyy-MM-dd');
-        availableDatesSet.add(dateStr);
-        if (!combinedReportsMap.has(dateStr)) {
-          combinedReportsMap.set(dateStr, { site: null, support: null });
-        }
-        combinedReportsMap.get(dateStr)![type] = report;
-      };
-
-      siteReports.forEach(r => addToMap(r, 'site'));
-      supportReports.forEach(r => addToMap(r, 'support'));
-
-      currentUserReports.forEach((report: any) => {
-        if (!report.reportDate) return;
-        let rDate: Date;
-        if (typeof report.reportDate === 'object' && ('_seconds' in report.reportDate || 'seconds' in report.reportDate)) {
-          rDate = new Date((report.reportDate._seconds || report.reportDate.seconds) * 1000);
-        } else {
-          rDate = new Date(report.reportDate);
-        }
-        currentUserDates.push(format(rDate, 'yyyy-MM-dd'));
-      });
-
-      const newData: Record<string, DailySummary> = {};
-      
-      const parseHours = (timeStr?: string, isRegular: boolean = false): number => {
-        if (!timeStr) return 0;
-        const [start, end] = timeStr.split(' - ');
-        if (!start || !end) return 0;
-        const [sh, sm] = start.split(':').map(Number);
-        const [eh, em] = end.split(':').map(Number);
-        let hours = (eh + em / 60) - (sh + sm / 60);
-        if (hours < 0) hours += 24;
-        if (isRegular && hours >= 5) hours -= 1; // ลบพักเที่ยง
-        return hours;
-      };
-
-      const calculateLaborStats = (report: any) => {
-        let count = 0;
-        let reg = 0;
-        let otM = 0;
-        let otN = 0;
-        let otE = 0;
-        if (report && report.labor && Array.isArray(report.labor)) {
-          count = report.labor.length;
-          report.labor.forEach((l: any) => {
-            if (l.shifts?.normal) reg += parseHours(l.shiftTimes?.day, true);
-            if (l.shifts?.otMorning) otM += parseHours(l.shiftTimes?.otMorning);
-            if (l.shifts?.otNoon) otN += parseHours(l.shiftTimes?.otNoon);
-            if (l.shifts?.otEvening) otE += parseHours(l.shiftTimes?.otEvening);
-          });
-        }
-        return { count, reg, otM, otN, otE, total: reg + otM + otN + otE };
-      };
-
-      // Sort dates chronologically to calculate progress added correctly
-      const sortedDates = Array.from(availableDatesSet).sort();
-      let previousProgress = 0;
-      let runningProgress = 0;
-
-      sortedDates.forEach(dateStr => {
-        const entry = combinedReportsMap.get(dateStr)!;
-        const siteStats = calculateLaborStats(entry.site);
-        const supportStats = calculateLaborStats(entry.support);
-
-        if (entry.site && entry.site.progress !== undefined) {
-          runningProgress = entry.site.progress;
+          siteReports = await dailyReportService
+            .getAllTaskReports(task.id, forceRefresh, false)
+            .catch(() => []);
         }
 
-        const progressAdded = Math.max(0, runningProgress - previousProgress);
+        // The reports to determine the current user's calendar dots
+        const currentUserReports = isActingAsSupport ? supportReports : siteReports;
+        const currentUserDates: string[] = [];
+        const availableDatesSet = new Set<string>();
 
-        newData[dateStr] = {
-          hasSiteReport: !!entry.site,
-          hasSupportReport: !!entry.support,
-          progressAdded,
-          totalProgress: runningProgress,
-          pastProgress: previousProgress,
-          siteWorkerCount: siteStats.count,
-          supportWorkerCount: supportStats.count,
-          siteTotalHours: siteStats.total,
-          supportTotalHours: supportStats.total,
-          siteRegularHours: siteStats.reg,
-          supportRegularHours: supportStats.reg,
-          siteOtMorning: siteStats.otM,
-          supportOtMorning: supportStats.otM,
-          siteOtNoon: siteStats.otN,
-          supportOtNoon: supportStats.otN,
-          siteOtEvening: siteStats.otE,
-          supportOtEvening: supportStats.otE,
-          sitePhotos: entry.site?.photos?.site || [],
-          laborPhotos: entry.site?.photos?.labor || [],
+        // Build a unified map of dates
+        const combinedReportsMap = new Map<string, { site: any; support: any }>();
+
+        const addToMap = (report: any, type: 'site' | 'support') => {
+          if (!report.reportDate) return;
+          let rDate: Date;
+          if (
+            typeof report.reportDate === 'object' &&
+            ('_seconds' in report.reportDate || 'seconds' in report.reportDate)
+          ) {
+            rDate = new Date((report.reportDate._seconds || report.reportDate.seconds) * 1000);
+          } else {
+            rDate = new Date(report.reportDate);
+          }
+          const dateStr = format(rDate, 'yyyy-MM-dd');
+          availableDatesSet.add(dateStr);
+          if (!combinedReportsMap.has(dateStr)) {
+            combinedReportsMap.set(dateStr, { site: null, support: null });
+          }
+          combinedReportsMap.get(dateStr)![type] = report;
         };
-        
-        if (entry.site && entry.site.progress !== undefined) {
-          previousProgress = runningProgress;
-        }
-      });
 
-      setReportData(newData);
-      setReportDates(currentUserDates);
-      setAllAvailableDates(Array.from(availableDatesSet));
-      if (forceRefresh) enqueueSnackbar('อัปเดตข้อมูลล่าสุดแล้ว', { variant: 'success' });
-    } catch (error) {
-      console.error('Failed to fetch daily reports:', error);
-      enqueueSnackbar('โหลดข้อมูลล้มเหลว', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [task?.id, open, enqueueSnackbar]);
+        siteReports.forEach((r) => addToMap(r, 'site'));
+        supportReports.forEach((r) => addToMap(r, 'support'));
+
+        currentUserReports.forEach((report: any) => {
+          if (!report.reportDate) return;
+          let rDate: Date;
+          if (
+            typeof report.reportDate === 'object' &&
+            ('_seconds' in report.reportDate || 'seconds' in report.reportDate)
+          ) {
+            rDate = new Date((report.reportDate._seconds || report.reportDate.seconds) * 1000);
+          } else {
+            rDate = new Date(report.reportDate);
+          }
+          currentUserDates.push(format(rDate, 'yyyy-MM-dd'));
+        });
+
+        const newData: Record<string, DailySummary> = {};
+
+        const parseHours = (timeStr?: string, isRegular: boolean = false): number => {
+          if (!timeStr) return 0;
+          const [start, end] = timeStr.split(' - ');
+          if (!start || !end) return 0;
+          const [sh, sm] = start.split(':').map(Number);
+          const [eh, em] = end.split(':').map(Number);
+          let hours = eh + em / 60 - (sh + sm / 60);
+          if (hours < 0) hours += 24;
+          if (isRegular && hours >= 5) hours -= 1; // ลบพักเที่ยง
+          return hours;
+        };
+
+        const calculateLaborStats = (report: any) => {
+          let count = 0;
+          let reg = 0;
+          let otM = 0;
+          let otN = 0;
+          let otE = 0;
+          if (report && report.labor && Array.isArray(report.labor)) {
+            count = report.labor.length;
+            report.labor.forEach((l: any) => {
+              if (l.shifts?.normal) reg += parseHours(l.shiftTimes?.day, true);
+              if (l.shifts?.otMorning) otM += parseHours(l.shiftTimes?.otMorning);
+              if (l.shifts?.otNoon) otN += parseHours(l.shiftTimes?.otNoon);
+              if (l.shifts?.otEvening) otE += parseHours(l.shiftTimes?.otEvening);
+            });
+          }
+          return { count, reg, otM, otN, otE, total: reg + otM + otN + otE };
+        };
+
+        // Sort dates chronologically to calculate progress added correctly
+        const sortedDates = Array.from(availableDatesSet).sort();
+        let previousProgress = 0;
+        let runningProgress = 0;
+
+        sortedDates.forEach((dateStr) => {
+          const entry = combinedReportsMap.get(dateStr)!;
+          const siteStats = calculateLaborStats(entry.site);
+          const supportStats = calculateLaborStats(entry.support);
+
+          if (entry.site && entry.site.progress !== undefined) {
+            runningProgress = entry.site.progress;
+          }
+
+          const progressAdded = Math.max(0, runningProgress - previousProgress);
+
+          newData[dateStr] = {
+            hasSiteReport: !!entry.site,
+            hasSupportReport: !!entry.support,
+            progressAdded,
+            totalProgress: runningProgress,
+            pastProgress: previousProgress,
+            siteWorkerCount: siteStats.count,
+            supportWorkerCount: supportStats.count,
+            siteTotalHours: siteStats.total,
+            supportTotalHours: supportStats.total,
+            siteRegularHours: siteStats.reg,
+            supportRegularHours: supportStats.reg,
+            siteOtMorning: siteStats.otM,
+            supportOtMorning: supportStats.otM,
+            siteOtNoon: siteStats.otN,
+            supportOtNoon: supportStats.otN,
+            siteOtEvening: siteStats.otE,
+            supportOtEvening: supportStats.otE,
+            sitePhotos: entry.site?.photos?.site || [],
+            laborPhotos: entry.site?.photos?.labor || [],
+          };
+
+          if (entry.site && entry.site.progress !== undefined) {
+            previousProgress = runningProgress;
+          }
+        });
+
+        setReportData(newData);
+        setReportDates(currentUserDates);
+        setAllAvailableDates(Array.from(availableDatesSet));
+        if (forceRefresh) enqueueSnackbar('อัปเดตข้อมูลล่าสุดแล้ว', { variant: 'success' });
+      } catch (error) {
+        console.error('Failed to fetch daily reports:', error);
+        enqueueSnackbar('โหลดข้อมูลล้มเหลว', { variant: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [task?.id, open, enqueueSnackbar]
+  );
 
   useEffect(() => {
     fetchReports(false);
@@ -289,19 +314,20 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     return () => window.removeEventListener('globalSync', handleSync);
   }, [fetchReports]);
 
-  const handleUnlockClick = (event: React.MouseEvent<HTMLElement>) => setUnlockAnchorEl(event.currentTarget);
+  const handleUnlockClick = (event: React.MouseEvent<HTMLElement>) =>
+    setUnlockAnchorEl(event.currentTarget);
   const handleUnlockClose = () => setUnlockAnchorEl(null);
   const handleUnlock = async (days: number) => {
     handleUnlockClose();
     if (!task || !selectedDate) return;
-    
+
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const isConfirmed = await confirm({
       title: 'ยืนยันการปลดล็อคสิทธิ์',
       message: `คุณต้องการขยายเวลาให้ผู้คุมงานลงรายงานย้อนหลังสำหรับวันที่ ${format(selectedDate, 'dd/MM/yyyy')} เป็นเวลา ${days} วัน ใช่หรือไม่?`,
       confirmText: 'ยืนยัน',
       cancelText: 'ยกเลิก',
-      severity: 'warning'
+      severity: 'warning',
     });
 
     if (isConfirmed) {
@@ -317,7 +343,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           taskName: task.taskName,
         });
         enqueueSnackbar('ปลดล็อคสิทธิ์เรียบร้อยแล้ว', { variant: 'success' });
-        
+
         const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
         const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
 
@@ -325,7 +351,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         const until = new Date();
         until.setDate(until.getDate() + days);
         task[unlockedDatesField][dateStr] = { unlockedUntil: until, unlockedBy: user?.id || '' };
-        
+
         if (task[requestsField] && task[requestsField][dateStr]) {
           delete task[requestsField][dateStr];
         }
@@ -333,7 +359,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         if (onTaskUpdated) {
           onTaskUpdated();
         }
-        
+
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
       } catch (error: any) {
         enqueueSnackbar(error.message || 'ไม่สามารถปลดล็อคได้', { variant: 'error' });
@@ -473,7 +499,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
     const unlockedDates = task[unlockedDatesField] || {};
     return Object.keys(requests)
-      .filter(dateStr => {
+      .filter((dateStr) => {
         // Only include dates that are still pending (not yet unlocked or unlock expired)
         const unlockData = unlockedDates[dateStr];
         if (!unlockData) return true;
@@ -497,7 +523,9 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
     const unlockedDates = task?.[unlockedDatesField];
     const unlockData = unlockedDates?.[dateStr];
-    const isExplicitlyUnlocked = !!(unlockData && isBefore(new Date(), new Date(unlockData.unlockedUntil)));
+    const isExplicitlyUnlocked = !!(
+      unlockData && isBefore(new Date(), new Date(unlockData.unlockedUntil))
+    );
 
     // 1. Boundary Lock: Hide dots for dates before task creation / revision boundary
     if (effectiveBoundaryDate && !hasReport && !isExplicitlyUnlocked) {
@@ -517,11 +545,13 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
     const isRequested = !!(task?.[requestsField] && task[requestsField][dateStr]);
     const isPast = isBefore(day, today) && !isSameDay(day, today);
-    
+
     const boundDateStr = effectiveBoundaryDate ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
     const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
 
-    const isLocked = (isPast && isBefore(day, subDays(today, 3)) && !isExplicitlyUnlocked) || (isBeforeBound && !isExplicitlyUnlocked);
+    const isLocked =
+      (isPast && isBefore(day, subDays(today, 3)) && !isExplicitlyUnlocked) ||
+      (isBeforeBound && !isExplicitlyUnlocked);
     const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
 
     let badgeColor = undefined;
@@ -543,24 +573,27 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           outsideCurrentMonth={outsideCurrentMonth}
           day={day}
           sx={{
-            ...(hasReport && !outsideCurrentMonth && {
-              fontWeight: 'bold',
-              '&:not(.Mui-selected)': {
-                ...(isCompleted ? {
-                  backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
-                  color: '#059669 !important',
-                  '&:hover': {
-                    backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
-                  },
-                } : {
-                  backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
-                  color: '#d97706 !important',
-                  '&:hover': {
-                    backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
-                  },
-                }),
-              },
-            }),
+            ...(hasReport &&
+              !outsideCurrentMonth && {
+                fontWeight: 'bold',
+                '&:not(.Mui-selected)': {
+                  ...(isCompleted
+                    ? {
+                        backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
+                        color: '#059669 !important',
+                        '&:hover': {
+                          backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
+                        },
+                      }
+                    : {
+                        backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
+                        color: '#d97706 !important',
+                        '&:hover': {
+                          backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
+                        },
+                      }),
+                },
+              }),
           }}
         />
         {badgeColor && (
@@ -583,11 +616,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="lg" 
-      fullWidth 
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
       PaperProps={{ sx: { borderRadius: 4, minHeight: 600 } }}
     >
       <DialogTitle sx={{ pb: 1, pt: 3, px: 3, borderBottom: '1px solid #eef0f4' }}>
@@ -605,21 +638,45 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   </Box>
                 )}
                 {' : '}
-                {isActingAsSupport && task?.supportTaskName 
-                  ? task.supportTaskName 
-                  : (task?.subtaskName ? `${task.taskName} > ${task.subtaskName}` : task?.taskName)}
+                {isActingAsSupport && task?.supportTaskName
+                  ? task.supportTaskName
+                  : task?.subtaskName
+                    ? `${task.taskName} > ${task.subtaskName}`
+                    : task?.taskName}
               </Typography>
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: '99px' }}>
-                <Avatar sx={{ width: 24, height: 24, bgcolor: '#334155', fontSize: 12, fontWeight: 700, mr: 1 }}>
-                  {isActingAsSupport 
-                    ? (task?.supportAssignees?.[0]?.name ? task.supportAssignees[0].name.substring(0, 2) : 'NA')
-                    : (task?.assignees?.[0]?.name ? task.assignees[0].name.substring(0, 2) : 'NA')}
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  bgcolor: '#f1f5f9',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: '99px',
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    bgcolor: '#334155',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    mr: 1,
+                  }}
+                >
+                  {isActingAsSupport
+                    ? task?.supportAssignees?.[0]?.name
+                      ? task.supportAssignees[0].name.substring(0, 2)
+                      : 'NA'
+                    : task?.assignees?.[0]?.name
+                      ? task.assignees[0].name.substring(0, 2)
+                      : 'NA'}
                 </Avatar>
                 <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>
-                  {isActingAsSupport 
-                    ? (task?.supportAssignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ (Support)')
-                    : (task?.assignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ')}
+                  {isActingAsSupport
+                    ? task?.supportAssignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ (Support)'
+                    : task?.assignees?.[0]?.name || 'ไม่ระบุผู้รับผิดชอบ'}
                 </Typography>
               </Box>
             </Stack>
@@ -643,7 +700,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   '&:hover': { bgcolor: '#fef08a' },
                 }}
               >
-                <Badge badgeContent={pendingUnlockDates.length} color="warning" sx={{ '& .MuiBadge-badge': { fontWeight: 700 } }}>
+                <Badge
+                  badgeContent={pendingUnlockDates.length}
+                  color="warning"
+                  sx={{ '& .MuiBadge-badge': { fontWeight: 700 } }}
+                >
                   <NotificationsActiveIcon sx={{ fontSize: 20 }} />
                 </Badge>
                 <Typography variant="caption" sx={{ fontWeight: 700, ml: 1, whiteSpace: 'nowrap' }}>
@@ -653,17 +714,44 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             )}
 
             {isActingAsSupport && task?.status === 'for-checking' && (
-              <Box sx={{ bgcolor: '#fef3c7', color: '#d97706', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #fde68a' }}>
+              <Box
+                sx={{
+                  bgcolor: '#fef3c7',
+                  color: '#d97706',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  border: '1px solid #fde68a',
+                }}
+              >
                 <InfoIcon sx={{ fontSize: 18, mr: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>กำลังรอดำเนินตรวจสอบ</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  กำลังรอดำเนินตรวจสอบ
+                </Typography>
               </Box>
             )}
 
             {task?.status === 'completed' && (
-              <Box sx={{ bgcolor: '#dcfce7', color: '#166534', px: 2, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #bbf7d0' }}>
+              <Box
+                sx={{
+                  bgcolor: '#dcfce7',
+                  color: '#166534',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  border: '1px solid #bbf7d0',
+                }}
+              >
                 <CheckCircleIcon sx={{ fontSize: 18, mr: 1 }} />
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  อนุมัติแล้วเมื่อ: {task.updatedAt ? format(new Date(task.updatedAt), 'dd/MM/yyyy HH:mm', { locale: th }) : '-'}
+                  อนุมัติแล้วเมื่อ:{' '}
+                  {task.updatedAt
+                    ? format(new Date(task.updatedAt), 'dd/MM/yyyy HH:mm', { locale: th })
+                    : '-'}
                 </Typography>
               </Box>
             )}
@@ -702,28 +790,47 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
       <DialogContent sx={{ px: 3, pb: 4, pt: 3 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}
+          >
             <CircularProgress />
           </Box>
         ) : (
           <Grid container spacing={4} sx={{ mt: 1.5 }}>
             <Grid item xs={12} md={5}>
               <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '32px' }}>
+                <Box
+                  sx={{
+                    mb: 3,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    height: '32px',
+                  }}
+                >
                   <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
                     Daily Report Log
                   </Typography>
                   {(() => {
-                    const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
-                    const hasRequest = task?.[requestsField] && task[requestsField][selectedDateStr];
+                    const requestsField = isActingAsSupport
+                      ? 'supportUnlockRequests'
+                      : 'unlockRequests';
+                    const hasRequest =
+                      task?.[requestsField] && task[requestsField][selectedDateStr];
                     return hasRequest ? (
                       <Button
-                        variant={isUnlocked ? "outlined" : "contained"}
-                        color={isUnlocked ? "primary" : "warning"}
+                        variant={isUnlocked ? 'outlined' : 'contained'}
+                        color={isUnlocked ? 'primary' : 'warning'}
                         size="small"
                         startIcon={isUnlocked ? <LockOpenIcon /> : <LockIcon />}
                         onClick={handleUnlockClick}
-                        sx={{ borderRadius: '999px', textTransform: 'none', fontWeight: 700, boxShadow: 'none', px: 2 }}
+                        sx={{
+                          borderRadius: '999px',
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          boxShadow: 'none',
+                          px: 2,
+                        }}
                       >
                         {isUnlocked ? 'ขยายเวลา' : 'ปลดล็อคสิทธิ์'}
                       </Button>
@@ -736,18 +843,35 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                     anchorEl={unlockAnchorEl}
                     open={Boolean(unlockAnchorEl)}
                     onClose={handleUnlockClose}
-                    PaperProps={{ sx: { borderRadius: 2, mt: 1, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' } }}
+                    PaperProps={{
+                      sx: { borderRadius: 2, mt: 1, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' },
+                    }}
                   >
                     <MenuItem onClick={() => handleUnlock(1)}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 1 วัน</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        ปลดล็อค 1 วัน
+                      </Typography>
                     </MenuItem>
                     <MenuItem onClick={() => handleUnlock(3)}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>ปลดล็อค 3 วัน</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        ปลดล็อค 3 วัน
+                      </Typography>
                     </MenuItem>
                   </Menu>
 
                   {isWagePeriodClosed && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: 'error.50', borderRadius: 2, color: 'error.700' }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        mb: 2,
+                        p: 1,
+                        bgcolor: 'error.50',
+                        borderRadius: 2,
+                        color: 'error.700',
+                      }}
+                    >
                       <InfoIcon fontSize="small" />
                       <Typography variant="caption" sx={{ fontWeight: 600 }}>
                         รอบค่าแรงปิดแล้ว ค่อยผูกสิทธิ์ภายหลัง
@@ -766,37 +890,85 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                         mx: 'auto',
                         '& .MuiPickersDay-root': { fontWeight: 600 },
                         '& .MuiPickersDay-today': { borderColor: 'primary.main' },
-                        '& .Mui-selected': { backgroundColor: 'primary.main', color: '#fff', '&:hover': { backgroundColor: 'primary.dark' } },
+                        '& .Mui-selected': {
+                          backgroundColor: 'primary.main',
+                          color: '#fff',
+                          '&:hover': { backgroundColor: 'primary.dark' },
+                        },
                       }}
                     />
                   </LocalizationProvider>
 
                   <Stack spacing={1.5} sx={{ mt: 3, px: 2 }}>
                     {/* Row 1: Reports Submitted (Background highlight) */}
-                    <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
+                    <Stack
+                      direction="row"
+                      spacing={2}
+                      justifyContent="center"
+                      flexWrap="wrap"
+                      useFlexGap
+                    >
                       <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box sx={{ width: 14, height: 14, bgcolor: 'rgba(5, 150, 105, 0.15)', border: '1px solid #059669', borderRadius: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ส่งแล้ว (ครบ 100%)</Typography>
+                        <Box
+                          sx={{
+                            width: 14,
+                            height: 14,
+                            bgcolor: 'rgba(5, 150, 105, 0.15)',
+                            border: '1px solid #059669',
+                            borderRadius: 0.5,
+                          }}
+                        />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                          ส่งแล้ว (ครบ 100%)
+                        </Typography>
                       </Stack>
                       <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box sx={{ width: 14, height: 14, bgcolor: 'rgba(217, 119, 6, 0.15)', border: '1px solid #d97706', borderRadius: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ส่งแล้ว (กำลังทำ)</Typography>
+                        <Box
+                          sx={{
+                            width: 14,
+                            height: 14,
+                            bgcolor: 'rgba(217, 119, 6, 0.15)',
+                            border: '1px solid #d97706',
+                            borderRadius: 0.5,
+                          }}
+                        />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                          ส่งแล้ว (กำลังทำ)
+                        </Typography>
                       </Stack>
                     </Stack>
 
                     {/* Row 2: Missing Reports (Bottom Status Dots) */}
-                    <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
+                    <Stack
+                      direction="row"
+                      spacing={2}
+                      justifyContent="center"
+                      flexWrap="wrap"
+                      useFlexGap
+                    >
                       <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box sx={{ width: 8, height: 8, bgcolor: 'warning.main', borderRadius: '50%' }} />
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ยังไม่ได้ลง (ส่งได้)</Typography>
+                        <Box
+                          sx={{ width: 8, height: 8, bgcolor: 'warning.main', borderRadius: '50%' }}
+                        />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                          ยังไม่ได้ลง (ส่งได้)
+                        </Typography>
                       </Stack>
                       <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box sx={{ width: 8, height: 8, bgcolor: 'error.main', borderRadius: '50%' }} />
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ไม่มีข้อมูล (ล็อค)</Typography>
+                        <Box
+                          sx={{ width: 8, height: 8, bgcolor: 'error.main', borderRadius: '50%' }}
+                        />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                          ไม่มีข้อมูล (ล็อค)
+                        </Typography>
                       </Stack>
                       <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box sx={{ width: 8, height: 8, bgcolor: '#a855f7', borderRadius: '50%' }} />
-                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>ขอปลดล็อคลงย้อนหลัง</Typography>
+                        <Box
+                          sx={{ width: 8, height: 8, bgcolor: '#a855f7', borderRadius: '50%' }}
+                        />
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                          ขอปลดล็อคลงย้อนหลัง
+                        </Typography>
                       </Stack>
                     </Stack>
                   </Stack>
@@ -807,8 +979,18 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             <Grid item xs={12} md={7}>
               <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', height: '32px' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
-                    สรุปข้อมูลวันที่ {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: th }) : ''}
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 800,
+                      color: '#1e293b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
+                    สรุปข้อมูลวันที่{' '}
+                    {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: th }) : ''}
                   </Typography>
                 </Box>
 
@@ -817,83 +999,212 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <Stack spacing={2} sx={{ height: '100%' }}>
-                          <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <Box
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 3,
+                              bgcolor: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                            }}
+                          >
                             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
                               <PeopleIcon sx={{ color: '#0ea5e9', fontSize: 18 }} />
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>แรงงาน (DC)</Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700, color: '#475569' }}
+                              >
+                                แรงงาน (DC)
+                              </Typography>
                             </Stack>
                             {task?.isSupportRequest ? (
                               <Stack direction="row" spacing={3} sx={{ mt: 1 }}>
                                 <Box sx={{ textAlign: 'center' }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>SITE</Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                                    {selectedSummary.siteWorkerCount} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ fontWeight: 700, color: '#64748b' }}
+                                  >
+                                    SITE
+                                  </Typography>
+                                  <Typography
+                                    variant="h6"
+                                    sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}
+                                  >
+                                    {selectedSummary.siteWorkerCount}{' '}
+                                    <Typography
+                                      component="span"
+                                      variant="caption"
+                                      sx={{ fontWeight: 600, color: '#64748b' }}
+                                    >
+                                      คน
+                                    </Typography>
                                   </Typography>
                                 </Box>
                                 <Box sx={{ width: '1px', bgcolor: '#e2e8f0' }} />
                                 <Box sx={{ textAlign: 'center' }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>Support</Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                                    {selectedSummary.supportWorkerCount} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ fontWeight: 700, color: '#64748b' }}
+                                  >
+                                    Support
+                                  </Typography>
+                                  <Typography
+                                    variant="h6"
+                                    sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}
+                                  >
+                                    {selectedSummary.supportWorkerCount}{' '}
+                                    <Typography
+                                      component="span"
+                                      variant="caption"
+                                      sx={{ fontWeight: 600, color: '#64748b' }}
+                                    >
+                                      คน
+                                    </Typography>
                                   </Typography>
                                 </Box>
                               </Stack>
                             ) : (
                               <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                                {selectedSummary.siteWorkerCount} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                                {selectedSummary.siteWorkerCount}{' '}
+                                <Typography
+                                  component="span"
+                                  variant="body2"
+                                  sx={{ fontWeight: 600, color: '#64748b' }}
+                                >
+                                  คน
+                                </Typography>
                               </Typography>
                             )}
                           </Box>
 
-                          <Box sx={{ p: 2, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', flexGrow: 1 }}>
+                          <Box
+                            sx={{
+                              p: 2,
+                              borderRadius: 3,
+                              bgcolor: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              flexGrow: 1,
+                            }}
+                          >
                             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
                               <AccessTimeIcon sx={{ fontSize: 18, color: '#475569' }} />
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155' }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700, color: '#334155' }}
+                              >
                                 รายละเอียดชั่วโมงการทำงาน
                               </Typography>
                             </Stack>
                             {task?.isSupportRequest ? (
                               <Stack direction="row" spacing={2}>
                                 <Box sx={{ flex: 1 }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, textAlign: 'center' }}>SITE</Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      fontWeight: 700,
+                                      color: '#64748b',
+                                      display: 'block',
+                                      mb: 1,
+                                      textAlign: 'center',
+                                    }}
+                                  >
+                                    SITE
+                                  </Typography>
                                   <Stack spacing={1}>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>Day</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteRegularHours} ชม.</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        Day
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.siteRegularHours} ชม.
+                                      </Typography>
                                     </Stack>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เช้า</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtMorning > 0 ? `${selectedSummary.siteOtMorning} ชม.` : '-'}</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        OT เช้า
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.siteOtMorning > 0
+                                          ? `${selectedSummary.siteOtMorning} ชม.`
+                                          : '-'}
+                                      </Typography>
                                     </Stack>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtNoon > 0 ? `${selectedSummary.siteOtNoon} ชม.` : '-'}</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        OT เที่ยง
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.siteOtNoon > 0
+                                          ? `${selectedSummary.siteOtNoon} ชม.`
+                                          : '-'}
+                                      </Typography>
                                     </Stack>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เย็น</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtEvening > 0 ? `${selectedSummary.siteOtEvening} ชม.` : '-'}</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        OT เย็น
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.siteOtEvening > 0
+                                          ? `${selectedSummary.siteOtEvening} ชม.`
+                                          : '-'}
+                                      </Typography>
                                     </Stack>
                                   </Stack>
                                 </Box>
                                 <Box sx={{ width: '1px', bgcolor: '#e2e8f0' }} />
                                 <Box sx={{ flex: 1 }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', display: 'block', mb: 1, textAlign: 'center' }}>Support</Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      fontWeight: 700,
+                                      color: '#64748b',
+                                      display: 'block',
+                                      mb: 1,
+                                      textAlign: 'center',
+                                    }}
+                                  >
+                                    Support
+                                  </Typography>
                                   <Stack spacing={1}>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>Day</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportRegularHours} ชม.</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        Day
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.supportRegularHours} ชม.
+                                      </Typography>
                                     </Stack>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เช้า</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportOtMorning > 0 ? `${selectedSummary.supportOtMorning} ชม.` : '-'}</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        OT เช้า
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.supportOtMorning > 0
+                                          ? `${selectedSummary.supportOtMorning} ชม.`
+                                          : '-'}
+                                      </Typography>
                                     </Stack>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เที่ยง</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportOtNoon > 0 ? `${selectedSummary.supportOtNoon} ชม.` : '-'}</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        OT เที่ยง
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.supportOtNoon > 0
+                                          ? `${selectedSummary.supportOtNoon} ชม.`
+                                          : '-'}
+                                      </Typography>
                                     </Stack>
                                     <Stack direction="row" justifyContent="space-between">
-                                      <Typography variant="caption" sx={{ color: '#64748b' }}>OT เย็น</Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>{selectedSummary.supportOtEvening > 0 ? `${selectedSummary.supportOtEvening} ชม.` : '-'}</Typography>
+                                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                        OT เย็น
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        {selectedSummary.supportOtEvening > 0
+                                          ? `${selectedSummary.supportOtEvening} ชม.`
+                                          : '-'}
+                                      </Typography>
                                     </Stack>
                                   </Stack>
                                 </Box>
@@ -901,20 +1212,42 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                             ) : (
                               <Stack spacing={1}>
                                 <Stack direction="row" justifyContent="space-between">
-                                  <Typography variant="body2" sx={{ color: '#64748b' }}>Day : เวลาปกติ</Typography>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteRegularHours} ชม.</Typography>
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                    Day : เวลาปกติ
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {selectedSummary.siteRegularHours} ชม.
+                                  </Typography>
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between">
-                                  <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เช้า</Typography>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtMorning > 0 ? `${selectedSummary.siteOtMorning} ชม.` : '-'}</Typography>
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                    OT : เช้า
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {selectedSummary.siteOtMorning > 0
+                                      ? `${selectedSummary.siteOtMorning} ชม.`
+                                      : '-'}
+                                  </Typography>
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between">
-                                  <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เที่ยง</Typography>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtNoon > 0 ? `${selectedSummary.siteOtNoon} ชม.` : '-'}</Typography>
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                    OT : เที่ยง
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {selectedSummary.siteOtNoon > 0
+                                      ? `${selectedSummary.siteOtNoon} ชม.`
+                                      : '-'}
+                                  </Typography>
                                 </Stack>
                                 <Stack direction="row" justifyContent="space-between">
-                                  <Typography variant="body2" sx={{ color: '#64748b' }}>OT : เย็น</Typography>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedSummary.siteOtEvening > 0 ? `${selectedSummary.siteOtEvening} ชม.` : '-'}</Typography>
+                                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                    OT : เย็น
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {selectedSummary.siteOtEvening > 0
+                                      ? `${selectedSummary.siteOtEvening} ชม.`
+                                      : '-'}
+                                  </Typography>
                                 </Stack>
                               </Stack>
                             )}
@@ -924,72 +1257,162 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
                       <Grid item xs={12} sm={6}>
                         <Stack spacing={2} sx={{ height: '100%' }}>
-                          <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                          <Box
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 3,
+                              bgcolor: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
                             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
                               <AccessTimeIcon sx={{ color: '#64748b', fontSize: 18 }} />
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569' }}>ชั่วโมงการทำงานทั้งหมด</Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700, color: '#475569' }}
+                              >
+                                ชั่วโมงการทำงานทั้งหมด
+                              </Typography>
                             </Stack>
 
                             {task?.isSupportRequest ? (
                               <Stack direction="row" spacing={3} sx={{ mt: 1 }}>
                                 <Box sx={{ textAlign: 'center' }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>SITE</Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                                    {selectedSummary.siteTotalHours} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>ชม.</Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ fontWeight: 700, color: '#64748b' }}
+                                  >
+                                    SITE
+                                  </Typography>
+                                  <Typography
+                                    variant="h6"
+                                    sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}
+                                  >
+                                    {selectedSummary.siteTotalHours}{' '}
+                                    <Typography
+                                      component="span"
+                                      variant="caption"
+                                      sx={{ fontWeight: 600, color: '#64748b' }}
+                                    >
+                                      ชม.
+                                    </Typography>
                                   </Typography>
                                 </Box>
                                 <Box sx={{ width: '1px', bgcolor: '#e2e8f0' }} />
                                 <Box sx={{ textAlign: 'center' }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>Support</Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                                    {selectedSummary.supportTotalHours} <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#64748b' }}>ชม.</Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ fontWeight: 700, color: '#64748b' }}
+                                  >
+                                    Support
+                                  </Typography>
+                                  <Typography
+                                    variant="h6"
+                                    sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}
+                                  >
+                                    {selectedSummary.supportTotalHours}{' '}
+                                    <Typography
+                                      component="span"
+                                      variant="caption"
+                                      sx={{ fontWeight: 600, color: '#64748b' }}
+                                    >
+                                      ชม.
+                                    </Typography>
                                   </Typography>
                                 </Box>
                               </Stack>
                             ) : (
                               <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                                {selectedSummary.siteTotalHours} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>ชั่วโมง</Typography>
+                                {selectedSummary.siteTotalHours}{' '}
+                                <Typography
+                                  component="span"
+                                  variant="body2"
+                                  sx={{ fontWeight: 600, color: '#64748b' }}
+                                >
+                                  ชั่วโมง
+                                </Typography>
                               </Typography>
                             )}
                           </Box>
 
-                          <Box sx={{ p: 2, flexGrow: 1, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <Box
+                            sx={{
+                              p: 2,
+                              flexGrow: 1,
+                              borderRadius: 3,
+                              bgcolor: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center',
+                            }}
+                          >
                             {(() => {
                               const allPhotos = [
-                                ...(selectedSummary.hasSiteReport ? selectedSummary.sitePhotos : []),
-                                ...(selectedSummary.hasSiteReport ? selectedSummary.laborPhotos : [])
-                              ].map(url => getImageUrl(url));
-                              
+                                ...(selectedSummary.hasSiteReport
+                                  ? selectedSummary.sitePhotos
+                                  : []),
+                                ...(selectedSummary.hasSiteReport
+                                  ? selectedSummary.laborPhotos
+                                  : []),
+                              ].map((url) => getImageUrl(url));
+
                               const totalCount = allPhotos.length;
 
                               return (
                                 <>
-                                  <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', textAlign: 'center', fontWeight: 700 }}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: '#64748b',
+                                      mb: 1,
+                                      display: 'block',
+                                      textAlign: 'center',
+                                      fontWeight: 700,
+                                    }}
+                                  >
                                     รูปแนบทั้งหมด {totalCount > 0 ? `1/${totalCount}` : '0/0'}
                                   </Typography>
                                   <Stack direction="row" spacing={1} justifyContent="center">
                                     {totalCount > 0 ? (
-                                      <Box 
-                                        component="img" 
-                                        src={allPhotos[0]} 
+                                      <Box
+                                        component="img"
+                                        src={allPhotos[0]}
                                         onClick={() => {
                                           setPreviewImages(allPhotos);
                                           setPreviewIndex(0);
-                                        }} 
-                                        sx={{ 
-                                          width: 120, 
-                                          height: 120, 
-                                          borderRadius: 2, 
-                                          objectFit: 'cover', 
-                                          cursor: 'zoom-in', 
-                                          transition: '0.2s', 
+                                        }}
+                                        sx={{
+                                          width: 120,
+                                          height: 120,
+                                          borderRadius: 2,
+                                          objectFit: 'cover',
+                                          cursor: 'zoom-in',
+                                          transition: '0.2s',
                                           border: '1px solid #e2e8f0',
-                                          '&:hover': { opacity: 0.8, transform: 'scale(1.02)' } 
-                                        }} 
+                                          '&:hover': { opacity: 0.8, transform: 'scale(1.02)' },
+                                        }}
                                       />
                                     ) : (
-                                      <Box sx={{ width: '100%', py: 3, border: '1px dashed #cbd5e1', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc' }}>
-                                        <Typography variant="caption" color="text.secondary">ไม่มีรูปภาพแนบ</Typography>
+                                      <Box
+                                        sx={{
+                                          width: '100%',
+                                          py: 3,
+                                          border: '1px dashed #cbd5e1',
+                                          borderRadius: 2,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          bgcolor: '#f8fafc',
+                                        }}
+                                      >
+                                        <Typography variant="caption" color="text.secondary">
+                                          ไม่มีรูปภาพแนบ
+                                        </Typography>
                                       </Box>
                                     )}
                                   </Stack>
@@ -1002,66 +1425,132 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                     </Grid>
 
                     <Box sx={{ mt: 2 }}>
-                          {selectedSummary.hasSiteReport ? (
-                            <Box sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#334155', mb: 1, textAlign: 'center' }}>
-                                ความคืบหน้าของวัน
-                              </Typography>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#059669', textAlign: 'center', mb: 0.5 }}>
-                                {selectedSummary.totalProgress}%
-                              </Typography>
-                              
-                              <Box sx={{ position: 'relative', width: '100%', mt: 1 }}>
-                                <Box sx={{ width: '100%', height: 24, bgcolor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 1 }} />
-                                
-                                {selectedSummary.pastProgress > 0 && (
-                                  <Box 
-                                    sx={{ 
-                                      position: 'absolute', top: 0, left: 0, height: 24, 
-                                      width: `${selectedSummary.pastProgress}%`, 
-                                      bgcolor: '#bbf7d0', 
-                                      border: '1px solid #22c55e', 
-                                      borderRight: 'none',
-                                      borderRadius: 1,
-                                      borderTopRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
-                                      borderBottomRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
-                                    }} 
-                                  />
-                                )}
+                      {selectedSummary.hasSiteReport ? (
+                        <Box
+                          sx={{
+                            p: 2,
+                            flexGrow: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            borderRadius: 3,
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 700, color: '#334155', mb: 1, textAlign: 'center' }}
+                          >
+                            ความคืบหน้าของวัน
+                          </Typography>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 800, color: '#059669', textAlign: 'center', mb: 0.5 }}
+                          >
+                            {selectedSummary.totalProgress}%
+                          </Typography>
 
-                                {selectedSummary.progressAdded > 0 && (
-                                  <Box 
-                                    sx={{ 
-                                      position: 'absolute', top: 0, left: `${selectedSummary.pastProgress}%`, height: 24, 
-                                      width: `${selectedSummary.progressAdded}%`, 
-                                      bgcolor: '#22c55e', 
-                                      border: '1px solid #16a34a', 
-                                      borderRadius: 1,
-                                      borderTopLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
-                                      borderBottomLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }} 
+                          <Box sx={{ position: 'relative', width: '100%', mt: 1 }}>
+                            <Box
+                              sx={{
+                                width: '100%',
+                                height: 24,
+                                bgcolor: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: 1,
+                              }}
+                            />
+
+                            {selectedSummary.pastProgress > 0 && (
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  height: 24,
+                                  width: `${selectedSummary.pastProgress}%`,
+                                  bgcolor: '#bbf7d0',
+                                  border: '1px solid #22c55e',
+                                  borderRight: 'none',
+                                  borderRadius: 1,
+                                  borderTopRightRadius: selectedSummary.progressAdded === 0 ? 1 : 0,
+                                  borderBottomRightRadius:
+                                    selectedSummary.progressAdded === 0 ? 1 : 0,
+                                }}
+                              />
+                            )}
+
+                            {selectedSummary.progressAdded > 0 && (
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: `${selectedSummary.pastProgress}%`,
+                                  height: 24,
+                                  width: `${selectedSummary.progressAdded}%`,
+                                  bgcolor: '#22c55e',
+                                  border: '1px solid #16a34a',
+                                  borderRadius: 1,
+                                  borderTopLeftRadius: selectedSummary.pastProgress === 0 ? 1 : 0,
+                                  borderBottomLeftRadius:
+                                    selectedSummary.pastProgress === 0 ? 1 : 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                {selectedSummary.progressAdded > 5 && (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ fontWeight: 800, color: '#ffffff', zIndex: 1 }}
                                   >
-                                    {selectedSummary.progressAdded > 5 && (
-                                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#ffffff', zIndex: 1 }}>
-                                        +{selectedSummary.progressAdded}%
-                                      </Typography>
-                                    )}
-                                  </Box>
+                                    +{selectedSummary.progressAdded}%
+                                  </Typography>
                                 )}
                               </Box>
-                            </Box>
-                          ) : (
-                            <Box sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '2px dashed #e2e8f0', borderRadius: 3, bgcolor: '#f8fafc' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#94a3b8', textAlign: 'center' }}>
-                                ทีม Site ยังไม่อัปเดตความคืบหน้า
-                              </Typography>
-                            </Box>
-                          )}
+                            )}
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Box
+                          sx={{
+                            p: 2,
+                            flexGrow: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            border: '2px dashed #e2e8f0',
+                            borderRadius: 3,
+                            bgcolor: '#f8fafc',
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600, color: '#94a3b8', textAlign: 'center' }}
+                          >
+                            ทีม Site ยังไม่อัปเดตความคืบหน้า
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   </Stack>
                 ) : (
-                  <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: 4, p: 3, textAlign: 'center' }}>
+                  <Box
+                    sx={{
+                      flexGrow: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: '#f8fafc',
+                      border: '2px dashed #cbd5e1',
+                      borderRadius: 4,
+                      p: 3,
+                      textAlign: 'center',
+                    }}
+                  >
                     <EventBusyIcon sx={{ fontSize: 48, color: '#94a3b8', mb: 2 }} />
                     <Typography variant="body1" sx={{ fontWeight: 700, color: '#475569', mb: 1 }}>
                       ไม่มีข้อมูลรายงานการทำงาน
@@ -1076,23 +1565,68 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
       {/* Approve/Reject Footer removed as requested - already in header */}
 
-      <Dialog open={previewImages.length > 0} onClose={() => setPreviewImages([])} maxWidth="md" fullWidth>
-        <Box sx={{ position: 'relative', bgcolor: '#000', textAlign: 'center', p: 1, minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <IconButton onClick={() => setPreviewImages([])} sx={{ position: 'absolute', top: 12, right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' }, zIndex: 10 }}>
+      <Dialog
+        open={previewImages.length > 0}
+        onClose={() => setPreviewImages([])}
+        maxWidth="md"
+        fullWidth
+      >
+        <Box
+          sx={{
+            position: 'relative',
+            bgcolor: '#000',
+            textAlign: 'center',
+            p: 1,
+            minHeight: '60vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <IconButton
+            onClick={() => setPreviewImages([])}
+            sx={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              color: '#fff',
+              bgcolor: 'rgba(0,0,0,0.5)',
+              '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+              zIndex: 10,
+            }}
+          >
             <CloseIcon />
           </IconButton>
-          
+
           {previewImages.length > 1 && (
             <>
-              <IconButton 
-                onClick={() => setPreviewIndex((prev) => (prev > 0 ? prev - 1 : previewImages.length - 1))}
-                sx={{ position: 'absolute', left: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' }, zIndex: 10 }}
+              <IconButton
+                onClick={() =>
+                  setPreviewIndex((prev) => (prev > 0 ? prev - 1 : previewImages.length - 1))
+                }
+                sx={{
+                  position: 'absolute',
+                  left: 12,
+                  color: '#fff',
+                  bgcolor: 'rgba(0,0,0,0.3)',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' },
+                  zIndex: 10,
+                }}
               >
                 <ChevronLeftIcon sx={{ fontSize: 40 }} />
               </IconButton>
-              <IconButton 
-                onClick={() => setPreviewIndex((prev) => (prev < previewImages.length - 1 ? prev + 1 : 0))}
-                sx={{ position: 'absolute', right: 12, color: '#fff', bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' }, zIndex: 10 }}
+              <IconButton
+                onClick={() =>
+                  setPreviewIndex((prev) => (prev < previewImages.length - 1 ? prev + 1 : 0))
+                }
+                sx={{
+                  position: 'absolute',
+                  right: 12,
+                  color: '#fff',
+                  bgcolor: 'rgba(0,0,0,0.3)',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' },
+                  zIndex: 10,
+                }}
               >
                 <ChevronRightIcon sx={{ fontSize: 40 }} />
               </IconButton>
@@ -1100,13 +1634,31 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           )}
 
           {previewImages.length > 0 && (
-            <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <img 
-                src={previewImages[previewIndex]} 
-                alt={`Preview ${previewIndex + 1}`} 
-                style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} 
+            <Box
+              sx={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}
+            >
+              <img
+                src={previewImages[previewIndex]}
+                alt={`Preview ${previewIndex + 1}`}
+                style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
               />
-              <Typography variant="caption" sx={{ color: '#fff', mt: 1, bgcolor: 'rgba(0,0,0,0.5)', px: 2, py: 0.5, borderRadius: 2 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#fff',
+                  mt: 1,
+                  bgcolor: 'rgba(0,0,0,0.5)',
+                  px: 2,
+                  py: 0.5,
+                  borderRadius: 2,
+                }}
+              >
                 {previewIndex + 1} / {previewImages.length}
               </Typography>
             </Box>

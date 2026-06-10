@@ -71,7 +71,7 @@ export default function App({ Component, pageProps }: AppProps) {
             <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
               <GlobalFeedback />
               <Component {...pageProps} />
-              
+
               {/* Global Page Transition Loading Spinner */}
               <Backdrop
                 sx={{

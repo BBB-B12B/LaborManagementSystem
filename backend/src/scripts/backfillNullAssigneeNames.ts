@@ -12,7 +12,8 @@ async function getAssigneeName(assigneeId: string): Promise<string | null> {
       }
     }
     // 2. Query by lowercase 'employeeId'
-    const lowercaseSnap = await db.collection('users')
+    const lowercaseSnap = await db
+      .collection('users')
       .where('employeeId', '==', assigneeId)
       .limit(1)
       .get();
@@ -22,7 +23,8 @@ async function getAssigneeName(assigneeId: string): Promise<string | null> {
       if (name) return name;
     }
     // 3. Query by uppercase 'Employeeid'
-    const uppercaseSnap = await db.collection('users')
+    const uppercaseSnap = await db
+      .collection('users')
       .where('Employeeid', '==', assigneeId)
       .limit(1)
       .get();
@@ -38,7 +40,7 @@ async function getAssigneeName(assigneeId: string): Promise<string | null> {
 }
 
 async function main() {
-  console.log("=== STARTING RETROACTIVE ASSIGNEE NAME BACKFILL ===");
+  console.log('=== STARTING RETROACTIVE ASSIGNEE NAME BACKFILL ===');
   const snap = await db.collection('reconciliationRecords').get();
   console.log(`Total reconciliation records in DB: ${snap.size}`);
 
@@ -55,15 +57,15 @@ async function main() {
     if (assigneeId && (!assigneeName || assigneeName === 'Unknown')) {
       console.log(`Resolving name for AssigneeId: ${assigneeId} (Doc: ${doc.id})`);
       const resolvedName = await getAssigneeName(assigneeId);
-      
+
       if (resolvedName) {
         console.log(`   -> Resolved to: "${resolvedName}"`);
         batch.update(doc.ref, {
           assigneeName: resolvedName,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         });
         updatedCount++;
-        
+
         // Firestore batch limits to 500 operations
         if (updatedCount % 200 === 0) {
           await batch.commit();
@@ -81,9 +83,14 @@ async function main() {
     await batch.commit();
   }
 
-  console.log("\n=== BACKFILL COMPLETED ===");
+  console.log('\n=== BACKFILL COMPLETED ===');
   console.log(`Successfully updated: ${updatedCount} records`);
   console.log(`Could not resolve: ${skippedCount} records`);
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

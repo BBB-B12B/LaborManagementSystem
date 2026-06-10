@@ -20,4 +20,6 @@ async function check() {
   console.log('Photos in After Sale DB:', doc.data()?.photos);
 }
 
-check().then(() => process.exit(0)).catch(console.error);
+check()
+  .then(() => process.exit(0))
+  .catch(console.error);

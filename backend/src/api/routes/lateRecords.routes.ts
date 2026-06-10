@@ -27,33 +27,41 @@ router.get(
       const pageSize = parseInt(req.query.pageSize as string) || 50;
 
       const filters: any[] = [];
-      
+
       if (req.query.projectLocationId) {
-        filters.push({ field: 'projectLocationId', operator: '==', value: req.query.projectLocationId });
+        filters.push({
+          field: 'projectLocationId',
+          operator: '==',
+          value: req.query.projectLocationId,
+        });
       }
       if (req.query.dailyContractorId) {
-        filters.push({ field: 'dailyContractorId', operator: '==', value: req.query.dailyContractorId });
+        filters.push({
+          field: 'dailyContractorId',
+          operator: '==',
+          value: req.query.dailyContractorId,
+        });
       }
       if (req.query.wagePeriodId) {
         filters.push({ field: 'wagePeriodId', operator: '==', value: req.query.wagePeriodId });
       }
 
-      // Query all matching records and do pagination in memory 
+      // Query all matching records and do pagination in memory
       // (similar to what other CrudServices do if they don't have native pagination)
       const allRecords = await lateRecordService.query(filters);
-      
+
       // Filter by employeeNumber if provided (in-memory since we might not index it directly)
       let filteredRecords = allRecords;
       if (req.query.employeeNumber) {
-        filteredRecords = filteredRecords.filter((r: any) => 
-          r.employeeNumber === req.query.employeeNumber
+        filteredRecords = filteredRecords.filter(
+          (r: any) => r.employeeNumber === req.query.employeeNumber
         );
       }
-      
+
       if (req.query.includedInWageCalculation !== undefined) {
         const isIncluded = req.query.includedInWageCalculation === 'true';
-        filteredRecords = filteredRecords.filter((r: any) => 
-          r.includedInWageCalculation === isIncluded
+        filteredRecords = filteredRecords.filter(
+          (r: any) => r.includedInWageCalculation === isIncluded
         );
       }
 
@@ -68,7 +76,7 @@ router.get(
           total,
           page,
           pageSize,
-        }
+        },
       });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });

@@ -15,7 +15,7 @@ if (!fs.existsSync(PROJECT_B_KEY_PATH)) {
 // Initialize Firebase Admin for Project B
 const serviceAccount = require(PROJECT_B_KEY_PATH);
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
@@ -54,7 +54,7 @@ const generateMockData = (): MockTimesheet[] => {
     for (const emp of mockEmployees) {
       // Create some variance based on employee number
       const isOvertimeWorker = emp.startsWith('2'); // Just a fake rule for data variance
-      
+
       records.push({
         employeeNumber: emp,
         date: date,
@@ -68,7 +68,7 @@ const generateMockData = (): MockTimesheet[] => {
         },
         shiftTimes: {
           day: '08:00 - 17:00',
-          ...(isOvertimeWorker ? { otEvening: '18:00 - 21:00' } : {})
+          ...(isOvertimeWorker ? { otEvening: '18:00 - 21:00' } : {}),
         },
         workLogs: [
           {
@@ -76,8 +76,8 @@ const generateMockData = (): MockTimesheet[] => {
             workOrderId: 'WO-2025-MOCK',
             categoryId: 'CAT-MOCK',
             dailyReportId: `h-mock-${Date.now()}`,
-            shifts: { normal: true, ...(isOvertimeWorker ? { otEvening: true } : {}) }
-          }
+            shifts: { normal: true, ...(isOvertimeWorker ? { otEvening: true } : {}) },
+          },
         ],
       });
     }
@@ -101,10 +101,10 @@ async function run() {
   for (const record of records) {
     const docId = `${record.employeeNumber}_${record.date}`;
     const docRef = db.collection(TARGET_COLLECTION).doc(docId);
-    
+
     batch.set(docRef, {
       ...record,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
     });
 
     operationCount++;
@@ -124,12 +124,14 @@ async function run() {
     successCount += operationCount;
   }
 
-  console.log(`\n✅ Successfully dumped ${successCount} records into ${TARGET_COLLECTION} collection of Project B!`);
+  console.log(
+    `\n✅ Successfully dumped ${successCount} records into ${TARGET_COLLECTION} collection of Project B!`
+  );
   console.log('You can now test the wage calculation in your system.');
   process.exit(0);
 }
 
-run().catch(error => {
+run().catch((error) => {
   console.error('Fatal error during dump:', error);
   process.exit(1);
 });

@@ -12,7 +12,16 @@ export default function DiscrepancyDetailPage() {
   }, [router]);
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+    <Container
+      maxWidth="lg"
+      sx={{
+        mt: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <LoadingSpinner size="large" />
       <Typography variant="h6" sx={{ mt: 4, color: 'text.secondary' }}>
         กำลังพาคุณไปยังระบบจัดการชั่วโมงทำงานใหม่...

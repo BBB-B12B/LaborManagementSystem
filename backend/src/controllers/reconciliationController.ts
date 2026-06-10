@@ -30,14 +30,14 @@ function mapFilterStatusToStatuses(filterStatus: string): ReconciliationStatus[]
     case 'normal':
       return ['MATCHED'];
     case 'all_abnormal':
-    case 'abnormal':          // คลิกการ์ดหลักสีแดง → แสดงรายการผิดปกติทั้งหมดที่ยังค้างอยู่
+    case 'abnormal': // คลิกการ์ดหลักสีแดง → แสดงรายการผิดปกติทั้งหมดที่ยังค้างอยู่
     case 'abnormal_pending':
       return ['CONFLICTED', 'MISSING_SCAN', 'MISSING_DAILY', 'UNREGISTERED_EMPLOYEE', 'ABSENT'];
     case 'missingDaily':
       return ['MISSING_DAILY'];
     case 'missingScan':
       return ['MISSING_SCAN'];
-    case 'workHourConflict':   // card เดียว (รวมทั้ง OT และชั่วโมงปกติ)
+    case 'workHourConflict': // card เดียว (รวมทั้ง OT และชั่วโมงปกติ)
       return ['CONFLICTED'];
     case 'unregistered':
       return ['UNREGISTERED_EMPLOYEE'];
@@ -64,13 +64,12 @@ function mapFilterStatusToStatuses(filterStatus: string): ReconciliationStatus[]
  * Query params: projectLocationId, status, startDate, endDate, employeeId
  */
 
-
 export async function getReconciliationRecords(req: Request, res: Response): Promise<void> {
   try {
     const authReq = req as AuthRequest;
     const {
-      homeProjectId,        // param ใหม่ที่ frontend ส่งมา
-      projectLocationId,    // backward compat — ถ้า frontend เก่ายังส่ง projectLocationId
+      homeProjectId, // param ใหม่ที่ frontend ส่งมา
+      projectLocationId, // backward compat — ถ้า frontend เก่ายังส่ง projectLocationId
       status,
       startDate,
       endDate,
@@ -124,11 +123,13 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
 
     // Enrich projectName สำหรับ records ที่ยังไม่มีชื่อโครงการ
     // Query แบบ global (ไม่ผ่าน RBAC) เพื่อให้แสดงชื่อโครงการที่พนักงานไปทำงาน
-    const missingNameIds = [...new Set(
-      result.records
-        .filter(r => !r.projectName && r.projectLocationId)
-        .map(r => r.projectLocationId)
-    )];
+    const missingNameIds = [
+      ...new Set(
+        result.records
+          .filter((r) => !r.projectName && r.projectLocationId)
+          .map((r) => r.projectLocationId)
+      ),
+    ];
 
     if (missingNameIds.length > 0) {
       try {
@@ -141,33 +142,31 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
           const batch = missingNameIds.slice(i, i + batchSize);
 
           // 1) หา document ที่ doc ID ตรงกับ projectLocationId
-          const idSnap = await collections.projectLocations
-            .where('__name__', 'in', batch)
-            .get();
-          idSnap.forEach(doc => {
+          const idSnap = await collections.projectLocations.where('__name__', 'in', batch).get();
+          idSnap.forEach((doc) => {
             const name = doc.data().projectName;
             if (name) projectNameMap.set(doc.id, name);
           });
 
           // 2) Fallback: หาจาก code field
-          const stillMissingByCode = batch.filter(id => !projectNameMap.has(id));
+          const stillMissingByCode = batch.filter((id) => !projectNameMap.has(id));
           if (stillMissingByCode.length > 0) {
             const codeSnap = await collections.projectLocations
               .where('code', 'in', stillMissingByCode)
               .get();
-            codeSnap.forEach(doc => {
+            codeSnap.forEach((doc) => {
               const d = doc.data();
               if (d.projectName && d.code) projectNameMap.set(d.code, d.projectName);
             });
           }
 
           // 3) Fallback: หาจาก projectCode field
-          const stillMissingByProjectCode = batch.filter(id => !projectNameMap.has(id));
+          const stillMissingByProjectCode = batch.filter((id) => !projectNameMap.has(id));
           if (stillMissingByProjectCode.length > 0) {
             const pcSnap = await collections.projectLocations
               .where('projectCode', 'in', stillMissingByProjectCode)
               .get();
-            pcSnap.forEach(doc => {
+            pcSnap.forEach((doc) => {
               const d = doc.data();
               if (d.projectName && d.projectCode) projectNameMap.set(d.projectCode, d.projectName);
             });
@@ -175,7 +174,7 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
         }
 
         // Patch projectName เข้า records ที่ยังไม่มีชื่อ
-        result.records.forEach(r => {
+        result.records.forEach((r) => {
           if (!r.projectName && projectNameMap.has(r.projectLocationId)) {
             r.projectName = projectNameMap.get(r.projectLocationId);
           }
@@ -192,7 +191,6 @@ export async function getReconciliationRecords(req: Request, res: Response): Pro
       page: result.page,
       pageSize: result.pageSize,
     });
-
   } catch (error) {
     console.error('[reconciliation] getRecords error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch reconciliation records' });
@@ -225,7 +223,10 @@ export async function getReconciliationStats(req: Request, res: Response): Promi
       }
     } else {
       if (userProjects.length === 0) {
-        res.json({ success: true, data: { totalRows: 0, normalCount: 0, pendingCount: 0, resolvedCount: 0 } });
+        res.json({
+          success: true,
+          data: { totalRows: 0, normalCount: 0, pendingCount: 0, resolvedCount: 0 },
+        });
         return;
       }
     }
@@ -331,20 +332,25 @@ export async function generateForProjectAuto(req: Request, res: Response): Promi
     };
 
     if (!projectLocationId || !startDate || !endDate) {
-      res.status(400).json({ success: false, error: 'projectLocationId, startDate, endDate are required' });
+      res
+        .status(400)
+        .json({ success: false, error: 'projectLocationId, startDate, endDate are required' });
       return;
     }
 
     const result = await reconciliationService.generateForProject(
       projectLocationId,
       startDate,
-      endDate,
+      endDate
     );
 
     res.json({ success: true, ...result });
   } catch (error: any) {
     console.error('[reconciliation] generateForProjectAuto error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to generate reconciliation records' });
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate reconciliation records',
+    });
   }
 }
 
@@ -396,9 +402,9 @@ export async function generateReconciliationRecords(req: Request, res: Response)
             scanDataId: r.scanDataId,
           },
           r.isHoliday,
-          r.isLeave,
-        ),
-      ),
+          r.isLeave
+        )
+      )
     );
 
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
@@ -546,10 +552,11 @@ export async function reviewLeaveStatus(req: Request, res: Response): Promise<vo
     res.json({ success: true, message: 'Leave status reviewed successfully' });
   } catch (error: any) {
     console.error('[reconciliation] reviewLeaveStatus error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to review leave status' });
+    res
+      .status(500)
+      .json({ success: false, error: error.message || 'Failed to review leave status' });
   }
 }
-
 
 /**
  * Admin แก้ไขรายการสแกนนิ้ว (Manual Adjust Scan Data)
@@ -577,7 +584,9 @@ export async function updateScanPunches(req: Request, res: Response): Promise<vo
     res.json({ success: true, message: 'Scan punches updated successfully' });
   } catch (error: any) {
     console.error('[reconciliation] updateScanPunches error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to update scan punches' });
+    res
+      .status(500)
+      .json({ success: false, error: error.message || 'Failed to update scan punches' });
   }
 }
 
@@ -621,15 +630,19 @@ export async function exportToExcel(req: Request, res: Response): Promise<void> 
     });
 
     const excelBuffer = await reconciliationService.generateForemanExcel(result.records);
-    
-    const dateRange = startDate && endDate ? `${startDate}_${endDate}` : new Date().toISOString().split('T')[0];
+
+    const dateRange =
+      startDate && endDate ? `${startDate}_${endDate}` : new Date().toISOString().split('T')[0];
     const excelFilename = `รายงานความผิดปกติ_${dateRange}.xlsx`;
 
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
-    res.setHeader('Content-Disposition', `attachment; filename=${encodeURIComponent(excelFilename)}`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=${encodeURIComponent(excelFilename)}`
+    );
     res.send(excelBuffer);
   } catch (error: any) {
     console.error('[reconciliation] exportToExcel error:', error);

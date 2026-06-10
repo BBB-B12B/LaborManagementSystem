@@ -356,8 +356,14 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                   name="workDays"
                   control={control}
                   render={({ field }) => (
-                    <FormControl component="fieldset" error={!!errors.workDays} disabled={isLoading || isSubmitting}>
-                      <FormLabel component="legend" sx={{ fontSize: '0.875rem', mb: 1 }}>วันทำงานของโครงการ</FormLabel>
+                    <FormControl
+                      component="fieldset"
+                      error={!!errors.workDays}
+                      disabled={isLoading || isSubmitting}
+                    >
+                      <FormLabel component="legend" sx={{ fontSize: '0.875rem', mb: 1 }}>
+                        วันทำงานของโครงการ
+                      </FormLabel>
                       <FormGroup row>
                         {[
                           { value: 1, label: 'จ.' },

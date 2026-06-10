@@ -5,11 +5,7 @@
  * Generic CRUD operations for Firestore collections
  */
 
-import type {
-  CollectionReference,
-  Query,
-  WhereFilterOp,
-} from 'firebase-admin/firestore';
+import type { CollectionReference, Query, WhereFilterOp } from 'firebase-admin/firestore';
 
 export interface PaginationOptions {
   page?: number;

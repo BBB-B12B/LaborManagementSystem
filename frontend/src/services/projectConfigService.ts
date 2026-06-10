@@ -23,11 +23,31 @@ export const projectConfigService = {
     return await api.get(`/projects/${projectId}/configs/work-orders`);
   },
 
-  createWorkOrder: async (projectId: string, data: { code: string; name: string; leaderId?: string | null; leaderName?: string | null; leaderIds?: string[]; leaderNames?: string[] }): Promise<WorkOrderConfig> => {
+  createWorkOrder: async (
+    projectId: string,
+    data: {
+      code: string;
+      name: string;
+      leaderId?: string | null;
+      leaderName?: string | null;
+      leaderIds?: string[];
+      leaderNames?: string[];
+    }
+  ): Promise<WorkOrderConfig> => {
     return await api.post(`/projects/${projectId}/configs/work-orders`, data);
   },
 
-  updateWorkOrder: async (projectId: string, code: string, data: { name?: string; leaderId?: string | null; leaderName?: string | null; leaderIds?: string[]; leaderNames?: string[] }): Promise<void> => {
+  updateWorkOrder: async (
+    projectId: string,
+    code: string,
+    data: {
+      name?: string;
+      leaderId?: string | null;
+      leaderName?: string | null;
+      leaderIds?: string[];
+      leaderNames?: string[];
+    }
+  ): Promise<void> => {
     return await api.put(`/projects/${projectId}/configs/work-orders/${code}`, data);
   },
 
@@ -38,13 +58,16 @@ export const projectConfigService = {
   // --- Categories ---
   getCategories: async (projectId: string, workOrderCode?: string): Promise<CategoryConfig[]> => {
     if (!projectId) return [];
-    const url = workOrderCode 
+    const url = workOrderCode
       ? `/projects/${projectId}/configs/categories?workOrderCode=${workOrderCode}`
       : `/projects/${projectId}/configs/categories`;
     return await api.get(url);
   },
 
-  createCategory: async (projectId: string, data: { workOrderCode: string; name: string }): Promise<CategoryConfig> => {
+  createCategory: async (
+    projectId: string,
+    data: { workOrderCode: string; name: string }
+  ): Promise<CategoryConfig> => {
     return await api.post(`/projects/${projectId}/configs/categories`, data);
   },
 

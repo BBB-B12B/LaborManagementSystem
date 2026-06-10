@@ -9,7 +9,6 @@ import { logger } from '../../utils/logger';
 import { ScanData } from '../../models/ScanData';
 import { DailyReportEntry } from '../../models/DailyReport';
 
-
 /** Local helper: format a Date to YYYY-MM-DD string */
 function formatWorkDateStr(date: Date): string {
   const y = date.getFullYear();
@@ -34,7 +33,9 @@ class WorkVerificationService {
     endDate: Date
   ): Promise<VerificationResult> {
     try {
-      logger.info(`Starting work verification for project: ${projectLocationId} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      logger.info(
+        `Starting work verification for project: ${projectLocationId} from ${startDate.toISOString()} to ${endDate.toISOString()}`
+      );
 
       // 1. Fetch Daily Reports for the period
       const reportsSnapshot = await collections.dailyReports
@@ -58,7 +59,7 @@ class WorkVerificationService {
         .get();
 
       const scanMap = new Map<string, ScanData>();
-      scansSnapshot.docs.forEach(doc => {
+      scansSnapshot.docs.forEach((doc) => {
         const data = doc.data() as ScanData;
         const key = `${data.employeeId}_${data.workDate}`;
         scanMap.set(key, data);
@@ -75,14 +76,14 @@ class WorkVerificationService {
         const reportData = reportDoc.data();
         // [T-401] Handle both Date and Timestamp correctly
         const rawDate = reportData.date;
-        const reportDate = (rawDate instanceof Date) ? rawDate : (rawDate as any).toDate();
+        const reportDate = rawDate instanceof Date ? rawDate : (rawDate as any).toDate();
         const reportDateStr = formatWorkDateStr(reportDate);
         const entries = (reportData as any).entries as DailyReportEntry[];
         let updated = false;
 
-        const updatedEntries = entries.map(entry => {
+        const updatedEntries = entries.map((entry) => {
           totalEntries++;
-          
+
           // Use denormalized employeeId (T-400)
           const empId = entry.employeeId;
           if (!empId) {
@@ -105,15 +106,15 @@ class WorkVerificationService {
             (entry as any).verificationStatus = 'discrepancy';
             discrepancies++;
           }
-          
+
           updated = true;
           return entry;
         });
 
         if (updated) {
-          batch.update(reportDoc.ref, { 
+          batch.update(reportDoc.ref, {
             entries: updatedEntries,
-            updatedAt: new Date()
+            updatedAt: new Date(),
           });
         }
       }
@@ -122,9 +123,10 @@ class WorkVerificationService {
         await batch.commit();
       }
 
-      logger.info(`Work verification completed: ${autoVerified} auto-verified, ${discrepancies} discrepancies.`);
+      logger.info(
+        `Work verification completed: ${autoVerified} auto-verified, ${discrepancies} discrepancies.`
+      );
       return { totalEntries, autoVerified, discrepancies };
-
     } catch (error) {
       logger.error('Error in WorkVerificationService:', error);
       throw error;

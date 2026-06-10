@@ -26,13 +26,15 @@ import { useSnackbar } from 'notistack';
 
 const rejectSchema = z.object({
   reason: z.string().min(2, 'กรุณาระบุเหตุผลการตีกลับ'),
-  assignees: z.array(
-    z.object({
-      employeeId: z.string(),
-      name: z.string(),
-      roleId: z.string(),
-    })
-  ).min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน'),
+  assignees: z
+    .array(
+      z.object({
+        employeeId: z.string(),
+        name: z.string(),
+        roleId: z.string(),
+      })
+    )
+    .min(1, 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน'),
 });
 
 type RejectFormData = z.infer<typeof rejectSchema>;
@@ -44,7 +46,12 @@ interface TaskRejectModalProps {
   task: Task | null;
 }
 
-export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose, onSuccess, task }) => {
+export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({
+  open,
+  onClose,
+  onSuccess,
+  task,
+}) => {
   const { user } = useAuthStore();
   const { enqueueSnackbar } = useSnackbar();
   const [fmUsers, setFmUsers] = useState<User[]>([]);
@@ -71,7 +78,7 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
         reason: '',
         assignees: task.assignees || [],
       });
-      
+
       const fetchFms = async () => {
         setLoading(true);
         try {
@@ -91,11 +98,12 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
   }, [open, task, reset]);
 
   const filteredFms = React.useMemo(() => {
-    const validFms = fmUsers.filter((u) => 
-      u.roleId !== 'GOD' && 
-      u.roleId === 'FM' && 
-      (u as any).systemCode !== 'AS' && 
-      (u as any).SystemCode !== 'AS'
+    const validFms = fmUsers.filter(
+      (u) =>
+        u.roleId !== 'GOD' &&
+        u.roleId === 'FM' &&
+        (u as any).systemCode !== 'AS' &&
+        (u as any).SystemCode !== 'AS'
     );
     if (!user?.projectLocationIds || user.projectLocationIds.length === 0) {
       return validFms;
@@ -117,9 +125,12 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
       console.error('Failed to reject task', error);
       const serverData = error.response?.data;
       let errorMsg = 'เกิดข้อผิดพลาดในการตีกลับงาน';
-      
+
       if (serverData) {
-        errorMsg = typeof serverData === 'string' ? serverData : (serverData.error || serverData.message || JSON.stringify(serverData));
+        errorMsg =
+          typeof serverData === 'string'
+            ? serverData
+            : serverData.error || serverData.message || JSON.stringify(serverData);
       } else if (error.message) {
         errorMsg = error.message;
       }
@@ -127,12 +138,15 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
     }
   };
 
-  const inputStyles = { 
+  const inputStyles = {
     '& .MuiFilledInput-root': {
-      borderRadius: 2, 
+      borderRadius: 2,
       backgroundColor: '#F4F6F8 !important',
-      '&:hover': { backgroundColor: '#EAECEF !important' }, 
-      '&.Mui-focused': { backgroundColor: '#ffffff !important', boxShadow: 'inset 0 0 0 1px #1c1e2b' }
+      '&:hover': { backgroundColor: '#EAECEF !important' },
+      '&.Mui-focused': {
+        backgroundColor: '#ffffff !important',
+        boxShadow: 'inset 0 0 0 1px #1c1e2b',
+      },
     },
     '& .MuiInputBase-input': {
       color: '#1c1e2b',
@@ -141,52 +155,56 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
     '& .MuiInputLabel-root': {
       color: '#637381',
       fontWeight: 500,
-    }
+    },
   };
 
   if (!task) return null;
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={isSubmitting ? undefined : onClose} 
-      maxWidth="sm" 
-      fullWidth 
-      PaperProps={{ 
-        sx: { 
+    <Dialog
+      open={open}
+      onClose={isSubmitting ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        sx: {
           borderRadius: 4,
           boxShadow: '0 24px 48px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
-        } 
+          overflow: 'hidden',
+        },
       }}
     >
-      <DialogTitle sx={{ 
-        fontWeight: 700, 
-        color: '#1c1e2b',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5,
-        px: 3,
-        pt: 3,
-        pb: 2,
-        borderBottom: '1px solid #f0f0f0'
-      }}>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          width: 40, 
-          height: 40, 
-          borderRadius: '50%', 
-          bgcolor: 'warning.50',
-          color: 'warning.main'
-        }}>
+      <DialogTitle
+        sx={{
+          fontWeight: 700,
+          color: '#1c1e2b',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          px: 3,
+          pt: 3,
+          pb: 2,
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            bgcolor: 'warning.50',
+            color: 'warning.main',
+          }}
+        >
           <AssignmentReturnIcon />
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
           ตีกลับงาน (Reject Task)
         </Typography>
-        <IconButton 
+        <IconButton
           onClick={onClose}
           disabled={isSubmitting}
           sx={{ ml: 'auto', color: 'text.secondary', '&:hover': { bgcolor: 'grey.100' } }}
@@ -209,7 +227,7 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
                   </Typography>
                 </Grid>
               )}
-              
+
               <Grid item xs={12}>
                 <Typography variant="body2" sx={{ color: '#475569', mb: 1, fontWeight: 600 }}>
                   รหัสงาน: {task.taskId} - {task.taskName}
@@ -248,17 +266,30 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
                       isOptionEqualToValue={(option, value) => option.id === value.employeeId}
                       onChange={(_, newValue) => {
                         field.onChange(
-                          newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                          newValue.map((v) => ({
+                            employeeId: v.id,
+                            name: v.name,
+                            roleId: v.roleId || 'FM',
+                          }))
                         );
                       }}
-                      value={filteredFms.filter((u) => field.value?.some((val) => val.employeeId === u.id))}
+                      value={filteredFms.filter((u) =>
+                        field.value?.some((val) => val.employeeId === u.id)
+                      )}
                       disabled={isSubmitting}
                       renderOption={(props, option) => {
                         const { key, ...otherProps } = props as any;
                         return (
                           <li key={key || option.id} {...otherProps}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
-                              <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.75rem' }}>
+                              <Avatar
+                                sx={{
+                                  width: 28,
+                                  height: 28,
+                                  bgcolor: 'primary.main',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
                                 {option.name.substring(0, 2).toUpperCase()}
                               </Avatar>
                               <Typography variant="body2">{option.name}</Typography>
@@ -272,7 +303,9 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
                           label="ผู้แก้ไขงาน (Assignees) *"
                           variant="filled"
                           error={!!errors.assignees}
-                          helperText={errors.assignees?.message || 'สามารถเลือก FM คนเดิมหรือคนใหม่ได้'}
+                          helperText={
+                            errors.assignees?.message || 'สามารถเลือก FM คนเดิมหรือคนใหม่ได้'
+                          }
                           InputProps={{ ...params.InputProps, disableUnderline: true }}
                           sx={inputStyles}
                         />
@@ -285,16 +318,21 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2.5, bgcolor: '#fafafa', borderTop: '1px solid #f0f0f0' }}>
-          <Button onClick={onClose} disabled={isSubmitting} variant="text" sx={{ borderRadius: 2, color: 'text.secondary', fontWeight: 600, px: 3 }}>
+          <Button
+            onClick={onClose}
+            disabled={isSubmitting}
+            variant="text"
+            sx={{ borderRadius: 2, color: 'text.secondary', fontWeight: 600, px: 3 }}
+          >
             ยกเลิก
           </Button>
-          <Button 
-            type="submit" 
-            variant="contained" 
+          <Button
+            type="submit"
+            variant="contained"
             color="warning"
             disabled={!isValid || isSubmitting || loading}
-            sx={{ 
-              borderRadius: 2, 
+            sx={{
+              borderRadius: 2,
               fontWeight: 600,
               px: 4,
               boxShadow: 'none',
@@ -306,7 +344,9 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({ open, onClose,
                 <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
                 กำลังบันทึก...
               </>
-            ) : 'ยืนยันตีกลับ'}
+            ) : (
+              'ยืนยันตีกลับ'
+            )}
           </Button>
         </DialogActions>
       </Box>

@@ -24,11 +24,11 @@ const db = admin.firestore();
 
 async function fixNames() {
   console.log('Starting reconciliation records name fix...');
-  
+
   // 1. Get all daily contractors
   const contractorsSnap = await db.collection('dailyContractors').get();
   const contractorMap = new Map<string, string>();
-  contractorsSnap.forEach(doc => {
+  contractorsSnap.forEach((doc) => {
     const data = doc.data();
     if (data.employeeId && data.name) {
       contractorMap.set(data.employeeId.trim(), data.name);
@@ -53,10 +53,10 @@ async function fixNames() {
     if ((data.employeeName !== name && name) || rawId !== trimmedId) {
       batch.update(doc.ref, {
         employeeName: name || null,
-        employeeId: trimmedId // Fix trailing spaces too
+        employeeId: trimmedId, // Fix trailing spaces too
       });
       fixCount++;
-      
+
       // Batch commit every 500
       if (fixCount % 500 === 0) {
         await batch.commit();
@@ -73,7 +73,9 @@ async function fixNames() {
   console.log(`Finished fixing ${fixCount} records.`);
 }
 
-fixNames().then(() => process.exit(0)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+fixNames()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

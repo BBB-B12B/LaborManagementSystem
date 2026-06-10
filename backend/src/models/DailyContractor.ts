@@ -12,19 +12,25 @@
  */
 
 export interface AttendanceStats {
-  yearly: Record<string, {
-    paidLeave: number;
-    unpaidLeave: number;
-    lateCount: number;
-    absentDays: number;
-  }>;
-  periods: Record<string, {
-    name: string;
-    paidLeave: number;
-    unpaidLeave: number;
-    lateCount: number;
-    absentDays: number;
-  }>;
+  yearly: Record<
+    string,
+    {
+      paidLeave: number;
+      unpaidLeave: number;
+      lateCount: number;
+      absentDays: number;
+    }
+  >;
+  periods: Record<
+    string,
+    {
+      name: string;
+      paidLeave: number;
+      unpaidLeave: number;
+      lateCount: number;
+      absentDays: number;
+    }
+  >;
 }
 
 export interface DailyContractor {
@@ -45,10 +51,13 @@ export interface DailyContractor {
   createdBy: string;
   updatedBy: string;
   idHistory?: string[]; // History of previous employeeIds
-  foremanUsage?: Record<string, {
-    count: number;
-    name: string;
-  }>;
+  foremanUsage?: Record<
+    string,
+    {
+      count: number;
+      name: string;
+    }
+  >;
   // T-230/T-240 Fields
   dailyWageRate?: number;
   professionalRate?: number;
@@ -80,10 +89,13 @@ export interface DailyContractorDTO {
   endDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  foremanUsage?: Record<string, {
-    count: number;
-    name: string;
-  }>;
+  foremanUsage?: Record<
+    string,
+    {
+      count: number;
+      name: string;
+    }
+  >;
   attendanceStats?: AttendanceStats;
 }
 
@@ -195,10 +207,14 @@ export const dailyContractorConverter = {
   },
   fromFirestore: (snapshot: any): DailyContractor => {
     const data = snapshot.data();
-    
+
     // Support for legacy data: if projectLocationIds exists and is an array with at least one element, use its first element
     let projectLocationId = data.projectLocationId;
-    if (!projectLocationId && Array.isArray(data.projectLocationIds) && data.projectLocationIds.length > 0) {
+    if (
+      !projectLocationId &&
+      Array.isArray(data.projectLocationIds) &&
+      data.projectLocationIds.length > 0
+    ) {
       projectLocationId = data.projectLocationIds[0];
     }
 

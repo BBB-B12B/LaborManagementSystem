@@ -101,10 +101,7 @@ async function backfill() {
 
   // วน paginate ทีละ batch เพื่อไม่ให้ memory เยอะเกินไป
   while (true) {
-    let query = db
-      .collection(COLLECTION)
-      .orderBy('workDate')
-      .limit(BATCH_SIZE);
+    let query = db.collection(COLLECTION).orderBy('workDate').limit(BATCH_SIZE);
 
     if (lastDoc) {
       query = query.startAfter(lastDoc);
@@ -138,8 +135,7 @@ async function backfill() {
     totalEligible += eligible.length;
 
     console.log(
-      `   📄 Scanned ${totalScanned} docs | ` +
-      `Eligible this batch: ${eligible.length}`
+      `   📄 Scanned ${totalScanned} docs | ` + `Eligible this batch: ${eligible.length}`
     );
 
     if (!isDryRun && eligible.length > 0) {

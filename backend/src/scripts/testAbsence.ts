@@ -5,13 +5,19 @@ function generateReconciliationId(employeeId: string, workDate: string): string 
   return `REC_${employeeId}_${workDate}`;
 }
 
-async function getFallbackAssignee(employeeId: string): Promise<{ id: string; name: string } | null> {
+async function getFallbackAssignee(
+  employeeId: string
+): Promise<{ id: string; name: string } | null> {
   try {
     let targetDoc = await db.collection('dailyContractors').doc(`DC-${employeeId}`).get();
     if (!targetDoc.exists) {
       targetDoc = await db.collection('dailyContractors').doc(employeeId).get();
       if (!targetDoc.exists) {
-        const qSnap = await db.collection('dailyContractors').where('employeeId', '==', employeeId).limit(1).get();
+        const qSnap = await db
+          .collection('dailyContractors')
+          .where('employeeId', '==', employeeId)
+          .limit(1)
+          .get();
         if (qSnap.empty) return null;
         targetDoc = qSnap.docs[0];
       }
@@ -36,12 +42,23 @@ async function getFallbackAssignee(employeeId: string): Promise<{ id: string; na
       let finalName = maxAssigneeName;
       if (!finalName || finalName === 'Unknown') {
         try {
-          const userSnap = await db.collection('users').where('Employeeid', '==', maxAssigneeId).limit(1).get();
+          const userSnap = await db
+            .collection('users')
+            .where('Employeeid', '==', maxAssigneeId)
+            .limit(1)
+            .get();
           if (!userSnap.empty) {
             const uData = userSnap.docs[0].data();
-            finalName = uData['Fullname'] || uData['name'] || uData['fullNameEn'] || uData['Fullnameen'] || 'Unknown';
+            finalName =
+              uData['Fullname'] ||
+              uData['name'] ||
+              uData['fullNameEn'] ||
+              uData['Fullnameen'] ||
+              'Unknown';
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       return { id: maxAssigneeId, name: finalName || 'Unknown' };
     }
@@ -59,12 +76,13 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
 
   // ── 1. เช็ควันหยุดบริษัท (ดึงตามปีและเปรียบเทียบในระดับวันแบบ UTC) ──────────────
   const targetYear = new Date(`${workDateStr}T00:00:00.000Z`).getUTCFullYear();
-  const holidaySnap = await db.collection('companyHolidays')
+  const holidaySnap = await db
+    .collection('companyHolidays')
     .doc(String(targetYear))
     .collection('holidays')
     .get();
 
-  const isGlobalHoliday = holidaySnap.docs.some(doc => {
+  const isGlobalHoliday = holidaySnap.docs.some((doc) => {
     const data = doc.data();
     if (!data.date) return false;
     const d = typeof data.date.toDate === 'function' ? data.date.toDate() : new Date(data.date);
@@ -76,18 +94,20 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
 
   // ── 1.5. ดึงข้อมูล Project Locations เพื่อตรวจสอบการตั้งค่าวันทำงาน ───────────
   const projectsSnap = await db.collection('Project').get();
-  const projectConfigMap = new Map<string, { workDays: number[], followCompanyHoliday: boolean }>();
-  
-  projectsSnap.docs.forEach(doc => {
+  const projectConfigMap = new Map<string, { workDays: number[]; followCompanyHoliday: boolean }>();
+
+  projectsSnap.docs.forEach((doc) => {
     const data = doc.data();
     projectConfigMap.set(doc.id, {
       workDays: data.workDays !== undefined ? data.workDays : [1, 2, 3, 4, 5, 6], // default จันทร์-เสาร์
-      followCompanyHoliday: data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true, // default หยุดตามบริษัท
+      followCompanyHoliday:
+        data.followCompanyHoliday !== undefined ? data.followCompanyHoliday : true, // default หยุดตามบริษัท
     });
   });
 
   // ── 2. ดึงพนักงาน Active ทั้งหมด ───────────────────────────────────────────
-  const contractorsSnap = await db.collection('dailyContractors')
+  const contractorsSnap = await db
+    .collection('dailyContractors')
     .where('isActive', '==', true)
     .get();
 
@@ -96,7 +116,9 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
     return;
   }
 
-  console.log(`[checkDailyAbsence] Checking ${contractorsSnap.size} active employees for ${workDateStr}`);
+  console.log(
+    `[checkDailyAbsence] Checking ${contractorsSnap.size} active employees for ${workDateStr}`
+  );
 
   const now = admin.firestore.Timestamp.now();
   let absentCount = 0;
@@ -116,7 +138,10 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
     const recordRef = db.collection('reconciliationRecords').doc(recordId);
 
     // ตรวจสอบการตั้งค่าของโครงการ
-    const pConfig = projectConfigMap.get(projectLocationId) || { workDays: [1, 2, 3, 4, 5, 6], followCompanyHoliday: true };
+    const pConfig = projectConfigMap.get(projectLocationId) || {
+      workDays: [1, 2, 3, 4, 5, 6],
+      followCompanyHoliday: true,
+    };
 
     // ถ้าวันนี้ไม่ใช่วันทำงานของโครงการนี้ → ข้าม
     if (!pConfig.workDays.includes(dayOfWeek)) {
@@ -141,22 +166,24 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
 
     currentBatch.set(recordRef, {
       employeeId,
-      employeeName:      contractorData['name']          || null,
-      workDate:          workDateStr,
+      employeeName: contractorData['name'] || null,
+      workDate: workDateStr,
       projectLocationId,
-      homeProjectId:     projectLocationId,
-      dailyReportHours:  null,
-      scanDataHours:     null,
-      assigneeId:        fallback?.id   || null,
-      assigneeName:      fallback?.name || null,
+      homeProjectId: projectLocationId,
+      dailyReportHours: null,
+      scanDataHours: null,
+      assigneeId: fallback?.id || null,
+      assigneeName: fallback?.name || null,
       isFallbackAssignee: fallback != null,
-      status:            'ABSENT',
-      statusHistory: [{
-        status:    'ABSENT',
-        changedAt: now,
-        changedBy: 'system',
-        reason:    'No scan and no daily report found for this workday',
-      }],
+      status: 'ABSENT',
+      statusHistory: [
+        {
+          status: 'ABSENT',
+          changedAt: now,
+          changedBy: 'system',
+          reason: 'No scan and no daily report found for this workday',
+        },
+      ],
       createdAt: now,
       updatedAt: now,
     });
@@ -175,29 +202,35 @@ async function checkDailyAbsence(workDateStr: string): Promise<void> {
     batches.push(currentBatch);
   }
 
-  await Promise.all(batches.map(b => b.commit()));
+  await Promise.all(batches.map((b) => b.commit()));
 
-  console.log(`[checkDailyAbsence] Done for ${workDateStr}: absent=${absentCount}, skipped=${skippedCount}`);
+  console.log(
+    `[checkDailyAbsence] Done for ${workDateStr}: absent=${absentCount}, skipped=${skippedCount}`
+  );
 }
 
 async function run() {
   const args = process.argv.slice(2);
   const workDate = args[0];
   if (!workDate) {
-    console.error("Please provide a date in YYYY-MM-DD format. Example: npm run ts-node src/scripts/testAbsence.ts 2026-05-17");
+    console.error(
+      'Please provide a date in YYYY-MM-DD format. Example: npm run ts-node src/scripts/testAbsence.ts 2026-05-17'
+    );
     process.exit(1);
   }
-  
+
   // Basic format validation
   if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) {
-    console.error("Invalid date format. Must be YYYY-MM-DD.");
+    console.error('Invalid date format. Must be YYYY-MM-DD.');
     process.exit(1);
   }
 
   await checkDailyAbsence(workDate);
 }
 
-run().then(() => process.exit(0)).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+run()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

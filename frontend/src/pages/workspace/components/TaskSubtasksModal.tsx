@@ -35,7 +35,8 @@ export default function TaskSubtasksModal({
     let isMounted = true;
     if (open && task?.id) {
       setLoading(true);
-      taskService.getSubtasks(task.id)
+      taskService
+        .getSubtasks(task.id)
         .then((data) => {
           if (isMounted) {
             setSubtasks(data || []);
@@ -83,7 +84,9 @@ export default function TaskSubtasksModal({
 
       <DialogContent sx={{ px: 3, pb: 4, pt: 3 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}
+          >
             <CircularProgress />
           </Box>
         ) : subtasks.length === 0 ? (
@@ -107,9 +110,10 @@ export default function TaskSubtasksModal({
               เลือก Subtask เพื่อดูรายงาน
             </Typography>
             {subtasks.map((subtask) => {
-              const fmNames = subtask.assignees && subtask.assignees.length > 0
-                ? subtask.assignees.map((a) => a.name).join(', ')
-                : 'ไม่ได้ระบุ';
+              const fmNames =
+                subtask.assignees && subtask.assignees.length > 0
+                  ? subtask.assignees.map((a) => a.name).join(', ')
+                  : 'ไม่ได้ระบุ';
 
               return (
                 <Paper

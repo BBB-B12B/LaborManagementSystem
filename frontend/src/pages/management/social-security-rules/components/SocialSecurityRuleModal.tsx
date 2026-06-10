@@ -328,7 +328,7 @@ export function SocialSecurityRuleModal({
           <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
             <Typography variant="body2" color="text.secondary">
               <strong>วิธีการทำงาน:</strong> ระบบจะใช้รายได้ทั้งหมดรวมแล้ว (Total Income) มาเช็คกับ
-              {" \"เงื่อนไข\" "} ข้างต้น หากเข้าเงื่อนไข จะทำการหักเงินตาม {" \"ผลลัพธ์\" "} ที่ตั้งไว้
+              {' "เงื่อนไข" '} ข้างต้น หากเข้าเงื่อนไข จะทำการหักเงินตาม {' "ผลลัพธ์" '} ที่ตั้งไว้
             </Typography>
           </Box>
         </DialogContent>

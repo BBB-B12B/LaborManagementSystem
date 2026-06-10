@@ -52,7 +52,11 @@ async function migrate() {
     let projectId: string = data.projectLocationId;
 
     // Support legacy array field
-    if (!projectId && Array.isArray(data.projectLocationIds) && data.projectLocationIds.length > 0) {
+    if (
+      !projectId &&
+      Array.isArray(data.projectLocationIds) &&
+      data.projectLocationIds.length > 0
+    ) {
       projectId = data.projectLocationIds[0];
     }
 
@@ -73,7 +77,9 @@ async function migrate() {
     return !data.homeProjectId; // ยังไม่มี homeProjectId
   });
 
-  console.log(`[migrate] Found ${needsMigration.length} records to migrate (out of ${allDocs.length})`);
+  console.log(
+    `[migrate] Found ${needsMigration.length} records to migrate (out of ${allDocs.length})`
+  );
 
   if (needsMigration.length === 0) {
     console.log('[migrate] ✅ Nothing to migrate. Done.');
@@ -117,7 +123,9 @@ async function migrate() {
     }
 
     await batch.commit();
-    console.log(`[migrate] Batch ${Math.floor(i / BATCH_SIZE) + 1}: committed ${chunk.length} docs`);
+    console.log(
+      `[migrate] Batch ${Math.floor(i / BATCH_SIZE) + 1}: committed ${chunk.length} docs`
+    );
   }
 
   console.log(`\n[migrate] ✅ Migration complete!`);

@@ -132,11 +132,13 @@ export default function CompanyHolidaysPage() {
   const [saving, setSaving] = useState(false);
 
   // Snackbar
-  const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({
-    open: false,
-    msg: '',
-    severity: 'success',
-  });
+  const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>(
+    {
+      open: false,
+      msg: '',
+      severity: 'success',
+    }
+  );
 
   // ---------- computed ----------
 

@@ -48,7 +48,9 @@ export class AuthService {
     }
 
     // Debug Log
-    console.log(`[AuthService] Login attempt: username=${username}, active=${user?.isActive}, userId=${user?.id}`);
+    console.log(
+      `[AuthService] Login attempt: username=${username}, active=${user?.isActive}, userId=${user?.id}`
+    );
 
     const isValidPassword = await userService.verifyPassword(user.id, password);
     console.log(`[AuthService] Password valid: ${isValidPassword}`);

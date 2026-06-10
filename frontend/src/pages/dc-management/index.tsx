@@ -27,14 +27,7 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import {
-  Add,
-  Edit,
-  Delete,
-  Search,
-  FileDownload,
-  CloudUpload,
-} from '@mui/icons-material';
+import { Add, Edit, Delete, Search, FileDownload, CloudUpload } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -94,10 +87,8 @@ const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: 
 export default function DCManagementPage() {
   const queryClient = useQueryClient();
   const { success: showSuccess, error: showError } = useToast();
-  const {
-    confirmDelete: showDeleteConfirm,
-    ConfirmDialog: DeleteConfirmDialog,
-  } = useDeleteConfirmDialog();
+  const { confirmDelete: showDeleteConfirm, ConfirmDialog: DeleteConfirmDialog } =
+    useDeleteConfirmDialog();
   const { user } = useAuthStore();
 
   // Filters
@@ -111,13 +102,14 @@ export default function DCManagementPage() {
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
-  const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<DCEditInput> | undefined>(undefined);
+  const [drawerInitialValues, setDrawerInitialValues] = useState<Partial<DCEditInput> | undefined>(
+    undefined
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<DCImportSummary | null>(null);
-
 
   // Fetch all projects for display mapping
   const { data: projects = [] } = useQuery({
@@ -232,9 +224,7 @@ export default function DCManagementPage() {
     },
     onError: (error: any) => {
       const message =
-        error?.response?.data?.error ||
-        error?.message ||
-        'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน';
+        error?.response?.data?.error || error?.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน';
       showError(message);
     },
   });
@@ -244,7 +234,7 @@ export default function DCManagementPage() {
     let userProjectName = '';
     if (user?.projectLocationIds && user.projectLocationIds.length > 0) {
       const firstProjectId = user.projectLocationIds[0];
-      const project = projects.find(p => p.id === firstProjectId);
+      const project = projects.find((p) => p.id === firstProjectId);
       if (project) {
         userProjectName = project.department || project.projectName || '';
       }
@@ -252,32 +242,57 @@ export default function DCManagementPage() {
 
     // 2. Define headers (Must match exactly what backend expects)
     const headers = [
-      'EmployeeName', 'รหัสพนักงาน', 'ตำแหน่ง', 'หน่วยงาน', 'ค่าแรง/วัน', 
-      'ค่าโทรศัพท์ DC', 'เบี้ยเลี้ยง', 'รายได้อื่นๆ ต่องวด (บาท)', 'ค่าวิชาชีพ/วัน', 
-      'จำนวนคนผู้ติดตาม', 'หักค่าตู้เย็น 125 บาท/งวด', 'หักค่าเครื่องเสียง 250 บาท/งวด', 
-      'หักค่าเครื่องปรับอากาศเคลื่อนที่ 200 บาท/งวด', 'หักโทรทัศน์ (TV) 100 บาท/งวด', 
-      'หักเครื่องซักผ้า 250 บาท/งวด', 'ค่าห้องพัก 175 บาท/งวด/คน', 
-      'วันเกิด (ปปปป-ดด-วว)', 'วันเริ่มงาน (ปปปป-ดด-วว)', 'สถานะใช้งาน (TRUE/FALSE)', 
-      'เปอร์เซ็นต์หัก MOU (%)', 'รายหักอื่นๆ'
+      'EmployeeName',
+      'รหัสพนักงาน',
+      'ตำแหน่ง',
+      'หน่วยงาน',
+      'ค่าแรง/วัน',
+      'ค่าโทรศัพท์ DC',
+      'เบี้ยเลี้ยง',
+      'รายได้อื่นๆ ต่องวด (บาท)',
+      'ค่าวิชาชีพ/วัน',
+      'จำนวนคนผู้ติดตาม',
+      'หักค่าตู้เย็น 125 บาท/งวด',
+      'หักค่าเครื่องเสียง 250 บาท/งวด',
+      'หักค่าเครื่องปรับอากาศเคลื่อนที่ 200 บาท/งวด',
+      'หักโทรทัศน์ (TV) 100 บาท/งวด',
+      'หักเครื่องซักผ้า 250 บาท/งวด',
+      'ค่าห้องพัก 175 บาท/งวด/คน',
+      'วันเกิด (ปปปป-ดด-วว)',
+      'วันเริ่มงาน (ปปปป-ดด-วว)',
+      'สถานะใช้งาน (TRUE/FALSE)',
+      'เปอร์เซ็นต์หัก MOU (%)',
+      'รายหักอื่นๆ',
     ];
 
     // 3. Define example row with pre-filled project
     const exampleRow = [
-      'นายสมหมาย ใจดี', 'EMP001', 'กรรมกร', userProjectName, '450',
-      '0', '0', '0', '0',
-      '0', '125', '0', 
-      '0', '0', 
-      '0', '175', 
-      '1990-01-01', '2024-01-01', 'TRUE',
-      '0', '0'
+      'นายสมหมาย ใจดี',
+      'EMP001',
+      'กรรมกร',
+      userProjectName,
+      '450',
+      '0',
+      '0',
+      '0',
+      '0',
+      '0',
+      '125',
+      '0',
+      '0',
+      '0',
+      '0',
+      '175',
+      '1990-01-01',
+      '2024-01-01',
+      'TRUE',
+      '0',
+      '0',
     ];
 
     // 4. Construct CSV string (with BOM for Excel Thai support)
     const bom = '\uFEFF';
-    const csvContent = [
-      headers.join(','),
-      exampleRow.join(',')
-    ].join('\n');
+    const csvContent = [headers.join(','), exampleRow.join(',')].join('\n');
 
     // 5. Trigger download
     const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -306,10 +321,10 @@ export default function DCManagementPage() {
     try {
       const [detail, compensation] = await Promise.all([
         dcService.getDCById(contractor.id),
-        dcService.getDCCompensation(contractor.id).catch(() => null)
+        dcService.getDCCompensation(contractor.id).catch(() => null),
       ]);
       setEditingId(contractor.id);
-      
+
       const income = compensation?.income as any;
       const expense = compensation?.expense as any;
 
@@ -407,7 +422,12 @@ export default function DCManagementPage() {
         const id = params.value as string;
         const department = id ? projectDepartmentMap.get(id) : null;
 
-        if (!department) return <Typography variant="caption" color="text.secondary">-</Typography>;
+        if (!department)
+          return (
+            <Typography variant="caption" color="text.secondary">
+              -
+            </Typography>
+          );
 
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
@@ -425,9 +445,18 @@ export default function DCManagementPage() {
         const id = params.value as string;
         const projectName = id ? projectNameMap.get(id) : null;
 
-        if (!projectName) return <Typography variant="caption" color="text.secondary">ไม่ระบุ</Typography>;
+        if (!projectName)
+          return (
+            <Typography variant="caption" color="text.secondary">
+              ไม่ระบุ
+            </Typography>
+          );
 
-        return <Typography variant="body2" sx={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{projectName}</Typography>;
+        return (
+          <Typography variant="body2" sx={{ whiteSpace: 'normal', lineHeight: 1.2 }}>
+            {projectName}
+          </Typography>
+        );
       },
     },
 
@@ -476,13 +505,12 @@ export default function DCManagementPage() {
 
   const importErrorMessage = importMutation.isError
     ? (importMutation.error as any)?.response?.data?.error ||
-    (importMutation.error as Error)?.message ||
-    'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน'
+      (importMutation.error as Error)?.message ||
+      'เกิดข้อผิดพลาดในการนำเข้าข้อมูลแรงงาน'
     : null;
 
   const pageContent = (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-
       {/* Header */}
       <Box
         sx={{
@@ -512,12 +540,7 @@ export default function DCManagementPage() {
           >
             นำเข้าจากไฟล์
           </Button>
-          <Button
-            variant="contained"
-            color="info"
-            startIcon={<Add />}
-            onClick={handleCreateDC}
-          >
+          <Button variant="contained" color="info" startIcon={<Add />} onClick={handleCreateDC}>
             สร้างแรงงานรายวันใหม่
           </Button>
         </Box>
@@ -537,9 +560,7 @@ export default function DCManagementPage() {
               value={filters.search}
               onChange={(e) => handleSearch(e.target.value)}
               InputProps={{
-                startAdornment: (
-                  <Search sx={{ mr: 1, color: 'text.secondary' }} />
-                ),
+                startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
               }}
             />
           </Grid>
@@ -628,7 +649,10 @@ export default function DCManagementPage() {
         onClose={handleCloseDrawer}
         mode={drawerMode}
         defaultValues={drawerInitialValues}
-        isLoading={(drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending) || drawerLoading}
+        isLoading={
+          (drawerMode === 'create' ? createMutation.isPending : updateMutation.isPending) ||
+          drawerLoading
+        }
         onSubmit={handleDrawerSubmit}
       />
       <DCImportDialog
@@ -646,9 +670,7 @@ export default function DCManagementPage() {
       <ProtectedRoute requiredRoles={['GOD', 'AM', 'FM', 'SE', 'OE', 'PM', 'PD']}>
         <Layout>
           <Container maxWidth="lg" sx={{ mt: 4 }}>
-            <Typography color="error">
-              เกิดข้อผิดพลาด: {(error as Error).message}
-            </Typography>
+            <Typography color="error">เกิดข้อผิดพลาด: {(error as Error).message}</Typography>
           </Container>
         </Layout>
       </ProtectedRoute>

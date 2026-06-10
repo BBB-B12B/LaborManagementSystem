@@ -15,12 +15,13 @@ const app = admin.initializeApp(
 );
 const db = app.firestore();
 
-const EMPLOYEE_ID = '200030';  // ← เปลี่ยนตรงนี้
+const EMPLOYEE_ID = '200030'; // ← เปลี่ยนตรงนี้
 
 async function check() {
   console.log(`\nค้นหา DailyEmployeeTimesheets ของ ${EMPLOYEE_ID}...\n`);
 
-  const snap = await db.collection('DailyEmployeeTimesheets')
+  const snap = await db
+    .collection('DailyEmployeeTimesheets')
     .where('employeeNumber', '==', EMPLOYEE_ID)
     .orderBy('date', 'desc')
     .limit(10)
@@ -32,7 +33,7 @@ async function check() {
   }
 
   console.log(`✅ พบ ${snap.size} records ล่าสุด:\n`);
-  snap.forEach(doc => {
+  snap.forEach((doc) => {
     const d = doc.data();
     console.log(`  📅 Doc ID  : ${doc.id}`);
     console.log(`     date           : ${d.date}`);
@@ -43,7 +44,9 @@ async function check() {
   });
 }
 
-check().then(() => process.exit(0)).catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
+check()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });

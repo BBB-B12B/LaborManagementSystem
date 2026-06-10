@@ -9,4 +9,6 @@ async function check() {
   console.log('Photos in REC_200808_2025-08-30:', doc.data()?.dailyReportPhotos);
 }
 
-check().then(() => process.exit(0)).catch(console.error);
+check()
+  .then(() => process.exit(0))
+  .catch(console.error);

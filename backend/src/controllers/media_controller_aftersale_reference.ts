@@ -14,7 +14,7 @@ export class MediaController {
       }
 
       const folder = (req.body.folder as string) || 'general';
-      
+
       const fileUrl = await storage.uploadBuffer(
         req.file.buffer,
         folder,
@@ -27,14 +27,14 @@ export class MediaController {
         data: {
           url: fileUrl,
           filename: req.file.originalname,
-          mimeType: req.file.mimetype
-        }
+          mimeType: req.file.mimetype,
+        },
       });
     } catch (error) {
       logger.error('Failed to upload media', { error });
       return res.status(500).json({
         success: false,
-        error: (error as Error).message
+        error: (error as Error).message,
       });
     }
   }
@@ -60,7 +60,7 @@ export class MediaController {
         );
         return {
           url: fileUrl,
-          filename: file.originalname
+          filename: file.originalname,
         };
       });
 
@@ -68,13 +68,13 @@ export class MediaController {
 
       return res.status(200).json({
         success: true,
-        data: results
+        data: results,
       });
     } catch (error) {
       logger.error('Failed to upload multiple media', { error });
       return res.status(500).json({
         success: false,
-        error: (error as Error).message
+        error: (error as Error).message,
       });
     }
   }

@@ -2,15 +2,15 @@
   "variables": {
     "COLLECTIONS": {
       "source": "backend/src/config/collections.ts",
-      "line": 32
+      "line": 31
     },
     "collections": {
       "source": "backend/src/config/collections.ts",
-      "line": 58
+      "line": 57
     },
     "getCollection": {
       "source": "backend/src/config/collections.ts",
-      "line": 105
+      "line": 104
     },
     "db": {
       "source": "backend/src/config/firebase.ts",
@@ -18,7 +18,7 @@
     },
     "auth": {
       "source": "backend/src/api/middleware/auth.ts",
-      "line": 392
+      "line": 385
     },
     "storage": {
       "source": "backend/src/config/storage.ts",
@@ -38,27 +38,27 @@
     },
     "getByProjectAndDate": {
       "source": "backend/src/controllers/dailyReportController.ts",
-      "line": 79
+      "line": 73
     },
     "getByProjectAndMonth": {
       "source": "backend/src/controllers/dailyReportController.ts",
-      "line": 94
+      "line": 88
     },
     "importExcel": {
       "source": "backend/src/controllers/dailyReportController.ts",
-      "line": 112
+      "line": 106
     },
     "bulkCreate": {
       "source": "backend/src/controllers/dailyReportController.ts",
-      "line": 149
+      "line": 143
     },
     "downloadTemplate": {
       "source": "backend/src/controllers/dailyReportController.ts",
-      "line": 170
+      "line": 164
     },
     "syncDailyReport": {
       "source": "backend/src/controllers/dailyReportController.ts",
-      "line": 214
+      "line": 211
     },
     "getAllOTRecords": {
       "source": "backend/src/controllers/overtimeController.ts",
@@ -122,47 +122,47 @@
     },
     "getReconciliationRecords": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 68
+      "line": 67
     },
     "getReconciliationStats": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 211
+      "line": 209
     },
     "exportAnomalies": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 255
+      "line": 256
     },
     "getReconciliationById": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 298
+      "line": 299
     },
     "generateForProjectAuto": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 325
+      "line": 326
     },
     "generateReconciliationRecords": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 361
+      "line": 367
     },
     "confirmByDailyReport": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 428
+      "line": 434
     },
     "deleteGhostScan": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 460
+      "line": 466
     },
     "resolveManual": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 492
+      "line": 498
     },
     "updateScanPunches": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 558
+      "line": 565
     },
     "exportToExcel": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 592
+      "line": 601
     },
     "exportForemanReport": {
       "source": "backend/src/controllers/reconciliationController.ts",
@@ -206,7 +206,7 @@
     },
     "ApprovedTimesheet": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 153
+      "line": 151
     },
     "CreateApprovedTimesheetInput": {
       "source": "backend/src/models/ApprovedTimesheet.ts",
@@ -242,19 +242,19 @@
     },
     "DailyContractorDTO": {
       "source": "backend/src/models/DailyContractor.ts",
-      "line": 70
+      "line": 79
     },
     "CreateDailyContractorInput": {
       "source": "backend/src/models/DailyContractor.ts",
-      "line": 90
+      "line": 102
     },
     "UpdateDailyContractorInput": {
       "source": "backend/src/models/DailyContractor.ts",
-      "line": 118
+      "line": 130
     },
     "dailyContractorConverter": {
       "source": "backend/src/models/DailyContractor.ts",
-      "line": 160
+      "line": 172
     },
     "WorkType": {
       "source": "frontend/src/services/dailyReportService.ts",
@@ -302,7 +302,7 @@
     },
     "dailyReportConverter": {
       "source": "backend/src/models/DailyReport.ts",
-      "line": 135
+      "line": 132
     },
     "DCExpenseDetails": {
       "source": "backend/src/models/DCExpenseDetails.ts",
@@ -370,7 +370,7 @@
     },
     "detectFileType": {
       "source": "backend/src/services/scanData/ScanDataImportUtils.ts",
-      "line": 566
+      "line": 594
     },
     "fileAttachmentConverter": {
       "source": "backend/src/models/FileAttachment.ts",
@@ -386,7 +386,7 @@
     },
     "LateRecord": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 66
+      "line": 62
     },
     "CreateLateRecordInput": {
       "source": "backend/src/models/LateRecord.ts",
@@ -402,7 +402,7 @@
     },
     "ProjectStatus": {
       "source": "frontend/src/validation/projectSchema.ts",
-      "line": 57
+      "line": 60
     },
     "ProjectLocation": {
       "source": "frontend/src/components/forms/ProjectSelect.tsx",
@@ -410,15 +410,15 @@
     },
     "CreateProjectLocationInput": {
       "source": "backend/src/models/ProjectLocation.ts",
-      "line": 25
+      "line": 24
     },
     "UpdateProjectLocationInput": {
       "source": "backend/src/models/ProjectLocation.ts",
-      "line": 41
+      "line": 40
     },
     "projectLocationConverter": {
       "source": "backend/src/models/ProjectLocation.ts",
-      "line": 57
+      "line": 56
     },
     "ReconciliationStatus": {
       "source": "frontend/src/services/reconciliationService.ts",
@@ -434,19 +434,19 @@
     },
     "ReconciliationRecord": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 44
+      "line": 43
     },
     "CreateReconciliationRecordInput": {
       "source": "backend/src/models/ReconciliationRecord.ts",
-      "line": 173
+      "line": 171
     },
     "generateReconciliationId": {
       "source": "backend/src/models/ReconciliationRecord.ts",
-      "line": 232
+      "line": 231
     },
     "reconciliationRecordConverter": {
       "source": "backend/src/models/ReconciliationRecord.ts",
-      "line": 243
+      "line": 242
     },
     "RoleCode": {
       "source": "backend/src/models/Role.ts",
@@ -478,15 +478,15 @@
     },
     "ScanBehavior": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 36
+      "line": 37
     },
     "ScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 15
+      "line": 12
     },
     "CreateScanDataInput": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 110
+      "line": 111
     },
     "roundDownToFiveMinutes": {
       "source": "frontend/src/utils/dateUtils.ts",
@@ -494,15 +494,15 @@
     },
     "classifyScanBehavior": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 132
+      "line": 133
     },
     "generateScanDocId": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 173
+      "line": 174
     },
     "scanDataConverter": {
       "source": "backend/src/models/ScanData.ts",
-      "line": 180
+      "line": 181
     },
     "SocialSecurityCalculation": {
       "source": "backend/src/models/SocialSecurityCalculation.ts",
@@ -590,7 +590,7 @@
     },
     "migrateDCIdsAndSchema": {
       "source": "backend/src/scripts/migrateDCIds.ts",
-      "line": 21
+      "line": 20
     },
     "migrateWagePeriodProjectFields": {
       "source": "backend/src/scripts/migrateWagePeriodProjectFields.ts",
@@ -598,7 +598,7 @@
     },
     "migrateWagePeriodsIsDeleted": {
       "source": "backend/src/scripts/migrateWagePeriodsIsDeleted.ts",
-      "line": 12
+      "line": 11
     },
     "OvertimeData": {
       "source": "backend/src/services/overtimeService.ts",
@@ -614,31 +614,31 @@
     },
     "updateOvertimeRecord": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 158
+      "line": 155
     },
     "deleteOvertimeRecord": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 242
+      "line": 239
     },
     "getOvertimeRecordById": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 257
+      "line": 254
     },
     "getAllOvertimeRecords": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 270
+      "line": 267
     },
     "getOvertimeRecordHistory": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 320
+      "line": 315
     },
     "checkOTTimeOverlap": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 337
+      "line": 332
     },
     "calculateOTWage": {
       "source": "backend/src/services/overtimeService.ts",
-      "line": 402
+      "line": 392
     },
     "ProjectData": {
       "source": "backend/src/services/projectService.ts",
@@ -646,35 +646,35 @@
     },
     "createProject": {
       "source": "backend/src/services/projectService.ts",
-      "line": 124
+      "line": 122
     },
     "updateProject": {
       "source": "backend/src/services/projectService.ts",
-      "line": 171
+      "line": 167
     },
     "deleteProject": {
       "source": "backend/src/services/projectService.ts",
-      "line": 245
+      "line": 242
     },
     "getProjectById": {
       "source": "backend/src/services/projectService.ts",
-      "line": 262
+      "line": 259
     },
     "getAllProjects": {
       "source": "backend/src/services/projectService.ts",
-      "line": 282
+      "line": 279
     },
     "getNextProjectCode": {
       "source": "backend/src/services/projectService.ts",
-      "line": 335
+      "line": 333
     },
     "getActiveProjects": {
       "source": "backend/src/services/projectService.ts",
-      "line": 359
+      "line": 357
     },
     "getDepartments": {
       "source": "backend/src/services/projectService.ts",
-      "line": 363
+      "line": 361
     },
     "ApiResponse": {
       "source": "frontend/src/types/index.ts",
@@ -722,15 +722,15 @@
     },
     "checkRole": {
       "source": "backend/src/api/middleware/auth.ts",
-      "line": 185
+      "line": 191
     },
     "checkDepartmentAccess": {
       "source": "backend/src/api/middleware/auth.ts",
-      "line": 229
+      "line": 232
     },
     "checkProjectAccess": {
       "source": "backend/src/api/middleware/auth.ts",
-      "line": 272
+      "line": 269
     },
     "Permissions": {
       "source": "frontend/src/utils/permissions.ts",
@@ -770,7 +770,7 @@
     },
     "portalUserService": {
       "source": "backend/src/services/auth/PortalUserService.ts",
-      "line": 143
+      "line": 140
     },
     "UserService": {
       "source": "backend/src/services/auth/UserService.ts",
@@ -778,15 +778,15 @@
     },
     "userService": {
       "source": "backend/src/services/auth/UserService.ts",
-      "line": 159
+      "line": 157
     },
     "PaginationOptions": {
       "source": "backend/src/services/base/CrudService.ts",
-      "line": 14
+      "line": 10
     },
     "PaginatedResult": {
       "source": "backend/src/services/base/CrudService.ts",
-      "line": 21
+      "line": 17
     },
     "BaseCrudService": {
       "source": "backend/src/services/base/BaseCrudService.ts",
@@ -802,15 +802,15 @@
     },
     "dailyContractorService": {
       "source": "backend/src/services/dailyContractor/DailyContractorService.ts",
-      "line": 677
+      "line": 717
     },
     "DailyReportService": {
       "source": "backend/src/services/dailyReport/DailyReportService.ts",
-      "line": 21
+      "line": 22
     },
     "dailyReportService": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 464
+      "line": 502
     },
     "ProjectBExpectedHours": {
       "source": "backend/src/services/external/ProjectBDailyReportService.ts",
@@ -842,7 +842,7 @@
     },
     "projectBDailyReportService": {
       "source": "backend/src/services/external/ProjectBDailyReportService.ts",
-      "line": 469
+      "line": 489
     },
     "projectLocationService": {
       "source": "backend/src/services/project/ProjectLocationService.ts",
@@ -850,27 +850,27 @@
     },
     "ReconciliationFilter": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 134
+      "line": 132
     },
     "PaginatedReconciliationResult": {
       "source": "backend/src/services/reconciliation/ReconciliationService.ts",
-      "line": 92
+      "line": 91
     },
     "ClassifyResult": {
       "source": "backend/src/services/reconciliation/ReconciliationService.ts",
-      "line": 99
+      "line": 98
     },
     "ReconciliationService": {
       "source": "backend/src/services/reconciliation/ReconciliationService.ts",
-      "line": 119
+      "line": 118
     },
     "reconciliationService": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 160
+      "line": 158
     },
     "lateRecordService": {
       "source": "backend/src/services/scanData/LateRecordService.ts",
-      "line": 97
+      "line": 96
     },
     "DailyAggregatedRow": {
       "source": "backend/src/services/scanData/ScanDataAggregator.ts",
@@ -882,43 +882,43 @@
     },
     "ParsedFileResult": {
       "source": "backend/src/services/scanData/ScanDataImportUtils.ts",
-      "line": 59
+      "line": 56
     },
     "parseNotepadText": {
       "source": "backend/src/services/scanData/ScanDataImportUtils.ts",
-      "line": 265
+      "line": 296
     },
     "parseDatFile": {
       "source": "backend/src/services/scanData/ScanDataImportUtils.ts",
-      "line": 388
+      "line": 419
     },
     "parseExcelFile": {
       "source": "backend/src/services/scanData/ScanDataImportUtils.ts",
-      "line": 392
+      "line": 423
     },
     "BulkImportRecord": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 28
+      "line": 24
     },
     "BulkImportOptions": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 37
+      "line": 33
     },
     "ImportErrorEntry": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 46
+      "line": 42
     },
     "RowSummary": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 53
+      "line": 49
     },
     "ImportSummary": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 61
+      "line": 57
     },
     "scanDataService": {
       "source": "backend/src/services/scanData/ScanDataService.ts",
-      "line": 1418
+      "line": 1607
     },
     "additionalExpenseService": {
       "source": "backend/src/services/wage/AdditionalExpenseService.ts",
@@ -938,15 +938,15 @@
     },
     "wagePeriodService": {
       "source": "backend/src/services/wage/WagePeriodService.ts",
-      "line": 595
+      "line": 592
     },
     "VerificationResult": {
       "source": "backend/src/services/wage/WorkVerificationService.ts",
-      "line": 21
+      "line": 20
     },
     "workVerificationService": {
       "source": "backend/src/services/wage/WorkVerificationService.ts",
-      "line": 135
+      "line": 137
     },
     "isFirebaseInitialized": {
       "source": "frontend/src/config/firebase.ts",
@@ -994,87 +994,87 @@
     },
     "DCCompensationIncome": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 61
+      "line": 67
     },
     "DCCompensationExpense": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 72
+      "line": 78
     },
     "DCCompensationDetails": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 85
+      "line": 91
     },
     "DCImportError": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 90
+      "line": 96
     },
     "DCImportSummary": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 96
+      "line": 102
     },
     "DCListResponse": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 106
+      "line": 112
     },
     "DCFilterOptions": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 116
+      "line": 122
     },
     "getAllDCs": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 130
+      "line": 136
     },
     "getActiveDCs": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 157
+      "line": 158
     },
     "getDCById": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 170
+      "line": 171
     },
     "createDC": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 185
+      "line": 186
     },
     "updateDC": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 200
+      "line": 201
     },
     "deleteDC": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 218
+      "line": 216
     },
     "importDailyContractorsFromFile": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 226
+      "line": 224
     },
     "searchDCs": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 239
+      "line": 237
     },
     "getDCsBySkill": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 259
+      "line": 254
     },
     "getDCsByProject": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 274
+      "line": 269
     },
     "getDCCompensation": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 289
+      "line": 282
     },
     "upsertDCCompensation": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 304
+      "line": 295
     },
     "checkEmployeeIdUnique": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 337
+      "line": 328
     },
     "dcService": {
       "source": "frontend/src/services/dcService.ts",
-      "line": 360
+      "line": 351
     },
     "UserListResponse": {
       "source": "frontend/src/services/memberService.ts",
@@ -1146,71 +1146,71 @@
     },
     "PaginatedReconciliationResponse": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 146
+      "line": 144
     },
     "ImportResult": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 89
+      "line": 85
     },
     "uploadScanDataFile": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 115
+      "line": 110
     },
     "uploadScanDataExcel": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 143
+      "line": 139
     },
     "getAllScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 148
+      "line": 144
     },
     "getScanDataById": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 197
+      "line": 189
     },
     "deleteScanDataBatch": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 207
+      "line": 197
     },
     "deleteScanDataBulk": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 218
+      "line": 210
     },
     "getLateRecords": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 239
+      "line": 230
     },
     "softDeleteScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 287
+      "line": 272
     },
     "addManualScan": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 295
+      "line": 279
     },
     "updateScanDataRecord": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 311
+      "line": 295
     },
     "fillFromDailyReport": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 325
+      "line": 309
     },
     "updateDailyPunches": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 345
+      "line": 328
     },
     "exportScanData": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 367
+      "line": 346
     },
     "deleteScanDataById": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 401
+      "line": 379
     },
     "restoreScanDataById": {
       "source": "frontend/src/services/scanDataService.ts",
-      "line": 411
+      "line": 388
     },
     "WagePeriodListResponse": {
       "source": "frontend/src/services/wageService.ts",
@@ -1526,63 +1526,63 @@
     },
     "optionalDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 189
+      "line": 192
     },
     "pastDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 202
+      "line": 205
     },
     "futureDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 210
+      "line": 213
     },
     "timeString": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 218
+      "line": 221
     },
     "optionalTimeString": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 226
+      "line": 229
     },
     "baseBoolean": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 235
+      "line": 238
     },
     "optionalBoolean": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 243
+      "line": 246
     },
     "createEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 248
+      "line": 251
     },
     "baseArray": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 257
+      "line": 260
     },
     "nonEmptyArray": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 266
+      "line": 269
     },
     "departmentEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 275
+      "line": 278
     },
     "roleEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 283
+      "line": 286
     },
     "PROJECT_STATUS_VALUES": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 288
+      "line": 291
     },
     "projectStatusEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 289
+      "line": 292
     },
     "workTypeEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 297
+      "line": 300
     },
     "validateDateRange": {
       "source": "frontend/src/components/forms/DatePicker.tsx",
@@ -1594,15 +1594,15 @@
     },
     "emptyStringToNull": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 330
+      "line": 333
     },
     "stringToNumber": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 338
+      "line": 341
     },
     "stringToDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 349
+      "line": 352
     },
     "dailyReportSchema": {
       "source": "frontend/src/validation/dailyReportSchema.ts",
@@ -1658,7 +1658,7 @@
     },
     "dcEditSchema": {
       "source": "frontend/src/validation/dcSchema.ts",
-      "line": 127
+      "line": 169
     },
     "dcIncomeDetailsSchema": {
       "source": "frontend/src/validation/wageSchema.ts",
@@ -1670,19 +1670,19 @@
     },
     "dcFilterSchema": {
       "source": "frontend/src/validation/dcSchema.ts",
-      "line": 234
+      "line": 318
     },
     "validateDCEmployeeIdUnique": {
       "source": "frontend/src/validation/dcSchema.ts",
-      "line": 245
+      "line": 329
     },
     "DCCreateInput": {
       "source": "frontend/src/validation/dcSchema.ts",
-      "line": 260
+      "line": 344
     },
     "DCEditInput": {
       "source": "frontend/src/validation/dcSchema.ts",
-      "line": 261
+      "line": 345
     },
     "DCIncomeDetailsInput": {
       "source": "frontend/src/validation/wageSchema.ts",
@@ -1694,7 +1694,7 @@
     },
     "DCFilterInput": {
       "source": "frontend/src/validation/dcSchema.ts",
-      "line": 264
+      "line": 348
     },
     "otPeriodEnum": {
       "source": "frontend/src/validation/overtimeSchema.ts",
@@ -1746,19 +1746,19 @@
     },
     "projectFilterSchema": {
       "source": "frontend/src/validation/projectSchema.ts",
-      "line": 46
+      "line": 49
     },
     "PROJECT_STATUS_OPTIONS": {
       "source": "frontend/src/validation/projectSchema.ts",
-      "line": 53
+      "line": 56
     },
     "ProjectFormData": {
       "source": "frontend/src/validation/projectSchema.ts",
-      "line": 55
+      "line": 58
     },
     "ProjectFilterData": {
       "source": "frontend/src/validation/projectSchema.ts",
-      "line": 56
+      "line": 59
     },
     "ScanTypeEnum": {
       "source": "frontend/src/validation/scanDataSchema.ts",
@@ -2234,11 +2234,11 @@
     },
     "SkillSelectProps": {
       "source": "frontend/src/components/forms/SkillSelect.tsx",
-      "line": 16
+      "line": 13
     },
     "SkillSelect": {
       "source": "frontend/src/components/forms/SkillSelect.tsx",
-      "line": 28
+      "line": 25
     },
     "TimePickerProps": {
       "source": "frontend/src/components/forms/TimePicker.tsx",
@@ -2258,11 +2258,11 @@
     },
     "LayoutProps": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 20
+      "line": 24
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 166
+      "line": 170
     },
     "SIDEBAR_WIDTH": {
       "source": "frontend/src/components/layout/Navbar.tsx",
@@ -2294,15 +2294,15 @@
     },
     "WorkRecordComposerPage": {
       "source": "frontend/src/pages/daily-reports/new.tsx",
-      "line": 1187
+      "line": 2484
     },
     "DashboardPage": {
       "source": "frontend/src/pages/dashboard/index.tsx",
-      "line": 174
+      "line": 160
     },
     "DCManagementPage": {
       "source": "frontend/src/pages/dc-management/index.tsx",
-      "line": 94
+      "line": 87
     },
     "LegacyDCCreateRedirect": {
       "source": "frontend/src/pages/dc-management/new.tsx",
@@ -2326,7 +2326,7 @@
     },
     "MemberManagementPage": {
       "source": "frontend/src/pages/member-management/index.tsx",
-      "line": 48
+      "line": 51
     },
     "CreateUserPageRedirect": {
       "source": "frontend/src/pages/member-management/new.tsx",
@@ -2350,7 +2350,7 @@
     },
     "ScanDataMonitoringPage": {
       "source": "frontend/src/pages/scan-data-monitoring/index.tsx",
-      "line": 123
+      "line": 121
     },
     "DiscrepancyDetailPage": {
       "source": "frontend/src/pages/scan-data-monitoring/[id].tsx",
@@ -2358,15 +2358,15 @@
     },
     "WageCalculationPage": {
       "source": "frontend/src/pages/wage-calculation/index.tsx",
-      "line": 72
+      "line": 69
     },
     "WageCalculationDetailsPage": {
       "source": "frontend/src/pages/wage-calculation/[id].tsx",
-      "line": 49
+      "line": 62
     },
     "WorkHourMonitoringPage": {
       "source": "frontend/src/pages/work-hour-monitoring/index.tsx",
-      "line": 32
+      "line": 34
     },
     "DailyReportDashboard": {
       "source": "frontend/src/pages/daily-reports/components/DailyReportDashboard.tsx",
@@ -2398,11 +2398,11 @@
     },
     "DCFormProps": {
       "source": "frontend/src/pages/dc-management/components/DCForm.tsx",
-      "line": 51
+      "line": 60
     },
     "DCForm": {
       "source": "frontend/src/pages/dc-management/components/DCForm.tsx",
-      "line": 82
+      "line": 91
     },
     "DCImportDialogProps": {
       "source": "frontend/src/pages/dc-management/components/DCImportDialog.tsx",
@@ -2550,7 +2550,7 @@
     },
     "TaskService": {
       "source": "backend/src/services/TaskService.ts",
-      "line": 12
+      "line": 19
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
@@ -2558,7 +2558,7 @@
     },
     "CrudService": {
       "source": "backend/src/services/base/CrudService.ts",
-      "line": 29
+      "line": 25
     },
     "logService": {
       "source": "frontend/src/services/logService.ts",
@@ -2606,7 +2606,7 @@
     },
     "useAuth": {
       "source": "frontend/src/context/AuthContext.tsx",
-      "line": 16
+      "line": 12
     },
     "WorkOrderProvider": {
       "source": "frontend/src/context/WorkOrderContext.tsx",
@@ -2618,7 +2618,7 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 95
+      "line": 101
     },
     "TaskCard": {
       "source": "frontend/src/pages/workspace/components/TaskCard.tsx",
@@ -2626,7 +2626,7 @@
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 82
+      "line": 95
     },
     "MediaController": {
       "source": "backend/src/controllers/media_controller_aftersale_reference.ts",
@@ -2638,7 +2638,7 @@
     },
     "reviewLeaveStatus": {
       "source": "backend/src/controllers/reconciliationController.ts",
-      "line": 515
+      "line": 521
     },
     "AttendanceStats": {
       "source": "frontend/src/services/dcService.ts",
@@ -2746,11 +2746,11 @@
     },
     "WorkspaceRequestsPage": {
       "source": "frontend/src/pages/workspace/requests.tsx",
-      "line": 404
+      "line": 502
     },
     "CategoryConfigModal": {
       "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
-      "line": 28
+      "line": 38
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
@@ -2758,7 +2758,7 @@
     },
     "TaskRejectModal": {
       "source": "frontend/src/pages/workspace/components/TaskRejectModal.tsx",
-      "line": 47
+      "line": 49
     },
     "TaskSubtasksModal": {
       "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
@@ -2766,11 +2766,11 @@
     },
     "WorkOrderConfigModal": {
       "source": "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx",
-      "line": 30
+      "line": 42
     },
     "WorkspaceTree": {
       "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 44
+      "line": 45
     }
   }
 }

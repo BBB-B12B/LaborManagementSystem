@@ -1,0 +1,8 @@
+{
+  "session_id": "session_022_scan_data_optimization",
+  "associated_tasks": ["T-018-01-04", "T-018-01-05"],
+  "status": "completed",
+  "estimated_tokens": 85000,
+  "summary_context": "Investigated the reconciliation record status reverting back to CONFLICTED. Identified that the backend updates scanData punches to 7 (MATCHED status), but the document write triggers the production GCP Cloud Function. Since the GCP Cloud Function runs the old version of the code, it suffers from eventual consistency delay (querying scanData returns 5 punches instead of 7) and uses the old segment classification logic (which incorrectly marks 08:03 as used by otMorning, resulting in no IN scan for the morning shift). Consequently, the GCP function overwrites the record back to CONFLICTED with note 'ไม่พบสแกน IN สำหรับ segment 08:00–12:00'. The fix has been fully implemented in functions/src/index.ts, and the user has been requested to deploy the Cloud Functions to GCP to resolve the issue on production. Also, implemented preservation of original seconds for finger scan data during Daily Report fill and edit (T-018-01-05), ensuring backend merges punches using allScans (HH:mm:ss) as the base, keeping the original seconds intact and only appending :00 to newly added admin punches, preventing 2-digit format overrides.",
+  "History": []
+}
