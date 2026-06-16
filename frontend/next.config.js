@@ -3,7 +3,6 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
-  output: 'standalone',
   transpilePackages: ['@mui/x-date-pickers', '@mui/x-data-grid'],
 
   // i18n configuration

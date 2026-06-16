@@ -1,12 +1,10 @@
-# Context Cache — 2026-06-16 09:33
-task: T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth
+# Context Cache — 2026-06-16 16:18
+task: Optimize resource management and remove manual editing features
 phase: done
-next: (optional) ลบไฟล์คู่มือเก่า T-034 (admin/foreman/leader.html, manual.css) · รัน capture_manual.py เก็บ screenshot
-session_total: ~36110
-chat_total: ~50741
+next: None
+session_total: ~10570
+chat_total: ~25201
 cache_read: 0
 cache_write: 0
 pending_sections:
-  - [ ] /compact checkpoint
-  - [ ] R8 index sync: 10+ HTML files created → python3 scripts/backlink_analyzer.py → emit [r8-sync-check]
-  - [ ] Roadmap [X]: T-035 annotated (attempts + tool_calls)
+  none
