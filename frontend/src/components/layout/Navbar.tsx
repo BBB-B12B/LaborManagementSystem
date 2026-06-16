@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography, Drawer } from '@mui/material';
 import {
+  AccessTime as AccessTimeIcon,
   Calculate as CalculateIcon,
   Dashboard as DashboardIcon,
   Description as DescriptionIcon,
@@ -45,10 +46,10 @@ export const Navbar: React.FC = () => {
 
   const menuItems: NavMenuItem[] = [
     {
-      label: t('nav.dashboard'),
-      path: '/dashboard',
-      icon: <DashboardIcon />,
-      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD'],
+      label: t('nav.workspace', 'Workspace'),
+      path: '/workspace',
+      icon: <ViewKanbanIcon />,
+      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'],
     },
     {
       label: t('nav.dailyReport'),
@@ -75,10 +76,10 @@ export const Navbar: React.FC = () => {
       roles: ['AM'],
     },
     {
-      label: t('nav.workspace', 'Workspace'),
-      path: '/workspace',
-      icon: <ViewKanbanIcon />,
-      roles: ['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'],
+      label: 'ติดตามชั่วโมงงาน',
+      path: '/work-hour-monitoring',
+      icon: <AccessTimeIcon />,
+      roles: ['AM', 'PM', 'PD', 'MD'],
     },
     {
       label: 'Activity Monitor',

@@ -2,7 +2,9 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs20",
-    "predeploy": ["npm --prefix functions run build"],
+    "predeploy": [
+      "npm --prefix functions run build"
+    ],
     "ignore": [
       "node_modules",
       ".git",
@@ -37,5 +39,13 @@
       "port": 4001
     },
     "singleProjectMode": true
+  },
+  "hosting": {
+    "source": "frontend",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
   }
 }

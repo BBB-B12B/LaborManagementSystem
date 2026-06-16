@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือ AM — ผู้ดูแลระบบ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <h1>📘 คู่มือการใช้งานระบบบริหารจัดการแรงงาน</h1>
+  <div class="subtitle">บทบาท: AM — ผู้ดูแลระบบ (Admin · Level 8)</div>
+  <nav class="nav">
+    <a href="index.html">หน้าแรก</a>
+    <a href="god.html">GOD</a>
+    <a href="am.html" class="active">AM</a>
+    <a href="pm.html">PM</a>
+    <a href="se_fm.html">SE / FM</a>
+    <a href="md.html">MD</a>
+    <a href="pd.html">PD</a>
+    <a href="pe.html">PE</a>
+    <a href="oe.html">OE</a>
+    <a href="ld.html">LD</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › AM ผู้ดูแลระบบ</div>
+
+  <h2>AM ทำอะไรได้บ้าง</h2>
+  <p><strong>AM (ผู้ดูแลระบบ)</strong> เป็นเจ้าของหลักของงานหลังบ้านทั้งหมด ได้แก่ จัดการสมาชิก, แรงงานรายวัน (DC),
+     คำนวณค่าแรง, ข้อมูลสแกนเข้า-ออก, สรุปชั่วโมงงาน, กฎประกันสังคม และวันหยุดบริษัท</p>
+  <div class="note">ข้อควรรู้: AM เปิดหน้า <strong>Workspace</strong> ได้เพื่อ <em>ดูอย่างเดียว</em> — สร้าง/แก้ไขงานหรือใบสั่งงานไม่ได้
+     (ดูรายละเอียด Workspace ที่ <a href="pm.html#workspace">หน้า PM</a>)</div>
+
+  <p><strong>ทางลัดไปแต่ละหัวข้อ:</strong>
+     <a href="#member-management">สมาชิก</a> ·
+     <a href="#dc-management">แรงงานรายวัน</a> ·
+     <a href="#wage-calculation">คำนวณค่าแรง</a> ·
+     <a href="#scan-data">ข้อมูลสแกน</a> ·
+     <a href="#work-hour">ชั่วโมงงาน</a> ·
+     <a href="#sso-rules">ประกันสังคม</a> ·
+     <a href="#holidays">วันหยุด</a>
+  </p>
+
+  <!-- ============ 1. MEMBER MANAGEMENT ============ -->
+  <h2 id="member-management">1 · จัดการสมาชิก (Member Management)</h2>
+  <p>หน้า <code>/member-management</code> — เพิ่ม/แก้ไข/ลบ และนำเข้าผู้ใช้ระบบ พร้อมกำหนดบทบาทและโครงการที่รับผิดชอบ</p>
+
+  <h3>1.1 ดูรายชื่อสมาชิก</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"จัดการสมาชิก"</strong> จากแถบเมนูด้านบน</li>
+    <li>ระบบแสดงตารางรายชื่อสมาชิกทั้งหมด พร้อมบทบาทและสถานะ</li>
+    <li>ใช้ตัวกรองด้านบนเพื่อกรองตาม <strong>บทบาท (role)</strong>, <strong>แผนก</strong> หรือสถานะ <strong>ใช้งาน/ปิดใช้งาน</strong></li>
+  </ol>
+  <figure><img src="assets/am/member_list.png" alt="รายชื่อสมาชิก" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: member_list.png]&lt;/span&gt;'"><figcaption>ตารางรายชื่อสมาชิก</figcaption></figure>
+
+  <h3>1.2 เพิ่มสมาชิกใหม่</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"เพิ่มสมาชิก"</strong> (มุมขวาบน)</li>
+    <li>กรอกแบบฟอร์ม: <strong>ชื่อ-นามสกุล</strong>, <strong>username</strong>, <strong>password</strong>, เลือก <strong>บทบาท (role)</strong>, <strong>แผนก</strong> และ <strong>โครงการที่รับผิดชอบ</strong></li>
+    <li>กด <strong>"บันทึก"</strong> — ระบบสร้างบัญชีและแสดงในตารางทันที</li>
+  </ol>
+  <figure><img src="assets/am/member_create_form.png" alt="ฟอร์มเพิ่มสมาชิก" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: member_create_form.png]&lt;/span&gt;'"><figcaption>ฟอร์มเพิ่มสมาชิกใหม่</figcaption></figure>
+
+  <h3>1.3 แก้ไขสมาชิก</h3>
+  <ol class="steps">
+    <li>ที่แถวของสมาชิก กดไอคอน <strong>แก้ไข (✏️)</strong></li>
+    <li>เปลี่ยน <strong>บทบาท</strong>, <strong>โครงการที่รับผิดชอบ</strong> หรือ <strong>สถานะใช้งาน</strong> ได้</li>
+    <li>กด <strong>"บันทึก"</strong></li>
+  </ol>
+
+  <h3>1.4 ลบสมาชิก</h3>
+  <ol class="steps">
+    <li>ที่แถวของสมาชิก กดไอคอน <strong>ลบ (🗑️)</strong></li>
+    <li>ระบบถามยืนยัน — กด <strong>"ยืนยัน"</strong> เพื่อลบ</li>
+  </ol>
+
+  <h3>1.5 นำเข้าสมาชิกจาก Excel/CSV</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"Import"</strong></li>
+    <li>เลือกไฟล์ <strong>Excel หรือ CSV</strong></li>
+    <li>ระบบแสดงตัวอย่างข้อมูลก่อนนำเข้า — ตรวจสอบความถูกต้อง</li>
+    <li>กด <strong>"ยืนยันนำเข้า"</strong></li>
+  </ol>
+
+  <!-- ============ 2. DC MANAGEMENT ============ -->
+  <h2 id="dc-management">2 · จัดการแรงงานรายวัน (DC Management)</h2>
+  <p>หน้า <code>/dc-management</code> — ทะเบียนแรงงานรายวัน (Daily Contractor) พร้อมข้อมูลค่าจ้างและสวัสดิการ</p>
+
+  <h3>2.1 ดูรายชื่อแรงงานรายวัน</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"จัดการ"</strong> › <strong>"แรงงานรายวัน"</strong> (หรือเข้าที่ <code>/dc-management</code>)</li>
+    <li>ค้นหาได้จากช่อง <strong>"ค้นหาชื่อ, รหัสพนักงาน..."</strong></li>
+    <li>กรองด้วย <strong>"กรองโครงการ"</strong>, <strong>"กรองตำแหน่ง"</strong>, <strong>"ปี"</strong> และ <strong>"รูปแบบการดู"</strong></li>
+  </ol>
+  <figure><img src="assets/am/dc_list.png" alt="รายชื่อแรงงานรายวัน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: dc_list.png]&lt;/span&gt;'"><figcaption>ตารางแรงงานรายวัน + ตัวกรอง</figcaption></figure>
+
+  <h3>2.2 เพิ่มแรงงานใหม่</h3>
+  <p>ฟอร์มแบ่งเป็น 3 แท็บ (DC Form Tabs):</p>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"เพิ่มแรงงาน"</strong></li>
+    <li>แท็บ <strong>"ข้อมูลส่วนตัว"</strong>: กรอก <em>ชื่อ-นามสกุล</em>, <em>รหัสพนักงาน</em>, <em>วันเกิด</em>, <em>วันที่เริ่มงาน</em>, สถานะ <em>ใช้งาน (Active)</em></li>
+    <li>แท็บ <strong>"ข้อมูลการเงิน"</strong>: กรอก <em>ค่าแรงต่อวัน</em>, <em>เบี้ยเลี้ยง</em>, <em>ค่าวิชาชีพ</em>, <em>ค่าโทรศัพท์</em>, <em>ค่าห้องพัก</em>, สวัสดิการอื่น (ค่าตู้เย็น/ทีวี/เครื่องซักผ้า/แอร์เคลื่อนที่/อื่นๆ) และ <em>หักค่าผู้ติดตาม (Auto)</em> พร้อม <em>จำนวนคนผู้ติดตาม</em></li>
+    <li>แท็บ <strong>"งวดงาน"</strong>: ระบุงวดงานที่เกี่ยวข้อง</li>
+    <li>กด <strong>"บันทึก"</strong></li>
+  </ol>
+  <figure><img src="assets/am/dc_create_form.png" alt="ฟอร์มเพิ่มแรงงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: dc_create_form.png]&lt;/span&gt;'"><figcaption>ฟอร์มเพิ่มแรงงาน — 3 แท็บ</figcaption></figure>
+
+  <h3>2.3 แก้ไข / ลบ / ดูรายบุคคล</h3>
+  <ol class="steps">
+    <li>กดที่แถวแรงงานเพื่อ <strong>ดูรายละเอียดรายบุคคล</strong></li>
+    <li>กดไอคอน <strong>แก้ไข</strong> เพื่อปรับข้อมูล แล้วกด <strong>"บันทึก"</strong></li>
+    <li>กดไอคอน <strong>ลบ</strong> แล้ว <strong>"ยืนยัน"</strong></li>
+  </ol>
+
+  <h3>2.4 นำเข้าแรงงานจาก CSV/Excel</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"Import"</strong> → ช่อง <strong>"เลือกไฟล์ CSV หรือ Excel"</strong></li>
+    <li>หากยังไม่มีแม่แบบ กด <strong>"ดาวน์โหลดเทมเพลต"</strong> ก่อน แล้วกรอกข้อมูลตามรูปแบบ</li>
+    <li>อัปโหลดไฟล์ → ตรวจสอบตัวอย่าง → กด <strong>"ยืนยันนำเข้า"</strong></li>
+  </ol>
+
+  <!-- ============ 3. WAGE CALCULATION ============ -->
+  <h2 id="wage-calculation">3 · คำนวณค่าแรง (Wage Calculation)</h2>
+  <p>หน้า <code>/wage-calculation</code> — คำนวณ ตรวจสอบ อนุมัติ และส่งออกข้อมูลค่าแรงของแต่ละโครงการ</p>
+
+  <h3>3.1 เลือกโครงการ</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"คำนวณค่าแรง"</strong></li>
+    <li>ระบบแสดง <strong>รายการโครงการ</strong> ที่มีข้อมูลค่าแรง — คลิกโครงการที่ต้องการ</li>
+  </ol>
+  <figure><img src="assets/am/wage_project_list.png" alt="รายการโครงการค่าแรง" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: wage_project_list.png]&lt;/span&gt;'"><figcaption>รายการโครงการสำหรับคำนวณค่าแรง</figcaption></figure>
+
+  <h3>3.2 คำนวณและอนุมัติค่าแรง</h3>
+  <ol class="steps">
+    <li>เลือกช่วง <strong>"วันที่เริ่มต้น"</strong> และ <strong>"วันที่สิ้นสุด"</strong></li>
+    <li>กดปุ่ม <strong>"คำนวณ"</strong> (Calculate) — ระบบแสดงตารางพนักงานพร้อมยอดค่าแรง</li>
+    <li>ตรวจสอบยอด หากถูกต้องกด <strong>"อนุมัติ"</strong> (Approve) — ใส่ <strong>หมายเหตุ</strong> ได้หากต้องการ แล้วยืนยัน</li>
+  </ol>
+
+  <h3>3.3 ดูรายละเอียดรายบุคคล</h3>
+  <ol class="steps">
+    <li>คลิกที่ชื่อพนักงานในตาราง → เปิดหน้ารายละเอียด (<code>/wage-calculation/[id]</code>)</li>
+    <li>ดูการแยกยอด ค่าแรง/เบี้ยเลี้ยง/หักประกันสังคม รายวัน</li>
+    <li>กด <strong>"ย้อนกลับ"</strong> เพื่อกลับสู่ตารางรวม</li>
+  </ol>
+  <figure><img src="assets/am/wage_detail.png" alt="รายละเอียดค่าแรงรายบุคคล" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: wage_detail.png]&lt;/span&gt;'"><figcaption>รายละเอียดค่าแรงรายบุคคล</figcaption></figure>
+
+  <h3>3.4 Export รายงานค่าแรง</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"Export Attendance"</strong> — ระบบดาวน์โหลดไฟล์ Excel สรุปการลงเวลา/ค่าแรง</li>
+  </ol>
+
+  <!-- ============ 4. SCAN DATA ============ -->
+  <h2 id="scan-data">4 · ข้อมูลสแกนเข้า-ออก (Scan Data Monitoring)</h2>
+  <p>หน้า <code>/scan-data-monitoring</code> — นำเข้าและตรวจสอบข้อมูลสแกนนิ้ว/บัตรของพนักงาน</p>
+
+  <h3>4.1 ดูรายการสแกน + กรอง</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"ข้อมูลสแกน"</strong></li>
+    <li>กรองด้วย <strong>"จากวันที่"</strong> – <strong>"ถึงวันที่"</strong> และ <strong>"เลือกโครงการ"</strong></li>
+    <li>กด <strong>Refresh</strong> เพื่อโหลดล่าสุด · กด <strong>เต็มจอ (Fullscreen)</strong> เพื่อดูตารางขนาดใหญ่</li>
+  </ol>
+  <figure><img src="assets/am/scan_data_list.png" alt="รายการข้อมูลสแกน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: scan_data_list.png]&lt;/span&gt;'"><figcaption>ตารางข้อมูลสแกน + ตัวกรองช่วงวันที่</figcaption></figure>
+
+  <h3>4.2 อัปโหลดไฟล์สแกนจากเครื่อง</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"Upload"</strong></li>
+    <li>เลือกไฟล์ข้อมูลที่ส่งออกจากเครื่องสแกนนิ้ว</li>
+    <li>ระบบประมวลผลและเพิ่มข้อมูลเข้าตาราง</li>
+  </ol>
+  <figure><img src="assets/am/scan_upload.png" alt="อัปโหลดไฟล์สแกน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: scan_upload.png]&lt;/span&gt;'"><figcaption>อัปโหลดไฟล์ข้อมูลสแกน</figcaption></figure>
+
+  <h3>4.3 แก้ไข / เพิ่มรายการด้วยตนเอง</h3>
+  <ol class="steps">
+    <li>กดที่รายการเพื่อเปิด <strong>กล่องแก้ไข (Edit Dialog)</strong></li>
+    <li>กรอก/แก้ <strong>รหัสพนักงาน</strong>, <strong>วันที่</strong>, <strong>เวลา</strong>, <strong>หมายเหตุ (ถ้ามี)</strong></li>
+    <li>กด <strong>"บันทึก"</strong> (Save) · กด <strong>"ยกเลิก"</strong> เพื่อปิดโดยไม่บันทึก</li>
+    <li>คลิกชื่อพนักงานเพื่อดูรายละเอียดรายบุคคล (<code>/scan-data-monitoring/[id]</code>)</li>
+  </ol>
+
+  <!-- ============ 5. WORK HOUR ============ -->
+  <h2 id="work-hour">5 · สรุปชั่วโมงทำงาน (Work Hour Monitoring)</h2>
+  <p>หน้า <code>/work-hour-monitoring</code> — ดูภาพรวมชั่วโมงทำงานของพนักงานทุกโครงการ</p>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"ชั่วโมงงาน"</strong> — ระบบแสดงภาพรวมชั่วโมงทำงานรวม</li>
+    <li>กดปุ่ม <strong>"Filter"</strong> เพื่อเลือกช่วงวันที่ (<strong>"เริ่ม"</strong> – <strong>"สิ้นสุด"</strong>) และโครงการ → กด <strong>ใช้ตัวกรอง</strong></li>
+    <li>กด <strong>"รีเซ็ตตัวกรอง"</strong> เพื่อล้างเงื่อนไข · คลิกที่พนักงานเพื่อดูชั่วโมงรายบุคคล</li>
+  </ol>
+  <figure><img src="assets/am/work_hour_overview.png" alt="ภาพรวมชั่วโมงงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: work_hour_overview.png]&lt;/span&gt;'"><figcaption>ภาพรวมชั่วโมงทำงาน</figcaption></figure>
+
+  <!-- ============ 6. SSO RULES ============ -->
+  <h2 id="sso-rules">6 · กฎประกันสังคม (SSO Rules)</h2>
+  <p>หน้า <code>/management/social-security-rules</code> — กำหนดเพดานและอัตราการหักประกันสังคมที่ใช้คำนวณค่าแรง</p>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"จัดการ"</strong> › <strong>"กฎประกันสังคม"</strong></li>
+    <li>ดูกฎปัจจุบัน (เพดานเงินเดือน + อัตรา %)</li>
+    <li>กด <strong>"เพิ่มกฎ"</strong> → กรอกเพดานและอัตรา ในกล่อง <strong>Social Security Rule</strong> → <strong>"บันทึก"</strong></li>
+    <li>แก้ไข/ลบกฎเดิมได้จากไอคอนในแต่ละแถว</li>
+  </ol>
+  <figure><img src="assets/am/sso_rules_list.png" alt="กฎประกันสังคม" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: sso_rules_list.png]&lt;/span&gt;'"><figcaption>รายการกฎประกันสังคม</figcaption></figure>
+
+  <!-- ============ 7. HOLIDAYS ============ -->
+  <h2 id="holidays">7 · วันหยุดบริษัท (Company Holidays)</h2>
+  <p>หน้า <code>/management/company-holidays</code> — กำหนดวันหยุดที่ระบบใช้ประกอบการคำนวณค่าแรง/ชั่วโมงงาน</p>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"จัดการ"</strong> › <strong>"วันหยุดบริษัท"</strong></li>
+    <li>กรองตาม <strong>ปี</strong> เพื่อดูวันหยุดของปีนั้น</li>
+    <li>กด <strong>"เพิ่มวันหยุด"</strong> → กรอก <em>วันที่</em>, <em>ชื่อวันหยุด</em>, เลือก <em>ประเภท</em> (นักขัตฤกษ์ / วันหยุดบริษัท) → <strong>"บันทึก"</strong></li>
+    <li>แก้ไข/ลบได้จากไอคอนในแต่ละแถว</li>
+  </ol>
+  <figure><img src="assets/am/holidays_list.png" alt="รายการวันหยุด" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: holidays_list.png]&lt;/span&gt;'"><figcaption>รายการวันหยุดบริษัท</figcaption></figure>
+  <figure><img src="assets/am/holidays_create.png" alt="ฟอร์มเพิ่มวันหยุด" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: holidays_create.png]&lt;/span&gt;'"><figcaption>ฟอร์มเพิ่มวันหยุด</figcaption></figure>
+
+  <!-- ============ 8. WORKSPACE NOTE ============ -->
+  <h2>8 · Workspace (ดูได้อย่างเดียว)</h2>
+  <div class="crosslink">AM เปิด Workspace ได้เพื่อ <strong>ดู</strong> งานและใบสั่งงาน แต่ <strong>แก้ไขไม่ได้</strong>
+     วิธีใช้งาน Workspace แบบเต็มอยู่ที่ → <a href="pm.html#workspace">หน้า PM › Workspace</a></div>
+
+  <footer class="site-footer">
+    <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
+    <p>คู่มือ AM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
+  </footer>
+</div>
+
+</body>
+</html>

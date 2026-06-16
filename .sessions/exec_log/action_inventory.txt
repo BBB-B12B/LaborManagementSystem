@@ -1,0 +1,99 @@
+===== [A] DC MANAGEMENT =====
+label="1. ค่าห้องพัก"
+label="1. ค่าแรงต่อวัน"
+label="2. จำนวนคนผู้ติดตาม"
+label="2. เบี้ยเลี้ยง"
+label="3. ค่าตู้เย็น"
+label="3. ค่าวิชาชีพ"
+label="4. ค่าเครื่องเสียง"
+label="4. ค่าโทรศัพท์"
+label="5. ค่าทีวี"
+label="5. อื่นๆ"
+label="6. ค่าเครื่องซักผ้า"
+label="7. ค่าแอร์เคลื่อนที่"
+label="8. ค่าอื่นๆ"
+label="DC Form Tabs"
+label="กรองตำแหน่ง"
+label="กรองโครงการ"
+label="ข้อมูลการเงิน"
+label="ข้อมูลส่วนตัว"
+label="งวดงาน"
+label="ชื่อ-นามสกุล"
+label="ปี"
+label="ยกเว้น"
+label="รหัสพนักงาน"
+label="รูปแบบการดู"
+label="วันที่เริ่มงาน"
+label="วันเกิด"
+label="สถิติ ขาด/ลา/มาสาย"
+label="หักค่าผู้ติดตาม (Auto)"
+label="เลือกไฟล์ CSV หรือ Excel"
+label="ใช้งาน (Active)"
+onClick={handleCancel
+onClick={handleCreateDC
+onClick={handleDownloadTemplate
+onClick={handleOpenImport
+onClick={handleSubmit
+onClick={onClose
+onSubmit={handleDrawerSubmit
+onSubmit={handleSubmit
+placeholder="ค้นหาชื่อ, รหัสพนักงาน..."
+
+===== [B] WAGE CALCULATION =====
+Export
+export
+label="วันที่สิ้นสุด"
+label="วันที่เริ่มต้น"
+label="หมายเหตุ"
+onClick={handleApprove
+onClick={handleBack
+onClick={handleCalculate
+onClick={handleConfirmAction
+onClick={handleExportAttendance
+onClick={handleSubmit
+
+===== [C] WORK HOUR MONITORING =====
+Filter
+filter
+label="สิ้นสุด"
+label="เริ่ม"
+onClick={handleCloseFilter
+onClick={handleOpenFilter
+onClick={handleResetFilter
+
+===== [D] SCAN DATA MONITORING =====
+>ยกเลิก</Button
+EditDialog
+Upload
+editDialog
+label="จากวันที่"
+label="ถึงวันที่"
+label="รหัสพนักงาน"
+label="วันที่"
+label="หมายเหตุ (ถ้ามี)"
+label="เลือกโครงการ"
+label="เวลา"
+onClick={handleRefresh
+onClick={handleResetFilters
+onClick={handleSave
+onClick={onClose
+onClick={toggleFullscreen
+onSubmit={handleManualSubmit
+upload
+
+===== [E] OVERTIME =====
+label="1.5x"
+label="ค่าแรง OT รวม (1.5x)"
+label="งาน/รายละเอียดงาน *"
+label="ชั่วโมง OT"
+label="วันที่ *"
+label="หมายเหตุ (ถ้ามี)"
+label="อัปโหลดรูปภาพ (ถ้ามี)"
+label="เวลาจบ OT *"
+label="เวลาเริ่ม OT *"
+label="แรงงานรายวัน *"
+label="โครงการ/สังกัด *"
+onClick={onCancel
+onSubmit={handleSubmit
+placeholder="ระบุรายละเอียดงาน OT ที่ทำ"
+placeholder="ระบุหมายเหตุเพิ่มเติม"

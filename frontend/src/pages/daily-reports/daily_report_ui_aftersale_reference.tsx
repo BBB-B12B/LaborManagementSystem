@@ -69,9 +69,9 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
-import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns as AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import thLocale from 'date-fns/locale/th';
+import { th as thLocale } from 'date-fns/locale';
 import { format, subDays, isBefore, isSameDay, isValid, startOfDay } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
@@ -1049,7 +1049,7 @@ export default function DailyReportPage() {
         });
 
         // Save to Cache
-        setTasksInCache(filtered);
+        setTasksInCache(filtered, 1, false);
         return filtered;
       } finally {
         setCacheLoading(false);
@@ -2095,7 +2095,7 @@ export default function DailyReportPage() {
 
   return (
     <ProtectedRoute>
-      <LocalizationProvider dateAdapter={AdapterDateFnsV2} adapterLocale={thLocale}>
+      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box
             sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}

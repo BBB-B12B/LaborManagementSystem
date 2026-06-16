@@ -61,10 +61,14 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Request logging
-app.use((req, _res, next) => {
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    userAgent: req.get('user-agent'),
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`, {
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
   });
   next();
 });

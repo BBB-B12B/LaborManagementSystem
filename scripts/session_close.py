@@ -129,14 +129,15 @@ def run_session_indexer(dry_run=False):
         print(f"[dry-run] python3 {ROOT / 'scripts' / 'session_indexer.py'}")
         return True
     try:
+        import sys as sys_module
         result = subprocess.run(
-            ["python3", str(ROOT / "scripts" / "session_indexer.py")],
+            [sys_module.executable, str(ROOT / "scripts" / "session_indexer.py")],
             cwd=str(ROOT),
             capture_output=True,
             timeout=10
         )
         if result.returncode == 0:
-            print("[✓ session-indexer] completed")
+            print("[session-indexer] completed")
             return True
         else:
             print(f"[warn] session_indexer.py failed (code {result.returncode})", file=sys.stderr)
@@ -174,7 +175,7 @@ def main():
     success &= run_session_indexer()
 
     if success:
-        print("[✓ session-close] 5 files written")
+        print("[session-close] 5 files written")
         sys.exit(0)
     else:
         sys.exit(1)

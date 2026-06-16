@@ -11,6 +11,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -118,8 +119,18 @@ export default function CompanyHolidaysPage() {
   const availableYears = getAvailableYears();
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [holidays, setHolidays] = useState<CompanyHoliday[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  // useQuery caching for company holidays list
+  const {
+    data: holidays = [],
+    isLoading: loading,
+    error: queryError,
+    refetch: fetchHolidays,
+  } = useQuery({
+    queryKey: ['companyHolidays', selectedYear],
+    queryFn: () => companyHolidayService.getAll(selectedYear),
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+  });
 
   // Dialog states
   const [addOpen, setAddOpen] = useState(false);
@@ -147,29 +158,17 @@ export default function CompanyHolidaysPage() {
   const isReadOnly = isPastYear;
   const showWarningBanner = selectedYear !== currentYear;
 
-  // ---------- data fetching ----------
-
-  const fetchHolidays = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await companyHolidayService.getAll(selectedYear);
-      setHolidays(data);
-    } catch (e: any) {
-      showSnack(e.message || 'โหลดข้อมูลล้มเหลว', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedYear]);
-
-  useEffect(() => {
-    fetchHolidays();
-  }, [fetchHolidays]);
-
   // ---------- snack helper ----------
 
-  const showSnack = (msg: string, severity: 'success' | 'error') => {
+  const showSnack = useCallback((msg: string, severity: 'success' | 'error') => {
     setSnack({ open: true, msg, severity });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (queryError) {
+      showSnack(queryError.message || 'โหลดข้อมูลล้มเหลว', 'error');
+    }
+  }, [queryError, showSnack]);
 
   // ---------- add dialog ----------
 

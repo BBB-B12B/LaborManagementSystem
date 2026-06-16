@@ -52,7 +52,15 @@ Two counters — both in working memory, sourced from files at Boot:
 - `CHAT_TOTAL` — resets only on /compact · B1 sets to sys_fixed (dynamic: (CLAUDE.md+AGENTS.md chars × 0.3)+3500 ≈ 11–13k) · compact-restore: compact_size + sys_fixed
 - `CACHE_READ` / `CACHE_WRITE` — from API usage fields · `cache_hit% = CACHE_READ / (CACHE_READ + uncached_input) × 100` · target ≥ 60%
 
-Formulas:
+**Provider formula selection (read `api_provider` / `token_formula` from detected.md — see §Provider Profiles):**
+- `anthropic` → use the baseline Formulas below as-is (calibrated for the Claude tokenizer). Cache read ≈ 0.1× input.
+- `openai` → tiktoken-style: English ≈ chars/4 (≈ 0.25/char); code/structured denser → 0.30/char; thinking tokens count as output; cache read ≈ 0.1× input.
+- `google` → multi-byte correction: Latin ≈ 0.27/char, CJK/Thai ≈ 1.0/char; ⚠️ input >200000 → reprice the WHOLE request (in+out) at long-context rate before logging (200K cliff).
+- `generic` (provider unknown) → average / generic fallback: use the baseline Formulas below AND assume NO cache discount (cold every turn — most conservative).
+- ⚠️ Never apply one provider's cache cost factor to another (§Provider Profiles). api_provider missing/unknown → generic fallback + no-cache assumption.
+- **PostToolUse hook (`scripts/posttool_track.py`, T-178)** consumes this profile: it imports `token_estimator.PROVIDER_MULTS` + `_load_provider_formula()` and accumulates SESSION_TOTAL/CHAT_TOTAL using the detected provider's `tool` multiplier (anthropic 0.3 / openai 0.27 / google 0.27 / generic 0.35). Import failure → generic 0.35 fallback (fail-safe). CHAT uses the same delta as SESSION (no ×1.5 — true API context ≈1.5–2× this lower bound, doc note only).
+
+Formulas: (baseline — `anthropic` and `generic` fallback)
 - Output = (thai_chars × 1.7) + (en_chars × 0.3)
 - Input = (user_msg_chars × 0.3) + tool_result_tokens
 - Per-turn CHAT_TOTAL growth: CHAT_TOTAL += 700 + turn_tokens × 1.5  (calibrated T-046: actual ≈ 1.5–2×)
@@ -63,6 +71,7 @@ Formulas:
 Each turn (in order):
 1. Compute turn_tokens → SESSION_TOTAL += turn_tokens · CHAT_TOTAL += 700 + turn_tokens × 1.5
 2. Write SESSION_TOTAL + CHAT_TOTAL to session_tokens.md EVERY turn, before the footer (persist-every-turn — closes CFP-031). Reset SESSION_TOTAL to 0 ONLY on: (1) user-confirmed /compact at an explicit mece compact-checkpoint (PATH B writes `session_reset=armed`), OR (2) task done + session close (PATH A/C). NEVER reset on stale/leftover compact_state.md or mid-task fresh boot. CHAT_TOTAL resets on /compact only.
+   · T-180 single-source: `scripts/compact_reset.py` is the ONE place that recomputes counters after a compact (CHAT=compact_size+sys_fixed, LOOP=0, SESSION=0 if armed|phase:done else preserve, flips armed→consumed, prints `[compact-reset]`). Called by the SessionStart:compact hook (claude-code, automatic) and the C0 plain-text-confirm path (other providers). It mirrors the B1 formula exactly so B1 / hook / confirm never drift. Stuck-counter guard (C0.5): [compact-STOP] with ~same CHAT (±2k) across ≥2 turns = didn't-reset bug, not a real ceiling → run compact_reset.py instead of nagging.
 3. Write JSONL entry → `.sessions/token_log.jsonl`: turn_id · timestamp · task_id · phase · session_total · chat_total · cache_read_tokens · cache_write_tokens · cache_hit_pct · bucket_sys/tools/hist/output · turn_tokens · hooks_overhead=700
    · bucket fields required — write 0 if value unknown (never omit fields from schema)
 4. Footer: `*(Turn: N · Loop_W: N | Session: ~NNNk | Chat: ~NNNk tokens)*` · if SESSION_TOTAL >5k add `[sys:Nk tools:Nk hist:Nk out:Nk]`
@@ -162,12 +171,11 @@ Routing shortcuts:
 | Counter | Threshold | Action |
 |---|---|---|
 | SESSION_TOTAL | >40k + turns ≥8 | rolling summary: summarize prior 4 turns → `.sessions/session_memory.md` · keep last 2 raw |
-| SESSION_TOTAL | >30k + sections ≥3 remaining | compact after current section (cache-warm) |
 | SESSION_TOTAL | >60k | finish current step → TOKEN PAUSE |
-| SESSION_TOTAL | >80k | `/compact` immediately |
+| SESSION_TOTAL | 80-90k | 🟡 [compact-rec] strong — recommend /compact (NOT forced · user choice) |
 | SESSION_TOTAL | >90k | HALT → save state → report |
 | CHAT_TOTAL | >80k | 🟡 [compact-rec] strong — PRIMARY trigger: recommend /compact + user choice (NOT a STOP) |
-| CHAT_TOTAL | >120k | 🛑 /compact บังคับ |
+| CHAT_TOTAL | >120k | 🛑 HALT (hard ceiling) — save state → report |
 ⚠️ CHAT_TOTAL undercount: true API context ≈ CHAT_TOTAL × 1.5–2× (triangular re-send) · use as lower bound · compact before CHAT_TOTAL > 80k to avoid spike
 | LOOP_WEIGHT | >50 | 🟡 [compact-rec] light hint only — SECONDARY: high call-count, not context size (no STOP) |
 > Hard STOP = SESSION_TOTAL >90k OR CHAT_TOTAL >120k only. PRIMARY rec signal = CHAT_TOTAL >80k (real context size); LOOP_WEIGHT >50 is a secondary call-count hint, never hard-stops (Phase C+D).
@@ -179,7 +187,7 @@ Routing shortcuts:
 **Set once at project setup. All harness files reference tier names — never hardcode model names.**
 
 ```
-MODEL_HIGH   = <your high-capability model>   # reasoning, MECE plan, multi-step execution
+MODEL_HIGH   = <your high-capability model>   # structural reasoning, MECE plan, architecture (reserved — not routine code edits)
 MODEL_MEDIUM = <your mid-tier model>           # analysis, code review, structured output
 MODEL_LOW    = <your fast/cheap model>         # lookup, grep, read-only, single-output tasks
 ```
@@ -188,18 +196,43 @@ MODEL_LOW    = <your fast/cheap model>         # lookup, grep, read-only, single
 
 | Tier | Anthropic (Claude) | Google (Gemini) | OpenAI |
 |---|---|---|---|
-| HIGH | claude-sonnet-4-6 | gemini-2.0-pro | gpt-4o |
-| MEDIUM | claude-haiku-4-5 | gemini-2.0-flash | gpt-4o-mini |
-| LOW | claude-haiku-4-5 | gemini-2.0-flash-lite | gpt-4o-mini |
+| HIGH | claude-opus-4-8 | gemini-3.1-pro | gpt-5.5 |
+| MEDIUM | claude-sonnet-4-6 | gemini-3.5-flash | gpt-5.4 |
+| LOW | claude-haiku-4-5 | gemini-3.1-flash-lite | gpt-5.4-nano |
+
+> Model IDs current as of Jun 2026 (see `knowledge/llm-api-pricing-comparison-2026-06.md`). Tier ladder: HIGH reserved for genuine structural reasoning; MEDIUM = capable workhorse writer (does the bulk of execution); LOW = grep/lookup/review.
 
 **How to configure:** Agent fills in actual model IDs during project setup (Phase 1 §1.1).
 Store in `.agents/platform/detected.md` under `model_high:` / `model_medium:` / `model_low:` fields.
-All spawn calls in AGENTS.md use tier names — runtime resolves to actual model ID via detected.md.
+The active provider is set in detected.md `api_provider:` — runtime resolves tier → that provider's column. All spawn calls in AGENTS.md use tier names — never hardcode model IDs.
 
-**Routing rule (R4):**
-- `MODEL_LOW` → lookup / grep / single-file read / Reviewer / Completion Gate
-- `MODEL_MEDIUM` → analysis / structured output / classify
-- `MODEL_HIGH` → MECE plan / multi-step execution / Phase 3 sections ≥2
+**Routing rule (R4) — model × EFFORT · baseline = Sonnet (MEDIUM) @ low-med effort · provider resolved via detected.md `api_provider` · robustness floor: every skill must run on a MEDIUM-tier model WITHOUT inference:**
+- `MODEL_LOW` @ low → lookup / grep / single-file read / Reviewer / Completion Gate
+- `MODEL_MEDIUM` (Sonnet) @ low → mechanical edit / edit-as-instructed / classify / structured output
+- `MODEL_MEDIUM` (Sonnet) @ medium → multi-step execution / code edits / Phase 3 sections ≥2 (workhorse — must produce complete detailed output without inference)
+- `MODEL_HIGH` (Opus) @ high → MECE planning / architecture / structural reasoning ONLY (reserved — NOT for routine code edits)
+- Rule: dial EFFORT first, tier second · escalate to MODEL_HIGH (Opus) ONLY for genuine structural reasoning (a strong model masking a vague step = the skill is still broken for weaker models)
+
+---
+
+## Provider Profiles — Cache & Token Rules per Provider
+
+**Why this section exists:** cache mechanics and token-cost behavior differ per provider. Applying one provider's cache rules to another **breaks immediately** (e.g. placing Anthropic explicit breakpoints on an OpenAI request, or ignoring Google's 200K repricing cliff). Runtime MUST read `api_provider:` from `.agents/platform/detected.md` and apply ONLY that provider's row. Source rates: `knowledge/llm-api-pricing-comparison-2026-06.md`.
+
+| api_provider | cache_mechanism | cache_write_cost | cache_read_cost | cache_TTL | context_cliff_tokens | token_formula |
+|---|---|---|---|---|---|---|
+| `anthropic` | explicit_breakpoint (must place `cache_control` on stable prefix) | 1.25× (5-min TTL) / 2× (1-hr TTL) | 0.1× (−90%) | 5 min / 1 hr | none (flat to 1M) | `anthropic` |
+| `openai` | auto_prefix (automatic when prefix stable >~1024 tokens) | none | ~0.1× (−90%) | 5–10 min | ~270000 | `openai` |
+| `google` | implicit + explicit | per-hour storage cost | ~0.1–0.25× (−75–90%) | varies | **200000** | `google` |
+| _unknown_ | treat as no-cache (assume cold every turn) | — | — | — | assume 200000 (most conservative) | `generic` |
+
+**Per-provider guardrails (hard):**
+- **anthropic** — keep CLAUDE.md + AGENTS.md as a stable cached prefix; any mid-session edit to that prefix pays write cost again → emit `[schema-changed]`. Never `cache_control` dynamic blocks (user msg / tool results).
+- **openai** — cache is automatic; just keep the prefix byte-stable. Short TTL (5–10 min) → compact before idle >10 min or lose the cached prefix.
+- **google** — ⚠️ **200K cliff**: crossing 200K *input* reprices the ENTIRE request (input **and** output) at long-context rate — silent cost spike. Guard: warn + consider compact when approaching 200K with a Google provider.
+- **unknown** — never assume a cache discount; never apply another provider's breakpoint syntax. Use `generic` token formula + the most conservative cliff.
+
+**Resolution order:** detected.md `api_provider` → match row → apply cache_mechanism + token_formula. Missing/unknown → `generic` row. This profile is set once at B4 Platform Probe and read by R1 (token formula) and the cache-discipline rules.
 
 ---
 
@@ -221,14 +254,15 @@ Run 1 Bash scope probe before any task.
 - Parallel spawn: pass all sections as array in single `invoke_subagents` Subagents[] (not sequentially)
 - Custom types: use `define_subagent` to register a new TypeName for the session before invoking
 
-**Phase routing (override task-type tier when phase is known):**
-| Phase | Tier | Reason |
-|---|---|---|
-| G1 Scan / G2 Reads | MODEL_LOW | Grep + classify only |
-| MECE Plan M1-M3 | MODEL_HIGH | Reasoning heavy |
-| L1-L5 REACT Loop | MODEL_HIGH | Code edits need quality |
-| Reviewer (Completion Gate) | MODEL_LOW | Verify only — read-only |
-Savings: route G1+G2+Reviewer to MODEL_LOW → ~35% cost reduction vs all-HIGH
+**Phase routing (override task-type tier when phase is known) — model × effort:**
+| Phase | Tier | Effort | Reason |
+|---|---|---|---|
+| G1 Scan / G2 Reads | MODEL_LOW | low | Grep + classify only |
+| MECE Plan M1-M3 | MODEL_HIGH | high | Structural reasoning |
+| L1-L5 REACT Loop (mechanical / edit-as-instructed) | MODEL_MEDIUM | low | Explicit steps, no reasoning |
+| L1-L5 REACT Loop (multi-step / code edits) | MODEL_MEDIUM | medium | Workhorse writer — complete output w/o inference (HIGH reserved for planning) |
+| Reviewer (Completion Gate) | MODEL_LOW | low | Verify only — read-only |
+Baseline when phase unknown: Sonnet @ low-med effort. Savings: route lookups+reviewer to MODEL_LOW + dial effort low for mechanical work → ~35%+ cost reduction vs all-HIGH @ high-effort.
 
 **Harness Context in Sub-agent Prompts:**
 - Explore agents (read-only): no harness constraints needed
@@ -239,7 +273,7 @@ Savings: route G1+G2+Reviewer to MODEL_LOW → ~35% cost reduction vs all-HIGH
     - No src/ edit without gather_complete.md AND mece_plan.md written today
     - No new file without updating knowledge/index_files.json backlinks
     - No symbol create/rename without python scripts/symbol_indexer.py after edit
-    - DB edits (src/db/): emit [db-gate] and halt — main agent must confirm
+    - Domain-gated edits (per active domain pack `## domain_gates`, e.g. coding's src/db/): emit the pack's gate signal and halt — main agent must confirm
   ```
 - Missing `constraints:` block in execution sub-agent prompt = CFP violation
 
@@ -291,7 +325,7 @@ Cannot fill Line? → grep not done yet → run grep first.
 T1 partial match (path found but no line number) → proceed to T2. Still no line? → T3.
 
 **Config files load ONCE at Boot (B1–B3) — never re-read mid-session:**
-CLAUDE.md · index_files.json · index_variables.json → in working memory after Boot.
+CLAUDE.md · knowledge/index_files.json · knowledge/index_variables.json → in working memory after Boot.
 Re-read only after TOKEN PAUSE + resume.
 
 | Prohibited | Required instead |
@@ -385,7 +419,7 @@ R11: `.sessions/`, `knowledge/`, comments, commits → English only. Thai: user 
 |---|---|
 | Edit `src/` | Re-read changed section · check no broken imports |
 | DB schema | No ERR-007 violations |
-| Create/delete file | `index_files.json` updated + backlinks resolved |
+| Create/delete file | `knowledge/index_files.json` updated + backlinks resolved |
 | Error fix | ERR-XXX in error_index.md + roadmap `[X]` |
 
 ---
@@ -399,15 +433,15 @@ AttemptID=02 / tool error 2× / R12 FAIL twice → emit and halt:
 ---
 
 ## R14 · Destructive Action Gates
-Emit `[gate]` + wait confirm before: delete/overwrite `src/` or `knowledge/` · any `src/db/` edit · batch >5 files.
+Emit `[gate]` + wait confirm before: delete/overwrite `knowledge/` or `.sessions/mece_plan.md` · any path in the active domain pack `## paths` `protected:` field (e.g. coding's `src/`, `src/db/`) · batch >5 files.
 ```
 [gate] Action: `<what>` · Scope: `<files>` · Risk: `<why>` · Waiting: confirm
 ```
 
 ---
 
-## R15 · DB Hard Stop
-Any `src/db/` edit or TS type with DB columns → HALT immediately:
+## R15 · Domain Hard Stop
+Any edit matching the active domain pack `## domain_gates` `Pre:` condition (e.g. coding's `src/db/` or TS type with DB columns) → HALT immediately:
 ```
 [db-gate] File: `<path>` · Symbol: `<name>` · Change: `<what>` · DB impact: `<tables>` · → Waiting for explicit "yes"
 ```
@@ -564,7 +598,7 @@ Set `[/]` when starting → `[X]` when done.
   5. **MANDATORY tool call (same response):** Edit CODING_FAILURE_PATTERNS.md → append CFP entry immediately · no deferral
      CFP format: `## CFP-<N+1> · <title>` · Symptom · Root cause · Prevention · Detection signal
      After Edit: grep -c "^## CFP-" → verify count = N+1 · emit `[✓ CFP-<N+1>]`
-  6. Set c0_resolved = true → re-run C0→C1→C2→C3 with original user message
+  6. Set c0_resolved = true → re-run C0→C0.5→C1→C2→C3 with original user message
      (C0 detects c0_resolved → clears it → skips complaint check → proceeds to C1)
 ```
 
@@ -644,7 +678,7 @@ Reply line 1: `**[Boot]** Thread: <done|in_progress> · Tasks: <N open> · Skill
 
 ---
 
-## Per-Turn Routing (every user message — run C0→C1→C2→C3 before any work)
+## Per-Turn Routing (every user message — run C0→C0.5→C1→C2→C3 before any work)
 
 **Hard rule:** Agent detects topic switch autonomously — user must NOT need to say "close session".
 
@@ -654,7 +688,14 @@ Reply line 1: `**[Boot]** Thread: <done|in_progress> · Tasks: <N open> · Skill
   "ลืมบอกให้เพิ่ม X" = feature request → NOT C0
 - c0_resolved flag set → clear → skip C0 → proceed to C1 (prevents infinite C0 loop)
 - YES → [self-improve] → backfill → CFP log → c0_resolved=true → re-run C0-C3
-- NO → C1
+- NO → C0.5
+
+**C0.5 — Compact / Token Pre-Check (every turn, before C1):**
+- Read the `[token-state]` hook values: LOOP_W · SESSION · CHAT. PRIMARY signal = CHAT_TOTAL (real context size); LOOP_WEIGHT = secondary tool-call-count hint only.
+- CHAT_TOTAL > 80k → emit `[compact-rec]` strong (recommend /compact · NOT a stop · user decides)
+- LOOP_WEIGHT > 50 → emit `[compact-rec]` light hint only (secondary · optional · no stop)
+- HARD STOP only at the real ceiling: SESSION_TOTAL > 90k OR CHAT_TOTAL > 120k → emit `[compact-STOP]` → write compact_state.md → STOP
+- Stuck-counter guard: `[compact-STOP]` firing with ~same CHAT_TOTAL (±2k) across ≥2 turns = the counter did NOT reset after a compact (the bug), NOT a real ceiling → run `python3 scripts/compact_reset.py --trigger=user-confirm` → surface its `[compact-reset]` line · do NOT keep nagging
 
 **C1 — Load:** Read `.sessions/active_thread.md` → extract task: field
 
@@ -723,8 +764,8 @@ Same topic   → match keywords[] → re-read SKILL.md if skill changes
 
 Completion Gate:
 **Token Check (run first):**
-- SESSION_TOTAL > 50k AND compact not yet run? → compact first → then run Completion Gate checks
-- SESSION_TOTAL > 60k? → TOKEN PAUSE before Completion Gate
+- SESSION_TOTAL > 60k AND compact not yet run? → compact first → then run Completion Gate checks
+- SESSION_TOTAL 60-80k (still high after compact)? → TOKEN PAUSE before Completion Gate · > 90k → HALT
 ```
 □ All sections executed  □ Writes [✓ written]  □ Index Sync
 □ Roadmap [X]           □ phase: done          □ SESSION_TOTAL written → .sessions/session_tokens.md
@@ -812,11 +853,11 @@ Before any of these actions → emit `[gate]` → ask user → wait for explicit
 
 **Any trigger below = HALT immediately. Do NOT touch anything until user says "yes" explicitly.**
 
-Triggers (any one is enough):
-- Edit to any file in `src/db/` (schema, migration, seed, connection, queries)
-- Rename, remove, or change TypeScript type/interface that has DB column fields
-- Any symbol in `index_variables.json` with type `DBTable`, `DBColumn`, or `DrizzleSchema`
-- Adding/removing columns, changing column types, altering table relationships
+Triggers (any one is enough — per active domain pack `## domain_gates` · defaults shown are coding pack examples):
+- Edit to any file matching the domain pack gate path (e.g. coding's `src/db/`: schema, migration, seed, connection, queries)
+- Rename, remove, or change a protected type/interface listed in the domain pack gate (e.g. coding's TS type with DB column fields)
+- Any symbol in `knowledge/index_variables.json` with type `DBTable`, `DBColumn`, or `DrizzleSchema`
+- Domain-specific structural change listed in the pack `## domain_gates` (e.g. coding's adding/removing columns, changing column types)
 
 Gate — emit and WAIT before any tool call:
 ```
@@ -828,7 +869,7 @@ Gate — emit and WAIT before any tool call:
 **"It's just a TypeScript type" is NOT an exemption.**
 Drizzle derives DB schema from TypeScript types — a type rename silently breaks migrations and queries.
 
-> ⚠️ EDIT THIS for project-specific additional rules (multi-row INSERT, edge runtime constraints, CSV parsing, etc.)
+> ⚠️ Project-specific hard rules now live in the active domain pack (`domain/<name>.md` `## critical_rules` + `## domain_gates`), not here — e.g. coding's Miniflare D1 multi-row INSERT restriction, edge runtime (WebCrypto only), CSV parsing rules.
 > Reference: INVARIANTS.md I2 for canonical source.
 
 ---
@@ -1219,8 +1260,8 @@ All valid trace tokens agents must emit. Include in `CLAUDE.md` Quick Reference.
 | `**[db-gate]**` | Before any DB schema change (I2) — wait for confirm |
 | `**[R8]**` | After file create/edit/delete — running symbol_indexer.py |
 | `**[loop]**` | After each MECE section completes |
-| `**[compact]**` | When SESSION_TOTAL > 50k — compact fires, continue working |
-| `**[pause]**` | When SESSION_TOTAL > 60k — TOKEN PAUSE, save state, ask user |
+| `**[compact-rec]**` | When SESSION_TOTAL > 60k — recommend /compact (not forced · user decides), continue working |
+| `**[pause]**` | When SESSION_TOTAL 60-80k — TOKEN PAUSE, save state, ask user · > 90k → HALT |
 | `**[resume]**` | When resuming an in_progress thread |
 | `**[tokens]**` | Token checkpoint (A=before, B=after, C=final) |
 | `**[MECE]**` | MECE plan sent to user — waiting confirm |

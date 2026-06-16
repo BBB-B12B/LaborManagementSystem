@@ -69,12 +69,20 @@ class SocialSecurityRuleService extends BaseCrudService<SocialSecurityRule> {
         }
       });
 
-      await collections.socialSecurityRules.doc(id).update(updateData);
+      const docRef = collections.socialSecurityRules.doc(id);
+      const existingSnap = await docRef.get();
+      if (!existingSnap.exists) {
+        throw new Error(`Social Security Rule with ID ${id} not found`);
+      }
+      const existing = existingSnap.data()!;
 
-      const doc = await collections.socialSecurityRules.doc(id).get();
+      await docRef.update(updateData);
       logger.info(`Social Security Rule updated: ${id}`);
 
-      return { id: doc.id, ...doc.data() } as SocialSecurityRule;
+      // Invalidate query cache
+      this.cachedRules = null;
+
+      return { id, ...existing, ...updateData } as SocialSecurityRule;
     } catch (error: any) {
       logger.error(`Error updating social security rule ${id}:`, error);
       throw error;

@@ -50,11 +50,11 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { format, parse, lastDayOfMonth } from 'date-fns';
-import thLocale from 'date-fns/locale/th';
+import { th as thLocale } from 'date-fns/locale';
 
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { th } from 'date-fns/locale';
 
 import { Layout, ProtectedRoute } from '@/components/layout';
@@ -390,6 +390,7 @@ export default function WorkRecordsPage() {
     queryKey: ['daily-report-backlog', filterStartDate, filterEndDate],
     queryFn: () => taskService.getBacklog(filterStartDate, filterEndDate),
     enabled: true,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   // Filter tasks that are eligible for the selected cell's date
@@ -877,9 +878,9 @@ export default function WorkRecordsPage() {
                         fontWeight: 'bold',
                         minWidth: 60,
                         width: 60,
-                        position: 'sticky',
-                        left: 0,
-                        zIndex: 11,
+                        position: { xs: 'static', sm: 'sticky' },
+                        left: { xs: 'auto', sm: 0 },
+                        zIndex: { xs: 'auto', sm: 11 },
                         bgcolor: 'background.paper',
                         borderRight: '1px solid rgba(224,224,224,0.5)',
                       }}
@@ -890,11 +891,11 @@ export default function WorkRecordsPage() {
                       sx={{
                         fontWeight: 'bold',
                         minWidth: 240,
-                        position: 'sticky',
-                        left: 60,
-                        zIndex: 10,
+                        position: { xs: 'static', sm: 'sticky' },
+                        left: { xs: 'auto', sm: 60 },
+                        zIndex: { xs: 'auto', sm: 10 },
                         bgcolor: 'background.paper',
-                        boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
+                        boxShadow: { xs: 'none', sm: '2px 0 5px rgba(0,0,0,0.05)' },
                       }}
                     >
                       รายชื่อแรงงาน
@@ -930,9 +931,9 @@ export default function WorkRecordsPage() {
                         <TableCell
                           align="center"
                           sx={{
-                            position: 'sticky',
-                            left: 0,
-                            zIndex: 9,
+                            position: { xs: 'static', sm: 'sticky' },
+                            left: { xs: 'auto', sm: 0 },
+                            zIndex: { xs: 'auto', sm: 9 },
                             bgcolor: 'background.paper',
                             minWidth: 60,
                             width: 60,
@@ -945,11 +946,11 @@ export default function WorkRecordsPage() {
                         </TableCell>
                         <TableCell
                           sx={{
-                            position: 'sticky',
-                            left: 60,
-                            zIndex: 9,
+                            position: { xs: 'static', sm: 'sticky' },
+                            left: { xs: 'auto', sm: 60 },
+                            zIndex: { xs: 'auto', sm: 9 },
                             bgcolor: 'background.paper',
-                            boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
+                            boxShadow: { xs: 'none', sm: '2px 0 5px rgba(0,0,0,0.05)' },
                             minWidth: 240,
                             whiteSpace: 'nowrap',
                           }}

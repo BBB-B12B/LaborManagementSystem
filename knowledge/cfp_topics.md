@@ -1,6 +1,9 @@
 # CFP Topics — Canonical Topic Registry
 # Source of truth for harness_doctor §1 topic matching
 # Every CFP must belong to exactly 1 topic.
+# NAMESPACE (T-193): topic ids here are kebab-case and are SEPARATE from the snake_case
+#   file-facet topics in knowledge/topic_registry.json. Similar names (token-tracking vs
+#   token_tracking) are NOT the same topic — never cross-assign. See topic_facet_schema.md §9.
 # date_created: 2026-06-02
 
 ---

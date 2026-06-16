@@ -77,6 +77,8 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import DatePicker from '@/components/forms/DatePicker';
 import { memberService } from '@/services/memberService';
 import * as XLSX from 'xlsx-js-style';
+import { useRealtimeWorkspaceRequests } from '@/hooks/useRealtimeWorkspaceRequests';
+import { useWorkspaceRequestsCacheStore } from '@/store/workspaceRequestsCacheStore';
 
 // ฟังก์ชันคำนวณชั่วโมงจากช่วงเวลากะ
 const calculateHoursFromRange = (timeRange: string | null | undefined): number => {
@@ -404,8 +406,8 @@ const renderLeaveDiff = (currentLeave: any[], prevLeave: any[] | null) => {
 
 const getDueDateColor = (row: any) => {
   if (!row.dueDate) return row.progress === 100 ? '#10b981' : '#9ca3af';
-  const dueDateObj = new Date(row.dueDate);
-  if (isNaN(dueDateObj.getTime())) return row.progress === 100 ? '#10b981' : '#9ca3af';
+  const dueDateObj = parseSafeDate(row.dueDate);
+  if (!dueDateObj || isNaN(dueDateObj.getTime())) return row.progress === 100 ? '#10b981' : '#9ca3af';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -413,7 +415,7 @@ const getDueDateColor = (row: any) => {
 
   // If progress is 100, compare completion date (updatedAt) with dueDate
   if (row.progress === 100) {
-    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    const completionDate = parseSafeDate(row.updatedAt) || new Date();
     completionDate.setHours(0, 0, 0, 0);
     const diff = dueDateObj.getTime() - completionDate.getTime();
     const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
@@ -441,8 +443,8 @@ const getDueDateColor = (row: any) => {
 
 const getDueDateTooltip = (row: any) => {
   if (!row.dueDate) return row.progress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
-  const dueDateObj = new Date(row.dueDate);
-  if (isNaN(dueDateObj.getTime())) return row.progress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+  const dueDateObj = parseSafeDate(row.dueDate);
+  if (!dueDateObj || isNaN(dueDateObj.getTime())) return row.progress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -450,7 +452,7 @@ const getDueDateTooltip = (row: any) => {
 
   // If progress is 100, describe completion relative to dueDate
   if (row.progress === 100) {
-    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    const completionDate = parseSafeDate(row.updatedAt) || new Date();
     completionDate.setHours(0, 0, 0, 0);
     const diff = dueDateObj.getTime() - completionDate.getTime();
     const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
@@ -486,10 +488,10 @@ const getDueDateTooltip = (row: any) => {
 const getDueDateText = (row: any) => {
   if (row.progress === 100) {
     if (!row.dueDate) return 'ตรงตามแผน';
-    const dueDateObj = new Date(row.dueDate);
-    if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+    const dueDateObj = parseSafeDate(row.dueDate);
+    if (!dueDateObj || isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
 
-    const completionDate = row.updatedAt ? new Date(row.updatedAt) : new Date();
+    const completionDate = parseSafeDate(row.updatedAt) || new Date();
     completionDate.setHours(0, 0, 0, 0);
     dueDateObj.setHours(0, 0, 0, 0);
 
@@ -506,8 +508,8 @@ const getDueDateText = (row: any) => {
   }
 
   if (!row.dueDate) return 'ไม่ระบุ';
-  const dueDateObj = new Date(row.dueDate);
-  if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+  const dueDateObj = parseSafeDate(row.dueDate);
+  if (!dueDateObj || isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -591,6 +593,30 @@ export default function WorkspaceRequestsPage() {
     }
   }, [allowedProjects, selectedProjectId, user]);
 
+  // ดึงข้อมูลผู้ใช้ทั้งหมดเพื่อใช้แปลง UID/username เป็นชื่อจริง
+  const { data: usersData } = useQuery({
+    queryKey: ['usersMapList'],
+    queryFn: () => memberService.getAllUsers({ pageSize: 1000 }),
+    staleTime: 7 * 24 * 60 * 60 * 1000, // แคชข้อมูลพนักงานไว้ 7 วัน
+  });
+
+  const usersMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (usersData?.users && Array.isArray(usersData.users)) {
+      usersData.users.forEach((u) => {
+        map.set(u.id, u.name);
+        if (u.username) map.set(u.username, u.name);
+        if (u.employeeId) map.set(u.employeeId, u.name);
+      });
+    }
+    return map;
+  }, [usersData]);
+
+  const resolveUserName = (userId: string) => {
+    if (!userId) return 'ไม่ระบุ';
+    return usersMap.get(userId) || userId;
+  };
+
   // 2. ดึงข้อมูล Requests และ Reports
   const fetchParams = useMemo(() => ({
     projectId: selectedProjectId,
@@ -598,22 +624,47 @@ export default function WorkspaceRequestsPage() {
     endDate: endDate && isValid(endDate) ? format(endDate, 'yyyy-MM-dd') : '',
   }), [selectedProjectId, startDate, endDate]);
 
-  const {
-    data: rawData = [],
-    isLoading: isDataLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ['workspaceLaborData', dataType, fetchParams],
-    queryFn: () => {
-      if (!selectedProjectId) return Promise.resolve([]);
-      if (dataType === 'requests') {
-        return taskService.getAdvanceRequestsAll(fetchParams);
-      } else {
-        return taskService.getDailyReportsAll(fetchParams);
+  // เรียกใช้ Real-time hook เพื่อดึงและอัปเดตข้อมูล real-time
+  useRealtimeWorkspaceRequests(selectedProjectId, fetchParams.startDate, fetchParams.endDate);
+
+  const requests = useWorkspaceRequestsCacheStore((s) => s.requests);
+  const dailyReports = useWorkspaceRequestsCacheStore((s) => s.dailyReports);
+  const tasksMeta = useWorkspaceRequestsCacheStore((s) => s.tasksMeta);
+  const subtasksMeta = useWorkspaceRequestsCacheStore((s) => s.subtasksMeta);
+  const isDataLoading = useWorkspaceRequestsCacheStore((s) => s.isLoading);
+
+  const rawData = useMemo(() => {
+    const list = dataType === 'requests' ? requests : dailyReports;
+
+    return list.map((item: any) => {
+      // ดึง meta ข้อมูลของ Task และ Subtask
+      const parentMeta = tasksMeta[item.taskId] || null;
+      const subMeta = item.subtaskId ? subtasksMeta[item.subtaskId] : null;
+
+      let taskName = parentMeta?.taskName || item.taskName || 'ไม่ระบุ';
+      let dueDate = parentMeta?.dueDate || item.dueDate || null;
+
+      if (subMeta) {
+        if (subMeta.subtaskName) {
+          taskName = `${parentMeta?.taskName || 'ไม่ระบุ'} > ${subMeta.subtaskName}`;
+        }
+        if (subMeta.dueDate) {
+          dueDate = subMeta.dueDate;
+        }
       }
-    },
-    enabled: !!selectedProjectId,
-  });  // 3. แตกและจัดเรียงข้อมูลกำลังพลให้เป็นรายบรรทัด (1 แถวต่อ 1 Subtask)
+
+      const reporterName = resolveUserName(item.createdBy) || item.createdBy || 'ไม่ระบุ';
+
+      return {
+        ...item,
+        taskName,
+        dueDate,
+        createdBy: reporterName,
+        projectName: parentMeta?.projectName || item.projectName || '',
+      };
+    });
+  }, [dataType, requests, dailyReports, tasksMeta, subtasksMeta, usersMap]);
+  // 3. แตกและจัดเรียงข้อมูลกำลังพลให้เป็นรายบรรทัด (1 แถวต่อ 1 Subtask)
   const unfilteredRows = useMemo(() => {
     const rows: any[] = [];
     if (!Array.isArray(rawData)) return rows;
@@ -731,28 +782,7 @@ export default function WorkspaceRequestsPage() {
     };
   }, [flattenedRows]);
 
-  // ดึงข้อมูลผู้ใช้ทั้งหมดเพื่อใช้แปลง UID/username เป็นชื่อจริงในหน้าประวัติ
-  const { data: usersData } = useQuery({
-    queryKey: ['usersMapList'],
-    queryFn: () => memberService.getAllUsers({ pageSize: 1000 }),
-  });
 
-  const usersMap = useMemo(() => {
-    const map = new Map<string, string>();
-    if (usersData?.users && Array.isArray(usersData.users)) {
-      usersData.users.forEach((u) => {
-        map.set(u.id, u.name);
-        if (u.username) map.set(u.username, u.name);
-        if (u.employeeId) map.set(u.employeeId, u.name);
-      });
-    }
-    return map;
-  }, [usersData]);
-
-  const resolveUserName = (userId: string) => {
-    if (!userId) return 'ไม่ระบุ';
-    return usersMap.get(userId) || userId;
-  };
 
   // ดึงประวัติรายงานกำลังพล
   const dailyReportEvents = useMemo(() => {
@@ -818,6 +848,17 @@ export default function WorkspaceRequestsPage() {
     setSelectedSubtaskName(row.taskName);
     setActiveHistoryTab(dataType === 'reports' ? 'report' : 'subtask');
     setHistoryModalOpen(true);
+
+    // 1. Try to load from local real-time cache store first
+    const cachedSubtask = subtasksMeta[row.subtaskId];
+    if (cachedSubtask) {
+      setSelectedSubtask(cachedSubtask);
+      setSelectedSubtaskHistory(cachedSubtask.editHistory || []);
+      setHistoryLoading(false);
+      return;
+    }
+
+    // 2. Fallback to REST API if not cached
     setHistoryLoading(true);
     try {
       const subtasks = await taskService.getSubtasks(row.taskId);
@@ -882,8 +923,8 @@ export default function WorkspaceRequestsPage() {
         r.shiftTimes?.otEvening || '',
         (() => {
           if (!r.dueDate) return '-';
-          const d = new Date(r.dueDate);
-          return isValid(d) ? format(d, 'dd/MM/yyyy') : '-';
+          const d = parseSafeDate(r.dueDate);
+          return d && isValid(d) ? format(d, 'dd/MM/yyyy') : '-';
         })(),
         `${r.progress || 0}%`,
       ]);

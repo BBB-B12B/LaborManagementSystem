@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { useFeedbackStore } from '@/store/feedbackStore';
 import { auth as firebaseAuth } from '../firebase/config';
+import { isTokenExpired } from '../../utils/tokenUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -102,10 +103,11 @@ apiClient.interceptors.request.use(
     // เพิ่ม auth token ถ้ามี
     let token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
-    // Refresh Firebase Token ถ้ามี session ค้างอยู่
+    // Refresh Firebase Token ถ้ามี session ค้างอยู่ หรือ token หมดอายุ
     if (typeof window !== 'undefined' && firebaseAuth.currentUser) {
       try {
-        const freshToken = await firebaseAuth.currentUser.getIdToken();
+        const expired = isTokenExpired(token);
+        const freshToken = await firebaseAuth.currentUser.getIdToken(expired);
         if (freshToken && freshToken !== token) {
           token = freshToken;
           localStorage.setItem('authToken', freshToken);

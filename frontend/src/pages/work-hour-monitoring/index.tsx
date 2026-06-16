@@ -70,6 +70,7 @@ export default function WorkHourMonitoringPage() {
   const { data: wagePeriodsData } = useQuery({
     queryKey: ['wagePeriods'],
     queryFn: () => wageService.getAllWagePeriods(),
+    staleTime: 300000, // 5 minutes cache
   });
   const wagePeriods = useMemo(() => wagePeriodsData?.wagePeriods || [], [wagePeriodsData]);
 
@@ -143,10 +144,15 @@ export default function WorkHourMonitoringPage() {
   // Real-time Trigger Listener for auto-refreshing reconciliation data
   useEffect(() => {
     let unsubscribe = () => {};
+    let isFirstSnapshot = true;
 
     if (project === 'all') {
       // Listen to the entire reconciliationTriggers collection
       unsubscribe = onSnapshot(collection(db, 'reconciliationTriggers'), (snapshot) => {
+        if (isFirstSnapshot) {
+          isFirstSnapshot = false;
+          return;
+        }
         let hasChanges = false;
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added' || change.type === 'modified') {
@@ -166,6 +172,10 @@ export default function WorkHourMonitoringPage() {
     } else {
       // Listen to the specific project trigger document
       unsubscribe = onSnapshot(doc(db, 'reconciliationTriggers', project), (snapshot) => {
+        if (isFirstSnapshot) {
+          isFirstSnapshot = false;
+          return;
+        }
         if (snapshot.exists()) {
           console.log(
             `[WorkHourMonitoring] Trigger for project ${project} changed, invalidating queries...`

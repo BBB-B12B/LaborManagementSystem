@@ -137,19 +137,14 @@ const toProjectId = (value: string): string => {
 };
 
 async function attachCompensationFlags(contractors: DailyContractorDTO[]) {
-  const enriched = await Promise.all(
-    contractors.map(async (contractor) => {
-      const { income, expense } = await dailyContractorService.getCompensationDetails(
-        contractor.id
-      );
-      return {
-        ...contractor,
-        hasCompensation: Boolean(income && expense),
-      };
-    })
-  );
-  return enriched;
+  // Frontend does not use hasCompensation on list/grid pages.
+  // We return false here to prevent N+1 database queries on every page fetch.
+  return contractors.map((contractor) => ({
+    ...contractor,
+    hasCompensation: false,
+  }));
 }
+
 
 /**
  * GET /api/daily-contractors
@@ -197,10 +192,12 @@ router.get(
         page = 1;
         pageSize = result.length;
       } else if (search) {
+        console.time(`[Backend API] searchByKeyword: ${search}`);
         const result = await dailyContractorService.searchByKeyword(search as string, {
           page,
           pageSize,
         });
+        console.timeEnd(`[Backend API] searchByKeyword: ${search}`);
         contractors = result.items.map((dc) => dailyContractorService.toDTO(dc));
         total = result.total;
         page = result.page;
@@ -216,7 +213,10 @@ router.get(
         pageSize = result.pageSize;
       }
 
+      console.time(`[Backend API] attachCompensationFlags`);
       const contractorsWithFlags = await attachCompensationFlags(contractors);
+      console.timeEnd(`[Backend API] attachCompensationFlags`);
+
 
       res.json({
         success: true,
@@ -379,6 +379,39 @@ router.post(
 
       // --- Fetch Projects for Mapping ---
       const allProjects = await getAllProjects();
+
+      const financialKeys = [
+        'ค่าแรง/วัน',
+        'ค่าแรงต่อวัน(บาท)',
+        'ค่าวิชาชีพ/วัน',
+        'ค่าช่าง/ค่าฝีมือต่อวัน(บาท)',
+        'ค่าโทรศัพท์DC',
+        'ค่าโทรศัพท์ต่องวด(บาท)',
+        'เปอร์เซ็นต์หักMOU(%)',
+        'เบี้ยเลี้ยง',
+        'รายได้อื่นๆต่องวด(บาท)',
+        'ค่าห้องพัก175บาท/งวด/คน',
+        'ค่าที่พักต่องวด(บาท)',
+        'จำนวนคนผู้ติดตาม',
+        'จำนวนผู้ติดตาม',
+        'หักค่าตู้เย็น125บาท/งวด',
+        'ค่าตู้เย็นต่องวด(บาท)',
+        'หักค่าเครื่องเสียง250บาท/งวด',
+        'ค่าเครื่องเสียงต่องวด(บาท)',
+        'หักโทรทัศน์(TV)100บาท/งวด',
+        'ค่าทีวีต่องวด(บาท)',
+        'หักเครื่องซักผ้า250บาท/งวด',
+        'ค่าเครื่องซักผ้าต่องวด(บาท)',
+        'หักค่าเครื่องปรับอากาศเคลื่อนที่200บาท/งวด',
+        'ค่าแอร์เคลื่อนที่ต่องวด(บาท)',
+        'รายหักอื่นๆต่องวด(บาท)',
+        'รายหักอื่นๆ',
+      ];
+      const normalizedHeaders = headers.map((h) => normalizeKey(h));
+      const hasFinancialHeaders = financialKeys.some((key) =>
+        normalizedHeaders.includes(normalizeKey(key))
+      );
+
       // Create lookup function
       const resolveProjectLocationId = (rawName: string): string | null => {
         if (!rawName) return null;
@@ -496,6 +529,22 @@ router.post(
               getValue(row, 'รายหักอื่นๆต่องวด(บาท)') || getValue(row, 'รายหักอื่นๆ')
             );
 
+            const paidLeave = toInteger(
+              getValue(row, 'ลาได้เงิน(วัน)') || getValue(row, 'ลาได้เงิน')
+            );
+            const unpaidLeave = toInteger(
+              getValue(row, 'ลาไม่ได้เงิน(วัน)') || getValue(row, 'ลาไม่ได้เงิน')
+            );
+            const lateMinutes = toInteger(
+              getValue(row, 'มาสาย(นาที)') || getValue(row, 'มาสาย')
+            );
+            const earlyLeaveMinutes = toInteger(
+              getValue(row, 'ออกก่อน(นาที)') || getValue(row, 'ออกก่อน')
+            );
+            const absentDays = toInteger(
+              getValue(row, 'ขาดงาน(วัน)') || getValue(row, 'ขาดงาน')
+            );
+
             try {
               console.time(`[CSV Import] Row ${rowNumber} DB Ops`);
               let contractorId = '';
@@ -515,6 +564,11 @@ router.post(
                     projectLocationId: mappedProjectLocationId,
                     isActive,
                     startDate,
+                    paidLeave,
+                    unpaidLeave,
+                    lateMinutes,
+                    earlyLeaveMinutes,
+                    absentDays,
                   },
                   'import-csv'
                 );
@@ -530,37 +584,44 @@ router.post(
                     projectLocationId: mappedProjectLocationId,
                     isActive,
                     startDate,
+                    paidLeave,
+                    unpaidLeave,
+                    lateMinutes,
+                    earlyLeaveMinutes,
+                    absentDays,
                   },
                   'import-csv'
                 );
                 contractorId = contractor.id;
               }
 
-              // Upsert compensation details for both cases
-              await dailyContractorService.upsertCompensationDetails(
-                contractorId,
-                {
-                  income: {
-                    dailyWageRate,
-                    professionalRate,
-                    phoneAllowancePerPeriod: phoneAllowance,
-                    allowance,
-                    mouDeductionRate,
-                    otherIncome,
+              // Upsert compensation details conditionally if financial headers exist or it's a new contractor
+              if (hasFinancialHeaders || !existingDC) {
+                await dailyContractorService.upsertCompensationDetails(
+                  contractorId,
+                  {
+                    income: {
+                      dailyWageRate,
+                      professionalRate,
+                      phoneAllowancePerPeriod: phoneAllowance,
+                      allowance,
+                      mouDeductionRate,
+                      otherIncome,
+                    },
+                    expense: {
+                      accommodationCostPerPeriod: accommodationCost,
+                      followerCount,
+                      refrigeratorCostPerPeriod: refrigeratorCost,
+                      soundSystemCostPerPeriod: soundSystemCost,
+                      tvCostPerPeriod: tvCost,
+                      washingMachineCostPerPeriod: washingMachineCost,
+                      portableAcCostPerPeriod: portableAcCost,
+                      otherDeduction,
+                    },
                   },
-                  expense: {
-                    accommodationCostPerPeriod: accommodationCost,
-                    followerCount,
-                    refrigeratorCostPerPeriod: refrigeratorCost,
-                    soundSystemCostPerPeriod: soundSystemCost,
-                    tvCostPerPeriod: tvCost,
-                    washingMachineCostPerPeriod: washingMachineCost,
-                    portableAcCostPerPeriod: portableAcCost,
-                    otherDeduction,
-                  },
-                },
-                'import-csv'
-              );
+                  'import-csv'
+                );
+              }
               console.timeEnd(`[CSV Import] Row ${rowNumber} DB Ops`);
 
               summary.imported += 1;
@@ -810,6 +871,11 @@ router.post(
     body('airConFee').optional().isFloat({ min: 0 }),
     body('otherDeduction').optional().isFloat({ min: 0 }), // otherDeduction -> expense (not clearly mapped in upsert but can determine logic)
     body('otherIncome').optional().isFloat({ min: 0 }), // otherIncome -> income (if schema supports it)
+    body('paidLeave').optional().isInt({ min: 0 }),
+    body('unpaidLeave').optional().isInt({ min: 0 }),
+    body('lateMinutes').optional().isInt({ min: 0 }),
+    body('earlyLeaveMinutes').optional().isInt({ min: 0 }),
+    body('absentDays').optional().isInt({ min: 0 }),
   ],
   authorize(['AM', 'FM']),
   async (req: Request, res: Response) => {
@@ -927,6 +993,11 @@ router.put(
     body('airConFee').optional().isFloat({ min: 0 }),
     body('otherDeduction').optional().isFloat({ min: 0 }),
     body('otherIncome').optional().isFloat({ min: 0 }),
+    body('paidLeave').optional().isInt({ min: 0 }),
+    body('unpaidLeave').optional().isInt({ min: 0 }),
+    body('lateMinutes').optional().isInt({ min: 0 }),
+    body('earlyLeaveMinutes').optional().isInt({ min: 0 }),
+    body('absentDays').optional().isInt({ min: 0 }),
   ],
   authorize(['AM', 'FM']),
   async (req: Request, res: Response) => {

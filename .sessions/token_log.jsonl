@@ -16,3 +16,14 @@
 {"ts":"2026-06-09T09:27:08Z","task":"ทำไมผมลองทดสอบเเล้ว Assign งานไปทำไมไม่ เเจ้งเตือนมันไม่เตือน FM หรือ SE เลยหรอครับ","phase":"done","session_total":0,"chat_total":16541,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-09T09:47:54Z","task":"ทำไมผมลองทดสอบเเล้ว Assign งานไปทำไมไม่ เเจ้งเตือนมันไม่เตือน FM หรือ SE เลยหรอครับ","phase":"done","session_total":0,"chat_total":16541,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-09T10:18:52Z","task":"ทำไมผมลองทดสอบเเล้ว Assign งานไปทำไมไม่ เเจ้งเตือนมันไม่เตือน FM หรือ SE เลยหรอครับ","phase":"done","session_total":0,"chat_total":16541,"cache_read":0,"cache_write":0}
+{"ts": "2026-06-12T03:10:30Z", "task": "Session closed — Double spinner fix on login redirect (_app.tsx)", "phase": "done", "session_total": 0, "chat_total": 14749, "cache_read": 0, "cache_write": 0}
+{"ts":"2026-06-15T09:48:26Z","task":"T-034: เพิ่มหน้าคู่มือการใช้งานของระบบและเชื่อมโยงจากหน้า Login","phase":"done","session_total":5741,"chat_total":27863,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-15T09:55:22Z","task":"T-034: เพิ่มหน้าคู่มือการใช้งานของระบบและเชื่อมโยงจากหน้า Login","phase":"done","session_total":28890,"chat_total":51012,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-15T10:05:27Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"in_progress","session_total":82836,"chat_total":104958,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-15T10:12:40Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"in_progress","session_total":161348,"chat_total":183470,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-15T10:36:00Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"done","session_total":515948,"chat_total":530579,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-16T01:45:20Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"done","session_total":7918,"chat_total":22549,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-16T02:22:06Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"done","session_total":1716,"chat_total":16347,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-16T02:23:16Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"done","session_total":2317,"chat_total":16948,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-16T02:32:13Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"done","session_total":35727,"chat_total":50358,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-16T02:33:23Z","task":"T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth","phase":"done","session_total":36110,"chat_total":50741,"cache_read":0,"cache_write":0}

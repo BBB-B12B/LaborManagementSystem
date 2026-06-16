@@ -329,15 +329,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     }
   }, [checkDialogOpen]);
 
-  // --- Manual Resolve States ---
-  const [isManualMode, setIsManualMode] = React.useState(false);
-  const [manualHours, setManualHours] = React.useState({
-    normal: 0,
-    otMorning: 0,
-    otNoon: 0,
-    otEvening: 0,
-  });
-  const [resolveReason, setResolveReason] = React.useState('');
+
   const [isRejectModalOpen, setIsRejectModalOpen] = React.useState(false);
   const [viewerOpen, setViewerOpen] = React.useState(false);
   const [imageZoom, setImageZoom] = React.useState(1);
@@ -396,10 +388,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     }
   };
 
-  // --- Scan Edit States ---
-  const [isEditingScan, setIsEditingScan] = React.useState(false);
-  const [editingScanPunches, setEditingScanPunches] = React.useState<string[]>([]);
-  const [scanEditReason, setScanEditReason] = React.useState('');
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -480,20 +468,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
       queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
-    },
-  });
-
-  const resolveMutation = useMutation({
-    mutationFn: (data: any) => reconciliationService.resolveManual(selectedRow!.id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
-      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
-      toast.success('แก้ไขข้อมูลด้วยตนเองสำเร็จ');
-      handleCloseCheckDialog();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูล');
     },
   });
 
@@ -505,20 +479,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const isFilling = fillMutation.isPending;
   // ────────────────────────────────────────────────────────────────────────────
 
-  const updateScanMutation = useMutation({
-    mutationFn: (vars: { id: string; punches: string[]; reason: string }) =>
-      reconciliationService.updateScanPunches(vars.id, vars.punches, vars.reason),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
-      queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
-      toast.success('อัปเดตเวลาสแกนนิ้วเรียบร้อยแล้ว');
-      setIsEditingScan(false);
-      setCheckDialogOpen(false);
-    },
-    onError: (err: any) => {
-      toast.error(`เกิดข้อผิดพลาด: ${err.message || 'ไม่สามารถอัปเดตข้อมูลได้'}`);
-    },
-  });
+
 
   const reviewLeaveMutation = useMutation({
     mutationFn: (vars: { id: string; isApproved: boolean; reason?: string }) =>
@@ -526,7 +487,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reconciliation'] });
       queryClient.invalidateQueries({ queryKey: ['reconciliation-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['reconciliation-breakdown-stats'] });
       toast.success('ตรวจสอบใบรับรองแพทย์เรียบร้อยแล้ว');
       setCheckDialogOpen(false);
     },
@@ -584,14 +544,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
   const handleOpenCheckDialog = (row: any) => {
     setSelectedRow(row);
-    setManualHours({
-      normal: row.timesheetNormalHours ?? row.dailyReportHours ?? 0,
-      otMorning: row.timesheetOtMorning ?? 0,
-      otNoon: row.timesheetOtNoon ?? 0,
-      otEvening: row.timesheetOtEvening ?? 0,
-    });
-    setIsManualMode(false);
-    setResolveReason('');
     setCheckDialogOpen(true);
     setHistoryOpen(false);
   };
@@ -599,8 +551,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
   const handleCloseCheckDialog = () => {
     setCheckDialogOpen(false);
     setSelectedRow(null);
-    setIsManualMode(false);
-    setIsEditingScan(false);
     setHistoryOpen(false);
   };
 
@@ -639,6 +589,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     queryKey: ['dc-stats', selectedRow?.employeeId],
     queryFn: () => dcService.searchDCs(selectedRow!.employeeId, 1),
     enabled: !!selectedRow?.employeeId && !!selectedRow?.medCertFileUrl,
+    staleTime: 300000, // 5 minutes cache
   });
 
   const leaveQuotaElement = React.useMemo(() => {
@@ -976,10 +927,13 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         }
       }
 
+      const hasValidIn = closestIn !== -1 && minInDiff <= 90;
+      const effectiveIn = hasValidIn ? closestIn : -1;
+
       let closestOut = -1;
       let minOutDiff = Infinity;
       for (const t of available) {
-        if (t <= closestIn) continue;
+        if (t <= effectiveIn) continue;
         const diff = Math.abs(t - seg.expectedEnd);
         if (diff < minOutDiff) {
           minOutDiff = diff;
@@ -989,7 +943,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
       // Only consume a punch if it's within the 90-minute threshold (same as backend)
       // This prevents a far-away punch from being "used" by the wrong segment
-      if (closestIn !== -1 && minInDiff <= 90) usedPunches.add(closestIn);
+      if (hasValidIn) usedPunches.add(closestIn);
       // Mirror backend logic: don't mark OUT as used if it equals the next segment's expectedStart
       // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning)
       if (closestOut !== -1 && minOutDiff <= 90) {
@@ -1003,7 +957,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
       return {
         ...seg,
-        actualIn: closestIn !== -1 && minInDiff <= 90 ? closestIn : null,
+        actualIn: hasValidIn ? closestIn : null,
         actualOut: closestOut !== -1 && minOutDiff <= 90 ? closestOut : null,
       };
     });
@@ -1040,6 +994,10 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       const isMorningTransition = seg.key === 'morning' && !!otMorningSeg;
       const isOtMorningTransition = seg.key === 'otMorning' && segments.some((s) => s.key === 'morning');
 
+      // Transition scan bypass rules (OT เที่ยง ↔ กะปกติ)
+      const otNoonSeg = segments.find((s) => s.key === 'otNoon');
+      const isOtNoonActive = !!otNoonSeg;
+
       let isBypassed = false;
       let bypassReason = '';
 
@@ -1059,6 +1017,30 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         if (morningSeg) {
           const nextHasOut = scanMinsList.some((t: number) => t >= 480 - 90 && t <= morningSeg.expectedEnd + 90);
           if (nextHasOut) {
+            isBypassed = true;
+            bypassReason = 'ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)';
+          }
+        }
+      }
+
+      // OT Noon continuous transition bypass
+      if (isOtNoonActive) {
+        if (seg.key === 'morning' && !hasOut) {
+          const hasScanAfterLunch = scanMinsList.some((t: number) => t >= 13 * 60 - 90);
+          if (hasScanAfterLunch) {
+            isBypassed = true;
+            bypassReason = 'ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)';
+          }
+        } else if (seg.key === 'afternoon' && !hasIn) {
+          const hasScanBeforeLunch = scanMinsList.some((t: number) => t <= 12 * 60 + 90);
+          if (hasScanBeforeLunch) {
+            isBypassed = true;
+            bypassReason = 'ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)';
+          }
+        } else if (seg.key === 'otNoon' && (!hasIn || !hasOut)) {
+          const hasScanBeforeLunch = scanMinsList.some((t: number) => t <= 12 * 60 + 90);
+          const hasScanAfterLunch = scanMinsList.some((t: number) => t >= 13 * 60 - 90);
+          if (hasScanBeforeLunch && hasScanAfterLunch) {
             isBypassed = true;
             bypassReason = 'ทำงานต่อเนื่อง (ไม่มีสแกนรอยต่อ)';
           }
@@ -1654,86 +1636,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                     </Box>
                   )}
 
-                  {/* Editing Scan Punches Panel */}
-                  {isEditingScan && (
-                    <Box
-                      sx={{
-                        mb: 3,
-                        p: 3,
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '12px',
-                        backgroundColor: '#f8fafc',
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        fontWeight={800}
-                        sx={{
-                          color: '#334155',
-                          mb: 2,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                        }}
-                      >
-                        📝 แก้ไขข้อมูลสแกนนิ้วสำหรับวันนี้ (เรียงตามลำดับเวลา)
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-                        {editingScanPunches.map((p, idx) => (
-                          <Box
-                            key={idx}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 0.5,
-                              bgcolor: '#fff',
-                              p: 1,
-                              borderRadius: '8px',
-                              border: '1px solid #e2e8f0',
-                            }}
-                          >
-                            <TimePicker
-                              label=""
-                              size="small"
-                              fullWidth={false}
-                              value={p}
-                              onChange={(newVal) => {
-                                const next = [...editingScanPunches];
-                                next[idx] = newVal || '';
-                                setEditingScanPunches(next);
-                              }}
-                            />
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                const next = [...editingScanPunches];
-                                next.splice(idx, 1);
-                                setEditingScanPunches(next);
-                              }}
-                              sx={{ color: '#ef4444', p: 0.5 }}
-                            >
-                              <CloseIcon sx={{ fontSize: '1.1rem' }} />
-                            </IconButton>
-                          </Box>
-                        ))}
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => setEditingScanPunches([...editingScanPunches, ''])}
-                          sx={{
-                            textTransform: 'none',
-                            fontSize: '0.8rem',
-                            fontWeight: 800,
-                            px: 2,
-                            py: 1,
-                            borderRadius: '8px',
-                          }}
-                        >
-                          + เพิ่มเวลาสแกน
-                        </Button>
-                      </Box>
-                    </Box>
-                  )}
+
 
                   {/* Segment-based Comparison Table */}
                   <TableContainer
@@ -2139,119 +2042,70 @@ const WorkHourComparisonTable: React.FC<Props> = ({
               justifyContent="flex-end"
               sx={{ mt: 4, pt: 3, borderTop: '1px solid #e2e8f0' }}
             >
-              {isEditingScan ? (
-                <Box sx={{ width: '100%' }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="เหตุผลการแก้ไข"
-                    placeholder="ระบุเหตุผลการแก้ไข (เช่น พนักงานลืมสแกนแต่มีรูปยืนยัน)"
-                    value={scanEditReason}
-                    onChange={(e) => setScanEditReason(e.target.value)}
-                    sx={{
-                      mb: 2,
-                      '& .MuiInputBase-input': { fontWeight: 600 },
-                      '& .MuiInputLabel-root': { fontWeight: 700, color: '#475569' },
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                  <Stack direction="row" spacing={2} justifyContent="flex-end">
-                    <Button
-                      variant="outlined"
-                      onClick={() => setIsEditingScan(false)}
-                      sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '10px', px: 3 }}
-                    >
-                      ยกเลิก
-                    </Button>
+              {(() => {
+                const status = selectedRow?.status;
+                // รวมทั้งสองเงื่อนไขเข้าด้วยกัน: ถ้ามีปัญหาเรื่องเวลา/ขาดสแกน (CONFLICTED หรือ MISSING_SCAN) ให้แสดงปุ่ม "ยืนยันตาม Daily Report" ที่จะช่วยเติมเวลาให้อัตโนมัติโดยไม่ทับข้อมูลเดิม
+                const canFillFromDaily = status === 'MISSING_SCAN' || status === 'CONFLICTED';
+
+                return (
+                  <>
+                    {(isLocked || selectedRow?.isLocked) && (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: '#ef4444',
+                          fontWeight: 800,
+                          alignSelf: 'center',
+                          mr: 'auto',
+                        }}
+                      >
+                        🔒 งวดงานนี้ถูกอนุมัติแล้ว ไม่สามารถแก้ไขข้อมูลการทำงานได้
+                      </Typography>
+                    )}
+
+                    {/* กรณี MISSING_SCAN หรือ CONFLICTED → ยืนยันตาม Daily Report (เติมเวลาที่ขาดหาย) */}
+                    {canFillFromDaily && !(isLocked || selectedRow?.isLocked) && (
+                      <Button
+                        variant="outlined"
+                        onClick={() => setConfirmFillOpen(true)}
+                        sx={{
+                          textTransform: 'none',
+                          fontWeight: 800,
+                          borderRadius: '10px',
+                          px: 3,
+                          borderColor: '#ea580c',
+                          color: '#ea580c',
+                          '&:hover': { backgroundColor: '#fff7ed', borderColor: '#c2410c' },
+                        }}
+                      >
+                        ยืนยันตาม Daily Report
+                      </Button>
+                    )}
+
+                    {/* ปุ่มอนุมัติการลา ย้ายไปอยู่ในการดูหลักฐานแทน (Phase 4 UX) */}
+                    {/* แต่ยังคงเช็ค condition เผื่อไว้เผื่อมีเคสพิเศษ */}
+
                     <Button
                       variant="contained"
-                      onClick={() => {
-                        updateScanMutation.mutate({
-                          id: selectedRow.id,
-                          punches: editingScanPunches.filter((p) => p.trim() !== ''),
-                          reason: scanEditReason,
-                        });
-                      }}
-                      disabled={updateScanMutation.isPending}
+                      onClick={handleCloseCheckDialog}
+                      disableElevation
                       sx={{
                         textTransform: 'none',
                         fontWeight: 800,
                         borderRadius: '10px',
                         px: 4,
-                        backgroundColor: '#0f172a',
-                        '&:hover': { backgroundColor: '#1e293b' },
+                        py: 1,
+                        backgroundColor: '#1e293b',
+                        color: '#fff',
+                        boxShadow: 'none',
+                        '&:hover': { backgroundColor: '#334155', boxShadow: 'none' },
                       }}
                     >
-                      {updateScanMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกข้อมูลสแกนนิ้ว'}
+                      ปิดหน้าต่าง
                     </Button>
-                  </Stack>
-                </Box>
-              ) : (
-                (() => {
-                  const status = selectedRow?.status;
-                  // รวมทั้งสองเงื่อนไขเข้าด้วยกัน: ถ้ามีปัญหาเรื่องเวลา/ขาดสแกน (CONFLICTED หรือ MISSING_SCAN) ให้แสดงปุ่ม "ยืนยันตาม Daily Report" ที่จะช่วยเติมเวลาให้อัตโนมัติโดยไม่ทับข้อมูลเดิม
-                  const canFillFromDaily = status === 'MISSING_SCAN' || status === 'CONFLICTED';
-
-                  return (
-                    <>
-                      {(isLocked || selectedRow?.isLocked) && (
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: '#ef4444',
-                            fontWeight: 800,
-                            alignSelf: 'center',
-                            mr: 'auto',
-                          }}
-                        >
-                          🔒 งวดงานนี้ถูกอนุมัติแล้ว ไม่สามารถแก้ไขข้อมูลการทำงานได้
-                        </Typography>
-                      )}
-
-                      {/* กรณี MISSING_SCAN หรือ CONFLICTED → ยืนยันตาม Daily Report (เติมเวลาที่ขาดหาย) */}
-                      {canFillFromDaily && !(isLocked || selectedRow?.isLocked) && (
-                        <Button
-                          variant="outlined"
-                          onClick={() => setConfirmFillOpen(true)}
-                          sx={{
-                            textTransform: 'none',
-                            fontWeight: 800,
-                            borderRadius: '10px',
-                            px: 3,
-                            borderColor: '#ea580c',
-                            color: '#ea580c',
-                            '&:hover': { backgroundColor: '#fff7ed', borderColor: '#c2410c' },
-                          }}
-                        >
-                          ยืนยันตาม Daily Report
-                        </Button>
-                      )}
-
-                      {/* ปุ่มอนุมัติการลา ย้ายไปอยู่ในการดูหลักฐานแทน (Phase 4 UX) */}
-                      {/* แต่ยังคงเช็ค condition เผื่อไว้เผื่อมีเคสพิเศษ */}
-
-                      <Button
-                        variant="contained"
-                        onClick={handleCloseCheckDialog}
-                        disableElevation
-                        sx={{
-                          textTransform: 'none',
-                          fontWeight: 800,
-                          borderRadius: '10px',
-                          px: 4,
-                          py: 1,
-                          backgroundColor: '#1e293b',
-                          color: '#fff',
-                          boxShadow: 'none',
-                          '&:hover': { backgroundColor: '#334155', boxShadow: 'none' },
-                        }}
-                      >
-                        ปิดหน้าต่าง
-                      </Button>
-                    </>
-                  );
-                })()
-              )}
+                  </>
+                );
+              })()}
             </Stack>
           </Box>
         </DialogContent>

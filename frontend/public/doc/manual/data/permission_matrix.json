@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "task": "T-035",
+    "generated": "2026-06-15",
+    "source_of_truth": "frontend/src/utils/permissions.ts + ProtectedRoute gates + Navbar roles",
+    "legend": { "true": "เข้าถึงได้", "false": "เข้าไม่ได้" },
+    "note": "GOD = superuser, เข้าถึงได้ทุกหน้า. AM read-only ใน Workspace. LD แก้ workspace ได้แต่ห้ามแก้ Work Order. FM ดู Daily Reports ได้แต่สร้าง/แก้ไม่ได้."
+  },
+  "roles": [
+    { "code": "GOD", "name": "ผู้ดูแลสูงสุด", "level": 0 },
+    { "code": "MD",  "name": "กรรมการผู้จัดการ", "level": 1 },
+    { "code": "PD",  "name": "ผู้อำนวยการโครงการ", "level": 2 },
+    { "code": "PM",  "name": "ผู้จัดการโครงการ", "level": 3 },
+    { "code": "PE",  "name": "วิศวกรโครงการ", "level": 4 },
+    { "code": "OE",  "name": "วิศวกรสำนักงาน", "level": 5 },
+    { "code": "SE",  "name": "วิศวกรประจำหน้างาน", "level": 6 },
+    { "code": "FM",  "name": "หัวหน้างาน", "level": 7 },
+    { "code": "AM",  "name": "ผู้ดูแลระบบ", "level": 8 },
+    { "code": "LD",  "name": "หัวหน้าคนงาน", "level": 9 }
+  ],
+  "routes": [
+    { "path": "/workspace", "label": "Workspace (กระดานงาน)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": true, "OE": true, "SE": false, "FM": false, "AM": true, "LD": true } },
+    { "path": "/workspace/requests", "label": "Workspace · Requests (ตารางแรงงาน)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": true, "OE": true, "SE": false, "FM": false, "AM": true, "LD": true } },
+    { "path": "/daily-reports", "label": "Daily Reports (รายงานประจำวัน)", "access": { "GOD": true, "MD": false, "PD": false, "PM": false, "PE": false, "OE": false, "SE": true, "FM": true, "AM": false, "LD": true } },
+    { "path": "/overtime", "label": "Overtime (ทำงานล่วงเวลา)", "access": { "GOD": true, "MD": false, "PD": true, "PM": true, "PE": true, "OE": true, "SE": true, "FM": false, "AM": true, "LD": false } },
+    { "path": "/management", "label": "Management (จัดการ)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": true, "OE": true, "SE": false, "FM": false, "AM": true, "LD": false } },
+    { "path": "/project-management", "label": "Project Management (จัดการโครงการ)", "access": { "GOD": true, "MD": false, "PD": false, "PM": true, "PE": false, "OE": false, "SE": false, "FM": true, "AM": true, "LD": false } },
+    { "path": "/member-management", "label": "Member Management (จัดการสมาชิก)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": true, "OE": true, "SE": false, "FM": true, "AM": true, "LD": false } },
+    { "path": "/dc-management", "label": "DC Management (แรงงานรายวัน)", "access": { "GOD": true, "MD": false, "PD": true, "PM": true, "PE": false, "OE": true, "SE": true, "FM": true, "AM": true, "LD": false } },
+    { "path": "/management/social-security-rules", "label": "SSO Rules (กฎประกันสังคม)", "access": { "GOD": true, "MD": true, "PD": false, "PM": false, "PE": false, "OE": false, "SE": false, "FM": false, "AM": true, "LD": false } },
+    { "path": "/management/company-holidays", "label": "Company Holidays (วันหยุดบริษัท)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": true, "OE": true, "SE": false, "FM": true, "AM": true, "LD": false } },
+    { "path": "/wage-calculation", "label": "Wage Calculation (คำนวณค่าแรง)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": true, "OE": true, "SE": false, "FM": false, "AM": true, "LD": false } },
+    { "path": "/scan-data-monitoring", "label": "Scan Data Monitoring (ข้อมูลสแกน)", "access": { "GOD": true, "MD": false, "PD": false, "PM": false, "PE": false, "OE": false, "SE": false, "FM": false, "AM": true, "LD": false } },
+    { "path": "/work-hour-monitoring", "label": "Work Hour Monitoring (ชั่วโมงงาน)", "access": { "GOD": true, "MD": true, "PD": true, "PM": true, "PE": false, "OE": false, "SE": false, "FM": false, "AM": true, "LD": false } },
+    { "path": "/activity-monitor", "label": "Activity Monitor (ตรวจสอบกิจกรรมระบบ)", "access": { "GOD": true, "MD": false, "PD": false, "PM": false, "PE": false, "OE": false, "SE": false, "FM": false, "AM": false, "LD": false } }
+  ]
+}

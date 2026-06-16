@@ -20,6 +20,7 @@ description: Lightweight index of all available skills. Agent reads skill-manife
 | token footer (every turn) | `token_tracker` (always active) |
 | output > 8k | `token_auditor` |
 | "แก้ harness", "update harness", "improve skill", "เพิ่ม rule", "edit SKILL.md", "harness edit" | `harness_editor` |
+| "audit AGENTS.md", "review CLAUDE.md", "ตรวจกฎ harness", "find contradictions in the rules", "กฎขัดกันไหม" | `harness_doc_auditor` |
 
 > **Chained skills**: After `coder` or `editor` completes → ALWAYS run `file_manager` + `variable_manager` to sync indexes.
 
@@ -39,6 +40,7 @@ description: Lightweight index of all available skills. Agent reads skill-manife
 | `token_tracker` | `.agents/skills/token_tracker/SKILL.md` | At the end of every interaction turn (Step 6 of loop) | `[.sessions/<latest>.json]` |
 | `token_auditor` | `.agents/skills/token_auditor/SKILL.md` | Only when `estimated_tokens` exceeds 8,000 | `[knowledge/index_files.json, docs/optimization_logs.md]` |
 | `harness_editor` | `.agents/skills/harness_editor/SKILL.md` | Editing CLAUDE.md, AGENTS.md, SKILL.md files, knowledge/, Implement/ | `[knowledge/harness_flow_20260526.md]` |
+| `harness_doc_auditor` | `.agents/skills/harness_doc_auditor/SKILL.md` | Auditing rule/directive .md (CLAUDE/AGENTS/INVARIANTS/REPO_MAP/Implement) for contradictions, scatter, dead refs, gate/BC errors | `[knowledge/audit_engine_rubric.md]` |
 
 ---
 

@@ -1,0 +1,208 @@
+import { useEffect } from 'react';
+import { collection, collectionGroup, query, where, onSnapshot } from 'firebase/firestore';
+import { afterSaleDb } from '@/services/firebase/config';
+import useTaskCacheStore from '@/store/taskCacheStore';
+import { Task } from '@/services/taskService';
+
+const mapFirestoreDocToTask = (snapshot: any): Task => {
+  const data = snapshot.data();
+  const safeDate = (val: any): string => {
+    if (!val) return new Date().toISOString();
+    if (typeof val.toDate === 'function') return val.toDate().toISOString();
+    if (typeof val === 'string') return new Date(val).toISOString();
+    if (val instanceof Date) return val.toISOString();
+    return new Date().toISOString();
+  };
+
+  return {
+    id: `${data.workOrderId || 'N-A'}__${data.categoryId || 'N-A'}__${snapshot.id}`,
+    taskId: data.taskId || '',
+    taskName: data.taskName || '',
+    description: data.description || '',
+    projectId: data.projectId || '',
+    projectCode: data.projectCode || '',
+    projectName: data.projectName || '',
+    workOrderId: data.workOrderId || '',
+    workOrderCode: data.workOrderCode || '',
+    workOrderName: data.workOrderName || '',
+    categoryId: data.categoryId || '',
+    categoryName: data.categoryName || '',
+    assignees: data.assignees || [],
+    dueDate: safeDate(data.dueDate),
+    status: data.status || 'upcoming',
+    currentRevision: data.currentRevision || 'rev00',
+    revisionId: data.revisionId || data.currentRevision || 'rev00',
+    revisionName: data.revisionName || '',
+    dailyProgress: data.dailyProgress || 0,
+    attachmentsCount: data.attachmentsCount || 0,
+    isActive: data.isActive !== false,
+    isSupportRequest: data.isSupportRequest || false,
+    isPickedUpBySupport: data.isPickedUpBySupport || false,
+    supportTaskName: data.supportTaskName || '',
+    supportDailyProgress: data.supportDailyProgress || 0,
+    supportAssignees: data.supportAssignees || [],
+    unlockedDates: data.unlockedDates || {},
+    unlockRequests: data.unlockRequests || {},
+    supportUnlockedDates: data.supportUnlockedDates || {},
+    supportUnlockRequests: data.supportUnlockRequests || {},
+    createdAt: safeDate(data.createdAt),
+    updatedAt: safeDate(data.updatedAt),
+    createdBy: data.createdBy || '',
+    updatedBy: data.updatedBy || '',
+    historicalAssigneeIds: data.historicalAssigneeIds || [],
+    subtasks: [],
+  } as unknown as Task;
+};
+
+const mapFirestoreDocToSubtask = (snapshot: any): any => {
+  const data = snapshot.data();
+  const safeDate = (val: any): string => {
+    if (!val) return new Date().toISOString();
+    if (typeof val.toDate === 'function') return val.toDate().toISOString();
+    if (typeof val === 'string') return new Date(val).toISOString();
+    if (val instanceof Date) return val.toISOString();
+    return new Date().toISOString();
+  };
+
+  return {
+    id: snapshot.id,
+    subtaskId: data.subtaskId || snapshot.id,
+    subtaskName: data.subtaskName || '',
+    isSupportRequest: data.isSupportRequest || false,
+    status: data.status || 'upcoming',
+    assignees: data.assignees || [],
+    dailyProgress: data.dailyProgress || 0,
+    currentRevision: data.currentRevision || 'rev00',
+    revisionId: data.revisionId || data.currentRevision || 'rev00',
+    revisionName: data.revisionName || '',
+    isPickedUpBySupport: data.isPickedUpBySupport || false,
+    supportTaskName: data.supportTaskName || '',
+    supportDailyProgress: data.supportDailyProgress || 0,
+    supportAssignees: data.supportAssignees || [],
+    dueDate: safeDate(data.dueDate),
+    createdAt: safeDate(data.createdAt),
+    updatedAt: safeDate(data.updatedAt),
+    createdBy: data.createdBy || '',
+    updatedBy: data.updatedBy || '',
+  };
+};
+
+export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks') => {
+  const { upsertTask, removeTaskRealtime, upsertSubtask, removeSubtaskRealtime, setLoading: setCacheLoading } = useTaskCacheStore();
+
+  useEffect(() => {
+    // ล้าง Cache ทุกครั้งที่เปลี่ยน Tab หรือ Project เพื่อให้ UI โหลดข้อมูลใหม่
+    useTaskCacheStore.getState().invalidate();
+
+    if (!projectIds || projectIds.length === 0) return;
+
+    let unsubscribes: any[] = [];
+    
+    setCacheLoading(true);
+
+    // Calculate startDate based on activeTab
+    let startDate: Date | null = null;
+    const now = new Date();
+    if (activeTab === 'This Month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (activeTab === 'This Week') {
+      const day = now.getDay() || 7; 
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (activeTab === 'Today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    const handleTasksSnapshot = (snapshot: any) => {
+      snapshot.docChanges().forEach((change: any) => {
+        const data = change.doc.data();
+        if (!projectIds.includes(data.projectId)) return; 
+        if (change.type === 'added' || change.type === 'modified') {
+          upsertTask(mapFirestoreDocToTask(change.doc));
+        }
+        if (change.type === 'removed') {
+          removeTaskRealtime(mapFirestoreDocToTask(change.doc).id);
+        }
+      });
+      setCacheLoading(false);
+    };
+
+    const handleTasksError = (err: any) => {
+      console.error("Tasks Realtime Error", err);
+      // Catch index required errors and show them on screen
+      useTaskCacheStore.getState().setError(`[Tasks Realtime Error]: ${err.message}`);
+      setCacheLoading(false);
+    };
+
+    const handleSubtasksSnapshot = (snapshot: any) => {
+      snapshot.docChanges().forEach((change: any) => {
+        const parentTaskRef = change.doc.ref.parent.parent;
+        if (!parentTaskRef) return;
+        const pathParts = change.doc.ref.path.split('/');
+        if (pathParts.length >= 8) {
+          const woId = pathParts[1];
+          const catId = pathParts[3];
+          const taskId = pathParts[5];
+          const parentCompositeId = `${woId}__${catId}__${taskId}`;
+
+          if (change.type === 'added' || change.type === 'modified') {
+            upsertSubtask(parentCompositeId, mapFirestoreDocToSubtask(change.doc));
+          }
+          if (change.type === 'removed') {
+            removeSubtaskRealtime(parentCompositeId, change.doc.id);
+          }
+        }
+      });
+    };
+
+    const handleSubtasksError = (err: any) => {
+      console.error("Subtasks Realtime Error", err);
+      useTaskCacheStore.getState().setError(`[Subtasks Realtime Error]: ${err.message}`);
+    };
+
+    // 1. Listen to workOrders to filter out type === 'AfterSale'
+    const woQuery = query(collection(afterSaleDb, 'workOrders'), where('type', '==', 'AfterSale'));
+    const unsubWo = onSnapshot(woQuery, (snapshot) => {
+      const hiddenIds: string[] = [];
+      snapshot.forEach(doc => {
+        hiddenIds.push(doc.id);
+      });
+      useTaskCacheStore.setState({ hiddenWorkOrderIds: hiddenIds });
+    }, (err) => console.warn("WorkOrders listener failed", err));
+    unsubscribes.push(unsubWo);
+
+    // 2. Setup Task and Subtask Listeners
+    if (startDate) {
+      const activeStatuses = ['upcoming', 'in-progress', 'for-checking', 'rework'];
+      const dateString = startDate.toISOString();
+      
+      // Active Tasks
+      const activeTasksQuery = query(collectionGroup(afterSaleDb, 'tasks'), where('status', 'in', activeStatuses));
+      unsubscribes.push(onSnapshot(activeTasksQuery, handleTasksSnapshot, handleTasksError));
+
+      // Completed Tasks (This Month/Week/Day)
+      const completedTasksQuery = query(collectionGroup(afterSaleDb, 'tasks'), where('status', '==', 'completed'), where('updatedAt', '>=', dateString));
+      unsubscribes.push(onSnapshot(completedTasksQuery, handleTasksSnapshot, handleTasksError));
+
+      // Active Subtasks
+      const activeSubtasksQuery = query(collectionGroup(afterSaleDb, 'subtasks'), where('status', 'in', activeStatuses));
+      unsubscribes.push(onSnapshot(activeSubtasksQuery, handleSubtasksSnapshot, handleSubtasksError));
+
+      // Completed Subtasks
+      const completedSubtasksQuery = query(collectionGroup(afterSaleDb, 'subtasks'), where('status', '==', 'completed'), where('updatedAt', '>=', dateString));
+      unsubscribes.push(onSnapshot(completedSubtasksQuery, handleSubtasksSnapshot, handleSubtasksError));
+    } else {
+      // All Tasks
+      const tasksQuery = query(collectionGroup(afterSaleDb, 'tasks'));
+      unsubscribes.push(onSnapshot(tasksQuery, handleTasksSnapshot, handleTasksError));
+
+      const subtasksQuery = query(collectionGroup(afterSaleDb, 'subtasks'));
+      unsubscribes.push(onSnapshot(subtasksQuery, handleSubtasksSnapshot, handleSubtasksError));
+    }
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [projectIds.join(','), activeTab]);
+};

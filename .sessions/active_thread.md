@@ -1,3 +1,3 @@
-task: ทำไมผมลองทดสอบเเล้ว Assign งานไปทำไมไม่ เเจ้งเตือนมันไม่เตือน FM หรือ SE เลยหรอครับ
+task: Optimize resource management and remove manual editing features
 phase: done
-next: none
+next: None

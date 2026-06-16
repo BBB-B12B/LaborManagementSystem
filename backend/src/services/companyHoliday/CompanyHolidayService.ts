@@ -108,8 +108,12 @@ export class CompanyHolidayService {
 
     await docRef.update(updates);
 
-    const updatedSnap = await docRef.get();
-    return updatedSnap.data()!;
+    // Merge changes with existing data in memory to save 1 Firestore Read
+    return {
+      ...existing,
+      ...updates,
+      date: updates.date ?? existing.date,
+    };
   }
 
   /**

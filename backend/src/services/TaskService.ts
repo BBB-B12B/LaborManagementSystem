@@ -216,6 +216,8 @@ export class TaskService {
             id: `${woId}__${catId}__${taskId}__${subtaskId}`,
             subtaskId: subtaskId,
             subtaskName: st.subtaskName,
+            projectId: input.projectId || '',
+            projectName: input.projectName || '',
             status: input.status || 'upcoming',
             assignees: st.assignees,
             dailyProgress: 0,
@@ -741,6 +743,8 @@ export class TaskService {
         id: `${woId}__${catId}__${tId}__${subtaskId}`,
         subtaskId: subtaskId,
         subtaskName: subtaskName,
+        projectId: taskData?.projectId || '',
+        projectName: taskData?.projectName || '',
         status: 'upcoming' as TaskStatus,
         assignees: assignees,
         dailyProgress: 0,
@@ -1085,6 +1089,8 @@ export class TaskService {
                 id: `${oldWoId}__${targetCatId}__${oldTaskId}__${subtaskId}`,
                 subtaskId: subtaskId,
                 subtaskName: stInput.subtaskName,
+                projectId: oldData.projectId || '',
+                projectName: oldData.projectName || '',
                 status: 'upcoming',
                 assignees: newAssignees,
                 dailyProgress: 0,
@@ -1291,6 +1297,8 @@ export class TaskService {
                 id: `${oldWoId}__${oldCatId}__${oldTaskId}__${subtaskId}`,
                 subtaskId: subtaskId,
                 subtaskName: stInput.subtaskName,
+                projectId: oldData.projectId || '',
+                projectName: oldData.projectName || '',
                 status: 'upcoming',
                 assignees: newAssignees,
                 dailyProgress: 0,
@@ -1710,16 +1718,11 @@ export class TaskService {
       const endOfDay = new Date(reportDate);
       endOfDay.setHours(23, 59, 59, 999);
       
-      // [TEMPORARY REVERT] ใช้การกรองใน Memory ชั่วคราวเพื่อเลี่ยง Error 500 (FAILED_PRECONDITION)
-      // เนื่องจาก Firebase ต้องการ COLLECTION_GROUP_ASC index สำหรับ dailyReports (reportDate)
-      // เมื่อสร้าง Index แล้ว ควรเปลี่ยนกลับมาใช้ .where('reportDate', '>=', startOfDay) เพื่อลด Read Cost
-      const allReportsQuerySnapshot = await afterSaleDb.collectionGroup('dailyReports').get();
-      const allReportsDocs = allReportsQuerySnapshot.docs.filter(doc => {
-        const data = doc.data();
-        if (!data.reportDate) return false;
-        const dDate = data.reportDate.toDate ? data.reportDate.toDate() : new Date(data.reportDate);
-        return dDate.getTime() >= startOfDay.getTime() && dDate.getTime() <= endOfDay.getTime();
-      });
+      const allReportsQuerySnapshot = await afterSaleDb.collectionGroup('dailyReports')
+        .where('reportDate', '>=', startOfDay)
+        .where('reportDate', '<=', endOfDay)
+        .get();
+      const allReportsDocs = allReportsQuerySnapshot.docs;
 
       const parseTimeToMinutes = (tStr: string | null | undefined): {start: number, end: number} | null => {
         if (!tStr) return null;
@@ -1905,6 +1908,8 @@ export class TaskService {
       const payload: any = {
         ...finalReportData,
         reportDate: reportDate,
+        projectId: taskData.projectId || '',
+        projectName: taskData.projectName || '',
         updatedAt: now,
         updatedBy: updatedBy,
         editHistory: editHistory
@@ -2158,6 +2163,73 @@ export class TaskService {
   }
 
   /**
+   * และยิง webhook กลับไปให้ AfterSale อัปเดตข้อมูล
+   */
+  async rejectMedCertInDailyReport(employeeId: string, dateStr: string): Promise<void> {
+    const timesheetRef = afterSaleDb
+      .collection('DailyEmployeeTimesheets')
+      .doc(`${employeeId}_${dateStr}`);
+    const timesheetSnap = await timesheetRef.get();
+
+    if (!timesheetSnap.exists) {
+      console.warn(`[TaskService] DailyEmployeeTimesheet not found for ${employeeId}_${dateStr}`);
+      return;
+    }
+
+    const sourceReportPath = timesheetSnap.data()?.sourceReport;
+    if (!sourceReportPath) {
+      console.warn(`[TaskService] No sourceReport found in timesheet for ${employeeId}_${dateStr}`);
+      return;
+    }
+
+    const reportRef = afterSaleDb.doc(sourceReportPath);
+    const reportSnap = await reportRef.get();
+
+    if (!reportSnap.exists) {
+      console.warn(`[TaskService] DailyReport not found at path ${sourceReportPath}`);
+      return;
+    }
+
+    const data = reportSnap.data();
+    if (!data?.leave || !Array.isArray(data.leave)) {
+      return;
+    }
+
+    const workerIndex = data.leave.findIndex(
+      (l: any) => l.workerId === employeeId || l.employeeId === employeeId
+    );
+    if (workerIndex === -1) {
+      return;
+    }
+
+    const updatedLeaveArray = [...data.leave];
+    updatedLeaveArray[workerIndex].leaveType = 'Unpaid';
+    updatedLeaveArray[workerIndex].isMedCertRejected = true;
+
+    await reportRef.update({ leave: updatedLeaveArray });
+    const reportPath = reportRef.path;
+    // Trigger After-Sale System Webhook
+    try {
+      await axios.post(
+        'https://asia-southeast1-after-sale-system.cloudfunctions.net/syncDailyReport',
+        {
+          reportPath: reportPath,
+          reportDate: dateStr,
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      console.log(
+        `[TaskService] Triggered After-Sale Sync Successfully for ${reportPath} after rejecting med cert`
+      );
+    } catch (error: any) {
+      console.error(
+        '[TaskService] Failed to trigger After-Sale sync after rejecting med cert:',
+        error.message
+      );
+    }
+  }
+
+  /**
    * ดึงข้อมูลรายงานประจำวันทั้งหมดของ Task
    */
   async getAllDailyReports(id: string, isSupportReport?: boolean): Promise<any[]> {
@@ -2335,6 +2407,8 @@ export class TaskService {
     const payload = {
         requestId: dateStr,
         ...requestData,
+        projectId: docData.projectId || '',
+        projectName: docData.projectName || '',
         reportDate: requestDate,
         createdAt: now,
         updatedAt: now,
@@ -2635,6 +2709,8 @@ export class TaskService {
             id: `${woId}__${catId}__${taskId}__${subtaskId}`,
             subtaskId: subtaskId,
             subtaskName: st.subtaskName,
+            projectId: projectId,
+            projectName: projectName,
             status: 'upcoming',
             assignees: st.assignees,
             dailyProgress: 0,

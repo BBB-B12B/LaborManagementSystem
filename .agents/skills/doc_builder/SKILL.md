@@ -122,7 +122,7 @@ Steps:
 4. **§4 Playwright Script** — generate capture script
 5. **§5 MECE Update** — insert screenshot filenames into HTML placeholders
 6. **§6 Build HTML + PDF** — write files · call `pdf` skill
-   - STOP if any §6 file write fails → report error · wait for user
+   - STOP if any §6 file write fails → emit `[doc-builder-halt] reason:write-fail` · report error · wait for user
 
 Stop conditions:
 - Missing prerequisite → emit `[doc-builder-refused]` · halt immediately

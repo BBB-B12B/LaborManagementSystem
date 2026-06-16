@@ -9,8 +9,6 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authService } from '../../services/auth/AuthService';
 import { AppError } from '../middleware/errorHandler';
-import { auth as firebaseAuth } from '../../config/firebase';
-import { resolveUserProfile } from '../middleware/auth';
 import { activityService } from '../../services/activity/ActivityService';
 
 const router = Router();

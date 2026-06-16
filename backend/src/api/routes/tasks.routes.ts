@@ -1,17 +1,32 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import admin from 'firebase-admin';
 import { taskService } from '../../services/TaskService';
 import { taskConverter } from '../../models/Task';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { db } from '../../config/firebase';
 import { afterSaleDb } from '../../config/firebaseProjectB';
-import admin from 'firebase-admin';
+
 import multer from 'multer';
 import { parseWbsExcel } from '../../utils/wbsParser';
 import * as ExcelJS from 'exceljs';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+/**
+ * ดึงรายการ ID ของ Work Orders ที่เป็นระบบ After-Sale (type == 'AfterSale')
+ */
+export async function getAfterSaleWorkOrderIds(): Promise<Set<string>> {
+  try {
+    const snap = await afterSaleDb.collection('workOrders').where('type', '==', 'AfterSale').get();
+    return new Set(snap.docs.map(doc => doc.id));
+  } catch (err) {
+    console.error('[getAfterSaleWorkOrderIds] Error fetching AfterSale workOrders:', err);
+    return new Set();
+  }
+}
+
 
 // Apply authentication to all routes
 router.use(authenticate);
@@ -71,6 +86,7 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
     const { startDate, endDate } = req.query;
     const userRole = authReq.user?.roleCode;
     const userEmployeeId = authReq.user?.employeeId;
+    const userProjectIds = authReq.user?.projectLocationIds || [];
 
     if (!startDate || !endDate) {
       throw new AppError('ต้องระบุวันที่เริ่มต้น (startDate) และวันที่สิ้นสุด (endDate) (startDate and endDate are required)', 400);
@@ -82,16 +98,62 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       throw new AppError('รูปแบบวันที่ไม่ถูกต้อง (Invalid date format)', 400);
     }
 
-    // 1. Fetch all projects to build projectCode map
-    const projectsSnapshot = await db.collection('Project').get();
+    // 1. Define all queries and fetch them concurrently to minimize network roundtrip latency
+    let projectsQuery = db.collection('Project');
+    if ((userRole === 'FM' || userRole === 'SE') && userProjectIds.length > 0) {
+      projectsQuery = projectsQuery.where(admin.firestore.FieldPath.documentId(), 'in', userProjectIds) as any;
+    }
+
+    const periodsQuery = db.collection('wagePeriods');
+    const dcQuery = db.collection('dailyContractors').where('isActive', '==', true);
+
+    let tasksQuery: admin.firestore.Query = afterSaleDb.collectionGroup('tasks');
+    if ((userRole === 'FM' || userRole === 'SE') && userProjectIds.length > 0) {
+      tasksQuery = tasksQuery.where('projectId', 'in', userProjectIds);
+    }
+
+    let subtasksQuery: admin.firestore.Query = afterSaleDb.collectionGroup('subtasks');
+    if ((userRole === 'FM' || userRole === 'SE') && userProjectIds.length > 0) {
+      subtasksQuery = subtasksQuery.where('projectId', 'in', userProjectIds);
+    }
+
+    const usersQuery = db.collection('users');
+
+    const startOfDay = new Date(start);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(end);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const reportsQuery = afterSaleDb.collectionGroup('dailyReports')
+      .where('reportDate', '>=', startOfDay)
+      .where('reportDate', '<=', endOfDay);
+
+    const [
+      projectsSnapshot,
+      periodsSnapshot,
+      contractorsSnapshot,
+      afterSaleWoIds,
+      tasksSnapshot,
+      subtasksSnapshot,
+      usersSnapshot,
+      reportsSnapshot
+    ] = await Promise.all([
+      projectsQuery.get(),
+      periodsQuery.get(),
+      dcQuery.get(),
+      getAfterSaleWorkOrderIds(),
+      tasksQuery.get(),
+      subtasksQuery.get(),
+      usersQuery.get(),
+      reportsQuery.get()
+    ]);
     const projectsMap = new Map<string, string>(); // projectId -> projectCode
     projectsSnapshot.forEach(doc => {
       const data = doc.data();
       projectsMap.set(doc.id, data.projectCode || data.code || '');
     });
 
-    // 2. Fetch locked wage periods for all projects
-    const periodsSnapshot = await db.collection('wagePeriods').get();
+    // 2. Map locked wage periods for projects
     const periods = periodsSnapshot.docs.map(doc => doc.data()).filter(p => p.isDeleted !== true);
 
     const isProjectDateLocked = (projectCode: string, date: Date) => {
@@ -113,9 +175,7 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       });
     };
 
-    // 3. Fetch all active daily contractors
-    let dcQuery = db.collection('dailyContractors').where('isActive', '==', true);
-    const contractorsSnapshot = await dcQuery.get();
+    // 3. Map active daily contractors
     let contractors = contractorsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -140,8 +200,8 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
-    // 4. Fetch all tasks and subtasks from afterSaleDb to map subtasks
-    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    // 4. Map tasks and subtasks from afterSaleDb
+    
     const tasksMap = new Map<string, any>();
     tasksSnapshot.docs.forEach(doc => {
       const pathParts = doc.ref.path.split('/');
@@ -153,7 +213,6 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       });
     });
 
-    const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
     let tasks = subtasksSnapshot.docs.map(doc => {
       const data = doc.data() as any;
       const parentPath = doc.ref.parent.parent?.path;
@@ -166,9 +225,8 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       const parentTask = tasksMap.get(taskId);
       if (!parentTask) return null;
       
-      // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
-      const woCode = String(parentTask.workOrderCode || '').toUpperCase().trim();
-      if (woCode === 'WOA' || woCode === 'WOP') return null;
+      // กรองไม่แสดงงานของ After-Sale ออกจากระบบ
+      if (afterSaleWoIds.has(woId)) return null;
       
       return {
         ...parentTask,
@@ -185,7 +243,6 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
     }).filter(Boolean) as any[];
 
     // Filter tasks if role is FM
-    const userProjectIds = authReq.user?.projectLocationIds || [];
     if (userRole === 'FM' || userRole === 'SE') {
       if (userProjectIds.length > 0) {
         tasks = tasks.filter((t: any) => userProjectIds.includes(t.projectId));
@@ -208,8 +265,7 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
       }
     }
 
-    // Fetch all users to map uid/employeeId -> name
-    const usersSnapshot = await db.collection('users').get();
+    // Map users to map uid/employeeId -> name
     const usersMap = new Map<string, string>();
     usersSnapshot.forEach(doc => {
       const data = doc.data();
@@ -237,10 +293,50 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
     }
 
     if (dates.length > 0) {
-      for (const task of tasks) {
-        const currentRev = task.currentRevision || 'rev00';
-        const taskRef = afterSaleDb.doc(task.path);
+      // Build a map of tasks by path for quick lookup
+      const tasksByPath = new Map<string, any>();
+      tasks.forEach(t => {
+        tasksByPath.set(t.path, t);
+      });
 
+      // Use pre-fetched reportsSnapshot
+
+      reportsSnapshot.docs.forEach((doc: any) => {
+        const data = doc.data();
+        const path = doc.ref.path;
+        const parts = path.split('/');
+
+        // dailyReports under subtask have length 12:
+        // workOrders/{woId}/categories/{catId}/tasks/{taskId}/subtasks/{subtaskId}/revisions/{currentRev}/dailyReports/{dateStr}
+        // or help:
+        // workOrders/{woId}/categories/{catId}/tasks/{taskId}/subtasks/{subtaskId}/help/{helpId}/dailyReports/{dateStr}
+        if (parts.length !== 12) return;
+
+        const subtaskPath = `workOrders/${parts[1]}/categories/${parts[3]}/tasks/${parts[5]}/subtasks/${parts[7]}`;
+        const task = tasksByPath.get(subtaskPath);
+        if (!task) return;
+
+        const currentRev = task.currentRevision || 'rev00';
+        const helpId = currentRev.replace('rev', 'help');
+
+        const isNormal = parts[8] === 'revisions' && parts[9] === currentRev;
+        const isSupport = parts[8] === 'help' && parts[9] === helpId;
+
+        if (!isNormal && !isSupport) return;
+
+        allReports.push({
+          taskId: task.taskId,
+          taskName: task.taskName,
+          taskPath: task.path,
+          isSupport: isSupport,
+          dateStr: doc.id,
+          unlockedDates: isSupport ? (task.supportUnlockedDates || {}) : (task.unlockedDates || {}),
+          ...data
+        });
+      });
+
+      // Now set completionDate and startDate for each task
+      for (const task of tasks) {
         // Fetch completion date if task has reached 100% or completed
         let completionDate: string | null = null;
         if (
@@ -248,73 +344,16 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
           task.supportDailyProgress >= 100 ||
           task.status === 'completed'
         ) {
-          const reportsSnap = await taskRef
-            .collection('revisions')
-            .doc(currentRev)
-            .collection('dailyReports')
-            .where('progress', '>=', 100)
-            .get();
-
-          const completedDates = reportsSnap.docs.map((doc) => doc.id);
-
-          const helpId = currentRev.replace('rev', 'help');
-          const helpReportsSnap = await taskRef
-            .collection('help')
-            .doc(helpId)
-            .collection('dailyReports')
-            .where('progress', '>=', 100)
-            .get();
-
-          completedDates.push(...helpReportsSnap.docs.map((doc) => doc.id));
-
-          if (completedDates.length > 0) {
-            completedDates.sort();
-            completionDate = completedDates[0];
+          // Check if we already have a 100% report in our loaded date range
+          const completedReportInAll = allReports.find(r => r.taskId === task.taskId && r.progress >= 100);
+          if (completedReportInAll) {
+            completionDate = completedReportInAll.dateStr;
           } else {
             const fallbackDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
             completionDate = fallbackDate.toISOString().split('T')[0];
           }
         }
         task.completionDate = completionDate;
-
-        // Normal reports
-        const normalReportsPromise = taskRef.collection('revisions').doc(currentRev).collection('dailyReports')
-          .where(admin.firestore.FieldPath.documentId(), '>=', dates[0])
-          .where(admin.firestore.FieldPath.documentId(), '<=', dates[dates.length - 1])
-          .get();
-
-        // Support reports (help)
-        const helpId = currentRev.replace('rev', 'help');
-        const supportReportsPromise = taskRef.collection('help').doc(helpId).collection('dailyReports')
-          .where(admin.firestore.FieldPath.documentId(), '>=', dates[0])
-          .where(admin.firestore.FieldPath.documentId(), '<=', dates[dates.length - 1])
-          .get();
-
-        const [normalSnap, supportSnap] = await Promise.all([normalReportsPromise, supportReportsPromise]);
-
-        normalSnap.forEach(doc => {
-          allReports.push({
-            taskId: task.taskId,
-            taskName: task.taskName,
-            taskPath: task.path,
-            isSupport: false,
-            dateStr: doc.id,
-            unlockedDates: task.unlockedDates || {},
-            ...doc.data()
-          });
-        });
-
-        supportSnap.forEach(doc => {
-          allReports.push({
-            taskId: task.taskId,
-            taskName: task.taskName,
-            taskPath: task.path,
-            isSupport: true,
-            dateStr: doc.id,
-            unlockedDates: task.supportUnlockedDates || {},
-            ...doc.data()
-          });
-        });
 
         // Now compute startDate for this task using allReports and task creation fields
         const getTaskDateStr = (timestampOrStr: any) => {
@@ -330,25 +369,25 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
           }
         };
 
-        let startDate: string | null = null;
+        let startDateStr: string | null = null;
         if (task.revisionCreatedAt && task.currentRevision && task.currentRevision !== 'rev00') {
-          startDate = getTaskDateStr(task.revisionCreatedAt);
+          startDateStr = getTaskDateStr(task.revisionCreatedAt);
         } else if (task.isSupportRequest && task.supportCreatedAt) {
-          startDate = getTaskDateStr(task.supportCreatedAt);
+          startDateStr = getTaskDateStr(task.supportCreatedAt);
         } else {
-          startDate = getTaskDateStr(task.createdAt);
+          startDateStr = getTaskDateStr(task.createdAt);
         }
 
-        // Check if there are any reports for this task (inside allReports) that are earlier than startDate
+        // Check if there are any reports for this task (inside allReports) that are earlier than startDateStr
         const taskReports = allReports.filter(r => r.taskId === task.taskId);
         if (taskReports.length > 0) {
           const reportDates = taskReports.map(r => r.dateStr).sort();
           const earliestReportDate = reportDates[0];
-          if (startDate && earliestReportDate < startDate) {
-            startDate = earliestReportDate;
+          if (startDateStr && earliestReportDate < startDateStr) {
+            startDateStr = earliestReportDate;
           }
         }
-        task.startDate = startDate;
+        task.startDate = startDateStr;
       }
     }
 
@@ -628,7 +667,22 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
       return res;
     };
 
-    const snapshot = await afterSaleDb.collectionGroup('subtasks').get();
+    const afterSaleWoIds = await getAfterSaleWorkOrderIds();
+
+    const userProjectIds = (req.user as any)?.projectLocationIds || [];
+    let targetProjectIds: string[] = [];
+    if (projectId) {
+      targetProjectIds = [String(projectId)];
+    } else if ((userRole === 'FM' || userRole === 'SE') && userProjectIds.length > 0) {
+      targetProjectIds = userProjectIds;
+    }
+
+    let subtasksQuery: admin.firestore.Query = afterSaleDb.collectionGroup('subtasks');
+    if (targetProjectIds.length > 0) {
+      subtasksQuery = subtasksQuery.where('projectId', 'in', targetProjectIds.slice(0, 10));
+    }
+    const snapshot = await subtasksQuery.get();
+
     let subtasks = snapshot.docs.map(doc => {
       const data = doc.data() as any;
       const parentPath = doc.ref.parent.parent?.path;
@@ -648,6 +702,7 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
         supportUnlockedDates: parseUnlockDates(data.supportUnlockedDates),
         supportUnlockRequests: parseUnlockRequests(data.supportUnlockRequests),
         id: fullId,
+        woId, // สำหรับใช้กรอง After-Sale
         taskId: subtaskId, // original subtaskId (full code ARC-xxxx-xxx-xxxx)
         parentTaskId: taskId, // the parent task's id
       };
@@ -667,7 +722,11 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
        });
     }
 
-    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    let tasksQuery: admin.firestore.Query = afterSaleDb.collectionGroup('tasks');
+    if (targetProjectIds.length > 0) {
+      tasksQuery = tasksQuery.where('projectId', 'in', targetProjectIds.slice(0, 10));
+    }
+    const tasksSnapshot = await tasksQuery.get();
     const tasksMap = new Map();
     tasksSnapshot.docs.forEach(doc => {
        const pathParts = doc.ref.path.split('/');
@@ -681,8 +740,7 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
        if (!parentTask) return null;
 
        // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
-       const woCode = String(parentTask.workOrderCode || '').toUpperCase().trim();
-       if (woCode === 'WOA' || woCode === 'WOP') return null;
+       if (afterSaleWoIds.has(st.woId)) return null;
 
        if (projectId && parentTask.projectId !== projectId) return null;
        return {
@@ -707,8 +765,29 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
   try {
     const { projectId, startDate, endDate } = req.query;
     
-    // 1. Fetch all tasks to get projectId map
-    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
+    const afterSaleWoIds = await getAfterSaleWorkOrderIds();
+
+    const userRole = (req.user as any)?.roleCode || req.user?.role;
+    const userProjectIds = (req.user as any)?.projectLocationIds || [];
+
+    let targetProjectIds: string[] = [];
+    if (projectId) {
+      targetProjectIds = [String(projectId)];
+    } else if ((userRole === 'FM' || userRole === 'SE') && userProjectIds.length > 0) {
+      targetProjectIds = userProjectIds;
+    }
+
+    let tasksQuery: admin.firestore.Query = afterSaleDb.collectionGroup('tasks');
+    let subtasksQuery: admin.firestore.Query = afterSaleDb.collectionGroup('subtasks');
+    let requestsQuery: admin.firestore.Query = afterSaleDb.collectionGroup('requests');
+
+    if (targetProjectIds.length > 0) {
+      tasksQuery = tasksQuery.where('projectId', 'in', targetProjectIds.slice(0, 10));
+      subtasksQuery = subtasksQuery.where('projectId', 'in', targetProjectIds.slice(0, 10));
+      requestsQuery = requestsQuery.where('projectId', 'in', targetProjectIds.slice(0, 10));
+    }
+
+    const tasksSnapshot = await tasksQuery.get();
     const tasksMap = new Map();
     tasksSnapshot.docs.forEach(doc => {
       const parts = doc.ref.path.split('/');
@@ -727,8 +806,7 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
       });
     });
 
-    // Fetch all subtasks to get subtaskName and dueDate map
-    const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
+    const subtasksSnapshot = await subtasksQuery.get();
     const subtasksMap = new Map();
     subtasksSnapshot.docs.forEach(doc => {
       const sData = doc.data();
@@ -748,8 +826,7 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
       if (uData.username) usersMap.set(uData.username, uData.name);
     });
 
-    // 2. Fetch all requests
-    const snapshot = await afterSaleDb.collectionGroup('requests').get();
+    const snapshot = await requestsQuery.get();
     const allRequests: any[] = [];
 
     snapshot.docs.forEach(doc => {
@@ -769,12 +846,12 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
         return;
       }
       
+      const woId = parts[1];
       const taskMeta = tasksMap.get(taskId);
       if (!taskMeta) return;
 
-      // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
-      const woCode = String(taskMeta.workOrderCode || '').toUpperCase().trim();
-      if (woCode === 'WOA' || woCode === 'WOP') return;
+      // กรองไม่แสดงงานของ After-Sale ออกจากระบบ
+      if (afterSaleWoIds.has(woId)) return;
 
       if (projectId && taskMeta.projectId !== projectId) return;
 
@@ -838,36 +915,108 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
   try {
     const { projectId, startDate, endDate } = req.query;
     
-    // 1. Fetch all tasks to get projectId map
-    const tasksSnapshot = await afterSaleDb.collectionGroup('tasks').get();
-    const tasksMap = new Map();
-    tasksSnapshot.docs.forEach(doc => {
-      const parts = doc.ref.path.split('/');
-      const taskId = parts[5];
-      const taskData = doc.data();
-      tasksMap.set(taskId, {
-        id: doc.id,
-        taskId,
-        taskName: taskData.taskName,
-        projectId: taskData.projectId,
-        projectName: taskData.projectName,
-        workOrderCode: taskData.workOrderCode,
-        createdBy: taskData.createdBy || 'ไม่ระบุ',
-        createdAt: taskData.createdAt ? (typeof taskData.createdAt.toDate === 'function' ? taskData.createdAt.toDate() : taskData.createdAt) : null,
-        dueDate: taskData.dueDate ? (typeof taskData.dueDate.toDate === 'function' ? taskData.dueDate.toDate() : taskData.dueDate) : null,
-      });
+    const afterSaleWoIds = await getAfterSaleWorkOrderIds();
+
+    // 1. Fetch dailyReports with Firestore-level filters
+    let dailyReportsQuery: any = afterSaleDb.collectionGroup('dailyReports');
+    
+    if (projectId) {
+      dailyReportsQuery = dailyReportsQuery.where('projectId', '==', projectId);
+    }
+    
+    if (startDate) {
+      const startOfDay = new Date(startDate as string);
+      startOfDay.setHours(0, 0, 0, 0);
+      dailyReportsQuery = dailyReportsQuery.where('reportDate', '>=', startOfDay);
+    }
+    
+    if (endDate) {
+      const endOfDay = new Date(endDate as string);
+      endOfDay.setHours(23, 59, 59, 999);
+      dailyReportsQuery = dailyReportsQuery.where('reportDate', '<=', endOfDay);
+    }
+    
+    const snapshot = await dailyReportsQuery.get();
+    
+    // Extract unique task refs and subtask refs referenced in matching dailyReports
+    const taskRefs: FirebaseFirestore.DocumentReference[] = [];
+    const subtaskRefs: FirebaseFirestore.DocumentReference[] = [];
+    const uniqueTaskPaths = new Set<string>();
+    const uniqueSubtaskPaths = new Set<string>();
+
+    snapshot.docs.forEach((doc: any) => {
+      const path = doc.ref.path;
+      const parts = path.split('/');
+      
+      let taskId = '';
+      let subtaskId = '';
+      
+      if (parts.length === 10) {
+        taskId = parts[5];
+      } else if (parts.length === 12) {
+        taskId = parts[5];
+        subtaskId = parts[7];
+      } else {
+        return;
+      }
+
+      const taskPath = `workOrders/${parts[1]}/categories/${parts[3]}/tasks/${taskId}`;
+      if (!uniqueTaskPaths.has(taskPath)) {
+        uniqueTaskPaths.add(taskPath);
+        taskRefs.push(afterSaleDb.doc(taskPath));
+      }
+
+      if (subtaskId) {
+        const subtaskPath = `${taskPath}/subtasks/${subtaskId}`;
+        if (!uniqueSubtaskPaths.has(subtaskPath)) {
+          uniqueSubtaskPaths.add(subtaskPath);
+          subtaskRefs.push(afterSaleDb.doc(subtaskPath));
+        }
+      }
     });
 
-    // Fetch all subtasks to get subtaskName and dueDate map
-    const subtasksSnapshot = await afterSaleDb.collectionGroup('subtasks').get();
-    const subtasksMap = new Map();
-    subtasksSnapshot.docs.forEach(doc => {
-      const sData = doc.data();
-      subtasksMap.set(doc.id, {
-        subtaskName: sData.subtaskName,
-        dueDate: sData.dueDate ? (typeof sData.dueDate.toDate === 'function' ? sData.dueDate.toDate() : sData.dueDate) : null,
+    // Fetch referenced tasks in batch
+    const tasksMap = new Map();
+    if (taskRefs.length > 0) {
+      const tasksDocs = await afterSaleDb.getAll(...taskRefs);
+      tasksDocs.forEach((doc: any) => {
+        if (doc.exists) {
+          const parts = doc.ref.path.split('/');
+          const taskId = parts[5];
+          const taskData = doc.data();
+          if (taskData) {
+            tasksMap.set(taskId, {
+              id: doc.id,
+              taskId,
+              taskName: taskData.taskName,
+              projectId: taskData.projectId,
+              projectName: taskData.projectName,
+              workOrderCode: taskData.workOrderCode,
+              createdBy: taskData.createdBy || 'ไม่ระบุ',
+              createdAt: taskData.createdAt ? (typeof taskData.createdAt.toDate === 'function' ? taskData.createdAt.toDate() : taskData.createdAt) : null,
+              dueDate: taskData.dueDate ? (typeof taskData.dueDate.toDate === 'function' ? taskData.dueDate.toDate() : taskData.dueDate) : null,
+            });
+          }
+        }
       });
-    });
+    }
+
+    // Fetch referenced subtasks in batch
+    const subtasksMap = new Map();
+    if (subtaskRefs.length > 0) {
+      const subtasksDocs = await afterSaleDb.getAll(...subtaskRefs);
+      subtasksDocs.forEach((doc: any) => {
+        if (doc.exists) {
+          const sData = doc.data();
+          if (sData) {
+            subtasksMap.set(doc.id, {
+              subtaskName: sData.subtaskName,
+              dueDate: sData.dueDate ? (typeof sData.dueDate.toDate === 'function' ? sData.dueDate.toDate() : sData.dueDate) : null,
+            });
+          }
+        }
+      });
+    }
 
     // Fetch all users to map employeeId / uid / username to name
     const usersSnapshot = await db.collection('users').get();
@@ -879,11 +1028,9 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
       if (uData.username) usersMap.set(uData.username, uData.name);
     });
 
-    // 2. Fetch all dailyReports
-    const snapshot = await afterSaleDb.collectionGroup('dailyReports').get();
     const allReports: any[] = [];
 
-    snapshot.docs.forEach(doc => {
+    snapshot.docs.forEach((doc: any) => {
       const data = doc.data();
       const path = doc.ref.path;
       const parts = path.split('/');
@@ -900,18 +1047,14 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
         return;
       }
       
+      const woId = parts[1];
       const taskMeta = tasksMap.get(taskId);
       if (!taskMeta) return;
 
-      // กรองไม่แสดงงานของ After-Sale (workOrderCode == 'WOA' หรือ 'WOP') ออกจากระบบ
-      const woCode = String(taskMeta.workOrderCode || '').toUpperCase().trim();
-      if (woCode === 'WOA' || woCode === 'WOP') return;
-
-      if (projectId && taskMeta.projectId !== projectId) return;
+      // กรองไม่แสดงงานของ After-Sale ออกจากระบบ
+      if (afterSaleWoIds.has(woId)) return;
 
       const rDateStr = doc.id;
-      if (startDate && rDateStr < startDate) return;
-      if (endDate && rDateStr > endDate) return;
 
       let taskName = taskMeta.taskName;
       let dueDate = taskMeta.dueDate || null;
@@ -977,6 +1120,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       filters.projectId = projectId as string;
     }
 
+    // Pagination params
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+
     // If role is FM, SE, OE, they should only see assigned tasks
     // Let's assume FM can only see tasks assigned to them
     if (userRole === 'FM' || userRole === 'SE') {
@@ -1015,9 +1162,27 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       });
     }
 
+    const total = filteredTasks.length;
+    let paginatedTasks = filteredTasks;
+    let hasMore = false;
+    
+    if (page !== undefined) {
+      const startIndex = (page - 1) * limit;
+      paginatedTasks = filteredTasks.slice(startIndex, startIndex + limit);
+      hasMore = startIndex + limit < total;
+    }
+
     res.status(200).json({
       success: true,
-      data: filteredTasks,
+      data: paginatedTasks,
+      ...(page !== undefined && {
+        pagination: {
+          total,
+          page,
+          limit,
+          hasMore
+        }
+      })
     });
   } catch (error) {
     next(error);
@@ -1829,11 +1994,30 @@ router.get('/:id/reports/:date', async (req: Request, res: Response, next: NextF
   try {
     const { id, date } = req.params;
     const isSupportReport = req.query.isSupportReport === 'true';
-    const report = await taskService.getDailyReport(id, date, isSupportReport);
+    
+    const reportPromise = taskService.getDailyReport(id, date, isSupportReport);
+    let siteReportPromise = Promise.resolve(null);
+    let supportReportPromise = Promise.resolve(null);
+    
+    if (isSupportReport) {
+      siteReportPromise = taskService.getDailyReport(id, date, false);
+    } else {
+      supportReportPromise = taskService.getDailyReport(id, date, true);
+    }
+    
+    const [report, siteReport, supportReport] = await Promise.all([
+      reportPromise,
+      siteReportPromise,
+      supportReportPromise
+    ]);
 
     res.status(200).json({
       success: true,
-      data: report,
+      data: {
+        report,
+        siteReport,
+        supportReport
+      },
     });
   } catch (error) {
     next(error);

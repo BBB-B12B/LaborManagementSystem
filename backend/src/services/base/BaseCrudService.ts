@@ -17,6 +17,7 @@ export interface PaginationOptions {
   pageSize?: number;
   orderBy?: string;
   orderDirection?: 'asc' | 'desc';
+  projection?: string[];
 }
 
 export interface PaginatedResult<T> {
@@ -73,6 +74,10 @@ export class BaseCrudService<T extends { id: string }> {
       }
 
       let query = this.collection.orderBy(orderBy, orderDirection);
+
+      if (options?.projection && options.projection.length > 0) {
+        query = (query as any).select(...options.projection);
+      }
 
       const offset = (page - 1) * pageSize;
       if (offset > 0) {
@@ -163,6 +168,10 @@ export class BaseCrudService<T extends { id: string }> {
     );
 
     let query: Query<T> = this.collection as any;
+
+    if (options?.projection && options.projection.length > 0) {
+      query = (query as any).select(...options.projection);
+    }
 
     filters.forEach((filter) => {
       query = query.where(filter.field, filter.operator, filter.value);

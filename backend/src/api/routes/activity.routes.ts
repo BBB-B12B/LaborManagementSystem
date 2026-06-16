@@ -44,7 +44,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       res.status(403).json({ success: false, error: 'Forbidden' });
       return;
     }
-    const data = await activityService.getActivityLogs();
+    const dateFilter = req.query.dateFilter as string || 'today';
+    const data = await activityService.getActivityLogs(dateFilter);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

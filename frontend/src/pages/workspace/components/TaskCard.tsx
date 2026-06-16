@@ -37,6 +37,18 @@ interface TaskCardProps {
   hasUnread?: boolean;
 }
 
+const parseSafeDate = (val: any): Date | null => {
+  if (!val) return null;
+  let d: Date;
+  if (typeof val === 'object' && ('_seconds' in val || 'seconds' in val)) {
+    const secs = val._seconds || val.seconds;
+    d = new Date(secs * 1000);
+  } else {
+    d = new Date(val);
+  }
+  return isNaN(d.getTime()) ? null : d;
+};
+
 export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, onHide, hasUnread }) => {
   const theme = useTheme();
   const { user } = useAuthStore();
@@ -45,8 +57,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
 
   const getDueDateColor = () => {
     if (!task.dueDate) return task.dailyProgress === 100 ? '#10b981' : '#9ca3af';
-    const dueDateObj = new Date(task.dueDate);
-    if (isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? '#10b981' : '#9ca3af';
+    const dueDateObj = parseSafeDate(task.dueDate);
+    if (!dueDateObj || isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? '#10b981' : '#9ca3af';
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -54,7 +66,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
 
     // If progress is 100, compare completion date (updatedAt) with dueDate
     if (task.dailyProgress === 100) {
-      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      const completionDate = parseSafeDate(task.updatedAt) || new Date();
       completionDate.setHours(0, 0, 0, 0);
       const diff = dueDateObj.getTime() - completionDate.getTime();
       const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
@@ -82,8 +94,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
 
   const getDueDateTooltip = () => {
     if (!task.dueDate) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
-    const dueDateObj = new Date(task.dueDate);
-    if (isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
+    const dueDateObj = parseSafeDate(task.dueDate);
+    if (!dueDateObj || isNaN(dueDateObj.getTime())) return task.dailyProgress === 100 ? 'เสร็จสิ้น (ไม่ระบุวันครบกำหนด)' : 'ไม่ระบุวันครบกำหนด';
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -91,7 +103,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
 
     // If progress is 100, describe completion relative to dueDate
     if (task.dailyProgress === 100) {
-      const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+      const completionDate = parseSafeDate(task.updatedAt) || new Date();
       completionDate.setHours(0, 0, 0, 0);
       const diff = dueDateObj.getTime() - completionDate.getTime();
       const diffDaysCompleted = Math.round(diff / (1000 * 60 * 60 * 24));
@@ -401,10 +413,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               {(() => {
                 if (task.dailyProgress === 100) {
                   if (!task.dueDate) return 'ตรงตามแผน';
-                  const dueDateObj = new Date(task.dueDate);
-                  if (isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
+                  const dueDateObj = parseSafeDate(task.dueDate);
+                  if (!dueDateObj || isNaN(dueDateObj.getTime())) return 'ตรงตามแผน';
 
-                  const completionDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
+                  const completionDate = parseSafeDate(task.updatedAt) || new Date();
                   completionDate.setHours(0, 0, 0, 0);
                   dueDateObj.setHours(0, 0, 0, 0);
 
@@ -421,8 +433,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
                 }
 
                 if (!task.dueDate) return 'ไม่ระบุ';
-                const dueDateObj = new Date(task.dueDate);
-                if (isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
+                const dueDateObj = parseSafeDate(task.dueDate);
+                if (!dueDateObj || isNaN(dueDateObj.getTime())) return 'ไม่ระบุ';
 
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);

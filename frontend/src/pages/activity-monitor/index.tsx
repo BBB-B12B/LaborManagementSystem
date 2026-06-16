@@ -122,10 +122,10 @@ export default function ActivityMonitorPage() {
   }, []);
 
   // ─── Fetch history ───────────────────────────────────────────────────────
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (filter: DateFilter) => {
     setLoadingLogs(true);
     try {
-      const data = await api.get<ActivityLog[]>('/activity');
+      const data = await api.get<ActivityLog[]>('/activity', { dateFilter: filter });
       setLogs(data || []);
     } catch {
       // silently fail
@@ -138,24 +138,17 @@ export default function ActivityMonitorPage() {
   useEffect(() => {
     if (!user || user.roleCode !== 'GOD') return;
     fetchPresence();
-    fetchLogs();
+    fetchLogs(dateFilter);
     const interval = setInterval(fetchPresence, 30000);
     return () => clearInterval(interval);
-  }, [user, fetchPresence, fetchLogs]);
+  }, [user, dateFilter, fetchPresence, fetchLogs]);
 
   // ─── Filter logs by date ─────────────────────────────────────────────────
-  const filteredLogs = logs.filter((log) => {
-    if (!log.timestamp) return false;
-    const d = new Date(log.timestamp);
-    if (dateFilter === 'today') return isToday(d);
-    if (dateFilter === '7d') return isAfter(d, subDays(new Date(), 7));
-    if (dateFilter === '30d') return isAfter(d, subDays(new Date(), 30));
-    return true;
-  });
+  const filteredLogs = logs;
 
   const handleRefresh = () => {
     fetchPresence();
-    fetchLogs();
+    fetchLogs(dateFilter);
   };
 
   if (!user || user.roleCode !== 'GOD') return null;

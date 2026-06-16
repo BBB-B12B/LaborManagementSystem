@@ -21,7 +21,9 @@ import {
   Person,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Business,
 } from '@mui/icons-material';
+import { Virtuoso } from 'react-virtuoso';
 import type { Task, Subtask } from '@/services/taskService';
 import type { WorkOrderConfig } from '@/services/projectConfigService';
 import { useAuthStore } from '@/store/authStore';
@@ -29,8 +31,8 @@ import { useAuthStore } from '@/store/authStore';
 
 interface WorkspaceTreeProps {
   tasks: Task[];
-  selectedNode: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null;
-  onSelectNode: (node: { type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null) => void;
+  selectedNode: { type: 'all' | 'project' | 'workOrder' | 'category' | 'task'; id: string } | null;
+  onSelectNode: (node: { type: 'all' | 'project' | 'workOrder' | 'category' | 'task'; id: string } | null) => void;
   onSubtaskClick: (task: Task, subtask: Subtask) => void;
   onQuickCreateSubtask?: (taskId: string) => void;
   onQuickAssignSubtask?: (task: Task, subtask: Subtask) => void;
@@ -211,10 +213,14 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
     );
   };
 
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [expandedWOs, setExpandedWOs] = useState<Record<string, boolean>>({});
 
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+
+  const [mainExpanded, setMainExpanded] = useState<boolean>(true);
+  const [supportExpanded, setSupportExpanded] = useState<boolean>(true);
 
   // Helper to check if a due date matches the active tab's criteria
   const checkDateMatch = (dueDateVal: string | Date | undefined | null) => {
@@ -255,81 +261,182 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
 
   // Helper to build hierarchy based on a subtask filter
   const buildTree = (subtaskFilter: (sub: Subtask) => boolean, checkTask: (t: Task) => boolean) => {
-    const woMap = new Map<string, { id: string; name: string; code?: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
-
-    tasks.forEach((task) => {
-      const activeSubtasks = (task.subtasks || []).filter(sub => sub.isActive !== false);
-      const hasActiveSubtasks = activeSubtasks.length > 0;
-      
-      let subtasks: Subtask[] = [];
-      if (hasActiveSubtasks) {
-        subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
-        // If the task has active subtasks, but none match the filter, do not show this task
-        if (subtasks.length === 0) return;
-      } else {
-        // If the task has no active subtasks, only show it if the task itself matches the filter criteria
-        if (!checkTask(task) || !checkDateMatch(task.dueDate)) return;
-      }
-
-      const woId = task.workOrderId || 'general-wo';
-      const woName = task.workOrderName || task.workOrderCode || 'งานทั่วไป';
-      const catId = task.categoryId || 'general-cat';
-      const catName = task.categoryName || 'ทั่วไป';
-
-      if (!woMap.has(woId)) {
-        woMap.set(woId, { id: woId, name: woName, code: task.workOrderCode, categories: new Map() });
-      }
-      const wo = woMap.get(woId)!;
-
-      if (!wo.categories.has(catId)) {
-        wo.categories.set(catId, { id: catId, name: catName, tasks: new Map() });
-      }
-      const cat = wo.categories.get(catId)!;
-
-      if (!cat.tasks.has(task.id)) {
-        cat.tasks.set(task.id, { id: task.id, name: task.taskName, task, subtasks: [] });
-      }
-      const tItem = cat.tasks.get(task.id)!;
-      tItem.subtasks.push(...subtasks);
+    // Determine unique projects first
+    const projectIds = new Set<string>();
+    tasks.forEach(t => {
+      if (t.projectId) projectIds.add(t.projectId);
     });
+    const hasMultipleProjects = projectIds.size > 1;
 
-    return Array.from(woMap.values()).map(wo => {
-      const categoriesArray = Array.from(wo.categories.values()).map(cat => {
-        const tasksArray = Array.from(cat.tasks.values()).map(tItem => {
-          const sortedSubtasks = tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName));
-          const taskProgress = tItem.task.supportDailyProgress !== undefined ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
-          const dueDateStatus = getNodeDueDateStatus(sortedSubtasks, tItem.task.dueDate, taskProgress);
+    if (hasMultipleProjects) {
+      const projectMap = new Map<string, { id: string; name: string; workOrders: Map<string, { id: string; name: string; code?: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }> }>();
+
+      tasks.forEach((task) => {
+        const activeSubtasks = (task.subtasks || []).filter(sub => sub.isActive !== false);
+        const hasActiveSubtasks = activeSubtasks.length > 0;
+        
+        let subtasks: Subtask[] = [];
+        if (hasActiveSubtasks) {
+          subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
+          if (subtasks.length === 0) return;
+        } else {
+          if (!checkTask(task) || !checkDateMatch(task.dueDate)) return;
+        }
+
+        const projId = task.projectId || 'general-project';
+        const projName = task.projectName || 'โครงการทั่วไป';
+        const woId = task.workOrderId || 'general-wo';
+        const woName = task.workOrderName || task.workOrderCode || 'งานทั่วไป';
+        const catId = task.categoryId || 'general-cat';
+        const catName = task.categoryName || 'ทั่วไป';
+
+        if (!projectMap.has(projId)) {
+          projectMap.set(projId, { id: projId, name: projName, workOrders: new Map() });
+        }
+        const proj = projectMap.get(projId)!;
+
+        if (!proj.workOrders.has(woId)) {
+          proj.workOrders.set(woId, { id: woId, name: woName, code: task.workOrderCode, categories: new Map() });
+        }
+        const wo = proj.workOrders.get(woId)!;
+
+        if (!wo.categories.has(catId)) {
+          wo.categories.set(catId, { id: catId, name: catName, tasks: new Map() });
+        }
+        const cat = wo.categories.get(catId)!;
+
+        if (!cat.tasks.has(task.id)) {
+          cat.tasks.set(task.id, { id: task.id, name: task.taskName, task, subtasks: [] });
+        }
+        const tItem = cat.tasks.get(task.id)!;
+        tItem.subtasks.push(...subtasks);
+      });
+
+      return Array.from(projectMap.values()).map(proj => {
+        const workOrdersArray = Array.from(proj.workOrders.values()).map(wo => {
+          const categoriesArray = Array.from(wo.categories.values()).map(cat => {
+            const tasksArray = Array.from(cat.tasks.values()).map(tItem => {
+              const sortedSubtasks = tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName));
+              const taskProgress = tItem.task.supportDailyProgress !== undefined ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
+              const dueDateStatus = getNodeDueDateStatus(sortedSubtasks, tItem.task.dueDate, taskProgress);
+              return {
+                ...tItem,
+                subtasks: sortedSubtasks,
+                dueDateStatus
+              };
+            }).sort((a, b) => a.name.localeCompare(b.name));
+
+            const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
+            const assignedSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.filter(sub => sub.assignees && sub.assignees.length > 0).length, 0);
+            const catDueDateStatus = getCategoryDueDateStatus(tasksArray);
+            return {
+              id: cat.id,
+              name: cat.name,
+              tasks: tasksArray,
+              totalSubtaskCount,
+              assignedSubtaskCount,
+              dueDateStatus: catDueDateStatus
+            };
+          }).filter(cat => cat.tasks.length > 0).sort((a, b) => a.name.localeCompare(b.name));
+
+          const totalSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.totalSubtaskCount, 0);
+          const assignedSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.assignedSubtaskCount, 0);
           return {
-            ...tItem,
-            subtasks: sortedSubtasks,
-            dueDateStatus
+            id: wo.id,
+            name: wo.name,
+            code: wo.code,
+            categories: categoriesArray,
+            totalSubtaskCount,
+            assignedSubtaskCount
           };
-        }).sort((a, b) => a.name.localeCompare(b.name));
+        }).filter(wo => wo.categories.length > 0).sort((a, b) => a.name.localeCompare(b.name));
 
-        const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
-        const assignedSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.filter(sub => sub.assignees && sub.assignees.length > 0).length, 0);
-        const catDueDateStatus = getCategoryDueDateStatus(tasksArray);
+        const totalSubtaskCount = workOrdersArray.reduce((sum, w) => sum + w.totalSubtaskCount, 0);
+        const assignedSubtaskCount = workOrdersArray.reduce((sum, w) => sum + w.assignedSubtaskCount, 0);
         return {
-          id: cat.id,
-          name: cat.name,
-          tasks: tasksArray,
+          id: proj.id,
+          name: proj.name,
+          workOrders: workOrdersArray,
           totalSubtaskCount,
-          assignedSubtaskCount,
-          dueDateStatus: catDueDateStatus
+          assignedSubtaskCount
         };
-      }).filter(cat => cat.tasks.length > 0).sort((a, b) => a.name.localeCompare(b.name));
+      }).filter(proj => proj.workOrders.length > 0).sort((a, b) => a.name.localeCompare(b.name));
 
-      const totalSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.totalSubtaskCount, 0);
-      const assignedSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.assignedSubtaskCount, 0);
-      return {
-        id: wo.id,
-        name: wo.name,
-        code: wo.code,
-        categories: categoriesArray,
-        totalSubtaskCount,
-        assignedSubtaskCount
-      };
-    }).filter(wo => wo.categories.length > 0).sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      const woMap = new Map<string, { id: string; name: string; code?: string; categories: Map<string, { id: string; name: string; tasks: Map<string, { id: string; name: string; task: Task; subtasks: Subtask[] }> }> }>();
+
+      tasks.forEach((task) => {
+        const activeSubtasks = (task.subtasks || []).filter(sub => sub.isActive !== false);
+        const hasActiveSubtasks = activeSubtasks.length > 0;
+        
+        let subtasks: Subtask[] = [];
+        if (hasActiveSubtasks) {
+          subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
+          if (subtasks.length === 0) return;
+        } else {
+          if (!checkTask(task) || !checkDateMatch(task.dueDate)) return;
+        }
+
+        const woId = task.workOrderId || 'general-wo';
+        const woName = task.workOrderName || task.workOrderCode || 'งานทั่วไป';
+        const catId = task.categoryId || 'general-cat';
+        const catName = task.categoryName || 'ทั่วไป';
+
+        if (!woMap.has(woId)) {
+          woMap.set(woId, { id: woId, name: woName, code: task.workOrderCode, categories: new Map() });
+        }
+        const wo = woMap.get(woId)!;
+
+        if (!wo.categories.has(catId)) {
+          wo.categories.set(catId, { id: catId, name: catName, tasks: new Map() });
+        }
+        const cat = wo.categories.get(catId)!;
+
+        if (!cat.tasks.has(task.id)) {
+          cat.tasks.set(task.id, { id: task.id, name: task.taskName, task, subtasks: [] });
+        }
+        const tItem = cat.tasks.get(task.id)!;
+        tItem.subtasks.push(...subtasks);
+      });
+
+      return Array.from(woMap.values()).map(wo => {
+        const categoriesArray = Array.from(wo.categories.values()).map(cat => {
+          const tasksArray = Array.from(cat.tasks.values()).map(tItem => {
+            const sortedSubtasks = tItem.subtasks.sort((a, b) => a.subtaskName.localeCompare(b.subtaskName));
+            const taskProgress = tItem.task.supportDailyProgress !== undefined ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
+            const dueDateStatus = getNodeDueDateStatus(sortedSubtasks, tItem.task.dueDate, taskProgress);
+            return {
+              ...tItem,
+              subtasks: sortedSubtasks,
+              dueDateStatus
+            };
+          }).sort((a, b) => a.name.localeCompare(b.name));
+
+          const totalSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.length, 0);
+          const assignedSubtaskCount = tasksArray.reduce((sum, t) => sum + t.subtasks.filter(sub => sub.assignees && sub.assignees.length > 0).length, 0);
+          const catDueDateStatus = getCategoryDueDateStatus(tasksArray);
+          return {
+            id: cat.id,
+            name: cat.name,
+            tasks: tasksArray,
+            totalSubtaskCount,
+            assignedSubtaskCount,
+            dueDateStatus: catDueDateStatus
+          };
+        }).filter(cat => cat.tasks.length > 0).sort((a, b) => a.name.localeCompare(b.name));
+
+          const totalSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.totalSubtaskCount, 0);
+          const assignedSubtaskCount = categoriesArray.reduce((sum, c) => sum + c.assignedSubtaskCount, 0);
+        return {
+          id: wo.id,
+          name: wo.name,
+          code: wo.code,
+          categories: categoriesArray,
+          totalSubtaskCount,
+          assignedSubtaskCount
+        };
+      }).filter(wo => wo.categories.length > 0).sort((a, b) => a.name.localeCompare(b.name));
+    }
   };
 
   const mainTree = useMemo(() => {
@@ -349,31 +456,38 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
     let total = 0;
     let assigned = 0;
     
-    mainTree.forEach(wo => {
-      wo.categories.forEach(cat => {
-        cat.tasks.forEach(t => {
-          t.subtasks.forEach(sub => {
-            total++;
-            if (sub.assignees && sub.assignees.length > 0) {
-              assigned++;
-            }
+    const countTree = (tree: any[]) => {
+      tree.forEach(node => {
+        if ('workOrders' in node) {
+          node.workOrders.forEach((wo: any) => {
+            wo.categories.forEach((cat: any) => {
+              cat.tasks.forEach((t: any) => {
+                t.subtasks.forEach((sub: any) => {
+                  total++;
+                  if (sub.assignees && sub.assignees.length > 0) {
+                    assigned++;
+                  }
+                });
+              });
+            });
           });
-        });
+        } else {
+          node.categories.forEach((cat: any) => {
+            cat.tasks.forEach((t: any) => {
+              t.subtasks.forEach((sub: any) => {
+                total++;
+                if (sub.assignees && sub.assignees.length > 0) {
+                  assigned++;
+                }
+              });
+            });
+          });
+        }
       });
-    });
+    };
 
-    supportTree.forEach(wo => {
-      wo.categories.forEach(cat => {
-        cat.tasks.forEach(t => {
-          t.subtasks.forEach(sub => {
-            total++;
-            if (sub.assignees && sub.assignees.length > 0) {
-              assigned++;
-            }
-          });
-        });
-      });
-    });
+    countTree(mainTree);
+    countTree(supportTree);
     
     return { assigned, total };
   }, [mainTree, supportTree]);
@@ -381,472 +495,527 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
 
   const isAllSelected = selectedNode === null || selectedNode.type === 'all';
 
-  const renderTreeNodes = (treeData: any[], isSupportTree: boolean) => {
-    return treeData.map((wo) => {
-      const isWoExpanded = !!expandedWOs[wo.id];
-      const isWoSelected = selectedNode?.type === 'workOrder' && selectedNode.id === wo.id;
-
-      return (
-        <Box key={wo.id} sx={{ mb: 0.5 }}>
-          {/* WorkOrder Node */}
-          <Box
-            onClick={() => {
-              onSelectNode({ type: 'workOrder', id: wo.id });
-              setExpandedWOs((prev) => ({ ...prev, [wo.id]: true }));
+  const renderWorkOrderNode = (wo: any, isSupportTree: boolean) => {
+    const isWoExpanded = !!expandedWOs[wo.id];
+    const isWoSelected = selectedNode?.type === 'workOrder' && selectedNode.id === wo.id;
+    
+    return (
+      <Box key={wo.id} sx={{ mb: 1.5, px: 0 }}>
+        {/* WorkOrder Node */}
+        <Box
+          onClick={() => {
+            onSelectNode({ type: 'workOrder', id: wo.id });
+            setExpandedWOs((prev) => ({ ...prev, [wo.id]: true }));
+          }}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            px: 1,
+            py: 0.8,
+            borderRadius: 2,
+            cursor: 'pointer',
+            bgcolor: isWoSelected ? '#eff6ff' : 'transparent',
+            borderLeft: isWoSelected ? '3px solid #3b82f6' : '3px solid transparent',
+            color: isWoSelected ? '#1d4ed8' : '#334155',
+            transition: 'all 0.2s',
+            '&:hover': {
+              bgcolor: isWoSelected ? '#eff6ff' : '#f8fafc',
+              '& .hover-actions': { opacity: 1 },
+            },
+          }}
+        >
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedWOs((prev) => ({ ...prev, [wo.id]: !prev[wo.id] }));
             }}
+            sx={{ p: 0.25, mr: 0.5, color: isWoSelected ? '#2563eb' : '#6b7280' }}
+          >
+            {isWoExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
+          </IconButton>
+          <Typography variant="body2" noWrap sx={{ fontWeight: isWoSelected ? 800 : 700, fontSize: '0.85rem' }}>
+            {wo.name}
+          </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          
+          {/* Hover Actions for WorkOrder */}
+          {!isSupportTree && (onEditWorkOrder || onDeleteWorkOrder) && (
+            <Stack
+              className="hover-actions"
+              direction="row"
+              spacing={0.5}
+              sx={{
+                opacity: 0,
+                transition: 'opacity 0.2s',
+                mr: 1,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {onEditWorkOrder && (
+                <Tooltip title="แก้ไขโครงการ" arrow>
+                  <IconButton
+                    size="small"
+                    onClick={() => onEditWorkOrder(wo.id, wo.name)}
+                    sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                  >
+                    <EditIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {onDeleteWorkOrder && isWorkOrderDeletable(wo.id) && (
+                <Tooltip title="ลบโครงการ" arrow>
+                  <IconButton
+                    size="small"
+                    onClick={() => onDeleteWorkOrder(wo.id, wo.name)}
+                    sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          )}
+
+          <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
               px: 1,
-              py: 0.6,
-              borderRadius: 2.5,
-              cursor: 'pointer',
-              bgcolor: isWoSelected ? '#eff6ff' : 'transparent',
-              borderLeft: isWoSelected ? '3px solid #3b82f6' : '3px solid transparent',
-              color: isWoSelected ? '#1d4ed8' : '#334155',
-              '&:hover': {
-                bgcolor: isWoSelected ? '#eff6ff' : '#f8fafc',
-                '& .hover-actions': {
-                  opacity: 1,
-                },
-              },
+              py: 0.25,
+              borderRadius: '999px',
+              bgcolor: isWoSelected ? '#dbeafe' : '#f1f5f9',
+              color: isWoSelected ? '#2563eb' : '#6b7280',
+              fontSize: '0.7rem',
+              fontWeight: 700,
             }}
           >
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpandedWOs((prev) => ({ ...prev, [wo.id]: !prev[wo.id] }));
-              }}
-              sx={{ p: 0.25, mr: 0.5, color: isWoSelected ? '#2563eb' : '#6b7280' }}
-            >
-              {isWoExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
-            </IconButton>
-            {isWoExpanded ? (
-              <FolderOpen sx={{ fontSize: 18, mr: 1, color: isWoSelected ? '#2563eb' : '#6b7280' }} />
-            ) : (
-              <Folder sx={{ fontSize: 18, mr: 1, color: isWoSelected ? '#2563eb' : '#6b7280' }} />
-            )}
-            <Typography variant="body2" noWrap sx={{ fontWeight: isWoSelected ? 700 : 600, fontSize: '0.85rem' }}>
-              {wo.name}
-            </Typography>
-            {(() => {
-              const config = workOrderConfigs.find(c => 
-                (wo.code && (c.code === wo.code || c.id === wo.code)) || 
-                c.code === wo.id || 
-                c.id === wo.id
-              );
-              if (!config) return null;
-              const names = config.leaderNames || (config.leaderName ? [config.leaderName] : []);
-              if (names.length === 0) return null;
+            {`${wo.assignedSubtaskCount}/${wo.totalSubtaskCount}`}
+          </Box>
+        </Box>
+
+        {/* Categories under WorkOrder */}
+        <Collapse in={isWoExpanded} timeout="auto" unmountOnExit>
+          <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #e2e8f0', ml: 2 }}>
+            {wo.categories.map((category: any) => {
+              const isCatExpanded = !!expandedCats[category.id];
+              const isCatSelected = selectedNode?.type === 'category' && selectedNode.id === category.id;
 
               return (
-                <Tooltip title={`หัวหน้ากลุ่มงาน (LD): ${names.join(', ')}`} arrow placement="top">
+                <Box key={category.id} sx={{ mb: 0.5 }}>
+                  {/* Category Node */}
                   <Box
-                    component="span"
-                    onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'inline-flex', alignItems: 'center', ml: 0.75 }}
-                  >
-                    <Person sx={{ fontSize: 15, color: '#3b82f6' }} />
-                  </Box>
-                </Tooltip>
-              );
-            })()}
-            <Box sx={{ flexGrow: 1 }} />
-            {/* Hover Actions */}
-            {(onEditWorkOrder || onDeleteWorkOrder) && (
-              <Stack
-                className="hover-actions"
-                direction="row"
-                spacing={0.5}
-                sx={{
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  mr: 1,
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {onEditWorkOrder && (
-                  <Tooltip title="แก้ไขชื่อ WorkOrder" arrow>
-                    <IconButton
-                      size="small"
-                      onClick={() => onEditWorkOrder(wo.id, wo.name)}
-                      sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
-                    >
-                      <EditIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-                {onDeleteWorkOrder && isWorkOrderDeletable(wo.id) && (
-                  <Tooltip title="ลบ WorkOrder" arrow>
-                    <IconButton
-                      size="small"
-                      onClick={() => onDeleteWorkOrder(wo.id, wo.name)}
-                      sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
-                    >
-                      <DeleteIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Stack>
-            )}
-            <Box
-              sx={{
-                px: 0.8,
-                py: 0.2,
-                borderRadius: '999px',
-                bgcolor: isWoSelected ? '#dbeafe' : '#f1f5f9',
-                color: isWoSelected ? '#2563eb' : '#6b7280',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-              }}
-            >
-              {`${wo.assignedSubtaskCount}/${wo.totalSubtaskCount}`}
-            </Box>
-          </Box>
-
-          {/* Categories under WorkOrder */}
-          <Collapse in={isWoExpanded} timeout="auto" unmountOnExit>
-            <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #e2e8f0', ml: 2 }}>
-              {wo.categories.map((category: any) => {
-                const isCatExpanded = !!expandedCats[category.id];
-                const isCatSelected = selectedNode?.type === 'category' && selectedNode.id === category.id;
-
-                return (
-                  <Box key={category.id} sx={{ mb: 0.5 }}>
-                    {/* Category Node */}
-                    <Box
-                      onClick={() => {
-                        onSelectNode({ type: 'category', id: category.id });
-                        setExpandedCats((prev) => ({ ...prev, [category.id]: true }));
-                      }}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        px: 1,
-                        py: 0.6,
-                        borderRadius: 2,
-                        cursor: 'pointer',
-                        bgcolor: isCatSelected ? '#eff6ff' : 'transparent',
-                        borderLeft: isCatSelected ? '3px solid #3b82f6' : '3px solid transparent',
-                        color: isCatSelected ? '#1d4ed8' : '#475569',
-                        '&:hover': {
-                          bgcolor: isCatSelected ? '#eff6ff' : '#f8fafc',
-                          '& .hover-actions': {
-                            opacity: 1,
-                          },
+                    onClick={() => {
+                      onSelectNode({ type: 'category', id: category.id });
+                      setExpandedCats((prev) => ({ ...prev, [category.id]: true }));
+                    }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      px: 1,
+                      py: 0.6,
+                      borderRadius: 2,
+                      cursor: 'pointer',
+                      bgcolor: isCatSelected ? '#eff6ff' : 'transparent',
+                      borderLeft: isCatSelected ? '3px solid #3b82f6' : '3px solid transparent',
+                      color: isCatSelected ? '#1d4ed8' : '#475569',
+                      '&:hover': {
+                        bgcolor: isCatSelected ? '#eff6ff' : '#f8fafc',
+                        '& .hover-actions': {
+                          opacity: 1,
                         },
+                      },
+                    }}
+                  >
+                    {renderBadge(category.dueDateStatus)}
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedCats((prev) => ({ ...prev, [category.id]: !prev[category.id] }));
+                      }}
+                      sx={{ p: 0.25, mr: 0.5, color: isCatSelected ? '#2563eb' : '#6b7280' }}
+                    >
+                      {isCatExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
+                    </IconButton>
+                    {isCatExpanded ? (
+                      <FolderOpen sx={{ fontSize: 16, mr: 0.75, color: isCatSelected ? '#2563eb' : '#6b7280' }} />
+                    ) : (
+                      <Folder sx={{ fontSize: 16, mr: 0.75, color: isCatSelected ? '#2563eb' : '#6b7280' }} />
+                    )}
+                    <Typography variant="body2" noWrap sx={{ fontWeight: isCatSelected ? 700 : 500, fontSize: '0.8rem' }}>
+                      {category.name}
+                    </Typography>
+                    <Box sx={{ flexGrow: 1 }} />
+                    {/* Hover Actions for Category */}
+                    {(onEditCategory || onDeleteCategory) && (
+                      <Stack
+                        className="hover-actions"
+                        direction="row"
+                        spacing={0.5}
+                        sx={{
+                          opacity: 0,
+                          transition: 'opacity 0.2s',
+                          mr: 1,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {onEditCategory && (
+                          <Tooltip title="แก้ไขชื่อหมวดหมู่" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => onEditCategory(category.id, category.name)}
+                              sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                            >
+                              <EditIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {onDeleteCategory && isCategoryDeletable(category.id) && (
+                          <Tooltip title="ลบหมวดหมู่" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => onDeleteCategory(category.id, category.name)}
+                                sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
+                            >
+                              <DeleteIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    )}
+                    <Box
+                      sx={{
+                        px: 0.8,
+                        py: 0.2,
+                        borderRadius: '999px',
+                        bgcolor: isCatSelected ? '#dbeafe' : '#f1f5f9',
+                        color: isCatSelected ? '#2563eb' : '#6b7280',
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
                       }}
                     >
-                      {renderBadge(category.dueDateStatus)}
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedCats((prev) => ({ ...prev, [category.id]: !prev[category.id] }));
-                        }}
-                        sx={{ p: 0.25, mr: 0.5, color: isCatSelected ? '#2563eb' : '#6b7280' }}
-                      >
-                        {isCatExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
-                      </IconButton>
-                      {isCatExpanded ? (
-                        <FolderOpen sx={{ fontSize: 16, mr: 0.75, color: isCatSelected ? '#2563eb' : '#6b7280' }} />
-                      ) : (
-                        <Folder sx={{ fontSize: 16, mr: 0.75, color: isCatSelected ? '#2563eb' : '#6b7280' }} />
-                      )}
-                      <Typography variant="body2" noWrap sx={{ fontWeight: isCatSelected ? 700 : 500, fontSize: '0.8rem' }}>
-                        {category.name}
-                      </Typography>
-                      <Box sx={{ flexGrow: 1 }} />
-                      {/* Hover Actions for Category */}
-                      {(onEditCategory || onDeleteCategory) && (
-                        <Stack
-                          className="hover-actions"
-                          direction="row"
-                          spacing={0.5}
-                          sx={{
-                            opacity: 0,
-                            transition: 'opacity 0.2s',
-                            mr: 1,
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {onEditCategory && (
-                            <Tooltip title="แก้ไขชื่อหมวดหมู่" arrow>
-                              <IconButton
-                                size="small"
-                                onClick={() => onEditCategory(category.id, category.name)}
-                                sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
-                              >
-                                <EditIcon sx={{ fontSize: 14 }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {onDeleteCategory && isCategoryDeletable(category.id) && (
-                            <Tooltip title="ลบหมวดหมู่" arrow>
-                              <IconButton
-                                size="small"
-                                onClick={() => onDeleteCategory(category.id, category.name)}
-                                  sx={{ p: 0.25, color: '#ef4444', '&:hover': { bgcolor: '#fee2e2' } }}
-                              >
-                                <DeleteIcon sx={{ fontSize: 14 }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </Stack>
-                      )}
-                      <Box
-                        sx={{
-                          px: 0.8,
-                          py: 0.2,
-                          borderRadius: '999px',
-                          bgcolor: isCatSelected ? '#dbeafe' : '#f1f5f9',
-                          color: isCatSelected ? '#2563eb' : '#6b7280',
-                          fontSize: '0.65rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {`${category.assignedSubtaskCount}/${category.totalSubtaskCount}`}
-                      </Box>
+                      {`${category.assignedSubtaskCount}/${category.totalSubtaskCount}`}
                     </Box>
+                  </Box>
 
-                    {/* Tasks under Category */}
-                    <Collapse in={isCatExpanded} timeout="auto" unmountOnExit>
-                      <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #e2e8f0', ml: 1.75 }}>
-                        {category.tasks.map((tItem: any) => {
-                          const isTaskExpanded = !!expandedTasks[tItem.id];
-                          const isTaskSelected = selectedNode?.type === 'task' && selectedNode.id === tItem.id;
-                          const subtasks = tItem.subtasks || [];
+                  {/* Tasks under Category */}
+                  <Collapse in={isCatExpanded} timeout="auto" unmountOnExit>
+                    <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #e2e8f0', ml: 1.75 }}>
+                      {category.tasks.map((tItem: any) => {
+                        const isTaskExpanded = !!expandedTasks[tItem.id];
+                        const isTaskSelected = selectedNode?.type === 'task' && selectedNode.id === tItem.id;
+                        const subtasks = tItem.subtasks || [];
 
-                          return (
-                            <Box key={tItem.id} sx={{ mb: 0.5 }}>
-                              {/* Task Node */}
-                              <Box
-                                onClick={() => {
-                                  onSelectNode({ type: 'task', id: tItem.id });
-                                  setExpandedTasks((prev) => ({ ...prev, [tItem.id]: true }));
+                        return (
+                          <Box key={tItem.id} sx={{ mb: 0.5 }}>
+                            {/* Task Node */}
+                            <Box
+                              onClick={() => {
+                                onSelectNode({ type: 'task', id: tItem.id });
+                                setExpandedTasks((prev) => ({ ...prev, [tItem.id]: true }));
+                              }}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1.5,
+                                cursor: 'pointer',
+                                bgcolor: isTaskSelected ? '#f0fdf4' : 'transparent',
+                                borderLeft: isTaskSelected ? '3px solid #22c55e' : '3px solid transparent',
+                                color: isTaskSelected ? '#15803d' : '#475569',
+                                '&:hover': {
+                                  bgcolor: isTaskSelected ? '#f0fdf4' : '#f8fafc',
+                                  '& .hover-actions': { opacity: 1 },
+                                },
+                              }}
+                            >
+                              {renderBadge(tItem.dueDateStatus)}
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedTasks((prev) => ({ ...prev, [tItem.id]: !prev[tItem.id] }));
                                 }}
+                                sx={{ p: 0.25, mr: 0.5, color: isTaskSelected ? '#22c55e' : '#6b7280' }}
+                              >
+                                {isTaskExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
+                              </IconButton>
+                              <Assignment sx={{ fontSize: 14, mr: 0.75, color: isTaskSelected ? '#22c55e' : '#6b7280' }} />
+                              <Typography
+                                variant="body2"
+                                noWrap
                                 sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1.5,
-                                  cursor: 'pointer',
-                                  bgcolor: isTaskSelected ? '#f0fdf4' : 'transparent',
-                                  borderLeft: isTaskSelected ? '3px solid #22c55e' : '3px solid transparent',
-                                  color: isTaskSelected ? '#15803d' : '#475569',
-                                  '&:hover': {
-                                    bgcolor: isTaskSelected ? '#f0fdf4' : '#f8fafc',
-                                    '& .hover-actions': { opacity: 1 },
-                                  },
+                                  fontWeight: isTaskSelected ? 700 : 500,
+                                  fontSize: '0.8rem',
+                                  flexGrow: 1,
                                 }}
                               >
-                                {renderBadge(tItem.dueDateStatus)}
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setExpandedTasks((prev) => ({ ...prev, [tItem.id]: !prev[tItem.id] }));
-                                  }}
-                                  sx={{ p: 0.25, mr: 0.5, color: isTaskSelected ? '#22c55e' : '#6b7280' }}
-                                >
-                                  {isTaskExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
-                                </IconButton>
-                                <Assignment sx={{ fontSize: 14, mr: 0.75, color: isTaskSelected ? '#22c55e' : '#6b7280' }} />
-                                <Typography
-                                  variant="body2"
-                                  noWrap
-                                  sx={{
-                                    fontWeight: isTaskSelected ? 700 : 500,
-                                    fontSize: '0.8rem',
-                                    flexGrow: 1,
-                                  }}
-                                >
-                                  {tItem.name}
-                                </Typography>
+                                {tItem.name}
+                              </Typography>
 
-                                {/* Hover Actions for Task */}
-                                {!isSupportTree && onEditTask && (
-                                  <Stack
-                                    className="hover-actions"
-                                    direction="row"
-                                    spacing={0.5}
+                              {/* Hover Actions for Task */}
+                              {!isSupportTree && onEditTask && (
+                                <Stack
+                                  className="hover-actions"
+                                  direction="row"
+                                  spacing={0.5}
+                                  sx={{
+                                    opacity: 0,
+                                    transition: 'opacity 0.2s',
+                                    mr: 1,
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Tooltip title="แก้ไขชื่องานหลัก" arrow>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => onEditTask(tItem.id, tItem.name)}
+                                      sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
+                                    >
+                                      <EditIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Stack>
+                              )}
+                              {(() => {
+                                const taskProgress = isSupportTree ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
+                                return (
+                                  <Typography
+                                    variant="caption"
                                     sx={{
-                                      opacity: 0,
-                                      transition: 'opacity 0.2s',
+                                      fontSize: '0.65rem',
+                                      fontWeight: 700,
+                                      color: taskProgress >= 100 ? '#10b981' : '#6366f1',
+                                      bgcolor: taskProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
+                                      px: 0.6,
+                                      py: 0.05,
+                                      borderRadius: '3px',
                                       mr: 1,
                                     }}
-                                    onClick={(e) => e.stopPropagation()}
                                   >
-                                    <Tooltip title="แก้ไขชื่องานหลัก" arrow>
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => onEditTask(tItem.id, tItem.name)}
-                                        sx={{ p: 0.25, color: '#4b5563', '&:hover': { bgcolor: '#e2e8f0' } }}
-                                      >
-                                        <EditIcon sx={{ fontSize: 14 }} />
-                                      </IconButton>
-                                    </Tooltip>
-                                  </Stack>
-                                )}
-                                {(() => {
-                                  const taskProgress = isSupportTree ? (tItem.task.supportDailyProgress || 0) : (tItem.task.dailyProgress || 0);
-                                  return (
-                                    <Typography
-                                      variant="caption"
+                                    {taskProgress}%
+                                  </Typography>
+                                );
+                              })()}
+                              
+                              <Stack direction="row" alignItems="center" spacing={0.5}>
+                                {/* Quick Add Subtask Button */}
+                                {!isSupportTree && onQuickCreateSubtask && (
+                                  <Tooltip title="สร้างงานย่อยด่วน" arrow>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onQuickCreateSubtask(tItem.id);
+                                      }}
                                       sx={{
-                                        fontSize: '0.65rem',
-                                        fontWeight: 700,
-                                        color: taskProgress >= 100 ? '#10b981' : '#6366f1',
-                                        bgcolor: taskProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
-                                        px: 0.6,
-                                        py: 0.05,
-                                        borderRadius: '3px',
-                                        mr: 1,
+                                        p: 0.25,
+                                        color: '#3b82f6',
+                                        '&:hover': { bgcolor: '#eff6ff' },
                                       }}
                                     >
-                                      {taskProgress}%
-                                    </Typography>
-                                  );
-                                })()}
+                                      <AddIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                                 
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                  {/* Quick Add Subtask Button */}
-                                  {!isSupportTree && onQuickCreateSubtask && (
-                                    <Tooltip title="สร้างงานย่อยด่วน" arrow>
-                                      <IconButton
-                                        size="small"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onQuickCreateSubtask(tItem.id);
-                                        }}
-                                        sx={{
-                                          p: 0.25,
-                                          color: '#3b82f6',
-                                          '&:hover': { bgcolor: '#eff6ff' },
-                                        }}
-                                      >
-                                        <AddIcon sx={{ fontSize: 14 }} />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  
+                                <Box
+                                  sx={{
+                                    px: 0.8,
+                                    py: 0.15,
+                                    borderRadius: '999px',
+                                    bgcolor: isTaskSelected ? '#dcfce7' : '#f1f5f9',
+                                    color: isTaskSelected ? '#166534' : '#6b7280',
+                                    fontSize: '0.6rem',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {`${subtasks.filter((sub: Subtask) => sub.assignees && sub.assignees.length > 0).length}/${subtasks.length}`}
+                                </Box>
+                              </Stack>
+                            </Box>
+
+                            {/* Subtasks under Task */}
+                            <Collapse in={isTaskExpanded} timeout="auto" unmountOnExit>
+                              <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #cbd5e1', ml: 1.5 }}>
+                                {subtasks.map((subtask: Subtask) => (
                                   <Box
+                                    key={subtask.id}
+                                    onClick={() => onSubtaskClick(tItem.task, subtask)}
                                     sx={{
-                                      px: 0.8,
-                                      py: 0.15,
-                                      borderRadius: '999px',
-                                      bgcolor: isTaskSelected ? '#dcfce7' : '#f1f5f9',
-                                      color: isTaskSelected ? '#166534' : '#6b7280',
-                                      fontSize: '0.6rem',
-                                      fontWeight: 700,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      px: 1.5,
+                                      py: 0.4,
+                                      my: 0.2,
+                                      borderRadius: 1.25,
+                                      cursor: 'pointer',
+                                      color: '#64748b',
+                                      '&:hover': {
+                                        bgcolor: '#f1f5f9',
+                                        color: '#0f172a',
+                                      },
                                     }}
                                   >
-                                    {`${subtasks.filter((sub: Subtask) => sub.assignees && sub.assignees.length > 0).length}/${subtasks.length}`}
-                                  </Box>
-                                </Stack>
-                              </Box>
-
-                              {/* Subtasks under Task */}
-                              <Collapse in={isTaskExpanded} timeout="auto" unmountOnExit>
-                                <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #cbd5e1', ml: 1.5 }}>
-                                  {subtasks.map((subtask: Subtask) => (
-                                    <Box
-                                      key={subtask.id}
-                                      onClick={() => onSubtaskClick(tItem.task, subtask)}
+                                    <Circle sx={{ fontSize: 5, mr: 1, color: getSubtaskDueDateColor(subtask) }} />
+                                    {subtask.assignees && subtask.assignees.length > 0 && (
+                                      <Tooltip title={`ผู้รับผิดชอบ: ${subtask.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
+                                        <Person sx={{ fontSize: 13, color: '#3b82f6', mr: 0.5 }} />
+                                      </Tooltip>
+                                    )}
+                                    <Typography
+                                      variant="caption"
+                                      noWrap
                                       sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        px: 1.5,
-                                        py: 0.4,
-                                        my: 0.2,
-                                        borderRadius: 1.25,
-                                        cursor: 'pointer',
-                                        color: '#64748b',
-                                        '&:hover': {
-                                          bgcolor: '#f1f5f9',
-                                          color: '#0f172a',
-                                        },
+                                        fontWeight: 500,
+                                        fontSize: '0.75rem',
+                                        flexGrow: 1,
                                       }}
                                     >
-                                      <Circle sx={{ fontSize: 5, mr: 1, color: getSubtaskDueDateColor(subtask) }} />
-                                      {subtask.assignees && subtask.assignees.length > 0 && (
-                                        <Tooltip title={`ผู้รับผิดชอบ: ${subtask.assignees.map((a: any) => a.name).join(', ')}`} arrow placement="top">
-                                          <Person sx={{ fontSize: 13, color: '#3b82f6', mr: 0.5 }} />
-                                        </Tooltip>
-                                      )}
-                                      <Typography
-                                        variant="caption"
-                                        noWrap
-                                        sx={{
-                                          fontWeight: 500,
-                                          fontSize: '0.75rem',
-                                          flexGrow: 1,
-                                        }}
-                                      >
-                                        {subtask.subtaskName}
-                                      </Typography>
+                                      {subtask.subtaskName}
+                                    </Typography>
 
-                                      <Stack direction="row" alignItems="center" spacing={0.5}>
-                                        {(!subtask.assignees || subtask.assignees.length === 0) && onQuickAssignSubtask && (
-                                          <Tooltip title="มอบหมายงานย่อยด่วน" arrow>
-                                            <IconButton
-                                              size="small"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                onQuickAssignSubtask(tItem.task, subtask);
-                                              }}
-                                              sx={{
-                                                p: 0.1,
-                                                color: '#3b82f6',
-                                                '&:hover': { bgcolor: '#eff6ff' },
-                                              }}
-                                            >
-                                              <AddIcon sx={{ fontSize: 13 }} />
-                                            </IconButton>
-                                          </Tooltip>
-                                        )}
-
-                                        {subtask.dailyProgress > 0 && (
-                                          <Typography
-                                            variant="caption"
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                      {(!subtask.assignees || subtask.assignees.length === 0) && onQuickAssignSubtask && (
+                                        <Tooltip title="มอบหมายงานย่อยด่วน" arrow>
+                                          <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onQuickAssignSubtask(tItem.task, subtask);
+                                            }}
                                             sx={{
-                                              fontSize: '0.6rem',
-                                              fontWeight: 700,
-                                              color: subtask.dailyProgress >= 100 ? '#10b981' : '#6366f1',
-                                              bgcolor: subtask.dailyProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
-                                              px: 0.6,
-                                              py: 0.05,
-                                              borderRadius: '3px',
+                                              p: 0.1,
+                                              color: '#3b82f6',
+                                              '&:hover': { bgcolor: '#eff6ff' },
                                             }}
                                           >
-                                            {subtask.dailyProgress}%
-                                          </Typography>
-                                        )}
-                                      </Stack>
-                                    </Box>
-                                  ))}
-                                  {subtasks.length === 0 && (
-                                    <Typography variant="caption" sx={{ display: 'block', pl: 2, py: 0.5, color: '#94a3b8', fontStyle: 'italic', fontSize: '0.7rem' }}>
-                                      ไม่มีงานย่อย
-                                    </Typography>
-                                  )}
-                                </Box>
-                              </Collapse>
-                            </Box>
-                          );
-                        })}
-                      </Box>
-                    </Collapse>
+                                            <AddIcon sx={{ fontSize: 13 }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+
+                                      {subtask.dailyProgress > 0 && (
+                                        <Typography
+                                          variant="caption"
+                                          sx={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: 700,
+                                            color: subtask.dailyProgress >= 100 ? '#10b981' : '#6366f1',
+                                            bgcolor: subtask.dailyProgress >= 100 ? '#ecfdf5' : '#e0e7ff',
+                                            px: 0.6,
+                                            py: 0.05,
+                                            borderRadius: '3px',
+                                          }}
+                                        >
+                                          {subtask.dailyProgress}%
+                                        </Typography>
+                                      )}
+                                    </Stack>
+                                  </Box>
+                                ))}
+                                {subtasks.length === 0 && (
+                                  <Typography variant="caption" sx={{ display: 'block', pl: 2, py: 0.5, color: '#94a3b8', fontStyle: 'italic', fontSize: '0.7rem' }}>
+                                    ไม่มีงานย่อย
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Collapse>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </Collapse>
+                </Box>
+              );
+            })}
+          </Box>
+        </Collapse>
+      </Box>
+    );
+  };
+
+  const renderTreeNodes = (nodes: any[], isSupportTree: boolean) => {
+    return (
+      <Virtuoso
+        style={{ height: '100%' }}
+        data={nodes}
+        itemContent={(_index, node) => {
+          const isProject = 'workOrders' in node;
+          
+          if (isProject) {
+            const proj = node;
+            const isProjExpanded = !!expandedProjects[proj.id];
+            const isProjSelected = selectedNode?.type === 'project' && selectedNode.id === proj.id;
+            
+            return (
+              <Box sx={{ mb: 1.5, px: 1 }}>
+                {/* Project Node */}
+                <Box
+                  onClick={() => {
+                    onSelectNode({ type: 'project', id: proj.id });
+                    setExpandedProjects((prev) => ({ ...prev, [proj.id]: true }));
+                  }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    px: 1,
+                    py: 0.8,
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    bgcolor: isProjSelected ? '#eff6ff' : 'transparent',
+                    borderLeft: isProjSelected ? '3px solid #3b82f6' : '3px solid transparent',
+                    color: isProjSelected ? '#1d4ed8' : '#334155',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      bgcolor: isProjSelected ? '#eff6ff' : '#f8fafc',
+                    },
+                  }}
+                >
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedProjects((prev) => ({ ...prev, [proj.id]: !prev[proj.id] }));
+                    }}
+                    sx={{ p: 0.25, mr: 0.5, color: isProjSelected ? '#2563eb' : '#6b7280' }}
+                  >
+                    {isProjExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
+                  </IconButton>
+                  <Business sx={{ fontSize: 16, mr: 0.75, color: isProjSelected ? '#2563eb' : '#6b7280' }} />
+                  <Typography variant="body2" noWrap sx={{ fontWeight: isProjSelected ? 800 : 700, fontSize: '0.85rem' }}>
+                    {proj.name}
+                  </Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Box
+                    sx={{
+                      px: 1,
+                      py: 0.25,
+                      borderRadius: '999px',
+                      bgcolor: isProjSelected ? '#dbeafe' : '#f1f5f9',
+                      color: isProjSelected ? '#2563eb' : '#6b7280',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {`${proj.assignedSubtaskCount}/${proj.totalSubtaskCount}`}
                   </Box>
-                );
-              })}
-            </Box>
-          </Collapse>
-        </Box>
-      );
-    });
+                </Box>
+                
+                {/* WorkOrders under Project */}
+                <Collapse in={isProjExpanded} timeout="auto" unmountOnExit>
+                  <Box sx={{ pl: 1, mt: 0.5, borderLeft: '1px dashed #cbd5e1', ml: 2 }}>
+                    {proj.workOrders.map((wo: any) => renderWorkOrderNode(wo, isSupportTree))}
+                  </Box>
+                </Collapse>
+              </Box>
+            );
+          } else {
+            return renderWorkOrderNode(node, isSupportTree);
+          }
+        }}
+      />
+    );
   };
 
   return (
@@ -869,108 +1038,167 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
         </Typography>
       </Box>
 
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 1, pb: 3 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden', px: 1, pb: 2 }}>
         {/* Show All Option */}
-        <Box
-          onClick={() => onSelectNode(null)}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            px: 1.5,
-            py: 0.8,
-            mb: 1.5,
-            borderRadius: 2.5,
-            cursor: 'pointer',
-            bgcolor: isAllSelected ? '#eff6ff' : 'transparent',
-            borderLeft: isAllSelected ? '3px solid #3b82f6' : '3px solid transparent',
-            color: isAllSelected ? '#1d4ed8' : '#4b5563',
-            transition: 'all 0.2s ease',
-            '&:hover': {
-              bgcolor: isAllSelected ? '#eff6ff' : '#f8fafc',
-            },
-          }}
-        >
-          <ListIcon sx={{ fontSize: 18, mr: 1.5, color: isAllSelected ? '#2563eb' : '#6b7280' }} />
-          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.85rem' }}>
-            แสดงงานทั้งหมด
-          </Typography>
-          <Box sx={{ flexGrow: 1 }} />
+        <Box sx={{ flexShrink: 0, mb: 1 }}>
           <Box
+            onClick={() => onSelectNode(null)}
             sx={{
-              px: 1,
-              py: 0.25,
-              borderRadius: '999px',
-              bgcolor: isAllSelected ? '#dbeafe' : '#f1f5f9',
-              color: isAllSelected ? '#2563eb' : '#6b7280',
-              fontSize: '0.7rem',
-              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              px: 1.5,
+              py: 0.8,
+              borderRadius: 2.5,
+              cursor: 'pointer',
+              bgcolor: isAllSelected ? '#eff6ff' : 'transparent',
+              borderLeft: isAllSelected ? '3px solid #3b82f6' : '3px solid transparent',
+              color: isAllSelected ? '#1d4ed8' : '#4b5563',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                bgcolor: isAllSelected ? '#eff6ff' : '#f8fafc',
+              },
             }}
           >
-            {`${totalAll.assigned}/${totalAll.total}`}
+            <ListIcon sx={{ fontSize: 18, mr: 1.5, color: isAllSelected ? '#2563eb' : '#6b7280' }} />
+            <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.85rem' }}>
+              แสดงงานทั้งหมด
+            </Typography>
+            <Box sx={{ flexGrow: 1 }} />
+            <Box
+              sx={{
+                px: 1,
+                py: 0.25,
+                borderRadius: '999px',
+                bgcolor: isAllSelected ? '#dbeafe' : '#f1f5f9',
+                color: isAllSelected ? '#2563eb' : '#6b7280',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+              }}
+            >
+              {`${totalAll.assigned}/${totalAll.total}`}
+            </Box>
           </Box>
         </Box>
 
         {/* SECTION 1: งานหลัก (Main Tasks) */}
-        <Typography
-          variant="caption"
+        <Box
           sx={{
-            fontWeight: 800,
-            color: '#64748b',
             display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 1,
-            py: 0.5,
-            mb: 1,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
+            flexDirection: 'column',
+            flex: !isWH
+              ? '1 1 100%'
+              : mainExpanded && supportExpanded
+                ? '1 1 50%'
+                : mainExpanded
+                  ? '1 1 100%'
+                  : '0 0 auto',
+            minHeight: 0,
+            overflow: 'hidden',
+            mb: isWH && mainExpanded ? 1 : 0,
           }}
         >
-          <Circle sx={{ fontSize: 8, color: '#3b82f6' }} />
-          งานหลัก
-        </Typography>
-
-        {mainTree.length > 0 ? (
-          renderTreeNodes(mainTree, false)
-        ) : (
-          <Typography variant="caption" sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}>
-            ไม่มีงานหลัก
+          <Typography
+            variant="caption"
+            onClick={() => isWH && setMainExpanded(!mainExpanded)}
+            sx={{
+              fontWeight: 800,
+              color: '#64748b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1,
+              py: 0.5,
+              mb: 1,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              flexShrink: 0,
+              cursor: isWH ? 'pointer' : 'default',
+              userSelect: 'none',
+              '&:hover': isWH ? {
+                color: '#3b82f6',
+              } : undefined,
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Circle sx={{ fontSize: 8, color: '#3b82f6' }} />
+              <Box component="span">งานหลัก</Box>
+            </Stack>
+            {isWH && (mainExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />)}
           </Typography>
-        )}
+
+          {mainExpanded && (
+            <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+              {mainTree.length > 0 ? (
+                renderTreeNodes(mainTree, false)
+              ) : (
+                <Typography variant="caption" sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}>
+                  ไม่มีงานหลัก
+                </Typography>
+              )}
+            </Box>
+          )}
+        </Box>
 
         {isWH && (
-          <>
-            <Divider sx={{ my: 2, mx: 1, borderColor: '#eaeef2' }} />
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: mainExpanded && supportExpanded
+                ? '1 1 50%'
+                : supportExpanded
+                  ? '1 1 100%'
+                  : '0 0 auto',
+              minHeight: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <Divider sx={{ my: 1, mx: 1, borderColor: '#eaeef2', flexShrink: 0 }} />
 
             {/* SECTION 2: งานช่วยเหลือ (Support Tasks) */}
             <Typography
               variant="caption"
+              onClick={() => setSupportExpanded(!supportExpanded)}
               sx={{
                 fontWeight: 800,
                 color: '#64748b',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1,
+                justifyContent: 'space-between',
                 px: 1,
                 py: 0.5,
                 mb: 1,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
+                flexShrink: 0,
+                cursor: 'pointer',
+                userSelect: 'none',
+                '&:hover': {
+                  color: '#f59e0b',
+                },
               }}
             >
-              <Circle sx={{ fontSize: 8, color: '#f59e0b' }} />
-              งานช่วยเหลือ
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Circle sx={{ fontSize: 8, color: '#f59e0b' }} />
+                <Box component="span">งานช่วยเหลือ</Box>
+              </Stack>
+              {supportExpanded ? <ExpandMore fontSize="small" /> : <ChevronRight fontSize="small" />}
             </Typography>
 
-            {supportTree.length > 0 ? (
-              renderTreeNodes(supportTree, true)
-            ) : (
-              <Typography variant="caption" sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}>
-                ไม่มีงานช่วยเหลือ
-              </Typography>
+            {supportExpanded && (
+              <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+                {supportTree.length > 0 ? (
+                  renderTreeNodes(supportTree, true)
+                ) : (
+                  <Typography variant="caption" sx={{ display: 'block', pl: 3, py: 1, color: '#94a3b8', fontStyle: 'italic' }}>
+                    ไม่มีงานช่วยเหลือ
+                  </Typography>
+                )}
+              </Box>
             )}
-          </>
+          </Box>
         )}
+
       </Box>
     </Paper>
   );

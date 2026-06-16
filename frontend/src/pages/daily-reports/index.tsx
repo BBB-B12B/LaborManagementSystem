@@ -77,9 +77,9 @@ import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { PickersActionBarProps } from '@mui/x-date-pickers/PickersActionBar';
 import { usePickerContext } from '@mui/x-date-pickers/hooks';
-import { AdapterDateFns as AdapterDateFnsV2 } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns as AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import thLocale from 'date-fns/locale/th';
+import { th as thLocale } from 'date-fns/locale';
 import { format, subDays, isBefore, isSameDay, isValid, isAfter, startOfDay } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
@@ -146,6 +146,126 @@ const parseSafeDate = (val: any): Date | null => {
   }
   return isNaN(d.getTime()) ? null : d;
 };
+
+interface CustomPickersDayProps extends PickersDayProps {
+  reportDates?: string[];
+  isActingAsSupport?: boolean;
+  selectedTask?: any;
+  effectiveBoundaryDate?: Date | null;
+  completionDateStr?: string | null;
+  reportsSummaryMap?: Record<string, any>;
+}
+
+const CustomPickersDay = React.memo((props: CustomPickersDayProps) => {
+  const {
+    day,
+    outsideCurrentMonth,
+    reportDates = [],
+    isActingAsSupport = false,
+    selectedTask = null,
+    effectiveBoundaryDate = null,
+    completionDateStr = null,
+    reportsSummaryMap = {},
+    ...other
+  } = props;
+
+  const dateStr = format(day, 'yyyy-MM-dd');
+
+  const hasReport = reportDates.includes(dateStr);
+
+  let hasValidUnlock = false;
+  const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+  const unlockedDates = selectedTask?.[unlockedDatesField];
+  if (unlockedDates && unlockedDates[dateStr]) {
+    const unlockInfo = unlockedDates[dateStr];
+    const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
+    if (unlockUntil > new Date()) {
+      hasValidUnlock = true;
+    }
+  }
+
+  if (effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) && !hasReport && !hasValidUnlock) {
+    const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
+    if (dateStr < boundDateStr) {
+      return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
+    }
+  }
+
+  if (completionDateStr && !hasReport) {
+    if (dateStr > completionDateStr) {
+      return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
+    }
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isPast = isBefore(day, today) && !isSameDay(day, today);
+  const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
+  const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
+
+  const isLocked = (isPast && isBefore(day, subDays(today, 3)) && !hasValidUnlock) || (isBeforeBound && !hasValidUnlock);
+  const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
+  const isRequested = selectedTask?.[requestsField] && selectedTask[requestsField][dateStr];
+  const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
+
+  let badgeColor = undefined;
+  if (isMissingReport) {
+    if (isRequested) {
+      badgeColor = '#a855f7'; // Purple: Pending unlock request
+    } else {
+      badgeColor = isLocked ? 'error.main' : 'warning.main';
+    }
+  }
+
+  const summary = reportsSummaryMap[dateStr];
+  const progress = summary ? (summary.progress ?? 0) : 0;
+  const isCompleted = progress === 100 || selectedTask?.status === 'completed';
+
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+      <PickersDay
+        {...other}
+        outsideCurrentMonth={outsideCurrentMonth}
+        day={day}
+        sx={{
+          ...(hasReport && !outsideCurrentMonth && {
+            fontWeight: 'bold',
+            '&:not(.Mui-selected)': {
+              ...(isCompleted ? {
+                backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
+                color: '#059669 !important',
+                '&:hover': {
+                  backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
+                },
+              } : {
+                backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
+                color: '#d97706 !important',
+                '&:hover': {
+                  backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
+                },
+              }),
+            },
+          }),
+        }}
+      />
+      {badgeColor && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 4,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 6,
+            height: 6,
+            bgcolor: badgeColor,
+            borderRadius: '50%',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+    </Box>
+  );
+});
+CustomPickersDay.displayName = 'CustomPickersDay';
 
 export default function DailyReportPage() {
   const router = useRouter();
@@ -247,12 +367,10 @@ export default function DailyReportPage() {
     return null;
   }, [selectedTask, isActingAsSupport]);
 
-  const remainingStaleTime = useMemo(() => {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0);
-    return Math.max(0, midnight.getTime() - now.getTime());
-  }, []);
+  const nowForStale = new Date();
+  const midnightForStale = new Date(nowForStale);
+  midnightForStale.setHours(24, 0, 0, 0);
+  const remainingStaleTime = Math.max(0, midnightForStale.getTime() - nowForStale.getTime());
 
   const { data: taskReportsData } = useQuery({
     queryKey: ['task-reports-all', selectedTask?.id, isActingAsSupport],
@@ -536,104 +654,7 @@ export default function DailyReportPage() {
     return map;
   }, [taskReportsData, selectedTask, isActingAsSupport]);
 
-  const CustomPickersDay = (props: PickersDayProps) => {
-    const { day, outsideCurrentMonth, ...other } = props;
-    const dateStr = format(day, 'yyyy-MM-dd');
 
-    const hasReport = reportDates.includes(dateStr);
-
-    let hasValidUnlock = false;
-    const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
-    const unlockedDates = selectedTask?.[unlockedDatesField];
-    if (unlockedDates && unlockedDates[dateStr]) {
-      const unlockInfo = unlockedDates[dateStr];
-      const unlockUntil = parseSafeDate(unlockInfo.unlockedUntil) || new Date(0);
-      if (unlockUntil > new Date()) {
-        hasValidUnlock = true;
-      }
-    }
-
-    if (effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) && !hasReport && !hasValidUnlock) {
-      const boundDateStr = format(effectiveBoundaryDate, 'yyyy-MM-dd');
-      if (dateStr < boundDateStr) {
-        return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
-      }
-    }
-
-    if (completionDateStr && !hasReport) {
-      if (dateStr > completionDateStr) {
-        return <PickersDay {...other} outsideCurrentMonth={outsideCurrentMonth} day={day} />;
-      }
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isPast = isBefore(day, today) && !isSameDay(day, today);
-    const boundDateStr = effectiveBoundaryDate && !isNaN(effectiveBoundaryDate.getTime()) ? format(effectiveBoundaryDate, 'yyyy-MM-dd') : '';
-    const isBeforeBound = !!(boundDateStr && dateStr < boundDateStr);
-
-    const isLocked = (isPast && isBefore(day, subDays(today, 3)) && !hasValidUnlock) || (isBeforeBound && !hasValidUnlock);
-    const requestsField = isActingAsSupport ? 'supportUnlockRequests' : 'unlockRequests';
-    const isRequested = selectedTask?.[requestsField] && selectedTask[requestsField][dateStr];
-    const isMissingReport = (isPast || isBeforeBound) && !hasReport && !outsideCurrentMonth;
-
-    let badgeColor = undefined;
-    if (isMissingReport) {
-      if (isRequested) {
-        badgeColor = '#a855f7'; // Purple: Pending unlock request
-      } else {
-        badgeColor = isLocked ? 'error.main' : 'warning.main';
-      }
-    }
-
-    const summary = reportsSummaryMap[dateStr];
-    const progress = summary ? (summary.progress ?? 0) : 0;
-    const isCompleted = progress === 100 || selectedTask?.status === 'completed';
-
-    return (
-      <Box sx={{ position: 'relative', display: 'inline-flex' }} key={props.day.toString()}>
-        <PickersDay
-          {...other}
-          outsideCurrentMonth={outsideCurrentMonth}
-          day={day}
-          sx={{
-            ...(hasReport && !outsideCurrentMonth && {
-              fontWeight: 'bold',
-              '&:not(.Mui-selected)': {
-                ...(isCompleted ? {
-                  backgroundColor: 'rgba(5, 150, 105, 0.15) !important',
-                  color: '#059669 !important',
-                  '&:hover': {
-                    backgroundColor: 'rgba(5, 150, 105, 0.25) !important',
-                  },
-                } : {
-                  backgroundColor: 'rgba(217, 119, 6, 0.15) !important',
-                  color: '#d97706 !important',
-                  '&:hover': {
-                    backgroundColor: 'rgba(217, 119, 6, 0.25) !important',
-                  },
-                }),
-              },
-            }),
-          }}
-        />
-        {badgeColor && (
-          <Box
-            sx={{
-              position: 'absolute',
-              bottom: 4,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 6,
-              height: 6,
-              bgcolor: badgeColor,
-              borderRadius: '50%',
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-      </Box>
-    );
-  };
 
   const CustomActionBar = (props: PickersActionBarProps) => {
     const { acceptValueChanges } = usePickerContext();
@@ -705,6 +726,25 @@ export default function DailyReportPage() {
     if (!reportDate || !isValid(reportDate)) return '';
     return format(reportDate, 'yyyy-MM-dd');
   }, [reportDate]);
+
+  const { data: advanceRequests } = useQuery({
+    queryKey: ['advance-requests', selectedTask?.id],
+    queryFn: async () => {
+      if (!selectedTask?.id) return [];
+      return await taskService.getAdvanceRequests(selectedTask.id);
+    },
+    enabled: !!selectedTask?.id,
+    staleTime: remainingStaleTime,
+    gcTime: remainingStaleTime + 60000,
+  });
+
+  const currentAdvanceRequest = useMemo(() => {
+    if (!advanceRequests || !dateStr) return null;
+    return advanceRequests.find((r: any) => {
+      const rDateStr = r.reportDate ? format(parseSafeDate(r.reportDate) || new Date(), 'yyyy-MM-dd') : r.requestId;
+      return rDateStr === dateStr && (isActingAsSupport ? r.isSupportReport === true : !r.isSupportReport);
+    }) || null;
+  }, [advanceRequests, dateStr, isActingAsSupport]);
 
   const { data: reportDetailData, isFetching: isDetailFetching } = useQuery({
     queryKey: ['task-report-detail', selectedTask?.id, dateStr, isActingAsSupport],
@@ -779,36 +819,17 @@ export default function DailyReportPage() {
         }
       }
 
-      const report = await dailyReportService.getTaskReport(
+      const combined = await dailyReportService.getCombinedTaskReports(
         selectedTask.id,
         dateStr,
         isActingAsSupport
       );
+      
+      const report = combined.report;
+      const siteReport = combined.siteReport;
+      const supportReport = combined.supportReport;
 
-      let siteReport = null;
-      let supportReport = null;
-      if (isActingAsSupport) {
-        try {
-          siteReport = await dailyReportService.getTaskReport(selectedTask.id, dateStr, false);
-        } catch (e) {}
-      } else if (selectedTask.isSupportRequest) {
-        try {
-          supportReport = await dailyReportService.getTaskReport(selectedTask.id, dateStr, true);
-        } catch (e) {}
-      }
-
-      let advanceRequest = null;
-      try {
-        const reqs = await taskService.getAdvanceRequests(selectedTask.id);
-        advanceRequest = reqs.find((r: any) => {
-          const rDateStr = r.reportDate ? format(parseSafeDate(r.reportDate) || new Date(), 'yyyy-MM-dd') : r.requestId;
-          return rDateStr === dateStr && (isActingAsSupport ? r.isSupportReport === true : !r.isSupportReport);
-        }) || null;
-      } catch (e) {
-        console.error("Failed to fetch advance request:", e);
-      }
-
-      return { report, siteReport, supportReport, lastPrevProgress, lastNextProgress, advanceRequest };
+      return { report, siteReport, supportReport, lastPrevProgress, lastNextProgress };
     },
     enabled: !!selectedTask && !!dateStr,
     staleTime: remainingStaleTime,
@@ -837,7 +858,8 @@ export default function DailyReportPage() {
 
   useEffect(() => {
     if (reportDetailData) {
-      const { report, siteReport, supportReport, lastPrevProgress: lp, lastNextProgress: ln, advanceRequest } = reportDetailData;
+      const { report, siteReport, supportReport, lastPrevProgress: lp, lastNextProgress: ln } = reportDetailData;
+      const advanceRequest = currentAdvanceRequest;
       setPreviousProgress(lp);
       setNextProgress(ln ?? null);
       setSiteReportData(siteReport);
@@ -963,7 +985,7 @@ export default function DailyReportPage() {
         if (siteReport.note !== undefined) setNote(siteReport.note);
       }
     }
-  }, [reportDetailData, selectedTask, isActingAsSupport, reportDate]);
+  }, [reportDetailData, currentAdvanceRequest, selectedTask, isActingAsSupport, reportDate]);
 
   useEffect(() => {
     // Priority Guard: ถ้ามี source ที่สำคัญกว่า (submit/sync) เป็นเจ้าของ Spinner อยู่ ให้ข้ามไป
@@ -1169,11 +1191,11 @@ export default function DailyReportPage() {
   }, [reportDate]);
 
   const requestLocked = useMemo(() => {
-    if (reportDetailData?.advanceRequest) {
-      return reportDetailData.advanceRequest.status !== 'pending';
+    if (currentAdvanceRequest) {
+      return currentAdvanceRequest.status !== 'pending';
     }
     return false;
-  }, [reportDetailData]);
+  }, [currentAdvanceRequest]);
 
   const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked || (isReportSubmittedAndPast && !hasValidUnlock);
   const isAdvanceRequestUI = pageMode === 'requests';
@@ -1247,18 +1269,14 @@ export default function DailyReportPage() {
         });
       };
 
-      // Check Cache first
-      if (isCacheValid() && tasksInCache.length > 0) {
-        console.log('[DailyReport] Using Cached Tasks');
-        return getFilteredTasks(tasksInCache);
-      }
+
 
       console.log('[DailyReport] Fetching fresh tasks from API');
       setCacheLoading(true);
       try {
         const tasks = await taskService.getAssignedSubtasks();
         // Save to Cache
-        setTasksInCache(tasks || []);
+        setTasksInCache(tasks || [], 1, false);
         return getFilteredTasks(tasks || []);
       } finally {
         setCacheLoading(false);
@@ -1280,10 +1298,12 @@ export default function DailyReportPage() {
       try {
         invalidateCache();
         dailyReportService.clearCache();
-        // Invalidate React Query cache ทั้งหมด (รวม unlockedDates, tasks, reports)
-        await queryClient.invalidateQueries();
-        // Force Refetch of active queries directly from Firestore bypassing query cache (Hard Refresh 100%)
-        await queryClient.refetchQueries({ type: 'active' });
+        // Invalidate specific cache keys only
+        await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        await queryClient.invalidateQueries({ queryKey: ['task-reports-all'] });
+        await queryClient.invalidateQueries({ queryKey: ['task-reports-site'] });
+        await queryClient.invalidateQueries({ queryKey: ['task-report-detail'] });
+        await queryClient.invalidateQueries({ queryKey: ['advance-requests'] });
         await refetchTasks();
       } catch (e) {
         console.error('[DailyReport] Sync error:', e);
@@ -1313,8 +1333,12 @@ export default function DailyReportPage() {
         try {
           invalidateCache();
           dailyReportService.clearCache();
-          await queryClient.invalidateQueries();
-          await queryClient.refetchQueries({ type: 'active' });
+          // Invalidate daily reports queries for midnight reset
+          await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+          await queryClient.invalidateQueries({ queryKey: ['task-reports-all'] });
+          await queryClient.invalidateQueries({ queryKey: ['task-reports-site'] });
+          await queryClient.invalidateQueries({ queryKey: ['task-report-detail'] });
+          await queryClient.invalidateQueries({ queryKey: ['advance-requests'] });
           await refetchTasks();
           toast.info('อัปเดตข้อมูลอัตโนมัติประจำวันเสร็จสิ้น');
         } catch (e) {
@@ -1396,9 +1420,11 @@ export default function DailyReportPage() {
     const isAdminRole = ['AM', 'GOD'].includes(String(user.roleCode || '').toUpperCase());
 
     allTasks.forEach((task: any) => {
+      const dueDateEpoch = task.dueDate ? new Date(task.dueDate).getTime() : 0;
+
       // GOD / AM เห็นทุก task โดยไม่ต้องเช็ค assignee
       if (isAdminRole) {
-        items.push({ ...task, isPastRevision: false });
+        items.push({ ...task, isPastRevision: false, dueDateEpoch });
         return;
       }
 
@@ -1425,6 +1451,7 @@ export default function DailyReportPage() {
         items.push({
           ...task,
           isPastRevision: false,
+          dueDateEpoch,
         });
       }
 
@@ -1456,6 +1483,7 @@ export default function DailyReportPage() {
               isPastRevision: true,
               isSupportRequest: wasSupportRevision, // Precisely set based on support involvement
               status: 'completed',
+              dueDateEpoch,
             });
           }
         }
@@ -1504,7 +1532,7 @@ export default function DailyReportPage() {
 
     return filtered.sort((a, b) => {
       if (a.isPastRevision !== b.isPastRevision) return a.isPastRevision ? 1 : -1;
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      return (a.dueDateEpoch || 0) - (b.dueDateEpoch || 0);
     });
   }, [processedTasks, searchTerm, activeTab, pageMode, reportDate]);
 
@@ -2057,11 +2085,23 @@ export default function DailyReportPage() {
       return Promise.resolve(file);
     }
     return new Promise((resolve) => {
+      let isResolved = false;
+      const safeResolve = (result: File) => {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutId);
+          resolve(result);
+        }
+      };
+
+      const timeoutId = setTimeout(() => {
+        console.warn(`Compression timed out for ${file.name}, uploading original.`);
+        safeResolve(file);
+      }, 30000); // 30 seconds timeout per image
+
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = (event) => {
         const img = new Image();
-        img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const MAX_WIDTH = 1280;
@@ -2093,16 +2133,26 @@ export default function DailyReportPage() {
                   type: 'image/jpeg',
                   lastModified: Date.now(),
                 });
-                resolve(compressedFile);
+                safeResolve(compressedFile);
               } else {
-                resolve(file);
+                safeResolve(file);
               }
             },
             'image/jpeg',
             0.8
           );
         };
+        img.onerror = () => {
+          console.error(`Failed to load image for ${file.name}, uploading original.`);
+          safeResolve(file);
+        };
+        img.src = event.target?.result as string;
       };
+      reader.onerror = () => {
+        console.error(`Failed to read file ${file.name}, uploading original.`);
+        safeResolve(file);
+      };
+      reader.readAsDataURL(file);
     });
   };
 
@@ -2359,11 +2409,17 @@ export default function DailyReportPage() {
       }
 
 
-      // Invalidate Cache once and perform a 100% Hard Refresh
+      // Invalidate specific cache keys only
       invalidateCache();
       dailyReportService.clearCache();
-      await queryClient.invalidateQueries();
-      await queryClient.refetchQueries({ type: 'active' });
+      if (selectedTask) {
+        await queryClient.invalidateQueries({ queryKey: ['tasks', 'assigned', user?.id] });
+        await queryClient.invalidateQueries({ queryKey: ['task-reports-all', selectedTask.id] });
+        await queryClient.invalidateQueries({ queryKey: ['task-reports-site', selectedTask.id] });
+        await queryClient.invalidateQueries({ queryKey: ['task-report-detail', selectedTask.id] });
+        await queryClient.invalidateQueries({ queryKey: ['advance-requests', selectedTask.id] });
+        await queryClient.invalidateQueries({ queryKey: ['daily-report-backlog'] });
+      }
       await refetchTasks();
 
       // Reset UI → กลับหน้า My Job list
@@ -2395,7 +2451,7 @@ export default function DailyReportPage() {
 
   return (
     <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
-      <LocalizationProvider dateAdapter={AdapterDateFnsV2} adapterLocale={thLocale}>
+      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box
             sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}
@@ -2513,7 +2569,7 @@ export default function DailyReportPage() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          gap: 2,
+                          mb: 1.5,
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -2547,43 +2603,41 @@ export default function DailyReportPage() {
                             </Box>
                           </Typography>
                         </Box>
-                        <TextField
-                          size="small"
-                          placeholder="Search tasks..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          sx={{
-                            flex: 1,
-                            minWidth: 120,
-                            maxWidth: 220,
-                            '& .MuiInputBase-root': {
-                              color: '#ffffff',
-                              fontSize: '0.825rem',
-                            }
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <Search
-                                size={16}
-                                style={{ marginRight: 8, color: 'rgba(255, 255, 255, 0.5)', flexShrink: 0 }}
-                              />
-                            ),
-                            sx: {
-                              borderRadius: '10px',
-                              bgcolor: 'rgba(255, 255, 255, 0.08)',
-                              border: '1px solid rgba(255, 255, 255, 0.15)',
-                              '& fieldset': { border: 'none' },
-                              '&:hover': {
-                                bgcolor: 'rgba(255, 255, 255, 0.12)',
-                              },
-                              '&.Mui-focused': {
-                                bgcolor: 'rgba(255, 255, 255, 0.15)',
-                                border: '1px solid #FF7F32',
-                              }
-                            },
-                          }}
-                        />
                       </Box>
+                      <TextField
+                        size="small"
+                        placeholder="Search tasks..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        sx={{
+                          width: '100%',
+                          '& .MuiInputBase-root': {
+                            color: '#ffffff',
+                            fontSize: '0.825rem',
+                          }
+                        }}
+                        InputProps={{
+                          startAdornment: (
+                            <Search
+                              size={16}
+                              style={{ marginRight: 8, color: 'rgba(255, 255, 255, 0.5)', flexShrink: 0 }}
+                            />
+                          ),
+                          sx: {
+                            borderRadius: '10px',
+                            bgcolor: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            '& fieldset': { border: 'none' },
+                            '&:hover': {
+                              bgcolor: 'rgba(255, 255, 255, 0.12)',
+                            },
+                            '&.Mui-focused': {
+                              bgcolor: 'rgba(255, 255, 255, 0.15)',
+                              border: '1px solid #FF7F32',
+                            }
+                          },
+                        }}
+                      />
 
                       {/* Active Tasks & Finish Segment Control */}
                       <Stack
@@ -2972,6 +3026,14 @@ export default function DailyReportPage() {
                                     },
                                   },
                                 },
+                                day: {
+                                  reportDates,
+                                  isActingAsSupport,
+                                  selectedTask,
+                                  effectiveBoundaryDate,
+                                  completionDateStr,
+                                  reportsSummaryMap,
+                                } as any
                               }}
                               disabled={isSubmitting}
                             />

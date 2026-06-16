@@ -74,6 +74,11 @@ const normalizeDCFormPayload = <T extends DCCreateInput | DCEditInput>(payload: 
     projectLocationId: toStringOrEmpty(payload.projectLocationId),
     startDate: toIsoOrEmpty(payload.startDate as Date | string | null | undefined) as any,
     isActive: payload.isActive ?? true,
+    paidLeave: payload.paidLeave !== undefined && (payload.paidLeave as any) !== '' ? Number(payload.paidLeave) : undefined,
+    unpaidLeave: payload.unpaidLeave !== undefined && (payload.unpaidLeave as any) !== '' ? Number(payload.unpaidLeave) : undefined,
+    lateMinutes: payload.lateMinutes !== undefined && (payload.lateMinutes as any) !== '' ? Number(payload.lateMinutes) : undefined,
+    earlyLeaveMinutes: payload.earlyLeaveMinutes !== undefined && (payload.earlyLeaveMinutes as any) !== '' ? Number(payload.earlyLeaveMinutes) : undefined,
+    absentDays: payload.absentDays !== undefined && (payload.absentDays as any) !== '' ? Number(payload.absentDays) : undefined,
   };
 };
 
@@ -246,23 +251,14 @@ export default function DCManagementPage() {
       'รหัสพนักงาน',
       'ตำแหน่ง',
       'หน่วยงาน',
-      'ค่าแรง/วัน',
-      'ค่าโทรศัพท์ DC',
-      'เบี้ยเลี้ยง',
-      'รายได้อื่นๆ ต่องวด (บาท)',
-      'ค่าวิชาชีพ/วัน',
-      'จำนวนคนผู้ติดตาม',
-      'หักค่าตู้เย็น 125 บาท/งวด',
-      'หักค่าเครื่องเสียง 250 บาท/งวด',
-      'หักค่าเครื่องปรับอากาศเคลื่อนที่ 200 บาท/งวด',
-      'หักโทรทัศน์ (TV) 100 บาท/งวด',
-      'หักเครื่องซักผ้า 250 บาท/งวด',
-      'ค่าห้องพัก 175 บาท/งวด/คน',
       'วันเกิด (ปปปป-ดด-วว)',
       'วันเริ่มงาน (ปปปป-ดด-วว)',
       'สถานะใช้งาน (TRUE/FALSE)',
-      'เปอร์เซ็นต์หัก MOU (%)',
-      'รายหักอื่นๆ',
+      'ลาได้เงิน',
+      'ลาไม่ได้เงิน',
+      'มาสาย',
+      'ออกก่อน',
+      'ขาดงาน',
     ];
 
     // 3. Define example row with pre-filled project
@@ -271,21 +267,12 @@ export default function DCManagementPage() {
       'EMP001',
       'กรรมกร',
       userProjectName,
-      '450',
-      '0',
-      '0',
-      '0',
-      '0',
-      '0',
-      '125',
-      '0',
-      '0',
-      '0',
-      '0',
-      '175',
       '1990-01-01',
       '2024-01-01',
       'TRUE',
+      '0',
+      '0',
+      '0',
       '0',
       '0',
     ];
@@ -328,6 +315,9 @@ export default function DCManagementPage() {
       const income = compensation?.income as any;
       const expense = compensation?.expense as any;
 
+      const currentYear = new Date().getFullYear().toString();
+      const yearlyStats = (detail.attendanceStats?.yearly?.[currentYear] || {}) as any;
+
       setDrawerInitialValues({
         ...detail,
         startDate: detail.startDate ? new Date(detail.startDate) : undefined,
@@ -346,6 +336,11 @@ export default function DCManagementPage() {
         laundryFee: expense?.washingMachineCostPerPeriod ?? '',
         airConFee: expense?.portableAcCostPerPeriod ?? '',
         otherDeduction: expense?.otherDeduction ?? '',
+        paidLeave: yearlyStats.paidLeave ?? '',
+        unpaidLeave: yearlyStats.unpaidLeave ?? '',
+        lateMinutes: yearlyStats.lateMinutes ?? '',
+        earlyLeaveMinutes: yearlyStats.earlyLeaveMinutes ?? '',
+        absentDays: yearlyStats.absentDays ?? '',
       });
     } catch (error: any) {
       showError(error.message || 'ไม่สามารถโหลดข้อมูลแรงงานรายวันได้');

@@ -53,4 +53,36 @@ if (!getApps().length) {
   db = getFirestore(app);
 }
 
-export { app, auth, db };
+const afterSaleConfig = {
+  apiKey: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_AFTER_SALE_FIREBASE_MEASUREMENT_ID,
+};
+
+let afterSaleApp: FirebaseApp;
+let afterSaleDb: Firestore;
+
+if (!getApps().some(a => a.name === 'afterSale')) {
+  afterSaleApp = initializeApp(afterSaleConfig, 'afterSale');
+  afterSaleDb = getFirestore(afterSaleApp);
+
+  if (shouldUseEmulators) {
+    const firestoreEmulatorHost =
+      process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || 'localhost:8080';
+    const firestoreSettings = afterSaleDb as unknown as { _settings?: { host?: string } };
+    if (!firestoreSettings._settings?.host) {
+      const [host, portString] = firestoreEmulatorHost.split(':');
+      const port = Number(portString) || 8080;
+      connectFirestoreEmulator(afterSaleDb, host, port);
+    }
+  }
+} else {
+  afterSaleApp = getApps().find(a => a.name === 'afterSale') as FirebaseApp;
+  afterSaleDb = getFirestore(afterSaleApp);
+}
+
+export { app, auth, db, afterSaleDb };

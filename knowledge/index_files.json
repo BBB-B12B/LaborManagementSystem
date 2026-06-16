@@ -15,10 +15,17 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/testApi.ts": {
+      "description": "Module: testApi.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/config/collections.ts": {
       "description": "Firestore Collections",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/scripts/listContractors.ts",
+        "backend/src/scripts/listProjects.ts",
         "backend/src/scripts/migrateDCIds.ts",
         "backend/src/scripts/migrateWagePeriodProjectFields.ts",
         "backend/src/scripts/migrateWagePeriodsIsDeleted.ts",
@@ -26,15 +33,15 @@
         "backend/src/services/dailyContractor/DailyContractorService.ts",
         "backend/src/services/dailyReport/DailyReportService.ts",
         "backend/src/services/project/ProjectLocationService.ts",
+        "backend/src/services/reconciliation/ReconciliationService.ts",
         "backend/src/services/scanData/LateRecordService.ts",
         "backend/src/services/scanData/ScanDataService.ts",
-        "backend/src/services/skill/SkillService.ts",
         "backend/src/services/wage/AdditionalExpenseService.ts",
         "backend/src/services/wage/AdditionalIncomeService.ts",
+        "backend/src/services/wage/ImportedWageSystemService.ts",
         "backend/src/services/wage/SocialSecurityRuleService.ts",
         "backend/src/services/wage/WagePeriodService.ts",
-        "backend/src/services/wage/WorkVerificationService.ts",
-        "backend/src/api/routes/scanData.routes.ts"
+        "backend/src/services/wage/WorkVerificationService.ts"
       ]
     },
     "backend/src/config/firebase.ts": {
@@ -43,21 +50,38 @@
       "backlinks": [
         "backend/src/check_user.ts",
         "backend/src/config/collections.ts",
+        "backend/src/scratch/inspect_categories.ts",
+        "backend/src/scratch/test_workspace_delete.ts",
+        "backend/src/scripts/backfillNullAssigneeNames.ts",
+        "backend/src/scripts/checkAllRecords.ts",
+        "backend/src/scripts/checkHolidays.ts",
+        "backend/src/scripts/checkPhotos.ts",
+        "backend/src/scripts/checkProject.ts",
+        "backend/src/scripts/checkRecords.ts",
+        "backend/src/scripts/checkUser.ts",
+        "backend/src/scripts/checkUserById.ts",
+        "backend/src/scripts/checkUsersFields.ts",
+        "backend/src/scripts/debugProjects.ts",
+        "backend/src/scripts/deleteRecords.ts",
+        "backend/src/scripts/fixIsDeleted.ts",
+        "backend/src/scripts/inspectDocs.ts",
         "backend/src/scripts/migrateDCIds.ts",
-        "backend/src/scripts/runMigration.ts",
-        "backend/src/services/dailyReportService.ts",
+        "backend/src/scripts/testAbsence.ts",
+        "backend/src/scripts/testReconciliation.ts",
         "backend/src/services/overtimeService.ts",
         "backend/src/services/ProjectConfigService.ts",
         "backend/src/services/projectService.ts",
         "backend/src/services/TaskService.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/routes/projectConfigs.routes.ts",
+        "backend/src/api/routes/tasks.routes.ts",
+        "backend/src/services/activity/ActivityService.ts",
         "backend/src/services/auth/AuthService.ts",
         "backend/src/services/auth/PortalUserService.ts",
+        "backend/src/services/companyHoliday/CompanyHolidayService.ts",
         "backend/src/services/dailyReport/DailyReportService.ts",
         "backend/src/services/scanData/ScanDataService.ts",
-        "backend/src/services/wage/WorkVerificationService.ts",
-        "backend/src/api/middleware/auth.ts",
-        "backend/src/api/routes/auth.routes.ts",
-        "backend/src/api/routes/tasks.routes.ts"
+        "backend/src/services/wage/WorkVerificationService.ts"
       ]
     },
     "backend/src/config/firebaseProjectB.ts": {
@@ -66,7 +90,11 @@
       "backlinks": [
         "backend/src/check_backlog.ts",
         "backend/src/config/storage.ts",
+        "backend/src/scratch/inspect_categories.ts",
         "backend/src/scratch/test_subtask_history.ts",
+        "backend/src/scratch/test_workspace_delete.ts",
+        "backend/src/scripts/migrateAddProjectId.ts",
+        "backend/src/scripts/migrateAddProjectIdSubtasks.ts",
         "backend/src/services/ProjectConfigService.ts",
         "backend/src/services/TaskService.ts",
         "backend/src/api/routes/notifications.routes.ts",
@@ -90,7 +118,6 @@
         "backend/src/controllers/dailyReportController.ts",
         "backend/src/controllers/MediaController.ts",
         "backend/src/controllers/media_controller_aftersale_reference.ts",
-        "backend/src/services/dailyReportService.ts",
         "backend/src/services/overtimeService.ts"
       ]
     },
@@ -121,21 +148,39 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/controllers/reconciliationController.ts": {
+      "description": "Reconciliation Controller",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/functions/onScanDataChanged.ts": {
+      "description": "onScanDataChanged",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/models/AdditionalExpense.ts": {
       "description": "AdditionalExpense Model",
       "associated_tasks": [],
       "backlinks": [
-        "backend/src/services/wage/AdditionalExpenseService.ts",
-        "backend/src/services/wage/WagePeriodService.ts"
+        "backend/src/services/wage/AdditionalExpenseService.ts"
       ]
     },
     "backend/src/models/AdditionalIncome.ts": {
       "description": "AdditionalIncome Model",
       "associated_tasks": [],
       "backlinks": [
-        "backend/src/services/wage/AdditionalIncomeService.ts",
-        "backend/src/services/wage/WagePeriodService.ts"
+        "backend/src/services/wage/AdditionalIncomeService.ts"
       ]
+    },
+    "backend/src/models/ApprovedTimesheet.ts": {
+      "description": "ApprovedTimesheet Model",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/models/CompanyHoliday.ts": {
+      "description": "CompanyHoliday Model",
+      "associated_tasks": [],
+      "backlinks": []
     },
     "backend/src/models/DailyContractor.ts": {
       "description": "DailyContractor Model",
@@ -149,7 +194,6 @@
       "description": "DailyReport Model (Aggregated)",
       "associated_tasks": [],
       "backlinks": [
-        "backend/src/services/scanData/ScanDataService.ts",
         "backend/src/services/wage/WorkVerificationService.ts"
       ]
     },
@@ -172,6 +216,13 @@
       "description": "FileAttachment Model",
       "associated_tasks": [],
       "backlinks": []
+    },
+    "backend/src/models/ImportedWageSystem.ts": {
+      "description": "ImportedWageSystem Model",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/services/wage/ImportedWageSystemService.ts"
+      ]
     },
     "backend/src/models/index.ts": {
       "description": "Models Index",
@@ -199,6 +250,14 @@
         "backend/src/scripts/migrateWagePeriodProjectFields.ts"
       ]
     },
+    "backend/src/models/ReconciliationRecord.ts": {
+      "description": "ReconciliationRecord Model",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/controllers/reconciliationController.ts",
+        "backend/src/models/ApprovedTimesheet.ts"
+      ]
+    },
     "backend/src/models/Role.ts": {
       "description": "Role Model",
       "associated_tasks": [],
@@ -209,19 +268,10 @@
       "associated_tasks": [],
       "backlinks": [
         "backend/src/scripts/migrateScanData.ts",
+        "backend/src/scripts/testScanDataLogic.ts",
+        "backend/src/services/reconciliation/ReconciliationService.ts",
+        "backend/src/services/scanData/ScanDataService.ts",
         "backend/src/services/wage/WorkVerificationService.ts"
-      ]
-    },
-    "backend/src/models/ScanDataDiscrepancy.ts": {
-      "description": "ScanDataDiscrepancy Model",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "backend/src/models/Skill.ts": {
-      "description": "Skill Model",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/skill/SkillService.ts"
       ]
     },
     "backend/src/models/SocialSecurityCalculation.ts": {
@@ -232,9 +282,7 @@
     "backend/src/models/SocialSecurityRule.ts": {
       "description": "SocialSecurityRule Model",
       "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/wage/SocialSecurityRuleService.ts"
-      ]
+      "backlinks": []
     },
     "backend/src/models/Task.ts": {
       "description": "Module: Task.ts",
@@ -242,17 +290,17 @@
       "backlinks": [
         "backend/src/scratch/test_subtask_history.ts",
         "backend/src/services/TaskService.ts",
-        "backend/src/api/routes/tasks.routes.ts",
-        "backend/src/utils/wbsParser.ts"
+        "backend/src/utils/wbsParser.ts",
+        "backend/src/api/routes/tasks.routes.ts"
       ]
     },
     "backend/src/models/User.ts": {
       "description": "User Model",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/api/routes/users.routes.ts",
         "backend/src/services/auth/AuthService.ts",
-        "backend/src/services/auth/UserService.ts",
-        "backend/src/api/routes/users.routes.ts"
+        "backend/src/services/auth/UserService.ts"
       ]
     },
     "backend/src/models/WagePeriod.ts": {
@@ -265,8 +313,8 @@
       "associated_tasks": [],
       "backlinks": []
     },
-    "backend/src/scratch/inspect_tasks.ts": {
-      "description": "Module: inspect_tasks.ts",
+    "backend/src/scratch/inspect_categories.ts": {
+      "description": "Module: inspect_categories.ts",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -275,13 +323,268 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/scratch/test_workspace_delete.ts": {
+      "description": "Module: test_workspace_delete.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/addAdditionalContractors.ts": {
+      "description": "Module: addAdditionalContractors.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/backfillAbsentAssignee.ts": {
+      "description": "backfillAbsentAssignee.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/backfillDCDepartment.ts": {
+      "description": "Module: backfillDCDepartment.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/backfillNullAssigneeNames.ts": {
+      "description": "Module: backfillNullAssigneeNames.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/backfillReconciliation.ts": {
+      "description": "Module: backfillReconciliation.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/backfillResolvedAt.ts": {
+      "description": "backfillResolvedAt.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkAfterSaleEmployee.ts": {
+      "description": "checkAfterSaleEmployee.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkAllRecords.ts": {
+      "description": "Module: checkAllRecords.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkCount.ts": {
+      "description": "Module: checkCount.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkDC.ts": {
+      "description": "Module: checkDC.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkFile.ts": {
+      "description": "Module: checkFile.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkFile2.ts": {
+      "description": "Module: checkFile2.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkHolidays.ts": {
+      "description": "Module: checkHolidays.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkPhotos.ts": {
+      "description": "Module: checkPhotos.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkPhotosAfterSale.ts": {
+      "description": "Module: checkPhotosAfterSale.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkProject.ts": {
+      "description": "Module: checkProject.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkRecords.ts": {
+      "description": "Module: checkRecords.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkScan.ts": {
+      "description": "Module: checkScan.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkSheets.ts": {
+      "description": "Module: checkSheets.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkUser.ts": {
+      "description": "Module: checkUser.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkUserById.ts": {
+      "description": "Module: checkUserById.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkUsersFields.ts": {
+      "description": "Module: checkUsersFields.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/checkWageData.ts": {
+      "description": "Module: checkWageData.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/cleanForemanUsageBug.ts": {
+      "description": "Module: cleanForemanUsageBug.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/cleanTrailingSpaces.ts": {
+      "description": "Module: cleanTrailingSpaces.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/clearScanData.ts": {
+      "description": "Module: clearScanData.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/convertCsvToJson.ts": {
+      "description": "Module: convertCsvToJson.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/debugCsv.ts": {
+      "description": "Module: debugCsv.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/debugFirestore.ts": {
+      "description": "Module: debugFirestore.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/debugLoginQuery.ts": {
+      "description": "Module: debugLoginQuery.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/debugProjects.ts": {
+      "description": "Module: debugProjects.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/deleteRecords.ts": {
+      "description": "Module: deleteRecords.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/dumpCsvToProjectB.ts": {
+      "description": "Module: dumpCsvToProjectB.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/dumpMockProjectB.ts": {
+      "description": "Module: dumpMockProjectB.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/fixDumpedProjectLocationIds.ts": {
+      "description": "fixDumpedProjectLocationIds.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/fixIsDeleted.ts": {
+      "description": "Module: fixIsDeleted.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/fixReconciliationNames.ts": {
+      "description": "Module: fixReconciliationNames.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/importDailyContractors.ts": {
+      "description": "Module: importDailyContractors.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/importTools.ts": {
+      "description": "Module: importTools.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/importWageData.ts": {
+      "description": "Module: importWageData.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/importWageSystem.ts": {
+      "description": "Module: importWageSystem.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/inspectDoc950948.ts": {
+      "description": "Module: inspectDoc950948.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/inspectDocs.ts": {
+      "description": "Module: inspectDocs.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/listContractors.ts": {
+      "description": "Module: listContractors.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/listProjectDocs.ts": {
+      "description": "Module: listProjectDocs.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/listProjects.ts": {
+      "description": "Module: listProjects.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/migrateAddProjectId.ts": {
+      "description": "Migration Script: Add projectId and projectName to all existing requests and dailyReports documents",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/migrateAddProjectIdSubtasks.ts": {
+      "description": "Migration Script: Add projectId and projectName to all existing subtasks documents",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/scripts/migrateDCIds.ts": {
       "description": "Migration Script: Migrate DC IDs and Schema",
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/scripts/migrateHomeProjectId.ts": {
+      "description": "Migration Script: Backfill homeProjectId and workLocationIds",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/scripts/migrateScanData.ts": {
-      "description": "Module: migrateScanData.ts",
+      "description": "@ts-nocheck",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/migrateToDailyScans.ts": {
+      "description": "Module: migrateToDailyScans.ts",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -302,13 +605,113 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/scripts/patchAbsentHomeProjectId.ts": {
+      "description": "patchAbsentHomeProjectId.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/removeOldWageDocs.ts": {
+      "description": "Module: removeOldWageDocs.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/runGenerate.ts": {
+      "description": "Module: runGenerate.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/scripts/runMigration.ts": {
       "description": "Module: runMigration.ts",
       "associated_tasks": [],
       "backlinks": []
     },
+    "backend/src/scripts/test-scan-upload.ts": {
+      "description": "Module: test-scan-upload.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testAbsence.ts": {
+      "description": "Module: testAbsence.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testClassifier.ts": {
+      "description": "Module: testClassifier.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testFillFromDailyReport.ts": {
+      "description": "testFillFromDailyReport.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testFirebase.ts": {
+      "description": "Module: testFirebase.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testGen.ts": {
+      "description": "Module: testGen.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testReconciliation.ts": {
+      "description": "Module: testReconciliation.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testScanDataLogic.ts": {
+      "description": "@ts-nocheck",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/testSegments.ts": {
+      "description": "Scratchpad for classifying segments",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/triggerReconcile.ts": {
+      "description": "Module: triggerReconcile.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/triggerReconcileLocal.ts": {
+      "description": "Module: triggerReconcileLocal.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/verifyFillResult.ts": {
+      "description": "verifyFillResult.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/verifyFirebaseWrite.ts": {
+      "description": "Module: verifyFirebaseWrite.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/verifyMigration.ts": {
+      "description": "Module: verifyMigration.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/verifyWageDataCompletion.ts": {
+      "description": "Module: verifyWageDataCompletion.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/verify_fix_reconcile.ts": {
+      "description": "Module: verify_fix_reconcile.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "backend/src/services/dailyReportService.ts": {
-      "description": "Daily Report Service (Backend)",
+      "description": "Dead file. Left empty to prevent TS errors. Use DailyReportService from dailyReport/ instead.",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/listProjects.ts": {
+      "description": "Module: listProjects.ts",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -321,24 +724,32 @@
       "description": "Project Configuration Service (Backend)",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/scratch/test_workspace_delete.ts",
         "backend/src/api/routes/projectConfigs.routes.ts"
       ]
     },
     "backend/src/services/projectService.ts": {
       "description": "Project Service (Backend)",
       "associated_tasks": [],
-      "backlinks": []
+      "backlinks": [
+        "backend/src/testApi.ts",
+        "backend/src/services/listProjects.ts",
+        "backend/src/api/routes/dailyContractors.routes.ts"
+      ]
     },
     "backend/src/services/TaskService.ts": {
-      "description": "\u0e2a\u0e23\u0e49\u0e32\u0e07 Task \u0e43\u0e2b\u0e21\u0e48 \u0e1e\u0e23\u0e49\u0e2d\u0e21 Running Number (\u0e40\u0e0a\u0e48\u0e19 WH-2026-0001)",
+      "description": "สร้าง Task ใหม่ พร้อม Running Number (เช่น WH-2026-0001)",
       "associated_tasks": [],
       "backlinks": [
         "backend/src/scratch/test_subtask_history.ts",
-        "backend/src/api/routes/tasks.routes.ts"
+        "backend/src/scratch/test_workspace_delete.ts",
+        "backend/src/services/ProjectConfigService.ts",
+        "backend/src/api/routes/tasks.routes.ts",
+        "backend/src/services/reconciliation/ReconciliationService.ts"
       ]
     },
     "backend/src/types/index.ts": {
-      "description": "\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e2b\u0e25\u0e31\u0e01\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e41\u0e23\u0e07\u0e07\u0e32\u0e19",
+      "description": "ประเภทข้อมูลหลักสำหรับระบบจัดการแรงงาน",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -347,7 +758,6 @@
       "associated_tasks": [],
       "backlinks": [
         "backend/src/controllers/dailyReportController.ts",
-        "backend/src/services/dailyReportService.ts",
         "backend/src/services/dailyReport/DailyReportService.ts"
       ]
     },
@@ -360,181 +770,65 @@
         "backend/src/controllers/dailyReportController.ts",
         "backend/src/controllers/MediaController.ts",
         "backend/src/controllers/media_controller_aftersale_reference.ts",
+        "backend/src/functions/onScanDataChanged.ts",
         "backend/src/scripts/migrateDCIds.ts",
         "backend/src/scripts/migrateWagePeriodProjectFields.ts",
         "backend/src/scripts/migrateWagePeriodsIsDeleted.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/errorHandler.ts",
+        "backend/src/api/routes/dailyContractors.routes.ts",
+        "backend/src/api/routes/users.routes.ts",
         "backend/src/services/dailyContractor/DailyContractorService.ts",
         "backend/src/services/project/ProjectLocationService.ts",
         "backend/src/services/scanData/LateRecordService.ts",
         "backend/src/services/scanData/ScanDataService.ts",
-        "backend/src/services/skill/SkillService.ts",
         "backend/src/services/wage/AdditionalExpenseService.ts",
         "backend/src/services/wage/AdditionalIncomeService.ts",
+        "backend/src/services/wage/ImportedWageSystemService.ts",
         "backend/src/services/wage/SocialSecurityRuleService.ts",
         "backend/src/services/wage/WagePeriodService.ts",
-        "backend/src/services/wage/WorkVerificationService.ts",
-        "backend/src/api/middleware/auth.ts",
-        "backend/src/api/middleware/errorHandler.ts",
-        "backend/src/api/routes/dailyContractors.routes.ts",
-        "backend/src/api/routes/users.routes.ts"
+        "backend/src/services/wage/WorkVerificationService.ts"
       ]
     },
     "backend/src/utils/wbsParser.ts": {
-      "description": "WBS excel parser utility",
+      "description": "Module: wbsParser.ts",
       "associated_tasks": [],
       "backlinks": [
         "backend/src/api/routes/tasks.routes.ts"
       ]
     },
-    "backend/src/services/auth/AuthService.ts": {
-      "description": "Authentication Service",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/auth/PortalUserService.ts",
-        "backend/src/api/routes/auth.routes.ts"
-      ]
-    },
-    "backend/src/services/auth/PortalUserService.ts": {
-      "description": "Portal User Service",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "backend/src/services/auth/UserService.ts": {
-      "description": "User Service",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/auth/AuthService.ts",
-        "backend/src/api/middleware/auth.ts",
-        "backend/src/api/routes/users.routes.ts"
-      ]
-    },
-    "backend/src/services/base/BaseCrudService.ts": {
-      "description": "Base CRUD Service",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/auth/UserService.ts",
-        "backend/src/services/dailyContractor/DailyContractorService.ts",
-        "backend/src/services/dailyReport/DailyReportService.ts",
-        "backend/src/services/project/ProjectLocationService.ts",
-        "backend/src/services/scanData/LateRecordService.ts",
-        "backend/src/services/scanData/ScanDataService.ts",
-        "backend/src/services/skill/SkillService.ts",
-        "backend/src/services/wage/AdditionalExpenseService.ts",
-        "backend/src/services/wage/AdditionalIncomeService.ts",
-        "backend/src/services/wage/SocialSecurityRuleService.ts",
-        "backend/src/services/wage/WagePeriodService.ts"
-      ]
-    },
-    "backend/src/services/base/CrudService.ts": {
-      "description": "Base CRUD Service",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "backend/src/services/dailyContractor/DailyContractorService.ts": {
-      "description": "DailyContractorService",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/dailyReportService.ts",
-        "backend/src/services/scanData/ScanDataService.ts",
-        "backend/src/api/routes/dailyContractors.routes.ts"
-      ]
-    },
-    "backend/src/services/dailyReport/DailyReportService.ts": {
-      "description": "Generate Custom ID (Normalized to Local Date)",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/controllers/dailyReportController.ts",
-        "backend/src/services/scanData/ScanDataService.ts"
-      ]
-    },
-    "backend/src/services/project/ProjectLocationService.ts": {
-      "description": "ProjectLocationService",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/api/routes/projects.routes.ts"
-      ]
-    },
-    "backend/src/services/scanData/LateRecordService.ts": {
-      "description": "LateRecordService",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/wage/WagePeriodService.ts"
-      ]
-    },
-    "backend/src/services/scanData/ScanDataImportUtils.ts": {
-      "description": "Module: ScanDataImportUtils.ts",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "backend/src/services/scanData/ScanDataService.ts": {
-      "description": "ScanDataService (Daily Aggregation Refactor)",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/api/routes/scanData.routes.ts"
-      ]
-    },
-    "backend/src/services/skill/SkillService.ts": {
-      "description": "SkillService",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/api/routes/skills.routes.ts"
-      ]
-    },
-    "backend/src/services/wage/AdditionalExpenseService.ts": {
-      "description": "AdditionalExpenseService",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "backend/src/services/wage/AdditionalIncomeService.ts": {
-      "description": "AdditionalIncomeService",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "backend/src/services/wage/SocialSecurityRuleService.ts": {
-      "description": "SocialSecurityRuleService",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/api/routes/socialSecurityRules.routes.ts"
-      ]
-    },
-    "backend/src/services/wage/WagePeriodService.ts": {
-      "description": "WagePeriodService",
-      "associated_tasks": [],
-      "backlinks": [
-        "backend/src/services/dailyReportService.ts",
-        "backend/src/api/routes/wagePeriods.routes.ts"
-      ]
-    },
-    "backend/src/services/wage/WorkVerificationService.ts": {
-      "description": "WorkVerificationService",
-      "associated_tasks": [],
-      "backlinks": []
-    },
     "backend/src/api/middleware/auth.ts": {
       "description": "Authentication & Authorization Middleware",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/controllers/projectController.ts",
+        "backend/src/controllers/reconciliationController.ts",
         "backend/src/api/middleware/authorize.ts",
-        "backend/src/api/routes/auth.routes.ts",
+        "backend/src/api/routes/activity.routes.ts",
+        "backend/src/api/routes/companyHolidays.routes.ts",
         "backend/src/api/routes/dailyContractors.routes.ts",
         "backend/src/api/routes/dailyReports.routes.ts",
+        "backend/src/api/routes/lateRecords.routes.ts",
         "backend/src/api/routes/media.routes.ts",
         "backend/src/api/routes/notifications.routes.ts",
         "backend/src/api/routes/overtime.routes.ts",
         "backend/src/api/routes/project.routes.ts",
         "backend/src/api/routes/projectConfigs.routes.ts",
         "backend/src/api/routes/projects.routes.ts",
+        "backend/src/api/routes/reconciliation.routes.ts",
         "backend/src/api/routes/scanData.routes.ts",
         "backend/src/api/routes/socialSecurityRules.routes.ts",
         "backend/src/api/routes/tasks.routes.ts",
         "backend/src/api/routes/users.routes.ts",
-        "backend/src/api/routes/wagePeriods.routes.ts"
+        "backend/src/api/routes/wagePeriods.routes.ts",
+        "backend/src/api/routes/labor/overtime.routes.ts"
       ]
     },
     "backend/src/api/middleware/authorize.ts": {
       "description": "Module: authorize.ts",
       "associated_tasks": [],
       "backlinks": [
+        "backend/src/api/routes/companyHolidays.routes.ts",
         "backend/src/api/routes/dailyContractors.routes.ts",
         "backend/src/api/routes/dailyReports.routes.ts",
         "backend/src/api/routes/overtime.routes.ts",
@@ -543,7 +837,8 @@
         "backend/src/api/routes/scanData.routes.ts",
         "backend/src/api/routes/socialSecurityRules.routes.ts",
         "backend/src/api/routes/users.routes.ts",
-        "backend/src/api/routes/wagePeriods.routes.ts"
+        "backend/src/api/routes/wagePeriods.routes.ts",
+        "backend/src/api/routes/labor/overtime.routes.ts"
       ]
     },
     "backend/src/api/middleware/errorHandler.ts": {
@@ -551,32 +846,41 @@
       "associated_tasks": [],
       "backlinks": [
         "backend/src/index.ts",
-        "backend/src/services/dailyReportService.ts",
         "backend/src/services/ProjectConfigService.ts",
         "backend/src/services/TaskService.ts",
-        "backend/src/services/auth/UserService.ts",
-        "backend/src/services/dailyContractor/DailyContractorService.ts",
-        "backend/src/services/project/ProjectLocationService.ts",
-        "backend/src/services/scanData/ScanDataImportUtils.ts",
-        "backend/src/services/scanData/ScanDataService.ts",
-        "backend/src/services/skill/SkillService.ts",
-        "backend/src/services/wage/WagePeriodService.ts",
         "backend/src/api/middleware/auth.ts",
         "backend/src/api/routes/auth.routes.ts",
+        "backend/src/api/routes/companyHolidays.routes.ts",
         "backend/src/api/routes/dailyContractors.routes.ts",
         "backend/src/api/routes/notifications.routes.ts",
         "backend/src/api/routes/projectConfigs.routes.ts",
         "backend/src/api/routes/projects.routes.ts",
         "backend/src/api/routes/scanData.routes.ts",
-        "backend/src/api/routes/skills.routes.ts",
         "backend/src/api/routes/socialSecurityRules.routes.ts",
         "backend/src/api/routes/tasks.routes.ts",
         "backend/src/api/routes/users.routes.ts",
-        "backend/src/api/routes/wagePeriods.routes.ts"
+        "backend/src/api/routes/wagePeriods.routes.ts",
+        "backend/src/api/routes/labor/importedWageSystem.routes.ts",
+        "backend/src/services/auth/UserService.ts",
+        "backend/src/services/dailyContractor/DailyContractorService.ts",
+        "backend/src/services/project/ProjectLocationService.ts",
+        "backend/src/services/scanData/ScanDataImportUtils.ts",
+        "backend/src/services/scanData/ScanDataService.ts",
+        "backend/src/services/wage/WagePeriodService.ts"
       ]
+    },
+    "backend/src/api/routes/activity.routes.ts": {
+      "description": "Module: activity.routes.ts",
+      "associated_tasks": [],
+      "backlinks": []
     },
     "backend/src/api/routes/auth.routes.ts": {
       "description": "Authentication Routes",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/api/routes/companyHolidays.routes.ts": {
+      "description": "GET /api/company-holidays?year=2026",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -596,6 +900,11 @@
       "backlinks": [
         "backend/src/index.ts"
       ]
+    },
+    "backend/src/api/routes/lateRecords.routes.ts": {
+      "description": "GET /api/late-records",
+      "associated_tasks": [],
+      "backlinks": []
     },
     "backend/src/api/routes/media.routes.ts": {
       "description": "Upload single file",
@@ -627,13 +936,13 @@
       "associated_tasks": [],
       "backlinks": []
     },
-    "backend/src/api/routes/scanData.routes.ts": {
-      "description": "Scan Data Routes",
+    "backend/src/api/routes/reconciliation.routes.ts": {
+      "description": "Reconciliation Routes",
       "associated_tasks": [],
       "backlinks": []
     },
-    "backend/src/api/routes/skills.routes.ts": {
-      "description": "Skill Routes",
+    "backend/src/api/routes/scanData.routes.ts": {
+      "description": "Scan Data Routes",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -643,7 +952,7 @@
       "backlinks": []
     },
     "backend/src/api/routes/tasks.routes.ts": {
-      "description": "Module: tasks.routes.ts",
+      "description": "ดึงรายการ ID ของ Work Orders ที่เป็นระบบ After-Sale (type == 'AfterSale')",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -654,6 +963,207 @@
     },
     "backend/src/api/routes/wagePeriods.routes.ts": {
       "description": "Wage Period Routes",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/api/routes/labor/dailyReports.routes.ts": {
+      "description": "Dead file. Left empty to prevent TS errors.",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/api/routes/labor/importedWageSystem.routes.ts": {
+      "description": "ImportedWageSystem Routes",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/api/routes/labor/overtime.routes.ts": {
+      "description": "Overtime Routes",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/api/routes/labor/wagePeriods.routes.ts": {
+      "description": "Dead file. Left empty to prevent TS errors.",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/activity/ActivityService.ts": {
+      "description": "ดึง users ที่ isOnline=true และ lastSeen ภายใน 3 นาที",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/activity.routes.ts",
+        "backend/src/api/routes/auth.routes.ts"
+      ]
+    },
+    "backend/src/services/auth/AuthService.ts": {
+      "description": "Authentication Service",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/auth.routes.ts",
+        "backend/src/services/auth/PortalUserService.ts"
+      ]
+    },
+    "backend/src/services/auth/PortalUserService.ts": {
+      "description": "Portal User Service",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/auth/UserService.ts": {
+      "description": "User Service",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/routes/users.routes.ts",
+        "backend/src/services/auth/AuthService.ts"
+      ]
+    },
+    "backend/src/services/base/BaseCrudService.ts": {
+      "description": "Base CRUD Service",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/services/auth/UserService.ts",
+        "backend/src/services/dailyContractor/DailyContractorService.ts",
+        "backend/src/services/dailyReport/DailyReportService.ts",
+        "backend/src/services/project/ProjectLocationService.ts",
+        "backend/src/services/scanData/LateRecordService.ts",
+        "backend/src/services/scanData/ScanDataService.ts",
+        "backend/src/services/wage/AdditionalExpenseService.ts",
+        "backend/src/services/wage/AdditionalIncomeService.ts",
+        "backend/src/services/wage/ImportedWageSystemService.ts",
+        "backend/src/services/wage/SocialSecurityRuleService.ts",
+        "backend/src/services/wage/WagePeriodService.ts"
+      ]
+    },
+    "backend/src/services/base/CrudService.ts": {
+      "description": "Base CRUD Service",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/companyHoliday/CompanyHolidayService.ts": {
+      "description": "CompanyHolidayService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/companyHolidays.routes.ts"
+      ]
+    },
+    "backend/src/services/dailyContractor/DailyContractorService.ts": {
+      "description": "DailyContractorService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/dailyContractors.routes.ts",
+        "backend/src/services/reconciliation/ReconciliationService.ts",
+        "backend/src/services/scanData/ScanDataService.ts"
+      ]
+    },
+    "backend/src/services/dailyReport/DailyReportService.ts": {
+      "description": "Generate Custom ID (Normalized to Local Date)",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/controllers/dailyReportController.ts",
+        "backend/src/services/scanData/ScanDataService.ts"
+      ]
+    },
+    "backend/src/services/external/ProjectBDailyReportService.ts": {
+      "description": "ProjectBDailyReportService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/services/scanData/ScanDataService.ts"
+      ]
+    },
+    "backend/src/services/project/ProjectLocationService.ts": {
+      "description": "ProjectLocationService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/projects.routes.ts",
+        "backend/src/services/dailyContractor/DailyContractorService.ts",
+        "backend/src/services/scanData/ScanDataService.ts"
+      ]
+    },
+    "backend/src/services/reconciliation/ReconciliationService.ts": {
+      "description": "ReconciliationService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/controllers/dailyReportController.ts",
+        "backend/src/controllers/reconciliationController.ts",
+        "backend/src/functions/onScanDataChanged.ts",
+        "backend/src/scripts/backfillReconciliation.ts",
+        "backend/src/scripts/checkFile2.ts",
+        "backend/src/scripts/runGenerate.ts",
+        "backend/src/scripts/testGen.ts",
+        "backend/src/scripts/testReconciliation.ts",
+        "backend/src/scripts/triggerReconcile.ts",
+        "backend/src/scripts/triggerReconcileLocal.ts",
+        "backend/src/scripts/verify_fix_reconcile.ts",
+        "backend/src/api/routes/scanData.routes.ts"
+      ]
+    },
+    "backend/src/services/scanData/LateRecordService.ts": {
+      "description": "LateRecordService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/lateRecords.routes.ts"
+      ]
+    },
+    "backend/src/services/scanData/ScanDataAggregator.ts": {
+      "description": "Group raw scans into DailyAggregatedRow arrays.",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/services/scanData/ScanDataService.ts"
+      ]
+    },
+    "backend/src/services/scanData/ScanDataImportUtils.ts": {
+      "description": "Module: ScanDataImportUtils.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/scanData/ScanDataService.ts": {
+      "description": "ScanDataService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/scripts/testScanDataLogic.ts",
+        "backend/src/api/routes/scanData.routes.ts",
+        "backend/src/services/reconciliation/ReconciliationService.ts",
+        "backend/src/services/scanData/ScanDataAggregator.ts",
+        "backend/src/services/scanData/ScanDataImportUtils.ts"
+      ]
+    },
+    "backend/src/services/wage/AdditionalExpenseService.ts": {
+      "description": "AdditionalExpenseService",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/wage/AdditionalIncomeService.ts": {
+      "description": "AdditionalIncomeService",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/services/wage/ImportedWageSystemService.ts": {
+      "description": "ImportedWageSystemService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/labor/importedWageSystem.routes.ts"
+      ]
+    },
+    "backend/src/services/wage/SocialSecurityRuleService.ts": {
+      "description": "SocialSecurityRuleService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/socialSecurityRules.routes.ts"
+      ]
+    },
+    "backend/src/services/wage/WagePeriodService.ts": {
+      "description": "WagePeriodService",
+      "associated_tasks": [],
+      "backlinks": [
+        "backend/src/api/routes/wagePeriods.routes.ts"
+      ]
+    },
+    "backend/src/services/wage/WorkVerificationService.ts": {
+      "description": "WorkVerificationService",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "backend/src/scripts/verify.js": {
+      "description": "Module: verify.js",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -669,8 +1179,34 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "frontend/src/constants/theme.ts": {
+      "description": "Module: theme.ts",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/work-hour-monitoring/AbnormalBreakdown.tsx",
+        "frontend/src/components/work-hour-monitoring/BreakdownCard.tsx",
+        "frontend/src/components/work-hour-monitoring/NormalBreakdown.tsx",
+        "frontend/src/components/work-hour-monitoring/SummaryStats.tsx",
+        "frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx"
+      ]
+    },
     "frontend/src/hooks/index.ts": {
       "description": "Custom Hooks Index",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/hooks/useNotifications.ts": {
+      "description": "Custom hook to manage notifications with React Query caching,",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/hooks/useRealtimeTasks.ts": {
+      "description": "Module: useRealtimeTasks.ts",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/hooks/useRealtimeWorkspaceRequests.ts": {
+      "description": "Module: useRealtimeWorkspaceRequests.ts",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -684,17 +1220,22 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "frontend/src/services/companyHolidayService.ts": {
+      "description": "Fetch all holidays for the given year (defaults to current year on backend)",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "frontend/src/services/dailyReportService.ts": {
       "description": "Daily Report Service (Frontend)",
       "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx"
-      ]
+      "backlinks": []
     },
     "frontend/src/services/dcService.ts": {
       "description": "Daily Contractor (DC) Service",
       "associated_tasks": [],
       "backlinks": [
+        "frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx",
+        "frontend/src/pages/dc-management/components/DCForm.tsx",
         "frontend/src/pages/dc-management/[id]/edit.tsx"
       ]
     },
@@ -707,6 +1248,7 @@
       "description": "Member/User Service",
       "associated_tasks": [],
       "backlinks": [
+        "frontend/src/pages/member-management/index.tsx",
         "frontend/src/pages/member-management/[id]/edit.tsx"
       ]
     },
@@ -730,6 +1272,17 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "frontend/src/services/reconciliationService.ts": {
+      "description": "ดึงรายการ ReconciliationRecords ตาม filter พร้อม server-side pagination",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/wage/AdditionalItemsDrawer.tsx",
+        "frontend/src/components/work-hour-monitoring/AbnormalBreakdown.tsx",
+        "frontend/src/components/work-hour-monitoring/NormalBreakdown.tsx",
+        "frontend/src/components/work-hour-monitoring/SummaryStats.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx"
+      ]
+    },
     "frontend/src/services/salesSyncService.ts": {
       "description": "---------------------------------------------------------------------------",
       "associated_tasks": [],
@@ -739,8 +1292,11 @@
       "description": "ScanData Service",
       "associated_tasks": [],
       "backlinks": [
+        "frontend/src/components/scan-data/ScanDataUploadDialog.tsx",
         "frontend/src/pages/scan-data-monitoring/index.tsx",
-        "frontend/src/pages/wage-calculation/[id].tsx"
+        "frontend/src/pages/wage-calculation/index.tsx",
+        "frontend/src/pages/wage-calculation/[id].tsx",
+        "frontend/src/pages/scan-data-monitoring/components/ScanDataEditDialog.tsx"
       ]
     },
     "frontend/src/services/skillService.ts": {
@@ -762,6 +1318,10 @@
       "description": "Wage Calculation Service",
       "associated_tasks": [],
       "backlinks": [
+        "frontend/src/components/wage/AdditionalItemsDrawer.tsx",
+        "frontend/src/components/wage/AuditHistoryDrawer.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/wage-calculation/index.tsx",
         "frontend/src/pages/wage-calculation/[id].tsx"
       ]
     },
@@ -782,11 +1342,6 @@
       "associated_tasks": [],
       "backlinks": []
     },
-    "frontend/src/store/notificationStore.ts": {
-      "description": "Module: notificationStore.ts",
-      "associated_tasks": [],
-      "backlinks": []
-    },
     "frontend/src/store/taskCacheStore.ts": {
       "description": "Task Cache Store (Zustand)",
       "associated_tasks": [],
@@ -794,6 +1349,13 @@
     },
     "frontend/src/store/uiStore.ts": {
       "description": "UI Store (Zustand)",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/scan-data-monitoring/index.tsx"
+      ]
+    },
+    "frontend/src/store/workspaceRequestsCacheStore.ts": {
+      "description": "Workspace Requests Cache Store (Zustand)",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -803,7 +1365,7 @@
       "backlinks": []
     },
     "frontend/src/types/index.ts": {
-      "description": "\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e2b\u0e25\u0e31\u0e01\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e41\u0e23\u0e07\u0e07\u0e32\u0e19",
+      "description": "ประเภทข้อมูลหลักสำหรับระบบจัดการแรงงาน",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -842,9 +1404,7 @@
     "frontend/src/validation/baseSchemas.ts": {
       "description": "Base Validation Schemas",
       "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/validation/projectSchema.ts"
-      ]
+      "backlinks": []
     },
     "frontend/src/validation/dailyReportSchema.ts": {
       "description": "Daily Report Form Validation Schema",
@@ -877,7 +1437,10 @@
     "frontend/src/validation/scanDataSchema.ts": {
       "description": "ScanData Validation Schemas",
       "associated_tasks": [],
-      "backlinks": []
+      "backlinks": [
+        "frontend/src/services/scanDataService.ts",
+        "frontend/src/components/scan-data/ScanDataUploadDialog.tsx"
+      ]
     },
     "frontend/src/validation/userManagementSchema.ts": {
       "description": "User Management Form Validation Schema",
@@ -889,53 +1452,14 @@
       "associated_tasks": [],
       "backlinks": [
         "frontend/src/services/memberService.ts",
-        "frontend/src/pages/member-management/index.tsx",
         "frontend/src/pages/member-management/[id]/edit.tsx"
       ]
     },
     "frontend/src/validation/wageSchema.ts": {
       "description": "Wage Calculation Form Validation Schema",
       "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/services/api/auth.service.ts": {
-      "description": "Authentication Service",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/services/api/client.ts": {
-      "description": "API Client Configuration",
-      "associated_tasks": [],
       "backlinks": [
-        "frontend/src/services/dailyReportService.ts",
-        "frontend/src/services/dcService.ts",
-        "frontend/src/services/memberService.ts",
-        "frontend/src/services/notificationService.ts",
-        "frontend/src/services/overtimeService.ts",
-        "frontend/src/services/projectConfigService.ts",
-        "frontend/src/services/projectService.ts",
-        "frontend/src/services/scanDataService.ts",
-        "frontend/src/services/socialSecurityRuleService.ts",
-        "frontend/src/services/taskService.ts",
-        "frontend/src/services/wageService.ts",
-        "frontend/src/services/api/auth.service.ts",
-        "frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx"
-      ]
-    },
-    "frontend/src/services/firebase/config.ts": {
-      "description": "Module: config.ts",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/services/salesSyncService.ts",
-        "frontend/src/services/api/client.ts"
-      ]
-    },
-    "frontend/src/pages/login/loginSchema.ts": {
-      "description": "Login Form Validation Schema",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/login/index.tsx",
-        "frontend/src/pages/login/LoginForm.tsx"
+        "frontend/src/pages/wage-calculation/index.tsx"
       ]
     },
     "frontend/src/components/common/index.ts": {
@@ -952,6 +1476,55 @@
       "description": "Layout Components Index",
       "associated_tasks": [],
       "backlinks": []
+    },
+    "frontend/src/pages/login/loginSchema.ts": {
+      "description": "Login Form Validation Schema",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/login/index.tsx",
+        "frontend/src/pages/login/LoginForm.tsx"
+      ]
+    },
+    "frontend/src/services/api/auth.service.ts": {
+      "description": "Authentication Service",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/services/api/client.ts": {
+      "description": "API Client Configuration",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/services/companyHolidayService.ts",
+        "frontend/src/services/dailyReportService.ts",
+        "frontend/src/services/dcService.ts",
+        "frontend/src/services/memberService.ts",
+        "frontend/src/services/notificationService.ts",
+        "frontend/src/services/overtimeService.ts",
+        "frontend/src/services/projectConfigService.ts",
+        "frontend/src/services/projectService.ts",
+        "frontend/src/services/reconciliationService.ts",
+        "frontend/src/services/scanDataService.ts",
+        "frontend/src/services/socialSecurityRuleService.ts",
+        "frontend/src/services/taskService.ts",
+        "frontend/src/services/wageService.ts",
+        "frontend/src/services/api/auth.service.ts",
+        "frontend/src/services/api/importedWageSystem.service.ts",
+        "frontend/src/components/scan-data/ScanDataUploadDialog.tsx",
+        "frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx"
+      ]
+    },
+    "frontend/src/services/api/importedWageSystem.service.ts": {
+      "description": "Imported Wage System Service",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/services/firebase/config.ts": {
+      "description": "Module: config.ts",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/services/salesSyncService.ts",
+        "frontend/src/services/api/client.ts"
+      ]
     },
     "frontend/src/components/AnalogTimePicker.tsx": {
       "description": "Module: AnalogTimePicker.tsx",
@@ -983,6 +1556,226 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "frontend/src/components/common/BackButton.tsx": {
+      "description": "BackButton Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/common/ConfirmDialog.tsx": {
+      "description": "Confirm Dialog Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/dc-management/index.tsx",
+        "frontend/src/pages/member-management/index.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/wage-calculation/index.tsx"
+      ]
+    },
+    "frontend/src/components/common/DataGrid.tsx": {
+      "description": "DataGrid Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/common/ErrorBoundary.tsx": {
+      "description": "Error Boundary Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/common/GlobalFeedback.tsx": {
+      "description": "Module: GlobalFeedback.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/common/LoadingSpinner.tsx": {
+      "description": "Loading Spinner Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/wage/AuditHistoryDrawer.tsx",
+        "frontend/src/pages/dc-management/index.tsx",
+        "frontend/src/pages/member-management/index.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/scan-data-monitoring/[id].tsx",
+        "frontend/src/pages/wage-calculation/index.tsx",
+        "frontend/src/pages/wage-calculation/[id].tsx",
+        "frontend/src/pages/dc-management/[id]/edit.tsx",
+        "frontend/src/pages/member-management/[id]/edit.tsx"
+      ]
+    },
+    "frontend/src/components/common/Modal.tsx": {
+      "description": "Modal Base Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/common/ResponsiveContainer.tsx": {
+      "description": "Responsive Container Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/common/Toast.tsx": {
+      "description": "Toast Notification Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/wage/AdditionalItemsDrawer.tsx",
+        "frontend/src/pages/dc-management/index.tsx",
+        "frontend/src/pages/member-management/index.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/wage-calculation/index.tsx",
+        "frontend/src/pages/wage-calculation/[id].tsx",
+        "frontend/src/pages/dc-management/[id]/edit.tsx",
+        "frontend/src/pages/member-management/[id]/edit.tsx",
+        "frontend/src/pages/scan-data-monitoring/components/ScanDataEditDialog.tsx"
+      ]
+    },
+    "frontend/src/components/dashboard/ScanDataMonitoringWidget.tsx": {
+      "description": "Module: ScanDataMonitoringWidget.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/forms/AutoCompleteSearch.tsx": {
+      "description": "AutoComplete Search Base Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/forms/DatePicker.tsx": {
+      "description": "DatePicker Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/wage-calculation/index.tsx",
+        "frontend/src/pages/dc-management/components/DCForm.tsx"
+      ]
+    },
+    "frontend/src/components/forms/DCAutoComplete.tsx": {
+      "description": "DC AutoComplete Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/forms/DepartmentAutocomplete.tsx": {
+      "description": "Module: DepartmentAutocomplete.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/forms/DepartmentSelect.tsx": {
+      "description": "Department Select Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/member-management/index.tsx"
+      ]
+    },
+    "frontend/src/components/forms/FileUpload.tsx": {
+      "description": "File Upload Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/forms/ProjectSelect.tsx": {
+      "description": "Project Select Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/scan-data/ScanDataUploadDialog.tsx",
+        "frontend/src/pages/dc-management/index.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/wage-calculation/index.tsx",
+        "frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx",
+        "frontend/src/pages/dc-management/components/DCForm.tsx"
+      ]
+    },
+    "frontend/src/components/forms/RoleSelect.tsx": {
+      "description": "Role Select Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/member-management/index.tsx"
+      ]
+    },
+    "frontend/src/components/forms/SkillSelect.tsx": {
+      "description": "Skill Select Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/dc-management/index.tsx",
+        "frontend/src/pages/dc-management/components/DCForm.tsx"
+      ]
+    },
+    "frontend/src/components/forms/TimePicker.tsx": {
+      "description": "TimePicker Component",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx",
+        "frontend/src/pages/scan-data-monitoring/index.tsx"
+      ]
+    },
+    "frontend/src/components/layout/Layout.tsx": {
+      "description": "Main layout component with persistent sidebar navigation.",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/layout/Navbar.tsx": {
+      "description": "Module: Navbar.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/layout/Layout.tsx"
+      ]
+    },
+    "frontend/src/components/layout/ProtectedRoute.tsx": {
+      "description": "Protected Route Component",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/scan-data/ScanDataUploadDialog.tsx": {
+      "description": "ScanData Upload Dialog",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/scan-data-monitoring/index.tsx",
+        "frontend/src/pages/wage-calculation/index.tsx"
+      ]
+    },
+    "frontend/src/components/wage/AdditionalItemsDrawer.tsx": {
+      "description": "AdditionalItemsDrawer",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/wage-calculation/[id].tsx"
+      ]
+    },
+    "frontend/src/components/wage/AuditHistoryDrawer.tsx": {
+      "description": "AuditHistoryDrawer",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/wage/AdditionalItemsDrawer.tsx"
+      ]
+    },
+    "frontend/src/components/work-hour-monitoring/AbnormalBreakdown.tsx": {
+      "description": "Module: AbnormalBreakdown.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/work-hour-monitoring/BreakdownCard.tsx": {
+      "description": "Module: BreakdownCard.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/components/work-hour-monitoring/AbnormalBreakdown.tsx",
+        "frontend/src/components/work-hour-monitoring/NormalBreakdown.tsx"
+      ]
+    },
+    "frontend/src/components/work-hour-monitoring/NormalBreakdown.tsx": {
+      "description": "Module: NormalBreakdown.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/work-hour-monitoring/SummaryStats.tsx": {
+      "description": "Module: SummaryStats.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx": {
+      "description": "Module: WorkHourComparisonTable.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/scan-data-monitoring/index.tsx"
+      ]
+    },
+    "frontend/src/pages/activity-monitor/index.tsx": {
+      "description": "Module: index.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "frontend/src/pages/daily-reports/daily_report_ui_aftersale_reference.tsx": {
       "description": "Module: daily_report_ui_aftersale_reference.tsx",
       "associated_tasks": [],
@@ -995,16 +1788,6 @@
     },
     "frontend/src/pages/daily-reports/list.tsx": {
       "description": "Work Records Page (Backlog / History Grid)",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/daily-reports/new.tsx": {
-      "description": "Module: new.tsx",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/dashboard/index.tsx": {
-      "description": "Dashboard Page",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1046,7 +1829,7 @@
       "backlinks": []
     },
     "frontend/src/pages/overtime/index.tsx": {
-      "description": "Legacy OT route \u2013 redirect into the combined work records page (OT tab).",
+      "description": "Legacy OT route – redirect into the combined work records page (OT tab).",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1071,7 +1854,7 @@
       "backlinks": []
     },
     "frontend/src/pages/scan-data-monitoring/[id].tsx": {
-      "description": "ScanData Discrepancy Detail Page",
+      "description": "Module: [id].tsx",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1090,192 +1873,18 @@
       "associated_tasks": [],
       "backlinks": []
     },
+    "frontend/src/pages/work-hour-monitoring/index.tsx": {
+      "description": "Module: index.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
     "frontend/src/pages/workspace/index.tsx": {
-      "description": "\u0e01\u0e23\u0e2d\u0e07 Task \u0e15\u0e32\u0e21 Role \u0e02\u0e2d\u0e07 User",
+      "description": "กรอง Task ตาม Role ของ User",
       "associated_tasks": [],
       "backlinks": []
     },
     "frontend/src/pages/workspace/requests.tsx": {
       "description": "requests.tsx",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/workspace/components/CategoryConfigModal.tsx": {
-      "description": "Module: CategoryConfigModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/components/TaskCreateModal.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/TaskCard.tsx": {
-      "description": "Module: TaskCard.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/index.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/TaskCreateModal.tsx": {
-      "description": "\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e27\u0e48\u0e32\u0e40\u0e1b\u0e47\u0e19\u0e17\u0e35\u0e21 Support (\u0e04\u0e25\u0e31\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32 P004 \u0e2b\u0e23\u0e37\u0e2d \u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32 P002) \u0e2b\u0e23\u0e37\u0e2d\u0e44\u0e21\u0e48 \u0e42\u0e14\u0e22\u0e40\u0e0a\u0e47\u0e04\u0e08\u0e32\u0e01\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/index.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx": {
-      "description": "Module: TaskDailyReportModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/index.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/TaskRejectModal.tsx": {
-      "description": "Module: TaskRejectModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx": {
-      "description": "Module: TaskSubtasksModal.tsx",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx": {
-      "description": "Module: WorkOrderConfigModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/components/TaskCreateModal.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/WbsImportModal.tsx": {
-      "description": "WBS / Plan Import Modal",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/index.tsx"
-      ]
-    },
-    "frontend/src/pages/workspace/components/WorkspaceTree.tsx": {
-      "description": "Module: WorkspaceTree.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/workspace/index.tsx"
-      ]
-    },
-    "frontend/src/pages/scan-data-monitoring/components/ScanDataUploadDialog.tsx": {
-      "description": "ScanData Upload Dialog",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/scan-data-monitoring/index.tsx"
-      ]
-    },
-    "frontend/src/pages/project-management/components/ProjectCreateModal.tsx": {
-      "description": "Module: ProjectCreateModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/project-management/index.tsx"
-      ]
-    },
-    "frontend/src/pages/project-management/components/ProjectDrawer.tsx": {
-      "description": "Module: ProjectDrawer.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/project-management/index.tsx"
-      ]
-    },
-    "frontend/src/pages/project-management/components/ProjectForm.tsx": {
-      "description": "Module: ProjectForm.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/project-management/components/ProjectDrawer.tsx",
-        "frontend/src/pages/project-management/[id]/edit.tsx"
-      ]
-    },
-    "frontend/src/pages/project-management/[id]/edit.tsx": {
-      "description": "Project Edit Page",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/overtime/components/OvertimeForm.tsx": {
-      "description": "Overtime Form Component",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/overtime/new.tsx",
-        "frontend/src/pages/overtime/[id]/edit.tsx"
-      ]
-    },
-    "frontend/src/pages/overtime/[id]/edit.tsx": {
-      "description": "Overtime Edit Page",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/overtime/[id]/history.tsx": {
-      "description": "Overtime Edit History Page",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/member-management/components/UserDrawer.tsx": {
-      "description": "Module: UserDrawer.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/member-management/index.tsx"
-      ]
-    },
-    "frontend/src/pages/member-management/components/UserForm.tsx": {
-      "description": "User Form Component",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/member-management/components/UserDrawer.tsx",
-        "frontend/src/pages/member-management/[id]/edit.tsx"
-      ]
-    },
-    "frontend/src/pages/member-management/components/UserImportDialog.tsx": {
-      "description": "Module: UserImportDialog.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/member-management/index.tsx"
-      ]
-    },
-    "frontend/src/pages/member-management/[id]/edit.tsx": {
-      "description": "Member Management - Edit User Page",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/management/social-security-rules/index.tsx": {
-      "description": "Module: index.tsx",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/pages/management/social-security-rules/components/SocialSecurityRuleModal.tsx": {
-      "description": "Module: SocialSecurityRuleModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/management/social-security-rules/index.tsx"
-      ]
-    },
-    "frontend/src/pages/dc-management/components/DCForm.tsx": {
-      "description": "DC Form Component (Refactored for T-240)",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/dc-management/components/DCModal.tsx",
-        "frontend/src/pages/dc-management/[id]/edit.tsx"
-      ]
-    },
-    "frontend/src/pages/dc-management/components/DCImportDialog.tsx": {
-      "description": "Module: DCImportDialog.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx"
-      ]
-    },
-    "frontend/src/pages/dc-management/components/DCModal.tsx": {
-      "description": "Module: DCModal.tsx",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx"
-      ]
-    },
-    "frontend/src/pages/dc-management/[id]/edit.tsx": {
-      "description": "DC Management - Edit DC Page",
       "associated_tasks": [],
       "backlinks": []
     },
@@ -1324,162 +1933,386 @@
       "associated_tasks": [],
       "backlinks": []
     },
-    "frontend/src/components/common/BackButton.tsx": {
-      "description": "BackButton Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/common/ConfirmDialog.tsx": {
-      "description": "Confirm Dialog Component",
+    "frontend/src/pages/dc-management/components/DCForm.tsx": {
+      "description": "DC Form Component (Refactored for T-240)",
       "associated_tasks": [],
       "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx",
-        "frontend/src/pages/member-management/index.tsx",
-        "frontend/src/pages/wage-calculation/index.tsx"
-      ]
-    },
-    "frontend/src/components/common/DataGrid.tsx": {
-      "description": "DataGrid Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/common/ErrorBoundary.tsx": {
-      "description": "Error Boundary Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/common/GlobalFeedback.tsx": {
-      "description": "Module: GlobalFeedback.tsx",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/common/LoadingSpinner.tsx": {
-      "description": "Loading Spinner Component",
-      "associated_tasks": [],
-      "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx",
-        "frontend/src/pages/member-management/index.tsx",
-        "frontend/src/pages/scan-data-monitoring/index.tsx",
-        "frontend/src/pages/scan-data-monitoring/[id].tsx",
-        "frontend/src/pages/wage-calculation/index.tsx",
-        "frontend/src/pages/wage-calculation/[id].tsx",
-        "frontend/src/pages/member-management/[id]/edit.tsx",
+        "frontend/src/pages/dc-management/components/DCModal.tsx",
         "frontend/src/pages/dc-management/[id]/edit.tsx"
       ]
     },
-    "frontend/src/components/common/Modal.tsx": {
-      "description": "Modal Base Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/common/ResponsiveContainer.tsx": {
-      "description": "Responsive Container Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/common/Toast.tsx": {
-      "description": "Toast Notification Component",
+    "frontend/src/pages/dc-management/components/DCImportDialog.tsx": {
+      "description": "Module: DCImportDialog.tsx",
       "associated_tasks": [],
       "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx",
-        "frontend/src/pages/member-management/index.tsx",
-        "frontend/src/pages/scan-data-monitoring/index.tsx",
-        "frontend/src/pages/wage-calculation/index.tsx",
-        "frontend/src/pages/wage-calculation/[id].tsx",
-        "frontend/src/pages/member-management/[id]/edit.tsx",
-        "frontend/src/pages/dc-management/[id]/edit.tsx"
+        "frontend/src/pages/dc-management/index.tsx"
       ]
     },
-    "frontend/src/components/dashboard/ScanDataMonitoringWidget.tsx": {
-      "description": "ScanData Monitoring Widget",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/forms/AutoCompleteSearch.tsx": {
-      "description": "AutoComplete Search Base Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/forms/DatePicker.tsx": {
-      "description": "DatePicker Component",
+    "frontend/src/pages/dc-management/components/DCModal.tsx": {
+      "description": "Module: DCModal.tsx",
       "associated_tasks": [],
       "backlinks": [
-        "frontend/src/pages/scan-data-monitoring/index.tsx",
-        "frontend/src/pages/wage-calculation/index.tsx",
-        "frontend/src/pages/dc-management/components/DCForm.tsx"
+        "frontend/src/pages/dc-management/index.tsx"
       ]
     },
-    "frontend/src/components/forms/DCAutoComplete.tsx": {
-      "description": "DC AutoComplete Component",
+    "frontend/src/pages/dc-management/[id]/edit.tsx": {
+      "description": "DC Management - Edit DC Page",
       "associated_tasks": [],
       "backlinks": []
     },
-    "frontend/src/components/forms/DepartmentAutocomplete.tsx": {
-      "description": "Module: DepartmentAutocomplete.tsx",
+    "frontend/src/pages/management/company-holidays/index.tsx": {
+      "description": "Company Holidays Management Page",
       "associated_tasks": [],
       "backlinks": []
     },
-    "frontend/src/components/forms/DepartmentSelect.tsx": {
-      "description": "Department Select Component",
+    "frontend/src/pages/management/social-security-rules/index.tsx": {
+      "description": "Module: index.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/pages/management/social-security-rules/components/SocialSecurityRuleModal.tsx": {
+      "description": "Module: SocialSecurityRuleModal.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/management/social-security-rules/index.tsx"
+      ]
+    },
+    "frontend/src/pages/member-management/components/UserDrawer.tsx": {
+      "description": "Module: UserDrawer.tsx",
       "associated_tasks": [],
       "backlinks": [
         "frontend/src/pages/member-management/index.tsx"
       ]
     },
-    "frontend/src/components/forms/FileUpload.tsx": {
-      "description": "File Upload Component",
-      "associated_tasks": [],
-      "backlinks": []
-    },
-    "frontend/src/components/forms/ProjectSelect.tsx": {
-      "description": "Project Select Component",
+    "frontend/src/pages/member-management/components/UserForm.tsx": {
+      "description": "User Form Component",
       "associated_tasks": [],
       "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx",
-        "frontend/src/pages/scan-data-monitoring/index.tsx",
-        "frontend/src/pages/wage-calculation/index.tsx",
-        "frontend/src/pages/scan-data-monitoring/components/ScanDataUploadDialog.tsx",
-        "frontend/src/pages/dc-management/components/DCForm.tsx",
-        "frontend/src/pages/daily-reports/components/DailyReportUploadDialog.tsx"
+        "frontend/src/pages/member-management/components/UserDrawer.tsx",
+        "frontend/src/pages/member-management/[id]/edit.tsx"
       ]
     },
-    "frontend/src/components/forms/RoleSelect.tsx": {
-      "description": "Role Select Component",
+    "frontend/src/pages/member-management/components/UserImportDialog.tsx": {
+      "description": "Module: UserImportDialog.tsx",
       "associated_tasks": [],
       "backlinks": [
         "frontend/src/pages/member-management/index.tsx"
       ]
     },
-    "frontend/src/components/forms/SkillSelect.tsx": {
-      "description": "Skill Select Component",
+    "frontend/src/pages/member-management/[id]/edit.tsx": {
+      "description": "Member Management - Edit User Page",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/pages/overtime/components/OvertimeForm.tsx": {
+      "description": "Overtime Form Component",
       "associated_tasks": [],
       "backlinks": [
-        "frontend/src/pages/dc-management/index.tsx",
-        "frontend/src/pages/dc-management/components/DCForm.tsx"
+        "frontend/src/pages/overtime/new.tsx",
+        "frontend/src/pages/overtime/[id]/edit.tsx"
       ]
     },
-    "frontend/src/components/forms/TimePicker.tsx": {
-      "description": "TimePicker Component",
+    "frontend/src/pages/overtime/[id]/edit.tsx": {
+      "description": "Overtime Edit Page",
       "associated_tasks": [],
       "backlinks": []
     },
-    "frontend/src/components/layout/Layout.tsx": {
-      "description": "Main layout component with persistent sidebar navigation.",
+    "frontend/src/pages/overtime/[id]/history.tsx": {
+      "description": "Overtime Edit History Page",
       "associated_tasks": [],
       "backlinks": []
     },
-    "frontend/src/components/layout/Navbar.tsx": {
-      "description": "Module: Navbar.tsx",
+    "frontend/src/pages/project-management/components/ProjectCreateModal.tsx": {
+      "description": "Module: ProjectCreateModal.tsx",
       "associated_tasks": [],
       "backlinks": [
-        "frontend/src/components/layout/Layout.tsx"
+        "frontend/src/pages/project-management/index.tsx"
       ]
     },
-    "frontend/src/components/layout/ProtectedRoute.tsx": {
-      "description": "Protected Route Component",
+    "frontend/src/pages/project-management/components/ProjectDrawer.tsx": {
+      "description": "Module: ProjectDrawer.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/project-management/index.tsx"
+      ]
+    },
+    "frontend/src/pages/project-management/components/ProjectForm.tsx": {
+      "description": "Module: ProjectForm.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/project-management/components/ProjectDrawer.tsx",
+        "frontend/src/pages/project-management/[id]/edit.tsx"
+      ]
+    },
+    "frontend/src/pages/project-management/[id]/edit.tsx": {
+      "description": "Project Edit Page",
       "associated_tasks": [],
       "backlinks": []
     },
+    "frontend/src/pages/scan-data-monitoring/components/ScanDataEditDialog.tsx": {
+      "description": "Module: ScanDataEditDialog.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/scan-data-monitoring/index.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/CategoryConfigModal.tsx": {
+      "description": "Module: CategoryConfigModal.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/components/TaskCreateModal.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/TaskCard.tsx": {
+      "description": "Module: TaskCard.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/TaskCreateModal.tsx": {
+      "description": "ตรวจสอบว่าเป็นทีม Support (คลังสินค้า P004 หรือ บริการลูกค้า P002) หรือไม่ โดยเช็คจากชื่อโครงการ",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx": {
+      "description": "Module: TaskDailyReportModal.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/TaskRejectModal.tsx": {
+      "description": "Module: TaskRejectModal.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx": {
+      "description": "Module: TaskSubtasksModal.tsx",
+      "associated_tasks": [],
+      "backlinks": []
+    },
+    "frontend/src/pages/workspace/components/WbsImportModal.tsx": {
+      "description": "Module: WbsImportModal.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx": {
+      "description": "Module: WorkOrderConfigModal.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/components/TaskCreateModal.tsx"
+      ]
+    },
+    "frontend/src/pages/workspace/components/WorkspaceTree.tsx": {
+      "description": "Module: WorkspaceTree.tsx",
+      "associated_tasks": [],
+      "backlinks": [
+        "frontend/src/pages/workspace/index.tsx"
+      ]
+    },
+    "related": []
+  },
+  "scripts/backfill_knowledge_index.py": {
+    "imports": [],
+    "extracted_at_hash": "97fc4441",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/backlink_analyzer.py": {
+    "imports": [],
+    "extracted_at_hash": "0ea63e36",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/bootstrap_indices.py": {
+    "imports": [],
+    "extracted_at_hash": "e46c5bc5",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/bootstrap_sessions.py": {
+    "imports": [],
+    "extracted_at_hash": "9825f540",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/build_file_index.py": {
+    "imports": [],
+    "extracted_at_hash": "bdecafb9",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/cfp_decay.py": {
+    "imports": [],
+    "extracted_at_hash": "3dd984c1",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/choose_tools.py": {
+    "imports": [],
+    "extracted_at_hash": "9f5db9ad",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/code_graph.py": {
+    "imports": [],
+    "extracted_at_hash": "a87e0dfd",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/compact_reset.py": {
+    "imports": [],
+    "extracted_at_hash": "7861856a",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/compute_compact_size.py": {
+    "imports": [],
+    "extracted_at_hash": "53c9bb23",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/fix-project-doc.js": {
+    "imports": [],
+    "extracted_at_hash": "92452828",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/generate-backend-env.js": {
+    "imports": [],
+    "extracted_at_hash": "92c0079e",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/generate-frontend-env.js": {
+    "imports": [],
+    "extracted_at_hash": "c104e982",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/index_reconcile.py": {
+    "imports": [],
+    "extracted_at_hash": "db72cd9a",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/knowledge_conflict_checker.py": {
+    "imports": [],
+    "extracted_at_hash": "cf5ed18f",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/learning_profile.py": {
+    "imports": [],
+    "extracted_at_hash": "a459baf1",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/lookup.py": {
+    "imports": [],
+    "extracted_at_hash": "50073c90",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/posttool_track.py": {
+    "imports": [
+      "scripts/token_estimator.py"
+    ],
+    "extracted_at_hash": "37ccf5e8",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/repo_map_check.py": {
+    "imports": [],
+    "extracted_at_hash": "1ee7d291",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/repo_scout.py": {
+    "imports": [],
+    "extracted_at_hash": "aeeb6ba6",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/rule_indexer.py": {
+    "imports": [],
+    "extracted_at_hash": "7b5e3ad4",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/safe_run.py": {
+    "imports": [],
+    "extracted_at_hash": "597764bb",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/session_analyzer.py": {
+    "imports": [],
+    "extracted_at_hash": "61891d36",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/session_close.py": {
+    "imports": [],
+    "extracted_at_hash": "8ed91821",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/session_compactor.py": {
+    "imports": [],
+    "extracted_at_hash": "4485df86",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/session_indexer.py": {
+    "imports": [],
+    "extracted_at_hash": "bba0c915",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/setup-env.js": {
+    "imports": [],
+    "extracted_at_hash": "8f24c28f",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/symbol_indexer.py": {
+    "imports": [],
+    "extracted_at_hash": "8ea0e6b9",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/token_estimator.py": {
+    "imports": [],
+    "extracted_at_hash": "15454201",
+    "imported_by": [
+      "scripts/posttool_track.py"
+    ],
+    "related": []
+  },
+  "scripts/trim_exec_log.py": {
+    "imports": [],
+    "extracted_at_hash": "ae9c52a4",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/verify_runner.py": {
+    "imports": [],
+    "extracted_at_hash": "9b22be80",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/capture_manual.py": {
+    "imports": [],
+    "extracted_at_hash": "1b1bbe7b",
+    "imported_by": [],
     "related": []
   }
 }

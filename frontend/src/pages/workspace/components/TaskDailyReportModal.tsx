@@ -37,11 +37,11 @@ import {
   NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV2';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { format, isBefore, subDays, startOfDay, isSameDay } from 'date-fns';
-import th from 'date-fns/locale/th';
+import { th } from 'date-fns/locale';
 import { dailyReportService } from '@/services/dailyReportService';
 import { taskService, type Task } from '@/services/taskService';
 import { useSnackbar } from 'notistack';
@@ -90,9 +90,26 @@ const getImageUrl = (url: string) => {
   return url;
 };
 
+const parseSafeDate = (val: any): Date | null => {
+  if (!val) return null;
+  let d: Date;
+  if (typeof val === 'object' && ('_seconds' in val || 'seconds' in val)) {
+    const secs = val._seconds || val.seconds;
+    d = new Date(secs * 1000);
+  } else {
+    d = new Date(val);
+  }
+  return isNaN(d.getTime()) ? null : d;
+};
+
 export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdated, initialDate }: TaskDailyReportModalProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useAuthStore();
+
+  const resolvedTaskId = useMemo(() => {
+    if (!task) return '';
+    return task.parentTaskId ? `${task.parentTaskId}__${task.id}` : task.id;
+  }, [task]);
   
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
 
@@ -114,6 +131,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number>(0);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+
 
   const isActingAsSupport = useMemo(() => {
     if (!task || !user) return false;
@@ -141,10 +159,10 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const canApproveUnlock = UNLOCK_APPROVER_ROLES.includes(String(user?.roleCode || user?.roleId || '').toUpperCase());
 
   const fetchReports = useCallback(async (forceRefresh = false) => {
-    if (!task?.id || !open) return;
+    if (!resolvedTaskId || !open) return;
     setLoading(true);
     try {
-      const isSupportTask = task.isSupportRequest && task.isPickedUpBySupport;
+      const isSupportTask = task?.isSupportRequest && task?.isPickedUpBySupport;
 
       // Always fetch both if it's a support task
       let siteReports: any[] = [];
@@ -152,13 +170,13 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
       if (isSupportTask) {
         const [siteRes, supportRes] = await Promise.all([
-          dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []),
-          dailyReportService.getAllTaskReports(task.id, forceRefresh, true).catch(() => [])
+          dailyReportService.getAllTaskReports(resolvedTaskId, forceRefresh, false).catch(() => []),
+          dailyReportService.getAllTaskReports(resolvedTaskId, forceRefresh, true).catch(() => [])
         ]);
         siteReports = siteRes;
         supportReports = supportRes;
       } else {
-        siteReports = await dailyReportService.getAllTaskReports(task.id, forceRefresh, false).catch(() => []);
+        siteReports = await dailyReportService.getAllTaskReports(resolvedTaskId, forceRefresh, false).catch(() => []);
       }
 
       // The reports to determine the current user's calendar dots
@@ -284,7 +302,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     } finally {
       setLoading(false);
     }
-  }, [task?.id, open, enqueueSnackbar]);
+  }, [resolvedTaskId, open, enqueueSnackbar]);
 
   useEffect(() => {
     fetchReports(false);
@@ -310,7 +328,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
     if (isConfirmed) {
       try {
-        await taskService.unlockTaskReport(task.id, dateStr, days, isActingAsSupport, {
+        await taskService.unlockTaskReport(resolvedTaskId, dateStr, days, isActingAsSupport, {
           projectId: task.projectId,
           projectName: task.projectName,
           workOrderId: task.workOrderId,
@@ -350,7 +368,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     if (!task) return;
     try {
       setActionLoading(true);
-      await taskService.approveTask(task.id);
+      await taskService.approveTask(resolvedTaskId);
       enqueueSnackbar('อนุมัติงานเรียบร้อยแล้ว (Task Completed)', { variant: 'success' });
       if (onTaskUpdated) onTaskUpdated();
       onClose();
@@ -371,9 +389,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     if (!task) return null;
 
     if (isActingAsSupport && task.supportCreatedAt) {
-      const d = new Date(task.supportCreatedAt);
-      d.setHours(0, 0, 0, 0);
-      return d;
+      const d = parseSafeDate(task.supportCreatedAt);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
     }
     if (
       !isActingAsSupport &&
@@ -381,14 +401,18 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
       task.revisionId &&
       task.revisionId !== 'rev00'
     ) {
-      const d = new Date(task.revisionCreatedAt);
-      d.setHours(0, 0, 0, 0);
-      return d;
+      const d = parseSafeDate(task.revisionCreatedAt);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
     }
     if (task.createdAt) {
-      const d = new Date(task.createdAt);
-      d.setHours(0, 0, 0, 0);
-      return d;
+      const d = parseSafeDate(task.createdAt);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
     }
     return null;
   }, [task, isActingAsSupport]);
@@ -403,9 +427,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     const dates: Date[] = [];
 
     if (isActingAsSupport && task?.supportCreatedAt) {
-      dates.push(new Date(task.supportCreatedAt));
+      const sd = parseSafeDate(task.supportCreatedAt);
+      if (sd) dates.push(sd);
     } else if (!isActingAsSupport && task?.revisionCreatedAt) {
-      dates.push(new Date(task.revisionCreatedAt));
+      const rd = parseSafeDate(task.revisionCreatedAt);
+      if (rd) dates.push(rd);
     } else if (boundaryDate) {
       dates.push(boundaryDate);
     }
@@ -709,7 +735,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                 <CheckCircleIcon sx={{ fontSize: 16 }} />
                 <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                   <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>อนุมัติแล้วเมื่อ: </Box>
-                  {task.updatedAt ? format(new Date(task.updatedAt), 'dd/MM/yy HH:mm', { locale: th }) : '-'}
+                  {task.updatedAt && parseSafeDate(task.updatedAt) ? format(parseSafeDate(task.updatedAt)!, 'dd/MM/yy HH:mm', { locale: th }) : '-'}
                 </Typography>
               </Box>
             )}
@@ -1184,7 +1210,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           if (onTaskUpdated) onTaskUpdated();
           onClose();
         }}
-        task={task}
+        task={task ? { ...task, id: resolvedTaskId } : null}
       />
       <ConfirmDialog />
     </Dialog>

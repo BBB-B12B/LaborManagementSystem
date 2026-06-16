@@ -28,6 +28,14 @@
   "skills": {
     "mece": {
       "path": ".agents/skills/mece/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet-high",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "haiku FLOOR_OK=yes all 7Q; medium+high comprehend. recommended=sonnet-high (structural reasoning + Cycle grouping + schema reconciliation). High-tier flagged 6; verified 2026-06-11 = 0 real defects (Q2 skill-changed=Boot B3 sha1sum global FP; Q3 read-after-write covered L99 cross-dep, minor; Q4 2nd-ambiguous=default-wait safe, minor; Q5 dual-source=L150 schema-wins FP; Q5 120L=L176 split-rule, minor; Q6 [check]-written=global R12 signal FP)."
+      },
       "bucket": "stable",
       "trigger": "Loop Phase 2 — runs once per task after Info Gather Loop. Builds section-based plan mapping 1:1 to target Skill sections[].",
       "keywords": [
@@ -62,8 +70,60 @@
         ]
       }
     },
+    "identity": {
+      "path": ".agents/skills/identity/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "haiku",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "always_loaded persona skill — also given a skills{} entry to hold certification. haiku FLOOR_OK=yes all 7Q; medium+high comprehend. recommended=haiku (one-shot mechanical: match trigger -> load context -> emit short response -> STOP; no branching/file-writes/coordination). High-tier flagged 4; verified 2026-06-11 = 0 real defects (Q1 platform-or-context-check explained L28 FP; Q2 trigger-check-vs-always-on = two layers persona-always-on + response-workflow FP; Q5 unknown-skill fallback=omit-skill-line L33 FP; Q6 no-gate covered by one-shot->STOP L42, minor)."
+      },
+      "bucket": "stable",
+      "trigger": "Identity query (who/what are you, introduce yourself) OR boot-trace confirmation. Persona constraints apply passively at all times.",
+      "keywords": [
+        "who are you",
+        "what are you",
+        "your identity",
+        "introduce yourself",
+        "your name",
+        "tell me about yourself",
+        "identity check",
+        "คุณคือใคร",
+        "แนะนำตัว"
+      ],
+      "on_demand_files": [],
+      "skip_when": "never skipped — persona always-on; one-shot identity RESPONSE fires only on explicit identity query",
+      "activates_at": [
+        "identity-query",
+        "always_loaded"
+      ],
+      "tools": {
+        "primary": [
+          "Read"
+        ],
+        "avoid": [
+          "Edit",
+          "Write",
+          "Bash",
+          "WebFetch",
+          "WebSearch",
+          "Workflow"
+        ]
+      }
+    },
     "coder": {
+      "domain": "coding",
       "path": ".agents/skills/coder/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-10",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed. recommended=sonnet because work is multi-step code-writing (harness routing: MODEL_HIGH @ medium). High-tier flagged 3 doc items; all 3 adversarially verified 2026-06-11 = 0 real defects (C1 parallel-ordering: coder is sequential L61 = false-positive; C2 scope>3 gate exists L44 = false-positive; C3 prereq order numbered L64/65 = false-positive)."
+      },
       "bucket": "stable",
       "trigger": "Creating new files, scaffolding features, adding new pages or API routes",
       "keywords": [
@@ -124,7 +184,16 @@
       }
     },
     "editor": {
+      "domain": "coding",
       "path": ".agents/skills/editor/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed (haiku + sonnet-medium both FLOOR_OK, zero UNCLEAR). recommended=sonnet because work is targeted src/ code-editing + error protocol + handoff routing (harness routing: MODEL_HIGH @ medium). High-tier flagged 4 doc items; all 4 adversarially verified 2026-06-11 = 0 real defects (Q3 loop-exit defined L196/205/208 = false-positive; Q4 'stale' defined in Phase Transition Gate = global-covered; Q6 R14 confirm = global-covered; Q7 symbol-index-fail = global [blocked]/R13-covered)."
+      },
       "bucket": "stable",
       "trigger": "Modifying, debugging, or fixing existing files",
       "keywords": [
@@ -201,6 +270,14 @@
     },
     "file_manager": {
       "path": ".agents/skills/file_manager/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "haiku",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed. recommended=haiku (mechanical index CRUD, fixed schema, no reasoning). High-tier flagged 4 items; verified 2026-06-11 = 0 real defects, 1 minor fixed (Q5 size-object required L69+L97 now also inline at step 2 L51 = FIXED 2026-06-11; Never-Full-Load = global harness rule; shallow-backlink-scan L29 minor; activates_at-vs-prose L38 minor non-blocking)."
+      },
       "bucket": "stable",
       "trigger": "MANDATORY after any file is created, moved, deleted, or has imports changed",
       "keywords": [
@@ -236,7 +313,16 @@
       }
     },
     "variable_manager": {
+      "domain": "coding",
       "path": ".agents/skills/variable_manager/SKILL.md",
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "haiku failed only Q6 (negative-answer artifact: automated skill never waits, same pattern as token_tracker); mid+high correct; 2 REAL defects FIXED: (1) L123 vs L75/L77 used_in manual contradiction reworded to symbol_indexer.py authoritative manual-seed-OK; (2) Workflow omitted symbol_indexer.py step for non-edit types vs BC L89 mandates all change types - added explicit step for ALL types; floor=sonnet (active multi-branch JSON mutation + contradiction = low-tier index-corruption risk per high-tier) recommended=sonnet"
+      },
       "bucket": "stable",
       "trigger": "MANDATORY after any symbol is created, renamed, deleted, or its body is edited",
       "keywords": [
@@ -274,6 +360,14 @@
     },
     "session_manager": {
       "path": ".agents/skills/session_manager/SKILL.md",
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet-high",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "3-tier probe: haiku FLOOR_OK=no (Q6 confirm-point unclear), sonnet FLOOR_OK=yes -> floor=sonnet. 5 high-tier flags = 4 FP/minor + 1 real-but-global ambiguity (reset-5-fields matches L174, LOOP_WEIGHT intentionally excluded = FP; token bands 60/80/90k OVERLAP at 80-90k: L82 >60k=ask-and-WAIT vs L83 >80k=do-NOT-wait both fire = REAL ambiguity for low-tier readers, but inherited VERBATIM from global CLAUDE.md R3 L61 -> proper fix = make bands exclusive in harness-core (deferred, needs confirm), NOT a skill-local defect; Completion-Gate-Reviewer = AGENTS.md global = FP; /tmp/mh.md PATH A + SKILL_detail @ref = global convention/design pattern minor). HIGH-RISK group: no doc edit. recommended=sonnet-high: destructive ordered Steps 0-6 close + threshold ladder + compact orchestration."
+      },
       "bucket": "stable",
       "trigger": "Token pause, blocked halt, session rotation, task completion, or user-requested close",
       "keywords": [
@@ -339,6 +433,14 @@
     },
     "token_tracker": {
       "path": ".agents/skills/token_tracker/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "haiku",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "3-tier probe: haiku FLOOR_OK=no on Q6 ONLY (passive skill never waits for user -> negative-answer artifact, not a comprehension gap; real execution floor=haiku). 4 high-tier flags = 0 real defect (LOOP_WEIGHT dual-ownership = read-yes L41 / write-no hook-owned L87 clearly delineated = FP; hook-fallback covered by R1 global + L43 grep fallback; hooks_overhead 700 constant = acceptable approximation; create-jsonl edge minor). No doc edit. recommended=haiku: always-on passive, read counters + arithmetic + footer = mechanical."
+      },
       "bucket": "stable",
       "trigger": "Boot-load only — SESSION_TOTAL read once at Boot, tracked in memory per turn, written at checkpoints",
       "keywords": [
@@ -367,6 +469,14 @@
     },
     "token_auditor": {
       "path": ".agents/skills/token_auditor/SKILL.md",
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "3-tier probe: haiku FLOOR_OK=no (Q6), sonnet FLOOR_OK=yes -> floor=sonnet. 4 high-tier flags: 2 REAL fixed (L75 log path docs/->knowledge/ to match L52+L110, user-confirmed 2026-06-11; L52 check count (1-5)->(1-3) to match 3 named checks + L18), 2 FP/minor (self-heal writes SKILL.md not state-file so non-destructive-reads L38 not violated = FP; >60/>80k band overlap = global CLAUDE.md R3 inherited, deferred). recommended=sonnet: drift analysis + cause hypothesis + self-heal rule injection = genuine reasoning, not mechanical."
+      },
       "bucket": "stable",
       "trigger": "When SESSION_TOTAL > 60k (R3 threshold)",
       "keywords": [
@@ -441,10 +551,26 @@
           "Workflow",
           "WebFetch"
         ]
+      },
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-12",
+        "method": "haiku-floor comprehension probe (med/high divergence not run this round)",
+        "probe_tiers": 1,
+        "notes": "FLOOR_STRUGGLE 2-3/5: Q2 CFP field template + Q3 doctor-flow BC-A/B/E + Q4 dup-search steps live in CLAUDE.md R16 (ALWAYS in context at runtime) + SKILL_detail.md, not quoted in SKILL.md. In real runtime R16 loaded -> floor=haiku holds; standalone doc has forward-deps. Suggested Addition: explicit \"fields: see CLAUDE.md R16\" pointer in SKILL.md. recommended=sonnet for proposal reasoning. certified honestly 2026-06-12."
       }
     },
     "ascii_flow": {
       "path": ".agents/skills/ascii_flow/SKILL.md",
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "haiku FLOOR_OK=no (Q6 wait-point unclear at floor) so floor raised to sonnet; sonnet-medium + high comprehend. recommended=sonnet (strict char-palette rule-following). High-tier flagged 3 items; verified 2026-06-11 = 0 real defects (Q1 BC-Invoke-Gate L86 enforces callers vs Trigger L31 activation = two distinct layers not contradiction = false-positive; Q3 box-count step present L23/L74 = false-positive; Q6 ask-calling-skill L70 mildly ambiguous non-blocking)."
+      },
       "bucket": "draft",
       "trigger": "Creating or updating ASCII flow diagrams, architecture charts, flow documentation in .md files",
       "keywords": [
@@ -488,6 +614,14 @@
     },
     "agent": {
       "path": ".agents/skills/agent/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-10",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed. recommended=sonnet because work is orchestration/MECE planning (harness routing: MODEL_HIGH @ high). High-tier flagged 4 doc items; all 4 adversarially verified 2026-06-11 = 0 real defects (A1 registry path explicit L78 = false-positive; A2 MECE-plan owner = Phase 2 L90 = false-positive; A3 60k-vs-50k = different actions, not contradiction = global-covered; A4 'DB actions' = global R15 concept = global-covered)."
+      },
       "bucket": "stable",
       "trigger": "Orchestrating multi-section tasks, spawning sub-agents, Cycle fan-out, multi-skill delegation",
       "keywords": [
@@ -519,6 +653,14 @@
     },
     "harness_doctor": {
       "path": ".agents/skills/harness_doctor/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet-high",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "haiku FLOOR_OK=yes all 7Q; medium+high comprehend. recommended=sonnet-high (multi-phase orchestration + harness_editor/session_manager delegation + behavior contracts). High-tier flagged 4; verified 2026-06-11 = 0 real defects (Q1 count-source=index_cfp_fix.json L88-90 FP; Q4 dated-today=global PreToolUse-gate convention, minor; Q6 escalation-trigger-vs-user-approval = two layers L4 vs L76 FP; Q7 mece-then-delegating order explicit L114->L116 FP)."
+      },
       "bucket": "draft",
       "trigger": "CFP pattern recurred after a fix was applied — structural harness repair needed",
       "keywords": [
@@ -560,6 +702,14 @@
     },
     "harness_editor": {
       "path": ".agents/skills/harness_editor/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet-high",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed (haiku + sonnet-medium both FLOOR_OK, zero UNCLEAR). recommended=sonnet-high because work is structural harness editing + behavioral verify + 5-stage pipeline + CFP logic (harness routing: MODEL_HIGH @ high effort). High-tier flagged 3 doc items; all 3 adversarially verified 2026-06-11 = 0 real defects (Q3 parallel/serial criteria explicit L83 = false-positive; Q4 BC-count consistent L36/212/231 = false-positive; Q6 mid-flow confirm = by-design, user confirms at MECE Phase 2)."
+      },
       "bucket": "stable",
       "trigger": "Task edits harness config files (CLAUDE.md, AGENTS.md, SKILL.md, knowledge/, Implement/) OR adds/converts/selects enforcement rules (BC, hook, signal contract, tier)",
       "keywords": [
@@ -617,6 +767,14 @@
     },
     "skeptical_reviewer": {
       "path": ".agents/skills/skeptical_reviewer/SKILL.md",
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet-high",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "3-tier probe: haiku FLOOR_OK=no (Q6 confirm-point unclear), sonnet FLOOR_OK=yes -> floor=sonnet. 4 high-tier flags = 0 real defect (missing-vs-weak Verify-N = two distinct cases not contradiction: absent->refuse L56, weak->flag L105 = FP; low-risk undefined + sr-overflow resume undefined + skeptic-refused proceeds advisory-by-design = minor). No doc edit. recommended=sonnet-high: adversarial plan critique + severity judgment + necessity/simplicity reasoning."
+      },
       "bucket": "draft",
       "trigger": "Phase 2 M4.5 — optional plan scrutiny gate after MECE plan confirmed, before Phase 3 execution",
       "keywords": [
@@ -652,6 +810,14 @@
     },
     "repo_researcher": {
       "path": ".agents/skills/repo_researcher/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "3-tier probe: haiku+sonnet FLOOR_OK=yes. 4 high-tier flags: 1 REAL minor fixed (XL threshold L50 >10k->>5k to match S/M/L/XL ladder L69-70, user-confirmed 2026-06-11); 3 FP/minor (scout.py missing-fallback = global [clone-failed]; already-TS-repo improvement-adapt undefined minor; overwrite-collision no-timeout minor). recommended=sonnet: codebase map + synthesis + TS/Next adapt over scripted phases."
+      },
       "name": "Repo Researcher",
       "bucket": "on_demand",
       "trigger": "user wants to analyze/research an external git repo — clone, map, synthesize 3 .md outputs",
@@ -702,6 +868,14 @@
     },
     "doc_builder": {
       "path": ".agents/skills/doc_builder/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet-high",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed. recommended=sonnet-high (multi-phase codebase scan + HTML generation). High-tier flagged 4 items; verified 2026-06-11 = 0 real defects, 1 minor fixed (S3-6 detail-split L109 = by-design; Explore agent = global harness concept; Q4 S6-write-fail now emits [doc-builder-halt] L125 = FIXED 2026-06-11; pdf-confirm L160 explicit = false-positive)."
+      },
       "name": "Doc Builder",
       "bucket": "on_demand",
       "trigger": "user wants to generate HTML manual pages, screenshot plan, or Playwright capture script for a web app project",
@@ -743,6 +917,14 @@
     },
     "project_presenter": {
       "path": ".agents/skills/project_presenter/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "3-tier probe: haiku+sonnet FLOOR_OK=yes. 3 high-tier flags verified = 0 real defect (Q5 storytelling path explicit 'in target project' L58/L126 = FP; Q3 3-questions = AskUserQuestion-style batch convention minor; Q7 terminal skill, no-handoff by design = FP). recommended=sonnet: multi-step narrative + 5-page HTML composition + pain-point interview loop, not mechanical."
+      },
       "name": "Project Presenter",
       "bucket": "on_demand",
       "trigger": "user wants to create a sales presentation, HTML pitch pages, or story-telling page for a web app project",
@@ -823,10 +1005,71 @@
           "path": "knowledge/9arm-skills-skill-building-framework-2026-06-04.md",
           "when": "Step 1 load before any assessment"
         }
-      ]
+      ],
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-12",
+        "method": "haiku-floor comprehension probe (med/high divergence not run this round)",
+        "probe_tiers": 1,
+        "notes": "FLOOR_STRUGGLE 1/5: Addition Gate criteria (Q1/Q2/Q3) defined in SKILL_detail.md not SKILL.md - forward-dependency, but SKILL.md L211-215 explicitly points to detail file so floor follows pointer. floor=haiku conditional on reading referenced detail. recommended=sonnet (audit = comprehension/reasoning). Suggested Addition: inline Addition Gate criteria summary in SKILL.md."
+      }
+    },
+    "harness_doc_auditor": {
+      "path": ".agents/skills/harness_doc_auditor/SKILL.md",
+      "bucket": "stable",
+      "trigger": "Auditing rule/directive .md files (harness constitution) — CLAUDE.md, AGENTS.md, INVARIANTS.md, REPO_MAP.md, Implement/*.md, mece_plan_schema.md — for contradictions, scatter, ambiguous triggers, dead refs, token bloat, low-tier-unfollowable steps, wrong gate/BC enforcement, broken links",
+      "keywords": [
+        "audit AGENTS.md",
+        "review CLAUDE.md",
+        "check the rules",
+        "audit the harness docs",
+        "find contradictions in the rules",
+        "audit directive file",
+        "ตรวจ AGENTS",
+        "ตรวจ CLAUDE",
+        "ตรวจกฎ harness",
+        "กฎขัดกันไหม"
+      ],
+      "activates_at": [
+        "Phase3",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Read"
+        ],
+        "avoid": [
+          "Edit",
+          "Write"
+        ]
+      },
+      "on_demand_files": [
+        {
+          "path": "knowledge/audit_engine_rubric.md",
+          "when": "Step 1 load shared engine before assessment"
+        }
+      ],
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-12",
+        "method": "MEDIUM-tier comprehension probe (sonnet) — 4/4 questions answered from SKILL.md alone, verdict FOLLOWABLE",
+        "probe_tiers": 1,
+        "notes": "Directive auditor referencing knowledge/audit_engine_rubric.md. recommended=sonnet (audit = comprehension/judgment). Most scope files are Never-Full-Load → skill mandates grep-walk in windows. Declines SKILL.md (routes to skill_auditor) and src/ (routes to harness_editor)."
+      }
     },
     "user-coach": {
       "path": ".agents/skills/user-coach/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "sonnet",
+        "certified": "2026-06-11",
+        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
+        "probe_tiers": 3,
+        "notes": "haiku+mid answered all 7 confidently (0 UNCLEAR) floor=haiku; real workload = bilingual quiz authoring + adaptive glossing + guarded shell calls recommended=sonnet; 6 high-tier flags all minor/edge (Q1 has examples, Q3 note free-text by design, Q6 L48 explicit Wait-for-answers, Q2/Q4/Q7 edge-case robustness) no real defect no doc fix"
+      },
       "bucket": "stable",
       "trigger": "After completing a substantial task — quiz the user (2-3 plain-Thai questions), record results to a JSON proficiency profile, and adapt glossing depth to their tracked strengths/weaknesses",
       "keywords": [

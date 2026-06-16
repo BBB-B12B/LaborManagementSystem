@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือ PM — ผู้จัดการโครงการ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <h1>📘 คู่มือการใช้งานระบบบริหารจัดการแรงงาน</h1>
+  <div class="subtitle">บทบาท: PM — ผู้จัดการโครงการ (Project Manager · Level 3)</div>
+  <nav class="nav">
+    <a href="index.html">หน้าแรก</a>
+    <a href="god.html">GOD</a>
+    <a href="am.html">AM</a>
+    <a href="pm.html" class="active">PM</a>
+    <a href="se_fm.html">SE / FM</a>
+    <a href="md.html">MD</a>
+    <a href="pd.html">PD</a>
+    <a href="pe.html">PE</a>
+    <a href="oe.html">OE</a>
+    <a href="ld.html">LD</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › PM ผู้จัดการโครงการ</div>
+
+  <h2>PM ทำอะไรได้บ้าง</h2>
+  <p><strong>PM (ผู้จัดการโครงการ)</strong> เป็นเจ้าของหลักของ <strong>Workspace</strong> (กระดานงาน), <strong>Activity Log</strong> (บันทึกกิจกรรม),
+     <strong>Workspace · Requests</strong> (ตารางแรงงาน) และ <strong>Project Management</strong> (จัดการโครงการ)</p>
+  <p><strong>ทางลัด:</strong>
+     <a href="#workspace">Workspace</a> ·
+     <a href="#activity-log">Activity Log</a> ·
+     <a href="#requests">Requests</a> ·
+     <a href="#project-management">Project Management</a>
+  </p>
+
+  <!-- ============ WORKSPACE ============ -->
+  <h2 id="workspace">1 · Workspace (กระดานงาน)</h2>
+  <p>หน้า <code>/workspace</code> — ใจกลางของการมอบหมายและติดตามงาน จัดเป็นลำดับชั้น:
+     <strong>หมวดหมู่งานหลัก → หมวดหมู่ย่อย → งานหลัก (Task) → งานย่อย (Subtask)</strong> และมี <strong>ใบสั่งงาน (Work Order)</strong></p>
+
+  <h3>1.1 เปิด Workspace และสลับมุมมอง</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"Workspace"</strong></li>
+    <li>สลับแท็บมุมมองงานได้: <strong>งานทั้งหมด</strong> / <strong>วันนี้</strong> / <strong>สัปดาห์นี้</strong> / <strong>เดือนนี้</strong></li>
+    <li>ใช้ตัวกรองด้านบนเพื่อกรองงาน · กด <strong>"รีเซ็ตตัวกรอง"</strong> เพื่อล้าง</li>
+  </ol>
+  <figure><img src="assets/pm/workspace_board.png" alt="กระดานงาน Workspace" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_board.png]&lt;/span&gt;'"><figcaption>กระดานงาน Workspace + แท็บมุมมอง</figcaption></figure>
+
+  <h3>1.2 สร้างหมวดหมู่งาน</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"เพิ่มหมวดหมู่งานหลัก"</strong></li>
+    <li>กรอก <strong>"ชื่อหมวดหมู่งานหลัก *"</strong> และ <strong>"รหัสหมวดหมู่งานหลัก (Code) *"</strong></li>
+    <li>ต้องการหมวดย่อย: กด <strong>"เพิ่มหมวดหมู่ย่อย"</strong> → กรอก <strong>"ชื่อหมวดหมู่ย่อย *"</strong></li>
+    <li>กด <strong>"บันทึก"</strong></li>
+  </ol>
+
+  <h3>1.3 สร้างงาน (Task) และงานย่อย (Subtask)</h3>
+  <ol class="steps">
+    <li>ในหมวดที่ต้องการ กดปุ่ม <strong>"เพิ่มงาน"</strong> (Quick Create)</li>
+    <li>กรอก <strong>"ชื่องานหลัก *"</strong>, เลือก <strong>"ผู้รับผิดชอบ *"</strong> และ <strong>"วันที่ครบกำหนด *"</strong></li>
+    <li>กด <strong>"บันทึก"</strong> → งานปรากฏบนกระดาน</li>
+    <li>เพิ่มงานย่อย: เปิดงานหลัก → กด <strong>"เพิ่มงานย่อย"</strong> → กรอก <strong>"ชื่องานย่อย *"</strong>, <strong>"ผู้รับผิดชอบ"</strong>, <strong>"วันที่ครบกำหนด"</strong> → บันทึก</li>
+  </ol>
+  <figure><img src="assets/pm/workspace_create_task.png" alt="ฟอร์มสร้างงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_create_task.png]&lt;/span&gt;'"><figcaption>ฟอร์มสร้างงาน / งานย่อย</figcaption></figure>
+
+  <h3>1.4 ใบสั่งงาน (Work Order)</h3>
+  <ol class="steps">
+    <li>เปิดงานที่ต้องการ → ไปที่ส่วน <strong>"ใบสั่งงาน (Work Order)"</strong></li>
+    <li>กรอก <strong>"ผู้รับผิดชอบ *"</strong> และ <strong>"หัวหน้ากลุ่มงาน (Leader)"</strong></li>
+    <li>กด <strong>"บันทึก"</strong> เพื่อแก้ไข หรือไอคอน <strong>ลบ</strong> แล้วยืนยันเพื่อลบใบสั่งงาน</li>
+  </ol>
+  <figure><img src="assets/pm/workspace_work_order_edit.png" alt="แก้ไขใบสั่งงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_work_order_edit.png]&lt;/span&gt;'"><figcaption>แก้ไขใบสั่งงาน (Work Order)</figcaption></figure>
+  <div class="note"><strong>LD (หัวหน้าคนงาน)</strong> เปิด Workspace และจัดการงานย่อยได้ แต่ <strong>แก้/ลบใบสั่งงานไม่ได้</strong> ·
+     <strong>AM</strong> เปิดดูได้อย่างเดียว</div>
+
+  <h3>1.5 ดูประวัติงาน (History)</h3>
+  <ol class="steps">
+    <li>ที่งานหรือใบสั่งงาน กด <strong>"ดูประวัติ"</strong></li>
+    <li>สลับแท็บได้ระหว่าง <strong>"รายงาน (report)"</strong> และ <strong>"การตั้งค่า (settings)"</strong> เพื่อดูการเปลี่ยนแปลงย้อนหลัง</li>
+  </ol>
+
+  <!-- ============ ACTIVITY LOG ============ -->
+  <h2 id="activity-log">2 · Activity Log (บันทึกกิจกรรมใน Workspace)</h2>
+  <p>Activity Log อยู่ภายในหน้า Workspace — บันทึกว่า <strong>ใครทำอะไร เมื่อไหร่</strong> ภายในเวิร์กสเปซ
+     (เช่น สร้างงาน, แก้ใบสั่งงาน, ลบหมวดหมู่)</p>
+  <ol class="steps">
+    <li>ในหน้า Workspace เปิดแผง <strong>"Activity / กิจกรรม"</strong></li>
+    <li>ไล่ดูรายการกิจกรรมเรียงตามเวลา — เห็นชื่อผู้ทำและการกระทำ</li>
+  </ol>
+  <figure><img src="assets/pm/workspace_activity_log.png" alt="บันทึกกิจกรรม" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_activity_log.png]&lt;/span&gt;'"><figcaption>แผง Activity Log ใน Workspace</figcaption></figure>
+  <div class="tip"><strong>ทุกคนที่เข้าถึง Workspace ดู Activity Log ได้</strong> (PM, PD, PE, OE, MD, LD และ AM แบบอ่าน) ·
+     ต่างจาก <a href="god.html#activity-monitor">Activity Monitor (GOD)</a> ที่ดูการเข้า/ออกระบบทั้งระบบ</div>
+
+  <!-- ============ REQUESTS ============ -->
+  <h2 id="requests">3 · Workspace · Requests (ตารางแรงงานและแผนงาน)</h2>
+  <p>หน้า <code>/workspace/requests</code> — ตารางแรงงานและแผนงาน (Labor &amp; Plans Table)
+     <strong>สิทธิ์การเข้าถึงเหมือนหน้า Workspace ทุกประการ</strong></p>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"Workspace"</strong> › <strong>"Requests"</strong></li>
+    <li>ดูตารางแรงงานเทียบกับแผนงานในแต่ละช่วงเวลา</li>
+    <li>ปรับ/บันทึกแผนแรงงานตามสิทธิ์ของบทบาท</li>
+  </ol>
+  <figure><img src="assets/pm/workspace_requests_table.png" alt="ตารางแรงงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_requests_table.png]&lt;/span&gt;'"><figcaption>ตารางแรงงานและแผนงาน</figcaption></figure>
+
+  <!-- ============ PROJECT MANAGEMENT ============ -->
+  <h2 id="project-management">4 · Project Management (จัดการโครงการ)</h2>
+  <p>หน้า <code>/project-management</code> — สร้างและแก้ไขโครงการ พร้อมกำหนดผู้จัดการโครงการ</p>
+
+  <h3>4.1 ดูรายการโครงการ</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"จัดการโครงการ"</strong> — ระบบแสดงรายการโครงการทั้งหมด</li>
+  </ol>
+  <figure><img src="assets/pm/project_list.png" alt="รายการโครงการ" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: project_list.png]&lt;/span&gt;'"><figcaption>รายการโครงการ</figcaption></figure>
+
+  <h3>4.2 สร้าง / แก้ไขโครงการ</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"เพิ่มโครงการ"</strong></li>
+    <li>กรอก <strong>"ชื่อโครงการ"</strong>, <strong>"รหัสโครงการ"</strong>, เลือก <strong>"สังกัด"</strong> และ <strong>"สถานะ"</strong></li>
+    <li>กำหนด <strong>"ผู้จัดการโครงการ (PM)"</strong> และ <strong>"รักษาการผู้จัดการโครงการ (PM)"</strong> (ถ้ามี)</li>
+    <li><strong>"ลำดับโครงการ"</strong> ระบบกำหนดให้อัตโนมัติ (Auto) หรือกรอกเองได้</li>
+    <li>กด <strong>"บันทึก"</strong> · แก้ไขภายหลังได้จากไอคอนแก้ไขในแต่ละแถว</li>
+  </ol>
+  <figure><img src="assets/pm/project_create_form.png" alt="ฟอร์มสร้างโครงการ" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: project_create_form.png]&lt;/span&gt;'"><figcaption>ฟอร์มสร้าง/แก้ไขโครงการ</figcaption></figure>
+  <div class="crosslink">ผู้ที่เข้า Project Management ได้ด้วย: <a href="se_fm.html">FM</a>, AM และ <a href="god.html">GOD</a></div>
+
+  <footer class="site-footer">
+    <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
+    <p>คู่มือ PM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
+  </footer>
+</div>
+
+</body>
+</html>

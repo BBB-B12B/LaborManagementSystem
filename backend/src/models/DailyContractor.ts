@@ -17,7 +17,8 @@ export interface AttendanceStats {
     {
       paidLeave: number;
       unpaidLeave: number;
-      lateCount: number;
+      lateMinutes: number;
+      earlyLeaveMinutes: number;
       absentDays: number;
     }
   >;
@@ -27,7 +28,8 @@ export interface AttendanceStats {
       name: string;
       paidLeave: number;
       unpaidLeave: number;
-      lateCount: number;
+      lateMinutes: number;
+      earlyLeaveMinutes: number;
       absentDays: number;
     }
   >;
@@ -125,6 +127,11 @@ export interface CreateDailyContractorInput {
   laundryFee?: number;
   airConFee?: number;
   otherDeduction?: number;
+  paidLeave?: number;
+  unpaidLeave?: number;
+  lateMinutes?: number;
+  earlyLeaveMinutes?: number;
+  absentDays?: number;
 }
 
 export interface UpdateDailyContractorInput {
@@ -153,6 +160,11 @@ export interface UpdateDailyContractorInput {
   laundryFee?: number;
   airConFee?: number;
   otherDeduction?: number;
+  paidLeave?: number;
+  unpaidLeave?: number;
+  lateMinutes?: number;
+  earlyLeaveMinutes?: number;
+  absentDays?: number;
 }
 
 const parseDate = (val: any) => {

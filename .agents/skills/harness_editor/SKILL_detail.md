@@ -112,3 +112,25 @@ Q4: ใส่เป็น note/bullet ได้ ไม่ต้อง gate?
 - "SKILL.md" / "CLAUDE.md" / "AGENTS.md" edit
 
 → Activate harness_editor skill ทันที
+
+---
+
+## Stage 3.5 — Behavioral Verify (detail)
+
+Goal: after a harness edit, empirically confirm a fresh model *obeys* the rule — not just that the text landed.
+
+1. **Trigger gate** — run ONLY on behavioural edits: BC / gate / signal-contract / step-sequence. Typo / doc / format / table-only edit → emit `[behave-skip]` and go to Stage 4 (zero overhead). Behavioural edit → emit `[behave-test]` to open the run, then proceed to step 2.
+2. **Test-spec derivation** — a BC is already a test spec: `Pre:` clause → the trigger prompt (the situation that should fire the rule); `Post:`/required signal → the expected output to grep for. No separate test format is invented.
+3. **3-config ladder (sequential · early-exit)** — spawn sub-agents (Agent tool) on the SAME trigger prompt under **isolation** (each reads ONLY the edited file + the trigger prompt — never the author's intent or this plan), cheapest-first, stopping at the first PASS:
+   - ① **Haiku** — the robustness floor (AGENTS.md: every SKILL must be followable by a medium-tier model without inference).
+   - ② **Sonnet@medium** — production model, direct answer.
+   - ③ **Sonnet@high** — production model, deep reasoning.
+   ⚠️ The Agent tool exposes `model` but has **no effort param** → effort is set via spawn-prompt framing: medium = prompt ends "answer directly"; high = prompt ends "reason step-by-step before answering". Record the exact framing in the run log for reproducibility.
+4. **Scoring (signal-grep)** — grep each sub-agent's returned output for the expected `Post:`/signal string. Present = PASS, absent = FAIL. Deterministic; no LLM judge in v1.
+5. **Verdict routing (early-exit)** —
+   - Haiku PASS → `[behave-pass]` → proceed to Stage 4 (do not spawn Sonnet — early-exit).
+   - Haiku FAIL, Sonnet@medium PASS → `[behave-gap]` (rule too subtle for the floor — rewrite for clarity) → loop Stage 5.
+   - only Sonnet@high PASS → `[behave-gap]` `effort:high` (rule is clear but needs deep reasoning — acceptable, but flag) → loop Stage 5.
+   - all 3 FAIL → `[behave-fail]` (rule not landing at all) → loop Stage 5.
+6. **k=3 sample** — single sample by default. For DB gates (R15) and boot-sequence edits, run k=3 per config and require unanimous PASS (these are high-blast-radius; one lucky pass is not enough).
+7. **Log** — append one JSON line per run to `knowledge/behave_test_log.jsonl`: this is both the feedback capture and the future regression suite (replay past trigger prompts after later edits).

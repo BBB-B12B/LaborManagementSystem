@@ -137,6 +137,21 @@
       ],
       "when": "Before large file reads or long operations — estimate cost first"
     },
+    "compact_reset_py": {
+      "type": "script",
+      "spawn_script": "python3 scripts/compact_reset.py [--dry-run] [--trigger=hook|user-confirm]",
+      "short": "Single-source token reset after /compact — recomputes CHAT/SESSION/LOOP in session_tokens.md + prints [compact-reset]",
+      "tags": [
+        "compact",
+        "reset",
+        "token",
+        "chat_total",
+        "session_total",
+        "stale counter"
+      ],
+      "when": "After /compact — wired into SessionStart:compact hook (auto) + C0 plain-text confirm (other providers). T-180.",
+      "note": "Mirrors B1 CHAT formula (compact_size+sys_fixed) + consume-once session_reset=armed→consumed. Never crashes a hook (exit 0)."
+    },
     "choose_tools_py": {
       "type": "script",
       "spawn_script": "python scripts/choose_tools.py --keywords \"<kw1,kw2>\" [--top N]",
@@ -233,6 +248,72 @@
       ],
       "when": "user-coach at task close (record) + UserPromptSubmit hook every turn (analyze)",
       "args": "record --topic <str> --correct <int> --total <int> [--note <str>] | analyze [--topic <str>]"
+    },
+    "rule_indexer_py": {
+      "type": "script",
+      "spawn_script": "python3 scripts/rule_indexer.py [--dry-run]",
+      "short": "Auto-generate cross-file rule map (rules_defined[]/rules_referenced[]) into index_files.json",
+      "tags": [
+        "rule",
+        "index",
+        "duplicate",
+        "drift",
+        "scan d",
+        "cross-file",
+        "single source",
+        "rules_defined"
+      ],
+      "when": "After harness rule edits — regenerate rule map; powers audit_engine §6 Scan D cache (T-182)",
+      "note": "Index is a CACHE only — harness files stay source of truth. Never hand-edit the two fields."
     }
+  },
+  "repo_map_check_py": {
+    "type": "script",
+    "spawn_script": "python3 scripts/repo_map_check.py [--dry-run|--append]",
+    "short": "REPO_MAP.md drift detector — flags top-level files/dirs added/removed vs the curated map; --append adds placeholder rows (never overwrites descriptions)",
+    "tags": [
+      "index",
+      "repo-map",
+      "drift",
+      "structure",
+      "stop-hook",
+      "judgment",
+      "fail-safe"
+    ],
+    "when": "Flagged at session Stop via index_reconcile.py; run --append manually to scaffold rows for newly-added files/dirs (T-185)",
+    "note": "Fail-safe: always exit 0. Detect+append only — curated per-file descriptions are never auto-overwritten (judgment-type, like the manifest checks)."
+  },
+  "index_reconcile_py": {
+    "type": "script",
+    "spawn_script": "python3 scripts/index_reconcile.py [--dry-run]",
+    "short": "Session-close index drift net — flags files changed but not indexed + lists idempotent regenerators to run",
+    "tags": [
+      "index",
+      "sync",
+      "drift",
+      "reconcile",
+      "stop-hook",
+      "r8",
+      "fail-safe"
+    ],
+    "when": "Auto at session Stop (wired in settings.json); manual --dry-run anytime to preview index drift (T-183)",
+    "note": "Fail-safe: always exit 0, never blocks session close. S3 adds guarded auto-run of regenerators."
+  },
+  "code_graph_py": {
+    "type": "script",
+    "spawn_script": "python3 scripts/code_graph.py [--dry-run|--write]",
+    "short": "Tier-A code import-graph extractor — regex-parses import/from statements (py + ts/js) into hard file→file edges (imports[]/imported_by[]) in index_files.json, kept separate from semantic edges",
+    "tags": [
+      "index",
+      "code-graph",
+      "import",
+      "hard-edge",
+      "hash-lock",
+      "stop-hook",
+      "r8",
+      "deterministic"
+    ],
+    "when": "Auto at session Stop via index_reconcile.py when code files changed; manual --dry-run to preview edges (T-192). Tier-B AST call/type graph deferred until src/ has TS code.",
+    "note": "Deterministic: pure regex, no AI. Hash-locked (extracted_at_hash) → idempotent, internal edges only. Spec: knowledge/code_linkage_index.md."
   }
 }

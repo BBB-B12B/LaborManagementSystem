@@ -8,7 +8,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Box, CircularProgress } from '@mui/material';
+import { Box } from '@mui/material';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { useAuthStore } from '@/store/authStore';
 import { useTranslation } from 'react-i18next';
 
@@ -65,18 +66,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
   // Show loading spinner while checking authentication or before hydration completes
   if (!hasMounted || isLoading) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
+    return <LoadingSpinner fullPage message="กำลังโหลด..." size="large" />;
   }
 
   // User is authenticated and has required role
@@ -85,18 +75,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
   }
 
   // Fallback: don't render anything while redirecting after hydration
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-      }}
-    >
-      <CircularProgress />
-    </Box>
-  );
+  return null;
 };
 
 export default ProtectedRoute;

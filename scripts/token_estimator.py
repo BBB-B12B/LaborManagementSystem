@@ -39,10 +39,37 @@ HOOKS_PER_TURN = 700
 
 OVERHEAD_PER_TURN = SYSTEM_FIXED + HOOKS_PER_TURN
 
-# ── Char multipliers ───────────────────────────────────────────────────────────
-THAI_MULT = 1.7    # UTF-8 multi-byte: ~1.5-2.5 tokens/char
-EN_MULT   = 0.3    # ~4 English chars/token
-TOOL_MULT = 0.3    # tool results ≈ English density
+# ── Char multipliers (provider-aware · T-174) ───────────────────────────────────
+# Per-provider char->token weights, selected at import from detected.md token_formula.
+# NEVER mix provider rules; unknown -> generic (conservative safety factor, over-estimate).
+PROVIDER_MULTS = {
+    "anthropic": {"thai": 1.7, "en": 0.3,  "tool": 0.3},   # baseline (was the only path pre-T-174)
+    "openai":    {"thai": 1.7, "en": 0.27, "tool": 0.27},  # ~3.7 en chars/token
+    "google":    {"thai": 1.0, "en": 0.27, "tool": 0.27},  # 03_config Provider Profiles: Latin~0.27, CJK/Thai~1.0
+    "generic":   {"thai": 2.0, "en": 0.35, "tool": 0.35},  # safety floor for unknown api_provider
+}
+
+
+def _load_provider_formula(path=None):
+    """Read token_formula from detected.md (provider-aware). Unknown/absent -> 'generic'."""
+    import os
+    if path is None:
+        path = os.path.join(os.path.dirname(__file__), "..", ".agents", "platform", "detected.md")
+    try:
+        for line in open(path):
+            if line.startswith("token_formula:"):
+                tf = line.split(":", 1)[1].strip()
+                return tf if tf in PROVIDER_MULTS else "generic"
+    except OSError:
+        pass
+    return "generic"
+
+
+TOKEN_FORMULA = _load_provider_formula()   # api_provider's formula (detected.md) or generic fallback
+_M = PROVIDER_MULTS.get(TOKEN_FORMULA, PROVIDER_MULTS["generic"])
+THAI_MULT = _M["thai"]    # provider-aware (anthropic baseline = 1.7, unchanged)
+EN_MULT   = _M["en"]
+TOOL_MULT = _M["tool"]
 
 
 def estimate_turn(user_chars=0, tool_chars=0, thai_chars=0, en_chars=0, chat_total=0):

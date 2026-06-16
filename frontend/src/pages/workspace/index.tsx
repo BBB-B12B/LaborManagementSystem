@@ -61,6 +61,7 @@ import {
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { format, isValid } from 'date-fns';
+import { Virtuoso } from 'react-virtuoso';
 import Layout from '@/components/layout/Layout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import TaskCard from './components/TaskCard';
@@ -77,6 +78,7 @@ import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/utils/permissions';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
+import { useRealtimeTasks } from '@/hooks/useRealtimeTasks';
 import { useFeedbackStore } from '@/store/feedbackStore';
 import { useNotifications } from '@/hooks';
 
@@ -113,6 +115,7 @@ export default function WorkspacePage() {
   const { user } = useAuthStore();
   const { notifications, markSubtaskAsRead } = useNotifications();
   const tasksInCache = useTaskCacheStore((s) => s.tasks);
+  const hiddenWorkOrderIds = useTaskCacheStore((s) => s.hiddenWorkOrderIds);
   const isCacheValid = useTaskCacheStore((s) => s.isCacheValid);
   const invalidateCache = useTaskCacheStore((s) => s.invalidate);
   const patchTaskInCache = useTaskCacheStore((s) => s.patchTask);
@@ -121,6 +124,18 @@ export default function WorkspacePage() {
   const setCacheError = useTaskCacheStore((s) => s.setError);
   const isCacheLoading = useTaskCacheStore((s) => s.isLoading);
   const { showLoading, hideLoading } = useFeedbackStore();
+
+  const [activeTab, setActiveTab] = useState('This Month');
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
+
+  useRealtimeTasks(user?.projectLocationIds || [], activeTab);
+
+  useEffect(() => {
+    setLoading(isCacheLoading);
+  }, [isCacheLoading]);
+
   const toast = useToast();
   const { canEditWorkspace } = usePermissions(user);
 
@@ -131,11 +146,6 @@ export default function WorkspacePage() {
       .then(setProjects)
       .catch((err) => console.error('Failed to load projects', err));
   }, []);
-
-  const [activeTab, setActiveTab] = useState('All Tasks');
-  const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
-  const [loading, setLoading] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWbsModalOpen, setIsWbsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -180,7 +190,53 @@ export default function WorkspacePage() {
   }, [user?.id]);
 
   // Left Tree Filter state
-  const [selectedNode, setSelectedNode] = useState<{ type: 'all' | 'workOrder' | 'category' | 'task'; id: string } | null>(null);
+  const [selectedNode, setSelectedNode] = useState<{ type: 'all' | 'project' | 'workOrder' | 'category' | 'task'; id: string } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const sidebarWidthRef = useRef(280);
+  const isResizing = useRef(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(280);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing.current || !sidebarRef.current) return;
+    const deltaX = e.clientX - startXRef.current;
+    const newWidth = startWidthRef.current + deltaX;
+    if (newWidth >= 200 && newWidth <= 600) {
+      sidebarRef.current.style.width = `${newWidth}px`;
+      sidebarWidthRef.current = newWidth;
+    }
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    if (isResizing.current) {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setSidebarWidth(sidebarWidthRef.current);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', stopResizing);
+    }
+  }, [handleMouseMove]);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarRef.current ? sidebarRef.current.getBoundingClientRect().width : 280;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', stopResizing);
+  }, [handleMouseMove, stopResizing]);
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', stopResizing);
+    };
+  }, [handleMouseMove, stopResizing]);
+
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [mobileActiveColumn, setMobileActiveColumn] = useState<string>('upcoming');
   const [showMobileActions, setShowMobileActions] = useState(false);
@@ -261,6 +317,9 @@ export default function WorkspacePage() {
   /** กรอง Task ตาม Role ของ User */
   const filterTasksByRole = useCallback(
     (allTasks: Task[]): Task[] => {
+      // [NEW] ซ่อนงานที่เป็นประเภท AfterSale สำหรับทุกคน (รวมถึง GOD/ADMIN)
+      const visibleTasks = allTasks.filter(t => !(t.workOrderId && hiddenWorkOrderIds && hiddenWorkOrderIds.includes(t.workOrderId)));
+
       const role = String(user?.roleCode || user?.roleId || '').toUpperCase();
       const isSuperUser = ['GOD', 'ADMIN'].includes(role);
       const dept = user?.department;
@@ -269,12 +328,12 @@ export default function WorkspacePage() {
 
       // Superusers (GOD, ADMIN) and Head Office (HO) always see all tasks.
       // Area Managers (AM) see all tasks unless they belong to the WH department.
-      if (isSuperUser || isHO || (role === 'AM' && !isWH)) return allTasks;
+      if (isSuperUser || isHO || (role === 'AM' && !isWH)) return visibleTasks;
 
       const userProjectIds = user?.projectLocationIds || [];
       const employeeId = user?.employeeId;
 
-      return allTasks
+      return visibleTasks
         .map((t) => {
           const isMyProject = userProjectIds.includes(t.projectId);
 
@@ -352,50 +411,20 @@ export default function WorkspacePage() {
           }
         });
     },
-    [user]
+    [user, hiddenWorkOrderIds]
   );
 
   /**
-   * Fetch จาก API จริง → บันทึก Cache
+   * Fetch จาก API จริง → บันทึก Cache (Obsolete - replaced by useRealtimeTasks)
    */
-  const fetchFromAPI = useCallback(
-    async (silent = false) => {
-      if (!silent) {
-        setLoading(true);
-      }
-      setCacheLoading(true);
-      try {
-        const data = await taskService.getTasks();
-        setTasksInCache(data || []);
-        const filtered = filterTasksByRole(data || []);
-        setTasks(filtered);
-      } catch (error) {
-        console.error('[WorkspacePage] Failed to fetch tasks', error);
-        setCacheError('ไม่สามารถโหลดข้อมูลงานได้');
-      } finally {
-        setLoading(false);
-        setCacheLoading(false);
-      }
-    },
-    [filterTasksByRole, setCacheLoading, setTasksInCache, setCacheError]
-  );
+  const fetchFromAPI = useCallback(async (silent = false, page = 1) => {}, []);
 
   /**
-   * โหลด Task:
-   * - ถ้า Cache ยังใช้ได้ → ใช้ข้อมูลจาก Cache ทันที (ไม่ยิง API)
-   * - ถ้า Cache หมดอายุ หรือถูก invalidate → เรียก API
+   * โหลด Task: (Obsolete - replaced by useRealtimeTasks)
    */
-  const loadTasks = useCallback(
-    async (forceRefresh = false) => {
-      if (!forceRefresh && isCacheValid() && tasksInCache.length > 0) {
-        setTasks(filterTasksByRole(tasksInCache));
-        setLoading(false);
-        return;
-      }
-      await fetchFromAPI(forceRefresh);
-    },
-    [isCacheValid, tasksInCache, fetchFromAPI, filterTasksByRole]
-  );
+  const loadTasks = useCallback(async (forceRefresh = false) => {}, []);
+
+  const fetchNextPage = useCallback(() => {}, []);
 
   // โหลดครั้งแรก + เมื่อ user เปลี่ยน → invalidate cache
   useEffect(() => {
@@ -404,22 +433,13 @@ export default function WorkspacePage() {
       invalidateCache();
       prevUserIdRef.current = user?.id ?? null;
     }
-    setLoading(true);
-    loadTasks(false);
+    
+    // Sync local tasks state with cache when cache updates
+    const filtered = filterTasksByRole(tasksInCache);
+    setTasks(filtered);
 
-    const handleSync = async () => {
-      showLoading();
-      invalidateCache();
-      try {
-        await fetchFromAPI(true);
-      } finally {
-        hideLoading();
-      }
-    };
-    window.addEventListener('globalSync', handleSync);
-    return () => window.removeEventListener('globalSync', handleSync);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, showLoading, hideLoading, fetchFromAPI, loadTasks]);
+  }, [user?.id, tasksInCache, filterTasksByRole]);
 
   /** หลัง Submit (Create/Edit) → invalidate + silent refresh */
   const handleModalSuccess = () => {
@@ -455,9 +475,9 @@ export default function WorkspacePage() {
     try {
       await taskService.deleteTask(taskToDelete.id);
       setIsDeleteDialogOpen(false);
+      const deletedId = taskToDelete.id;
       setTaskToDelete(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      useTaskCacheStore.getState().removeTask(deletedId);
     } catch (error) {
       console.error('Failed to delete task', error);
     }
@@ -528,15 +548,21 @@ export default function WorkspacePage() {
         subtaskToDeleteCard.id
       );
       toast.show(
-        result.type === 'soft'
+        result?.type === 'soft'
           ? 'ทำการปิดการทำงานชั่วคราว (Soft Delete) เนื่องจากมีรายงานผลงานแล้ว'
           : 'ลบงานย่อยออกจากระบบถาวรสำเร็จ',
         'success'
       );
       setIsSubtaskDeleteOpen(false);
       setSubtaskToDeleteCard(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      
+      try {
+        const refreshed = await taskService.getTaskById(parentTaskId);
+        patchTaskInCache(refreshed);
+      } catch {
+        invalidateCache();
+        fetchFromAPI(true);
+      }
     } catch (error: any) {
       console.error('Failed to delete subtask', error);
       toast.show(error.message || 'ไม่สามารถลบงานย่อยได้', 'error');
@@ -714,9 +740,15 @@ export default function WorkspacePage() {
       );
       toast.show('แก้ไขชื่องานหลักสำเร็จ', 'success');
       setIsTaskEditOpen(false);
+      const editedId = taskToEdit.id;
       setTaskToEdit(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      try {
+        const refreshed = await taskService.getTaskById(editedId);
+        patchTaskInCache(refreshed);
+      } catch {
+        invalidateCache();
+        fetchFromAPI(true);
+      }
     } catch (error: any) {
       console.error('Failed to update task name', error);
       toast.show(error.message || 'ไม่สามารถแก้ไขชื่องานหลักได้', 'error');
@@ -902,7 +934,9 @@ export default function WorkspacePage() {
 
     // 2. Filter by left Structure Tree node
     if (selectedNode) {
-      if (selectedNode.type === 'workOrder') {
+      if (selectedNode.type === 'project') {
+        filtered = filtered.filter((card) => card.projectId === selectedNode.id);
+      } else if (selectedNode.type === 'workOrder') {
         filtered = filtered.filter((card) => card.workOrderId === selectedNode.id);
       } else if (selectedNode.type === 'category') {
         filtered = filtered.filter((card) => card.categoryId === selectedNode.id);
@@ -1118,8 +1152,14 @@ export default function WorkspacePage() {
       setQuickCreateError('');
       setQuickAssignSubtask(null);
       setIsQuickAssignMode(false);
-      invalidateCache();
-      await fetchFromAPI(true);
+      
+      try {
+        const refreshed = await taskService.getTaskById(quickCreateTaskId);
+        patchTaskInCache(refreshed);
+      } catch {
+        invalidateCache();
+        fetchFromAPI(true);
+      }
     } catch (err: any) {
       console.error('Failed to quick-create/assign subtask', err);
       setQuickCreateError(err.response?.data?.message || 'ไม่สามารถบันทึกข้อมูลได้');
@@ -1161,6 +1201,8 @@ export default function WorkspacePage() {
     return effectiveStatus !== 'for-checking' && effectiveStatus !== 'completed';
   }, [editingSubtaskCard, projects, user]);
 
+  const cacheError = useTaskCacheStore((s) => s.error);
+
   return (
     <ProtectedRoute requiredRoles={['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD']}>
       <Layout disablePadding disableTopGap maxWidth={false}>
@@ -1168,17 +1210,24 @@ export default function WorkspacePage() {
         <title>Workspace | Labor Manager</title>
       </Head>
 
-      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', bgcolor: '#fbfcfd', overflow: 'hidden' }}>
+      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', bgcolor: '#fbfcfd', overflow: 'hidden', position: 'relative' }}>
+        {cacheError && (
+          <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999, p: 2, bgcolor: '#fee2e2', color: '#991b1b', borderBottom: '1px solid #fca5a5' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{cacheError}</Typography>
+          </Box>
+        )}
         {/* Left Structure Tree Panel - Desktop */}
         <Box
+          ref={sidebarRef}
           sx={{
             display: { xs: 'none', md: 'flex' },
             flexDirection: 'column',
-            width: 280,
+            width: sidebarWidth,
             height: '100%',
             flexShrink: 0,
             borderRight: '1px solid #eaeef2',
             bgcolor: '#ffffff',
+            position: 'relative',
           }}
         >
           {/* Sidebar Title */}
@@ -1204,7 +1253,28 @@ export default function WorkspacePage() {
               workOrderConfigs={woConfigs}
             />
           </Box>
+          {/* Resize Handle */}
+          <Box
+            onMouseDown={startResizing}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              right: -3,
+              width: 6,
+              height: '100%',
+              cursor: 'col-resize',
+              zIndex: 10,
+              transition: 'background-color 0.2s',
+              '&:hover': {
+                bgcolor: 'rgba(59, 130, 246, 0.3)',
+              },
+              '&:active': {
+                bgcolor: 'rgba(59, 130, 246, 0.5)',
+              }
+            }}
+          />
         </Box>
+
 
         {/* Right Content Area */}
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
@@ -1653,28 +1723,51 @@ export default function WorkspacePage() {
                         }}
                       />
                     )}
-                    {loading ? (
+                    {loading && useTaskCacheStore.getState().page === 1 ? (
                       Array.from(new Array(3)).map((_, idx) => (
                         <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '12px' }} />
                       ))
                     ) : columnTasks.length > 0 ? (
-                      columnTasks.map((task) => {
-                        const hasUnread = user && notifications.some(
-                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
-                        );
-                        return (
-                          <TaskCard
-                            key={task.id}
-                            task={task}
-                            onEdit={canEditWorkspace ? handleEdit : undefined}
-                            onDelete={canEditWorkspace ? handleDeleteClick : undefined}
-                            onViewHistory={handleViewHistoryClick}
-                            onClick={handleSubtaskCardClick}
-                            onHide={isMobileCompletedCol ? handleHideCard : undefined}
-                            hasUnread={!!hasUnread}
-                          />
-                        );
-                      })
+                      <Box sx={{ 
+                        height: 'calc(100vh - 220px)',
+                        '& [data-virtuoso-scroller]': {
+                          msOverflowStyle: 'none',
+                          scrollbarWidth: 'none',
+                          '&::-webkit-scrollbar': { display: 'none' }
+                        }
+                      }}>
+                        <Virtuoso
+                          style={{ height: '100%' }}
+                          data={columnTasks}
+                          endReached={fetchNextPage}
+                          itemContent={(_index, task) => {
+                            const hasUnread = user && notifications.some(
+                              (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
+                            );
+                            return (
+                              <Box sx={{ pb: 2 }}>
+                                <TaskCard
+                                  task={task}
+                                  onEdit={canEditWorkspace ? handleEdit : undefined}
+                                  onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                                  onViewHistory={handleViewHistoryClick}
+                                  onClick={handleSubtaskCardClick}
+                                  onHide={isMobileCompletedCol ? handleHideCard : undefined}
+                                  hasUnread={!!hasUnread}
+                                />
+                              </Box>
+                            );
+                          }}
+                          components={{
+                            Footer: () => {
+                              if (useTaskCacheStore.getState().hasMore) {
+                                return <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} /></Box>;
+                              }
+                              return <Box sx={{ height: 16 }} />;
+                            }
+                          }}
+                        />
+                      </Box>
                     ) : (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8, opacity: 0.4 }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>ไม่มีงานในสถานะนี้</Typography>
@@ -1747,7 +1840,7 @@ export default function WorkspacePage() {
                     bgcolor: '#f1f5f9',
                     borderRadius: '8px',
                     mt: 2,
-                    maxHeight: 'calc(100vh - 200px)',
+                    height: 'calc(100vh - 200px)',
                     overflow: 'hidden',
                   }}
                 >
@@ -1784,29 +1877,56 @@ export default function WorkspacePage() {
                   </Stack>
 
                   {/* Column Content */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 100, flexGrow: 1, overflowY: 'auto', px: 1.5, pb: 1.5, msOverflowStyle: 'none', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
-                    {loading ? (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    minHeight: 0, 
+                    flex: 1, 
+                    px: 1.5, 
+                    pb: 1.5, 
+                    overflow: 'hidden',
+                    '& [data-virtuoso-scroller]': {
+                      msOverflowStyle: 'none',
+                      scrollbarWidth: 'none',
+                      '&::-webkit-scrollbar': { display: 'none' }
+                    }
+                  }}>
+                    {loading && useTaskCacheStore.getState().page === 1 ? (
                       Array.from(new Array(2)).map((_, idx) => (
                         <Skeleton key={idx} variant="rounded" height={160} sx={{ mb: 2, borderRadius: '8px' }} />
                       ))
                     ) : columnTasks.length > 0 ? (
-                      columnTasks.map((task) => {
-                        const hasUnread = user && notifications.some(
-                          (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
-                        );
-                        return (
-                          <TaskCard
-                            key={task.id}
-                            task={task}
-                            onEdit={canEditWorkspace ? handleEdit : undefined}
-                            onDelete={canEditWorkspace ? handleDeleteClick : undefined}
-                            onViewHistory={handleViewHistoryClick}
-                            onClick={handleSubtaskCardClick}
-                            onHide={isCompletedCol ? handleHideCard : undefined}
-                            hasUnread={!!hasUnread}
-                          />
-                        );
-                      })
+                      <Virtuoso
+                        style={{ height: '100%' }}
+                        data={columnTasks}
+                        endReached={fetchNextPage}
+                        itemContent={(_index, task) => {
+                          const hasUnread = user && notifications.some(
+                            (n) => isNotificationForSubtask(n.subtaskId, task.id) && !(n.readBy ?? []).includes(user.id)
+                          );
+                          return (
+                            <Box sx={{ pb: 2 }}>
+                              <TaskCard
+                                task={task}
+                                onEdit={canEditWorkspace ? handleEdit : undefined}
+                                onDelete={canEditWorkspace ? handleDeleteClick : undefined}
+                                onViewHistory={handleViewHistoryClick}
+                                onClick={handleSubtaskCardClick}
+                                onHide={isCompletedCol ? handleHideCard : undefined}
+                                hasUnread={!!hasUnread}
+                              />
+                            </Box>
+                          );
+                        }}
+                        components={{
+                          Footer: () => {
+                            if (useTaskCacheStore.getState().hasMore) {
+                              return <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} /></Box>;
+                            }
+                            return <Box sx={{ height: 16 }} />;
+                          }
+                        }}
+                      />
                     ) : (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 5, opacity: 0.45 }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -2682,7 +2802,7 @@ export default function WorkspacePage() {
         <DialogTitle sx={{ fontWeight: 800 }}>ยืนยันการลบงานย่อย</DialogTitle>
         <DialogContent>
           <DialogContentText component="div">
-            คุณแน่ใจหรือไม่ว่าต้องการลบงานย่อย "{subtaskToDeleteCard?.taskName?.split(' > ')?.[1] || subtaskToDeleteCard?.taskName}"?
+            คุณแน่ใจหรือไม่ว่าต้องการลบงานย่อย "{subtaskToDeleteCard?.subtaskName || subtaskToDeleteCard?.taskName}"?
             <br />
             <br />
             {subtaskToDeleteCard && subtaskToDeleteCard.dailyProgress > 0 ? (

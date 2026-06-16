@@ -303,5 +303,50 @@
 - **Root Cause:** `renderPhotoGrid` call site ส่ง `onRemove` เป็น `(i) => removePhoto(i, 'site')` โดยไม่ส่ง `isExisting` parameter ทำให้ `removePhoto` เข้า branch `isExisting=false` เสมอ จึงพยายามลบจาก `sitePhotos` (new uploads) แทน `existingPhotos.site` (existing URLs)
 - **Resolution:** เปลี่ยน call site เป็น `(i, isExisting) => removePhoto(i, 'site', isExisting)` เพื่อส่ง flag ที่ถูกต้องตาม `item.isExisting` ที่ `renderPhotoGrid` คำนวณไว้
 
+## ERR-085: Overlapping double spinners shown during initial load and authentication redirect
+- **Task:** T-001-001-10 · **Session:** session_current
+- **File:** frontend/src/components/layout/ProtectedRoute.tsx & frontend/src/pages/index.tsx · **Line:** 88, 28
+- **Symptom:** When loading the web page for the first time, two loading spinner elements overlap each other in the center of the viewport.
+- **Root Cause:** On initial load, pages wrapped in `ProtectedRoute` and the home page `/` (`index.tsx`) display their own centered `CircularProgress` loaders while checking auth state. Once loading finishes and they redirect the user (via `router.push`), Next.js triggers client-side page transition, displaying the global backdrop spinner ("กำลังโหลดหน้าจอ...") from `_app.tsx`. Since the redirecting page remains visible behind the translucent backdrop, both spinners render on top of each other.
+- **Resolution:**
+  1. Updated `ProtectedRoute.tsx` to return `null` instead of a spinner in its fallback during client-side redirect. Added an `isRedirecting` state in `index.tsx` which sets to `true` when a redirect is triggered and returns `null` to clear the page spinner.
+  2. Consolidated all page transition/initial load spinners to use a unified **Light Glassmorphism Backdrop** style (`rgba(255, 255, 255, 0.7)` with `backdropFilter: 'blur(5px)'`) in `_app.tsx`, `ProtectedRoute.tsx`, and `index.tsx` for consistent, modern visual styling.
+  3. Replaced all duplicate backdrop blocks by extending the reusable [LoadingSpinner.tsx](file:///d:/LaborManagementSystem/frontend/src/components/common/LoadingSpinner.tsx) custom component with the full-page backdrop feature, eliminating redundant code blocks.
 
+## ERR-086: Workspace Daily Report Modal shows blank/no report details by default
+- **Task:** T-011-003-01 · **Session:** session_current
+- **File:** [TaskDailyReportModal.tsx](file:///d:/LaborManagementSystem/frontend/src/pages/workspace/components/TaskDailyReportModal.tsx) · **Line:** 95
+- **Symptom:** When opening the Daily Report Log modal for a subtask and selecting dates that have reports (e.g. June 9), the summary card displays "ไม่มีข้อมูลรายงานการทำงาน" (No daily report data) and the calendar shows red "locked/no data" dots.
+- **Root Cause:** The frontend was passing a plain subtask ID (e.g., `SRV-0001-001-0001`) to the reports API. Since the ID was not composite, the backend had to query the subtask document using `collectionGroup('subtasks').where('subtaskId', '==', id)`. In the production environment, this query failed with `9 FAILED_PRECONDITION` because the required Collection Group index did not exist in Firestore. The frontend caught the error and silently fallback to an empty reports array, causing the modal to appear empty.
+- **Resolution:**
+  1. Updated `TaskDailyReportModal.tsx` to construct a composite subtask ID (`resolvedTaskId` = `${task.parentTaskId}__${task.id}`) and used it for report fetching, unlock requests, and approval API calls. The composite ID enables direct document reference resolution in the backend (O(1)), bypassing the index requirement.
+  2. Passed the composite ID inside the `task` object to `TaskRejectModal` so that rejection actions also resolve directly.
+  3. Removed the auto-selection hook and restored the default start selection to `today` (current date) as requested by the user.
+## ERR-087: Search Task Text Field is Squished and Truncated on Laptop Viewports in Daily Report Sidebar
+- **Task:** T-020-001-05-12 · **Session:** session_current
+- **File:** frontend/src/pages/daily-reports/index.tsx · **Line:** 2569, 2605
+- **Symptom:** In laptop viewports (sidebar fixed at 320px width), the search task input field is squished next to the "My job" title block, causing the placeholder "Search tasks..." to be truncated to "Search ta" and rendering the layout cramped and unbalanced.
+- **Root Cause:** The header container used a horizontal flex layout (`display: 'flex', justifyContent: 'space-between'`) that forced both "My job" (about 148px wide) and the Search input box (minWidth 120px) to sit side-by-side inside a 272px available space, leaving insufficient width for the search box.
+- **Resolution:** Refactored the sidebar header layout by stacking the "My job" title and the Search input box vertically into two separate rows. The Search input box is set to full width (`width: '100%'`), allowing the search placeholder to render completely without truncation.
 
+## ERR-088: Logout UI Freeze and Out-of-Sync Locale Translations
+- **Task:** T-015-002-01 · **Session:** session_current
+- **File:** frontend/src/components/layout/Layout.tsx & frontend/src/pages/_app.tsx · **Line:** 133 (Layout.tsx) & 23 (_app.tsx)
+- **Symptom:** 1) Clicking the logout button freezes the UI and fails to redirect to the login page immediately. 2) The Next.js locale routing prefix (e.g. `/en/workspace`) is present in the URL, but the page content remains in Thai (translations are not updated).
+- **Root Cause:**
+  1. In `Layout.tsx`, the `handleLogout` function `await`ed a POST request to `/api/auth/logout`. If the backend was unreachable or slow to respond, it blocked the execution of Zustand's `logout()` and `router.push('/login')`, causing the UI to hang during connection timeout. Also, the Firebase user session was not signed out and `authToken` was not removed from `localStorage`.
+  2. The `react-i18next` language instance was not synchronized with Next.js router locale changes. When the locale route changed, the language did not update.
+- **Resolution:**
+  1. Updated `handleLogout` in `Layout.tsx` to call the logout API asynchronously in the background (fire-and-forget, removing `await`), cleared `authToken` and `user` from `localStorage`, called `auth.signOut()` from Firebase, and then updated Zustand's state and redirected to `/login` immediately.
+  2. Added a `useEffect` hook in `_app.tsx` that triggers on `router.locale` changes and updates the translation language via `i18n.changeLanguage(router.locale)`.
+
+## ERR-089: N+1 Database reads during wage calculation and redundant updates to daily reports
+- **Task:** T-025-02 · **Session:** session_current
+- **File:** [WagePeriodService.ts](file:///d:/LaborManagementSystem/backend/src/services/wage/WagePeriodService.ts), [WorkVerificationService.ts](file:///d:/LaborManagementSystem/backend/src/services/wage/WorkVerificationService.ts) · **Line:** 209 (WagePeriodService.ts), 90 (WorkVerificationService.ts)
+- **Symptom:** High database read counts (up to 200 reads for 100 contractors) and redundant document write operations on every wage period calculation click.
+- **Root Cause:**
+  1. `WagePeriodService` fetched compensation details of contractors inside a loop, performing individual queries to subcollections for each contractor (N+1 queries).
+  2. `WorkVerificationService` updated the daily report entries and wrote to Firestore unconditionally, regardless of whether their verification status changed.
+- **Resolution:**
+  1. Implemented a bulk query `getCompensationDetailsBulk` in `DailyContractorService.ts` using a Firestore `collectionGroup` query chunked in batches of 30, reducing reads by up to 97%.
+  2. Implemented a dirty check in `WorkVerificationService.ts` to only write daily report updates if the verification status actually changed, and added a write counter safety check to prevent empty Firestore batch commit errors.

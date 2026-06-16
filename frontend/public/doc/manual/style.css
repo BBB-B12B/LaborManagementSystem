@@ -1,0 +1,136 @@
+/* ===== คู่มือการใช้งานระบบบริหารจัดการแรงงาน — Shared Design System (T-035) ===== */
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap');
+
+:root {
+  --c-bg: #f4f6fb;
+  --c-surface: #ffffff;
+  --c-text: #1f2937;
+  --c-muted: #6b7280;
+  --c-border: #e5e7eb;
+  --c-primary: #2563eb;
+  --c-primary-dark: #1d4ed8;
+  --c-accent: #0ea5e9;
+  --c-ok: #16a34a;
+  --c-no: #d1d5db;
+  --c-warn: #f59e0b;
+  --c-readonly: #8b5cf6;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.04);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: 'Sarabun', -apple-system, 'Segoe UI', sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+/* ===== Header / Nav ===== */
+.site-header {
+  background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-dark) 100%);
+  color: #fff;
+  padding: 18px 28px;
+  box-shadow: var(--shadow);
+  position: sticky; top: 0; z-index: 100;
+}
+.site-header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+.site-header .subtitle { font-size: .85rem; opacity: .9; }
+.nav {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
+}
+.nav a {
+  color: #fff; text-decoration: none; font-size: .82rem;
+  padding: 5px 11px; border-radius: 999px;
+  background: rgba(255,255,255,.14); transition: background .15s;
+}
+.nav a:hover, .nav a.active { background: rgba(255,255,255,.32); }
+
+/* ===== Layout ===== */
+.container { max-width: 1100px; margin: 0 auto; padding: 28px 22px 80px; }
+.breadcrumb { font-size: .85rem; color: var(--c-muted); margin: 14px 0 22px; }
+.breadcrumb a { color: var(--c-primary); text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
+
+h2 { font-size: 1.5rem; margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--c-border); }
+h3 { font-size: 1.18rem; margin: 26px 0 10px; color: var(--c-primary-dark); }
+h4 { font-size: 1.02rem; margin: 18px 0 8px; }
+p { margin: 8px 0; }
+
+/* ===== Cards ===== */
+.role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+.role-card {
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--radius); padding: 18px; text-decoration: none;
+  color: inherit; box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s;
+  display: block; border-left: 5px solid var(--c-primary);
+}
+.role-card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.role-card .code { font-weight: 700; font-size: 1.1rem; color: var(--c-primary-dark); }
+.role-card .lvl { float: right; font-size: .72rem; background: var(--c-bg); color: var(--c-muted); padding: 2px 8px; border-radius: 999px; }
+.role-card .rname { font-size: .95rem; margin: 4px 0; }
+.role-card .menus { font-size: .8rem; color: var(--c-muted); margin-top: 8px; }
+
+/* ===== Tables ===== */
+.table-wrap { overflow-x: auto; margin: 16px 0; border-radius: var(--radius); box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; background: var(--c-surface); font-size: .85rem; }
+th, td { padding: 9px 11px; text-align: center; border: 1px solid var(--c-border); }
+th { background: var(--c-primary); color: #fff; font-weight: 600; position: sticky; top: 0; }
+td.feat { text-align: left; font-weight: 500; white-space: nowrap; }
+.yes { color: var(--c-ok); font-weight: 700; }
+.no  { color: var(--c-no); }
+.ro  { color: var(--c-readonly); font-weight: 700; }
+tbody tr:nth-child(even) { background: #fafbfe; }
+
+/* ===== Step boxes ===== */
+.steps { counter-reset: step; list-style: none; padding: 0; margin: 14px 0; }
+.steps li {
+  position: relative; padding: 12px 14px 12px 52px; margin: 8px 0;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 10px; box-shadow: var(--shadow);
+}
+.steps li::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 14px; top: 12px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--c-primary); color: #fff; font-weight: 700; font-size: .85rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.note { background: #fffbeb; border-left: 4px solid var(--c-warn); padding: 10px 14px; border-radius: 8px; margin: 12px 0; font-size: .9rem; }
+.tip  { background: #eff6ff; border-left: 4px solid var(--c-accent); padding: 10px 14px; border-radius: 8px; margin: 12px 0; font-size: .9rem; }
+.crosslink { background: #f0fdf4; border-left: 4px solid var(--c-ok); padding: 10px 14px; border-radius: 8px; margin: 12px 0; font-size: .9rem; }
+.crosslink a { color: var(--c-primary-dark); font-weight: 600; }
+
+/* ===== Screenshot placeholder ===== */
+figure { margin: 14px 0; }
+figure img {
+  max-width: 100%; border: 1px solid var(--c-border); border-radius: 10px;
+  box-shadow: var(--shadow); background: #fff;
+}
+figure figcaption { font-size: .82rem; color: var(--c-muted); margin-top: 6px; text-align: center; }
+.shot-missing {
+  display: block; padding: 40px; text-align: center; color: var(--c-muted);
+  background: repeating-linear-gradient(45deg,#f8fafc,#f8fafc 12px,#eef2f7 12px,#eef2f7 24px);
+  border: 2px dashed var(--c-border); border-radius: 10px; font-size: .85rem;
+}
+
+/* ===== Footer / PDF ===== */
+.site-footer { border-top: 1px solid var(--c-border); margin-top: 50px; padding: 24px 0; text-align: center; color: var(--c-muted); font-size: .85rem; }
+.pdf-btn {
+  background: var(--c-primary); color: #fff; border: none; cursor: pointer;
+  padding: 11px 22px; border-radius: 999px; font-size: .9rem; font-weight: 600;
+  font-family: inherit; box-shadow: var(--shadow); transition: background .15s;
+}
+.pdf-btn:hover { background: var(--c-primary-dark); }
+
+/* ===== Print ===== */
+@media print {
+  .site-header, .nav, .pdf-btn, .breadcrumb { display: none !important; }
+  body { background: #fff; }
+  .container { max-width: 100%; padding: 0; }
+  .role-card, .steps li, table { box-shadow: none; }
+  a { color: var(--c-text); text-decoration: none; }
+}

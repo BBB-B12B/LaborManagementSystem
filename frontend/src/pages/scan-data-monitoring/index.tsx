@@ -70,11 +70,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Controller, useForm } from 'react-hook-form';
 import {
   deleteScanDataBulk,
-  deleteScanDataById,
   getAllScanData,
   addManualScan,
   type ScanData,
-  restoreScanDataById,
 } from '../../services/scanDataService';
 import { reconciliationService } from '../../services/reconciliationService';
 import { wageService } from '../../services/wageService';
@@ -92,10 +90,8 @@ import { DatePicker } from '../../components/forms/DatePicker';
 import { TimePicker } from '../../components/forms/TimePicker';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import ScanDataUploadDialog from '../../components/scan-data/ScanDataUploadDialog';
-import { ScanDataEditDialog } from './components/ScanDataEditDialog';
 import type { ImportResult } from '../../services/scanDataService';
 import { useToast } from '../../components/common/Toast';
-import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useUIStore } from '../../store/uiStore';
 import { SIDEBAR_WIDTH } from '@/components/layout/Navbar';
 
@@ -122,13 +118,10 @@ export default function ScanDataMonitoringPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { success: showSuccess } = useToast();
-  const { confirmDelete, ConfirmDialog: DeleteConfirmDialog } = useDeleteConfirmDialog();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [manualScanOpen, setManualScanOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<any>(null);
 
   // Fullscreen and Layout states
   const { sidebarOpen, setSidebarOpen } = useUIStore();
@@ -176,6 +169,14 @@ export default function ScanDataMonitoringPage() {
   });
 
   const filter = watch();
+  const [debouncedEmployeeNumber, setDebouncedEmployeeNumber] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedEmployeeNumber(filter.employeeNumber || '');
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [filter.employeeNumber]);
 
   // Fetch wage periods for default date setting
   const { data: wagePeriodsData } = useQuery({
@@ -231,12 +232,20 @@ export default function ScanDataMonitoringPage() {
     isLoading: isAllScanLoading,
     refetch: refetchAllScans,
   } = useQuery({
-    queryKey: ['allScanData', filter, page, pageSize],
+    queryKey: [
+      'allScanData',
+      filter.projectLocationId,
+      debouncedEmployeeNumber,
+      filter.startDate,
+      filter.endDate,
+      page,
+      pageSize,
+    ],
     queryFn: () =>
       getAllScanData(
         {
           projectLocationId: filter.projectLocationId,
-          employeeNumber: filter.employeeNumber,
+          employeeNumber: debouncedEmployeeNumber,
           startDate: filter.startDate,
           endDate: filter.endDate,
           enriched: true,
@@ -275,83 +284,7 @@ export default function ScanDataMonitoringPage() {
     handleRefresh();
   };
 
-  const handleOpenEdit = (row: any) => {
-    const baseRow = row.detailedView || row;
-    const punches = [
-      baseRow.time1,
-      baseRow.time2,
-      baseRow.time3,
-      baseRow.time4,
-      baseRow.time5,
-      baseRow.time6,
-      baseRow.time7,
-      baseRow.time8,
-      baseRow.time9,
-      baseRow.time10,
-    ].filter((p) => p && p !== '-' && p !== '');
 
-    setSelectedRecord({
-      id: row.id,
-      contractorId: row.dailyContractorId || row.employeeNumber,
-      contractorName: row.dailyContractorName || '-',
-      employeeNumber: row.employeeNumber,
-      workDate: new Date(row.workDate || row.scanDate || row.date),
-      punches,
-    });
-    setEditDialogOpen(true);
-  };
-
-  const handleDeleteRow = async (row: any) => {
-    const empNo = row.employeeNumber || row.detailedView?.employeeNumber || '-';
-    let dateStr = '-';
-    try {
-      const dateVal = row.workDate || row.scanDate || row.date;
-      if (dateVal) {
-        const d = new Date(dateVal);
-        dateStr = d.toISOString().substring(0, 10);
-      }
-    } catch (e) {
-      /* ignore */
-    }
-
-    await confirmDelete(`ข้อมูลสแกนของพนักงาน ${empNo} วันที่ ${dateStr}`, async () => {
-      try {
-        await deleteScanDataById(row.id);
-        showSuccess('ลบข้อมูลสำเร็จ');
-        handleRefresh();
-      } catch (err: any) {
-        alert(`เกิดข้อผิดพลาด: ${err.message}`);
-      }
-    });
-  };
-
-  const handleRestoreRow = async (row: any) => {
-    const empNo = row.employeeNumber || row.detailedView?.employeeNumber || '-';
-    let dateStr = '-';
-    try {
-      const dateVal = row.workDate || row.scanDate || row.date;
-      if (dateVal) {
-        const d = new Date(dateVal);
-        dateStr = d.toISOString().substring(0, 10);
-      }
-    } catch (e) {
-      /* ignore */
-    }
-
-    if (
-      window.confirm(
-        `คุณต้องการกู้คืนข้อมูลของพนักงาน ${empNo} วันที่ ${dateStr} กลับมาแสดงในตารางหลักใช่หรือไม่?`
-      )
-    ) {
-      try {
-        await restoreScanDataById(row.id);
-        showSuccess('กู้คืนข้อมูลสำเร็จ');
-        handleRefresh();
-      } catch (err: any) {
-        alert(`เกิดข้อผิดพลาดในการกู้คืน: ${err.message}`);
-      }
-    }
-  };
 
   // Status color mapping
   const getStatusColor = (
@@ -1253,20 +1186,7 @@ export default function ScanDataMonitoringPage() {
           onClose={() => setUploadDialogOpen(false)}
           onSuccess={handleUploadSuccess}
         />
-        {selectedRecord && (
-          <ScanDataEditDialog
-            open={editDialogOpen}
-            onClose={() => {
-              setEditDialogOpen(false);
-              setSelectedRecord(null);
-            }}
-            contractorId={selectedRecord.contractorId}
-            contractorName={selectedRecord.contractorName}
-            employeeNumber={selectedRecord.employeeNumber}
-            workDate={selectedRecord.workDate}
-            existingPunches={selectedRecord.punches}
-          />
-        )}
+
 
         {/* Manual Scan Dialog */}
         <Dialog
@@ -1352,7 +1272,7 @@ export default function ScanDataMonitoringPage() {
             </DialogActions>
           </form>
         </Dialog>
-        <DeleteConfirmDialog />
+
       </Layout>
     </ProtectedRoute>
   );

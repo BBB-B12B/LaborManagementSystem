@@ -442,6 +442,8 @@ Never present plan in chat before mece_plan.md exists on disk.
 
 **How to apply:** Last step of every response: check footer is present with all fields (Turn · Loop_W · Session · Chat). If missing → re-emit before sending. No exceptions.
 
+**Fix applied (T-177 · 2026-06-12 · structural):** The recurring variant of this CFP was a *frozen* counter — SESSION_TOTAL stuck at 0, CHAT_TOTAL frozen at the boot value — because no hook wrote per-turn increments and the rule said both "agent must persist every turn" AND "use hook values · NEVER estimate" (deadlock). Fix: PostToolUse hook extracted to `scripts/posttool_track.py`, now estimates tool-I/O chars and accumulates SESSION_TOTAL + CHAT_TOTAL atomically per tool call (lower bound · misses model output). CLAUDE.md R1 L29/L31 reworded so hook-estimate is the source of truth, labelled approximate. Verified live: SESSION 0→50k+, CHAT 14k→89k across a session. status → resolved-pending (watch for over-count: CHAT ×0.45 grows fast; recalibrate if it overshoots real context). **T-178 fix (2026-06-12):** root over-count resolved — hook now reuses token_estimator's per-provider multiplier (anthropic 0.3 / openai 0.27 / google / generic) read from detected.md, instead of a flat 0.3; the ad-hoc CHAT ×1.5 factor was dropped (chat_delta = session_delta). True API context still ≈1.5–2× this lower bound — kept as a doc note, not baked into the counter.
+
 ## CFP-029 · Phase 3 Close Sequence Skipped Before mece_plan Clear
 
 **Symptom:** Agent runs `Clear mece_plan.md Phase 1–3` without completing the full Phase 3 close checklist — skipping Reviewer spawn, compact_state.md write, CFP count check, harness_doctor check, and Feedback delivery.
@@ -533,8 +535,8 @@ Root: (1) Completion Gate BC misread as auto-trigger · (2) Close Checklist trea
 Prevention: MUST Read mece_plan_schema.md §Close Checklist EVERY close — not from memory · tick each item explicitly · [harness-edit-done] only after ALL items verified
 Detection: grep response for [mece-audit] AND [session-health] AND [r8-sync-check] → any missing after [harness-edit-done] = violation
 topic: premature-close
-count: 4
-recurrences: ["2026-06-04 T-086 harness_doctor — fixed SKILL.md without optimization_logs.md", "2026-06-04 T-095 harness_editor — reported Close Checklist done without reading schema · skipped Reviewer/mece-audit/session-health/kcc"]
+count: 7
+recurrences: ["2026-06-04 T-086 harness_doctor — fixed SKILL.md without optimization_logs.md", "2026-06-04 T-095 harness_editor — reported Close Checklist done without reading schema · skipped Reviewer/mece-audit/session-health/kcc", "2026-06-14 T-191 session_manager manual-close run from memory — handoff w/o 5-field contract + reflections.md skipped + no [handoff-valid]; gap: CFP-037 fix was harness_editor-side, manual-close path uncovered"]
 
 ## CFP-038 · [fix-required] Signal Emitted But harness_doctor Not Triggered
 Symptom: AI emits [fix-required] CFP-N (count≥3) or [fix-escalated] (count≥5) in same response, then proceeds without triggering harness_doctor — threshold signal disconnected from mandatory escalation action
@@ -552,4 +554,13 @@ Prevention: After every Close Checklist run — MUST emit per-item table (item �
 Detection: grep response for checklist table (| R8 | or | Roadmap | or | harness_doctor |) after every [session-health] — missing = violation → backfill immediately
 topic: session-close
 count: 1
+recurrences: []
+
+## CFP-040 · Stale Token Counter After /compact — False [compact-STOP] Ceiling
+Symptom: After a /compact, CHAT_TOTAL stays at the pre-compact value (e.g. 178k) → [compact-STOP] fires every turn at that stale number, blocking work even though the real context is now small. The counter never recomputes because /compact is invisible to the model (the CLI intercepts it) and the UserPromptSubmit hook PRESERVED the old CHAT on session_reset=armed.
+Root: Only B1 boot recomputed CHAT = compact_size + sys_fixed; no actor reset it immediately after the compact. Logic lived in two places (B1 + the hook) and drifted — the hook reset SESSION/LOOP but not CHAT.
+Prevention: Single-source scripts/compact_reset.py recomputes session_tokens.md (CHAT=compact_size+sys_fixed, LOOP=0, SESSION=0 if armed-marker or phase:done else preserve; flips armed→consumed). Wired into the SessionStart:compact hook (claude-code, automatic) and the C0 plain-text confirm path ("compact แล้ว"/"compacted"/"เคลียร์แล้ว", other providers). Every reset prints a visible [compact-reset] line. Stuck-counter guard (C0.5): [compact-STOP] with ~same CHAT (±2k) across ≥2 turns = didn't-reset bug, not a real ceiling → run compact_reset.py instead of re-nagging.
+Detection: [compact-STOP] repeats with ~identical CHAT across ≥2 turns; OR a /compact is known to have happened but no [compact-reset] line was surfaced; OR CHAT_TOTAL unchanged across a SessionStart:compact event.
+topic: token-tracking
+count: 0
 recurrences: []

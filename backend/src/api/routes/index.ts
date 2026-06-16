@@ -22,11 +22,8 @@ import reconciliationRoutes from './reconciliation.routes';
 import taskRoutes from './tasks.routes';
 import mediaRoutes from './media.routes';
 import notificationRoutes from './notifications.routes';
-<<<<<<< HEAD
 import lateRecordRoutes from './lateRecords.routes';
-=======
 import activityRoutes from './activity.routes';
->>>>>>> origin/dailyReport
 
 const router = Router();
 
@@ -75,12 +72,10 @@ router.use('/media', mediaRoutes);
 // Notification routes
 router.use('/notifications', notificationRoutes);
 
-<<<<<<< HEAD
 // Late Record routes
 router.use('/late-records', lateRecordRoutes);
-=======
+
 // Activity Monitor routes (GOD only)
 router.use('/activity', activityRoutes);
->>>>>>> origin/dailyReport
 
 export default router;

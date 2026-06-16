@@ -154,5 +154,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
+
+    // Collection Group for tasks and subtasks
+    match /{path=**}/tasks/{taskId} {
+      allow read: if isAuthenticated();
+    }
+    match /{path=**}/subtasks/{subtaskId} {
+      allow read: if isAuthenticated();
+    }
   }
 }

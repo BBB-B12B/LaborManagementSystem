@@ -68,6 +68,7 @@ class WorkVerificationService {
       let totalEntries = 0;
       let autoVerified = 0;
       let discrepancies = 0;
+      let writeCount = 0;
 
       const batch = db.batch();
 
@@ -87,9 +88,12 @@ class WorkVerificationService {
           // Use denormalized employeeId (T-400)
           const empId = entry.employeeId;
           if (!empId) {
-            (entry as any).verificationStatus = 'discrepancy';
+
+            if ((entry as any).verificationStatus !== 'discrepancy') {
+              (entry as any).verificationStatus = 'discrepancy';
+              updated = true;
+            }
             discrepancies++;
-            updated = true;
             return entry;
           }
 
@@ -97,17 +101,19 @@ class WorkVerificationService {
           const scan = scanMap.get(scanKey);
 
           // Verification Logic
-          if (scan && (scan.punches ?? []).length >= 2) {
-            // Check hours (Optional refinement: check if scan hours match report hours)
-            // For now, if punches exist, we consider it "Auto Verified"
-            (entry as any).verificationStatus = 'auto_verified';
+          const expectedStatus = (scan && (scan.punches ?? []).length >= 2) ? 'auto_verified' : 'discrepancy';
+          if (expectedStatus === 'auto_verified') {
             autoVerified++;
           } else {
-            (entry as any).verificationStatus = 'discrepancy';
             discrepancies++;
           }
 
-          updated = true;
+          if ((entry as any).verificationStatus !== expectedStatus) {
+            (entry as any).verificationStatus = expectedStatus;
+            updated = true;
+          }
+
+
           return entry;
         });
 
@@ -116,12 +122,14 @@ class WorkVerificationService {
             entries: updatedEntries,
             updatedAt: new Date(),
           });
+          writeCount++;
         }
       }
 
-      if (totalEntries > 0) {
+      if (writeCount > 0) {
         await batch.commit();
       }
+
 
       logger.info(
         `Work verification completed: ${autoVerified} auto-verified, ${discrepancies} discrepancies.`

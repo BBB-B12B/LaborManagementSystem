@@ -1,0 +1,125 @@
+{
+  "_meta": {
+    "task": "T-035",
+    "principle": "Single Source of Truth — แต่ละ feature เขียนละเอียดในหน้า primary_role เพียงที่เดียว, role อื่นใช้ hyperlink",
+    "page_map": {
+      "GOD": "god.html", "AM": "am.html", "PM": "pm.html",
+      "SE": "se_fm.html", "FM": "se_fm.html",
+      "MD": "md.html", "PD": "pd.html", "PE": "pe.html", "OE": "oe.html", "LD": "ld.html"
+    }
+  },
+  "features": [
+    {
+      "feature": "Activity Monitor",
+      "route": "/activity-monitor",
+      "primary_role": "GOD",
+      "secondary_roles": [],
+      "doc_page": "god.html",
+      "sub_topics": ["ดู log กิจกรรมทั้งระบบ", "filter ตาม user/action/วันที่", "ดูรายละเอียด event"]
+    },
+    {
+      "feature": "Member Management",
+      "route": "/member-management",
+      "primary_role": "AM",
+      "secondary_roles": ["GOD", "FM", "OE", "PE", "PM", "PD", "MD"],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู List สมาชิก", "เพิ่มสมาชิกใหม่", "แก้ไขสมาชิก", "ลบสมาชิก", "Import Excel/CSV"]
+    },
+    {
+      "feature": "DC Management",
+      "route": "/dc-management",
+      "primary_role": "AM",
+      "secondary_roles": ["GOD", "FM", "SE", "OE", "PM", "PD"],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู List แรงงานรายวัน", "เพิ่มแรงงาน (ข้อมูลส่วนตัว/การเงิน/งวดงาน)", "แก้ไข", "ลบ", "Import CSV/Excel", "ดูรายบุคคล"]
+    },
+    {
+      "feature": "Wage Calculation",
+      "route": "/wage-calculation",
+      "primary_role": "AM",
+      "secondary_roles": ["OE", "PE", "PM", "PD", "MD"],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู List โครงการ", "Calculate ค่าแรง", "Approve", "Export Attendance", "ดูรายละเอียดรายบุคคล"]
+    },
+    {
+      "feature": "Scan Data Monitoring",
+      "route": "/scan-data-monitoring",
+      "primary_role": "AM",
+      "secondary_roles": [],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู List scan records", "Upload ไฟล์สแกน", "แก้ไข record (EditDialog)", "ดูรายบุคคล"]
+    },
+    {
+      "feature": "Work Hour Monitoring",
+      "route": "/work-hour-monitoring",
+      "primary_role": "AM",
+      "secondary_roles": ["PM", "PD", "MD"],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู overview ชั่วโมงงาน", "filter วันที่/โครงการ", "ดูรายบุคคล"]
+    },
+    {
+      "feature": "SSO Rules",
+      "route": "/management/social-security-rules",
+      "primary_role": "AM",
+      "secondary_roles": ["MD"],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู rules ประกันสังคม", "เพิ่ม rule", "แก้ไข", "ลบ"]
+    },
+    {
+      "feature": "Company Holidays",
+      "route": "/management/company-holidays",
+      "primary_role": "AM",
+      "secondary_roles": ["FM", "OE", "PE", "PM", "PD", "MD"],
+      "doc_page": "am.html",
+      "sub_topics": ["ดู List วันหยุด (filter ปี)", "เพิ่มวันหยุด", "แก้ไข", "ลบ"]
+    },
+    {
+      "feature": "Workspace",
+      "route": "/workspace",
+      "primary_role": "PM",
+      "secondary_roles": ["AM (read-only)", "OE", "PE", "PD", "MD", "LD"],
+      "doc_page": "pm.html",
+      "sub_topics": ["กระดานงาน (tabs: All/Today/Week/Month)", "สร้าง/แก้ Task", "สร้าง/แก้ Work Order", "categories/subtasks", "ดู History (report/settings)"]
+    },
+    {
+      "feature": "Activity Log",
+      "route": "/workspace (activity panel)",
+      "primary_role": "PM",
+      "secondary_roles": ["ทุกคนที่เข้าถึง workspace"],
+      "doc_page": "pm.html",
+      "sub_topics": ["ดู log กิจกรรมใน workspace", "ใครทำอะไรเมื่อไหร่"]
+    },
+    {
+      "feature": "Workspace Requests",
+      "route": "/workspace/requests",
+      "primary_role": "PM",
+      "secondary_roles": ["AM", "OE", "PE", "PD", "MD", "LD"],
+      "doc_page": "pm.html",
+      "sub_topics": ["ตารางแรงงาน + แผนงาน (Labor & Plans Table)"]
+    },
+    {
+      "feature": "Project Management",
+      "route": "/project-management",
+      "primary_role": "PM",
+      "secondary_roles": ["GOD", "FM", "AM"],
+      "doc_page": "pm.html",
+      "sub_topics": ["ดู List โครงการ", "สร้างโครงการใหม่", "แก้ไขรายละเอียดโครงการ"]
+    },
+    {
+      "feature": "Daily Reports",
+      "route": "/daily-reports",
+      "primary_role": "SE",
+      "secondary_roles": ["FM (ดูได้, สร้าง/แก้ไม่ได้)", "LD"],
+      "doc_page": "se_fm.html",
+      "sub_topics": ["tabs: pending/finish", "สร้างรายงานประจำวัน", "แนบรูปภาพ", "ดูรายงานย้อนหลัง"]
+    },
+    {
+      "feature": "Overtime",
+      "route": "/overtime",
+      "primary_role": "SE",
+      "secondary_roles": ["OE", "PE", "PM", "PD", "AM"],
+      "doc_page": "se_fm.html",
+      "sub_topics": ["ดู List OT", "สร้างคำขอ OT (1.5x, ชั่วโมง, เวลาเริ่ม/จบ)", "แนบรูป", "ดู history"]
+    }
+  ]
+}

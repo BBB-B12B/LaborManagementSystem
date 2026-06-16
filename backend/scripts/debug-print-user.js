@@ -17,8 +17,11 @@ if (!admin.apps.length) {
 }
 
 async function run() {
-  const snapshot = await admin.firestore().collection('User').doc('101527').get();
-  console.log(snapshot.data());
+  const snapshot = await admin.firestore().collection('users').get();
+  console.log(`=== Raw Users in Firestore (${snapshot.size} found) ===`);
+  snapshot.forEach(doc => {
+    console.log(doc.id, JSON.stringify(doc.data()));
+  });
 }
 
 run().then(() => process.exit(0)).catch((err) => {

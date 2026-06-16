@@ -61,26 +61,21 @@ class ActivityService {
 
   async updateHeartbeat(userId: string): Promise<void> {
     const ref = db.collection('presence').doc(userId);
-    const doc = await ref.get();
-    if (doc.exists) {
-      await ref.update({
-        lastSeen: admin.firestore.Timestamp.now(),
-        isOnline: true,
-      });
-    }
+    await ref.set({
+      lastSeen: admin.firestore.Timestamp.now(),
+      isOnline: true,
+    }, { merge: true });
   }
 
   /** ดึง users ที่ isOnline=true และ lastSeen ภายใน 3 นาที */
   async getPresence(): Promise<any[]> {
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
-    const snapshot = await db.collection('presence').get();
+    const snapshot = await db.collection('presence')
+      .where('lastSeen', '>=', admin.firestore.Timestamp.fromDate(threeMinutesAgo))
+      .get();
     return snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((p: any) => {
-        if (!p.isOnline) return false;
-        const lastSeen = p.lastSeen?.toDate?.();
-        return lastSeen && lastSeen >= threeMinutesAgo;
-      })
+      .filter((p: any) => p.isOnline)
       .map((p: any) => ({
         ...p,
         lastSeen: p.lastSeen?.toDate?.()?.toISOString?.() ?? null,
@@ -89,12 +84,24 @@ class ActivityService {
   }
 
   /** ดึง login/logout history ล่าสุด */
-  async getActivityLogs(limitCount = 200): Promise<any[]> {
-    const snapshot = await db
-      .collection('activityLogs')
-      .orderBy('timestamp', 'desc')
-      .limit(limitCount)
-      .get();
+  async getActivityLogs(dateFilter = 'today', limitCount = 200): Promise<any[]> {
+    let query = db.collection('activityLogs').orderBy('timestamp', 'desc');
+
+    if (dateFilter !== 'all') {
+      const startDate = new Date();
+      if (dateFilter === 'today') {
+        startDate.setHours(0, 0, 0, 0);
+      } else if (dateFilter === '7d') {
+        startDate.setDate(startDate.getDate() - 7);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (dateFilter === '30d') {
+        startDate.setDate(startDate.getDate() - 30);
+        startDate.setHours(0, 0, 0, 0);
+      }
+      query = query.where('timestamp', '>=', admin.firestore.Timestamp.fromDate(startDate));
+    }
+
+    const snapshot = await query.limit(limitCount).get();
     return snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),

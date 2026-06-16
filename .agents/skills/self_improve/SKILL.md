@@ -21,7 +21,7 @@ activates_at: [session_close_auto, manual]
 - **Pattern observer first, fixer second.** §1–§2 goal: understand why pattern recurs. Proposal before root cause confirmed = scope creep.
 - **One change per session, always.** Minimal means: removing one word breaks the prevention. Two ideas in one proposal → split.
 - **Cooldown is not laziness.** §4 cooldown gate exists because harness changes need sessions to validate. Skipping cooldown = proposing before previous fix was tested.
-- **self_improve cannot fix itself.** Circular dependency (V20) is a hard stop, not a judgment call.
+- **self_improve cannot fix itself.** Circular dependency (V20) is a hard stop on *self-execution* — emit `[blocked-self-edit]` and hand the change to the user as a code block (§Refusal Contract · L37/L148). The hard stop blocks auto-applying the edit, NOT producing the proposal output.
 
 ## Prerequisites
 - `CODING_FAILURE_PATTERNS.md` readable
@@ -93,7 +93,7 @@ Step 1: map root cause → specific rule/file/section to change
 Step 2: propose ONE minimal change (no redesigns)
 Step 2.5: dry-run validation — would this have caught the original violation?
           YES → Step 3 · NO → revise × 2 → [proposal-mismatch] → ask user
-Step 3: present to user (Thai format)
+Step 3: present to user (Thai format → SKILL_detail.md §S3 for template)
 Step 4: WAIT for explicit confirm before §4
          "ทำเลย" / "proceed" / "yes" → §4
          "skip" / "ไว้ก่อน" → [cfp-deferred] · end skill
@@ -121,6 +121,13 @@ Escalation rule (deferred ≥3) + dry-run examples → `SKILL_detail.md §S3`
 Step 0: cooldown gate — last_self_improve_session ≤ 2 sessions ago AND not explicit request
          → [cfp-cooldown] Skip · end skill
          Exception: recurrence ≥ 5 OR user typed "improve harness" → bypass
+Step 0.5: INVARIANTS.md conflict check — grep key terms · conflict → [blocked-invariant]
+Step 0.6: backup target file: cp <file> <file>.bak_$(date +%Y%m%d_%H%M)
+Step 1: apply change · R5 pre-edit gate before every Edit
+Step 2: grep verify → emit [✓ harness-updated] · not found → retry once → [blocked]
+Step 3: if routing keywords changed → update skill-manifest.json keywords[]
+Step 4: confirm to user (✅ Harness อัปเดต · file · change · CFP-N prevention)
+```
 
 **Behavior Contract — Cooldown Gate (fires at §4 Step 0 — before any file edit):**
 ```
@@ -131,13 +138,6 @@ Contract: last session ≤ 2 ago AND no explicit "improve harness" request
           first time (no session record) → proceed normally
 Post:   [cfp-cooldown] or [cfp-cooldown-bypass] emitted · OR no prior session (proceed)
 Enforce: §4 file edit without cooldown check this turn = [violation] BC-cooldown → undo edit · re-check
-```
-Step 0.5: INVARIANTS.md conflict check — grep key terms · conflict → [blocked-invariant]
-Step 0.6: backup target file: cp <file> <file>.bak_$(date +%Y%m%d_%H%M)
-Step 1: apply change · R5 pre-edit gate before every Edit
-Step 2: grep verify → emit [✓ harness-updated] · not found → retry once → [blocked]
-Step 3: if routing keywords changed → update skill-manifest.json keywords[]
-Step 4: confirm to user (✅ Harness อัปเดต · file · change · CFP-N prevention)
 ```
 Step 5 (patch table) + Step 6 (SI audit log) → `SKILL_detail.md §S4`
 
@@ -176,7 +176,8 @@ Prohibited: "I'll now log this..." · "As an improvement..." · prose CFP ration
 After §4 (Execution) completes: → return to session_manager §3 Step 1 (continue close flow)
 After §4 skipped: emit `[cfp-deferred]` → return to session_manager §3 Step 1
 After user rejects proposal: log `[cfp-deferred CFP-N]` → return to session_manager §3 Step 1
-After §3 proposal deferred ≥ 3 times for same CFP-N → escalate to `harness_doctor` (structural fix needed — do not loop self_improve again)
+After §3 proposal deferred ≥ 3 times for same CFP-N → emit `[cfp-escalate] CFP-N · deferred:<count> → harness_doctor` · hand off via session routing (set next-skill = harness_doctor, pass the deferred CFP-N + proposal history) — do not loop self_improve again (structural fix needed)
+  (Distinct from the recurrence path: window_count ≥ 5 → `[fix-escalated]` in §CFP Recurrence Thresholds. Trigger here = defer-count ≥3; that one = 90-day window_count ≥5. Both route to harness_doctor but are separate flows with separate signals.)
 Never stay active after returning — session_manager owns the close sequence.
 
 ## Hard Rules

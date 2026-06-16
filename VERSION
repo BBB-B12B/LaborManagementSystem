@@ -1,0 +1,5 @@
+harness_version: 2026-06-15
+git_sha: e4494a4
+# Version stamp for one-command migration (Implement/09_migration.md M0).
+# Compare $HARNESS_SRC/VERSION (cloned source) vs ./VERSION (target) to decide
+# whether the framework file-copy (M2/M3) can be skipped. Bump on every harness release.

@@ -115,3 +115,55 @@ description: Cleans CSV files.
 - *Stop condition* → `If input is not valid CSV → stop · report · do not guess the delimiter.`
 
 **Framework-Only Gaps (not recommended):** Operating Stance — csv_cleaner is mechanical; a stance adds ceremony with no behavioral value (Q1 fail).
+
+---
+
+## Step 4.5 — Comprehension Probe Detail
+
+### Goal
+Verify the target skill is executable by **low-to-mid tier** models, identically to the author's
+intent. The floor question: *"Would a Haiku-tier agent run each step the same way a high-tier agent
+would?"* If not → the doc is ambiguous → fix the doc, not the model.
+
+### Fixed question set (ask all 3 tiers verbatim — same questions, same target SKILL.md)
+1. **Trigger:** In one sentence, when should this skill activate, and when must it refuse/stop?
+2. **First action:** What is the very first tool call or step you take, and on what input?
+3. **Sequence:** List the steps in order. Which run once vs repeat? Any that run in parallel?
+4. **Stop/refuse:** Name every condition under which you must halt or decline. (probe area: scatter)
+5. **Output:** What exact structure + tone must the final output have? Cite where the spec says so.
+6. **Gates/waits:** Are there points where you must emit a signal and wait? Which, and why?
+7. **Handoff:** When done, what do you hand to whom, and what triggers that handoff?
+
+### Tiered agent prompts (Agent tool has NO effort param → frame via prompt)
+- **Haiku (low):** `"You are executing the skill below. Answer the 7 questions plainly from the doc
+  ONLY — do not infer beyond what is written. <SKILL.md> <questions>"`
+- **Sonnet @ medium:** `"Answer the 7 questions directly from the doc. Do not over-deliberate —
+  give the answer a competent agent would act on. <SKILL.md> <questions>"`
+- **Sonnet @ high:** `"Reason carefully step-by-step. For each of the 7 questions, state the answer
+  AND the exact lines that justify it; flag any question the doc leaves underspecified. <SKILL.md> <questions>"`
+
+Emit `[probe-spawn] tiers: haiku · sonnet-med · sonnet-high` before collecting.
+
+### Diff rubric (per question)
+| Outcome | Meaning | Action |
+|---|---|---|
+| all 3 agree + match author intent | clear | none |
+| tiers disagree on substance | doc ambiguous | Suggested Addition → the section that owns that answer |
+| low tier guesses / says "unclear" / infers | low-tier struggle | Suggested Addition that states the missing fact explicitly |
+| high tier flags "underspecified" | latent gap | Suggested Addition even if low/mid happened to guess right |
+
+Count substantive divergences → `[probe-diff] divergences: N`. Zero → `[probe-clean]`.
+
+### Divergence → Addition (route through existing Addition Gate)
+For each divergence: (1) name the question + the diverging answers, (2) trace to the owning section,
+(3) draft paste-ready text that removes the ambiguity, (4) run **Addition Gate Q1/Q2/Q3** before
+including it (same bar as any other Suggested Addition). Place it in the findings report under the
+section it fixes — do NOT create a separate "probe" section in the target skill.
+
+### No-bias enforcement (inherits Operating Stance L35/L37/L39)
+- A divergence is a **real defect**. Never downgrade to ⚠️ or drop it because the skill is new,
+  recently rewritten, or authored by someone present. **Truth over politeness.**
+- Verdict before explanation: state "diverged on Q4" first, then why.
+- Third-party stance: judge only what the doc says, not what you assume the author meant.
+- Never fabricate a probe result. If you cannot spawn sub-agents (auditor on a low tier) →
+  `[tier-low] skipped: Step 4.5` and record that the probe did not run.

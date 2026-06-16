@@ -64,7 +64,7 @@ def _rag_query(query: str, top_k: int = 8) -> list[dict]:
     except Exception:
         return []
 
-PROJECT_ROOT   = Path("/Volumes/BriteBrain/Projects/Asset Plan")
+PROJECT_ROOT   = Path(__file__).resolve().parent.parent
 INDEX_VARS     = PROJECT_ROOT / "knowledge/index_variables.json"
 INDEX_FILES    = PROJECT_ROOT / "knowledge/index_files.json"
 INDEX_SESSIONS = PROJECT_ROOT / "knowledge/index_sessions.json"

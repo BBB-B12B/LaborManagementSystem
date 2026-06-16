@@ -163,3 +163,27 @@ for h in session.get("History", []):
 ```
 
 ---
+
+## 9. Harness Automation Scripts (current set · run by hooks + Index Sync)
+
+> These are the scripts the live harness depends on (CLAUDE.md R8 + AGENTS.md §Index Sync + .claude/settings.json hooks).
+> All are **idempotent** (safe to re-run) unless noted. Trigger column = WHEN it must run.
+
+| Script | What it does | Trigger (when to run) |
+|---|---|---|
+| `backlink_analyzer.py` | Regenerates semantic `related[]` / `backlinks[]` edges in `knowledge/index_files.json` | File created / moved / deleted → `python3 scripts/backlink_analyzer.py` |
+| `code_graph.py` | Tier-A regex import graph → hard `imports[]` / `imported_by[]` edges in `index_files.json` (distinct from semantic edges) | Code file (.py/.ts/.js) created/edited/deleted → `python3 scripts/code_graph.py --write` (T-192) |
+| `symbol_indexer.py` | Refreshes symbol `source`/`line` in `index_variables.json` (see §6) | Symbol with cross-file dependency created/renamed → `python3 scripts/symbol_indexer.py` |
+| `rule_indexer.py` | Regenerates `rules_defined[]` / `rules_referenced[]` in `index_files.json` | Harness rule file edited (CLAUDE.md · AGENTS.md · Implement/* · */SKILL.md · INVARIANTS.md · CFP) → `python3 scripts/rule_indexer.py` (T-182) |
+| `repo_map_check.py` | Regenerates the REPO_MAP.md AUTO structure block (folders + per-folder counts · carries renames via `git -M` · curated descriptions never overwritten) | Top-level/nested folder or file added/moved/removed → `python3 scripts/repo_map_check.py --sync` (T-190) |
+| `index_reconcile.py` | **Stop-hook safety net** — diffs git-changed files vs `index_files.json`, emits `[index-drift]`, auto-runs the idempotent regenerators above (rule_indexer · backlink_analyzer · code_graph · symbol_indexer) + repo_map_check `--sync` | Session close (Stop hook · automatic) · manual: `python3 scripts/index_reconcile.py --sync` (T-183/T-190/T-193) |
+| `session_indexer.py` | Regenerates `index_sessions.json` (see §8) — NOT auto-run by the reconciler | Session closed → `python3 scripts/session_indexer.py` |
+| `posttool_track.py` | **PostToolUse hook** — auto-accumulates SESSION_TOTAL + CHAT_TOTAL per tool call (provider-aware · reads `token_formula` from detected.md) | Every tool call (hook · automatic) — agent never hand-writes these (T-178) |
+| `compact_reset.py` | **Single source** for post-compact counter recompute (CHAT=compact_size+sys_fixed · LOOP=0 · SESSION=0 if armed/done else preserve · flips `session_reset=armed→consumed`) | SessionStart:compact hook (claude-code · auto) OR C0 plain-text confirm → `python3 scripts/compact_reset.py --trigger=<hook\|user-confirm>` (T-180) |
+| `verify_runner.py` | Runs a MECE section's Verify-N commands (Phase 3 L4 automation) | `python3 scripts/verify_runner.py --section S<N> --file .sessions/mece_plan.md` |
+| `safe_run.py` | Wraps a noisy Bash command, returns only error/warn/fail tail (R6 output filter) | `python3 scripts/safe_run.py "<cmd>"` when output likely > 40 lines |
+| `trim_exec_log.py` | Prunes `.sessions/exec_log/` before /compact | Before /compact at Completion Gate |
+
+Other utility scripts on disk (setup / analysis · not in the per-turn loop): `bootstrap_sessions.py` (Step 5 init), `session_close.py`, `session_compactor.py`, `session_analyzer.py`, `compute_compact_size.py`, `cfp_decay.py`, `choose_tools.py`, `knowledge_conflict_checker.py`, `learning_profile.py`, `backfill_knowledge_index.py`, `repo_scout.py`, `token_estimator.py`.
+
+---

@@ -47,8 +47,8 @@ Expected: ≥ 10 matches
 
 | Section | Verify command | Expected |
 |---|---|---|
-| Boot B1–B4 | `grep -c "\[B[1-4]\]" CLAUDE.md` | 4 |
-| CFP_COUNT in Boot | `grep -c "cfp_boot_count\|CFP_COUNT" CLAUDE.md` | ≥ 2 |
+| Boot B1–B4 | `grep -c "\[B[1-4]\]" AGENTS.md` | 4 |
+| CFP_COUNT in Boot | `grep -c "cfp_boot_count\|CFP_COUNT" AGENTS.md` | ≥ 2 |
 | CHAT_TOTAL tracking | `grep -c "CHAT_TOTAL\|session_tokens" CLAUDE.md` | ≥ 3 |
 | Provider routing | `grep -c "provider\|claude-code\|detected.md" CLAUDE.md` | ≥ 2 |
 | Per-Turn C0-C3 | `grep -c "C0\|C1\|C2\|C3\|topic.switch\|complaint" CLAUDE.md` | ≥ 4 |
@@ -91,15 +91,16 @@ Expected: ≥ 10 matches
   Verify: `python3 scripts/safe_run.py "seq 1 50" | wc -l` → ≤30 · `python3 scripts/safe_run.py "echo 'error: x'" | grep error` → found
 - [ ] **Reviewer inline threshold**: `AGENTS.md §Completion Gate` has Verify-N ≤3 + no src/ → inline rule · saves spawn cost
   Verify: `grep -c "inline\|≤3\|3 Verify" AGENTS.md` → ≥1
-- [ ] **Compact 30k multi-section rule**: `CLAUDE.md R3` table has >30k + multi-section row · `AGENTS.md §Completion Gate` has 30k compact rule
-  Verify: `grep -c "30k\|multi-section" CLAUDE.md` → ≥1 · `grep "30k" AGENTS.md` → ≥1
+- [ ] **Compact model (R3 thresholds)**: `CLAUDE.md R3` has SESSION 60-80k TOKEN PAUSE · 80-90k [compact-rec] · >90k HALT · CHAT 80-120k [compact-rec] · >120k HALT (the old 30k multi-section rule was removed — must NOT be present)
+  Verify: `grep -c "60-80k\|80-90k\|compact-rec" CLAUDE.md` → ≥1 · `grep -c "30k" CLAUDE.md` → 0 · `grep -c "30k" AGENTS.md` → 0
 - [ ] **OmO Reviewer**: `AGENTS.md` has OmO Role Assignment table · `agent/SKILL.md` has Reviewer spawn block at Completion Gate
   Verify: `grep -c "OmO\|Reviewer" AGENTS.md` → ≥ 4 · `grep -c "OmO Reviewer\|haiku sub-agent" .agents/skills/agent/SKILL.md` → ≥ 1
 - [ ] **Reviewer prompt template**: `mece/SKILL.md` Phase 3 close block has 5-step template (not just "Verify-N list")
   Verify: `grep -c "Prompt template\|exits 0\|PASS list\|FAIL list" .agents/skills/mece/SKILL.md` → ≥ 3
 - [ ] **G0 Starter Interview**: `AGENTS.md` Phase 1 has G0 block before G1 · uses `AskUserQuestion` with options per question · reads REPO_MAP.md for affected-area options
   Verify: `grep -c "G0\|REPO_MAP\|options per question\|never open-ended" AGENTS.md` → ≥ 3
-- [ ] **CHAT_TOTAL counter**: both SESSION_TOTAL + CHAT_TOTAL in `.sessions/session_tokens.md` · B1 resets SESSION_TOTAL=0 · sets CHAT_TOTAL=7300 (system_fixed) on compact-restore OR phase≠in_progress · CHAT_TOTAL >120k → warn /compact · >180k → บังคับ
+- [ ] **CHAT_TOTAL counter**: both SESSION_TOTAL + CHAT_TOTAL in `.sessions/session_tokens.md` · B1 resets SESSION_TOTAL=0 · sets CHAT_TOTAL = sys_fixed = `(CLAUDE.md + AGENTS.md chars × 0.3) + 3500` (fallback 11070) on compact-restore OR phase≠in_progress · CHAT_TOTAL 80-120k → [compact-rec] strong · >120k → HALT
+  Verify: `grep -c "sys_fixed\|3500" AGENTS.md` → ≥1 · `grep -c "80-120k\|>120k" CLAUDE.md` → ≥1
 - [ ] **LOOP_WEIGHT + TURN_COUNT fields**: `.sessions/session_tokens.md` has all 6 fields (SESSION_TOTAL · CHAT_TOTAL · CACHE_READ · CACHE_WRITE · TURN_COUNT · LOOP_WEIGHT)
   Verify: `grep -c "LOOP_WEIGHT\|TURN_COUNT" .sessions/session_tokens.md` → 2
 - [ ] **PostToolUse hook present**: `.claude/settings.json` has `PostToolUse` event incrementing LOOP_WEIGHT by weight (Agent/Workflow/WebFetch/WebSearch=3 · Write/mcp__*=2 · others=1)
@@ -183,7 +184,7 @@ Fix if missing: `Implement/03_config.md` → CLAUDE.md template → copy missing
 | Loop Architecture | `grep -c "Loop Architecture\|Phase" AGENTS.md` | ≥ 3 |
 | Quick Reference table | `grep -c "Token footer\|File reads\|Symbol edits" AGENTS.md` | ≥ 3 |
 | Sub-agent Rules | `grep -c "Sub-agent Rules\|spawn_tool\|Cycle" AGENTS.md` | ≥ 3 |
-| Critical Rules | `grep -c "Critical\|Edge Runtime\|PapaParse\|D1" AGENTS.md` | ≥ 2 |
+| Critical Rules | `grep -c "^## critical_rules\|^## domain_gates\|^## paths" domain/coding.md 2>/dev/null \|\| grep -c "^## critical_rules\|^## domain_gates\|^## paths" domain/*.md` | ≥ 2 |
 
 Fix if missing: `Implement/03_config.md` → AGENTS.md template.
 

@@ -1,0 +1,10 @@
+{
+  "session_id": "session_028_workspace_requests_realtime",
+  "associated_tasks": [
+    "workspace-requests-realtime"
+  ],
+  "status": "completed",
+  "estimated_tokens": 15949,
+  "summary_context": "Migrated workspace requests page from high-read REST polling to Firestore real-time onSnapshot listeners. Added projectId/projectName backend payloads, backfilled existing documents, built Zustand store workspaceRequestsCacheStore and useRealtimeWorkspaceRequests hook. Cached employee directory on frontend for 7 days. Replaced hard-coded WOA/WOP checks in tasks.routes.ts with a dynamic Firestore query type filter. Optimized subtask editHistory loading by reading from subtasksMeta cache in handleOpenHistory.",
+  "History": []
+}

@@ -4,6 +4,20 @@ This file contains full bootstrap templates for all 10 agent skills. Each sectio
 
 ---
 
+## Skill Authoring — Robustness Floor (applies to every template below)
+
+**Hard rule:** every SKILL must contain enough explicit detail that a **MODEL_MEDIUM**-tier model (e.g. Sonnet) can produce complete, correct, detailed output by following the steps literally — WITHOUT inference / without guessing. Reserve **MODEL_HIGH** (Opus) only for genuine structural reasoning (MECE planning, architecture); never write a skill that silently depends on a top-tier model to fill the gaps.
+
+**Why:** the harness routes most execution (code edits, detailed writing, Phase 3 sections) to MODEL_MEDIUM — the biggest model may be unavailable (quota / cost / provider routing). A skill that only works on the flagship is broken for the robustness floor. See §Model Tiers routing rule in `Implement/03_config.md`.
+
+**Author-time checklist (per skill / per section):**
+- MEDIUM-followable without inference? — every step names the tool, the target, and the expected output shape. No "figure out X".
+- Detailed output achievable at MEDIUM? — provide the template/schema, do not leave it implicit.
+- HIGH used only for genuine reasoning? — if a step truly needs HIGH (Opus), mark it explicitly; everything else must run on MEDIUM (Sonnet).
+- A strong model masking a vague step = the skill is still broken for weaker models.
+
+---
+
 ## agent
 
 ```markdown
@@ -73,9 +87,9 @@ Orchestrator skill. Handles two responsibilities:
       Emit: [purge] Cycle <N> — dropped raw results · kept: verify verdicts + artifact paths
 **Token Check before spawning Cycle N+1:**
 - Read SESSION_TOTAL from .sessions/session_tokens.md
-- > 50k AND compact not yet run this transition? → run Mid-Session Compact → emit [compact] → then spawn
-- > 60k? → TOKEN PAUSE (do not spawn next cycle until user confirms resume)
-- ≤ 50k? → spawn immediately
+- > 60k AND compact not yet run this transition? → run Mid-Session Compact → emit [compact-rec] (recommend, not forced) → then spawn
+- 60-80k? → TOKEN PAUSE (do not spawn next cycle until user confirms resume) · > 90k → HALT
+- ≤ 60k? → spawn immediately
 6. Call `<spawn_tool>` for Cycle N+1 — inject cycle_N results as `cycle_context:` in each Subagent Prompt
 7. Repeat until all Cycles done → Completion Gate:
    **[OmO Reviewer]** Spawn haiku sub-agent (read-only) BEFORE reporting done — when sections > 2 OR any [gate]/DB action:
@@ -280,14 +294,16 @@ You are the "Builder". When the Agent delegates a new feature task to you, focus
 2. Call file_manager + variable_manager to sync indexes
 \```
 
-## Coding Standards (Cloudflare & Next.js)
-1. **Framework Strictness**: Follow standard directory conventions for new files (`src/app/`, `src/components/`, etc.).
-2. **Database Integrity**: When creating Drizzle schemas, ensure they match the Technical Requirements Document carefully.
-3. **Self-Correction (Linter)**: If you notice a TypeScript error or Linter warning while writing, fix it immediately before finishing your execution.
-4. **Aesthetics & UI**: Use TailwindCSS standard utility classes. Strive for a minimalist, modern enterprise look.
-5. **Local Staging**: When generating large files or major architectural components, write them to a temporary staging area (e.g., `/tmp/` or local `temp/` inside the project) first using your creation tools, verify their structure, and then move them to their final destination. This prevents token waste on failed direct file injections.
+## Domain Work Standards
 
-**Staged file cleanup:** If a staged write fails or is abandoned mid-task:
+Coding-specific standards (framework conventions, DB integrity, linting rules, UI guidelines, staging rules) live in the active domain pack:
+
+- `domain/coding.md` → `## critical_rules` (hard do/don't rules, e.g. no multi-row INSERT in Miniflare D1)
+- `domain/coding.md` → `## framework` (directory conventions, framework-specific patterns)
+
+**Read the active domain pack's `## critical_rules` and `## framework` sections before any coding work.** Never apply coding-pack rules to a non-coding domain.
+
+**Generic rule (all domains) — Staged file cleanup:** If a staged write fails or is abandoned mid-task:
 - Delete the staged file immediately
 - Emit `[staged-drop] <path>` to signal that this content must not appear in subsequent context or `context_files:`
 
@@ -517,7 +533,7 @@ description: Manages the lifecycle of files and their dependencies in knowledge/
 \```
 - id: 1
   name: "Index Update"
-  steps: ["update index_files.json entry", "add/remove backlinks", "[✓ written] verify no stale links"]
+  steps: ["update knowledge/index_files.json entry", "add/remove backlinks", "[✓ written] verify no stale links"]
 \```
 
 # File Index Manager
@@ -613,6 +629,12 @@ description: Loop Phase 2 — builds a section-based plan that maps 1:1 to targe
 - Single file edit, backlinks = 0, no ERR documentation needed
 - Resuming with existing plan → skip Phase 1+2, jump to Phase 3 at pending section
 
+## Output Spec — Structure (artifact mece_plan.md MUST contain)
+Phase 0–3 blocks · section count = target sections[] · per-section (Context/Skill/Model/Tool/Input_From/Constraints/Steps/Verify/Rollback) · ### Cycle grouping · compact_checkpoint if ≥3 sections · Phase 3 Close Checklist. Canonical: docs/session_templates/mece_plan_schema.md.
+
+## Robustness standard (low/medium-model — T-158)
+Every instruction must be followable by a MEDIUM-tier model @ low-med effort WITHOUT inference: decision-rules (if X→Y) not judgment-calls, self-contained, never pointer-only. Re-audit on a LOW tier (Haiku), not Opus. (mece T-158: 6/9 → 9/9.)
+
 ---
 
 ## Plan Format (section-based — must map 1:1 to target Skill sections[])
@@ -674,7 +696,7 @@ Rules:
   - Priority-first: signal lines (error/warn/fail) shown first · never truncated
   - Non-signal: first 25 lines + "[+N more]"
 - **Reviewer inline threshold:** Verify-N ≤ 3 + no src/ changes → run grep commands directly (skip spawn · saves ~8-11k)
-- **Compact at 30k (multi-section):** SESSION_TOTAL >30k + ≥3 sections remaining → /compact after current section
+- **Compact model (R3):** SESSION 60-80k → TOKEN PAUSE · 80-90k → [compact-rec] (recommend, not forced) · >90k → HALT · CHAT >80k → [compact-rec] · >120k → HALT (the old 30k multi-section rule was removed)
 
 ## Verify Pattern Lookup (use when writing DoD for each section)
 
@@ -796,8 +818,8 @@ Section 2 — Build:
 
 Section 3 — Sync & Close:
   Skill:    file_manager + variable_manager
-  [C] file_manager: update index_files.json + backlinks
-  [D] variable_manager: update index_variables.json
+  [C] file_manager: update knowledge/index_files.json + backlinks
+  [D] variable_manager: update knowledge/index_variables.json
   [E] python scripts/symbol_indexer.py · Mark roadmap [X]
   Verify: symbol count increased · no stale backlinks
   Rollback: restore index from last known state
@@ -849,7 +871,7 @@ Section 2 — Edit & Verify:
   Rollback: reverse rename in all files touched
 
 Section 3 — Sync & Close:
-  [D] python scripts/symbol_indexer.py · update index_variables.json key
+  [D] python scripts/symbol_indexer.py · update knowledge/index_variables.json key
   [E] Mark roadmap [X]
   Verify: index updated · roadmap [X]
   Rollback: restore index key
@@ -865,9 +887,9 @@ Section 3 — Sync & Close:
 ```
 TOKEN CHECK before Cycle/Section N+1:
 - Write SESSION_TOTAL (working memory) to file: `printf "SESSION_TOTAL: ___k\n" > .sessions/session_tokens.md` (fill ___k from memory) · then read + verify: `cat .sessions/session_tokens.md`
-- > 50k AND compact not yet run this cycle? → run Mid-Session Compact (see CLAUDE.md R3) → emit [compact] → then proceed
-- > 60k? → TOKEN PAUSE immediately (do not start next cycle)
-- ≤ 50k? → proceed to next Cycle/Section
+- > 60k AND compact not yet run this cycle? → run Mid-Session Compact (see CLAUDE.md R3) → emit [compact-rec] (recommend, not forced) → then proceed
+- 60-80k? → TOKEN PAUSE immediately (do not start next cycle) · > 90k → HALT
+- ≤ 60k? → proceed to next Cycle/Section
 ```
 **[cycle N]**  All <X> sections done · results: .sessions/cycle_N_*.json · spawning Cycle <N+1>
 **Final Step — Feedback & Error Summary (MANDATORY before closing task):**
@@ -954,7 +976,7 @@ If History count = 5 when about to spawn → compact first → then spawn. No ex
 ### Smart Output Truncation
 Tool outputs > 1,000 chars → keep first + last 20 lines, separated by `\n...[Truncated]...\n`
 
-### Mid-Session Compact (SESSION_TOTAL > 50k) — NON-BLOCKING
+### Mid-Session Compact (SESSION_TOTAL > 60k · recommend not forced) — NON-BLOCKING
 Triggered automatically. Does NOT pause work or ask user.
 ```
 1. Identify last 6 loop interactions (keep verbatim)
@@ -968,7 +990,7 @@ Triggered automatically. Does NOT pause work or ask user.
 5. Treat summary as new context anchor — old tool results no longer re-referenced
 6. Continue task immediately — no interruption
 ```
-**Compact cadence:** fires at >50k, then again at >60k (before TOKEN PAUSE check), then TOKEN PAUSE takes over at >60k if compact alone is insufficient.
+**Compact cadence:** recommended at >60k (`[compact-rec]` · not forced · user decides), then TOKEN PAUSE takes over at 60-80k if compact alone is insufficient, HALT at >90k.
 
 ---
 
@@ -1268,8 +1290,8 @@ Never use UTF-8 bytes ÷ 3 — undercounts Thai by up to 1.7×.
 
 | SESSION_TOTAL | Action |
 |---|---|
-| > 50k | **MID-SESSION COMPACT** — non-blocking, emit `[compact]`, continue work |
-| > 60k | TOKEN PAUSE → finish current loop step → save state → ask user |
+| > 60k | **[compact-rec]** — recommend /compact (not forced · non-blocking), continue work |
+| 60-80k | TOKEN PAUSE → finish current loop step → save state → ask user |
 | > 90k | HALT immediately → save state → report to user |
 
 ## Context Gate
@@ -1433,7 +1455,7 @@ description: Tracks variable, function, and component definitions and usage in k
 \```
 - id: 1
   name: "Symbol Sync"
-  steps: ["update index_variables.json", "run python scripts/symbol_indexer.py", "update used_in links", "[✓ written] verify"]
+  steps: ["update knowledge/index_variables.json", "run python scripts/symbol_indexer.py", "update used_in links", "[✓ written] verify"]
 \```
 
 # Variable Index Manager
@@ -1640,6 +1662,7 @@ Stages 1→4 run forward. Abnormal at any stage → Stage 5 CFP → loop back to
 Stage 1 · AUDIT (mandatory-first for structural SKILL.md edits): wc -l zone probe · structural SKILL.md edit → spawn skill_auditor (MANDATORY) · minor / non-SKILL.md edit → emit `[audit-skip]` + reason
 Stage 2 · PLAN (gate — cannot skip): mece_plan.md dated today + T-N roadmap [/] · Parallel-cycle scan — group sections with NO shared file-write AND no mutual dependency into ONE parallel Cycle (spawn agents + barrier to rejoin); shared file OR dependency → serial; >=5 files/>=300L → spawn agents (R4), <5 files → main-context serial · record grouping in `### Cycle grouping`
 Stage 3 · EDIT: [pre-edit] → targeted Edit → [✓ written] · SKILL.md edit → confirm 8 components survive · grep the file's ACTUAL section headers (never assume fixed names like "## Trigger")
+Stage 3.5 · BEHAVIORAL VERIFY (Signal Contract · trigger-gated): behavioural edit (BC/gate/signal/sequence) only → empirically test the rule. A BC is its own test spec — `Pre:` → trigger prompt, `Post:`/signal → expected output. Spawn a 3-config ladder cheapest-first with early-exit on first PASS — ① Haiku (floor) → ② Sonnet@medium → ③ Sonnet@high — each reading ONLY the edited file + trigger (isolation), score by signal-grep. No effort param on Agent tool → effort = prompt framing (medium="answer directly", high="reason step-by-step"). Haiku pass → [behave-pass] → Stage 4 · Haiku fail/Sonnet@medium pass → [behave-gap] (rule too subtle) → Stage 5 · only Sonnet@high pass → [behave-gap] effort:high (clear but needs deep reasoning) → Stage 5 · all 3 fail → [behave-fail] → Stage 5. k=3 per config for DB/boot gates. Log → knowledge/behave_test_log.jsonl. Non-behavioural edit → [behave-skip]. Full procedure: harness_editor/SKILL_detail.md §Stage 3.5
 Stage 4 · CLOSE (Index Sync + Docs Close): index sync (skill-manifest if new skill · topics[] from topic_registry.json · backlink_analyzer.py) · then Docs Close — edit a harness file → update its paired Implement/REPO doc in the SAME task per §Implement Map below · roadmap [/]→[X] · active_thread phase:done
 Stage 5 · CFP (abnormal → loop back · do NOT retry blindly): emit [escalate] → self_improve → harness_doctor · log CFP · re-enter the failed stage with a DIFFERENT approach · 3rd consecutive fail → [blocked] + halt for user
 

@@ -1,7 +1,7 @@
 {
-  "version": "1.0",
-  "last_updated": "2026-05-29",
-  "note": "Closed vocabulary — agents MUST assign topics only from this list. No free-text tags.",
+  "version": "2.0",
+  "last_updated": "2026-06-14",
+  "note": "Closed vocabulary — agents MUST assign topics only from this list. No free-text tags. v2: topics are per-file weighted major/minor (see knowledge/topic_facet_schema.md); type_registry is the orthogonal file-kind facet.",
   "topics": [
     "boot_sequence",
     "per_turn_routing",
@@ -57,5 +57,19 @@
     "prompt_caching":     "Prompt cache usage, hit rates, and cost optimization via caching",
     "cost_optimization":  "Techniques to reduce API costs including batching, caching, and compression",
     "compaction":         "Context window compaction and conversation state management"
+  },
+  "type_registry": {
+    "note": "FACET 1 — file kind (orthogonal to topic). Closed set. Used for navigation/filter only, NOT in link-strength formula (v2). Extend only via propose+confirm.",
+    "types": ["harness", "tool", "skill", "knowledge", "session", "index", "config", "doc"],
+    "descriptions": {
+      "harness":   "Core agent-behavior rule files (CLAUDE.md, AGENTS.md, INVARIANTS.md, Implement/*)",
+      "tool":      "Executable scripts under scripts/ that automate harness tasks",
+      "skill":     "SKILL.md / SKILL_detail.md capability definitions under .agents/skills/",
+      "knowledge": "Reference + design docs under knowledge/ (non-rule)",
+      "session":   "Session state + logs under .sessions/",
+      "index":     "Machine-maintained index/registry JSON (index_files, topic_registry, manifests)",
+      "config":    "Settings + platform/config files (.claude/settings.json, detected.md)",
+      "doc":       "Human-facing docs (REPO_MAP.md, roadmap, templates)"
+    }
   }
 }

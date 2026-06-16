@@ -147,6 +147,27 @@ export const dcCreateSchema = z
       (val) => (val === '' ? undefined : Number(val)),
       nonNegativeNumber('ค่าอื่นๆ').default(0)
     ),
+    // Attendance Stats (Optional inputs for mid-year starting balance)
+    paidLeave: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+      nonNegativeNumber('ลาได้เงิน').default(0)
+    ),
+    unpaidLeave: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+      nonNegativeNumber('ลาไม่ได้เงิน').default(0)
+    ),
+    lateMinutes: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+      nonNegativeNumber('มาสาย').default(0)
+    ),
+    earlyLeaveMinutes: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+      nonNegativeNumber('ออกก่อน').default(0)
+    ),
+    absentDays: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+      nonNegativeNumber('ขาดงาน').default(0)
+    ),
   })
   .refine(
     (data) => {
@@ -249,6 +270,26 @@ export const dcEditSchema = z.object({
   otherDeduction: z.preprocess(
     (val) => (val === '' ? undefined : Number(val)),
     nonNegativeNumber('ค่าอื่นๆ').optional()
+  ),
+  paidLeave: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+    nonNegativeNumber('ลาได้เงิน').optional()
+  ),
+  unpaidLeave: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+    nonNegativeNumber('ลาไม่ได้เงิน').optional()
+  ),
+  lateMinutes: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+    nonNegativeNumber('มาสาย').optional()
+  ),
+  earlyLeaveMinutes: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+    nonNegativeNumber('ออกก่อน').optional()
+  ),
+  absentDays: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+    nonNegativeNumber('ขาดงาน').optional()
   ),
 });
 

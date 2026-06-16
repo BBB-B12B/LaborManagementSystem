@@ -12,6 +12,7 @@ import { User, CreateUserInput, UpdateUserInput } from '../../models/User';
 import type { PaginatedResult, PaginationOptions } from '../base/BaseCrudService';
 
 import { AppError } from '../../api/middleware/errorHandler';
+import { logger } from '../../utils/logger';
 
 export class UserService extends BaseCrudService<User> {
   constructor() {
@@ -161,19 +162,28 @@ export class UserService extends BaseCrudService<User> {
       queryRef = queryRef.where('projectLocationIds', 'array-contains', options.projectId);
     }
 
-    const snapshot = await queryRef.get();
-    let users = snapshot.docs.map((doc: any) => doc.data() as User);
+    // 1. Efficient count aggregation O(1)
+    let total = 0;
+    try {
+      const countSnapshot = await queryRef.count().get();
+      total = countSnapshot.data().count;
+    } catch (countError: any) {
+      logger.warn(`[UserService] Error getting users count, falling back to get().size:`, countError.message);
+      const fullSnapshot = await queryRef.get();
+      total = fullSnapshot.size;
+    }
 
-    // Sort by createdAt desc in-memory
-    users.sort((a: User, b: User) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA;
-    });
+    // 2. Paginated native query
+    let paginatedQuery = queryRef.orderBy('createdAt', 'desc');
 
-    const total = users.length;
-    const startIndex = (page - 1) * pageSize;
-    const paginatedItems = users.slice(startIndex, startIndex + pageSize);
+    const offset = (page - 1) * pageSize;
+    if (offset > 0) {
+      paginatedQuery = paginatedQuery.offset(offset);
+    }
+    paginatedQuery = paginatedQuery.limit(pageSize);
+
+    const snapshot = await paginatedQuery.get();
+    const paginatedItems = snapshot.docs.map((doc: any) => doc.data() as User);
 
     // Remove passwordHash from results
     const items = paginatedItems.map((user: User) => {

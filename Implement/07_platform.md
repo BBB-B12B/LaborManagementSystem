@@ -51,6 +51,32 @@ Q4: Can multiple agents run in parallel in one call, or must they be sequential?
 → If partial support: I will document what IS possible and adapt the 3 spawn patterns to fit.
 ```
 
+## Model Tier + Provider Co-configuration (AI-guided · runs at setup Step 4b)
+
+The spawn-tool dialogue above covers *how to spawn*. This one covers *which model runs each job* and
+*which provider's cost rules apply* — two things the harness CANNOT auto-guess and must set WITH the user.
+
+```
+── Model tiers (ask the user — they alone know what they can use) ──
+[setup] To route work by cost, I map your models to 3 tiers. Which models can you use?
+  MODEL_HIGH   = strongest reasoning → MECE planning / architecture ONLY (reserved)
+  MODEL_MEDIUM = mid-tier workhorse  → code edits / multi-step execution / structured output (baseline)
+  MODEL_LOW    = fast/cheap          → lookup / grep / read-only / Reviewer
+  Rule: dial EFFORT first (low/med/high), tier second. Every skill must run on MODEL_MEDIUM
+        with no inference — MODEL_HIGH is reserved, not the default.
+  Only 1 model → all 3 tiers = it, differentiate by EFFORT. Only 2 → HIGH=MEDIUM=stronger, LOW=cheaper.
+
+── Provider (auto-probe, then confirm) ──
+I detected provider = `<guess>` from your model id (claude→anthropic · gpt/o#→openai · gemini→google).
+Confirm? Provider sets cache + token-cost rules — the wrong one breaks cost tracking immediately.
+  → I copy the matching row from 03_config.md §Provider Profiles into detected.md:
+    api_provider / cache_mechanism / context_cliff_tokens / token_formula / cache_write_cost
+  → unknown → token_formula: generic · cache_mechanism: none · context_cliff_tokens: 200000.
+```
+
+Then I write the model_high / model_medium / model_low + provider fields into `detected.md`
+(full field list: 02_setup.md Step 4b). All AGENTS.md spawn calls use tier names — never raw model IDs.
+
 ## What Happens After Co-development
 
 1. Agent writes `.agents/platform/detected.md` with confirmed values

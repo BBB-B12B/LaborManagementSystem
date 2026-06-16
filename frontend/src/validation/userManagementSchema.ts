@@ -127,12 +127,12 @@ export const userUpdateSchema = z
   .refine(
     (data) => {
       if (data.password && data.password.length > 0) {
-        return /^[A-Za-z]{6,}$/.test(data.password);
+        return /^[A-Za-z0-9]{6,}$/.test(data.password);
       }
       return true;
     },
     {
-      message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษรภาษาอังกฤษ',
+      message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษรหรือตัวเลขภาษาอังกฤษ',
       path: ['password'],
     }
   );

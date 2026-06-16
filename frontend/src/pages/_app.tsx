@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { AppProps } from 'next/app';
-import Router from 'next/router';
+import Router, { useRouter } from 'next/router';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import Backdrop from '@mui/material/Backdrop';
-import CircularProgress from '@mui/material/CircularProgress';
-import Typography from '@mui/material/Typography';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { GlobalFeedback } from '@/components/common/GlobalFeedback';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { theme } from '@/theme';
 import i18n from '@/i18n/config';
+import { useFeedbackStore } from '@/store/feedbackStore';
 import '@/styles/globals.css';
 
 import { onIdTokenChanged } from 'firebase/auth';
@@ -22,7 +21,16 @@ import { auth } from '@/config/firebase';
 import { queryClient } from '@/config/queryClient';
 
 export default function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
   const [isRouteChanging, setIsRouteChanging] = useState(false);
+
+  // Synchronize Next.js route locale with react-i18next
+  useEffect(() => {
+    if (router.locale) {
+      i18n.changeLanguage(router.locale);
+    }
+  }, [router.locale]);
+
 
   useEffect(() => {
     const handleStart = (url: string) => {
@@ -30,6 +38,9 @@ export default function App({ Component, pageProps }: AppProps) {
       const currentPath = window.location.pathname;
       const targetPath = url.split('?')[0].split('#')[0];
       if (currentPath !== targetPath) {
+        // Dismiss any API mutation spinner (e.g. login POST) before showing the
+        // page-transition spinner — prevents two consecutive spinners on login redirect.
+        useFeedbackStore.getState().hideLoading();
         setIsRouteChanging(true);
       }
     };
@@ -73,24 +84,9 @@ export default function App({ Component, pageProps }: AppProps) {
               <Component {...pageProps} />
 
               {/* Global Page Transition Loading Spinner */}
-              <Backdrop
-                sx={{
-                  color: '#fff',
-                  backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                  zIndex: (theme) => Math.max(theme.zIndex.drawer, theme.zIndex.modal) + 9999,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 2,
-                  backdropFilter: 'blur(3px)',
-                  transition: 'opacity 0.25s ease-in-out',
-                }}
-                open={isRouteChanging}
-              >
-                <CircularProgress color="primary" size={54} thickness={4} />
-                <Typography variant="h6" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
-                  กำลังโหลดหน้าจอ...
-                </Typography>
-              </Backdrop>
+              {isRouteChanging && (
+                <LoadingSpinner fullPage message="กำลังโหลดหน้าจอ..." size="large" />
+              )}
             </SnackbarProvider>
           </ThemeProvider>
         </QueryClientProvider>

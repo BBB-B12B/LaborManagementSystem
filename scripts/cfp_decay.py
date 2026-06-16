@@ -45,7 +45,7 @@ def main():
         print(f"Usage: cfp_decay.py [--dry-run|--update]", file=sys.stderr)
         sys.exit(1)
 
-    with open(INDEX_PATH) as f:
+    with open(INDEX_PATH, encoding="utf-8") as f:
         data = json.load(f)
 
     today = date.today()
@@ -76,12 +76,12 @@ def main():
                 entry["window_count"] = new_fields["window_count"]
                 entry["stale"] = new_fields["stale"]
 
-    print(f"\nTotal entries: {len(data)} · Changed: {changed}")
+    print(f"\nTotal entries: {len(data)} - Changed: {changed}")
 
     if mode == "--update":
-        with open(INDEX_PATH, "w") as f:
+        with open(INDEX_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"[✓ written] {INDEX_PATH}")
+        print(f"[written] {INDEX_PATH}")
     else:
         print("[dry-run] No file written.")
 

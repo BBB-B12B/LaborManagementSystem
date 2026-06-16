@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import Navbar, { GRADIENT_BG, NAV_TEXT, SIDEBAR_WIDTH } from './Navbar';
 import { useAuthStore } from '@/store/authStore';
+import { auth } from '@/config/firebase';
+import { isTokenExpired } from '@/utils/tokenUtils';
 import { dailyReportService } from '@/services/dailyReportService';
 import { taskService } from '@/services/taskService';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
@@ -132,16 +134,28 @@ const Topbar: React.FC = () => {
 
   const handleLogout = async () => {
     setAnchorEl(null);
-    // บันทึก logout activity ก่อน clear state
+    // บันทึก logout activity ก่อน clear state (fire-and-forget ในเบื้องหลัง)
     if (user?.id) {
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/auth/logout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
-        });
-      } catch {} // fire-and-forget
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => {});
     }
+
+    // เคลียร์ค่า token และ ข้อมูลผู้ใช้ออกจาก localStorage เพื่อความปลอดภัย
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+
+    // ลงชื่ออกจาก Firebase Auth (ถ้ามี)
+    if (auth) {
+      try {
+        await auth.signOut();
+      } catch (err) {
+        console.error('Firebase signOut failed:', err);
+      }
+    }
+
     logout();
     router.push('/login');
   };
@@ -421,15 +435,51 @@ export const Layout: React.FC<LayoutProps> = ({
     if (!isAuthenticated || !user?.id) return;
     const sendHeartbeat = async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/activity/heartbeat`, {
+        let token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+        // ถ้า token หมดอายุ หรือไม่มี และ Firebase Auth พร้อมใช้งาน -> ดึง token ใหม่แบบบังคับรีเฟรช
+        if (isTokenExpired(token)) {
+          if (auth.currentUser) {
+            token = await auth.currentUser.getIdToken(true);
+            if (token && typeof window !== 'undefined') {
+              localStorage.setItem('authToken', token);
+            }
+          } else {
+            // ถ้า Firebase Auth ยังไม่พร้อม และ token หมดอายุแล้ว ให้ข้ามรอบนี้ไปก่อนเพื่อกัน error 401 ในฝั่ง backend log
+            return;
+          }
+        } else if (auth.currentUser && !token) {
+          token = await auth.currentUser.getIdToken();
+          if (token && typeof window !== 'undefined') {
+            localStorage.setItem('authToken', token);
+          }
+        }
+
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/activity/heartbeat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
-      } catch {} // fire-and-forget
+
+        // หาก backend ตอบกลับด้วย 401 และ Firebase Auth พร้อม ให้ลอง Force Refresh ทันที 1 ครั้ง
+        if (res.status === 401 && auth.currentUser) {
+          const freshToken = await auth.currentUser.getIdToken(true);
+          if (freshToken) {
+            localStorage.setItem('authToken', freshToken);
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/activity/heartbeat`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${freshToken}`,
+              },
+            });
+          }
+        }
+      } catch (e) {
+        // fire-and-forget
+      }
     };
     sendHeartbeat(); // ส่งทันทีเมื่อ load
     const interval = setInterval(sendHeartbeat, 60000);
@@ -441,7 +491,7 @@ export const Layout: React.FC<LayoutProps> = ({
       taskCache.setLoading(true);
       taskService.getTasks()
         .then((tasks) => {
-          taskCache.setTasks(tasks || []);
+          taskCache.setTasks(tasks || [], 1, false);
         })
         .catch((err) => {
           taskCache.setError(err?.message || 'Failed to preload tasks cache');

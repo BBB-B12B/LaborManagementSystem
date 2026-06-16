@@ -322,23 +322,6 @@ export async function fillFromDailyReport(
   return response.data.data;
 }
 
-/**
- * Update all punches for a specific contractor and date (Manual correction)
- */
-export async function updateDailyPunches(
-  contractorId: string,
-  date: Date,
-  punches: string[],
-  scanDataId?: string
-): Promise<{ success: boolean; count: number }> {
-  const response = await apiClient.put<{ success: boolean; count: number }>('/scan-data/punches', {
-    id: scanDataId,
-    contractorId,
-    date: date.toISOString(),
-    punches,
-  });
-  return response.data;
-}
 
 /**
  * Export scan data to Excel
@@ -372,20 +355,3 @@ export async function exportScanData(params: {
   window.URL.revokeObjectURL(url);
 }
 
-/**
- * Delete a single scan data record by ID
- * DELETE /api/scan-data/:id
- */
-export async function deleteScanDataById(id: string): Promise<{ success: boolean }> {
-  const response = await apiClient.delete(`/scan-data/${id}`);
-  return response.data;
-}
-
-/**
- * Restore a single scan data record by ID
- * POST /api/scan-data/:id/restore
- */
-export async function restoreScanDataById(id: string): Promise<{ success: boolean }> {
-  const response = await apiClient.post(`/scan-data/${id}/restore`);
-  return response.data;
-}

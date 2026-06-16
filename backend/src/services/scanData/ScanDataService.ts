@@ -182,48 +182,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }).format(d);
   }
 
-  /**
-   * Merge new punches with original scans to preserve original seconds for unchanged punches.
-   * New punches from expected shifts or manual entries will have ":00" appended.
-   */
-  private mergePunchesWithOriginalSeconds(newPunches: string[], originalScans: string[]): string[] {
-    const toMins = (t: string) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
-    };
 
-    const usedOriginal = new Set<number>();
-    const scansList = originalScans || [];
-
-    return newPunches.map((np) => {
-      const npMins = toMins(np);
-
-      let bestMatch = '';
-      let minDiff = 2; // match within 1 minute (same minute or ±1 min)
-      let bestIdx = -1;
-
-      for (let i = 0; i < scansList.length; i++) {
-        if (usedOriginal.has(i)) continue;
-        const os = scansList[i];
-        if (!os || os === '-') continue;
-        const diff = Math.abs(toMins(os) - npMins);
-        if (diff < minDiff) {
-          minDiff = diff;
-          bestMatch = os;
-          bestIdx = i;
-        }
-      }
-
-      if (bestIdx !== -1) {
-        usedOriginal.add(bestIdx);
-        // Keep the original scan time (preserving original seconds)
-        return bestMatch.length === 5 ? `${bestMatch}:00` : bestMatch;
-      } else {
-        // It's a new punch added by admin, pad with :00
-        return np.length === 5 ? `${np}:00` : np;
-      }
-    });
-  }
 
   /**
    * Get scan data by contractor and date range
@@ -922,33 +881,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-  /**
-   * Delete by batch
-   */
-  async deleteByBatchId(batchId: string): Promise<number> {
-    const scans = await this.getByBatchId(batchId);
-    if (scans.length === 0) return 0;
-    const batch = db.batch();
-    scans.forEach((s) => batch.delete(collections.scanData.doc(s.id)));
-    await batch.commit();
-    return scans.length;
-  }
 
-  /**
-   * Delete by project and date range
-   */
-  async deleteByProjectAndDateRange(
-    projectLocationId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<number> {
-    const scans = await this.getByProjectAndDate(projectLocationId, startDate, endDate);
-    if (scans.length === 0) return 0;
-    const batch = db.batch();
-    scans.forEach((s) => batch.delete(collections.scanData.doc(s.id)));
-    await batch.commit();
-    return scans.length;
-  }
 
   /**
    * Update scan data
@@ -966,96 +899,7 @@ class ScanDataService extends BaseCrudService<ScanData> {
     }
   }
 
-  /**
-   * Update daily punches (Time1-Time6)
-   */
-  async updateDailyPunches(
-    contractorId: string,
-    date: Date,
-    punches: any[],
-    updatedBy: string,
-    scanDataId?: string
-  ): Promise<ScanData | null> {
-    try {
-      const scanDate = this.formatDate(date);
-      const uniqueKey = scanDataId || `SCAN_${contractorId}_${scanDate}`;
-      const docRef = collections.scanData.doc(uniqueKey);
 
-      // Fetch existing document to get original scans for preserving seconds
-      const existingDoc = await docRef.get();
-      const existingData = existingDoc.exists ? existingDoc.data() : null;
-      const originalScans: string[] = existingData
-        ? existingData.allScans || existingData.punches || []
-        : [];
-
-      // Recalculate metrics based on new punches
-      let metrics: any = {
-        normalStatus: 0,
-        regularHours: 0,
-        lunchStatus: 0,
-        otMorningHours: 0,
-        otEveningHours: 0,
-        lateMinutes: 0,
-      };
-
-      if (punches.length > 0) {
-        const records: BulkImportRecord[] = punches.map((p, i) => {
-          const [h, m] = p.split(':').map(Number);
-          const scanTime = new Date(date);
-          scanTime.setHours(h, m, 0, 0);
-          return {
-            rowNumber: i,
-            employeeNumber: contractorId,
-            scanDateTime: scanTime,
-          };
-        });
-
-        const aggregated = ScanDataAggregator.aggregate(records);
-        if (aggregated.length > 0) {
-          const agg = aggregated[0];
-          metrics = {
-            normalStatus: agg.normalStatus,
-            regularHours: agg.regularHours,
-            lunchStatus: agg.lunchStatus,
-            otMorningHours: agg.otMorningHours,
-            otEveningHours: agg.otEveningHours,
-            lateMinutes: agg.lateMinutes,
-          };
-        }
-      }
-
-      // Merge new punches with original scans to preserve seconds
-      const finalPunches = this.mergePunchesWithOriginalSeconds(punches, originalScans);
-
-      const timeSlots: any = {};
-      finalPunches.forEach((p, i) => {
-        if (i < 10) timeSlots[`Time${i + 1}`] = p;
-      });
-      // Clear remaining slots if any
-      for (let i = finalPunches.length + 1; i <= 10; i++) {
-        timeSlots[`Time${i}`] = '-';
-      }
-
-      const updateData: any = {
-        ...timeSlots,
-        ...metrics,
-        punches: punches.map((p) => p.slice(0, 5)), // Keep punches as HH:mm
-        allScans: finalPunches,
-        isManuallyEdited: true, // Flag for highlighting in UI
-        updatedAt: new Date(),
-        updatedBy,
-      };
-
-      await docRef.set(updateData, { merge: true });
-      const updatedScan = await docRef.get();
-      const updatedScanData = updatedScan.data() as ScanData;
-
-      return { ...updatedScanData, id: updatedScan.id } as ScanData;
-    } catch (error: any) {
-      logger.error('Error updating daily punches:', error);
-      throw error;
-    }
-  }
 
   /**
    * Analyze daily scans to extract metrics

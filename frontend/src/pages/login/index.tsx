@@ -135,8 +135,45 @@ export default function LoginPage() {
             <LoginForm onSubmit={handleLogin} isLoading={isLoading} error={error} />
 
             {/* Footer */}
-            <Stack direction="row" spacing={3} sx={{ mt: 6, color: theme.palette.text.disabled }}>
-              <Typography variant="caption">© 2025 LMS Corp</Typography>
+            <Stack
+              direction="row"
+              spacing={3}
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ mt: 6, width: '100%' }}
+            >
+              <Typography variant="caption" sx={{ color: theme.palette.text.disabled }}>
+                © 2025 LMS Corp
+              </Typography>
+              <Box
+                component="a"
+                href="/doc/manual/index.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: theme.palette.primary.main,
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: `1px solid ${theme.palette.primary.light}`,
+                  transition: 'all 0.2s ease-in-out',
+                  '&:hover': {
+                    backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                    borderColor: theme.palette.primary.main,
+                    boxShadow: '0 2px 8px rgba(25, 118, 210, 0.15)',
+                  },
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 11.55C9.64 9.35 6.48 8 3 8v11c3.48 0 6.64 1.35 9 3.55 2.36-2.2 5.52-3.55 9-3.55V8c-3.48 0-6.64 1.35-9 3.55zM12 8c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3z" />
+                </svg>
+                คู่มือการใช้งาน
+              </Box>
             </Stack>
           </Box>
         </Grid>

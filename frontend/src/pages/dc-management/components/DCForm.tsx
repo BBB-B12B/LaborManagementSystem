@@ -105,6 +105,7 @@ export function DCForm({
     new Date().getFullYear().toString()
   );
   const [statsSelectedPeriod, setStatsSelectedPeriod] = useState<string>('');
+  const [isEditingStats, setIsEditingStats] = useState(false);
 
   const schema = mode === 'create' ? dcCreateSchema : dcEditSchema;
 
@@ -127,6 +128,11 @@ export function DCForm({
       airConFee: '' as any,
       otherDeduction: '' as any,
       mouDeductionRate: '' as any,
+      paidLeave: '' as any,
+      unpaidLeave: '' as any,
+      lateMinutes: '' as any,
+      earlyLeaveMinutes: '' as any,
+      absentDays: '' as any,
       ...defaultValues,
     }),
     [defaultValues]
@@ -223,13 +229,6 @@ export function DCForm({
             icon={<EventBusy />}
             iconPosition="start"
             label="สถิติ ขาด/ลา/มาสาย"
-            sx={{ minHeight: 48 }}
-            disabled={mode === 'create'}
-          />
-          <Tab
-            icon={<AttachMoney />}
-            iconPosition="start"
-            label="ข้อมูลการเงิน"
             sx={{ minHeight: 48 }}
           />
         </Tabs>
@@ -371,11 +370,27 @@ export function DCForm({
 
         {/* Tab 2: Attendance Stats */}
         <TabPanel value={tabValue} index={1}>
-          {mode === 'create' ? (
-            <Alert severity="info">
-              ข้อมูลสถิติจะแสดงเมื่อมีการบันทึกพนักงานและมีการคำนวณงวดงานแล้ว
-            </Alert>
-          ) : (
+          {mode === 'edit' && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={isEditingStats}
+                    onChange={(e) => setIsEditingStats(e.target.checked)}
+                    color="primary"
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                    🔓 ปลดล็อกแก้ไขสถิติตั้งต้น
+                  </Typography>
+                }
+              />
+            </Box>
+          )}
+
+          {mode === 'edit' && !isEditingStats ? (
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -434,18 +449,18 @@ export function DCForm({
 
               {/* Stat Cards */}
               <Grid item xs={6}>
-                <Card sx={{ bgcolor: '#e3f2fd', boxShadow: 'none', border: '1px solid #bbdefb' }}>
+                <Card sx={{ bgcolor: '#f8fafc', boxShadow: 'none', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                   <CardContent
                     sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
                   >
-                    <LocalHotel sx={{ color: '#1976d2', fontSize: 40 }} />
+                    <LocalHotel sx={{ color: 'text.secondary', fontSize: 36 }} />
                     <Box>
                       <Typography variant="body2" color="text.secondary" fontWeight="bold">
                         ลาได้เงิน (Paid Leave)
                       </Typography>
-                      <Typography variant="h5" color="#1565c0" fontWeight="bold">
+                      <Typography variant="h5" color="text.primary" fontWeight="bold">
                         {currentStats.paidLeave}{' '}
-                        <Typography component="span" variant="body1">
+                        <Typography component="span" variant="body2" color="text.secondary">
                           วัน
                         </Typography>
                       </Typography>
@@ -455,18 +470,18 @@ export function DCForm({
               </Grid>
 
               <Grid item xs={6}>
-                <Card sx={{ bgcolor: '#fff3e0', boxShadow: 'none', border: '1px solid #ffe0b2' }}>
+                <Card sx={{ bgcolor: '#f8fafc', boxShadow: 'none', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                   <CardContent
                     sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
                   >
-                    <EventBusy sx={{ color: '#f57c00', fontSize: 40 }} />
+                    <EventBusy sx={{ color: 'text.secondary', fontSize: 36 }} />
                     <Box>
                       <Typography variant="body2" color="text.secondary" fontWeight="bold">
                         ลาไม่ได้เงิน (Unpaid Leave)
                       </Typography>
-                      <Typography variant="h5" color="#e65100" fontWeight="bold">
+                      <Typography variant="h5" color="text.primary" fontWeight="bold">
                         {currentStats.unpaidLeave}{' '}
-                        <Typography component="span" variant="body1">
+                        <Typography component="span" variant="body2" color="text.secondary">
                           วัน
                         </Typography>
                       </Typography>
@@ -476,18 +491,18 @@ export function DCForm({
               </Grid>
 
               <Grid item xs={6}>
-                <Card sx={{ bgcolor: '#ffebee', boxShadow: 'none', border: '1px solid #ffcdd2' }}>
+                <Card sx={{ bgcolor: '#f8fafc', boxShadow: 'none', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                   <CardContent
                     sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
                   >
-                    <AccessTime sx={{ color: '#d32f2f', fontSize: 40 }} />
+                    <AccessTime sx={{ color: 'text.secondary', fontSize: 36 }} />
                     <Box>
                       <Typography variant="body2" color="text.secondary" fontWeight="bold">
                         มาสาย (Late)
                       </Typography>
-                      <Typography variant="h5" color="#c62828" fontWeight="bold">
+                      <Typography variant="h5" color="text.primary" fontWeight="bold">
                         {currentStats.lateMinutes}{' '}
-                        <Typography component="span" variant="body1">
+                        <Typography component="span" variant="body2" color="text.secondary">
                           นาที
                         </Typography>
                       </Typography>
@@ -497,18 +512,18 @@ export function DCForm({
               </Grid>
 
               <Grid item xs={6}>
-                <Card sx={{ bgcolor: '#fce4ec', boxShadow: 'none', border: '1px solid #f8bbd0' }}>
+                <Card sx={{ bgcolor: '#f8fafc', boxShadow: 'none', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                   <CardContent
                     sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
                   >
-                    <ExitToApp sx={{ color: '#c2185b', fontSize: 40 }} />
+                    <ExitToApp sx={{ color: 'text.secondary', fontSize: 36 }} />
                     <Box>
                       <Typography variant="body2" color="text.secondary" fontWeight="bold">
                         ออกก่อน (Early Leave)
                       </Typography>
-                      <Typography variant="h5" color="#880e4f" fontWeight="bold">
+                      <Typography variant="h5" color="text.primary" fontWeight="bold">
                         {currentStats.earlyLeaveMinutes}{' '}
-                        <Typography component="span" variant="body1">
+                        <Typography component="span" variant="body2" color="text.secondary">
                           นาที
                         </Typography>
                       </Typography>
@@ -518,18 +533,18 @@ export function DCForm({
               </Grid>
 
               <Grid item xs={6}>
-                <Card sx={{ bgcolor: '#f3e5f5', boxShadow: 'none', border: '1px solid #e1bee7' }}>
+                <Card sx={{ bgcolor: '#f8fafc', boxShadow: 'none', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                   <CardContent
                     sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: '16px !important' }}
                   >
-                    <DirectionsRun sx={{ color: '#7b1fa2', fontSize: 40 }} />
+                    <DirectionsRun sx={{ color: 'text.secondary', fontSize: 36 }} />
                     <Box>
                       <Typography variant="body2" color="text.secondary" fontWeight="bold">
                         ขาดงาน (Absent)
                       </Typography>
-                      <Typography variant="h5" color="#4a148c" fontWeight="bold">
+                      <Typography variant="h5" color="text.primary" fontWeight="bold">
                         {currentStats.absentDays}{' '}
-                        <Typography component="span" variant="body1">
+                        <Typography component="span" variant="body2" color="text.secondary">
                           วัน
                         </Typography>
                       </Typography>
@@ -538,335 +553,136 @@ export function DCForm({
                 </Card>
               </Grid>
             </Grid>
+          ) : (
+            <Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  ระบุสถิติสะสม ขาด/ลา/มาสาย ในปีปัจจุบัน ({new Date().getFullYear()})
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                {/* Paid Leave */}
+                <Grid item xs={6}>
+                  <Controller
+                    name="paidLeave"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="ลาได้เงิน (วัน)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        error={!!errors.paidLeave}
+                        helperText={errors.paidLeave?.message as string | undefined}
+                        disabled={isLoading || isSubmitting}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)
+                        }
+                        value={field.value ?? ''}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                {/* Unpaid Leave */}
+                <Grid item xs={6}>
+                  <Controller
+                    name="unpaidLeave"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="ลาไม่ได้เงิน (วัน)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        error={!!errors.unpaidLeave}
+                        helperText={errors.unpaidLeave?.message as string | undefined}
+                        disabled={isLoading || isSubmitting}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)
+                        }
+                        value={field.value ?? ''}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                {/* Late Minutes */}
+                <Grid item xs={6}>
+                  <Controller
+                    name="lateMinutes"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="มาสาย (นาที)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        error={!!errors.lateMinutes}
+                        helperText={errors.lateMinutes?.message as string | undefined}
+                        disabled={isLoading || isSubmitting}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)
+                        }
+                        value={field.value ?? ''}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                {/* Early Leave Minutes */}
+                <Grid item xs={6}>
+                  <Controller
+                    name="earlyLeaveMinutes"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="ออกก่อน (นาที)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        error={!!errors.earlyLeaveMinutes}
+                        helperText={errors.earlyLeaveMinutes?.message as string | undefined}
+                        disabled={isLoading || isSubmitting}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)
+                        }
+                        value={field.value ?? ''}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                {/* Absent Days */}
+                <Grid item xs={6}>
+                  <Controller
+                    name="absentDays"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="ขาดงาน (วัน)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        error={!!errors.absentDays}
+                        helperText={errors.absentDays?.message as string | undefined}
+                        disabled={isLoading || isSubmitting}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)
+                        }
+                        value={field.value ?? ''}
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
           )}
-        </TabPanel>
-
-        {/* Tab 3: Financial Information */}
-        <TabPanel value={tabValue} index={2}>
-          <Grid container spacing={1}>
-            {/* Income Section */}
-            <Grid item xs={12}>
-              <Box sx={{ bgcolor: '#e3f2fd', p: 1, borderRadius: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#1565c0' }}>
-                  รายได้ (Income)
-                </Typography>
-              </Box>
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="dailyWageRate"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="1. ค่าแรงต่อวัน"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="allowance"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="2. เบี้ยเลี้ยง"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="professionalRate"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="3. ค่าวิชาชีพ"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="phoneAllowance"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="4. ค่าโทรศัพท์"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="otherIncome"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="5. อื่นๆ"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6} />
-
-            {/* Deduction Section */}
-            <Grid item xs={12}>
-              <Box sx={{ bgcolor: '#ffebee', p: 1, borderRadius: 1, mt: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#c62828' }}>
-                  รายการหัก (Deductions)
-                </Typography>
-              </Box>
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="housingFee"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="1. ค่าห้องพัก"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="followerCount"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="2. จำนวนคนผู้ติดตาม"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end">คน</InputAdornment>,
-                    }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                label="หักค่าผู้ติดตาม (Auto)"
-                value={followerFee.toFixed(0)}
-                fullWidth
-                size="small"
-                variant="outlined" // Use outlined for consistency
-                InputProps={{
-                  endAdornment: <InputAdornment position="end">฿</InputAdornment>,
-                  readOnly: true,
-                }}
-                sx={{ bgcolor: '#F5F5F5', '& .MuiInputBase-input': { cursor: 'not-allowed' } }}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="refrigeratorFee"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="3. ค่าตู้เย็น"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="soundSystemFee"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="4. ค่าเครื่องเสียง"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="tvFee"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="5. ค่าทีวี"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="laundryFee"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="6. ค่าเครื่องซักผ้า"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="airConFee"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="7. ค่าแอร์เคลื่อนที่"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Controller
-                name="otherDeduction"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="8. ค่าอื่นๆ"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    InputProps={{ endAdornment: <InputAdornment position="end">฿</InputAdornment> }}
-                    onChange={(e) =>
-                      field.onChange(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)
-                    }
-                    value={field.value ?? ''}
-                    disabled={isLoading || isSubmitting}
-                  />
-                )}
-              />
-            </Grid>
-          </Grid>
         </TabPanel>
       </Box>
     </Box>

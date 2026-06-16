@@ -143,9 +143,9 @@ Every spawned sub-agent MUST write this file before returning. Missing or invali
 3. Add sum to SESSION_TOTAL in working memory
 4. Write updated total → .sessions/session_tokens.md
 5. Check R3 threshold immediately:
-   > 50k AND compact not run → compact first → emit [compact]
-   > 60k → TOKEN PAUSE (do not spawn Cycle N+1 until user confirms)
-   ≤ 50k → spawn Cycle N+1
+   > 60k AND compact not run → compact first → emit [compact-rec] (recommend, not forced)
+   60-80k → TOKEN PAUSE (do not spawn Cycle N+1 until user confirms) · > 90k → HALT
+   ≤ 60k → spawn Cycle N+1
 ```
 
 ---

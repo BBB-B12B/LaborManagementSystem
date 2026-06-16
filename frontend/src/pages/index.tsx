@@ -6,47 +6,36 @@
  */
 
 import { useRouter } from 'next/router';
-import { useEffect } from 'react';
-import { Container, Typography, CircularProgress } from '@mui/material';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuthStore();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     // Wait for auth state to load from localStorage
     if (isLoading) return;
 
+    setIsRedirecting(true);
     // Redirect based on authentication status
     if (isAuthenticated) {
       const role = user?.roleCode || '';
       if (role === 'FM' || role === 'SE') {
         router.push('/daily-reports');
-      } else if (['OE', 'PE', 'PM', 'PD'].includes(role)) {
-        router.push('/workspace');
       } else {
-        router.push('/dashboard');
+        router.push('/workspace');
       }
     } else {
       router.push('/login');
     }
   }, [router, isAuthenticated, isLoading, user]);
 
-  return (
-    <Container
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-      }}
-    >
-      <CircularProgress />
-      <Typography variant="h6" sx={{ mt: 2 }}>
-        กำลังโหลด...
-      </Typography>
-    </Container>
-  );
+  if (isRedirecting) {
+    return null;
+  }
+
+  return <LoadingSpinner fullPage message="กำลังโหลด..." size="large" />;
 }

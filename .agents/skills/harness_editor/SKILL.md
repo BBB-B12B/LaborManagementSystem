@@ -88,6 +88,12 @@ grep "\[/\] T-" docs/master_roadmap.md                          # task tracked [
 - `[✓ written]` + grep verify immediately after each change
 - SKILL.md edit: after the change confirm all 8 framework components survive — grep the file's ACTUAL section headers (read them first; never assume fixed names like "## Trigger")
 
+### Stage 3.5 · BEHAVIORAL VERIFY  (Signal Contract · trigger-gated)
+After a *behavioural* edit (BC / gate / signal-contract / step-sequence) — skip typo/doc/format — empirically test the rule, don't just confirm text landed.
+- `[behave-test]` → spawn a 3-config ladder cheapest-first with **early-exit on first PASS** — each config reads ONLY the edited file + a trigger prompt derived from the BC `Pre:` clause, scored by whether the required `Post:`/signal is emitted: ① Haiku (robustness floor) → ② Sonnet@medium → ③ Sonnet@high. First PASS stops the ladder (no effort param on Agent tool → effort = prompt framing, see detail). Non-behavioural edit → `[behave-skip]` (zero overhead).
+- Verdict (early-exit): Haiku PASS → `[behave-pass]` → Stage 4 · Haiku fail / Sonnet@medium PASS → `[behave-gap]` (rule too subtle for the robustness floor) → loop Stage 5 · only Sonnet@high PASS → `[behave-gap]` `effort:high` (rule clear but needs deep reasoning) → loop Stage 5 · all 3 fail → `[behave-fail]` → Stage 5. Log every run to `knowledge/behave_test_log.jsonl` (feedback + regression suite).
+→ full procedure: @.agents/skills/harness_editor/SKILL_detail.md §Stage 3.5
+
 ### Stage 4 · CLOSE  (Index Sync + Docs Close — mandatory, same task)
 Edit a harness file → its paired Implement doc MUST update the same task (see §Implement Map).
 - Index sync: new skill → `skill-manifest.json` + `registry.md` · new `knowledge/`|`Implement/` file → `file_manager` + `python3 scripts/backlink_analyzer.py` (assign `topics[]` from `topic_registry.json`) · no `src/` symbol → skip `variable_manager`
@@ -134,6 +140,7 @@ Edit a harness file → update its paired Implement/REPO doc in the SAME task (S
 | Each file edited | `[✓ written]` + grep confirm (section header or symbol count intact) | **mandatory** |
 | User-facing Thai close | Thai summary after `[harness-edit-done]` (template below) | **mandatory** |
 | Mid-task probe result | `[scope-probe] file:<path> zone:🟢/🟡/🔴 lines:<N>` | **mandatory** |
+| Behavioral verify (Stage 3.5) | `[behave-test]` start (3-config early-exit ladder) · `[behave-skip]` non-behavioural · `[behave-pass]`/`[behave-gap]` (+`effort:high` if only Sonnet@high)/`[behave-fail]` verdict | **mandatory on behavioural edits** |
 | Next-step offer | one-line offer to route to skill_auditor or harness_doctor | **optional** |
 
 **User-facing close (Thai — mandatory after `[harness-edit-done]`):**

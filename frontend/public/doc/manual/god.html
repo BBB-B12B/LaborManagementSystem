@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือ GOD — ผู้ดูแลสูงสุด</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <h1>📘 คู่มือการใช้งานระบบบริหารจัดการแรงงาน</h1>
+  <div class="subtitle">บทบาท: GOD — ผู้ดูแลสูงสุด (Superuser · Level 0)</div>
+  <nav class="nav">
+    <a href="index.html">หน้าแรก</a>
+    <a href="god.html" class="active">GOD</a>
+    <a href="am.html">AM</a>
+    <a href="pm.html">PM</a>
+    <a href="se_fm.html">SE / FM</a>
+    <a href="md.html">MD</a>
+    <a href="pd.html">PD</a>
+    <a href="pe.html">PE</a>
+    <a href="oe.html">OE</a>
+    <a href="ld.html">LD</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › GOD</div>
+
+  <h2>GOD ทำอะไรได้บ้าง</h2>
+  <p><strong>GOD คือบทบาทสูงสุดของระบบ — เข้าถึงและทำได้ทุกอย่าง</strong> ทุกเมนูที่บทบาทอื่นทำได้ GOD ทำได้หมด
+     และมีเมนูพิเศษที่ <em>มีเฉพาะ GOD เท่านั้น</em> คือ <strong>Activity Monitor</strong> (ตรวจสอบกิจกรรมการใช้งานของผู้ใช้ทุกคน)</p>
+
+  <div class="tip">เพื่อไม่ให้เนื้อหาซ้ำซ้อน วิธีใช้แต่ละฟีเจอร์ถูกเขียนไว้ที่หน้าของบทบาทที่ดูแลฟีเจอร์นั้นเป็นหลัก
+     GOD ใช้ตามขั้นตอนเดียวกันได้ทุกประการ — กดลิงก์ในตารางด้านล่างเพื่อเปิดอ่าน</div>
+
+  <!-- ============ UNIQUE FEATURE: ACTIVITY MONITOR ============ -->
+  <h2 id="activity-monitor">เมนูเฉพาะ GOD · Activity Monitor</h2>
+  <p>หน้า <code>/activity-monitor</code> ใช้ <strong>ตรวจสอบการใช้งานของผู้ใช้ในระบบ</strong> — ดูว่าตอนนี้ใครออนไลน์อยู่บ้าง
+     และดูประวัติการเข้าสู่ระบบ/ออกจากระบบ (login/logout) ของผู้ใช้แต่ละคน</p>
+
+  <h3>2.1 เปิดหน้า Activity Monitor</h3>
+  <ol class="steps">
+    <li>เข้าสู่ระบบด้วยบัญชี GOD</li>
+    <li>ที่แถบเมนูด้านบน คลิก <strong>"Activity Monitor"</strong> (เมนูนี้จะแสดงเฉพาะบัญชี GOD เท่านั้น)</li>
+    <li>ระบบเปิดหน้าตรวจสอบกิจกรรม แบ่งเป็น 2 ส่วน: <em>รายชื่อผู้ใช้ที่ออนไลน์</em> (ซ้าย) และ <em>ประวัติกิจกรรม</em> (ขวา)</li>
+  </ol>
+  <figure>
+    <img src="assets/god/activity_monitor_main.png" alt="หน้า Activity Monitor" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: activity_monitor_main.png — หน้า Activity Monitor]&lt;/span&gt;'">
+    <figcaption>ภาพรวมหน้า Activity Monitor</figcaption>
+  </figure>
+
+  <h3>2.2 ดูผู้ใช้ที่กำลังออนไลน์ (Presence)</h3>
+  <ol class="steps">
+    <li>ดูที่กล่องด้านซ้าย — ตัวเลขบนป้ายคือ <strong>จำนวนคนที่ออนไลน์อยู่ขณะนี้</strong></li>
+    <li>ใต้ป้ายจะแสดงรายชื่อผู้ใช้ที่กำลังใช้งานระบบอยู่จริง (อัปเดตอัตโนมัติ)</li>
+  </ol>
+
+  <h3>2.3 ดูประวัติการเข้า-ออกระบบ + กรองตามวันที่</h3>
+  <ol class="steps">
+    <li>ดูที่ตารางด้านขวา — แต่ละแถวแสดง <strong>ชื่อผู้ใช้</strong>, <strong>การกระทำ</strong> (เข้าระบบ/ออกระบบ) และ <strong>เวลา</strong></li>
+    <li>ใช้ตัวกรอง <strong>"Filter"</strong> เพื่อเลือกช่วงวันที่ที่ต้องการดู</li>
+    <li>กดปุ่ม <strong>Refresh (🔄)</strong> เพื่อโหลดข้อมูลล่าสุด</li>
+  </ol>
+  <figure>
+    <img src="assets/god/activity_monitor_filter.png" alt="กรองกิจกรรมตามวันที่" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: activity_monitor_filter.png — การกรองตามวันที่]&lt;/span&gt;'">
+    <figcaption>กรองประวัติกิจกรรมตามช่วงวันที่</figcaption>
+  </figure>
+  <div class="note">หน้า Activity Monitor นี้เน้นกิจกรรม <strong>เข้า/ออกระบบทั้งระบบ</strong> ต่างจาก "Activity Log" ในหน้า Workspace
+     ที่บันทึกการเปลี่ยนแปลงงานภายในเวิร์กสเปซ (ดูที่ <a href="pm.html#activity-log">หน้า PM › Activity Log</a>)</div>
+
+  <!-- ============ ALL OTHER FEATURES (SSoT links) ============ -->
+  <h2>ฟีเจอร์อื่นทั้งหมด (GOD เข้าได้หมด)</h2>
+  <p>กดลิงก์เพื่อเปิดวิธีใช้แบบทีละขั้นตอนในหน้าของบทบาทเจ้าของฟีเจอร์:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="text-align:left">ฟีเจอร์</th><th style="text-align:left">เปิดวิธีใช้ที่</th></tr></thead>
+      <tbody>
+        <tr><td class="feat">Member Management (จัดการสมาชิก)</td><td style="text-align:left"><a href="am.html#member-management">หน้า AM › Member Management</a></td></tr>
+        <tr><td class="feat">DC Management (แรงงานรายวัน)</td><td style="text-align:left"><a href="am.html#dc-management">หน้า AM › DC Management</a></td></tr>
+        <tr><td class="feat">Wage Calculation (คำนวณค่าแรง)</td><td style="text-align:left"><a href="am.html#wage-calculation">หน้า AM › Wage Calculation</a></td></tr>
+        <tr><td class="feat">Scan Data Monitoring</td><td style="text-align:left"><a href="am.html#scan-data">หน้า AM › Scan Data</a></td></tr>
+        <tr><td class="feat">Work Hour Monitoring</td><td style="text-align:left"><a href="am.html#work-hour">หน้า AM › Work Hour</a></td></tr>
+        <tr><td class="feat">SSO Rules (กฎประกันสังคม)</td><td style="text-align:left"><a href="am.html#sso-rules">หน้า AM › SSO Rules</a></td></tr>
+        <tr><td class="feat">Company Holidays (วันหยุด)</td><td style="text-align:left"><a href="am.html#holidays">หน้า AM › Company Holidays</a></td></tr>
+        <tr><td class="feat">Workspace (กระดานงาน)</td><td style="text-align:left"><a href="pm.html#workspace">หน้า PM › Workspace</a></td></tr>
+        <tr><td class="feat">Workspace · Requests (ตารางแรงงาน)</td><td style="text-align:left"><a href="pm.html#requests">หน้า PM › Requests</a></td></tr>
+        <tr><td class="feat">Project Management (จัดการโครงการ)</td><td style="text-align:left"><a href="pm.html#project-management">หน้า PM › Project Management</a></td></tr>
+        <tr><td class="feat">Daily Reports (รายงานประจำวัน)</td><td style="text-align:left"><a href="se_fm.html#daily-reports">หน้า SE/FM › Daily Reports</a></td></tr>
+        <tr><td class="feat">Overtime (ทำงานล่วงเวลา)</td><td style="text-align:left"><a href="se_fm.html#overtime">หน้า SE/FM › Overtime</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="site-footer">
+    <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
+    <p>คู่มือ GOD · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
+  </footer>
+</div>
+
+</body>
+</html>

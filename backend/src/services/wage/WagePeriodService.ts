@@ -20,6 +20,34 @@ import { logger } from '../../utils/logger';
  * WagePeriodService
  * Extends CrudService with wage calculation operations
  */
+export const WAGE_PERIOD_LIST_PROJECTION = [
+  'periodCode',
+  'projectCode',
+  'projectName',
+  'startDate',
+  'endDate',
+  'periodDays',
+  'status',
+  'totalRegularDays',
+  'totalOtHours',
+  'totalGrossWages',
+  'totalDeductions',
+  'totalNetWages',
+  'hasUnresolvedDiscrepancies',
+  'calculatedAt',
+  'calculatedBy',
+  'approvedAt',
+  'approvedBy',
+  'notes',
+  'createdAt',
+  'updatedAt',
+  'createdBy',
+  'updatedBy',
+  'isDeleted',
+  'deletedAt',
+  'deletedBy',
+];
+
 class WagePeriodService extends BaseCrudService<WagePeriod> {
   constructor() {
     super(collections.wagePeriods);
@@ -35,6 +63,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       const items = await this.query([], {
         orderBy: options?.orderBy || 'createdAt',
         orderDirection: options?.orderDirection || 'desc',
+        projection: options?.projection || WAGE_PERIOD_LIST_PROJECTION,
       });
 
       // Filter active records
@@ -206,17 +235,11 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       let totalDeductions = 0;
       let totalNetWages = 0;
 
-      // [Optimization] Pre-fetch compensation details for all DCs
-      const compensationMap = new Map<string, any>();
-      for (let i = 0; i < dcs.length; i += 50) {
-        const batch = dcs.slice(i, i + 50);
-        await Promise.all(
-          batch.map(async (dc) => {
-            const comp = await dailyContractorService.getCompensationDetails(dc.id);
-            compensationMap.set(dc.id, comp);
-          })
-        );
-      }
+      // [Optimization] Pre-fetch compensation details for all DCs in bulk (resolves N+1 queries)
+      const compensationMap = await dailyContractorService.getCompensationDetailsBulk(
+        dcs.map((dc) => dc.id)
+      );
+
 
       // 6. Calculate for each DC
       for (const dc of dcs) {
@@ -530,7 +553,9 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           operator: '==',
           value: projectCode,
         },
-      ]);
+      ], {
+        projection: WAGE_PERIOD_LIST_PROJECTION,
+      });
 
       // Filter in memory to handle legacy data
       return results.filter((p) => p.isDeleted !== true);
@@ -551,7 +576,9 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
           operator: '==',
           value: status,
         },
-      ]);
+      ], {
+        projection: WAGE_PERIOD_LIST_PROJECTION,
+      });
 
       // Filter in memory to handle legacy data
       return results.filter((p) => p.isDeleted !== true);

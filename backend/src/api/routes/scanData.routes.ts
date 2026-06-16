@@ -585,38 +585,9 @@ router.post(
   }
 );
 
-/**
- * DELETE /api/scan-data/:id
- */
-router.delete('/:id', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
-  const authReq = req as AuthRequest;
-  try {
-    const deletedBy =
-      authReq.user?.username || authReq.user?.employeeId || authReq.user?.id || 'system';
-    await scanDataService.softDelete(req.params.id, deletedBy);
-    res.json({ success: true, message: 'Scan data deleted successfully' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-/**
- * POST /api/scan-data/:id/restore
- * กู้คืนข้อมูลที่ถูกลบ (Soft-deleted)
- */
-router.post('/:id/restore', authorize(['AM', 'MD']), async (req: Request, res: Response) => {
-  try {
-    const success = await scanDataService.restore(req.params.id);
-    if (!success) {
-      return res.status(404).json({ success: false, error: 'Scan data not found' });
-    }
-    res.json({ success: true, message: 'Scan data restored successfully' });
-    return;
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-    return;
-  }
-});
+
+
 
 /**
  * Add a manual scan record
@@ -663,32 +634,6 @@ router.patch('/:id', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * PUT /api/scan-data/punches
- * แก้ไขรายการสแกนนิ้วรายวัน (Manual Correction)
- */
-router.put(
-  '/punches',
-  [body('contractorId').isString(), body('date').isISO8601(), body('punches').isArray()],
-  async (req: Request, res: Response) => {
-    try {
-      const authReq = req as AuthRequest;
-      const { id, contractorId, date, punches } = req.body;
-      const updatedBy = authReq.user?.name || authReq.user?.username || 'admin';
 
-      const result = await scanDataService.updateDailyPunches(
-        contractorId,
-        new Date(date),
-        punches,
-        updatedBy,
-        id
-      );
-
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  }
-);
 
 export default router;

@@ -446,7 +446,31 @@ class DailyReportService {
     const { data: response } = await apiClient.get(
       `/tasks/${taskId}/reports/${dateStr}?isSupportReport=${isSupportReport}`
     );
+    if (response.data && 'report' in response.data) {
+      return response.data.report;
+    }
     return response.data;
+  }
+
+  /**
+   * Fetch Daily, Site, and Support Reports combined in one request
+   */
+  async getCombinedTaskReports(
+    taskId: string,
+    dateStr: string,
+    isSupportReport: boolean = false
+  ): Promise<{ report: any; siteReport: any; supportReport: any }> {
+    const { data: response } = await apiClient.get(
+      `/tasks/${taskId}/reports/${dateStr}?isSupportReport=${isSupportReport}`
+    );
+    if (response.data && 'report' in response.data) {
+      return response.data;
+    }
+    return {
+      report: response.data,
+      siteReport: isSupportReport ? null : response.data,
+      supportReport: isSupportReport ? response.data : null
+    };
   }
 
   /**

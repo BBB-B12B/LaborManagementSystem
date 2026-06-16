@@ -47,7 +47,7 @@ Keywords: วิจัย / analyze / research / explore / สรุป repo / g
 ## Refusal Contract
 Halt and emit `[research-refused]` if:
 - Repo requires authentication and no local path provided → ask for local clone path
-- size_tier = XL (>10k files) AND user has not confirmed phased approach
+- size_tier = XL (>5k files) AND user has not confirmed phased approach
 - Output path collision: `knowledge/research/<repo_name>_*.md` already exists → ask overwrite?
 
 ## Behavior Contract — Clone Gate

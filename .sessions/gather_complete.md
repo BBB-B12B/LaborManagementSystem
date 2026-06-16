@@ -1,14 +1,16 @@
-date: 2026-06-09
-objective: Implement backend notification triggers for 'task_assigned' to notify FMs/SEs when they are assigned tasks or subtasks.
-constraints:
-  - Notifications must resolve FM/SE uid from their employeeId by querying the users collection in the Project A database.
-  - Notifications must be triggered asynchronously after successful transaction commits to prevent cross-project transaction lockups or blocking.
-  - Prevent duplicate notifications when updating assignees in updateSubtask (only notify new assignees).
-affected_files:
-  - backend/src/services/TaskService.ts
-acceptance_criteria:
-  - FM/SE receives a 'task_assigned' notification when a subtask is created (Quick Create Subtask).
-  - FM/SE receives a 'task_assigned' notification when a subtask is updated with new assignees.
-  - FM/SE receives a 'task_assigned' notification when tasks/subtasks are created via WBS import or parent task creation.
-  - Backend compiles cleanly without TypeScript compilation errors.
-verification_intent: Verify that backend compiles cleanly and symbol index is synced.
+# Info Gather: Work Hour Monitoring Query Optimization and Feature Removal
+date: 2026-06-16
+
+## Objective
+Optimize query frequency on `/work-hour-monitoring` by resolving Firestore listener double-fetching, caching stagnant endpoints, and cleaning up dead code including obsolete manual time-editing actions.
+
+## Affected Files
+1. `frontend/src/pages/work-hour-monitoring/index.tsx`
+2. `frontend/src/components/work-hour-monitoring/WorkHourComparisonTable.tsx`
+3. `backend/src/api/routes/reconciliation.routes.ts`
+4. `backend/src/controllers/reconciliationController.ts`
+5. `backend/src/services/reconciliation/ReconciliationService.ts`
+
+## Constraints
+- Do not affect other features or pages in the frontend.
+- Backend services must build and compile correctly after cleanup.

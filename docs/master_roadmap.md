@@ -32,6 +32,7 @@
 - [X] T-001-001-05: ปรับปรุงช่องกรองวันที่ให้เล็กลง ชิดขวา และเพิ่มช่องกรองรายชื่อแรงงาน (Autocomplete) · attempts: 1 · tool_calls: 12
 - [X] T-001-001-06: ปรับปรุงระบบจัดการ API Cache และหน้าจอดาวน์โหลด Spinner (Workspace, Daily Report, Backlog) · attempts: 1 · tool_calls: 38
 - [X] T-001-001-08: แก้ไข Error Maximum update depth exceeded ที่หน้า workspace/index.tsx (→ ERR-007) · attempts: 1 · tool_calls: 5
+- [X] T-001-001-10: แก้ไขปัญหา Spinner ซ้อน และยุบรวมคอมโพเนนต์ดาวน์โหลดช่วงเปลี่ยนผ่านหน้าจอ (→ ERR-085) · attempts: 1 · tool_calls: 54
 - [/] T-009: บันทึกรูปภาพจาก Site FM แนบใน Help Daily Report เมื่อมีการเปิดงาน Support
 - [X] T-010: ปรับปรุง UI หน้าต่างสร้างรายงาน งานย่อย (Subtasks) เป็น 1 แถวต่อ 1 งาน และซ่อน Scrollbar · attempts: 1 · tool_calls: 10
 - [X] T-011: แสดงรายการ Subtasks ใน Workspace ก่อนดู Daily Report Log · attempts: 1 · tool_calls: 8
@@ -39,6 +40,7 @@
 - [X] T-011-001-02: แก้ไข RangeError: Invalid time value ใน CustomPickersDay ปฏิทิน Daily Report (→ ERR-009) · attempts: 1 · tool_calls: 14
 - [X] T-011-001-03: แก้ไขบักจุดแสดงสถานะสีปฏิทินและ Progress งานย่อย (Subtasks) FM แสดงผลไม่ถูกต้อง (→ ERR-010) · attempts: 1 · tool_calls: 12
 - [X] T-011-001-04: แก้ไข Logic การ Enforce leaveType ในหลังบ้าน submitDailyReport ให้ทำงานกับ finalReportData (→ ERR-011) · attempts: 1 · tool_calls: 36
+- [X] T-011-003-01: ปรับปรุงหน้าต่างรายงานให้แสดงข้อมูลของวันที่มีรายงานล่าสุดแทนหน้าว่างเปล่าเมื่อยังไม่มีการลงรายงานในวันปัจจุบัน (→ ERR-086) · attempts: 1 · tool_calls: 68
 - [X] T-011-002-01: ปรับปรุงหน้าประวัติย้อนหลัง (Backlog) และระบบปลดล็อกให้รองรับโครงสร้าง Subtasks (→ ERR-012) · attempts: 1 · tool_calls: 12
 - [X] T-012: ตารางกำลังพลและแผนงาน (Labor & Plans Table Workspace) สำหรับหัวหน้างาน · attempts: 1
 - [X] T-012-001-01: นำปุ่มส่งออกและล็อกแผนงานที่เลือกพร้อม checkbox/ตัวแปรที่ผูกออกเพื่อให้เป็นนอกระบบ · attempts: 1 · tool_calls: 4
@@ -176,9 +178,43 @@
 
 
 - [ ] T-020-001-05-11: แก้ไขบั๊ก Column Header ของ Kanban Board ไม่ lock เมื่อ scroll (Sticky Header)
+- [X] T-020-001-05-12: ปรับปรุงช่อง Search ในแถบด้านข้างหน้า รายงานประจำวัน ให้มีขนาดสมดุลเต็มกรอบบนอุปกรณ์ขนาด laptop (→ ERR-087) · attempts: 1 · tool_calls: 25
 - [X] T-012-009-12: ปรับปรุงตารางกำลังพลและแผนงานสำหรับเวอร์ชันมือถือด้วยรูปแบบการ์ดรายการ (Card-based List) · attempts: 1 · tool_calls: 3
 - [X] T-012-009-13: ซ่อนปุ่ม Export to Excel บนหน้าจอมือถือในหน้าตารางกำลังพล · attempts: 1 · tool_calls: 2
 - [X] T-012-009-14: ปรับปรุงส่วนเลือกผู้รับผิดชอบของ Quick Subtask และหน้าต่างแก้ไขย่อย ให้ดึงบทบาท SE เพิ่มเติม · attempts: 1 · tool_calls: 2
 - [X] T-012-009-15: popup แก้ไขเวลาทำงาน แถวลาให้เอาช่อง ประเภทการลาออก · attempts: 1 · tool_calls: 11
 - [X] T-012-009-17: ส่งการแจ้งเตือนเมื่อมีการมอบหมายงาน (Task Assignment Notifications Backend) · attempts: 1 · tool_calls: 15
+- [X] T-021: ปรับปรุงประสิทธิภาพการอ่านเขียนฐานข้อมูลคิวรีในหน้ารายงานประจำวัน (daily-reports) และทำดัชนี (Query Indexing) · attempts: 1 · tool_calls: 38
+- [X] T-022: ปรับปรุงประสิทธิภาพการดึงข้อมูล Presence และระบบ Heartbeat/Logs ที่หน้า Activity Monitor · attempts: 1 · tool_calls: 10
+- [/] T-023: เพิ่มตัวกรองโครงการ (Project Level) และแยก Scrollbar งานช่วยเหลือใน Structure Tree หน้า Workspace
+- [X] T-032: ผสานอัปเดตระบบ Harness จากโฟลเดอร์ดาวน์โหลดล่าสุด · attempts: 1 · tool_calls: 35
+- [X] T-033: ผสานอัปเดตระบบ Harness เพิ่มเติมจากโฟลเดอร์ดาวน์โหลดล่าสุด (มิถุนายน 2026) · attempts: 1 · tool_calls: 46
+- [X] T-034: เพิ่มหน้าคู่มือการใช้งานของระบบและเชื่อมโยงจากหน้า Login · attempts: 1 · tool_calls: 25
+
+
+
+
+
+- [X] T-035: เขียนคู่มือการใช้งานระบบใหม่ทั้งหมด — Single Source of Truth, 10 roles, step-by-step actions · 11 HTML + 2 JSON + Playwright script · attempts:1 · tool_calls:~30
+- [X] T-015-002-01: แก้ไขปัญหาหน้าจอค้างเมื่อกดปุ่มออกจากระบบ (Logout) และแก้ปัญหา Path Localization หายเมื่อเปลี่ยนเส้นทาง (→ ERR-088) · attempts: 1 · tool_calls: 13
+- [/] T-024: ปรับปรุงระบบจัดการข้อมูลการเงินแรงงานรายวัน และซ่อนเมนูประกันสังคม
+  - [X] T-024-001: S1 · Diagnose: ตรวจสอบตำแหน่งอ้างอิงของระบบข้อมูลการเงินและสถิติ · attempts: 1 · tool_calls: 3
+  - [X] T-024-002: S2 · Edit & Verify: ซ่อนแท็บข้อมูลการเงิน เพิ่มช่องสถิติในหน้ากรอก/นำเข้า และซ่อนเมนูประกันสังคม · attempts: 1 · tool_calls: 5
+  - [/] T-024-003: S3 · Sync & Close: อัปเดตดัชนีสัญลักษณ์และปิดการทำงานรอบนี้
+- [X] T-025: ปรับปรุงประสิทธิภาพการดึงข้อมูลและบันทึกข้อมูลในระบบคำนวณค่าแรง (Wage Calculation DB Optimizations) (→ ERR-089) · attempts: 1 · tool_calls: 10
+  - [X] T-025-01: S1 · Diagnose: ตรวจสอบจุดเกิดปัญหา N+1 queries และ redundant writes
+  - [X] T-025-02: S2 · Edit & Verify: ปรับปรุงการคิวรีเป็นแบบ bulk และ dirty-check ในการเขียนรายงาน
+  - [X] T-025-03: S3 · Sync & Close: อัปเดตดัชนีและบันทึกประวัติการแก้ไข
+- [X] T-036: ปรับปรุงการจัดการทรัพยากรและลบฟังก์ชันการแก้ไขเวลาทำงานด้วยตนเอง (Optimize resource management and remove manual editing features)
+  - [X] T-036-01: S1 · Fix duplicate query fetching and cache wagePeriods · attempts: 1 · tool_calls: 2
+  - [X] T-036-02: S2 · Remove manual edit dialog/mutations and cache dc-stats · attempts: 1 · tool_calls: 3
+  - [X] T-036-03: S3 · Clean up backend controller and routes · attempts: 1 · tool_calls: 3
+  - [X] T-036-04: S4 · Clean up backend ReconciliationService · attempts: 1 · tool_calls: 3
+  - [X] T-036-05: S5 · Build and Verify · attempts: 1 · tool_calls: 6
+  - [X] T-036-06: S6 · Fix segment matching swap bug and add OT Noon continuous transition bypass · attempts: 1 · tool_calls: 2
+
+
+
+
+
 

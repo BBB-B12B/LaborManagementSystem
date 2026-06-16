@@ -1,4 +1,4 @@
-import { api } from './api/client';
+import apiClient, { api } from './api/client';
 
 export interface TaskAssignee {
   employeeId: string;
@@ -148,6 +148,20 @@ export const taskService = {
    */
   getTasks: async (filters?: { projectId?: string }): Promise<Task[]> => {
     return await api.get<Task[]>('/tasks', filters);
+  },
+
+  /**
+   * Fetch tasks with pagination
+   */
+  getTasksPaginated: async (filters?: { projectId?: string; page?: number; limit?: number }): Promise<{ data: Task[]; pagination: { total: number; page: number; limit: number; hasMore: boolean } }> => {
+    const response = await apiClient.get('/tasks', { params: filters });
+    if (response.data.success) {
+      return {
+        data: response.data.data,
+        pagination: response.data.pagination
+      };
+    }
+    throw new Error(response.data.error || 'Request failed');
   },
 
   /**

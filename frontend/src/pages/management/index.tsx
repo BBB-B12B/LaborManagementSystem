@@ -52,15 +52,15 @@ const MANAGEMENT_SECTIONS = [
     permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
       permissions.canAccessDCManagement,
   },
-  {
-    key: 'social-security-rules',
-    label: 'จัดการเกณฑ์ประกันสังคม',
-    description: 'ตั้งค่าเงื่อนไขการหักเงินประกันสังคมตามรายได้',
-    icon: <EngineeringIcon fontSize="large" color="primary" />, // Can reuse icon or import a new one like SettingsIcon
-    href: '/management/social-security-rules',
-    permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
-      permissions.canAccessSSOManagement,
-  },
+  // {
+  //   key: 'social-security-rules',
+  //   label: 'จัดการเกณฑ์ประกันสังคม',
+  //   description: 'ตั้งค่าเงื่อนไขการหักเงินประกันสังคมตามรายได้',
+  //   icon: <EngineeringIcon fontSize="large" color="primary" />, // Can reuse icon or import a new one like SettingsIcon
+  //   href: '/management/social-security-rules',
+  //   permissionCheck: (permissions: ReturnType<typeof usePermissions>) =>
+  //     permissions.canAccessSSOManagement,
+  // },
   {
     key: 'company-holidays',
     label: 'จัดการวันหยุดบริษัท',

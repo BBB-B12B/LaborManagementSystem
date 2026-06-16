@@ -108,12 +108,17 @@
     "description": "Creating Implementation Plan Artifact Before MECE Plan Approval (Recurrence of CFP-005/CFP-010)",
     "fixes": [],
     "topic": "phase-gate-skip",
-    "recurrences": [],
-    "count": 0,
+    "recurrences": [
+      {
+        "date": "2026-06-15",
+        "context": "T-034: Created implementation_plan.md first due to Planning Mode prompt conflict, violating the mece plan order."
+      }
+    ],
+    "count": 1,
     "approved_proposal": "",
-    "last_seen": null,
-    "window_count": 0,
-    "stale": true
+    "last_seen": "2026-06-15",
+    "window_count": 1,
+    "stale": false
   },
   "CFP-012": {
     "status": "active",

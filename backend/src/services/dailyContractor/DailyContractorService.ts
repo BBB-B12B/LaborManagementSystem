@@ -19,6 +19,7 @@ import {
   calculateFollowerAccommodation,
 } from '../../models';
 import { collections } from '../../config/collections';
+import { db } from '../../config/firebase';
 import { AppError } from '../../api/middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { config } from '../../config';
@@ -77,8 +78,30 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
           department = project.department;
         }
       }
-
       const now = new Date();
+      const currentYear = now.getFullYear().toString();
+      const hasAttendanceStats =
+        input.paidLeave !== undefined ||
+        input.unpaidLeave !== undefined ||
+        input.lateMinutes !== undefined ||
+        input.earlyLeaveMinutes !== undefined ||
+        input.absentDays !== undefined;
+
+      const attendanceStats = hasAttendanceStats
+        ? {
+            yearly: {
+              [currentYear]: {
+                paidLeave: input.paidLeave || 0,
+                unpaidLeave: input.unpaidLeave || 0,
+                lateMinutes: input.lateMinutes || 0,
+                earlyLeaveMinutes: input.earlyLeaveMinutes || 0,
+                absentDays: input.absentDays || 0,
+              },
+            },
+            periods: {},
+          }
+        : undefined;
+
       const dcData: Omit<DailyContractor, 'id'> = {
         employeeId,
         username,
@@ -109,8 +132,8 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
         laundryFee: input.laundryFee || 0,
         airConFee: input.airConFee || 0,
         otherDeduction: input.otherDeduction || 0,
+        attendanceStats,
       };
-
       // Enforce DocumentID = DC-EmployeeID (F-006 & T-230)
       if (!employeeId) {
         throw new AppError('Employee ID is required', 400);
@@ -244,6 +267,39 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       if (input.laundryFee !== undefined) updateData.laundryFee = input.laundryFee;
       if (input.airConFee !== undefined) updateData.airConFee = input.airConFee;
       if (input.otherDeduction !== undefined) updateData.otherDeduction = input.otherDeduction;
+
+      if (
+        input.paidLeave !== undefined ||
+        input.unpaidLeave !== undefined ||
+        input.lateMinutes !== undefined ||
+        input.earlyLeaveMinutes !== undefined ||
+        input.absentDays !== undefined
+      ) {
+        const currentYear = new Date().getFullYear().toString();
+        const existingStats = existing.attendanceStats || { yearly: {}, periods: {} };
+        const yearlyStats = existingStats.yearly || {};
+        const currentYearStats = yearlyStats[currentYear] || {
+          paidLeave: 0,
+          unpaidLeave: 0,
+          lateMinutes: 0,
+          earlyLeaveMinutes: 0,
+          absentDays: 0,
+        };
+
+        updateData.attendanceStats = {
+          ...existingStats,
+          yearly: {
+            ...yearlyStats,
+            [currentYear]: {
+              paidLeave: input.paidLeave !== undefined ? input.paidLeave : currentYearStats.paidLeave,
+              unpaidLeave: input.unpaidLeave !== undefined ? input.unpaidLeave : currentYearStats.unpaidLeave,
+              lateMinutes: input.lateMinutes !== undefined ? input.lateMinutes : currentYearStats.lateMinutes,
+              earlyLeaveMinutes: input.earlyLeaveMinutes !== undefined ? input.earlyLeaveMinutes : currentYearStats.earlyLeaveMinutes,
+              absentDays: input.absentDays !== undefined ? input.absentDays : currentYearStats.absentDays,
+            },
+          },
+        };
+      }
 
       // Remove password from update data (we use passwordHash)
       delete (updateData as any).password;
@@ -393,8 +449,6 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       };
     }
 
-    const lowerKeyword = trimmed.toLowerCase();
-
     // 2. If it is an exact document lookup, try that first (Document ID is DC-[employeeId])
     const directDoc = await this.getById(`DC-${trimmed}`);
     if (directDoc) {
@@ -407,42 +461,36 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       };
     }
 
-    // Also check for direct query matches on employeeId
-    const queryByEmpId = await this.query([
-      { field: 'employeeId', operator: '==', value: trimmed },
-    ]);
-    if (queryByEmpId.length > 0) {
-      return {
-        items: queryByEmpId,
-        total: queryByEmpId.length,
-        page: 1,
-        pageSize,
-        totalPages: 1,
-      };
-    }
+    // 3. Fallback to in-memory filtering over a larger batch (limit 2000).
+    // Since we optimized dailyContractors.routes.ts to skip N+1 subcollection gets (hasCompensation: false),
+    // querying all contractors in one batch takes only ~70-150ms.
+    // This allows full case-insensitive substring matching (includes) anywhere in the name/employeeId.
+    const snapshot = await this.collection.limit(2000).get();
+    const allItems = snapshot.docs.map((doc) => doc.data() as DailyContractor);
 
-    // 3. Fallback to fetching all and filtering in memory ONLY when a search keyword is provided
-    const result = await this.getAll({
-      page: 1,
-      pageSize: 5000,
-    });
-
-    const filtered = result.items.filter((dc) => {
+    const lowerKeyword = trimmed.toLowerCase();
+    const filtered = allItems.filter((dc) => {
       const idMatch = dc.employeeId?.toLowerCase().includes(lowerKeyword);
       const nameMatch = dc.name?.toLowerCase().includes(lowerKeyword);
       return Boolean(idMatch || nameMatch);
     });
 
-    const offset = (page - 1) * pageSize;
+    // Sort alphabetically by name
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+
+    const total = filtered.length;
+    const startIndex = (page - 1) * pageSize;
+    const items = filtered.slice(startIndex, startIndex + pageSize);
 
     return {
-      items: filtered.slice(offset, offset + pageSize),
-      total: filtered.length,
+      items,
+      total,
       page,
       pageSize,
-      totalPages: Math.ceil(filtered.length / pageSize),
+      totalPages: Math.ceil(total / pageSize),
     };
   }
+
 
   private sortByEffectiveDate<T extends { effectiveDate: Date; updatedAt: Date }>(
     records: T[]
@@ -502,6 +550,94 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
       expense,
     };
   }
+
+  async getCompensationDetailsBulk(
+    dailyContractorIds: string[]
+  ): Promise<Map<string, { income: DCIncomeDetails | null; expense: DCExpenseDetails | null }>> {
+    const map = new Map<string, { income: DCIncomeDetails | null; expense: DCExpenseDetails | null }>();
+    if (dailyContractorIds.length === 0) return map;
+
+    // Initialize map entries with null
+    for (const id of dailyContractorIds) {
+      map.set(id, { income: null, expense: null });
+    }
+
+    // Helper to chunk array
+    const chunkArray = <T>(arr: T[], size: number): T[][] => {
+      const chunks: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+
+    const chunks = chunkArray(dailyContractorIds, 30);
+
+    // Fetch incomes and expenses in parallel batches
+    const incomeRecords: DCIncomeDetails[] = [];
+    const expenseRecords: DCExpenseDetails[] = [];
+
+    await Promise.all([
+      // Fetch all active/matching incomes
+      Promise.all(
+        chunks.map(async (chunk) => {
+          const snap = await db
+            .collectionGroup('dcIncomeDetails')
+            .where('dailyContractorId', 'in', chunk)
+            .get();
+          snap.docs.forEach((doc) => {
+            const converted = dcIncomeDetailsConverter.fromFirestore(doc);
+            incomeRecords.push(converted);
+          });
+        })
+      ),
+      // Fetch all active/matching expenses
+      Promise.all(
+        chunks.map(async (chunk) => {
+          const snap = await db
+            .collectionGroup('dcExpenseDetails')
+            .where('dailyContractorId', 'in', chunk)
+            .get();
+          snap.docs.forEach((doc) => {
+            const converted = dcExpenseDetailsConverter.fromFirestore(doc);
+            expenseRecords.push(converted);
+          });
+        })
+      ),
+    ]);
+
+    // Group records by contractor ID
+    const incomeByDC = new Map<string, DCIncomeDetails[]>();
+    const expenseByDC = new Map<string, DCExpenseDetails[]>();
+
+    for (const inc of incomeRecords) {
+      if (!incomeByDC.has(inc.dailyContractorId)) {
+        incomeByDC.set(inc.dailyContractorId, []);
+      }
+      incomeByDC.get(inc.dailyContractorId)!.push(inc);
+    }
+
+    for (const exp of expenseRecords) {
+      if (!expenseByDC.has(exp.dailyContractorId)) {
+        expenseByDC.set(exp.dailyContractorId, []);
+      }
+      expenseByDC.get(exp.dailyContractorId)!.push(exp);
+    }
+
+    // Find the latest record per contractor using sortByEffectiveDate
+    for (const id of dailyContractorIds) {
+      const incList = incomeByDC.get(id) || [];
+      const expList = expenseByDC.get(id) || [];
+
+      const income = incList.length > 0 ? this.sortByEffectiveDate(incList)[0] : null;
+      const expense = expList.length > 0 ? this.sortByEffectiveDate(expList)[0] : null;
+
+      map.set(id, { income, expense });
+    }
+
+    return map;
+  }
+
 
   async upsertCompensationDetails(
     dailyContractorId: string,
