@@ -31,8 +31,6 @@ jobs:
 
       # 3. สั่ง Deploy ทุกอย่างไปยัง Firebase (Hosting, Functions, Rules)
       - name: Deploy to Firebase
-        uses: w9jds/firebase-action@v2.2.0
-        with:
-          args: deploy
+        run: npx firebase-tools deploy
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
