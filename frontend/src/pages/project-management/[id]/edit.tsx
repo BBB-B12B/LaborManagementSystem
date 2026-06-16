@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Container, Paper, Alert } from '@mui/material';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { LoadingSpinner } from '@/components/common';
-import { ProjectForm } from '../components/ProjectForm';
+import { ProjectForm } from '@/page-components/project-management/components/ProjectForm';
 import { projectService } from '@/services/projectService';
 import { type ProjectFormData } from '@/validation/projectSchema';
 

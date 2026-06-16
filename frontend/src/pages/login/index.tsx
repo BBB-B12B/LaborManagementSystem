@@ -16,8 +16,8 @@ import {
   Paper,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import LoginForm from './LoginForm';
-import { LoginFormData } from './loginSchema';
+import LoginForm from '@/page-components/login/LoginForm';
+import { LoginFormData } from '@/page-components/login/loginSchema';
 import { authService } from '@/services/api/auth.service';
 import { useAuthStore } from '@/store/authStore';
 

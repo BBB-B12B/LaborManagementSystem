@@ -34,13 +34,13 @@ import { useDeleteConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import { RoleSelect } from '../../components/forms/RoleSelect';
 import { DepartmentSelect } from '../../components/forms/DepartmentSelect';
-import { UserDrawer } from './components/UserDrawer';
+import { UserDrawer } from '@/page-components/member-management/components/UserDrawer';
 import type {
   UserCreateFormData as UserCreateInput,
   UserUpdateFormData as UserEditInput,
 } from '@/validation/userManagementSchema';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { UserImportDialog } from './components/UserImportDialog';
+import { UserImportDialog } from '@/page-components/member-management/components/UserImportDialog';
 
 /**
  * Member Management List Page

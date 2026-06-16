@@ -25,7 +25,7 @@ import { th } from 'date-fns/locale';
 // Components
 import ProjectSelect from '@/components/forms/ProjectSelect';
 import DatePicker from '@/components/forms/DatePicker';
-import { DailyReportEntryModal } from './DailyReportEntryModal';
+import { DailyReportEntryModal } from '@/page-components/daily-reports/mobile/DailyReportEntryModal';
 import { useAuthStore } from '@/store/authStore';
 import dailyReportService, { DailyReportEntry, DailyReport } from '@/services/dailyReportService';
 
@@ -39,6 +39,13 @@ const MobileDailyReportPage = () => {
     const [date, setDate] = useState<Date | null>(new Date());
     const [modalOpen, setModalOpen] = useState(false);
     const [editingEntry, setEditingEntry] = useState<DailyReportEntry | undefined>(undefined);
+
+    // Client-only render: this page uses browser-only components (date pickers, etc.)
+    // and is excluded from static prerendering during `next build` (output: 'export').
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Load Report
     const { data: report, isLoading, refetch } = useQuery({
@@ -98,6 +105,11 @@ const MobileDailyReportPage = () => {
     // Let's list cards. Simple first.
 
     const entries = report?.entries || [];
+
+    // Skip server prerender — render only after mounting in the browser
+    if (!mounted) {
+        return null;
+    }
 
     return (
         <Container maxWidth="sm" sx={{ p: 0, minHeight: '100vh', bgcolor: '#F4F6F8', pb: 10 }}>

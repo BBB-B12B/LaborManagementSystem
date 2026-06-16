@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Container, Paper, Alert } from '@mui/material';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { LoadingSpinner } from '@/components/common';
-import { DailyReportForm } from '../components/DailyReportForm';
+import { DailyReportForm } from '@/page-components/daily-reports/components/DailyReportForm';
 import { dailyReportService } from '@/services/dailyReportService';
 import { type DailyReportFormData } from '@/validation/dailyReportSchema';
 

@@ -6,7 +6,7 @@ const nextConfig = {
   // Static export - deploy to Firebase Hosting CDN directly (no SSR needed, app is client-side)
   output: 'export',
 
-  transpilePackages: ['@mui/x-date-pickers', '@mui/x-data-grid'],
+  transpilePackages: ['@mui/x-date-pickers', '@mui/x-data-grid', '@mui/lab'],
 
   // Environment variables
   env: {

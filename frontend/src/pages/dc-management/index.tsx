@@ -44,8 +44,8 @@ import { useToast } from '../../components/common/Toast';
 import { SkillSelect } from '../../components/forms/SkillSelect';
 import { ProjectSelect } from '../../components/forms/ProjectSelect';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { DCModal } from './components/DCModal';
-import { DCImportDialog } from './components/DCImportDialog';
+import { DCModal } from '@/page-components/dc-management/components/DCModal';
+import { DCImportDialog } from '@/page-components/dc-management/components/DCImportDialog';
 import type { DCCreateInput, DCEditInput } from '@/validation/dcSchema';
 import { useAuthStore } from '@/store/authStore';
 

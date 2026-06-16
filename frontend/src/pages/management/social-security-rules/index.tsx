@@ -15,7 +15,7 @@ import {
   SocialSecurityRule,
   CreateSocialSecurityRuleInput,
 } from '@/services/socialSecurityRuleService';
-import { SocialSecurityRuleModal } from './components/SocialSecurityRuleModal';
+import { SocialSecurityRuleModal } from '@/page-components/management/social-security-rules/components/SocialSecurityRuleModal';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 const formatNumber = (num: number) => {

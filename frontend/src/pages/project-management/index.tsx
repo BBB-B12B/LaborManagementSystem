@@ -20,8 +20,8 @@ import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { BackButton, LoadingSpinner, useToast, useDeleteConfirmDialog } from '@/components/common';
 import { projectService, type Project } from '@/services/projectService';
-import { ProjectDrawer } from './components/ProjectDrawer';
-import { ProjectCreateModal } from './components/ProjectCreateModal';
+import { ProjectDrawer } from '@/page-components/project-management/components/ProjectDrawer';
+import { ProjectCreateModal } from '@/page-components/project-management/components/ProjectCreateModal';
 import { PROJECT_STATUS_OPTIONS, type ProjectFormData } from '@/validation/projectSchema';
 
 const CODE_PREFIX = 'P';

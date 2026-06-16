@@ -16,7 +16,7 @@ import { useRouter } from 'next/router';
 import { Container, Typography, Box, Button, Alert } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserForm } from '../components/UserForm';
+import { UserForm } from '@/page-components/member-management/components/UserForm';
 import { memberService } from '../../../services/memberService';
 import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 import { useToast } from '../../../components/common/Toast';

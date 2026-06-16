@@ -8,7 +8,7 @@ import { useRouter } from 'next/router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Container, Paper } from '@mui/material';
 import { Layout, ProtectedRoute } from '@/components/layout';
-import { OvertimeForm } from './components/OvertimeForm';
+import { OvertimeForm } from '@/page-components/overtime/components/OvertimeForm';
 import { overtimeService } from '@/services/overtimeService';
 import { type OvertimeFormData } from '@/validation/overtimeSchema';
 
