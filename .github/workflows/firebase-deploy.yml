@@ -20,7 +20,7 @@ jobs:
       # 1. ติดตั้ง Dependencies และ Build ส่วนของ Cloud Functions (Backend)
       - name: Install and Build Functions
         run: |
-          npm --prefix functions ci
+          npm --prefix functions install
           npm --prefix functions run build
 
       # 2. ติดตั้ง Dependencies สำหรับ Frontend (Next.js)
