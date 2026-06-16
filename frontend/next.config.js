@@ -37,6 +37,11 @@ const nextConfig = {
     return config;
   },
 
+  // Skip ESLint during build — lint separately
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Image optimization disabled for static export
   images: {
     unoptimized: true,
