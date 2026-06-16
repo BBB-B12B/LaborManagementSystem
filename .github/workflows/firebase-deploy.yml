@@ -16,10 +16,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: |
-            functions/package-lock.json
-            frontend/package-lock.json
 
       # 1. ติดตั้ง Dependencies และ Build ส่วนของ Cloud Functions (Backend)
       - name: Install and Build Functions
@@ -31,7 +27,7 @@ jobs:
       # เพื่อให้ Firebase Web Frameworks สามารถนำไป build และ deploy ต่อได้
       - name: Install Frontend Dependencies
         run: |
-          npm --prefix frontend ci
+          npm --prefix frontend install --legacy-peer-deps
 
       # 3. สั่ง Deploy ทุกอย่างไปยัง Firebase (Hosting, Functions, Rules)
       - name: Deploy to Firebase
