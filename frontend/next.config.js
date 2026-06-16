@@ -3,13 +3,10 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
-  transpilePackages: ['@mui/x-date-pickers', '@mui/x-data-grid'],
+  // Static export - deploy to Firebase Hosting CDN directly (no SSR needed, app is client-side)
+  output: 'export',
 
-  // i18n configuration
-  i18n: {
-    defaultLocale: 'th',
-    locales: ['th', 'en'],
-  },
+  transpilePackages: ['@mui/x-date-pickers', '@mui/x-data-grid'],
 
   // Environment variables
   env: {
@@ -29,7 +26,6 @@ const nextConfig = {
 
   // Webpack configuration
   webpack: (config, { isServer }) => {
-    // Fix for canvas issues with some packages
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -41,33 +37,9 @@ const nextConfig = {
     return config;
   },
 
-  // Images configuration
+  // Image optimization disabled for static export
   images: {
-    domains: ['your-r2-domain.com'], // Replace with actual Cloudflare R2 domain
-    formats: ['image/webp', 'image/avif'],
-  },
-
-  // Headers for security
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-        ],
-      },
-    ];
+    unoptimized: true,
   },
 };
 
