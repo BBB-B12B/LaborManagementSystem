@@ -77,7 +77,8 @@ if (!config.firebase.useEmulator) {
 const requiredEnvVars = ['FIREBASE_PROJECT_ID'];
 
 if (config.nodeEnv === 'production') {
-  requiredEnvVars.push('JWT_SECRET', 'CLOUDFLARE_R2_ENDPOINT', 'CLOUDFLARE_R2_ACCESS_KEY');
+  // R2 is legacy/unused (storage now goes through Firebase Storage) — only JWT_SECRET is required.
+  requiredEnvVars.push('JWT_SECRET');
 }
 
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);

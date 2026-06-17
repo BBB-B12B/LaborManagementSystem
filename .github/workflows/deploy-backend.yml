@@ -1,0 +1,49 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  # Allow manual runs from the Actions tab (first deploy / re-deploy)
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Build the backend Dockerfile via Cloud Build and deploy to Cloud Run.
+      # Firebase Admin uses the Cloud Run service account automatically (no key needed).
+      # CORS_ORIGIN holds two comma-separated origins, so a custom "^@^" delimiter is used
+      # to stop gcloud from treating those commas as env-var separators.
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy lms-backend \
+            --source backend \
+            --project labor-management-system-33b06 \
+            --region asia-southeast1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --set-env-vars "^@^NODE_ENV=production@FIREBASE_PROJECT_ID=labor-management-system-33b06@FIREBASE_EMULATOR_ENABLED=false@CORS_ORIGIN=https://labor-management-system-33b06.web.app,https://labor-management-system-33b06.firebaseapp.com@JWT_SECRET=${{ secrets.JWT_SECRET }}"
+
+      - name: Show deployed URL
+        run: |
+          echo "Backend URL:"
+          gcloud run services describe lms-backend \
+            --project labor-management-system-33b06 \
+            --region asia-southeast1 \
+            --format 'value(status.url)'

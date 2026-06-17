@@ -131,7 +131,9 @@ app.use(errorHandler);
 // Only runs when NOT loaded by Firebase CLI for function deployment.
 // Firebase sets FUNCTION_TARGET or K_SERVICE env vars when loading for analysis.
 // ============================================
-const isRunningAsCloudFunction = !!(process.env.FUNCTION_TARGET || process.env.K_SERVICE);
+// NOTE: only FUNCTION_TARGET (set by the Functions Framework) means "loaded as a Cloud Function".
+// K_SERVICE is ALSO set on Cloud Run, where we DO want app.listen() — so do not check it here.
+const isRunningAsCloudFunction = !!process.env.FUNCTION_TARGET;
 
 if (!isRunningAsCloudFunction) {
   app.listen(PORT, () => {
