@@ -29,5 +29,15 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/scripts/**",
+    "src/scratch/**",
+    "src/check_backlog.ts",
+    "src/check_user.ts",
+    "src/testApi.ts"
+  ]
 }
