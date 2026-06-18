@@ -80,6 +80,17 @@ class ProjectService {
   }
 
   /**
+   * Get project options for helper users (cross-project support pickup):
+   * own active projects ∪ active projects that currently have an open support request.
+   * Used by TaskCreateModal so helper users can select the requesting project.
+   */
+  async getSupportOptions(): Promise<Project[]> {
+    const result = await api.get<Project[] | { items: Project[] }>('/projects/support-options');
+    const items = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : [];
+    return items.map((project) => this.normalize(project));
+  }
+
+  /**
    * Get a single project by ID
    */
   async getById(id: string): Promise<Project> {

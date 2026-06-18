@@ -215,7 +215,25 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             memberService.getAllUsers({ roleId: 'FM', pageSize: 1000 }),
             memberService.getAllUsers({ roleId: 'SE', pageSize: 1000 }),
           ]);
-          setProjects(projectsData);
+
+          // Helper users (คลังสินค้าและบริการ / บริการลูกค้า) ต้องเห็น "โครงการตัวเอง + โครงการที่มีงานขอความช่วยเหลือ"
+          // เพื่อรับงานข้ามโครงการได้ → ใช้ getSupportOptions แทน getActive (fallback กลับไป getActive ถ้า error
+          // เพื่อไม่ให้ flow สร้างงานปกติพัง)
+          const isHelperProject = projectsData.some(p =>
+            user?.projectLocationIds?.includes(p.id) &&
+            (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
+          );
+          let finalProjects = projectsData;
+          if (isHelperProject) {
+            try {
+              finalProjects = await projectService.getSupportOptions();
+            } catch (error) {
+              console.error('Failed to fetch support-options, falling back to active projects', error);
+              finalProjects = projectsData;
+            }
+          }
+
+          setProjects(finalProjects);
           setFmUsers([
             ...(fmUsersData.users || []),
             ...(seUsersData.users || [])
@@ -223,15 +241,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
 
           // --- LOGIC: Default Project Selection ---
           if (!isEdit && user?.projectLocationIds && user.projectLocationIds.length > 0) {
-            // Check if user belongs to "Helper/Support" projects by Project Name
-            const isHelperProject = projectsData.some(p => 
-              user.projectLocationIds.includes(p.id) && 
-              (p.projectName.includes('คลังสินค้าและบริการ') || p.projectName.includes('บริการลูกค้า'))
-            );
-
             const userProjectId = user.projectLocationIds[0];
             // Match by ID or Project Code (to support both legacy and new ID formats)
-            const matchedProject = projectsData.find(p => 
+            const matchedProject = finalProjects.find(p =>
               p.id === userProjectId || p.code === userProjectId
             );
 

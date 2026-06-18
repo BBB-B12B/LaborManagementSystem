@@ -966,6 +966,55 @@ export class TaskService {
   }
 
   /**
+   * คืนค่าชุดของ projectId ที่มีงานขอความช่วยเหลือ (support request) ที่ยังเปิดอยู่ >= 1 รายการ
+   *
+   * ใช้ collection-group query แบบเงื่อนไขเดียว (isSupportRequest == true) ซึ่งใช้
+   * automatic single-field index ของ Firestore → ไม่ต้องสร้าง composite index เองใน after-sale
+   * จากนั้นกรองใน memory (!isPickedUpBySupport && dailyProgress < 100) และ resolve projectId
+   * จาก parent task (อ่าน task ละครั้ง โดย dedupe ref ก่อน)
+   */
+  async getProjectIdsWithOpenSupportRequests(): Promise<Set<string>> {
+    try {
+      const subSnapshot = await afterSaleDb
+        .collectionGroup('subtasks')
+        .where('isSupportRequest', '==', true)
+        .get();
+
+      // กรองเฉพาะงานขอความช่วยเหลือที่ยังไม่ถูกรับ และยังทำไม่เสร็จ
+      const openTaskRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+      for (const subDoc of subSnapshot.docs) {
+        const subData = subDoc.data();
+        const isPickedUp = subData.isPickedUpBySupport === true;
+        const progress = subData.dailyProgress || 0;
+        if (isPickedUp || progress >= 100) continue;
+
+        const taskRef = subDoc.ref.parent.parent; // .../tasks/{taskId}
+        if (taskRef) openTaskRefs.set(taskRef.path, taskRef);
+      }
+
+      if (openTaskRefs.size === 0) return new Set<string>();
+
+      // อ่าน task แต่ละตัว (dedupe แล้ว) เพื่อดึง projectId
+      const projectIds = new Set<string>();
+      const taskDocs = await Promise.all(
+        Array.from(openTaskRefs.values()).map((ref) => ref.get())
+      );
+      for (const taskDoc of taskDocs) {
+        if (!taskDoc.exists) continue;
+        const taskData = taskDoc.data() as Partial<Task> | undefined;
+        if (!taskData) continue;
+        if (taskData.isActive === false) continue;
+        if (taskData.projectId) projectIds.add(taskData.projectId);
+      }
+
+      return projectIds;
+    } catch (error) {
+      console.error('[TaskService] getProjectIdsWithOpenSupportRequests error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * อัปเดต Task พร้อมระบบ Audit Trail และ Category Migration
    */
   async updateTask(id: string, input: UpdateTaskInput, updatedBy: string): Promise<void> {

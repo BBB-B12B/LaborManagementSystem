@@ -8,6 +8,7 @@
 import { Router, Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { projectLocationService } from '../../services/project/ProjectLocationService';
+import { taskService } from '../../services/TaskService';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, type AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
@@ -124,6 +125,43 @@ router.get('/active', async (_req: Request, res: Response) => {
     res.json({
       success: true,
       data: projects,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/projects/support-options
+ * ดึงรายการโครงการสำหรับผู้ช่วย (helper) ในการสร้าง/รับงานข้ามโครงการ:
+ *   = โครงการของตัวเอง (active) ∪ โครงการ active ที่มีงานขอความช่วยเหลือเปิดอยู่
+ * ใช้แทน /active สำหรับ dropdown ของ helper เพื่อให้เลือกโครงการที่ขอความช่วยเหลือได้
+ */
+router.get('/support-options', async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    // โครงการ active ทั้งหมด (ไม่มี RBAC filter — เราจะกรองเองด้านล่าง)
+    const activeProjects = await projectLocationService.getActiveProjects();
+
+    // โครงการที่มีงานขอความช่วยเหลือเปิดอยู่ (query เงื่อนไขเดียว → ใช้ auto index)
+    const supportProjectIds = await taskService.getProjectIdsWithOpenSupportRequests();
+
+    const data = activeProjects.filter((p: any) => {
+      const isOwn =
+        userProjects.includes(p.id) ||
+        userProjects.includes(p.code) ||
+        userProjects.includes(p.projectCode);
+      return isOwn || supportProjectIds.has(p.id);
+    });
+
+    res.json({
+      success: true,
+      data,
     });
   } catch (error: any) {
     res.status(500).json({
