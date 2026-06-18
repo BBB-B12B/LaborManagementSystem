@@ -38,6 +38,9 @@ export class TaskService {
       }
     }
 
+    // Run-number offset for appended subtasks (set inside the tx, reused by the notification block)
+    let appendSubtaskOffset = 0;
+
     const createdTask = await afterSaleDb.runTransaction(async (transaction) => {
       // --- 2. ALL READS IN AFTER-SALE DB ---
       
@@ -121,6 +124,15 @@ export class TaskService {
       }
       const taskRef = categoryRef.collection('tasks').doc(taskId);
 
+      // When appending to an existing task, read how many subtasks it already has so new
+      // subtasks get continuing run numbers (must stay in the READS section — reads-before-writes).
+      let existingSubtaskCount = 0;
+      if (!isNewTask) {
+        const existingSubtasksSnap = await transaction.get(taskRef.collection('subtasks'));
+        existingSubtaskCount = existingSubtasksSnap.size;
+      }
+      appendSubtaskOffset = existingSubtaskCount;
+
       // --- 2. ALL WRITES ---
       const now = new Date();
       let createdAtDate = now;
@@ -155,8 +167,15 @@ export class TaskService {
       }, { merge: true });
 
       
-      // Aggregate assignees from subtasks
+      // Aggregate assignees from subtasks.
+      // When appending to an existing task, seed with the parent's current assignees so the
+      // aggregate is a UNION (not a replace) — otherwise existing assignees get clobbered.
       const allAssigneesMap = new Map<string, any>();
+      if (!isNewTask && Array.isArray(existingTaskData?.assignees)) {
+        existingTaskData.assignees.forEach((a: any) => {
+          if (a?.employeeId) allAssigneesMap.set(a.employeeId, a);
+        });
+      }
       let hasSupportRequest = false;
       if (input.subtasks) {
         input.subtasks.forEach(st => {
@@ -169,7 +188,17 @@ export class TaskService {
       const allAssignees = Array.from(allAssigneesMap.values());
 
       // Calculate max dueDate from subtasks, fallback to input.dueDate or now
-      const maxDueDate = this.calculateMaxDueDate(input.subtasks || []) || (input.dueDate ? new Date(input.dueDate) : now);
+      let maxDueDate = this.calculateMaxDueDate(input.subtasks || []) || (input.dueDate ? new Date(input.dueDate) : now);
+      // When appending to an existing task, keep the later of the existing parent dueDate and the
+      // new max — never shrink the parent dueDate just because an earlier subtask was added.
+      if (!isNewTask && existingTaskData?.dueDate) {
+        const existingDue = existingTaskData.dueDate.toDate
+          ? existingTaskData.dueDate.toDate()
+          : new Date(existingTaskData.dueDate);
+        if (existingDue.getTime() > maxDueDate.getTime()) {
+          maxDueDate = existingDue;
+        }
+      }
 
       const newTaskData: Omit<Task, 'id'> = {
         taskId: taskId,
@@ -192,7 +221,7 @@ export class TaskService {
         dailyProgress: isNewTask ? 0 : (existingTaskData?.dailyProgress || 0),
         attachmentsCount: isNewTask ? 0 : (existingTaskData?.attachmentsCount || 0),
         isActive: true,
-        isSupportRequest: hasSupportRequest,
+        isSupportRequest: hasSupportRequest || (!isNewTask && !!existingTaskData?.isSupportRequest),
         createdAt: createdAtDate,
         updatedAt: now,
         createdBy: isNewTask ? createdBy : (existingTaskData?.createdBy || createdBy),
@@ -206,9 +235,12 @@ export class TaskService {
       };
       transaction.set(taskRef.withConverter(taskConverter), newTaskData as any, { merge: true });
 
-      if (isNewTask && input.subtasks && input.subtasks.length > 0) {
+      // Write subtasks for BOTH new tasks and appends to an existing task.
+      // (Previously guarded by isNewTask, which silently dropped subtasks added under an
+      //  existing task name — the cause of T-202.) Run numbers continue past existing subtasks.
+      if (input.subtasks && input.subtasks.length > 0) {
         input.subtasks.forEach((st, index) => {
-          const subtaskNum = (index + 1).toString().padStart(4, '0');
+          const subtaskNum = (existingSubtaskCount + index + 1).toString().padStart(4, '0');
           const subtaskId = `${taskId}-${subtaskNum}`;
           const subtaskRef = taskRef.collection('subtasks').doc(subtaskId);
           
@@ -258,7 +290,7 @@ export class TaskService {
     // Send notifications asynchronously after transaction completes
     if (input.subtasks && input.subtasks.length > 0) {
       input.subtasks.forEach((st, index) => {
-        const subtaskNum = (index + 1).toString().padStart(4, '0');
+        const subtaskNum = (appendSubtaskOffset + index + 1).toString().padStart(4, '0');
         const subtaskId = `${createdTask.taskId}-${subtaskNum}`;
         if (st.assignees && st.assignees.length > 0) {
           this.sendAssignmentNotifications(

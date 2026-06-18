@@ -481,8 +481,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             data.subtasks.flatMap(s => s.assignees),
             existingOption.subtaskId
           );
-        } else if (hasSubtasks && selectedParentTaskId) {
-          // อัปเดต Task เดิมโดยการเพิ่ม/แก้ไข Subtasks
+        } else if (selectedParentTaskId) {
+          // เลือกงานเดิมจาก combobox -> อัปเดต Task เดิมโดยเพิ่ม/แก้ไข Subtasks (กันสร้าง task ซ้ำ)
           await taskService.updateTask(selectedParentTaskId, {
             taskName: data.taskName,
             description: data.description,
@@ -1206,6 +1206,61 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           );
                         }
                         
+                        // โหมดสร้างปกติ (ไม่ใช่แก้ไข / ไม่ใช่ขั้นเพิ่มงานย่อยให้งานที่เพิ่งสร้าง):
+                        // ช่องชื่องานเป็น combobox — เลือกงานเดิมจาก dropdown หรือพิมพ์ชื่องานใหม่
+                        // เลือกของเดิม -> ผูก selectedParentTaskId (ส่งไป updateTask = เพิ่มงานย่อยเข้างานนั้น กันสร้างซ้ำ)
+                        if (!isEdit && !isAddingSubtasksToNewTask) {
+                          return (
+                            <Autocomplete
+                              freeSolo
+                              fullWidth
+                              options={filteredTasksForDropdown}
+                              loading={isLoadingProjectTasks}
+                              getOptionLabel={(option) => {
+                                if (typeof option === 'string') return option;
+                                return option.taskName;
+                              }}
+                              value={field.value || null}
+                              onChange={(_, newValue) => {
+                                if (newValue && typeof newValue !== 'string') {
+                                  // เลือกงานเดิมจากรายการ -> เพิ่มงานย่อยเข้างานนั้น
+                                  setSelectedParentTaskId(newValue.id);
+                                  field.onChange(newValue.taskName);
+                                } else {
+                                  // ล้างค่า หรือ ค่าว่าง
+                                  setSelectedParentTaskId(null);
+                                  field.onChange(typeof newValue === 'string' ? newValue : '');
+                                }
+                              }}
+                              onInputChange={(_, newInputValue, reason) => {
+                                if (reason === 'input') {
+                                  // พิมพ์เอง -> ถือเป็นงานใหม่ เว้นแต่ตรงกับชื่องานเดิมพอดี
+                                  field.onChange(newInputValue);
+                                  const match = filteredTasksForDropdown.find((t: any) => t.taskName === newInputValue);
+                                  setSelectedParentTaskId(match ? match.id : null);
+                                }
+                              }}
+                              disabled={isSubmitting}
+                              renderOption={(props, option) => (
+                                <li {...props} key={option.id} style={{ padding: '12px 16px' }}>
+                                  {option.taskName}
+                                </li>
+                              )}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="ชื่องาน *"
+                                  variant="outlined"
+                                  placeholder="เลือกงานเดิมหรือพิมพ์ชื่องานใหม่"
+                                  error={!!errors.taskName}
+                                  helperText={errors.taskName?.message || (isLoadingProjectTasks ? 'กำลังโหลดรายการงาน...' : 'เลือกงานเดิมจากรายการ หรือพิมพ์เพื่อสร้างงานใหม่')}
+                                  sx={inputStyles}
+                                />
+                              )}
+                            />
+                          );
+                        }
+
                         return (
                           <TextField
                             {...field}
