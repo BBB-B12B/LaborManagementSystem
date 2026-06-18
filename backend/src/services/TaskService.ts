@@ -522,6 +522,12 @@ export class TaskService {
       console.log(`[TaskService] Resolved taskRef using query: ${taskRef.path}`);
     }
 
+    // Captured inside the transaction so notifications can fire after it commits
+    // (notifications must not run inside the transaction body).
+    let notifyTaskData: any = null;
+    let notifySubtaskName = supportTaskName;
+    let notifySubtaskId = subtaskId || '';
+
     try {
       await afterSaleDb.runTransaction(async (transaction) => {
         console.log(`[TaskService] Starting transaction for ${taskRef.path}`);
@@ -531,6 +537,7 @@ export class TaskService {
         if (!doc.exists) throw new AppError('Task not found', 404);
         const taskData = doc.data() as Task;
         const now = new Date();
+        notifyTaskData = taskData;
 
         if (subtaskId) {
           // --- CASE A: SUBTASK-SPECIFIC SUPPORT JOIN ---
@@ -543,6 +550,8 @@ export class TaskService {
           if (subtaskData.isPickedUpBySupport) {
             throw new AppError('งานย่อยนี้มีทีม Support รับไปแล้ว', 400);
           }
+          notifySubtaskName = supportTaskName || subtaskData.subtaskName || '';
+          notifySubtaskId = subtaskId;
 
           const subtaskRev = subtaskData.currentRevision || 'rev00';
           const subtaskRevNum = subtaskRev.replace('rev', '');
@@ -636,6 +645,13 @@ export class TaskService {
 
         console.log(`[TaskService] joinSupportTask transaction successfully completed`);
       });
+
+      // Notify the support assignees (fire-and-forget, after the transaction commits).
+      // Mirrors createSubtask/createTask: a failure here must not fail the pickup.
+      if (notifyTaskData && Array.isArray(supportAssignees) && supportAssignees.length > 0) {
+        this.sendAssignmentNotifications(notifyTaskData, notifySubtaskName, notifySubtaskId, supportAssignees, updatedBy)
+          .catch(err => console.error('[TaskService] Notification error in joinSupportTask:', err));
+      }
     } catch (error: any) {
       console.error(`[TaskService] Error in joinSupportTask:`, error);
       throw new AppError(error.message, error.statusCode || 500);

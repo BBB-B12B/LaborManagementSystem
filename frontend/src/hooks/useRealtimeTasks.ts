@@ -87,7 +87,7 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
   };
 };
 
-export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks') => {
+export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string) => {
   const { upsertTask, removeTaskRealtime, upsertSubtask, removeSubtaskRealtime, setLoading: setCacheLoading } = useTaskCacheStore();
 
   useEffect(() => {
@@ -117,7 +117,11 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     const handleTasksSnapshot = (snapshot: any) => {
       snapshot.docChanges().forEach((change: any) => {
         const data = change.doc.data();
-        if (!projectIds.includes(data.projectId)) return; 
+        // Show own-project tasks, plus cross-project tasks this user picked up as support.
+        const isOwnProject = projectIds.includes(data.projectId);
+        const isMySupport = !!supportEmployeeId && Array.isArray(data.supportAssignees)
+          && data.supportAssignees.some((a: any) => a?.employeeId === supportEmployeeId);
+        if (!isOwnProject && !isMySupport) return;
         if (change.type === 'added' || change.type === 'modified') {
           upsertTask(mapFirestoreDocToTask(change.doc));
         }
@@ -204,5 +208,5 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [projectIds.join(','), activeTab]);
+  }, [projectIds.join(','), activeTab, supportEmployeeId]);
 };

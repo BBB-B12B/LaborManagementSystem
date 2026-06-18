@@ -130,7 +130,7 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
 
-  useRealtimeTasks(user?.projectLocationIds || [], activeTab);
+  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId);
 
   useEffect(() => {
     setLoading(isCacheLoading);

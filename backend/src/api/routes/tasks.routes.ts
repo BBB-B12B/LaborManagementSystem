@@ -683,7 +683,25 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
     }
     const snapshot = await subtasksQuery.get();
 
-    let subtasks = snapshot.docs.map(doc => {
+    // Merge in cross-project support tasks this user picked up (deduped by doc path).
+    // historicalAssigneeIds is a flat array of employeeIds -> array-contains works.
+    // Use the raw-case employeeId (Firestore array-contains is an exact match).
+    const subtaskDocsByPath = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    snapshot.docs.forEach(d => subtaskDocsByPath.set(d.ref.path, d));
+    const employeeIdRaw = String((req.user as any)?.employeeId || '').trim();
+    if ((userRole === 'FM' || userRole === 'SE') && !projectId && employeeIdRaw) {
+      try {
+        const supportSnap = await afterSaleDb.collectionGroup('subtasks')
+          .where('historicalAssigneeIds', 'array-contains', employeeIdRaw)
+          .get();
+        supportSnap.docs.forEach(d => subtaskDocsByPath.set(d.ref.path, d));
+      } catch (err: any) {
+        console.error('[assigned-subtasks] cross-project support query failed (index building?):', err.message);
+      }
+    }
+    const subtaskDocs = Array.from(subtaskDocsByPath.values());
+
+    let subtasks = subtaskDocs.map(doc => {
       const data = doc.data() as any;
       const parentPath = doc.ref.parent.parent?.path;
       const parts = parentPath?.split('/') || [];
@@ -734,6 +752,29 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
        const tData = taskConverter.fromFirestore(doc);
        tasksMap.set(taskId, tData);
     });
+
+    // Resolve parent tasks for cross-project support subtasks that the project-scoped
+    // query above did not cover (fetch them directly by their parent ref).
+    const missingParentRefs: admin.firestore.DocumentReference[] = [];
+    const seenParentPaths = new Set<string>();
+    subtaskDocs.forEach(doc => {
+      const parentRef = doc.ref.parent.parent;
+      if (!parentRef) return;
+      const parentTaskId = parentRef.path.split('/')[5] || parentRef.id;
+      if (!tasksMap.has(parentTaskId) && !seenParentPaths.has(parentRef.path)) {
+        seenParentPaths.add(parentRef.path);
+        missingParentRefs.push(parentRef);
+      }
+    });
+    if (missingParentRefs.length > 0) {
+      const parentDocs = await afterSaleDb.getAll(...missingParentRefs);
+      parentDocs.forEach(doc => {
+        if (!doc.exists) return;
+        const pathParts = doc.ref.path.split('/');
+        const taskId = pathParts[5] || doc.id;
+        tasksMap.set(taskId, taskConverter.fromFirestore(doc as any));
+      });
+    }
 
     const enrichedSubtasks = subtasks.map(st => {
        const parentTask = tasksMap.get(st.parentTaskId);

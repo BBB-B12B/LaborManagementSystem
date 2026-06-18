@@ -2826,10 +2826,10 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 3132,
-      "line_end": 3132,
+      "line": 3181,
+      "line_end": 3181,
       "read_hint": {
-        "offset": 3127,
+        "offset": 3176,
         "limit": 15
       },
       "type": "Function",
@@ -4554,10 +4554,10 @@
     },
     "projectService": {
       "source": "frontend/src/services/projectService.ts",
-      "line": 157,
-      "line_end": 158,
+      "line": 168,
+      "line_end": 169,
       "read_hint": {
-        "offset": 152,
+        "offset": 163,
         "limit": 16
       },
       "type": "Function",
@@ -10824,10 +10824,10 @@
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 423,
-      "line_end": 539,
+      "line": 425,
+      "line_end": 541,
       "read_hint": {
-        "offset": 418,
+        "offset": 420,
         "limit": 80
       },
       "type": "ReactComponent",
