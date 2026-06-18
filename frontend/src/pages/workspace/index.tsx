@@ -130,7 +130,7 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
 
-  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId);
+  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId, user?.id);
 
   useEffect(() => {
     setLoading(isCacheLoading);
@@ -441,12 +441,12 @@ export default function WorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, tasksInCache, filterTasksByRole]);
 
-  /** หลัง Submit (Create/Edit) → invalidate + silent refresh */
+  /** หลัง Submit (Create/Edit): ไม่ต้องล้างแคช — useRealtimeTasks (onSnapshot) จะส่งงานที่สร้าง/แก้ไขเข้ามาเอง.
+   *  เดิมเรียก invalidateCache() + fetchFromAPI() แต่ fetchFromAPI เป็น no-op แล้ว ทำให้แคชโดนล้างทิ้งจนหน้าจอว่าง
+   *  (เห็น 0 งาน) ต้องสลับแท็บถึงจะ re-subscribe กลับมา — จึงเอาออก. */
   const handleModalSuccess = () => {
     setIsModalOpen(false);
     setEditingTask(null);
-    invalidateCache();
-    fetchFromAPI(true);
   };
 
   const handleEdit = (subtaskCard: Task) => {
@@ -518,13 +518,10 @@ export default function WorkspacePage() {
         try {
           const refreshed = await taskService.getTaskById(parentIdForPatch);
           patchTaskInCache(refreshed);
-        } catch {
-          invalidateCache();
-          fetchFromAPI(true);
+        } catch (e) {
+          // คงแคชเดิมไว้ — realtime จะส่ง subtask ที่แก้เข้ามาเอง (เดิมล้างแคชทำให้บอร์ดว่าง)
+          console.warn('patchTaskInCache failed after subtask edit; relying on realtime', e);
         }
-      } else {
-        invalidateCache();
-        fetchFromAPI(true);
       }
     } catch (error: any) {
       console.error('Failed to update subtask', error);
@@ -637,8 +634,8 @@ export default function WorkspacePage() {
       toast.show('แก้ไขข้อมูล WorkOrder สำเร็จ', 'success');
       setIsWoEditOpen(false);
       setEditingWo(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      // realtime (useRealtimeTasks onSnapshot) ส่ง task ที่เปลี่ยนเข้ามาเอง — ไม่ล้างแคช
+      // (เดิม invalidateCache + fetchFromAPI ที่เป็น no-op ทำให้บอร์ดว่างจน 0 จนกว่าจะสลับแท็บ)
     } catch (error: any) {
       console.error('Failed to update work order', error);
       setWoEditError(error.message || 'ไม่สามารถแก้ไขชื่อ WorkOrder ได้');
@@ -668,8 +665,7 @@ export default function WorkspacePage() {
       toast.show('ลบ WorkOrder สำเร็จ', 'success');
       setIsWoDeleteOpen(false);
       setWoToDelete(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      // realtime ส่งการลบ (isActive=false / removed) เข้ามาเอง — ไม่ล้างแคช (กันบอร์ดว่าง)
     } catch (error: any) {
       console.error('Failed to delete work order', error);
       setIsWoDeleteOpen(false);
@@ -709,8 +705,7 @@ export default function WorkspacePage() {
       toast.show('แก้ไขหมวดหมู่ย่อยสำเร็จ', 'success');
       setIsCatEditOpen(false);
       setEditingCat(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      // realtime ส่งการเปลี่ยนแปลงเข้ามาเอง — ไม่ล้างแคช (กันบอร์ดว่าง)
     } catch (error: any) {
       console.error('Failed to update category', error);
       setCatEditError(error.message || 'ไม่สามารถแก้ไขหมวดหมู่ย่อยได้');
@@ -782,8 +777,7 @@ export default function WorkspacePage() {
       toast.show('ลบหมวดหมู่ย่อยสำเร็จ', 'success');
       setIsCatDeleteOpen(false);
       setCatToDelete(null);
-      invalidateCache();
-      fetchFromAPI(true);
+      // realtime ส่งการลบเข้ามาเอง — ไม่ล้างแคช (กันบอร์ดว่าง)
     } catch (error: any) {
       console.error('Failed to delete category', error);
       setIsCatDeleteOpen(false);
@@ -1099,6 +1093,17 @@ export default function WorkspacePage() {
     );
   }, [fmUsers, quickCreateTaskId, tasks]);
 
+  // T-203: warn when quick-create subtask name duplicates a sibling in the SAME parent task.
+  const quickSubtaskDuplicate = useMemo(() => {
+    if (isQuickAssignMode) return false;
+    const name = quickSubtaskName.trim().toLowerCase();
+    if (!name) return false;
+    const parentTask = tasks.find((t) => t.id === quickCreateTaskId);
+    return !!parentTask?.subtasks?.some(
+      (s) => (s.subtaskName || '').trim().toLowerCase() === name
+    );
+  }, [isQuickAssignMode, quickSubtaskName, quickCreateTaskId, tasks]);
+
   // Filter FMs/SEs strictly by the parent task's project for editing subtask
   const editFilteredFms = useMemo(() => {
     const validFms = fmUsers.filter((u) => 
@@ -1125,6 +1130,14 @@ export default function WorkspacePage() {
     if (!quickDueDate) {
       setQuickCreateError('กรุณาเลือกวันที่ครบกำหนดสำหรับงานย่อย');
       return;
+    }
+    if (!isQuickAssignMode) {
+      const parentTask = tasks.find((t) => t.id === quickCreateTaskId);
+      const dupName = quickSubtaskName.trim().toLowerCase();
+      if (parentTask?.subtasks?.some((s) => (s.subtaskName || '').trim().toLowerCase() === dupName)) {
+        setQuickCreateError('ชื่องานย่อยนี้มีอยู่แล้วในงานนี้');
+        return;
+      }
     }
 
     try {
@@ -2027,6 +2040,8 @@ export default function WorkspacePage() {
               value={quickSubtaskName}
               onChange={(e) => setQuickSubtaskName(e.target.value)}
               disabled={isQuickAssignMode}
+              error={quickSubtaskDuplicate}
+              helperText={quickSubtaskDuplicate ? 'ชื่องานย่อยนี้มีอยู่แล้วในงานนี้' : ''}
               InputProps={{ disableUnderline: true }}
               sx={{
                 '& .MuiFilledInput-root': {
@@ -2125,6 +2140,7 @@ export default function WorkspacePage() {
           <Button
             onClick={handleQuickCreateSubmit}
             variant="contained"
+            disabled={quickSubtaskDuplicate}
             sx={{
               bgcolor: '#1c1e2b',
               color: '#fff',

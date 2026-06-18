@@ -127,9 +127,13 @@ export class TaskService {
       // When appending to an existing task, read how many subtasks it already has so new
       // subtasks get continuing run numbers (must stay in the READS section — reads-before-writes).
       let existingSubtaskCount = 0;
+      let existingSubtaskNames: string[] = [];
       if (!isNewTask) {
         const existingSubtasksSnap = await transaction.get(taskRef.collection('subtasks'));
         existingSubtaskCount = existingSubtasksSnap.size;
+        existingSubtaskNames = existingSubtasksSnap.docs.map(
+          (d) => ((d.data()?.subtaskName as string) || '').trim().toLowerCase()
+        );
       }
       appendSubtaskOffset = existingSubtaskCount;
 
@@ -239,6 +243,17 @@ export class TaskService {
       // (Previously guarded by isNewTask, which silently dropped subtasks added under an
       //  existing task name — the cause of T-202.) Run numbers continue past existing subtasks.
       if (input.subtasks && input.subtasks.length > 0) {
+        // T-203: reject duplicate subtask names within the same parent — both against the
+        // existing subtasks and among the incoming batch. Throwing aborts the whole tx (no partial write).
+        const seenSubtaskNames = new Set(existingSubtaskNames);
+        for (const st of input.subtasks) {
+          const n = (st.subtaskName || '').trim().toLowerCase();
+          if (!n) continue;
+          if (seenSubtaskNames.has(n)) {
+            throw new AppError(`ชื่องานย่อย "${st.subtaskName}" ซ้ำกับงานย่อยที่มีอยู่แล้วในงานนี้`, 409);
+          }
+          seenSubtaskNames.add(n);
+        }
         input.subtasks.forEach((st, index) => {
           const subtaskNum = (existingSubtaskCount + index + 1).toString().padStart(4, '0');
           const subtaskId = `${taskId}-${subtaskNum}`;
@@ -781,6 +796,17 @@ export class TaskService {
       // 2. Query existing subtasks to count and determine subtask suffix (READ)
       const subtasksQuery = await transaction.get(taskRef.collection('subtasks'));
       const count = subtasksQuery.size;
+
+      // T-203: reject a duplicate subtask name within the SAME parent task
+      // (no silent running-number append — surface a clear error instead).
+      const incomingName = (subtaskName || '').trim().toLowerCase();
+      const nameClash = subtasksQuery.docs.some(
+        (d) => (((d.data()?.subtaskName as string) || '').trim().toLowerCase()) === incomingName
+      );
+      if (nameClash) {
+        throw new AppError('ชื่องานย่อยนี้มีอยู่แล้วในงานนี้', 409);
+      }
+
       const subtaskNum = (count + 1).toString().padStart(4, '0');
       const subtaskId = `${tId}-${subtaskNum}`;
       const subtaskRef = taskRef.collection('subtasks').doc(subtaskId);
@@ -1092,6 +1118,20 @@ export class TaskService {
       const oldData = doc.data() as any;
       const now = new Date();
       const admin = require('firebase-admin');
+
+      // T-203: enforce unique subtask names within this parent task. updateTask receives the full
+      // final subtask list, so the resulting names must all be distinct (no silent duplicate).
+      if (input.subtasks && input.subtasks.length > 0) {
+        const seenNames = new Set<string>();
+        for (const st of input.subtasks) {
+          const n = (st.subtaskName || '').trim().toLowerCase();
+          if (!n) continue;
+          if (seenNames.has(n)) {
+            throw new AppError(`ชื่องานย่อย "${st.subtaskName}" ซ้ำกันภายในงานนี้`, 409);
+          }
+          seenNames.add(n);
+        }
+      }
 
       // Category Migration check
       if (input.categoryName && input.categoryName !== oldData.categoryName) {

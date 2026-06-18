@@ -1,30 +1,38 @@
-# Gather Complete — T-201 cross-project support pickup display + notify
+# Gather Complete — T-204 accepted support task disappears + create shows 0 tasks
 
 date: 2026-06-18
-task: After a helper accepts a cross-project support subtask, surface it in (1) helper workspace "งานช่วยเหลือ", (2) assigned FM daily report, (3) create a notification.
+skill: coding
+task: T-204 fix (1) cross-project support task vanishes from helper/FM view; (2) board shows 0 after create
 
-## G1/G2 findings (verified file:line)
+## Findings
 
-### Write path — WORKS (no change)
-- `backend/src/services/TaskService.ts:507-643` `joinSupportTask()` — CASE A (subtaskId given) writes to subtask (552-563) AND parent task (583-591): `isPickedUpBySupport:true`, `supportAssignees` (accumulated), `historicalAssigneeIds arrayUnion(...employeeIds, updatedBy)`. No notification call.
-- `supportAssignees` = array of objects `{employeeId, name, roleId}`. `historicalAssigneeIds` = flat array of employeeId strings.
+### Bug #1 — accepted cross-project support task disappears (DB correct, noti works)
+- Data source = `useRealtimeTasks(user.projectLocationIds, activeTab, user.employeeId)` (index.tsx:133).
+- Hook DOES intend cross-project support: handleTasksSnapshot keeps a task if isOwnProject OR isMySupport
+  (useRealtimeTasks.ts:120-124). BUT isMySupport = `data.supportAssignees.some(a => a.employeeId === supportEmployeeId)`
+  where supportEmployeeId = user.employeeId — compares ONE id only.
+- Pickup stores assignees as `{ employeeId: v.id, ... }` (index.tsx:2100/2721) → supportAssignees[].employeeId
+  actually holds the user's `id`. If user.id !== user.employeeId, the realtime match FAILS → parent task never
+  enters cache → its subtasks have no parent → whole task disappears.
+- Backend joinSupportTask (TaskService.ts:632-647) correctly accumulates supportAssignees on BOTH subtask and
+  parent task → DB is fine; the bug is purely the client realtime filter.
+- The role filter (index.tsx:360-361) already checks BOTH `employeeId` and `user.id` — realtime hook does not = inconsistent.
+- FIX: make useRealtimeTasks isMySupport match against BOTH employeeId and id (pass user.id too).
 
-### Notification fn
-- `backend/src/services/TaskService.ts:3087` `sendAssignmentNotifications(taskData, subtaskName, subtaskId, assignees, createdBy)` — assignees use `.employeeId`; resolves uid via db.users; writes `notifications` docs in afterSaleDb. supportAssignees shape matches `TaskAssignee[]`.
-- Called elsewhere fire-and-forget after transaction (e.g. createSubtask:826).
+### Bug #2 — board shows 0 tasks right after creating (must switch tab to see)
+- `handleModalSuccess` (index.tsx:445-449) calls `invalidateCache()` then `fetchFromAPI(true)`.
+- `fetchFromAPI` is now a NO-OP (index.tsx:420 — `useCallback(async () => {}, [])`); data comes from useRealtimeTasks.
+- So invalidate wipes the whole cache and nothing reloads (onSnapshot only fires on actual doc changes). Board = 0.
+- Switching tab re-runs the useRealtimeTasks effect (activeTab dep) → invalidate + RE-SUBSCRIBE → fresh full snapshot
+  → everything reappears. That is why "removing the filter" fixes it. NOT a date-filter problem (user confirmed dueDate is in-month).
+- FIX: remove invalidateCache()+fetchFromAPI() from handleModalSuccess. The new task arrives via realtime onSnapshot
+  'added' automatically; existing cache stays intact.
+- Note: other standalone invalidateCache() calls exist (640/671/712/785) for WO/category edits — same latent risk but
+  NOT reported; leave for a follow-up unless they regress. Happy-path handlers mostly use patchTaskInCache already.
 
-### Daily report — BROKEN at query filter
-- `backend/src/api/routes/tasks.routes.ts:629` GET /assigned-subtasks.
-- Line 680-683: subtasksQuery `.where('projectId','in', targetProjectIds)` — FM/SE scoped to own projects (676-678) -> cross-project support subtask excluded at query level.
-- Line 711-722: in-memory filter ALREADY correct (matchSupport via supportAssignees + matchHistorical) — but never reached because query pre-excludes.
-- Line 725-727: tasksQuery same projectId filter -> parent missing from tasksMap -> 740 `if(!parentTask) return null` drops it.
-- AM/GOD/MD + PM/PE: targetProjectIds empty -> no filter -> unaffected. Bug is FM/SE only.
+## Assessment
+- 2 surgical fixes, both client-side. No backend change. No date-filter change.
+- S1 (realtime id match) fixes #1 for both live-pickup ('modified' snapshot) and already-picked-up-on-load ('added').
+- S2 (remove cache wipe on create) fixes #2; realtime delivers the new task.
 
-### Workspace realtime — BROKEN at task filter
-- `frontend/src/hooks/useRealtimeTasks.ts:120` `if(!projectIds.includes(data.projectId)) return;` — TASK listener only.
-- Subtask listener (138-157) does NOT filter projectId -> cross-project support subtasks already flow into cache.
-- `mapFirestoreDocToTask:43` maps `supportAssignees`; parent task has supportAssignees written by joinSupportTask.
-- Caller `frontend/src/pages/workspace/index.tsx:133` `useRealtimeTasks(user?.projectLocationIds||[], activeTab)`. `user?.employeeId` exists (used at index.tsx:334).
-- `WorkspaceTree.tsx:450-453` supportTree (isWH only) filters `sub.isSupportRequest`. buildTree:368-399 — when task has active subtasks, only subtaskFilter applies (checkTask unused), so parent task need not be a support request itself. -> Fix = get parent task into cache (line 120).
-
-## [✓ gather] complete — ready for MECE
+[✓ gather]

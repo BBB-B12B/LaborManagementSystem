@@ -162,7 +162,7 @@ _Auto-generated structure snapshot — repo_map_check.py --sync (2026-06-18). Do
 | `backend\dist\services\wage/` | 24 | 0 |
 | `backend\dist\types/` | 4 | 0 |
 | `backend\dist\utils/` | 12 | 0 |
-| `backend\logs/` | 6 | 0 |
+| `backend\logs/` | 7 | 0 |
 | `backend\scripts/` | 24 | 0 |
 | `backend\src/` | 4 | 10 |
 | `backend\src\api/` | 0 | 2 |

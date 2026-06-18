@@ -87,7 +87,7 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
   };
 };
 
-export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string) => {
+export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string, supportUserId?: string) => {
   const { upsertTask, removeTaskRealtime, upsertSubtask, removeSubtaskRealtime, setLoading: setCacheLoading } = useTaskCacheStore();
 
   useEffect(() => {
@@ -117,11 +117,18 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     const handleTasksSnapshot = (snapshot: any) => {
       snapshot.docChanges().forEach((change: any) => {
         const data = change.doc.data();
-        // Show own-project tasks, plus cross-project tasks this user picked up as support.
+        // Decide whether this task may enter the cache. The per-user DISPLAY gate lives in
+        // filterTasksByRole (index.tsx) — here we only avoid pulling clearly-irrelevant docs.
+        // Rule: keep own-project tasks, tasks I'm a support assignee on, AND any picked-up support
+        // task. The last clause is essential: helper-side (WH) users must see EVERY picked-up support
+        // task (role filter shows them all), and identity matching alone was too strict because the
+        // pickup stores assignees keyed by member id, which can differ from the auth user id.
         const isOwnProject = projectIds.includes(data.projectId);
-        const isMySupport = !!supportEmployeeId && Array.isArray(data.supportAssignees)
-          && data.supportAssignees.some((a: any) => a?.employeeId === supportEmployeeId);
-        if (!isOwnProject && !isMySupport) return;
+        const myIds = [supportEmployeeId, supportUserId].filter(Boolean);
+        const isMySupport = myIds.length > 0 && Array.isArray(data.supportAssignees)
+          && data.supportAssignees.some((a: any) => myIds.includes(a?.employeeId));
+        const isPickedUpSupport = data.isSupportRequest === true && data.isPickedUpBySupport === true;
+        if (!isOwnProject && !isMySupport && !isPickedUpSupport) return;
         if (change.type === 'added' || change.type === 'modified') {
           upsertTask(mapFirestoreDocToTask(change.doc));
         }
@@ -208,5 +215,5 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [projectIds.join(','), activeTab, supportEmployeeId]);
+  }, [projectIds.join(','), activeTab, supportEmployeeId, supportUserId]);
 };

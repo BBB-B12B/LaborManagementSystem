@@ -1,12 +1,12 @@
-# Context Cache — 2026-06-18 14:39
-task: T-200 Cross-project support pickup — helper sees own + projects with open support requests
-phase: in_progress
-next: S1-S4 code DONE + verified (tsc pass, greps pass). Awaiting user deploy: backend redeploy (Cloud Run) + frontend build/deploy. Watch for after-sale FAILED_PRECONDITION on first /support-options call (single-field index — likely auto, else console link). Commands only, user runs.
-session_total: ~255947
-chat_total: ~115084
+# Context Cache — 2026-06-18 22:08
+task: T-204 support task disappears from helper/FM view + board shows 0 after create
+phase: done
+next: user pushes. T-202/T-203/T-204 ship together.
+session_total: ~2487602
+chat_total: ~1366677
 cache_read: 0
 cache_write: 0
 pending_sections:
-  - [ ] all S[N] marked [X]
-  - [ ] R8 index sync (symbol_indexer for new methods/route)
-  - [ ] roadmap [X]
+  - [ ] provide git commit cmds (user runs) + remind: push triggers deploy
+  - [ ] runtime re-test: (a) pick up cross-project support task -> appears in helper/FM board;
+  - [ ] roadmap T-204 [X] · active_thread phase:done · PATH A clear Phase 1-3

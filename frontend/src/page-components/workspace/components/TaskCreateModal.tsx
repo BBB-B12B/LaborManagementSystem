@@ -298,6 +298,36 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     return maxDate;
   }, [subtasksWatch]);
 
+  // T-203: real-time duplicate-name detection (warn as you type + disable save)
+  const duplicateSubtaskIndexes = React.useMemo(() => {
+    const seen = new Map<string, number>();
+    const dups = new Set<number>();
+    subtasksWatch.forEach((st: any, idx: number) => {
+      const name = (st?.subtaskName || '').trim().toLowerCase();
+      if (!name) return;
+      if (seen.has(name)) {
+        dups.add(idx);
+        dups.add(seen.get(name)!);
+      } else {
+        seen.set(name, idx);
+      }
+    });
+    return dups;
+  }, [subtasksWatch]);
+
+  // Task-name dup = creating a NEW task whose name already exists in the same WO+Category.
+  // (Picking an existing task via the combobox sets selectedParentTaskId -> intended, not a dup.)
+  const taskNameDuplicate = React.useMemo(() => {
+    if (selectedParentTaskId) return false;
+    const name = (selectedTaskName || '').trim().toLowerCase();
+    if (!name) return false;
+    return filteredTasksForDropdown.some(
+      (t: any) => (t.taskName || '').trim().toLowerCase() === name
+    );
+  }, [selectedParentTaskId, selectedTaskName, filteredTasksForDropdown]);
+
+  const hasDuplicate = taskNameDuplicate || duplicateSubtaskIndexes.size > 0;
+
   const isSupportPickup = !!(isHelperUser && selectedProjectId && selectedProjectId !== user?.projectLocationIds?.[0]);
 
   // Fetch Existing Subtasks for Support Team when projectId changes
@@ -319,7 +349,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     subtaskName: st.subtaskName,
                     workOrderCode: t.workOrderCode || '',
                     categoryName: t.categoryName || '',
-                    dueDate: t.dueDate || '',
+                    // ใช้วันครบกำหนดของ "งานย่อย" (st) ไม่ใช่ของ task แม่ (t) — เดิมใช้ t.dueDate (= วันสูงสุดของแม่)
+                    // ทำให้ค่าที่ดึงมา prefill เพี้ยนจากที่การ์ดแสดง (เช่น 29 -> 30)
+                    dueDate: st.dueDate || '',
                   });
                 }
               });
@@ -1138,22 +1170,29 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                       name="taskName"
                       control={control}
                       render={({ field }) => {
-                        if (!isEdit && hasSubtasks && !isAddingSubtasksToNewTask) {
+                        // โหมดสร้าง (ไม่ใช่แก้ไข): ช่องชื่องานเป็น combobox เดียวกันทุกสถานะ
+                        // - เลือกงานเดิมจากรายการ -> โหลดงานย่อยเดิมมาแสดง + เพิ่มเข้างานนั้น (กันสร้างซ้ำ)
+                        // - พิมพ์ชื่อใหม่ -> สร้างงานใหม่
+                        // ไม่กลับไปเป็น text ธรรมดาอีก เพื่อให้แก้/เปลี่ยนงานทีหลังได้เสมอ
+                        if (!isEdit) {
                           return (
                             <Autocomplete
-                              sx={{ flex: 1 }}
+                              freeSolo
+                              fullWidth
                               options={filteredTasksForDropdown}
+                              loading={isLoadingProjectTasks || isFetchingSubtasks}
                               getOptionLabel={(option) => {
                                 if (typeof option === 'string') return option;
                                 return option.taskName;
                               }}
-                              loading={isLoadingProjectTasks || isFetchingSubtasks}
+                              value={field.value || null}
                               onChange={(_, newValue) => {
                                 if (newValue && typeof newValue !== 'string') {
+                                  // เลือกงานเดิม -> ผูกงานนั้น + โหลดงานย่อยเดิมมาแสดง
                                   setSelectedParentTaskId(newValue.id);
                                   field.onChange(newValue.taskName);
-                                  
-                                  // Fetch subtasks of this selected task and populate subtasks array
+                                  setHasSubtasks(true);
+                                  setIsAddingSubtasksToNewTask(false);
                                   setIsFetchingSubtasks(true);
                                   taskService.getSubtasks(newValue.id)
                                     .then(subtasksData => {
@@ -1175,69 +1214,23 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                     })
                                     .finally(() => setIsFetchingSubtasks(false));
                                 } else {
-                                  setSelectedParentTaskId(null);
-                                  field.onChange('');
-                                  setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
-                                }
-                              }}
-                              value={filteredTasksForDropdown.find((t: any) => t.id === selectedParentTaskId) || null}
-                              disabled={isSubmitting}
-                              renderOption={(props, option) => (
-                                <li {...props} key={option.id} style={{ padding: '12px 16px' }}>
-                                  {option.taskName}
-                                </li>
-                              )}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  label="เลือกงานหลัก *"
-                                  variant="outlined"
-                                  placeholder="ค้นหางานหลัก..."
-                                  InputProps={{ 
-                                    ...params.InputProps, 
-                                    readOnly: true,
-                                  }}
-                                  error={!!errors.taskName}
-                                  helperText={errors.taskName?.message || (isLoadingProjectTasks ? 'กำลังโหลดรายการงาน...' : isFetchingSubtasks ? 'กำลังโหลดงานย่อย...' : 'เลือกงานหลักที่ต้องการเพิ่มงานย่อยภายใต้')}
-                                  sx={inputStyles}
-                                />
-                              )}
-                            />
-                          );
-                        }
-                        
-                        // โหมดสร้างปกติ (ไม่ใช่แก้ไข / ไม่ใช่ขั้นเพิ่มงานย่อยให้งานที่เพิ่งสร้าง):
-                        // ช่องชื่องานเป็น combobox — เลือกงานเดิมจาก dropdown หรือพิมพ์ชื่องานใหม่
-                        // เลือกของเดิม -> ผูก selectedParentTaskId (ส่งไป updateTask = เพิ่มงานย่อยเข้างานนั้น กันสร้างซ้ำ)
-                        if (!isEdit && !isAddingSubtasksToNewTask) {
-                          return (
-                            <Autocomplete
-                              freeSolo
-                              fullWidth
-                              options={filteredTasksForDropdown}
-                              loading={isLoadingProjectTasks}
-                              getOptionLabel={(option) => {
-                                if (typeof option === 'string') return option;
-                                return option.taskName;
-                              }}
-                              value={field.value || null}
-                              onChange={(_, newValue) => {
-                                if (newValue && typeof newValue !== 'string') {
-                                  // เลือกงานเดิมจากรายการ -> เพิ่มงานย่อยเข้างานนั้น
-                                  setSelectedParentTaskId(newValue.id);
-                                  field.onChange(newValue.taskName);
-                                } else {
-                                  // ล้างค่า หรือ ค่าว่าง
+                                  // ล้างค่า หรือ กด Enter ข้อความใหม่ -> งานใหม่
                                   setSelectedParentTaskId(null);
                                   field.onChange(typeof newValue === 'string' ? newValue : '');
                                 }
                               }}
                               onInputChange={(_, newInputValue, reason) => {
                                 if (reason === 'input') {
-                                  // พิมพ์เอง -> ถือเป็นงานใหม่ เว้นแต่ตรงกับชื่องานเดิมพอดี
                                   field.onChange(newInputValue);
                                   const match = filteredTasksForDropdown.find((t: any) => t.taskName === newInputValue);
-                                  setSelectedParentTaskId(match ? match.id : null);
+                                  if (match) {
+                                    setSelectedParentTaskId(match.id);
+                                  } else if (selectedParentTaskId) {
+                                    // เคยเลือกงานเดิมไว้ แต่พิมพ์แก้เป็นชื่ออื่น -> กลายเป็นงานใหม่
+                                    // ล้าง parent + รีเซ็ตงานย่อยที่โหลดมา (กันงานย่อยของงานเก่าติดไป)
+                                    setSelectedParentTaskId(null);
+                                    setValue('subtasks', [{ subtaskName: '', assignees: [], isSupportRequest: false, dueDate: null as any }], { shouldValidate: true });
+                                  }
                                 }
                               }}
                               disabled={isSubmitting}
@@ -1252,8 +1245,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                   label="ชื่องาน *"
                                   variant="outlined"
                                   placeholder="เลือกงานเดิมหรือพิมพ์ชื่องานใหม่"
-                                  error={!!errors.taskName}
-                                  helperText={errors.taskName?.message || (isLoadingProjectTasks ? 'กำลังโหลดรายการงาน...' : 'เลือกงานเดิมจากรายการ หรือพิมพ์เพื่อสร้างงานใหม่')}
+                                  error={!!errors.taskName || taskNameDuplicate}
+                                  helperText={errors.taskName?.message || (taskNameDuplicate ? 'ชื่องานนี้มีอยู่แล้วในหมวดนี้ — เลือกจากรายการเพื่อเพิ่มงานย่อย' : isLoadingProjectTasks ? 'กำลังโหลดรายการงาน...' : isFetchingSubtasks ? 'กำลังโหลดงานย่อย...' : 'เลือกงานเดิมจากรายการ หรือพิมพ์เพื่อสร้างงานใหม่')}
                                   sx={inputStyles}
                                 />
                               )}
@@ -1426,8 +1419,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                     variant="outlined"
                                     fullWidth
                                     disabled={isSubmitting}
-                                    error={!!errors.subtasks?.[index]?.subtaskName}
-                                    helperText={errors.subtasks?.[index]?.subtaskName?.message}
+                                    error={!!errors.subtasks?.[index]?.subtaskName || duplicateSubtaskIndexes.has(index)}
+                                    helperText={errors.subtasks?.[index]?.subtaskName?.message || (duplicateSubtaskIndexes.has(index) ? 'ชื่องานย่อยซ้ำกับงานย่อยอื่นในงานเดียวกัน' : '')}
                                     sx={{
                                       '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
                                         borderRadius: '24px !important',
@@ -1678,9 +1671,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           >
             ยกเลิก
           </Button>
-          <Button 
+          <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasDuplicate}
             sx={{
               flex: 1,
               maxWidth: 200,

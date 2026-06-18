@@ -688,11 +688,18 @@ router.get('/assigned-subtasks', async (req: Request, res: Response, next: NextF
     // Use the raw-case employeeId (Firestore array-contains is an exact match).
     const subtaskDocsByPath = new Map<string, admin.firestore.QueryDocumentSnapshot>();
     snapshot.docs.forEach(d => subtaskDocsByPath.set(d.ref.path, d));
+    // Match against ALL of the user's identifiers: member-doc id (== frontend user.id), HR employeeId,
+    // and auth uid. Support pickup stores historicalAssigneeIds using the member id (a.employeeId = v.id),
+    // NOT the HR employeeId — so a single array-contains on employeeId silently missed the assignee's own
+    // cross-project picked-up support tasks (the bug: noti fired but the task never appeared in "My job").
     const employeeIdRaw = String((req.user as any)?.employeeId || '').trim();
-    if ((userRole === 'FM' || userRole === 'SE') && !projectId && employeeIdRaw) {
+    const userIdRaw = String((req.user as any)?.id || '').trim();
+    const uidRaw = String(req.user?.uid || '').trim();
+    const supportMatchIds = Array.from(new Set([userIdRaw, employeeIdRaw, uidRaw].filter(Boolean)));
+    if ((userRole === 'FM' || userRole === 'SE') && !projectId && supportMatchIds.length > 0) {
       try {
         const supportSnap = await afterSaleDb.collectionGroup('subtasks')
-          .where('historicalAssigneeIds', 'array-contains', employeeIdRaw)
+          .where('historicalAssigneeIds', 'array-contains-any', supportMatchIds)
           .get();
         supportSnap.docs.forEach(d => subtaskDocsByPath.set(d.ref.path, d));
       } catch (err: any) {
