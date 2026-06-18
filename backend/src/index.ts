@@ -45,17 +45,44 @@ app.use(compression());
 // Static uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Trust the Cloud Run / load-balancer proxy hop so req.ip reflects the real
+// client IP (from X-Forwarded-For) instead of the proxy address. Without this,
+// every request looks like it comes from the same proxy IP and all users
+// collapse into a single shared rate-limit bucket.
+app.set('trust proxy', 1);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: config.rateLimitWindow,
   max: config.rateLimitMax,
-  message: 'Too many requests from this IP, please try again later.',
+  message: 'Too many requests, please try again later.',
+  // Key the limit per authenticated user so each person gets their own quota
+  // (users behind a shared office NAT would otherwise share one IP bucket).
+  // This limiter runs before route-level auth, so req.user is not populated yet;
+  // we read the uid from the bearer token payload WITHOUT verifying it — this is
+  // for bucketing only, not a security boundary. Falls back to IP when no token.
+  keyGenerator: (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const payload = JSON.parse(
+          Buffer.from(authHeader.slice(7).split('.')[1], 'base64').toString('utf8')
+        );
+        const uid = payload.user_id || payload.uid || payload.sub;
+        if (uid) return `user:${uid}`;
+      } catch {
+        // malformed/unexpected token → fall back to IP keying below
+      }
+    }
+    return `ip:${req.ip}`;
+  },
   skip: (req) => {
     if (config.nodeEnv === 'development') {
       return true;
     }
     const path = req.path || '';
-    return path.startsWith('/auth');
+    // /auth must never be throttled; heartbeat polls every 60s and is cheap.
+    return path.startsWith('/auth') || path.startsWith('/activity/heartbeat');
   },
 });
 app.use('/api/', limiter);
