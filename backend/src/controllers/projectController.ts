@@ -23,6 +23,7 @@ import {
   getNextProjectCode,
 } from '../services/projectService';
 import { AuthRequest } from '../api/middleware/auth';
+import { taskService } from '../services/TaskService';
 
 /**
  * GET /api/projects
@@ -89,6 +90,41 @@ export async function getActiveProjectsHandler(_req: Request, res: Response): Pr
     return res.status(500).json({
       success: false,
       error: 'เกิดข้อผิดพลาดในการดึงข้อมูลโครงการที่ใช้งาน',
+      message: (error as Error).message,
+    });
+  }
+}
+
+/**
+ * GET /api/projects/support-options
+ * Project options for helper users (cross-project support pickup):
+ *   own active projects ∪ active projects that currently have an open support request.
+ */
+export async function getSupportOptionsHandler(req: Request, res: Response): Promise<Response> {
+  try {
+    const authReq = req as AuthRequest;
+    const userProjects = authReq.user?.projectLocationIds || [];
+
+    const activeProjects = await getActiveProjects();
+    const supportProjectIds = await taskService.getProjectIdsWithOpenSupportRequests();
+
+    const data = activeProjects.filter((p) => {
+      const isOwn =
+        userProjects.includes(p.id) ||
+        userProjects.includes((p as any).code) ||
+        userProjects.includes((p as any).projectCode);
+      return isOwn || supportProjectIds.has(p.id);
+    });
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Error fetching support options:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'เกิดข้อผิดพลาดในการดึงโครงการสำหรับงานช่วยเหลือ',
       message: (error as Error).message,
     });
   }

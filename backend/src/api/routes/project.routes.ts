@@ -16,6 +16,7 @@ import {
   deleteProjectHandler,
   getDepartmentsHandler,
   getNextProjectCodeHandler,
+  getSupportOptionsHandler,
 } from '../../controllers/projectController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/authorize';
@@ -53,6 +54,13 @@ router.get('/departments', getDepartmentsHandler);
  * Retrieve the next running project code
  */
 router.get('/next-code', authorize(['FM', 'PM', 'AM']), getNextProjectCodeHandler);
+
+/**
+ * GET /api/projects/support-options
+ * Project options for helper users (cross-project support pickup).
+ * Must be registered BEFORE /:id so it is not captured as an :id param.
+ */
+router.get('/support-options', getSupportOptionsHandler);
 
 /**
  * GET /api/projects/:id
