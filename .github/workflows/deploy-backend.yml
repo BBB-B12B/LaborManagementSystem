@@ -38,7 +38,7 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars "^@^NODE_ENV=production@FIREBASE_PROJECT_ID=labor-management-system-33b06@FIREBASE_EMULATOR_ENABLED=false@CORS_ORIGIN=https://labor-management-system-33b06.web.app,https://labor-management-system-33b06.firebaseapp.com@JWT_SECRET=${{ secrets.JWT_SECRET }}"
+            --set-env-vars "^@^NODE_ENV=production@FIREBASE_PROJECT_ID=labor-management-system-33b06@FIREBASE_EMULATOR_ENABLED=false@CORS_ORIGIN=https://labor-management-system-33b06.web.app,https://labor-management-system-33b06.firebaseapp.com@JWT_SECRET=${{ secrets.JWT_SECRET }}@AFTER_SALE_KEY_BASE64=${{ secrets.AFTER_SALE_KEY_BASE64 }}"
 
       - name: Show deployed URL
         run: |
