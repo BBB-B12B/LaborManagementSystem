@@ -157,7 +157,9 @@ const Topbar: React.FC = () => {
     }
 
     logout();
-    router.push('/login');
+    // Full page reload on logout: clears all in-memory state and avoids the
+    // SPA router race with ProtectedRoute's redirect (intermittent hang / "Abort fetching component").
+    window.location.replace('/login');
   };
 
   return (
