@@ -335,7 +335,21 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
         });
       });
 
-      // Now set completionDate and startDate for each task
+      // Now set completionDate and startDate for each task.
+      // Helper hoisted above the loop so the completionDate fallback below can reuse it
+      // (updatedAt may be a Firestore Timestamp object, which a raw new Date(...) cannot parse).
+      const getTaskDateStr = (timestampOrStr: any) => {
+        if (!timestampOrStr) return null;
+        if (typeof timestampOrStr === 'object' && ('_seconds' in timestampOrStr || 'seconds' in timestampOrStr)) {
+          const secs = timestampOrStr._seconds || timestampOrStr.seconds;
+          return new Date(secs * 1000).toISOString().split('T')[0];
+        }
+        try {
+          return new Date(timestampOrStr).toISOString().split('T')[0];
+        } catch (e) {
+          return null;
+        }
+      };
       for (const task of tasks) {
         // Fetch completion date if task has reached 100% or completed
         let completionDate: string | null = null;
@@ -349,26 +363,14 @@ router.get('/backlog', async (req: Request, res: Response, next: NextFunction) =
           if (completedReportInAll) {
             completionDate = completedReportInAll.dateStr;
           } else {
-            const fallbackDate = task.updatedAt ? new Date(task.updatedAt) : new Date();
-            completionDate = fallbackDate.toISOString().split('T')[0];
+            // updatedAt may be a Firestore Timestamp object; getTaskDateStr handles that
+            // (a raw new Date(timestampObject) is an Invalid Date and throws on toISOString).
+            completionDate = getTaskDateStr(task.updatedAt) || new Date().toISOString().split('T')[0];
           }
         }
         task.completionDate = completionDate;
 
         // Now compute startDate for this task using allReports and task creation fields
-        const getTaskDateStr = (timestampOrStr: any) => {
-          if (!timestampOrStr) return null;
-          if (typeof timestampOrStr === 'object' && ('_seconds' in timestampOrStr || 'seconds' in timestampOrStr)) {
-            const secs = timestampOrStr._seconds || timestampOrStr.seconds;
-            return new Date(secs * 1000).toISOString().split('T')[0];
-          }
-          try {
-            return new Date(timestampOrStr).toISOString().split('T')[0];
-          } catch (e) {
-            return null;
-          }
-        };
-
         let startDateStr: string | null = null;
         if (task.revisionCreatedAt && task.currentRevision && task.currentRevision !== 'rev00') {
           startDateStr = getTaskDateStr(task.revisionCreatedAt);
