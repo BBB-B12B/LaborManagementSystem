@@ -2020,6 +2020,56 @@ export class TaskService {
         subtasksSnapshot = await transaction.get(taskRef.collection('subtasks'));
       }
 
+      // --- Progress monotonic guard (server-side mirror of the daily-report UI rule) ---
+      // Reject a progress value that would regress below the floor or cross a later report,
+      // so a direct API call cannot bypass the front-end validation. Support reports carry
+      // no progress; >3-day locked edits have their progress restored below — both skip.
+      // (This is a read; it must stay above the "ALL WRITES" section per Firestore rules.)
+      const submittedProgress = Number(reportData?.progress);
+      const isLockedRetroEdit = isUpdate && reportDate < threeDaysAgo;
+      if (!isSupportReport && !isLockedRetroEdit && Number.isFinite(submittedProgress)) {
+        // Nearest prior report = the largest document id (date) before dateStr. Avoid an
+        // orderBy(documentId,'desc') query inside the transaction — descending __name__
+        // ordering can require a non-auto index and 500s. A task has few daily reports, so
+        // fetch the prior ones and pick the latest in code.
+        const priorSnapshot = await transaction.get(
+          reportsCollectionRef.where(admin.firestore.FieldPath.documentId(), '<', dateStr)
+        );
+        let prevProgress = 0;
+        let nearestPriorId = '';
+        priorSnapshot.forEach((d) => {
+          if (d.id > nearestPriorId) {
+            nearestPriorId = d.id;
+            prevProgress = d.data().progress || 0;
+          }
+        });
+        const nextProgress = newerReportsSnapshot.empty
+          ? null
+          : (newerReportsSnapshot.docs[0].data().progress ?? null);
+
+        // For a NEW latest report the floor also includes the task's real current progress
+        // (covers the first report of a revision where dailyProgress was carried over).
+        // When editing an existing report, dailyProgress already reflects it, so use only
+        // the prior-report floor.
+        let currentProgress = 0;
+        if (subtaskRef && subtasksSnapshot) {
+          const selfDoc = subtasksSnapshot.docs.find(d => d.id === subtaskRef.id);
+          currentProgress = (selfDoc?.data()?.dailyProgress) || 0;
+        } else {
+          currentProgress = taskData.dailyProgress || 0;
+        }
+        const floor = (nextProgress === null && !isUpdate)
+          ? Math.max(prevProgress, currentProgress)
+          : prevProgress;
+
+        if (submittedProgress <= floor) {
+          throw new AppError(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${floor}%)`, 400);
+        }
+        if (nextProgress !== null && submittedProgress >= nextProgress) {
+          throw new AppError(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, 400);
+        }
+      }
+
       // 2. ALL WRITES
       const now = new Date();
 

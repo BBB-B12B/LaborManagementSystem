@@ -824,10 +824,20 @@ export default function DailyReportPage() {
         dateStr,
         isActingAsSupport
       );
-      
+
       const report = combined.report;
       const siteReport = combined.siteReport;
       const supportReport = combined.supportReport;
+
+      // Forward / NEW latest report (no later report AND no existing report for this date):
+      // raise the floor to the task's real current progress so a fresh report cannot be
+      // entered below where the work stands — e.g. the first report of a revision while
+      // dailyProgress carried over, which otherwise leaves the floor at 0 and lets progress
+      // be dragged backwards. Skip when EDITING an existing report (dailyProgress already
+      // reflects it) or for a back-dated report (the prior/next report bounds are correct).
+      if (lastNextProgress === null && !report) {
+        lastPrevProgress = Math.max(lastPrevProgress, selectedTask.dailyProgress || 0);
+      }
 
       return { report, siteReport, supportReport, lastPrevProgress, lastNextProgress };
     },
@@ -1368,39 +1378,45 @@ export default function DailyReportPage() {
       // T-944: Logic for worker selection
       // 1. If FM or Support FM (SFM): Fetch by department
       // 2. If Admin or others: Fetch by current project
-      const isFM = user?.roleCode === 'FM';
       const isGOD = user?.roleCode === 'GOD';
       let workers: any[] = [];
 
       if (isGOD) {
-        // GOD เห็น DC ทั้งหมดในระบบ
+        // GOD sees every DC in the system
         workers = await dcService.getAllDCs({}).then(res => res.dailyContractors);
-      } else if (isFM) {
+      } else {
+        // Every role that can reach this page (FM/SE/LD/...) filters by department (สังกัด).
+        // Many work-units (projectLocationId) sit under one department, so filtering by
+        // department returns workers across all units under that affiliation — not just the
+        // user's single project. (Previously only roleCode === 'FM' did this; SE/LD wrongly
+        // fell back to a single-project list.)
         const dept = user?.department;
         if (!dept) {
-          console.warn('[DailyReport] FM has no department:', user?.name);
+          console.warn('[DailyReport] User has no department:', user?.name);
           return [];
         }
-        console.log('[DailyReport] FM fetching workers by department:', dept);
+        console.log('[DailyReport] Fetching workers by department:', dept);
         workers = await dcService.getAllDCs({ department: dept }).then(res => res.dailyContractors);
-      } else {
-        // Default: Fetch by Project Location
-        const locationId = user?.projectLocationIds?.[0];
-        if (!locationId) {
-          console.warn('[DailyReport] No projectLocationId found for user:', user?.name);
-          return [];
-        }
-        console.log('[DailyReport] Admin/User fetching workers for locationId:', locationId);
-        workers = await dcService.getDCsByProject(locationId);
       }
 
-      // Sort by foremanUsage count for the logged-in foreman (user.employeeId) descending
+      // Sort workers for the picker, three tiers:
+      //   1) foremanUsage count for the logged-in user (employeeId) — most-used first.
+      //   2) tiebreak (incl. the first-time case where every count is 0): workers in the
+      //      user's own work-units (projectLocationIds) come before cross-unit workers.
+      //   3) final tiebreak: name (Thai locale).
       if (user?.employeeId && workers.length > 0) {
         const empId = user.employeeId;
+        const userUnits = new Set(user.projectLocationIds || []);
         workers.sort((a, b) => {
           const aCount = a.foremanUsage?.[empId]?.count || 0;
           const bCount = b.foremanUsage?.[empId]?.count || 0;
-          return bCount - aCount;
+          if (aCount !== bCount) return bCount - aCount;
+
+          const aOwn = userUnits.has(a.projectLocationId) ? 0 : 1;
+          const bOwn = userUnits.has(b.projectLocationId) ? 0 : 1;
+          if (aOwn !== bOwn) return aOwn - bOwn;
+
+          return (a.name || '').localeCompare(b.name || '', 'th');
         });
       }
       
@@ -2208,33 +2224,29 @@ export default function DailyReportPage() {
       return;
     }
 
-    if (!isActingAsSupport && !isAdvanceRequest) {
-      if (isFinalSubmit) {
-        if (progress === '') {
-          enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
-          return;
-        }
-        const numProgress = Number(progress);
-        if (numProgress <= previousProgress) {
-          enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
-            variant: 'error',
-          });
-          return;
-        }
-        if (nextProgress !== null && numProgress >= nextProgress) {
-          enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
-            variant: 'error',
-          });
-          return;
-        }
-      } else {
-        const numProgress = progress === '' ? previousProgress : Number(progress);
-        if (nextProgress !== null && numProgress >= nextProgress) {
-          enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
-            variant: 'error',
-          });
-          return;
-        }
+    // Support reports never submit a user-entered progress (the input is disabled), so
+    // they are exempt. Advance-request DOES submit a committed progress prediction, so it
+    // must satisfy the same monotonic rule as a final submit — previously it was bypassed.
+    if (!isActingAsSupport) {
+      // Lower bound (value must exceed the current floor) applies to a real commit: a final
+      // submit or an advance-request prediction. A plain draft save skips the lower bound.
+      const enforceLowerBound = isFinalSubmit || isAdvanceRequest;
+      if (isFinalSubmit && progress === '') {
+        enqueueSnackbar('กรุณากรอกความคืบหน้าของงาน', { variant: 'error' });
+        return;
+      }
+      const numProgress = progress === '' ? previousProgress : Number(progress);
+      if (enforceLowerBound && numProgress <= previousProgress) {
+        enqueueSnackbar(`ความคืบหน้าต้องมากกว่าค่าล่าสุด (ต้องมากกว่า ${previousProgress}%)`, {
+          variant: 'error',
+        });
+        return;
+      }
+      if (nextProgress !== null && numProgress >= nextProgress) {
+        enqueueSnackbar(`ความคืบหน้าต้องน้อยกว่ารายงานถัดไป (ต้องน้อยกว่า ${nextProgress}%)`, {
+          variant: 'error',
+        });
+        return;
       }
     }
 
