@@ -1,38 +1,33 @@
-# Gather Complete — T-204 accepted support task disappears + create shows 0 tasks
+# Gather Complete — T-205 FM "My job" card shows subtask name on both lines
 
 date: 2026-06-18
 skill: coding
-task: T-204 fix (1) cross-project support task vanishes from helper/FM view; (2) board shows 0 after create
+task: T-205 fix FM "My job" support card showing subtask name twice (should be task name + subtask name)
 
 ## Findings
 
-### Bug #1 — accepted cross-project support task disappears (DB correct, noti works)
-- Data source = `useRealtimeTasks(user.projectLocationIds, activeTab, user.employeeId)` (index.tsx:133).
-- Hook DOES intend cross-project support: handleTasksSnapshot keeps a task if isOwnProject OR isMySupport
-  (useRealtimeTasks.ts:120-124). BUT isMySupport = `data.supportAssignees.some(a => a.employeeId === supportEmployeeId)`
-  where supportEmployeeId = user.employeeId — compares ONE id only.
-- Pickup stores assignees as `{ employeeId: v.id, ... }` (index.tsx:2100/2721) → supportAssignees[].employeeId
-  actually holds the user's `id`. If user.id !== user.employeeId, the realtime match FAILS → parent task never
-  enters cache → its subtasks have no parent → whole task disappears.
-- Backend joinSupportTask (TaskService.ts:632-647) correctly accumulates supportAssignees on BOTH subtask and
-  parent task → DB is fine; the bug is purely the client realtime filter.
-- The role filter (index.tsx:360-361) already checks BOTH `employeeId` and `user.id` — realtime hook does not = inconsistent.
-- FIX: make useRealtimeTasks isMySupport match against BOTH employeeId and id (pass user.id too).
-
-### Bug #2 — board shows 0 tasks right after creating (must switch tab to see)
-- `handleModalSuccess` (index.tsx:445-449) calls `invalidateCache()` then `fetchFromAPI(true)`.
-- `fetchFromAPI` is now a NO-OP (index.tsx:420 — `useCallback(async () => {}, [])`); data comes from useRealtimeTasks.
-- So invalidate wipes the whole cache and nothing reloads (onSnapshot only fires on actual doc changes). Board = 0.
-- Switching tab re-runs the useRealtimeTasks effect (activeTab dep) → invalidate + RE-SUBSCRIBE → fresh full snapshot
-  → everything reappears. That is why "removing the filter" fixes it. NOT a date-filter problem (user confirmed dueDate is in-month).
-- FIX: remove invalidateCache()+fetchFromAPI() from handleModalSuccess. The new task arrives via realtime onSnapshot
-  'added' automatically; existing cache stays intact.
-- Note: other standalone invalidateCache() calls exist (640/671/712/785) for WO/category edits — same latent risk but
-  NOT reported; leave for a follow-up unless they regress. Happy-path handlers mostly use patchTaskInCache already.
+### Bug — My job card duplicates the subtask name on both lines (DB correct, noti correct)
+- Data path: GET /assigned-subtasks (backend tasks.routes.ts:629) returns enrichedSubtasks. Each card = a subtask,
+  enriched with its parent task. `taskName` is explicitly set to parentTask.taskName (tasks.routes.ts:798) = correct
+  ("พื้น post tension"); `subtaskName` = the subtask ("ชั้น 1"). Because `...st` is spread AFTER `...parentTask`
+  (tasks.routes.ts:794-799), the SUBTASK's `supportTaskName` overrides the parent's on the merged object.
+- Card render (frontend/src/pages/daily-reports/index.tsx):
+  - line 4248-4249: `displayTaskName = isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName`
+  - line 4411 (title / "Task Name"): shows `displayTaskName` -> for support = `supportTaskName` = "ชั้น 1" ❌
+  - line 4419 (subtitle / "Subtask Name"): shows `task.subtaskName` = "ชั้น 1" ✓
+  => both lines = "ชั้น 1".
+- Root: `supportTaskName` legitimately holds the SUBTASK-level support name (the noti at TaskService.ts:575-600 reads
+  it as the subtask name: 'ชั้น 1' in งาน 'พื้น post tension'). The card wrongly puts this subtask-level name on the
+  TASK title line, colliding with the subtask line. The parent task name (`task.taskName`) is available and correct.
+- Same anti-pattern in the detail modal (daily-reports/index.tsx:2937-2939): the "Parent task name as context"
+  subtitle line uses `isActingAsSupport && supportTaskName ? supportTaskName : taskName` -> shows "ชั้น 1" instead of
+  the parent "พื้น post tension". Will duplicate the same way when opening this support task's detail.
+- Own-project (non-support) cards: isActingAsSupport=false -> displayTaskName already = taskName, subtitle = subtaskName.
+  So fixing the title to always use the parent task name is a no-op for own-project (no regression).
 
 ## Assessment
-- 2 surgical fixes, both client-side. No backend change. No date-filter change.
-- S1 (realtime id match) fixes #1 for both live-pickup ('modified' snapshot) and already-picked-up-on-load ('added').
-- S2 (remove cache wipe on create) fixes #2; realtime delivers the new task.
+- Pure display fix, frontend only. No backend, no data change. supportTaskName data is correct as stored.
+- 2 spots, identical root: task-title line must use the parent task name; the subtask line carries supportTaskName/subtaskName.
+- Standing user authorization: fix the detail-modal duplicate too (same kind of problem, will definitely recur).
 
 [✓ gather]

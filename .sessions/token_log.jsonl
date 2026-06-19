@@ -100,3 +100,11 @@
 {"ts":"2026-06-18T13:31:57Z","task":"T-203 real-time duplicate-name warning at task/subtask creation","phase":"in_progress","session_total":1171032,"chat_total":50107,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-18T14:11:29Z","task":"T-203 real-time duplicate-name warning at task/subtask creation","phase":"done","session_total":1840687,"chat_total":719762,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-18T15:08:23Z","task":"T-204 support task disappears from helper/FM view + board shows 0 after create","phase":"done","session_total":2487602,"chat_total":1366677,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T15:33:35Z","task":"T-204 support task disappears from helper/FM view + board shows 0 after create","phase":"done","session_total":2504549,"chat_total":39578,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T16:10:45Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2771927,"chat_total":306956,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T16:20:19Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2775867,"chat_total":25201,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T16:33:59Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2789107,"chat_total":38441,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T16:39:27Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2796783,"chat_total":46117,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T16:48:30Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2796783,"chat_total":46117,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-18T16:59:47Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2803960,"chat_total":53294,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-19T02:17:49Z","task":"T-205 FM My job support card shows subtask name on both lines","phase":"in_progress","session_total":2809650,"chat_total":58984,"cache_read":0,"cache_write":0}

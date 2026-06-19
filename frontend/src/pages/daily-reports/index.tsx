@@ -2934,9 +2934,7 @@ export default function DailyReportPage() {
                                     whiteSpace: 'nowrap',
                                   }}
                                 >
-                                  {isActingAsSupport && selectedTask.supportTaskName
-                                    ? selectedTask.supportTaskName
-                                    : selectedTask.taskName}
+                                  {selectedTask.taskName}
                                 </Typography>
                               )}
  
@@ -4245,8 +4243,14 @@ function TaskSidebarCard({
     return isViewingCrossProject && task.isSupportRequest && task.isPickedUpBySupport;
   }, [task, user]);
 
-  const displayTaskName =
-    isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName;
+  // Title line = the parent task name (always correct here; backend sets task.taskName = parentTask.taskName).
+  // supportTaskName is a SUBTASK-level name (== subtaskName) and must NOT sit on the task-title line — that was
+  // the duplicate-name bug (both lines showed the subtask name). It belongs on the subtask line below.
+  const displayTaskName = task.taskName;
+  const displaySubtaskName =
+    isActingAsSupport && task.supportTaskName
+      ? task.supportTaskName
+      : (task.subtaskName || (task.subtasks && task.subtasks[0]?.subtaskName));
   const displayProgress = task.dailyProgress || 0;
 
   const getDueDateColor = () => {
@@ -4416,7 +4420,7 @@ function TaskSidebarCard({
         variant="caption"
         sx={{ display: 'block', color: '#6b7280', mb: 0.5, fontSize: '0.75rem', lineHeight: 1.3, fontWeight: 500 }}
       >
-        {task.subtaskName || (task.subtasks && task.subtasks[0]?.subtaskName)}
+        {displaySubtaskName}
       </Typography>
 
       <Typography
