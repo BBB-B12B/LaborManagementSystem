@@ -288,17 +288,35 @@ class ProjectBDailyReportService {
         return;
       }
 
-      const keyPath = path.resolve(process.cwd(), 'src/config/after-sale-key.json');
+      // Load the After-Sale service-account credential.
+      // Order: (1) env AFTER_SALE_KEY_BASE64 — base64-encoded JSON, used on Cloud Run
+      // where the key file is NOT shipped (it is gitignored, see .gitignore *-key.json);
+      // (2) local after-sale-key.json file, used in local dev. Without (1) the deployed
+      // service had no credential, so this.db stayed null and ensureDb() threw
+      // "Project B database connection is not initialized." on confirm-daily.
+      let serviceAccount: admin.ServiceAccount | null = null;
 
-      if (!fs.existsSync(keyPath)) {
+      const b64 = process.env.AFTER_SALE_KEY_BASE64;
+      if (b64) {
+        const json = Buffer.from(b64, 'base64').toString('utf8');
+        serviceAccount = JSON.parse(json) as admin.ServiceAccount;
+      } else {
+        const keyPath = path.resolve(process.cwd(), 'src/config/after-sale-key.json');
+        if (fs.existsSync(keyPath)) {
+          serviceAccount = require(keyPath);
+        }
+      }
+
+      if (!serviceAccount) {
         console.warn(
-          `[ProjectBDailyReportService] Service account key not found at ${keyPath}. ` +
+          '[ProjectBDailyReportService] No After-Sale credentials found. Set ' +
+            'AFTER_SALE_KEY_BASE64 (base64 of the service-account JSON) in the ' +
+            'environment, or place after-sale-key.json in backend/src/config/. ' +
             'Cross-project fetching will fail.'
         );
         return;
       }
 
-      const serviceAccount = require(keyPath);
       const app = admin.initializeApp(
         { credential: admin.credential.cert(serviceAccount) },
         this.APP_NAME
