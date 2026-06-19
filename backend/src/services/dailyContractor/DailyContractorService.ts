@@ -423,6 +423,28 @@ class DailyContractorService extends BaseCrudService<DailyContractor> {
     }
   }
 
+  /**
+   * Get DCs by department (สังกัด, e.g. 'WH'). Returns every DC under that
+   * affiliation regardless of which หน่วยงาน (projectLocationId) they belong to —
+   * e.g. department 'WH' covers both คลังสินค้าและบริการ and บริการลูกค้า.
+   */
+  async getByDepartment(department: string): Promise<DailyContractorDTO[]> {
+    try {
+      const results = await this.query([
+        {
+          field: 'department',
+          operator: '==',
+          value: department,
+        },
+      ]);
+
+      return results.map((dc) => this.toDTO(dc));
+    } catch (error: any) {
+      logger.error('Error getting DCs by department:', error);
+      throw error;
+    }
+  }
+
   async searchByKeyword(
     keyword: string,
     options?: PaginationOptions

@@ -172,7 +172,7 @@ router.get(
         );
       }
 
-      const { skillId, projectLocationId, search } = req.query;
+      const { skillId, projectLocationId, search, department } = req.query;
 
       let contractors: DailyContractorDTO[] = [];
       let total = 0;
@@ -187,6 +187,14 @@ router.get(
         pageSize = result.length;
       } else if (projectLocationId) {
         const result = await dailyContractorService.getByProject(projectLocationId as string);
+        contractors = result;
+        total = result.length;
+        page = 1;
+        pageSize = result.length;
+      } else if (department) {
+        // Filter by สังกัด (e.g. 'WH') — returns DCs across every หน่วยงาน under that
+        // affiliation (WH covers both คลังสินค้าและบริการ and บริการลูกค้า).
+        const result = await dailyContractorService.getByDepartment(department as string);
         contractors = result;
         total = result.length;
         page = 1;
