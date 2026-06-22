@@ -108,8 +108,10 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
     if (inputEl) {
       inputEl.click();
     }
-    // 2. Close drawer
-    closeMenu();
+    // 2. Keep the drawer open so that mobile Safari/Chrome doesn't cancel
+    // the file dialog due to DOM unmounting/focus-shifting.
+    // The drawer will close in handleChange once the file is selected,
+    // or when the user clicks the "Cancel" button.
   };
 
   const Trigger = (component || Box) as React.ElementType;
