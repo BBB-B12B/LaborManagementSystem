@@ -1,36 +1,26 @@
-# Gather Complete — 2026-06-22
+# Gather Complete — workspace role-based access rework
 
-## Task (T-039)
-Fix the +New Task ambiguity: a task with empty `subtasks[]` is ambiguous — "standalone, no subtasks ever" vs "has subtasks, just not created yet" look identical in data. Record intent explicitly via a persisted `taskType` flag. User confirmed Option A (toggle) + Option-2 rendering (standalone shows as a task with 1 subtask).
+date: 2026-06-22
+task: T-043 rework filterTasksByRole — AM project-scoped, LD own-created-only
 
-## Root cause (confirmed in code)
-`TaskCreateModal.tsx` has a `hasSubtasks` toggle (state line 121) but the toggle value is NOT persisted — toggle-off just stores `subtasks: []`. Intent is inferred from emptiness, so it is lost. Standalone mode also has NO field to enter assignee/dueDate (those only exist on subtask rows).
+## What was read
+- frontend/src/pages/workspace/index.tsx:316-415 — `filterTasksByRole` (the ONLY filter that decides which tasks/subtasks a user sees on /workspace).
+- frontend/src/components/layout/Navbar.tsx:47-99 — menu/role gate (workspace roles = AM,OE,PE,PM,PD,MD,LD + GOD always). Menu NOT changing.
 
-## Key findings (Phase 1)
-- Backend `createTask` (TaskService.ts:177-205) ALREADY aggregates assignees + derives parent dueDate from subtasks (fallback input.dueDate||now). → standalone sending ONE mirror subtask works with NO backend logic change.
-- Daily report / hours are opened ONLY by clicking a subtask (WorkspaceTree.tsx:844). A task with no subtask is not reportable. → standalone REQUIRES one mirror subtask (confirms design).
-- Tasks with no subtasks DO render in the tree (WorkspaceTree.tsx:282-284 fallback). → "pending" task will appear; just needs a badge.
-- Subtasks only written when length>0 (TaskService.ts:245). Backend dueDate-required validation (tasks.routes.ts:1636) only fires when subtasks exist → pending case passes unchanged. SAFE.
+## Root facts
+- Current "see everything" bucket (line 331): `isSuperUser(GOD/ADMIN) || isHO || (role==='AM' && !isWH)`.
+- Non-WH site users fall through: own project → see all main tasks (support requests gated: visible only if picked up OR createdByMe); cross-project → only own-created/assigned.
+- WH department has its own branch (support pickup flow — T-042). UNCHANGED per user.
+- `role = (roleCode || roleId).toUpperCase()`. LD is a roleCode.
+- createdBy is matched against BOTH `user.id` and `user.employeeId` everywhere.
 
-## taskType state mapping (derived at form submit)
-- toggle OFF → `standalone` — show assignee+dueDate fields on main task → build 1 mirror subtask (subtaskName = taskName) → send.
-- toggle ON + subtasks.length > 0 → `hasSubtasks` (current behavior).
-- toggle ON + subtasks.length === 0 → `pending` ("รอแตกงาน").
+## Change required (user-confirmed)
+1. Remove `(role==='AM' && !isWH)` from the see-all bucket → AM becomes project-scoped like OE/PE/PM/PD/MD (reuses existing non-WH site path).
+2. Add LD-specific branch: LD sees ONLY main tasks where `createdBy === me`, and for those, ALL subtasks regardless of creator (do NOT filter subtasks for LD).
+3. GOD/ADMIN/HO + WH branch untouched.
 
-## Affected files (~4-5)
-| File | Why |
-|---|---|
-| frontend/src/services/taskService.ts | add taskType to Task + CreateTaskInput |
-| backend/src/models/Task.ts | add taskType to Task model |
-| frontend/src/page-components/workspace/components/TaskCreateModal.tsx | standalone fields + mirror subtask + taskType payload + 3-state derive |
-| backend/src/services/TaskService.ts | store taskType in newTaskData |
-| frontend/src/page-components/workspace/components/WorkspaceTree.tsx | badge งานเดี่ยว/รอแตกงาน/แตกงานแล้ว |
+## Assumptions (confirm in plan)
+- LD gate = main-task `createdBy` only (not isMyProject). A task whose main task LD did NOT create is hidden even if it contains an LD-created subtask.
+- Support-request gating for the AM/OE/PE/PM/PD/MD group stays as-is (part of support flow user said keep).
 
-## Acceptance criteria
-- taskType persisted on every created task; existing tasks (no field) default safely.
-- Standalone task: assignee+date set on main task, reportable (has mirror subtask), shows in tree.
-- Pending task creatable (no subtasks) and shows "รอแตกงาน".
-- No regression to existing multi-subtask create flow.
-- Work on `main`; do NOT commit/push (user does it).
-
-[✓ gather]
+[done] gather

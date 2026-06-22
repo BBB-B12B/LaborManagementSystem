@@ -325,10 +325,13 @@ export default function WorkspacePage() {
       const dept = user?.department;
       const isHO = dept === 'HO';
       const isWH = dept === 'WH';
+      // SITE LD (non-WH): tracks ONLY their own tasks. Warehouse LD (isWH) falls through
+      // to the WH branch below and sees all tasks in the warehouse project.
+      const isLD = role === 'LD' && !isWH;
 
       // Superusers (GOD, ADMIN) and Head Office (HO) always see all tasks.
-      // Area Managers (AM) see all tasks unless they belong to the WH department.
-      if (isSuperUser || isHO || (role === 'AM' && !isWH)) return visibleTasks;
+      // AM is now project-scoped (handled by the per-project filter below), like OE/PE/PM/PD/MD.
+      if (isSuperUser || isHO) return visibleTasks;
 
       const userProjectIds = user?.projectLocationIds || [];
       const employeeId = user?.employeeId;
@@ -336,6 +339,12 @@ export default function WorkspacePage() {
       return visibleTasks
         .map((t) => {
           const isMyProject = userProjectIds.includes(t.projectId);
+
+          // SITE LD: keep ALL subtasks intact (the task-level filter below drops any
+          // task LD didn't create; subtasks inside an LD-owned task are always shown).
+          if (isLD) {
+            return { ...t, subtasks: t.subtasks || [] };
+          }
 
           // กรอง subtasks ของแต่ละ Task ตามสิทธิ์การเข้าถึง
           const allowedSubtasks = (t.subtasks || []).filter((sub) => {
@@ -388,7 +397,12 @@ export default function WorkspacePage() {
         // กรองเอาเฉพาะ Task ที่ได้รับสิทธิ์เข้าถึงตามบทบาท (รองรับงานที่ไม่มี subtask)
         .filter((t) => {
           const isMyProject = userProjectIds.includes(t.projectId);
-          
+
+          // SITE LD: show only main tasks they created — track their own category work.
+          if (isLD) {
+            return t.createdBy === user?.id || t.createdBy === user?.employeeId;
+          }
+
           // ตรวจสอบว่า Task ดั้งเดิมมี subtask หรือไม่
           const originalTask = allTasks.find(x => x.id === t.id);
           const hadSubtasks = originalTask && originalTask.subtasks && originalTask.subtasks.length > 0;
@@ -816,6 +830,10 @@ export default function WorkspacePage() {
           currentRevision: subtask.currentRevision,
           isSupportRequest: isSubtaskSupport,
           isPickedUpBySupport: isSubtaskPickedUp,
+          // Support fields live on the SUBTASK after pickup (joinSupportTask writes them there) —
+          // carry them onto the card so the renamed name / helper assignees show.
+          supportTaskName: subtask.supportTaskName || '',
+          supportAssignees: subtask.supportAssignees || [],
           unlockedDates: subtask.unlockedDates || {},
           unlockRequests: subtask.unlockRequests || {},
           supportUnlockedDates: subtask.supportUnlockedDates || {},
@@ -973,6 +991,8 @@ export default function WorkspacePage() {
       updatedAt: subtask.updatedAt,
       currentRevision: subtask.currentRevision,
       isSupportRequest: subtask.isSupportRequest ?? task.isSupportRequest,
+      supportTaskName: subtask.supportTaskName || '',
+      supportAssignees: subtask.supportAssignees || [],
       unlockedDates: subtask.unlockedDates || {},
       unlockRequests: subtask.unlockRequests || {},
       supportUnlockedDates: subtask.supportUnlockedDates || {},

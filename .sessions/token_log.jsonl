@@ -144,3 +144,12 @@
 {"ts":"2026-06-22T03:23:32Z","task":"T-039 task-type toggle (standalone vs has-subtasks) — disambiguate empty subtasks","phase":"in_progress","session_total":580695,"chat_total":595436,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T03:29:14Z","task":"T-039 task-type toggle (standalone vs has-subtasks) — disambiguate empty subtasks","phase":"in_progress","session_total":586503,"chat_total":20549,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T03:53:51Z","task":"T-040 assign-later mode — make assignee optional on task create + ยังไม่มีผู้รับผิดชอบ warning badge","phase":"done","session_total":695210,"chat_total":15815,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T04:11:59Z","task":"T-041 workspace Sync button empties board — re-subscribe realtime on globalSync","phase":"done","session_total":753930,"chat_total":48034,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T04:14:20Z","task":"T-041 workspace Sync button empties board — re-subscribe realtime on globalSync","phase":"done","session_total":753930,"chat_total":48034,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T04:26:35Z","task":"T-041 workspace Sync button — hide on workspace route (realtime makes it redundant + costly)","phase":"done","session_total":48659,"chat_total":63400,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T04:51:34Z","task":"T-042 support card shows sites name+progress instead of helpers own","phase":"done","session_total":198682,"chat_total":213423,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T06:04:28Z","task":"T-042 support card — renamed name not reflected on card","phase":"done","session_total":5511,"chat_total":20252,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T06:06:47Z","task":"T-042 support card — renamed name not reflected on card","phase":"done","session_total":7000,"chat_total":21741,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T06:16:47Z","task":"T-042 support card — renamed name not reflected on card","phase":"done","session_total":23513,"chat_total":38254,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T06:18:37Z","task":"T-042 support card — renamed name not reflected on card","phase":"done","session_total":25939,"chat_total":40680,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T06:21:08Z","task":"T-042 support card — renamed name not reflected on card","phase":"done","session_total":25939,"chat_total":40680,"cache_read":0,"cache_write":0}

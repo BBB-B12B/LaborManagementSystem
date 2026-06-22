@@ -229,6 +229,10 @@ const Topbar: React.FC = () => {
         </Stack>
 
         <Stack direction="row" alignItems="center" spacing={1}>
+          {/* [T-041] Sync button hidden on the realtime workspace. onSnapshot keeps the
+              board live, so a manual refresh there is either a no-op (deceptive) or a
+              full billed re-read. Kept on other pages (e.g. daily-reports) where it's useful. */}
+          {!router.pathname.startsWith('/workspace') && (
           <IconButton
             onClick={handleGlobalSync}
             disabled={isLoading || syncCooldown}
@@ -255,6 +259,7 @@ const Topbar: React.FC = () => {
               }}
             />
           </IconButton>
+          )}
           {/* Notification Bell */}
           <IconButton
             onClick={(e) => setBellAnchorEl(e.currentTarget)}
