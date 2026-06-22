@@ -50,6 +50,16 @@ const taskSchema = z.object({
   workOrderCode: z.string().min(1, 'กรุณาเลือกหมวดหมู่งานหลัก'),
   categoryName: z.string().min(2, 'กรุณาระบุหมวดหมู่งานย่อย'),
   isSupportRequest: z.boolean().optional().default(false),
+  // [T-039] Assignees for a STANDALONE task (toggle off). These are entered on the main task and
+  // copied into the single auto-created mirror subtask on save. Optional in the schema — required-ness
+  // for the standalone case is enforced manually in onSubmit (depends on the hasSubtasks toggle state).
+  mainAssignees: z.array(
+    z.object({
+      employeeId: z.string(),
+      name: z.string(),
+      roleId: z.string(),
+    })
+  ).optional().default([]),
   subtasks: z.array(
     z.object({
       id: z.string().optional(),
@@ -144,6 +154,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       categoryName: '',
       dueDate: null as any,
       isSupportRequest: false,
+      mainAssignees: [],
       subtasks: [{ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false }],
     },
   });
@@ -171,6 +182,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             categoryName: task.categoryName,
             dueDate: task.dueDate ? new Date(task.dueDate) : null as any,
             isSupportRequest: task.isSupportRequest || false,
+            mainAssignees: [],
             subtasks: hasExistingSubtasks ? subtasksData.map(st => ({
               id: st.id,
               subtaskId: st.subtaskId,
@@ -199,6 +211,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         categoryName: '',
         dueDate: null as any,
         isSupportRequest: false,
+        mainAssignees: [],
         subtasks: [],
       });
     }
@@ -450,6 +463,19 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   };
 
   const onSubmit = (data: TaskFormData) => {
+    // [T-039] Standalone task (toggle off): assignee + due date are entered on the main task and
+    // copied into the single mirror subtask, so enforce them here (the zod schema keeps them optional
+    // because required-ness depends on the toggle state, which the schema can't see).
+    if (!hasSubtasks && !isEdit && !selectedParentTaskId && !supportOriginalTaskId) {
+      // [T-040] Assignee is now OPTIONAL (assign-later / dump-plan mode) — a task can be created
+      // with no one responsible yet; the tree shows a "ยังไม่มีผู้รับผิดชอบ" warning badge instead.
+      // The due date stays required (every task must still have a plan deadline).
+      if (!data.dueDate) {
+        setSubmitError('กรุณาเลือกวันที่ครบกำหนดสำหรับงานนี้');
+        return;
+      }
+      setSubmitError('');
+    }
     // Calculate parent task's dueDate from subtasks max dueDate
     if (data.subtasks && data.subtasks.length > 0) {
       let maxDate: Date | null = null;
@@ -524,6 +550,27 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             subtasks: mappedSubtasks,
           }, user?.id || 'system');
         } else {
+          // [T-039] Record explicit intent + build the subtasks payload accordingly:
+          //  - toggle off            → standalone: one mirror subtask (copy of the main task) holds
+          //                            the assignee + due date so the task stays trackable/reportable.
+          //  - toggle on + subtasks  → hasSubtasks (the original flow).
+          //  - toggle on + none yet  → pending ("รอแตกงาน") — created now, broken down later.
+          let taskType: 'standalone' | 'pending' | 'hasSubtasks';
+          let subtasksPayload: typeof mappedSubtasks = mappedSubtasks;
+          if (!hasSubtasks) {
+            taskType = 'standalone';
+            subtasksPayload = [{
+              subtaskName: data.taskName,
+              assignees: data.mainAssignees || [],
+              isSupportRequest: false,
+              dueDate: data.dueDate instanceof Date ? data.dueDate.toISOString() : (data.dueDate as any),
+            }] as typeof mappedSubtasks;
+          } else if (mappedSubtasks.length > 0) {
+            taskType = 'hasSubtasks';
+          } else {
+            taskType = 'pending';
+          }
+
           await taskService.createTask({
             taskName: data.taskName,
             description: data.description,
@@ -534,7 +581,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
             categoryName: data.categoryName,
             dueDate: data.dueDate ? data.dueDate.toISOString() : undefined as any,
             status: 'upcoming',
-            subtasks: mappedSubtasks,
+            taskType,
+            subtasks: subtasksPayload,
           });
         }
       }
@@ -1336,6 +1384,93 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                     </Box>
                   </Grid>
 
+                  {/* [T-039] งานเดี่ยว (Standalone) — ผู้รับผิดชอบ + วันที่ครบกำหนด บนงานหลัก
+                       แสดงเฉพาะตอนปิดสวิตช์งานย่อย จะถูก copy ไปเป็นงานย่อยเงา 1 ตัวตอนบันทึก */}
+                  {!hasSubtasks && (
+                    <Grid item xs={12}>
+                      <Box sx={{ p: 2, mt: 1.5, borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 1.5 }}>
+                          งานเดี่ยว — ระบุผู้รับผิดชอบและวันที่ครบกำหนดของงานนี้
+                        </Typography>
+                        <Grid container spacing={1.5}>
+                          <Grid item xs={12} sm={5}>
+                            <Controller
+                              name="dueDate"
+                              control={control}
+                              render={({ field }) => (
+                                <DatePicker
+                                  label="วันที่ครบกำหนด *"
+                                  value={field.value ?? null}
+                                  onChange={field.onChange}
+                                  disabled={isSubmitting}
+                                  error={!!errors.dueDate}
+                                  helperText={errors.dueDate?.message as string}
+                                  variant="outlined"
+                                  sx={{
+                                    width: '100%',
+                                    '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+                                      borderRadius: '24px !important',
+                                      backgroundColor: '#ffffff !important',
+                                      height: 40,
+                                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1 !important' },
+                                    },
+                                    '& .MuiInputBase-input': { fontSize: '0.8rem', py: '8px !important', color: '#2563eb !important', WebkitTextFillColor: '#2563eb !important', fontWeight: 600 },
+                                    '& .MuiInputLabel-root': { fontSize: '0.8rem', mt: -0.25, color: '#64748b' },
+                                  }}
+                                />
+                              )}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={7}>
+                            <Controller
+                              name="mainAssignees"
+                              control={control}
+                              render={({ field }) => (
+                                <Autocomplete
+                                  multiple
+                                  options={filteredFms}
+                                  getOptionLabel={(option) => option.name}
+                                  isOptionEqualToValue={(option, value) => option.id === value.employeeId}
+                                  onChange={(_, newValue) => {
+                                    field.onChange(
+                                      newValue.map((v) => ({ employeeId: v.id, name: v.name, roleId: v.roleId || 'FM' }))
+                                    );
+                                  }}
+                                  value={
+                                    (field.value || []).map(val =>
+                                      filteredFms.find(f => f.id === val.employeeId || f.employeeId === val.employeeId) || { id: val.employeeId, employeeId: val.employeeId, name: val.name, roleId: val.roleId }
+                                    )
+                                  }
+                                  disabled={isSubmitting}
+                                  renderInput={(params) => (
+                                    <TextField
+                                      {...params}
+                                      label="ผู้รับผิดชอบ (ใส่ทีหลังได้)"
+                                      variant="outlined"
+                                      error={!!errors.mainAssignees}
+                                      helperText={errors.mainAssignees?.message as string}
+                                      sx={{
+                                        '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+                                          borderRadius: '24px !important',
+                                          backgroundColor: '#ffffff !important',
+                                          minHeight: 40,
+                                          py: '4px !important',
+                                          '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1 !important' },
+                                        },
+                                        '& .MuiInputBase-input': { fontSize: '0.85rem' },
+                                        '& .MuiInputLabel-root': { fontSize: '0.85rem', mt: -0.75, color: '#64748b' },
+                                      }}
+                                    />
+                                  )}
+                                />
+                              )}
+                            />
+                          </Grid>
+                        </Grid>
+                      </Box>
+                    </Grid>
+                  )}
+
                   {/* รายการงานย่อย (Subtasks Container) */}
                   {hasSubtasks && (
                     <Grid item xs={12}>
@@ -1388,7 +1523,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                             <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569' }}>
                               งานย่อยที่ {index + 1}
                             </Typography>
-                            {(isEdit || fields.length > 1) && (
+                            {/* [T-039] allow removing the last row too so a task can be saved with no
+                                 subtasks yet (taskType=pending · "รอแตกงาน") */}
+                            {(isEdit || fields.length >= 1) && (
                               <Tooltip title="ลบงานย่อย" arrow placement="top">
                                 <IconButton 
                                   size="small" 
@@ -1763,6 +1900,14 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                   <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>ครบกำหนด</Box>
                   <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>{confirmData.dueDate ? new Date(confirmData.dueDate).toLocaleDateString('th-TH') : '-'}</Box>
                 </Box>
+
+                {/* [T-039] Standalone task: show the chosen assignee (it lives on mainAssignees, not subtasks) */}
+                {(!confirmData.subtasks || confirmData.subtasks.length === 0) && confirmData.mainAssignees && confirmData.mainAssignees.length > 0 && (
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid #e0e0e0' }}>
+                    <Box sx={{ p: 1.5, bgcolor: '#f5f5f5', fontWeight: 600, fontSize: '0.85rem' }}>ผู้รับผิดชอบ</Box>
+                    <Box sx={{ p: 1.5, fontSize: '0.85rem' }}>{confirmData.mainAssignees.map(a => a.name).join(', ')}</Box>
+                  </Box>
+                )}
 
                 {confirmData.subtasks && confirmData.subtasks.length > 0 && (
                   <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr' }}>

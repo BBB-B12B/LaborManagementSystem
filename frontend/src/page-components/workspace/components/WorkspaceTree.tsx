@@ -799,6 +799,33 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
                               })()}
                               
                               <Stack direction="row" alignItems="center" spacing={0.5}>
+                                {/* [T-039] Task-type badge — งานเดี่ยว / รอแตกงาน / แตกงานแล้ว.
+                                    Only shown when taskType is explicitly set (legacy tasks render nothing). */}
+                                {(() => {
+                                  const tt = tItem.task.taskType;
+                                  if (!tt) return null;
+                                  const cfg = tt === 'standalone'
+                                    ? { label: 'งานเดี่ยว', bg: '#eef2ff', color: '#4338ca' }
+                                    : tt === 'pending'
+                                      ? { label: 'รอแตกงาน', bg: '#fef3c7', color: '#b45309' }
+                                      : { label: 'แตกงานแล้ว', bg: '#ecfdf5', color: '#047857' };
+                                  return (
+                                    <Box
+                                      sx={{
+                                        px: 0.8,
+                                        py: 0.15,
+                                        borderRadius: '999px',
+                                        bgcolor: cfg.bg,
+                                        color: cfg.color,
+                                        fontSize: '0.6rem',
+                                        fontWeight: 700,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {cfg.label}
+                                    </Box>
+                                  );
+                                })()}
                                 {/* Quick Add Subtask Button */}
                                 {!isSupportTree && onQuickCreateSubtask && (
                                   <Tooltip title="สร้างงานย่อยด่วน" arrow>

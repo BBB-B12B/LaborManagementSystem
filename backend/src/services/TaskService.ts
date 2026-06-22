@@ -204,9 +204,20 @@ export class TaskService {
         }
       }
 
+      // [T-039] Resolve explicit task intent. Prefer the value the client sent; otherwise derive
+      // (subtasks present → hasSubtasks, none → pending). On append to an existing task that already
+      // has a taskType and we are not adding subtasks now, preserve the existing value.
+      const derivedTaskType: 'standalone' | 'pending' | 'hasSubtasks' =
+        input.taskType || ((input.subtasks && input.subtasks.length > 0) ? 'hasSubtasks' : 'pending');
+      const resolvedTaskType =
+        !isNewTask && existingTaskData?.taskType && (!input.subtasks || input.subtasks.length === 0)
+          ? existingTaskData.taskType
+          : derivedTaskType;
+
       const newTaskData: Omit<Task, 'id'> = {
         taskId: taskId,
         taskName: input.taskName,
+        taskType: resolvedTaskType,
         description: input.description,
         projectId: input.projectId,
         projectCode: projectCode,

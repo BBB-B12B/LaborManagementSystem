@@ -55,6 +55,14 @@ export interface Task {
   updatedBy: string;
   historicalAssigneeIds?: string[]; // [NEW] Track all users who ever participated in this task
   subtasks?: Subtask[];
+  /**
+   * [T-039] Explicit task intent — recorded at creation so an empty subtasks[] is no longer ambiguous.
+   *  'standalone'  = single task (has 1 auto-created mirror subtask for tracking)
+   *  'pending'     = subtasks intended but not created yet ("รอแตกงาน")
+   *  'hasSubtasks' = real subtasks created
+   * Optional: legacy tasks have no value → derive from subtasks when absent.
+   */
+  taskType?: 'standalone' | 'pending' | 'hasSubtasks';
 }
 
 export interface EditHistoryRecord {
@@ -124,6 +132,7 @@ export interface CreateTaskInput {
   categoryName: string;
   dueDate?: Date;
   status?: TaskStatus;
+  taskType?: 'standalone' | 'pending' | 'hasSubtasks';
   subtasks?: {
     subtaskName: string;
     assignees: TaskAssignee[];

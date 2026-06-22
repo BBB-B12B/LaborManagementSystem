@@ -139,3 +139,8 @@
 {"ts":"2026-06-19T09:28:45Z","task":"T-037 hide After-Sale daily-report drafts from work-hours-tracking page","phase":"done","session_total":227137,"chat_total":249768,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-19T09:32:31Z","task":"T-037 hide After-Sale daily-report drafts from work-hours-tracking page","phase":"done","session_total":227496,"chat_total":250127,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T01:55:36Z","task":"T-037 hide After-Sale daily-report drafts from work-hours-tracking page","phase":"done","session_total":15874,"chat_total":38505,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T02:54:41Z","task":"Post-deploy fixes — dark-theme readability (#1), auth flicker (#2), logout hang (#3)","phase":"in_progress","session_total":124571,"chat_total":95684,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T02:57:45Z","task":"Post-deploy fixes — dark-theme readability (#1), auth flicker (#2), logout hang (#3)","phase":"in_progress","session_total":131332,"chat_total":102445,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T03:23:32Z","task":"T-039 task-type toggle (standalone vs has-subtasks) — disambiguate empty subtasks","phase":"in_progress","session_total":580695,"chat_total":595436,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T03:29:14Z","task":"T-039 task-type toggle (standalone vs has-subtasks) — disambiguate empty subtasks","phase":"in_progress","session_total":586503,"chat_total":20549,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T03:53:51Z","task":"T-040 assign-later mode — make assignee optional on task create + ยังไม่มีผู้รับผิดชอบ warning badge","phase":"done","session_total":695210,"chat_total":15815,"cache_read":0,"cache_write":0}

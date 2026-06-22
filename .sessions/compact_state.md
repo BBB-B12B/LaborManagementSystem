@@ -1,11 +1,11 @@
-dt=2026-06-19
+dt=2026-06-22
 s=0
-task=T-037 hide After-Sale daily-report drafts from work-hours-tracking page
+task=T-039 task-type toggle (standalone vs has-subtasks) — disambiguate empty subtasks
 cfp=37
 sk=coding
 compact_size=8000
-p3=in_progress
-section=S4
-step=in-memory draft filter in getRecords + getStats (ReconciliationService.ts ~1656/~1951)
-session_reset=skip
-notes=T-037 backend plumbing S1-S3 DONE: (S1) ProjectBDailyReportService.ts adds status?:'draft'|'submitted' to DailyEmployeeTimesheet + dailyReportStatus? to DailyTimesheetSummary + toTimesheetSummary sets dailyReportStatus:doc.status. (S2) ReconciliationRecord.ts adds dailyReportStatus? to both interfaces + serialize (~287) + parse (~428). (S3) ReconciliationService.ts main input build (~1290) sets dailyReportStatus:summary.dailyReportStatus; update path (~922 area) sets dailyReportStatus:input.dailyReportStatus ?? existing.dailyReportStatus; create path carries via ...input spread; MISSING_DAILY path (~1391) leaves undefined (correct). REMAINING: S4 = in-memory filter dailyReportStatus==='draft' OUT in getRecords(~1656, drop server .count()+offset, fetch bounded set, filter, recompute total+slice) + getStats(~1951, replace per-status .count() aggregates with in-memory count over draft-filtered docs). Rule: hide ONLY 'draft'; show missing-field(legacy/mockup) + 'submitted'. S5 = document in docs/work-hour-monitoring-logic.md. Close: tsc --noEmit in backend.
+p3=not_started
+section=S0
+step=design confirmed by user — implementation not yet started (needs fresh Phase 1+2)
+session_reset=consumed
+notes=DESIGN CONFIRMED (Option A). Problem: a task with empty subtasks[] is ambiguous — "standalone, no subtasks ever" vs "has subtasks, just not created yet" look identical. The create form ALREADY has a `hasSubtasks` toggle (TaskCreateModal.tsx state ~line 121) but it is NOT persisted — toggle off just stores subtasks:[]. FIX: persist intent as a field on Task. Add `taskType: 'standalone' | 'pending' | 'hasSubtasks'` to both FE type (frontend/src/services/taskService.ts Task iface ~line 12-56) and BE model (backend/src/models/Task.ts). Behaviors: (1) toggle OFF=standalone → form shows assignee+dueDate on the main task → on save auto-create ONE mirror subtask = copy of main (reuses existing subtask-level tracking: dailyProgress/status/revision) but taskType=standalone tells UI to render as a single task, not a parent. (2) toggle ON but no subtasks added → save as taskType=pending → list shows "รอแตกงาน" badge + "เพิ่มงานย่อย" button. (3) subtasks added → taskType=hasSubtasks (current behavior). Checked & SAFE: backend dueDate-required validation (tasks.routes.ts:1636) only fires when subtasks exist → pending case passes unchanged; parent dueDate+assignees are derived from subtasks (TaskService.ts ~174-205) → mirror subtask keeps that logic working. Edit-mode: changing taskType later (standalone→add subtasks, pending→break down) = just update the field. SCOPE ~4-5 files: taskService.ts type + Task.ts model + TaskCreateModal.tsx (send taskType + render standalone assignee/date fields) + task-list card (show badge) + TaskService.ts createTask (set taskType + auto-mirror for standalone). Backend route: backend/src/api/routes/tasks.routes.ts POST /api/tasks ~1612-1666. NEXT SESSION: run Phase 1 (re-read TaskCreateModal.tsx create flow + TaskService.createTask + the task-list card component) → Phase 2 MECE plan → confirm → implement. User commits/pushes themselves; work on main (git-workflow-main-only). Do NOT commit/push.

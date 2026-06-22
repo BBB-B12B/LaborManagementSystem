@@ -47,6 +47,15 @@ export interface Task {
   unlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
   supportUnlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
   subtasks?: Subtask[];
+  /**
+   * Explicit intent for this task (records what the creator chose — never inferred from subtasks.length):
+   *  - 'standalone'   : a single task. Has exactly one auto-created mirror subtask so it stays reportable.
+   *  - 'pending'      : will have subtasks, but none created yet ("รอแตกงาน").
+   *  - 'hasSubtasks'  : real subtasks created (the original multi-subtask flow).
+   * Optional + may be undefined on legacy tasks created before this field existed → callers must fall back
+   * to deriving from subtasks.length.
+   */
+  taskType?: 'standalone' | 'pending' | 'hasSubtasks';
   parentTaskId?: string;
   createdBy?: string;
   updatedBy?: string;
@@ -67,6 +76,7 @@ export interface CreateTaskInput {
   categoryName: string;
   dueDate?: string; // ISO string
   status?: TaskStatus;
+  taskType?: 'standalone' | 'pending' | 'hasSubtasks';
   subtasks?: {
     subtaskName: string;
     assignees: TaskAssignee[];

@@ -1,14 +1,3 @@
-task: Post-deploy fixes — dark-theme readability (#1), auth flicker (#2), logout hang (#3)
-phase: in_progress
-next: User to commit + push (integration → main triggers prod deploy). More UX/UI issues pending from user testing.
-
-Done this session:
-- #1 globals.css: locked color-scheme: light (dark-browser-theme readability)
-- #3 Layout.tsx handleLogout: Promise.race timeout so signOut can't block redirect
-- #2 flicker: NO code change needed — T-205 fix already in working tree, just uncommitted.
-  Root cause of "still broken in prod" = fix never reached `main` (deploy branch).
-
-Files changed (uncommitted, user will commit/push):
-- frontend/src/styles/globals.css
-- frontend/src/components/layout/Layout.tsx
-- (already-present working-tree changes: authStore.ts, _app.tsx, client.ts = the #2 fix)
+task: T-040 assign-later mode — make assignee optional on task create (warning badge REMOVED per user)
+phase: done
+next: user tests assign-later flow on deployed app, then commits/pushes themselves (do NOT commit/push). FE tsc pass (EXIT=0). Files changed: TaskCreateModal.tsx (onSubmit drops mainAssignees-required, keeps dueDate-required + label "(ใส่ทีหลังได้)"). WorkspaceTree.tsx badge REVERTED — user found it insufficient (only flagged at main-task level, missed partial-assign case); X/Y count badge already signals assignment state. Option A kept (assignee optional, dueDate still required). Backend untouched. Prior: T-039 task-type toggle done.

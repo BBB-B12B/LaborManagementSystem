@@ -1,20 +1,36 @@
 # Gather Complete — 2026-06-22
 
-## Task
-Fix dark-browser-theme rendering bug: when a user's browser/OS uses a dark theme, some text/UI becomes unreadable. App is light-theme-only. Lock app to light color-scheme permanently (user-confirmed direction).
+## Task (T-039)
+Fix the +New Task ambiguity: a task with empty `subtasks[]` is ambiguous — "standalone, no subtasks ever" vs "has subtasks, just not created yet" look identical in data. Record intent explicitly via a persisted `taskType` flag. User confirmed Option A (toggle) + Option-2 rendering (standalone shows as a task with 1 subtask).
 
-## Root cause (confirmed)
-`frontend/src/styles/globals.css:25-29` contains leftover Next.js boilerplate:
-```css
-@media (prefers-color-scheme: dark) { html { color-scheme: dark; } }
-```
-This flips UA-styled elements (inputs, scrollbars, dropdowns, default text/bg) to dark when the browser theme is dark — but no real dark theme exists, so light-on-light / dark-on-dark text becomes invisible.
+## Root cause (confirmed in code)
+`TaskCreateModal.tsx` has a `hasSubtasks` toggle (state line 121) but the toggle value is NOT persisted — toggle-off just stores `subtasks: []`. Intent is inferred from emptiness, so it is lost. Standalone mode also has NO field to enter assignee/dueDate (those only exist on subtask rows).
 
-## Evidence
-- Only ONE "dark" reference in entire `src/styles/` (grep) -> no real dark theme implemented.
-- Snippet matches create-next-app default globals.css verbatim -> boilerplate, not intentional.
+## Key findings (Phase 1)
+- Backend `createTask` (TaskService.ts:177-205) ALREADY aggregates assignees + derives parent dueDate from subtasks (fallback input.dueDate||now). → standalone sending ONE mirror subtask works with NO backend logic change.
+- Daily report / hours are opened ONLY by clicking a subtask (WorkspaceTree.tsx:844). A task with no subtask is not reportable. → standalone REQUIRES one mirror subtask (confirms design).
+- Tasks with no subtasks DO render in the tree (WorkspaceTree.tsx:282-284 fallback). → "pending" task will appear; just needs a badge.
+- Subtasks only written when length>0 (TaskService.ts:245). Backend dueDate-required validation (tasks.routes.ts:1636) only fires when subtasks exist → pending case passes unchanged. SAFE.
 
-## Fix direction (user-confirmed)
-Replace the dark media query with an unconditional `html { color-scheme: light; }` to lock light rendering regardless of OS/browser theme.
+## taskType state mapping (derived at form submit)
+- toggle OFF → `standalone` — show assignee+dueDate fields on main task → build 1 mirror subtask (subtaskName = taskName) → send.
+- toggle ON + subtasks.length > 0 → `hasSubtasks` (current behavior).
+- toggle ON + subtasks.length === 0 → `pending` ("รอแตกงาน").
+
+## Affected files (~4-5)
+| File | Why |
+|---|---|
+| frontend/src/services/taskService.ts | add taskType to Task + CreateTaskInput |
+| backend/src/models/Task.ts | add taskType to Task model |
+| frontend/src/page-components/workspace/components/TaskCreateModal.tsx | standalone fields + mirror subtask + taskType payload + 3-state derive |
+| backend/src/services/TaskService.ts | store taskType in newTaskData |
+| frontend/src/page-components/workspace/components/WorkspaceTree.tsx | badge งานเดี่ยว/รอแตกงาน/แตกงานแล้ว |
+
+## Acceptance criteria
+- taskType persisted on every created task; existing tasks (no field) default safely.
+- Standalone task: assignee+date set on main task, reportable (has mirror subtask), shows in tree.
+- Pending task creatable (no subtasks) and shows "รอแตกงาน".
+- No regression to existing multi-subtask create flow.
+- Work on `main`; do NOT commit/push (user does it).
 
 [✓ gather]
