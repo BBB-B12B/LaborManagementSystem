@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Menu,
@@ -36,7 +36,12 @@ export interface PhotoSourcePickerProps {
  * Camera vs Gallery (vs File). This makes Android and iOS behave identically:
  * a bare `<input accept="image/*">` lets each browser decide the UX — iOS shows
  * a menu (camera/library), Android jumps straight to the gallery with no camera.
- * Here the app owns the choice, so both platforms offer the same options.
+ *
+ * IMPORTANT: each menu item is a native <label> wrapping its own hidden input.
+ * Mobile browsers only open the file/camera dialog from a real user gesture, so
+ * we MUST rely on native label->input activation — programmatically calling
+ * input.click() after closing the menu gets blocked on mobile Safari/Chrome
+ * (the click is no longer tied to the user's tap). The menu closes on change.
  */
 const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   onSelect,
@@ -53,9 +58,6 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   children,
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const openMenu = (e: React.MouseEvent<HTMLElement>) => {
     if (disabled) return;
@@ -63,15 +65,11 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   };
   const closeMenu = () => setAnchorEl(null);
 
-  const pick = (ref: React.RefObject<HTMLInputElement>) => {
-    closeMenu();
-    ref.current?.click();
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSelect(e.target.files);
     // reset so re-picking the same file still fires onChange
     e.target.value = '';
+    closeMenu();
   };
 
   const Trigger = (component || Box) as React.ElementType;
@@ -97,58 +95,54 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
       >
-        <MenuItem onClick={() => pick(cameraRef)}>
+        {/* Camera: native label activation + `capture` forces the camera app */}
+        <MenuItem component="label">
           <ListItemIcon>
             <Camera size={18} />
           </ListItemIcon>
           <ListItemText>{cameraLabel}</ListItemText>
+          <input
+            type="file"
+            hidden
+            accept="image/*"
+            capture="environment"
+            multiple={multiple}
+            onChange={handleChange}
+          />
         </MenuItem>
-        <MenuItem onClick={() => pick(galleryRef)}>
+
+        {/* Gallery: plain image picker via native label */}
+        <MenuItem component="label">
           <ListItemIcon>
             <ImageIcon size={18} />
           </ListItemIcon>
           <ListItemText>{galleryLabel}</ListItemText>
+          <input
+            type="file"
+            hidden
+            accept={galleryAccept}
+            multiple={multiple}
+            onChange={handleChange}
+          />
         </MenuItem>
+
+        {/* File: any accepted type incl. PDF, via native label */}
         {fileAccept && (
-          <MenuItem onClick={() => pick(fileRef)}>
+          <MenuItem component="label">
             <ListItemIcon>
               <Paperclip size={18} />
             </ListItemIcon>
             <ListItemText>{fileLabel}</ListItemText>
+            <input
+              type="file"
+              hidden
+              accept={fileAccept}
+              multiple={multiple}
+              onChange={handleChange}
+            />
           </MenuItem>
         )}
       </Menu>
-
-      {/* Camera: `capture` forces the camera app (image only) */}
-      <input
-        ref={cameraRef}
-        type="file"
-        hidden
-        accept="image/*"
-        capture="environment"
-        multiple={multiple}
-        onChange={handleChange}
-      />
-      {/* Gallery: plain image picker */}
-      <input
-        ref={galleryRef}
-        type="file"
-        hidden
-        accept={galleryAccept}
-        multiple={multiple}
-        onChange={handleChange}
-      />
-      {/* File: any accepted type incl. PDF */}
-      {fileAccept && (
-        <input
-          ref={fileRef}
-          type="file"
-          hidden
-          accept={fileAccept}
-          multiple={multiple}
-          onChange={handleChange}
-        />
-      )}
     </>
   );
 };
