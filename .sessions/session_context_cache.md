@@ -1,9 +1,9 @@
-# Context Cache — 2026-06-22 17:21
+# Context Cache — 2026-06-22 17:31
 task: T-044-fix daily-reports photo attach camera capture fix
 phase: done
 next: none
-session_total: ~52530
-chat_total: ~67271
+session_total: ~66709
+chat_total: ~81450
 cache_read: 0
 cache_write: 0
 pending_sections:

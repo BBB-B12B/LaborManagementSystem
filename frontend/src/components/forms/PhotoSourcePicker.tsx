@@ -1,13 +1,5 @@
-import React, { useState, useId } from 'react';
-import {
-  Box,
-  Drawer,
-  List,
-  ListItem,
-  Divider,
-  Typography,
-  Button,
-} from '@mui/material';
+import React, { useState, useRef } from 'react';
+import { Box, Divider, Typography, Button } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import { Camera, Image as ImageIcon, Paperclip } from 'lucide-react';
 
@@ -29,24 +21,24 @@ export interface PhotoSourcePickerProps {
 /**
  * Cross-platform photo/file source chooser.
  *
- * ─── Why nested labels work on iOS / Android ────────────────────────────────
+ * ─── Why no MUI Drawer ────────────────────────────────────────────────────────
  *
- * Root cause of the previous approach failing:
- *   MUI Drawer uses a Portal (renders in document.body) AND traps focus with
- *   aria-modal. Inputs placed OUTSIDE the Drawer with htmlFor labels INSIDE
- *   the Drawer fail because:
- *   (a) The focus trap prevents activation of elements outside the modal DOM.
- *   (b) The htmlFor mechanism must cross the Portal boundary, which some
- *       mobile browsers refuse to follow when a focus trap is active.
+ * MUI Drawer uses a Portal (renders outside React tree, in document.body).
+ * On mobile browsers, calling input.click() from inside a Portal is not
+ * treated as a trusted user gesture → camera/file picker blocked.
  *
- * Solution — nested labels (input inside label, same DOM subtree):
- *   • Each option row is a <label> element rendered INSIDE the Drawer.
- *   • The <input> is nested directly inside that same <label>.
- *   • The browser activates the input at the OS level when the label is tapped.
- *   • No cross-portal htmlFor, no JS .click(), no focus trap crossing.
- *   • The lazy-mount issue does NOT apply here because we use native label
- *     activation (not a programmatic .click()), so the input being mounted
- *     during animation is fine — the user taps AFTER the Drawer is visible.
+ * This was true even with nested labels inside the Drawer: some mobile
+ * browsers block file picker activation when the initiating element is
+ * inside an aria-modal/Portal boundary.
+ *
+ * Solution — position:fixed div in the normal React tree:
+ *   • The bottom sheet is a regular child of this component (no Portal).
+ *   • Each option is a <Box onClick={...}> that synchronously calls
+ *     inputRef.current?.click() from the same user-gesture call stack.
+ *   • This is identical to the pattern in Camera.tsx (qc-report-new)
+ *     which is confirmed to work on real iOS/Android devices.
+ *   • The hidden inputs are always mounted (outside the {isOpen &&} block)
+ *     so the ref is always valid when .click() is called.
  */
 const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   onSelect,
@@ -62,38 +54,67 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   fileLabel = 'แนบไฟล์',
   children,
 }) => {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [isOpen, setIsOpen] = useState(false);
 
-  const openMenu = () => {
-    if (disabled) return;
-    setIsOpen(true);
-  };
+  const openMenu = () => { if (!disabled) setIsOpen(true); };
   const closeMenu = () => setIsOpen(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSelect(e.target.files);
     e.target.value = '';
-    closeMenu();
+    setIsOpen(false);
   };
+
+  // Each handler: close sheet first (queues re-render), then .click() synchronously.
+  // The .click() is still in the same call stack as the user tap → trusted gesture.
+  // Inputs are always mounted (declared outside {isOpen&&}) so ref is always valid.
+  const handleCamera = () => { setIsOpen(false); cameraRef.current?.click(); };
+  const handleGallery = () => { setIsOpen(false); galleryRef.current?.click(); };
+  const handleFile = () => { setIsOpen(false); fileRef.current?.click(); };
 
   const Trigger = (component || Box) as React.ElementType;
 
-  const labelRowSx = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 2,
-    py: 1.8,
-    px: 2,
-    borderRadius: '12px',
-    cursor: 'pointer',
-    width: '100%',
-    userSelect: 'none' as const,
+  const optionSx = {
+    display: 'flex', alignItems: 'center', gap: 2,
+    py: 1.8, px: 2, borderRadius: '12px', cursor: 'pointer',
     '&:hover': { bgcolor: '#f8fafc' },
     '&:active': { bgcolor: '#f1f5f9' },
   };
 
   return (
     <>
+      {/* ─── Always-mounted hidden inputs — never inside isOpen block ──────── */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept={galleryAccept}
+        multiple={multiple}
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
+      {fileAccept && (
+        <input
+          ref={fileRef}
+          type="file"
+          accept={fileAccept}
+          multiple={multiple}
+          style={{ display: 'none' }}
+          onChange={handleChange}
+        />
+      )}
+
       {/* ─── Trigger ────────────────────────────────────────────────────────── */}
       <Trigger
         className={className}
@@ -107,48 +128,49 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
         {children}
       </Trigger>
 
-      {/* ─── Drawer (inputs nested inside labels — same DOM subtree) ─────────── */}
-      <Drawer
-        anchor="bottom"
-        open={isOpen}
-        onClose={closeMenu}
-        PaperProps={{
-          sx: {
-            borderTopLeftRadius: '24px',
-            borderTopRightRadius: '24px',
-            padding: '16px 16px 24px 16px',
-            maxWidth: { xs: '100%', sm: '480px' },
-            margin: '0 auto',
-            boxShadow: '0 -10px 25px rgba(0,0,0,0.1)',
-            bgcolor: '#ffffff',
-          },
-        }}
-      >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}>
-            <Box sx={{ width: 40, height: 4, bgcolor: '#e2e8f0', borderRadius: 2 }} />
-          </Box>
+      {/* ─── Bottom sheet — position:fixed, NOT a Portal ────────────────────── *
+       *   Stays in the normal React/DOM tree. onClick handlers on the options  *
+       *   call inputRef.click() synchronously → always a trusted gesture.      */}
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <Box
+            onClick={closeMenu}
+            sx={{
+              position: 'fixed', inset: 0,
+              bgcolor: 'rgba(0,0,0,0.5)',
+              zIndex: 1300,
+            }}
+          />
 
-          <Typography variant="subtitle1" fontWeight={800} align="center" sx={{ color: '#1e293b' }}>
-            เลือกช่องทางแนบรูปภาพ
-          </Typography>
+          {/* Sheet (sibling of backdrop — click events don't bubble between siblings) */}
+          <Box
+            sx={{
+              position: 'fixed', bottom: 0, left: 0, right: 0,
+              zIndex: 1301,
+              bgcolor: '#ffffff',
+              borderTopLeftRadius: '24px',
+              borderTopRightRadius: '24px',
+              padding: '16px 16px 24px 16px',
+              maxWidth: { xs: '100%', sm: '480px' },
+              mx: 'auto',
+              boxShadow: '0 -10px 25px rgba(0,0,0,0.1)',
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {/* Handle bar */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}>
+                <Box sx={{ width: 40, height: 4, bgcolor: '#e2e8f0', borderRadius: 2 }} />
+              </Box>
 
-          <Divider sx={{ borderColor: '#f1f5f9' }} />
+              <Typography variant="subtitle1" fontWeight={800} align="center" sx={{ color: '#1e293b', mb: 1 }}>
+                เลือกช่องทางแนบรูปภาพ
+              </Typography>
 
-          <List disablePadding>
-            {/* Camera — nested input inside label, no JS .click(), no htmlFor crossing portal */}
-            <ListItem disablePadding>
-              <Box
-                component="label"
-                sx={labelRowSx}
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  style={{ display: 'none' }}
-                  onChange={handleChange}
-                />
+              <Divider sx={{ borderColor: '#f1f5f9' }} />
+
+              {/* Camera option */}
+              <Box onClick={handleCamera} sx={optionSx}>
                 <Box sx={{ color: '#3b82f6', display: 'flex', alignItems: 'center', minWidth: 40 }}>
                   <Camera size={22} />
                 </Box>
@@ -156,21 +178,9 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
                   {cameraLabel}
                 </Typography>
               </Box>
-            </ListItem>
 
-            {/* Gallery — nested input inside label */}
-            <ListItem disablePadding sx={{ mt: 1 }}>
-              <Box
-                component="label"
-                sx={labelRowSx}
-              >
-                <input
-                  type="file"
-                  accept={galleryAccept}
-                  multiple={multiple}
-                  style={{ display: 'none' }}
-                  onChange={handleChange}
-                />
+              {/* Gallery option */}
+              <Box onClick={handleGallery} sx={optionSx}>
                 <Box sx={{ color: '#10b981', display: 'flex', alignItems: 'center', minWidth: 40 }}>
                   <ImageIcon size={22} />
                 </Box>
@@ -178,22 +188,10 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
                   {galleryLabel}
                 </Typography>
               </Box>
-            </ListItem>
 
-            {/* File (optional) — nested input inside label */}
-            {fileAccept && (
-              <ListItem disablePadding sx={{ mt: 1 }}>
-                <Box
-                  component="label"
-                  sx={labelRowSx}
-                >
-                  <input
-                    type="file"
-                    accept={fileAccept}
-                    multiple={multiple}
-                    style={{ display: 'none' }}
-                    onChange={handleChange}
-                  />
+              {/* File option (optional) */}
+              {fileAccept && (
+                <Box onClick={handleFile} sx={optionSx}>
                   <Box sx={{ color: '#64748b', display: 'flex', alignItems: 'center', minWidth: 40 }}>
                     <Paperclip size={22} />
                   </Box>
@@ -201,29 +199,24 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
                     {fileLabel}
                   </Typography>
                 </Box>
-              </ListItem>
-            )}
-          </List>
+              )}
 
-          <Button
-            variant="outlined"
-            color="inherit"
-            onClick={closeMenu}
-            sx={{
-              mt: 1,
-              py: 1.5,
-              borderRadius: '12px',
-              fontWeight: 800,
-              borderColor: '#e2e8f0',
-              color: '#64748b',
-              fontSize: '0.95rem',
-              '&:hover': { borderColor: '#cbd5e1', bgcolor: '#f8fafc' },
-            }}
-          >
-            ยกเลิก
-          </Button>
-        </Box>
-      </Drawer>
+              <Button
+                variant="outlined"
+                color="inherit"
+                onClick={closeMenu}
+                sx={{
+                  mt: 1, py: 1.5, borderRadius: '12px', fontWeight: 800,
+                  borderColor: '#e2e8f0', color: '#64748b', fontSize: '0.95rem',
+                  '&:hover': { borderColor: '#cbd5e1', bgcolor: '#f8fafc' },
+                }}
+              >
+                ยกเลิก
+              </Button>
+            </Box>
+          </Box>
+        </>
+      )}
     </>
   );
 };
