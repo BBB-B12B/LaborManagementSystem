@@ -156,3 +156,4 @@
 {"ts":"2026-06-22T07:11:47Z","task":"T-043 workspace role-based access rework (filterTasksByRole)","phase":"done","session_total":27362,"chat_total":50103,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T07:14:55Z","task":"T-043 workspace role-based access rework (filterTasksByRole)","phase":"done","session_total":30164,"chat_total":52905,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T07:21:14Z","task":"T-044 daily-reports photo attach — camera+gallery popup (consistent Android/iOS)","phase":"done","session_total":405323,"chat_total":428064,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-22T08:24:17Z","task":"T-044-fix daily-reports photo attach camera capture fix","phase":"done","session_total":0,"chat_total":14741,"cache_read":0,"cache_write":0}

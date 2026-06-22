@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Drawer,
@@ -36,9 +36,7 @@ export interface PhotoSourcePickerProps {
 
 /**
  * Visually-hidden (NOT display:none). The inputs must stay rendered in the
- * normal layout so mobile browsers/WebViews still open the file/camera dialog —
- * some Android WebViews refuse to open a picker for a `display:none` input even
- * when activated via a <label>.
+ * normal layout so mobile browsers/WebViews still open the file/camera dialog.
  */
 const visuallyHidden: React.CSSProperties = {
   position: 'absolute',
@@ -56,18 +54,17 @@ const visuallyHidden: React.CSSProperties = {
  * Cross-platform photo/file source chooser.
  *
  * Tapping the trigger opens a small popup so the user explicitly chooses
- * Camera vs Gallery (vs File). This makes Android and iOS behave identically:
- * a bare `<input accept="image/*">` lets each browser decide the UX — iOS shows
- * a menu (camera/library), Android jumps straight to the gallery with no camera.
+ * Camera vs Gallery (vs File). This makes Android and iOS behave identically.
  *
- * Resolved Issue (Camera not opening on mobile):
- *  1. MUI Menu uses a Portal and focus-management which shifts focus back to the
- *     trigger element immediately upon selection. Mobile browsers (especially iOS
- *     Safari) interpret this as an interruption and cancel any pending native file
- *     pickers due to the broken user-gesture trust chain.
- *  2. We replace Menu with an elegant bottom sheet Drawer, and trigger the hidden
- *     inputs synchronously via `.click()` in the MenuItem onClick handler. This keeps
- *     the gesture trusted and ensures the camera/file picker opens reliably.
+ * Fixes for Mobile Camera opening issues:
+ *  1. Drawer UI stays mounted: We keep the bottom drawer open when a selection is tapped.
+ *     If the Drawer closes immediately (DOM unmounts/focus shifts), mobile Safari/Chrome
+ *     cancels the file-picker request for security. The drawer closes only in handleChange.
+ *  2. React Refs: We use React refs instead of document.getElementById, avoiding potential
+ *     race conditions or ID conflicts across multiple picker instances.
+ *  3. Removed "multiple" from Camera input: Mobile browsers (especially iOS Safari) ignore
+ *     the `capture="environment"` attribute when the input also has `multiple`, falling back
+ *     to the library or failing to open. Removing it forces the native camera application.
  */
 const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   onSelect,
@@ -84,10 +81,9 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   children,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const uid = useId();
-  const camId = `${uid}-cam`;
-  const galId = `${uid}-gal`;
-  const fileId = `${uid}-file`;
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openMenu = (e: React.MouseEvent<HTMLElement>) => {
     if (disabled) return;
@@ -102,16 +98,15 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
     closeMenu();
   };
 
-  const handleInputTrigger = (id: string) => {
-    // 1. Synchronously trigger input click inside the user gesture handler
-    const inputEl = document.getElementById(id) as HTMLInputElement | null;
-    if (inputEl) {
-      inputEl.click();
+  const handleInputTrigger = (type: 'camera' | 'gallery' | 'file') => {
+    // Synchronously trigger input click inside the user gesture handler
+    if (type === 'camera' && cameraInputRef.current) {
+      cameraInputRef.current.click();
+    } else if (type === 'gallery' && galleryInputRef.current) {
+      galleryInputRef.current.click();
+    } else if (type === 'file' && fileInputRef.current) {
+      fileInputRef.current.click();
     }
-    // 2. Keep the drawer open so that mobile Safari/Chrome doesn't cancel
-    // the file dialog due to DOM unmounting/focus-shifting.
-    // The drawer will close in handleChange once the file is selected,
-    // or when the user clicks the "Cancel" button.
   };
 
   const Trigger = (component || Box) as React.ElementType;
@@ -161,7 +156,7 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
           <List disablePadding>
             <ListItem disablePadding>
               <ListItemButton
-                onClick={() => handleInputTrigger(camId)}
+                onClick={() => handleInputTrigger('camera')}
                 sx={{ py: 1.8, px: 2, borderRadius: '12px', '&:hover': { bgcolor: '#f8fafc' } }}
               >
                 <ListItemIcon sx={{ color: '#3b82f6', minWidth: 40 }}>
@@ -176,7 +171,7 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 
             <ListItem disablePadding sx={{ mt: 1 }}>
               <ListItemButton
-                onClick={() => handleInputTrigger(galId)}
+                onClick={() => handleInputTrigger('gallery')}
                 sx={{ py: 1.8, px: 2, borderRadius: '12px', '&:hover': { bgcolor: '#f8fafc' } }}
               >
                 <ListItemIcon sx={{ color: '#10b981', minWidth: 40 }}>
@@ -192,7 +187,7 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
             {fileAccept && (
               <ListItem disablePadding sx={{ mt: 1 }}>
                 <ListItemButton
-                  onClick={() => handleInputTrigger(fileId)}
+                  onClick={() => handleInputTrigger('file')}
                   sx={{ py: 1.8, px: 2, borderRadius: '12px', '&:hover': { bgcolor: '#f8fafc' } }}
                 >
                   <ListItemIcon sx={{ color: '#64748b', minWidth: 40 }}>
@@ -231,32 +226,31 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
       </Drawer>
 
       {/* Inputs live OUTSIDE the Menu portal, visually-hidden (not display:none) */}
-      {/* Camera: `capture` forces the camera app (image only) */}
+      {/* Camera: `capture` forces the camera app (image only). MUST NOT have "multiple" */}
       <input
-        id={camId}
         type="file"
         accept="image/*"
         capture="environment"
-        multiple={multiple}
+        ref={cameraInputRef}
         onChange={handleChange}
         style={visuallyHidden}
       />
       {/* Gallery: plain image picker */}
       <input
-        id={galId}
         type="file"
         accept={galleryAccept}
         multiple={multiple}
+        ref={galleryInputRef}
         onChange={handleChange}
         style={visuallyHidden}
       />
       {/* File: any accepted type incl. PDF */}
       {fileAccept && (
         <input
-          id={fileId}
           type="file"
           accept={fileAccept}
           multiple={multiple}
+          ref={fileInputRef}
           onChange={handleChange}
           style={visuallyHidden}
         />
@@ -266,4 +260,5 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 };
 
 export default PhotoSourcePicker;
+
 
