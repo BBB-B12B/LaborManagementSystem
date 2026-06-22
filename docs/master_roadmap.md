@@ -212,6 +212,12 @@
   - [X] T-036-04: S4 · Clean up backend ReconciliationService · attempts: 1 · tool_calls: 3
   - [X] T-036-05: S5 · Build and Verify · attempts: 1 · tool_calls: 6
   - [X] T-036-06: S6 · Fix segment matching swap bug and add OT Noon continuous transition bypass · attempts: 1 · tool_calls: 2
+- [X] T-037: Hide After-Sale Daily Report drafts from work-hours-tracking page (dailyReportStatus filter) · attempts:1 · tsc clean
+  - [X] T-037-01: S1 · Plumb status from After-Sale into DailyTimesheetSummary (ProjectBDailyReportService.ts)
+  - [X] T-037-02: S2 · Add dailyReportStatus field to ReconciliationRecord model (type + serialize + parse)
+  - [X] T-037-03: S3 · Carry dailyReportStatus through reconcile upsert (ReconciliationService input build + buildUpdates)
+  - [X] T-037-04: S4 · In-memory filter dailyReportStatus==='draft' in getRecords + getStats
+  - [X] T-037-05: S5 · Document the draft filter in work-hour-monitoring-logic.md
 
 
 

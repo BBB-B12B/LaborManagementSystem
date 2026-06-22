@@ -79,12 +79,11 @@ export const useAuthStore = create<AuthState>()(
         }
         return persistedState;
       },
-      onRehydrateStorage: () => (state, error) => {
-        if (error) {
-          state?.setLoading(false);
-          return;
-        }
-        state?.setLoading(false);
+      onRehydrateStorage: () => () => {
+        // Do NOT clear isLoading here. Rehydrating the persisted flag from localStorage is
+        // instant, but the actual API credential (Firebase token) is restored asynchronously.
+        // _app.tsx (Firebase onIdTokenChanged) now owns clearing isLoading once auth has truly
+        // settled, so the route guards never authorize into /workspace before the token is ready.
       },
       partialize: (state) => ({
         user: state.user,

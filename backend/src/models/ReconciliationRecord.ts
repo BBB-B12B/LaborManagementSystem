@@ -124,6 +124,9 @@ export interface ReconciliationRecord {
 
   // --- สถานะ ---
   status: ReconciliationStatus;
+  // After-Sale Daily Report submission state. undefined = legacy/mockup (showable).
+  // 'draft' records are hidden from the work-hours-tracking page (getRecords/getStats).
+  dailyReportStatus?: 'draft' | 'submitted';
   isHoliday?: boolean; // วันหยุดบริษัท
   leaveHours?: number; // จำนวนชั่วโมงที่ลา
   leaveEntries?: any[]; // ข้อมูลการลาเพิ่มเติม
@@ -219,6 +222,7 @@ export interface CreateReconciliationRecordInput {
   isFallbackAssignee?: boolean;
   workLogs?: any[];
   dailyReportHistory?: any[];
+  dailyReportStatus?: 'draft' | 'submitted';
 }
 
 // ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
@@ -280,6 +284,7 @@ export const reconciliationRecordConverter = {
     if (record.isEarlyLeave !== undefined) data.isEarlyLeave = record.isEarlyLeave;
     if (record.note !== undefined) data.note = record.note;
     if (record.status !== undefined) data.status = record.status;
+    if (record.dailyReportStatus !== undefined) data.dailyReportStatus = record.dailyReportStatus;
     if (record.isLocked !== undefined) data.isLocked = record.isLocked;
     if (record.resolvedAt !== undefined) data.resolvedAt = record.resolvedAt;
     if (record.resolvedBy !== undefined) data.resolvedBy = record.resolvedBy;
@@ -420,6 +425,7 @@ export const reconciliationRecordConverter = {
       isEarlyLeave: data.isEarlyLeave,
       note: data.note,
       status: data.status || 'PENDING',
+      dailyReportStatus: data.dailyReportStatus,
       isLocked: data.isLocked ?? false,
       resolvedAt: data.resolvedAt ? toDate(data.resolvedAt) : undefined,
       resolvedBy: data.resolvedBy,

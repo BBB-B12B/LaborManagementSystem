@@ -1,33 +1,20 @@
-# Gather Complete — T-205 FM "My job" card shows subtask name on both lines
+# Gather Complete — 2026-06-22
 
-date: 2026-06-18
-skill: coding
-task: T-205 fix FM "My job" support card showing subtask name twice (should be task name + subtask name)
+## Task
+Fix dark-browser-theme rendering bug: when a user's browser/OS uses a dark theme, some text/UI becomes unreadable. App is light-theme-only. Lock app to light color-scheme permanently (user-confirmed direction).
 
-## Findings
+## Root cause (confirmed)
+`frontend/src/styles/globals.css:25-29` contains leftover Next.js boilerplate:
+```css
+@media (prefers-color-scheme: dark) { html { color-scheme: dark; } }
+```
+This flips UA-styled elements (inputs, scrollbars, dropdowns, default text/bg) to dark when the browser theme is dark — but no real dark theme exists, so light-on-light / dark-on-dark text becomes invisible.
 
-### Bug — My job card duplicates the subtask name on both lines (DB correct, noti correct)
-- Data path: GET /assigned-subtasks (backend tasks.routes.ts:629) returns enrichedSubtasks. Each card = a subtask,
-  enriched with its parent task. `taskName` is explicitly set to parentTask.taskName (tasks.routes.ts:798) = correct
-  ("พื้น post tension"); `subtaskName` = the subtask ("ชั้น 1"). Because `...st` is spread AFTER `...parentTask`
-  (tasks.routes.ts:794-799), the SUBTASK's `supportTaskName` overrides the parent's on the merged object.
-- Card render (frontend/src/pages/daily-reports/index.tsx):
-  - line 4248-4249: `displayTaskName = isActingAsSupport && task.supportTaskName ? task.supportTaskName : task.taskName`
-  - line 4411 (title / "Task Name"): shows `displayTaskName` -> for support = `supportTaskName` = "ชั้น 1" ❌
-  - line 4419 (subtitle / "Subtask Name"): shows `task.subtaskName` = "ชั้น 1" ✓
-  => both lines = "ชั้น 1".
-- Root: `supportTaskName` legitimately holds the SUBTASK-level support name (the noti at TaskService.ts:575-600 reads
-  it as the subtask name: 'ชั้น 1' in งาน 'พื้น post tension'). The card wrongly puts this subtask-level name on the
-  TASK title line, colliding with the subtask line. The parent task name (`task.taskName`) is available and correct.
-- Same anti-pattern in the detail modal (daily-reports/index.tsx:2937-2939): the "Parent task name as context"
-  subtitle line uses `isActingAsSupport && supportTaskName ? supportTaskName : taskName` -> shows "ชั้น 1" instead of
-  the parent "พื้น post tension". Will duplicate the same way when opening this support task's detail.
-- Own-project (non-support) cards: isActingAsSupport=false -> displayTaskName already = taskName, subtitle = subtaskName.
-  So fixing the title to always use the parent task name is a no-op for own-project (no regression).
+## Evidence
+- Only ONE "dark" reference in entire `src/styles/` (grep) -> no real dark theme implemented.
+- Snippet matches create-next-app default globals.css verbatim -> boilerplate, not intentional.
 
-## Assessment
-- Pure display fix, frontend only. No backend, no data change. supportTaskName data is correct as stored.
-- 2 spots, identical root: task-title line must use the parent task name; the subtask line carries supportTaskName/subtaskName.
-- Standing user authorization: fix the detail-modal duplicate too (same kind of problem, will definitely recur).
+## Fix direction (user-confirmed)
+Replace the dark media query with an unconditional `html { color-scheme: light; }` to lock light rendering regardless of OS/browser theme.
 
 [✓ gather]

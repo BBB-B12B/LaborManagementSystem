@@ -147,10 +147,17 @@ const Topbar: React.FC = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
 
-    // ลงชื่ออกจาก Firebase Auth (ถ้ามี)
+    // ลงชื่ออกจาก Firebase Auth (ถ้ามี) — ห้ามให้ค้างจนบล็อก redirect
+    // บาง browser (storage ถูกบล็อก/cold) auth.signOut() อาจค้างไม่ยอม resolve
+    // ทำให้บรรทัด redirect ด้านล่างไม่ทำงาน → หน้าหมุนค้าง ไม่ออกจากระบบ
+    // ใส่ timeout กันค้าง: ถ้า signOut ไม่เสร็จใน 1.5s ก็ปล่อยผ่านไป redirect ต่อ
+    // (เรา reload หน้าเต็ม + ล้าง localStorage ไปแล้ว session ฝั่ง client หายแน่นอน)
     if (auth) {
       try {
-        await auth.signOut();
+        await Promise.race([
+          auth.signOut(),
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]);
       } catch (err) {
         console.error('Firebase signOut failed:', err);
       }

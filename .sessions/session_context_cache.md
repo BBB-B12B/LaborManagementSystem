@@ -1,12 +1,10 @@
-# Context Cache — 2026-06-19 09:17
-task: T-205 FM My job support card shows subtask name on both lines
-phase: in_progress
-next: user re-tests FM My job support card; then push T-202..T-205 together.
-session_total: ~2809650
-chat_total: ~58984
+# Context Cache — 2026-06-22 08:55
+task: T-037 hide After-Sale daily-report drafts from work-hours-tracking page
+phase: done
+next: T-037 complete (S1-S5 [X], tsc clean). Not committed. Ready for commit/deploy when user asks.
+session_total: ~15874
+chat_total: ~38505
 cache_read: 0
 cache_write: 0
 pending_sections:
-  - [ ] provide git commit cmds (user runs) + remind: push triggers deploy
-  - [ ] runtime re-test: FM "My job" support card shows task name on line 1, subtask name on line 2 (no duplicate)
-  - [ ] roadmap T-205 [X] · active_thread phase:done · PATH A clear Phase 1-3
+  - [ ] Verify-N pass · [ ] active_thread phase:done · [ ] roadmap T-038 [X]

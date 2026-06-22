@@ -510,3 +510,46 @@ const hasOtNoon = !!otNoon;
 | 2026-05-18 | Bug #1: `continue` เมื่อหา punch ไม่เจอ → ต้องเป็น CONFLICTED ทันที |
 | 2026-05-18 | Bug #2: punch ถูกใช้ซ้ำข้าม segment → ต้องเพิ่ม `usedPunches: Set<number>` |
 | 2026-05-18 | Bug #3: `hasOtNoon` ใช้ค่าจาก scan aggregator → ต้องใช้แค่ `shiftTimes.otNoon` จาก daily report |
+| 2026-06-19 | เพิ่ม Section 13: ซ่อน record ที่ Daily Report ฝั่ง After-Sale ยังเป็น `draft` ออกจากหน้าติดตามชั่วโมง |
+
+## 13. Daily Report Draft Display Filter
+
+**Rule:** A reconciliation record is hidden from the work-hours-tracking page
+(`scan-data-monitoring`) when its source After-Sale Daily Report is still a
+`draft`. Records whose daily report is `submitted` — or that have no status at
+all (legacy/mockup data) — are shown.
+
+| `dailyReportStatus` | Shown? |
+|---|---|
+| `'draft'` | hidden |
+| `'submitted'` | shown |
+| missing / `undefined` (legacy/mockup) | shown |
+
+### Why missing = shown
+The After-Sale `status` field was added recently, so older records lack it.
+Those legacy/mockup rows must still appear (they are deleted manually later).
+
+### Why filtered in-memory (not in the Firestore query)
+"Hide drafts" is really "show submitted **OR** missing-field". Firestore's
+`where('dailyReportStatus','!=','draft')` would also drop every doc that lacks
+the field, hiding the legacy rows we need. That condition cannot be expressed as
+one indexed query, so the exclusion runs in-memory.
+
+### Where it lives (`ReconciliationService.ts`)
+- `getRecords()` — fetches the full filtered set, drops `dailyReportStatus === 'draft'`,
+  then recomputes `total` and the page slice in-memory (replaces the server-side
+  `count()` + `offset()` pagination).
+- `getStats()` — fetches the project/date set once, drops drafts, and tallies every
+  per-status count in-memory (replaces the per-status `count()` aggregates). The
+  `dailyContractors` employee count is unrelated to drafts and stays a `count()`
+  aggregate.
+
+### Submit → un-submit
+A `submitted` daily report can revert to `draft`. The status is re-plumbed onto
+the record on every reconcile generate (`dailyReportStatus: input.dailyReportStatus
+?? existing.dailyReportStatus`), so a revert updates the record to `draft` and the
+display filter then hides it.
+
+### Data flow
+`After-Sale DailyEmployeeTimesheet.status` → `DailyTimesheetSummary.dailyReportStatus`
+→ `ReconciliationRecord.dailyReportStatus` (persisted) → `getRecords`/`getStats` filter.

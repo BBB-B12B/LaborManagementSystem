@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { useFeedbackStore } from '@/store/feedbackStore';
+import { useAuthStore } from '@/store/authStore';
 import { auth as firebaseAuth } from '../firebase/config';
 import { isTokenExpired } from '../../utils/tokenUtils';
 
@@ -167,6 +168,10 @@ apiClient.interceptors.response.use(
           if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
             localStorage.removeItem('authToken');
             localStorage.removeItem('user');
+            // Clear the Zustand auth flag too. Otherwise the route guard still believes we are
+            // authenticated and bounces straight back into /workspace after the redirect —
+            // the /workspace <-> /login flicker loop.
+            useAuthStore.getState().logout();
             window.location.href = '/login';
           }
           break;

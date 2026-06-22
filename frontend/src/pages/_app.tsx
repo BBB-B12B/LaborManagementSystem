@@ -12,6 +12,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { theme } from '@/theme';
 import i18n from '@/i18n/config';
 import { useFeedbackStore } from '@/store/feedbackStore';
+import { useAuthStore } from '@/store/authStore';
 import '@/styles/globals.css';
 
 import { onIdTokenChanged } from 'firebase/auth';
@@ -58,6 +59,12 @@ export default function App({ Component, pageProps }: AppProps) {
   }, []);
 
   useEffect(() => {
+    const finishAuthLoading = () => useAuthStore.getState().setLoading(false);
+
+    // Safety fallback: never let the loading spinner hang if Firebase never settles
+    // (e.g. misconfig, or auth persistence blocked by the browser).
+    const fallback = setTimeout(finishAuthLoading, 3000);
+
     if (typeof window !== 'undefined' && auth) {
       const unsubscribe = onIdTokenChanged(auth, async (user) => {
         if (user) {
@@ -68,9 +75,21 @@ export default function App({ Component, pageProps }: AppProps) {
             console.error('Failed to refresh token:', error);
           }
         }
+        // Auth has now settled (signed in OR signed out) — release the route guards.
+        // Until this fires, ProtectedRoute/Home keep showing the spinner, so they never
+        // authorize into /workspace before the API token is ready (the flicker cause).
+        clearTimeout(fallback);
+        finishAuthLoading();
       });
-      return () => unsubscribe();
+      return () => {
+        clearTimeout(fallback);
+        unsubscribe();
+      };
     }
+
+    // Firebase auth unavailable — do not hold the guards hostage.
+    finishAuthLoading();
+    return () => clearTimeout(fallback);
   }, []);
 
   return (

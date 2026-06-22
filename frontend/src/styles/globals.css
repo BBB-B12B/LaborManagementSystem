@@ -22,8 +22,9 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* App is light-theme only. Lock UA color-scheme to light so dark-theme
+   browsers/OS don't flip form controls, scrollbars, and default text to
+   dark (which made text unreadable on our light backgrounds). */
+html {
+  color-scheme: light;
 }

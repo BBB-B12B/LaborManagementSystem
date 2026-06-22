@@ -1,41 +1,39 @@
-# MECE Plan — T-205 FM "My job" card shows subtask name on both lines
+# MECE Plan — T-038 Lock app to light color-scheme (dark-browser-theme fix)
+date: 2026-06-22
+task: Fix unreadable text/UI on dark-theme browsers by locking app to light color-scheme
+skill: frontend-design
 
-date: 2026-06-18
-skill: coding
-status: in_progress
+## Phase 0 — Boot (once per session · keep [X] on resume · reset on topic switch only)
+- [X] B1: boot probe run · SESSION_TOTAL=0 · CHAT_TOTAL=22631 · CFP_COUNT=37
+- [X] B2-B3: skill=frontend-design · topic-switch from reconciliation acknowledged
+- [X] C0-C3: routing confirmed · topic switch handled (new task)
+→ TOKEN CHECK: SESSION_TOTAL ~0k
 
-## Phase 0 — Context (kept across compacts)
-- Bug: FM "My job" support card shows the subtask name ("ชั้น 1") on BOTH the task-title line and the
-  subtask line, instead of task name ("พื้น post tension") + subtask name ("ชั้น 1"). noti is correct; DB is correct.
-- Root: card title uses `displayTaskName` which for support = `supportTaskName`. supportTaskName is a SUBTASK-level
-  name (== subtaskName), so it collides with the subtask line. Parent task name (`task.taskName`) is correct & available.
-- Same anti-pattern in detail modal subtitle (daily-reports/index.tsx:2937-2939) — fix per standing authorization.
-- Constraints: do NOT commit/push (git cmds only). after-sale-key.json sensitive. no base64 in chat.
+## Phase 1 — Info Gather
+- [X] Root cause found: globals.css:25-29 dark color-scheme boilerplate. See gather_complete.md.
 
-## Phase 1 — Info Gather -> see gather_complete.md (2026-06-18) [X]
+## Phase 2 — MECE Plan
+- [X] Plan confirmed by user: lock to light theme permanently (chose over building full dark theme).
 
-## Phase 2 — MECE Plan (this file) [X]
+## Phase 3 — Execution
+- [X] S1: Edit frontend/src/styles/globals.css — replace dark media query with `html { color-scheme: light; }`
+      Tool: Edit · Avoid: adding meta theme-color changes (out of scope)
+      Verify-1: grep "color-scheme: light" globals.css returns 1 match
+      Verify-2: grep "prefers-color-scheme" globals.css returns 0 matches
 
-## Phase 3 — Execution (1 section — single file)
+- [X] S2: Fix logout hang (issue #3) — Layout.tsx handleLogout: `await auth.signOut()` can block
+      the redirect. Wrap in Promise.race timeout so window.location.replace('/login') always fires.
+      Tool: Edit · Avoid: removing signOut entirely (still want Firebase session cleared when possible)
+      Verify-1: grep "Promise.race" Layout.tsx returns >=1 match
+      Verify-2: window.location.replace('/login') still present after the signOut block
 
-- [X] S1 · daily-reports/index.tsx: task-title line = parent task name; subtask line = supportTaskName/subtaskName
-  - File: `frontend/src/pages/daily-reports/index.tsx`
-  - Edit A (card, ~4248-4249): split into two names —
-    `displayTaskName = task.taskName` (parent task, the title)
-    `displaySubtaskName = isActingAsSupport && task.supportTaskName ? task.supportTaskName
-       : (task.subtaskName || (task.subtasks && task.subtasks[0]?.subtaskName))`
-  - Edit B (card subtitle, line 4419): render `{displaySubtaskName}` instead of the inline subtaskName expression.
-    (Title line 4411 keeps `{displayTaskName}` — now = parent task name.)
-  - Edit C (detail modal subtitle, lines 2937-2939): the "Parent task name as context" line must show the parent
-    task -> change to `{selectedTask.taskName}` (drop the supportTaskName substitution). Title line 2918 unchanged
-    (subtask-name-as-primary is intended there).
-  - Tool: Edit · Avoid: touching getDueDateColor/progress logic, isActingAsSupport memo, backend.
-  - Verify-1: frontend `npx tsc --noEmit` EXIT:0 · grep shows title uses task.taskName, subtitle uses displaySubtaskName,
-    modal subtitle uses selectedTask.taskName · own-project cards unchanged (displayTaskName==taskName when not support).
+## Notes (issue #2 — flicker)
+- Auth flicker fix (T-205) already in working tree (authStore/_app/client) but UNCOMMITTED on `integration`.
+- Production deploys only on push to `main`. Fix never shipped -> prod still flickers. No code change needed.
+- User will commit + push themselves. Do NOT commit/push.
 
 ## Phase 3 Close Checklist
-- [X] S1
-- [X] frontend tsc --noEmit EXIT:0
-- [ ] provide git commit cmds (user runs) + remind: push triggers deploy
-- [ ] runtime re-test: FM "My job" support card shows task name on line 1, subtask name on line 2 (no duplicate)
-- [ ] roadmap T-205 [X] · active_thread phase:done · PATH A clear Phase 1-3
+- [ ] Verify-N pass · [ ] active_thread phase:done · [ ] roadmap T-038 [X]
+
+## compact_checkpoint
+N/A (2 sections)

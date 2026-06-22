@@ -927,6 +927,8 @@ export class ReconciliationService {
       dailyReportId: input.dailyReportId ?? existing.dailyReportId,
       dailyReportPhotos: input.dailyReportPhotos ?? existing.dailyReportPhotos,
       dailyReportPunches: input.dailyReportPunches ?? existing.dailyReportPunches,
+      // Track After-Sale submit/un-submit state (submitted can revert to draft).
+      dailyReportStatus: input.dailyReportStatus ?? existing.dailyReportStatus,
       // Scan-data side
       scanDataHours: input.scanDataHours ?? existing.scanDataHours,
       scanNormalHours: input.scanNormalHours ?? existing.scanNormalHours,
@@ -1321,6 +1323,7 @@ export class ReconciliationService {
         assigneeName: summary.assigneeId ? assigneeMap.get(summary.assigneeId) : undefined,
         workLogs: summary.workLogs,
         dailyReportHistory: summary.dailyReportHistory,
+        dailyReportStatus: summary.dailyReportStatus,
       };
 
       try {
@@ -1659,19 +1662,23 @@ export class ReconciliationService {
 
     const baseQuery = this.buildBaseQuery(filter);
 
-    // Count total (Firestore Aggregate Query — ไม่คิดค่า read เต็ม)
-    const countSnap = await baseQuery.count().get();
-    const total = countSnap.data().count;
+    // Fetch the full filtered set, then exclude After-Sale daily-report drafts
+    // in-memory and paginate. We cannot use server-side count()+offset here:
+    // Firestore '!=' can't express "dailyReportStatus missing OR submitted"
+    // (a '!=' query drops docs that lack the field — i.e. legacy/mockup rows we
+    // must still show), so the total + page slice are recomputed after filtering.
+    const dataSnap = await baseQuery.orderBy('workDate', 'desc').get();
 
-    // ดึงข้อมูลหน้าปัจจุบัน
-    const dataSnap = await baseQuery
-      .orderBy('workDate', 'desc')
-      .offset(page * pageSize)
-      .limit(pageSize)
-      .get();
+    const visibleRecords = dataSnap.docs
+      .map((doc) => reconciliationRecordConverter.fromFirestore(doc))
+      .filter((r) => r.dailyReportStatus !== 'draft');
+
+    const total = visibleRecords.length;
+    const start = page * pageSize;
+    const records = visibleRecords.slice(start, start + pageSize);
 
     return {
-      records: dataSnap.docs.map((doc) => reconciliationRecordConverter.fromFirestore(doc)),
+      records,
       total,
       page,
       pageSize,
@@ -2000,39 +2007,14 @@ export class ReconciliationService {
       return q;
     };
 
-    // Run all queries concurrently
+    // Fetch the full project/date set once and tally in-memory. We cannot keep the
+    // server-side count() aggregates because After-Sale daily-report drafts must be
+    // excluded, and Firestore '!=' can't express "dailyReportStatus missing OR
+    // submitted" (it would drop legacy/mockup rows that lack the field). The
+    // dailyContractors employee count is unrelated to drafts → stays an aggregate.
     const baseQ = buildProjectDateQuery();
-    const [
-      totalSnap,
-      normalSnap,
-      pendingSnap,
-      resolvedSnap,
-      resolvedMatchedSnap,
-      resolvedLeaveSnap,
-      missingDailySnap,
-      missingScanSnap,
-      conflictedSnap,
-      unregisteredSnap,
-      absentSnap,
-      leaveSnap,
-      holidaySnap,
-      pendingLeaveSnap,
-      employeeCountSnap,
-    ] = await Promise.all([
-      baseQ.count().get(),
-      baseQ.where('status', '==', 'MATCHED').count().get(),
-      baseQ.where('status', 'in', abnormalStatuses).count().get(),
-      baseQ.where('resolvedAt', '>', new Date(0)).count().get(),
-      baseQ.where('status', '==', 'MATCHED').where('resolvedAt', '>', new Date(0)).count().get(),
-      baseQ.where('status', '==', 'LEAVE').where('resolvedAt', '>', new Date(0)).count().get(),
-      baseQ.where('status', '==', 'MISSING_DAILY').count().get(),
-      baseQ.where('status', '==', 'MISSING_SCAN').count().get(),
-      baseQ.where('status', '==', 'CONFLICTED').count().get(),
-      baseQ.where('status', '==', 'UNREGISTERED_EMPLOYEE').count().get(),
-      baseQ.where('status', '==', 'ABSENT').count().get(),
-      baseQ.where('status', '==', 'LEAVE').count().get(),
-      baseQ.where('status', '==', 'HOLIDAY').count().get(),
-      baseQ.where('status', '==', 'PENDING_LEAVE_REVIEW').count().get(),
+    const [docsSnap, employeeCountSnap] = await Promise.all([
+      baseQ.get(),
       // นับพนักงานจาก dailyContractors ที่ isActive: true + filter project (สังกัด)
       (() => {
         let dcQ: FirebaseFirestore.Query = this.db
@@ -2049,21 +2031,35 @@ export class ReconciliationService {
       })(),
     ]);
 
+    // Exclude drafts; show missing-field (legacy/mockup) + 'submitted'.
+    const records = docsSnap.docs
+      .map((doc) => reconciliationRecordConverter.fromFirestore(doc))
+      .filter((r) => r.dailyReportStatus !== 'draft');
+
+    const abnormalSet = new Set<ReconciliationStatus>(abnormalStatuses);
+    const isResolved = (r: ReconciliationRecord) => r.resolvedAt != null;
+    const countStatus = (s: ReconciliationStatus) =>
+      records.filter((r) => r.status === s).length;
+
+    const matchedCount = countStatus('MATCHED');
+    const leaveCount = countStatus('LEAVE');
+    const holidayCount = countStatus('HOLIDAY');
+
     return {
-      totalRows: totalSnap.data().count - holidaySnap.data().count,
-      normalCount: normalSnap.data().count + leaveSnap.data().count, // MATCHED + LEAVE (ใช้ใน SummaryStats การ์ดใหญ่)
-      matchedCount: normalSnap.data().count, // MATCHED อย่างเดียว (ใช้ใน NormalBreakdown)
-      absentCount: absentSnap.data().count,
-      leaveCount: leaveSnap.data().count, // status=LEAVE เท่านั้น
-      pendingCount: pendingSnap.data().count,
-      resolvedCount: resolvedSnap.data().count,
-      resolvedMatchedCount: resolvedMatchedSnap.data().count,
-      resolvedLeaveCount: resolvedLeaveSnap.data().count,
-      missingDailyCount: missingDailySnap.data().count,
-      missingScanCount: missingScanSnap.data().count,
-      conflictedCount: conflictedSnap.data().count,
-      unregisteredCount: unregisteredSnap.data().count,
-      pendingLeaveCount: pendingLeaveSnap.data().count,
+      totalRows: records.length - holidayCount,
+      normalCount: matchedCount + leaveCount, // MATCHED + LEAVE (ใช้ใน SummaryStats การ์ดใหญ่)
+      matchedCount, // MATCHED อย่างเดียว (ใช้ใน NormalBreakdown)
+      absentCount: countStatus('ABSENT'),
+      leaveCount, // status=LEAVE เท่านั้น
+      pendingCount: records.filter((r) => abnormalSet.has(r.status)).length,
+      resolvedCount: records.filter(isResolved).length,
+      resolvedMatchedCount: records.filter((r) => r.status === 'MATCHED' && isResolved(r)).length,
+      resolvedLeaveCount: records.filter((r) => r.status === 'LEAVE' && isResolved(r)).length,
+      missingDailyCount: countStatus('MISSING_DAILY'),
+      missingScanCount: countStatus('MISSING_SCAN'),
+      conflictedCount: countStatus('CONFLICTED'),
+      unregisteredCount: countStatus('UNREGISTERED_EMPLOYEE'),
+      pendingLeaveCount: countStatus('PENDING_LEAVE_REVIEW'),
       employeeCount: employeeCountSnap.data().count,
     };
   }

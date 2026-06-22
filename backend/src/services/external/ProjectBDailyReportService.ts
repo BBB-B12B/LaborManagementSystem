@@ -91,6 +91,8 @@ export interface DailyEmployeeTimesheet {
   AssigneesID?: string;
   lastUpdated?: string; // ISO string
   editHistory?: any[];
+  // Submission state (After-Sale). Legacy/mockup docs have no status field.
+  status?: 'draft' | 'submitted';
 }
 
 /**
@@ -126,6 +128,8 @@ export interface DailyTimesheetSummary {
   };
   workLogs?: ProjectBWorkLog[];
   dailyReportHistory?: any[];
+  // After-Sale submission state. undefined = legacy/mockup (treated as showable).
+  dailyReportStatus?: 'draft' | 'submitted';
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +265,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     shiftTimes: doc.shiftTimes,
     workLogs: doc.workLogs || [],
     dailyReportHistory: doc.editHistory || [],
+    dailyReportStatus: doc.status,
   };
 }
 
