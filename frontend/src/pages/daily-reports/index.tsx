@@ -286,6 +286,7 @@ export default function DailyReportPage() {
   // --- 1. State Management ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [draftDatesByTaskId, setDraftDatesByTaskId] = useState<Record<string, string[]>>({});
   const [pageMode, setPageMode] = useState<'daily-report' | 'requests'>('daily-report');
   const [reportDate, setReportDate] = useState<Date>(new Date());
   const [progress, setProgress] = useState<number | string>(0);
@@ -1297,6 +1298,12 @@ export default function DailyReportPage() {
     staleTime: remainingStaleTime,
     gcTime: remainingStaleTime + 60000,
   });
+
+  // Fetch draft daily-report dates — re-fetch whenever the task list loads or user changes
+  useEffect(() => {
+    if (!user?.id) return;
+    dailyReportService.getDraftDates().then(setDraftDatesByTaskId).catch((e) => console.error('[draft-dates]', e));
+  }, [user?.id, allTasks.length]);
 
   // Global Sync Listener — รับ event จาก Layout.tsx Sync button
   // DailyReport เป็น Single Owner ของ Spinner ระหว่าง Sync
@@ -2719,6 +2726,7 @@ export default function DailyReportPage() {
                               task={task}
                               active={selectedTask?.id === task.id}
                               onClick={() => handleSelectTask(task)}
+                              draftDates={draftDatesByTaskId[task.id]}
                             />
                           ))}
                         </Stack>
@@ -4229,11 +4237,29 @@ function TaskSidebarCard({
   task,
   active,
   onClick,
+  draftDates,
 }: {
   task: any;
   active: boolean;
   onClick: () => void;
+  draftDates?: string[];
 }) {
+  const hasDrafts = Array.isArray(draftDates) && draftDates.length > 0;
+  const [showDrafts, setShowDrafts] = useState(false);
+
+  const isDraftLocked = (dateStr: string): boolean => {
+    const reportDate = new Date(dateStr);
+    reportDate.setHours(0, 0, 0, 0);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    threeDaysAgo.setHours(0, 0, 0, 0);
+    return reportDate < threeDaysAgo;
+  };
+
+  const formatDraftDate = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
   const { user } = useAuthStore();
 
   const isActingAsSupport = useMemo(() => {
@@ -4459,6 +4485,61 @@ function TaskSidebarCard({
           }}
         />
       </Box>
+
+      {/* Draft Badge */}
+      {hasDrafts && (
+        <Box sx={{ mb: 1 }}>
+          <Box
+            onClick={(e) => { e.stopPropagation(); setShowDrafts((v) => !v); }}
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              px: 1, py: 0.35, borderRadius: '999px',
+              backgroundColor: '#fff7ed', border: '1px solid #fed7aa',
+              cursor: 'pointer', userSelect: 'none',
+            }}
+          >
+            <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f97316', flexShrink: 0 }} />
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#c2410c', fontSize: '0.68rem' }}>
+              Draft {draftDates!.length} ฉบับ
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#fb923c', fontSize: '0.65rem', ml: 0.25 }}>
+              {showDrafts ? '▲' : '▼'}
+            </Typography>
+          </Box>
+          {showDrafts && (
+            <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {[...draftDates!].sort().reverse().map((dateStr) => {
+                const locked = isDraftLocked(dateStr);
+                return (
+                  <Box
+                    key={dateStr}
+                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: 0.75,
+                      px: 1, py: 0.5, borderRadius: '8px',
+                      backgroundColor: locked ? '#f8fafc' : '#fffbeb',
+                      border: `1px solid ${locked ? '#e2e8f0' : '#fde68a'}`,
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: locked ? '#f1f5f9' : '#fef3c7' },
+                    }}
+                  >
+                    {locked
+                      ? <Typography component="span" sx={{ fontSize: '0.7rem', color: '#94a3b8' }}>🔒</Typography>
+                      : <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#f59e0b', flexShrink: 0 }} />
+                    }
+                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem', color: locked ? '#94a3b8' : '#92400e', flex: 1 }}>
+                      {formatDraftDate(dateStr)}
+                    </Typography>
+                    {locked && (
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#94a3b8' }}>ต้องขอปลดล็อก</Typography>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Due Date Row */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0 }}>

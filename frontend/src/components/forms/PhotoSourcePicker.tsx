@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Drawer,
@@ -35,39 +35,24 @@ export interface PhotoSourcePickerProps {
 }
 
 /**
- * Visually-hidden (NOT display:none). The input stays rendered inside the
- * label layout so the browser's native label-to-input click mapping works
- * perfectly on all mobile viewports and WebViews.
- */
-const visuallyHidden: React.CSSProperties = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  padding: 0,
-  margin: -1,
-  overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
-  whiteSpace: 'nowrap',
-  border: 0,
-};
-
-/**
  * Cross-platform photo/file source chooser.
  *
- * Tapping the trigger opens a bottom drawer containing options for Camera,
- * Gallery, and optional File Attachments.
+ * Tapping the trigger opens a bottom drawer with Camera / Gallery / File options.
  *
- * Bulletproof Mobile camera/file trigger:
- *  1. Nested Native HTML Inputs: We nest each `<input type="file">` directly inside
- *     `<ListItemButton component="label">`. This renders a native `<label>` element.
- *  2. Zero JavaScript Triggers: When the user taps a button, the browser natively
- *     links the label tap directly to the nested input. This is handled at the OS/browser
- *     level, ensuring it is a 100% trusted gesture that is never blocked.
- *  3. Stable DOM: The drawer remains open until the user actually picks a file
- *     (which triggers `handleChange` and runs `closeMenu`), keeping the DOM stable
- *     and preventing browser cancellations.
- *  4. Single Camera Capture: The camera input does not have the `multiple` attribute,
- *     which resolves conflicts that cause mobile Safari/Chrome to ignore the camera.
+ * ─── Why inputs live OUTSIDE the Drawer ───────────────────────────────────────
+ * Mobile Safari and Chrome require that a file-picker open from a "trusted
+ * gesture" — one whose call-stack traces directly back to a real user tap,
+ * with no async gaps and no DOM mutations between the tap and the click().
+ *
+ * MUI Drawer lazy-mounts its children on first open and runs CSS animations,
+ * so any <input> rendered inside it is born inside an animation frame —
+ * the browser no longer considers the subsequent .click() a trusted gesture
+ * and silently blocks the camera/file picker.
+ *
+ * The fix (mirroring the working QC-report Camera.tsx):
+ *   • Render both <input> elements at the TOP LEVEL, always mounted, display:none.
+ *   • Each Drawer option calls inputRef.current?.click() directly on the tap handler.
+ *   • The DOM is never mutated between the tap and the click → 100 % trusted gesture.
  */
 const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   onSelect,
@@ -85,7 +70,12 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const openMenu = (e: React.MouseEvent<HTMLElement>) => {
+  // Refs to the always-mounted hidden inputs (same pattern as Camera.tsx L60-61)
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openMenu = () => {
     if (disabled) return;
     setIsOpen(true);
   };
@@ -93,15 +83,68 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSelect(e.target.files);
-    // reset so re-picking the same file still fires onChange
+    // Reset so re-picking the same file still fires onChange
     e.target.value = '';
     closeMenu();
+  };
+
+  // Each handler closes the drawer then immediately clicks the pre-mounted input.
+  // Closing first keeps the DOM mutation before the click, not after — mobile
+  // browsers don't block this because the click is still within the same
+  // synchronous event handler as the original tap.
+  const handleCameraClick = () => {
+    closeMenu();
+    cameraInputRef.current?.click();
+  };
+
+  const handleGalleryClick = () => {
+    closeMenu();
+    galleryInputRef.current?.click();
+  };
+
+  const handleFileClick = () => {
+    closeMenu();
+    fileInputRef.current?.click();
   };
 
   const Trigger = (component || Box) as React.ElementType;
 
   return (
     <>
+      {/* ─── Always-mounted hidden inputs (OUTSIDE the Drawer) ─────────────── */}
+      {/* Camera — single capture, no `multiple` to avoid Safari conflicts */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
+
+      {/* Gallery */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept={galleryAccept}
+        multiple={multiple}
+        style={{ display: 'none' }}
+        onChange={handleChange}
+      />
+
+      {/* File (optional) */}
+      {fileAccept && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={fileAccept}
+          multiple={multiple}
+          style={{ display: 'none' }}
+          onChange={handleChange}
+        />
+      )}
+
+      {/* ─── Clickable Trigger ──────────────────────────────────────────────── */}
       <Trigger
         className={className}
         onClick={openMenu}
@@ -114,6 +157,7 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
         {children}
       </Trigger>
 
+      {/* ─── Bottom Drawer (UI only — no inputs here) ───────────────────────── */}
       <Drawer
         anchor="bottom"
         open={isOpen}
@@ -143,19 +187,12 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
           <Divider sx={{ borderColor: '#f1f5f9' }} />
 
           <List disablePadding>
+            {/* Camera */}
             <ListItem disablePadding>
               <ListItemButton
-                component="label"
+                onClick={handleCameraClick}
                 sx={{ py: 1.8, px: 2, borderRadius: '12px', '&:hover': { bgcolor: '#f8fafc' } }}
               >
-                {/* Camera Input nested inside label. MUST NOT be multiple */}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleChange}
-                  style={visuallyHidden}
-                />
                 <ListItemIcon sx={{ color: '#3b82f6', minWidth: 40 }}>
                   <Camera size={22} />
                 </ListItemIcon>
@@ -166,19 +203,12 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
               </ListItemButton>
             </ListItem>
 
+            {/* Gallery */}
             <ListItem disablePadding sx={{ mt: 1 }}>
               <ListItemButton
-                component="label"
+                onClick={handleGalleryClick}
                 sx={{ py: 1.8, px: 2, borderRadius: '12px', '&:hover': { bgcolor: '#f8fafc' } }}
               >
-                {/* Gallery Input nested inside label */}
-                <input
-                  type="file"
-                  accept={galleryAccept}
-                  multiple={multiple}
-                  onChange={handleChange}
-                  style={visuallyHidden}
-                />
                 <ListItemIcon sx={{ color: '#10b981', minWidth: 40 }}>
                   <ImageIcon size={22} />
                 </ListItemIcon>
@@ -189,20 +219,13 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
               </ListItemButton>
             </ListItem>
 
+            {/* File (optional) */}
             {fileAccept && (
               <ListItem disablePadding sx={{ mt: 1 }}>
                 <ListItemButton
-                  component="label"
+                  onClick={handleFileClick}
                   sx={{ py: 1.8, px: 2, borderRadius: '12px', '&:hover': { bgcolor: '#f8fafc' } }}
                 >
-                  {/* File Input nested inside label */}
-                  <input
-                    type="file"
-                    accept={fileAccept}
-                    multiple={multiple}
-                    onChange={handleChange}
-                    style={visuallyHidden}
-                  />
                   <ListItemIcon sx={{ color: '#64748b', minWidth: 40 }}>
                     <Paperclip size={22} />
                   </ListItemIcon>
@@ -242,6 +265,3 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 };
 
 export default PhotoSourcePicker;
-
-
-
