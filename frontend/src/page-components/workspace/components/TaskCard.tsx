@@ -35,6 +35,10 @@ interface TaskCardProps {
   onViewHistory?: (task: Task) => void;
   onHide?: (task: Task) => void;
   hasUnread?: boolean;
+  /** Dates (yyyy-MM-dd) that have a draft daily report for this task */
+  draftDates?: string[];
+  /** Called when the user clicks a draft date to open that report */
+  onDraftDateClick?: (task: Task, date: Date) => void;
 }
 
 const parseSafeDate = (val: any): Date | null => {
@@ -49,11 +53,28 @@ const parseSafeDate = (val: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, onHide, hasUnread }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onClick, onViewHistory, onHide, hasUnread, draftDates, onDraftDateClick }) => {
   const theme = useTheme();
   const { user } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const [showDrafts, setShowDrafts] = useState(false);
+
+  const hasDrafts = Array.isArray(draftDates) && draftDates.length > 0;
+
+  const isDraftLocked = (dateStr: string): boolean => {
+    const reportDate = new Date(dateStr);
+    reportDate.setHours(0, 0, 0, 0);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    threeDaysAgo.setHours(0, 0, 0, 0);
+    return reportDate < threeDaysAgo;
+  };
+
+  const formatDraftDate = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
 
   const getDueDateColor = () => {
     if (!task.dueDate) return task.dailyProgress === 100 ? '#10b981' : '#9ca3af';
@@ -486,6 +507,89 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
           </Tooltip>
         )}
       </Stack>
+
+      {/* Draft Badge */}
+      {hasDrafts && (
+        <Box sx={{ mt: 1.25 }}>
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDrafts((v) => !v);
+            }}
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              px: 1,
+              py: 0.35,
+              borderRadius: '999px',
+              backgroundColor: '#fff7ed',
+              border: '1px solid #fed7aa',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+          >
+            <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f97316', flexShrink: 0 }} />
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#c2410c', fontSize: '0.68rem' }}>
+              Draft {draftDates!.length} ฉบับ
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#fb923c', fontSize: '0.65rem', ml: 0.25 }}>
+              {showDrafts ? '▲' : '▼'}
+            </Typography>
+          </Box>
+
+          {showDrafts && (
+            <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {[...draftDates!].sort().reverse().map((dateStr) => {
+                const locked = isDraftLocked(dateStr);
+                return (
+                  <Box
+                    key={dateStr}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onDraftDateClick) onDraftDateClick(task, new Date(dateStr));
+                    }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: '8px',
+                      backgroundColor: locked ? '#f8fafc' : '#fffbeb',
+                      border: `1px solid ${locked ? '#e2e8f0' : '#fde68a'}`,
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: locked ? '#f1f5f9' : '#fef3c7' },
+                    }}
+                  >
+                    {locked ? (
+                      <Typography component="span" sx={{ fontSize: '0.7rem', color: '#94a3b8' }}>🔒</Typography>
+                    ) : (
+                      <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#f59e0b', flexShrink: 0 }} />
+                    )}
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: '0.72rem',
+                        color: locked ? '#94a3b8' : '#92400e',
+                        flex: 1,
+                      }}
+                    >
+                      {formatDraftDate(dateStr)}
+                    </Typography>
+                    {locked && (
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                        ต้องขอปลดล็อก
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Dashed Separator Line */}
       <Box sx={{ borderTop: '1px dashed #cbd5e1', my: 1.25 }} />

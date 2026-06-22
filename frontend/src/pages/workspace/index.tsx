@@ -81,6 +81,7 @@ import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useRealtimeTasks } from '@/hooks/useRealtimeTasks';
 import { useFeedbackStore } from '@/store/feedbackStore';
 import { useNotifications } from '@/hooks';
+import { dailyReportService } from '@/services/dailyReportService';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Upcoming Tasks', color: '#ff5c5c' },
@@ -159,6 +160,9 @@ export default function WorkspacePage() {
   const [selectedTaskForReport, setSelectedTaskForReport] = useState<Task | null>(null);
   const [selectedReportDate, setSelectedReportDate] = useState<Date | null>(null);
 
+  // Draft daily-report dates grouped by composite task ID
+  const [draftDatesByTaskId, setDraftDatesByTaskId] = useState<Record<string, string[]>>({});
+
   // Hidden completed cards (per-user, persisted in localStorage)
   const [hiddenCompletedIds, setHiddenCompletedIds] = useState<string[]>([]);
   const [hiddenPopoverAnchor, setHiddenPopoverAnchor] = useState<null | HTMLElement>(null);
@@ -170,6 +174,12 @@ export default function WorkspacePage() {
       if (stored) setHiddenCompletedIds(JSON.parse(stored));
     } catch {}
   }, [user?.id]);
+
+  // Fetch draft daily-report dates — on mount, and every time the report modal closes
+  useEffect(() => {
+    if (!user?.id || isReportModalOpen) return;
+    dailyReportService.getDraftDates().then(setDraftDatesByTaskId).catch((e) => console.error('[draft-dates]', e));
+  }, [user?.id, isReportModalOpen]);
 
   const handleHideCard = useCallback((task: Task) => {
     if (!user?.id) return;
@@ -1787,6 +1797,12 @@ export default function WorkspacePage() {
                                   onClick={handleSubtaskCardClick}
                                   onHide={isMobileCompletedCol ? handleHideCard : undefined}
                                   hasUnread={!!hasUnread}
+                                  draftDates={draftDatesByTaskId[task.id]}
+                                  onDraftDateClick={(t, date) => {
+                                    setSelectedTaskForReport(t);
+                                    setSelectedReportDate(date);
+                                    setIsReportModalOpen(true);
+                                  }}
                                 />
                               </Box>
                             );
@@ -1947,6 +1963,12 @@ export default function WorkspacePage() {
                                 onClick={handleSubtaskCardClick}
                                 onHide={isCompletedCol ? handleHideCard : undefined}
                                 hasUnread={!!hasUnread}
+                                draftDates={draftDatesByTaskId[task.id]}
+                                onDraftDateClick={(t, date) => {
+                                  setSelectedTaskForReport(t);
+                                  setSelectedReportDate(date);
+                                  setIsReportModalOpen(true);
+                                }}
                               />
                             </Box>
                           );

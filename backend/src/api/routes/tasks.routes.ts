@@ -960,6 +960,53 @@ router.get('/requests-all', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// GET /api/tasks/draft-dates — returns all draft daily-report dates grouped by composite task ID for the current user
+router.get('/draft-dates', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const snapshot = await afterSaleDb
+      .collectionGroup('dailyReports')
+      .where('createdBy', '==', userId)
+      .get();
+
+    const result: Record<string, string[]> = {};
+
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      if (data.status !== 'draft') return;
+
+      const parts = doc.ref.path.split('/');
+      let compositeId = '';
+
+      if (parts.length === 12) {
+        // workOrders/woId/categories/catId/tasks/taskId/subtasks/subtaskId/revisions|help/revId/dailyReports/dateStr
+        const woId = parts[1];
+        const catId = parts[3];
+        const taskId = parts[5];
+        const subtaskId = parts[7];
+        compositeId = `${woId}__${catId}__${taskId}__${subtaskId}`;
+      } else if (parts.length === 10) {
+        // workOrders/woId/categories/catId/tasks/taskId/revisions|help/revId/dailyReports/dateStr
+        compositeId = parts[5]; // task-level ID
+      } else {
+        return; // unexpected path structure
+      }
+
+      if (!result[compositeId]) result[compositeId] = [];
+      const dateStr = doc.id; // document ID is the date string 'yyyy-MM-dd'
+      if (!result[compositeId].includes(dateStr)) {
+        result[compositeId].push(dateStr);
+      }
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/tasks/reports-all
 router.get('/reports-all', async (req: Request, res: Response, next: NextFunction) => {
   try {

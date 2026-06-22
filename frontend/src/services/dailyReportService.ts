@@ -493,6 +493,15 @@ class DailyReportService {
   }
 
   /**
+   * Returns all draft daily-report dates for the current user, grouped by composite task ID.
+   * Shape: { [compositeTaskId]: 'yyyy-MM-dd'[] }
+   */
+  async getDraftDates(): Promise<Record<string, string[]>> {
+    const { data: response } = await apiClient.get('/tasks/draft-dates');
+    return response.data || {};
+  }
+
+  /**
    * Clear reports cache (useful for global sync)
    */
   clearCache(taskId?: string) {
