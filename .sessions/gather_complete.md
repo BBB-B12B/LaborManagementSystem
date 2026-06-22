@@ -1,26 +1,44 @@
-# Gather Complete — workspace role-based access rework
+# Gather Complete — T-044 daily-reports photo attach: consistent camera+gallery on mobile
 
 date: 2026-06-22
-task: T-043 rework filterTasksByRole — AM project-scoped, LD own-created-only
+task: T-044 daily-reports image attach — give Android the same camera-OR-gallery choice as iOS via an in-app popup chooser
 
-## What was read
-- frontend/src/pages/workspace/index.tsx:316-415 — `filterTasksByRole` (the ONLY filter that decides which tasks/subtasks a user sees on /workspace).
-- frontend/src/components/layout/Navbar.tsx:47-99 — menu/role gate (workspace roles = AM,OE,PE,PM,PD,MD,LD + GOD always). Menu NOT changing.
+## Objective
+On mobile, tapping "แนบรูป" in /daily-reports must offer the SAME choice on Android and iOS:
+"ถ่ายรูป" (open camera) OR "เลือกรูปจากเครื่อง" (gallery/files). Currently Android jumps
+straight to the file picker (no camera) because inputs use `accept="image/*"` with NO `capture`
+attribute (confirmed: `capture` is used nowhere in the codebase) — the browser decides, and the
+two platforms decide differently.
 
-## Root facts
-- Current "see everything" bucket (line 331): `isSuperUser(GOD/ADMIN) || isHO || (role==='AM' && !isWH)`.
-- Non-WH site users fall through: own project → see all main tasks (support requests gated: visible only if picked up OR createdByMe); cross-project → only own-created/assigned.
-- WH department has its own branch (support pickup flow — T-042). UNCHANGED per user.
-- `role = (roleCode || roleId).toUpperCase()`. LD is a roleCode.
-- createdBy is matched against BOTH `user.id` and `user.employeeId` everywhere.
+## Root cause
+`<input type="file" accept="image/*">` with no `capture` -> browser-controlled UX. iOS shows a
+menu (camera/library), Android Chrome usually opens gallery only. Fix = app controls the choice
+via a popup, backed by two inputs: camera input (`accept="image/*" capture="environment"`) +
+gallery input (original accept).
 
-## Change required (user-confirmed)
-1. Remove `(role==='AM' && !isWH)` from the see-all bucket → AM becomes project-scoped like OE/PE/PM/PD/MD (reuses existing non-WH site path).
-2. Add LD-specific branch: LD sees ONLY main tasks where `createdBy === me`, and for those, ALL subtasks regardless of creator (do NOT filter subtasks for LD).
-3. GOD/ADMIN/HO + WH branch untouched.
+## Affected files
+| File | Why | Lines |
+|---|---|---|
+| frontend/src/components/forms/PhotoSourcePicker.tsx | NEW reusable popup chooser component | new |
+| frontend/src/pages/daily-reports/index.tsx | swap 4 label-wrapped inputs -> PhotoSourcePicker | ~1900, ~2069, ~4921, ~5121 |
 
-## Assumptions (confirm in plan)
-- LD gate = main-task `createdBy` only (not isMyProject). A task whose main task LD did NOT create is hidden even if it contains an LD-created subtask.
-- Support-request gating for the AM/OE/PE/PM/PD/MD group stays as-is (part of support flow user said keep).
+## 4 attach sites in index.tsx
+1. Site photo grid (~1936): Box label · accept image/* · multiple · onUpload(files)
+2. Labor-shift photo grid (~2069): Box label · accept image/* · handleLaborShiftPhotoUpload(files, shiftKey) · disabled=isGridDisabled
+3. Med-cert (table row, ~4927): IconButton label · accept image/*,application/pdf · onUploadCert(files[0])
+4. Med-cert (expanded, ~5123): IconButton label · accept image/*,application/pdf · onUploadCert(files[0])
+
+## Constraints
+- Camera option = image only (capture). Gallery option keeps each site's original `accept`
+  (image/* for photo grids, image/*,application/pdf for med-cert).
+- Preserve existing visuals (140x140 dashed Box for grids, paperclip IconButton for med-cert).
+- Reset input value after select so re-picking the same file fires onChange.
+- No backend change. FE only. Do NOT commit/push (git-workflow-main-only).
+
+## Acceptance criteria
+- tsc EXIT=0
+- All 4 sites render the popup; camera item triggers capture input, gallery item triggers plain input.
+- grep -c "PhotoSourcePicker" index.tsx == 5 (1 import + 4 uses)
+- grep "capture=" PhotoSourcePicker.tsx present.
 
 [done] gather

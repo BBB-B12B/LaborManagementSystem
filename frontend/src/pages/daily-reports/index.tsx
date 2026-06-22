@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTaskCacheStore } from '@/store/taskCacheStore';
 import { useToast } from '@/components/common/Toast';
 import { useFeedbackStore } from '@/store/feedbackStore';
+import PhotoSourcePicker from '@/components/forms/PhotoSourcePicker';
 import {
   Search,
   LayoutDashboard,
@@ -1897,8 +1898,9 @@ export default function DailyReportPage() {
           </Box>
         ))}
         {!disabled && allPhotoItems.length < 10 && (
-          <Box
-            component="label"
+          <PhotoSourcePicker
+            multiple
+            onSelect={(files) => onUpload(files)}
             sx={{
               width: 140,
               height: 140,
@@ -1933,14 +1935,7 @@ export default function DailyReportPage() {
             >
               แนบรูปภาพ
             </Typography>
-            <input
-              type="file"
-              hidden
-              multiple
-              accept="image/*"
-              onChange={(e) => onUpload(e.target.files)}
-            />
-          </Box>
+          </PhotoSourcePicker>
         )}
       </Box>
     );
@@ -2036,8 +2031,9 @@ export default function DailyReportPage() {
                   </IconButton>
                 </Box>
               ) : !isActingAsSupport ? (
-                <Box
-                  component="label"
+                <PhotoSourcePicker
+                  disabled={isGridDisabled}
+                  onSelect={(files) => handleLaborShiftPhotoUpload(files, shiftKey)}
                   sx={{
                     width: 140,
                     height: 140,
@@ -2066,14 +2062,7 @@ export default function DailyReportPage() {
                   <Typography variant="caption" fontWeight={800} sx={{ color: '#94a3b8' }}>
                     แนบรูปภาพ
                   </Typography>
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    disabled={isGridDisabled}
-                    onChange={(e) => handleLaborShiftPhotoUpload(e.target.files, shiftKey)}
-                  />
-                </Box>
+                </PhotoSourcePicker>
               ) : null}
               <Typography
                 variant="caption"
@@ -4918,19 +4907,14 @@ function WorkerTableRow({
                       )}
                     </>
                   ) : !isReadOnly ? (
-                    <IconButton
-                      component="label"
-                      size="small"
+                    <PhotoSourcePicker
+                      component={IconButton}
+                      fileAccept="image/*,application/pdf"
+                      onSelect={(files) => onUploadCert(files?.[0] || null)}
                       sx={{ color: '#64748b', p: 0.4, bgcolor: '#f1f5f9', borderRadius: '6px' }}
                     >
                       <Paperclip size={14} />
-                      <input
-                        type="file"
-                        hidden
-                        accept="image/*,application/pdf"
-                        onChange={(e) => onUploadCert(e.target.files?.[0] || null)}
-                      />
-                    </IconButton>
+                    </PhotoSourcePicker>
                   ) : (
                     <Box sx={{ width: 22 }} />
                   )}
@@ -5118,10 +5102,9 @@ function WorkerMobileCard({ worker, onUpdate, onUpdateLeave, onUploadCert, onRem
                         </IconButton>
                       </>
                     ) : (
-                      <IconButton component="label" size="small" sx={{ color: '#64748b', p: 0.5, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
+                      <PhotoSourcePicker component={IconButton} fileAccept="image/*,application/pdf" onSelect={(files) => onUploadCert(files?.[0] || null)} sx={{ color: '#64748b', p: 0.5, bgcolor: '#f1f5f9', borderRadius: '6px' }}>
                         <Paperclip size={14} />
-                        <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => onUploadCert(e.target.files?.[0] || null)} />
-                      </IconButton>
+                      </PhotoSourcePicker>
                     )}
                   </Box>
                 </Box>

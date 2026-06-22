@@ -262,7 +262,7 @@ _Auto-generated structure snapshot — repo_map_check.py --sync (2026-06-22). Do
 | `frontend\src\components/` | 1 | 7 |
 | `frontend\src\components\common/` | 10 | 0 |
 | `frontend\src\components\dashboard/` | 1 | 0 |
-| `frontend\src\components\forms/` | 11 | 0 |
+| `frontend\src\components\forms/` | 12 | 0 |
 | `frontend\src\components\layout/` | 4 | 0 |
 | `frontend\src\components\scan-data/` | 1 | 0 |
 | `frontend\src\components\wage/` | 2 | 0 |

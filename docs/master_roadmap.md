@@ -224,3 +224,5 @@
 
 
 
+
+- [X] T-044: /daily-reports แนบรูป — popup เลือกถ่ายรูป/เลือกรูป/แนบไฟล์ (consistent Android+iOS) · PhotoSourcePicker.tsx + 4 sites in daily-reports/index.tsx · tsc EXIT=0
