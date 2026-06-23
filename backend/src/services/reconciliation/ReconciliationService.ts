@@ -1583,6 +1583,7 @@ export class ReconciliationService {
         isFallbackAssignee: isFallbackAssignee,
         workLogs: summary?.workLogs,
         dailyReportHistory: summary?.dailyReportHistory,
+        dailyReportStatus: summary?.dailyReportStatus,
       },
       false,
       summary?.isLeave
