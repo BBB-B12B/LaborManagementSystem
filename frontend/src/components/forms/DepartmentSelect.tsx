@@ -42,7 +42,7 @@ export const DEPARTMENTS: Department[] = [
   { code: 'WH', label: 'WH' },
 ];
 
-export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
+export const DepartmentSelect = React.forwardRef<HTMLDivElement, DepartmentSelectProps>(({
   label = 'สังกัด',
   value,
   onChange,
@@ -52,7 +52,7 @@ export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
   required = false,
   fullWidth = true,
   size = 'medium',
-}) => {
+}, ref) => {
   const handleChange = (event: SelectChangeEvent<string>) => {
     const selectedCode = event.target.value;
     onChange(selectedCode || null);
@@ -60,6 +60,7 @@ export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
 
   return (
     <FormControl
+      ref={ref}
       fullWidth={fullWidth}
       error={error}
       disabled={disabled}
@@ -80,7 +81,8 @@ export const DepartmentSelect: React.FC<DepartmentSelectProps> = ({
       {helperText && <FormHelperText>{helperText}</FormHelperText>}
     </FormControl>
   );
-};
+});
+DepartmentSelect.displayName = 'DepartmentSelect';
 
 export const getDepartmentByCode = (code: string): Department | undefined => {
   return DEPARTMENTS.find((dept) => dept.code === code);

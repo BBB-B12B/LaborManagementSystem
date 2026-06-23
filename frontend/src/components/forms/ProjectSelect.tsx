@@ -51,7 +51,7 @@ export interface ProjectSelectProps {
  * - Remembers last selected project (FR-DR-002)
  * - Shows department badge
  */
-export const ProjectSelect: React.FC<ProjectSelectProps> = ({
+export const ProjectSelect = React.forwardRef<HTMLDivElement, ProjectSelectProps>(({
   label = 'โครงการ',
   value,
   onChange,
@@ -65,7 +65,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   multiple = false,
   displayProjectNameOnly = false,
   onSelectProject,
-}) => {
+}, ref) => {
   const { user } = useAuthStore();
 
   /**
@@ -195,7 +195,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     ));
 
   return (
-    <Box>
+    <Box ref={ref}>
       <Autocomplete
         multiple={multiple}
         options={options}
@@ -275,7 +275,8 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
       )}
     </Box>
   );
-};
+});
+ProjectSelect.displayName = 'ProjectSelect';
 
 /**
  * Get last selected project for user

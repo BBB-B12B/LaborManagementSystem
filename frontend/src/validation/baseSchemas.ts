@@ -111,11 +111,10 @@ export const optionalThaiIdCard = z
 export const password = requiredString('รหัสผ่าน').min(6, errorMessages.passwordTooWeak);
 
 /**
- * Strong password validation (min 8 characters, contains letter and number)
+ * Strong password validation (min 6 characters, any characters allowed)
  */
 export const strongPassword = requiredString('รหัสผ่าน')
-  .min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษรหรือตัวเลข')
-  .regex(/^[A-Za-z0-9]+$/, 'รหัสผ่านต้องเป็นตัวอักษรหรือตัวเลขภาษาอังกฤษเท่านั้น');
+  .min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
 
 /**
  * Username validation (alphanumeric, 3-20 characters, no spaces)

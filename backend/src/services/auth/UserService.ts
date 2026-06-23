@@ -78,9 +78,14 @@ export class UserService extends BaseCrudService<User> {
   async createUser(input: CreateUserInput, createdBy: string): Promise<User> {
     const normalizedUsername = input.username.trim().toLowerCase();
 
+    const existingByEmpId = await this.findByEmployeeId(input.employeeId);
+    if (existingByEmpId) {
+      throw new AppError(`รหัสพนักงาน ${input.employeeId} มีอยู่ในระบบแล้ว`, 409);
+    }
+
     const existingUser = await this.findByUsername(normalizedUsername);
     if (existingUser) {
-      throw new AppError('Username already exists', 400);
+      throw new AppError(`Username "${normalizedUsername}" มีอยู่ในระบบแล้ว`, 409);
     }
 
     const passwordHash = await bcrypt.hash(input.password, 10);

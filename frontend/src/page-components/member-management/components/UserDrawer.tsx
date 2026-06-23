@@ -32,21 +32,19 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
       open={open}
       onClose={onClose}
       fullWidth
-      maxWidth="xl"
+      maxWidth="sm"
       scroll="body"
       PaperProps={{
         sx: {
-          maxWidth: 1100,
-          width: '100%',
           borderRadius: 3,
           boxShadow: '0 18px 40px rgba(0,0,0,0.08)',
-          overflow: 'visible',
         },
       }}
     >
       <Box
         sx={{
-          p: { xs: 2.5, md: 3.5 },
+          px: 3,
+          py: 2,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -60,17 +58,15 @@ export const UserDrawer: React.FC<UserDrawerProps> = ({
           <CloseIcon />
         </IconButton>
       </Box>
-      <DialogContent sx={{ p: { xs: 2.5, md: 4 }, overflow: 'visible' }}>
+      <DialogContent sx={{ p: 3 }}>
         {loading ? (
           <Box
-            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}
           >
             <CircularProgress />
           </Box>
         ) : (
-          <Box sx={{ width: '100%', maxWidth: 720, mx: 'auto' }}>
-            <UserForm {...formProps} onCancel={onClose} />
-          </Box>
+          <UserForm {...formProps} onCancel={onClose} />
         )}
       </DialogContent>
     </Dialog>

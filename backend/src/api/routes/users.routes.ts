@@ -207,9 +207,7 @@ router.post(
     body('username').notEmpty().withMessage('Username is required'),
     body('password')
       .isLength({ min: 6 })
-      .withMessage('Password must be at least 6 characters')
-      .matches(/^[A-Za-z0-9]+$/)
-      .withMessage('Password must contain only letters and numbers'),
+      .withMessage('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
     body('name').notEmpty().withMessage('Name is required'),
     body('employeeId').notEmpty().withMessage('Employee ID is required'),
     body('roleId').notEmpty().withMessage('Role ID is required'),
@@ -217,13 +215,15 @@ router.post(
       .isIn(['PD01', 'PD02', 'PD03', 'PD04', 'PD05', 'HO', 'WH'])
       .withMessage('Invalid department'),
     body('projectLocationIds').isArray().withMessage('Project location IDs must be an array'),
-    body('startDate').optional().isISO8601().withMessage('Start date must be a valid ISO8601 date'),
+    body('startDate').optional({ nullable: true }).isISO8601().withMessage('Start date must be a valid ISO8601 date'),
   ],
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        throw new AppError('Validation failed', 400);
+        const fieldErrors = errors.array().map((e: any) => `${e.path ?? e.param}: ${e.msg}`).join('; ');
+        logger.error('[POST /api/users] Validation failed', { errors: errors.array(), body: req.body });
+        throw new AppError(`Validation failed — ${fieldErrors}`, 400);
       }
 
       const createdBy = (req as AuthRequest).user?.id;
@@ -258,7 +258,7 @@ router.post(
         data: user,
       });
     } catch (error: any) {
-      res.status(error.message.includes('already exists') ? 409 : 500).json({
+      res.status(error.statusCode || 500).json({
         success: false,
         error: error.message,
       });

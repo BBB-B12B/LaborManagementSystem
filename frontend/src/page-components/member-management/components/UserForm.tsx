@@ -12,17 +12,13 @@ import {
   Button,
   Grid,
   TextField,
-  Typography,
   Alert,
   CircularProgress,
   InputAdornment,
   IconButton,
-  MenuItem,
-  Paper,
   FormControlLabel,
   Switch,
 } from '@mui/material';
-import { DatePicker } from '@/components/forms/DatePicker';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 import {
@@ -88,43 +84,28 @@ export function UserForm({
       setSubmitError(null);
       await onSubmit(data);
     } catch (error: any) {
-      setSubmitError(error.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง');
+      const message = error.response?.data?.error || error.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง';
+      setSubmitError(message);
     }
   };
 
   const passwordHelper =
     mode === 'edit'
       ? 'ถ้าไม่เปลี่ยนรหัส ให้เว้นว่าง'
-      : 'รหัสผ่านอย่างน้อย 6 ตัวอักษร (A-Z, a-z, 0-9)';
+      : 'รหัสผ่านอย่างน้อย 6 ตัวอักษร';
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 2.5, md: 3.5 },
-        borderRadius: 3,
-        border: '1px solid #e9ecef',
-        backgroundColor: '#fafafa',
-      }}
-    >
-      <Typography variant="h5" gutterBottom sx={{ fontWeight: 700 }}>
-        {mode === 'create' ? 'สร้างผู้ใช้ใหม่' : 'แก้ไขผู้ใช้'}
-      </Typography>
-
+    <Box>
       {submitError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 1.5 }}>
           {submitError}
         </Alert>
       )}
 
       <Box component="form" onSubmit={handleSubmit(handleFormSubmit)} noValidate>
-        <Grid container spacing={{ xs: 2, md: 3 }}>
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-              ข้อมูลพื้นฐาน
-            </Typography>
-          </Grid>
+        <Grid container spacing={1.5}>
 
+          {/* Row 1: รหัสพนักงาน + ชื่อ-นามสกุล */}
           <Grid item xs={12} md={6}>
             <Controller
               name="employeeId"
@@ -136,6 +117,7 @@ export function UserForm({
                   label="รหัสพนักงาน *"
                   required
                   fullWidth
+                  size="small"
                   error={!!errors.employeeId}
                   helperText={errors.employeeId?.message}
                   disabled={isLoading || isSubmitting || mode === 'edit'}
@@ -155,6 +137,7 @@ export function UserForm({
                   label="ชื่อ-นามสกุล *"
                   required
                   fullWidth
+                  size="small"
                   error={!!errors.name}
                   helperText={errors.name?.message}
                   disabled={isLoading || isSubmitting}
@@ -163,6 +146,7 @@ export function UserForm({
             />
           </Grid>
 
+          {/* Row 2: Username + Password */}
           <Grid item xs={12} md={6}>
             <Controller
               name="username"
@@ -174,8 +158,9 @@ export function UserForm({
                   label="Username *"
                   required
                   fullWidth
+                  size="small"
                   error={!!errors.username}
-                  helperText={errors.username?.message || 'ไม่สามารถมีช่องว่างและต้องไม่ซ้ำ'}
+                  helperText={errors.username?.message || 'เช่น somchai.j'}
                   disabled={isLoading || isSubmitting}
                   onChange={(event) => field.onChange(event.target.value.toLowerCase())}
                 />
@@ -195,6 +180,7 @@ export function UserForm({
                   type={showPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
+                  size="small"
                   error={!!errors.password}
                   helperText={errors.password?.message || passwordHelper}
                   disabled={isLoading || isSubmitting}
@@ -204,10 +190,11 @@ export function UserForm({
                         <IconButton
                           onClick={() => setShowPassword((prev) => !prev)}
                           edge="end"
+                          size="small"
                           disabled={isLoading || isSubmitting}
                           aria-label="toggle password visibility"
                         >
-                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                          {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -217,6 +204,7 @@ export function UserForm({
             />
           </Grid>
 
+          {/* Row 3: ยืนยันรหัสผ่าน + Role */}
           <Grid item xs={12} md={6}>
             <Controller
               name="confirmPassword"
@@ -229,6 +217,7 @@ export function UserForm({
                   type={showConfirmPassword ? 'text' : 'password'}
                   required={mode === 'create'}
                   fullWidth
+                  size="small"
                   error={!!errors.confirmPassword}
                   helperText={errors.confirmPassword?.message || 'ต้องตรงกับรหัสผ่าน'}
                   disabled={isLoading || isSubmitting}
@@ -238,10 +227,11 @@ export function UserForm({
                         <IconButton
                           onClick={() => setShowConfirmPassword((prev) => !prev)}
                           edge="end"
+                          size="small"
                           disabled={isLoading || isSubmitting}
                           aria-label="toggle confirm password visibility"
                         >
-                          {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                          {showConfirmPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -249,12 +239,6 @@ export function UserForm({
                 />
               )}
             />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-              บทบาทและแผนก
-            </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
@@ -274,6 +258,7 @@ export function UserForm({
             />
           </Grid>
 
+          {/* Row 4: Department + สถานะ */}
           <Grid item xs={12} md={6}>
             <Controller
               name="department"
@@ -291,37 +276,26 @@ export function UserForm({
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-              วันที่เริ่มงาน
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}>
             <Controller
-              name="startDate"
+              name="isActive"
               control={control}
               render={({ field }) => (
-                <DatePicker
-                  label="วันที่เริ่มงาน *"
-                  value={field.value ? new Date(field.value as string | Date) : null}
-                  onChange={(date) => field.onChange(date)}
-                  disabled={isLoading || isSubmitting}
-                  maxDate={new Date()}
-                  error={!!errors.startDate}
-                  helperText={errors.startDate?.message}
-                  required
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={field.value}
+                      onChange={field.onChange}
+                      disabled={isLoading || isSubmitting}
+                    />
+                  }
+                  label="เปิดใช้งาน (Active)"
                 />
               )}
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-              โครงการที่เข้าถึงได้
-            </Typography>
-          </Grid>
-
+          {/* Row 5: โครงการ (full width) */}
           <Grid item xs={12}>
             <Controller
               name="projectLocationIds"
@@ -345,33 +319,9 @@ export function UserForm({
             />
           </Grid>
 
+          {/* Buttons */}
           <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-              สถานะ
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Controller
-              name="isActive"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={field.value}
-                      onChange={field.onChange}
-                      disabled={isLoading || isSubmitting}
-                    />
-                  }
-                  label="เปิดใช้งาน (Active)"
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
+            <Box sx={{ display: 'flex', gap: 2, mt: 1, justifyContent: 'flex-end' }}>
               <Button
                 variant="outlined"
                 color="error"
@@ -401,7 +351,7 @@ export function UserForm({
           </Grid>
         </Grid>
       </Box>
-    </Paper>
+    </Box>
   );
 }
 

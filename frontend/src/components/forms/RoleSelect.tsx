@@ -111,7 +111,7 @@ export const ROLES: Role[] = [
  * - Shows 8 predefined roles
  * - Color-coded by level
  */
-export const RoleSelect: React.FC<RoleSelectProps> = ({
+export const RoleSelect = React.forwardRef<HTMLDivElement, RoleSelectProps>(({
   label = 'บทบาท',
   value,
   onChange,
@@ -121,7 +121,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
   required = false,
   fullWidth = true,
   size = 'medium',
-}) => {
+}, ref) => {
   /**
    * Handle selection change
    */
@@ -144,6 +144,7 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
 
   return (
     <FormControl
+      ref={ref}
       fullWidth={fullWidth}
       error={error}
       disabled={disabled}
@@ -169,7 +170,8 @@ export const RoleSelect: React.FC<RoleSelectProps> = ({
       {helperText && <FormHelperText>{helperText}</FormHelperText>}
     </FormControl>
   );
-};
+});
+RoleSelect.displayName = 'RoleSelect';
 
 /**
  * Get role by code

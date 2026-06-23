@@ -62,9 +62,6 @@ export const userCreateSchema = z
     // Accessible Projects (multi-select, array of project IDs)
     projectLocationIds: baseArray(z.string()).default([]),
 
-    // Start Date (optional)
-    startDate: optionalDate,
-
     // Active status
     isActive: baseBoolean.default(true),
   })

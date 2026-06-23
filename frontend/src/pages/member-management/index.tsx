@@ -91,7 +91,8 @@ export default function MemberManagementPage() {
       handleCloseDrawer();
     },
     onError: (error: any) => {
-      showError(error.message || 'เกิดข้อผิดพลาดในการสร้างผู้ใช้');
+      const message = error?.response?.data?.error || error.message || 'เกิดข้อผิดพลาดในการสร้างผู้ใช้';
+      showError(message);
     },
   });
 
@@ -104,7 +105,8 @@ export default function MemberManagementPage() {
       handleCloseDrawer();
     },
     onError: (error: any) => {
-      showError(error.message || 'เกิดข้อผิดพลาดในการอัปเดตผู้ใช้');
+      const message = error?.response?.data?.error || error.message || 'เกิดข้อผิดพลาดในการอัปเดตผู้ใช้';
+      showError(message);
     },
   });
 
