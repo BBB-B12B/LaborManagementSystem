@@ -1941,7 +1941,7 @@ router.post('/:id/unlock-report', async (req: Request, res: Response, next: Next
         targetUserId: targetFmUid || '',
       };
 
-      await afterSaleDb.collection('notifications').add(notificationData);
+      await afterSaleDb.collection('lms_notifications').add(notificationData);
       console.log(`[tasks.routes] Created unlock_granted notification for FM: ${targetFmUid}`);
     } catch (notiErr: any) {
       console.error('[tasks.routes] Failed to create unlock_granted notification:', notiErr.message);
@@ -2019,7 +2019,7 @@ router.post('/:id/request-unlock', async (req: Request, res: Response, next: Nex
 
         const batch = afterSaleDb.batch();
         for (const supervisor of supervisors) {
-          const notifRef = afterSaleDb.collection('notifications').doc();
+          const notifRef = afterSaleDb.collection('lms_notifications').doc();
           batch.set(notifRef, {
             type: 'unlock_requested',
             projectId: ctx.projectId || projectId,

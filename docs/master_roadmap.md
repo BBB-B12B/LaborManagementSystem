@@ -227,3 +227,4 @@
 
 - [X] T-044: /daily-reports แนบรูป — popup เลือกถ่ายรูป/เลือกรูป/แนบไฟล์ (consistent Android+iOS) · PhotoSourcePicker.tsx + 4 sites in daily-reports/index.tsx · tsc EXIT=0
 - [X] T-045: Import Wizard — UserImportDialog + DCImportDialog: parse CSV client-side → preview table → dropdown Role/Dept/Project per row → rebuild CSV → submit · tsc EXIT=0
+- [X] T-046: FM Self-Performed Checkbox — Daily Report modal adds "FM ทำเองโดยไม่มีแรงงาน" checkbox per work section; FM entries use sentinel ID FM:{userId}, fmSelfPerformed=true; backend skips contractor lookup + zeroes summary deltas; dashboard shows FM chip · attempts:1 · tool_calls:18

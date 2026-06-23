@@ -21,6 +21,7 @@ export interface DailyReportEntry {
   workType: WorkType;
   hours: number; // [PIVOT] เราจะเก็บ "ชั่วโมงทำงาน" ทันที ไม่ใช้ช่วงเวลา
   notes?: string;
+  fmSelfPerformed?: boolean;
   createdAt: Date;
 }
 

@@ -11,6 +11,7 @@ import {
   IconButton,
   Stack,
   Checkbox,
+  FormControlLabel,
   List,
   ListItem,
   ListItemText,
@@ -59,6 +60,7 @@ interface WorkSectionState {
   startTime: Date | null;
   endTime: Date | null;
   workerIds: string[];
+  fmSelfPerformed: boolean;
 }
 
 export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
@@ -80,6 +82,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     startTime: setHours(setMinutes(new Date(), 0), 8),
     endTime: setHours(setMinutes(new Date(), 0), 17),
     workerIds: [],
+    fmSelfPerformed: false,
   });
 
   // 2. OT Sections
@@ -90,6 +93,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     startTime: setHours(setMinutes(new Date(), 0), 5), // Default 5 AM?
     endTime: setHours(setMinutes(new Date(), 0), 8),
     workerIds: [],
+    fmSelfPerformed: false,
   });
 
   const [otNoon, setOtNoon] = useState<WorkSectionState>({
@@ -99,6 +103,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     startTime: setHours(setMinutes(new Date(), 0), 12),
     endTime: setHours(setMinutes(new Date(), 0), 13), // Fixed 1hr
     workerIds: [],
+    fmSelfPerformed: false,
   });
 
   const [otEvening, setOtEvening] = useState<WorkSectionState>({
@@ -108,6 +113,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     startTime: setHours(setMinutes(new Date(), 0), 17),
     endTime: setHours(setMinutes(new Date(), 0), 20),
     workerIds: [],
+    fmSelfPerformed: false,
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -162,6 +168,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
         startTime: setHours(setMinutes(new Date(), 0), startH),
         endTime: setHours(setMinutes(new Date(), 0), endH),
         workerIds: [],
+        fmSelfPerformed: false,
       });
 
       setRegular({ ...resetState(8, 17), enabled: true });
@@ -237,7 +244,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
     entriesToSave.forEach(({ type, state }) => {
       if (
         state.enabled &&
-        state.workerIds.length > 0 &&
+        (state.workerIds.length > 0 || state.fmSelfPerformed) &&
         state.startTime &&
         state.endTime &&
         state.taskName
@@ -246,15 +253,26 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
         let hours = diffMs / (1000 * 60 * 60);
         if (hours < 0) hours += 24; // Handle over-midnight
 
-        state.workerIds.forEach((workerId) => {
+        if (state.fmSelfPerformed && state.workerIds.length === 0) {
           onSave({
-            dailyContractorId: workerId,
+            dailyContractorId: `FM:${currentUser?.id ?? 'unknown'}`,
             taskId: state.taskId,
             taskName: state.taskName,
             workType: type,
             hours: hours,
+            fmSelfPerformed: true,
           });
-        });
+        } else {
+          state.workerIds.forEach((workerId) => {
+            onSave({
+              dailyContractorId: workerId,
+              taskId: state.taskId,
+              taskName: state.taskName,
+              workType: type,
+              hours: hours,
+            });
+          });
+        }
       }
     });
     onClose();
@@ -473,7 +491,21 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                     ),
                   }}
                 />
-                {renderWorkerList('regular', regularCandidates, regular.workerIds)}
+                <Box sx={regular.fmSelfPerformed ? { pointerEvents: 'none', opacity: 0.4 } : {}}>
+                  {renderWorkerList('regular', regularCandidates, regular.workerIds)}
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={regular.fmSelfPerformed}
+                      disabled={regular.workerIds.length > 0}
+                      onChange={(e) => setRegular({ ...regular, fmSelfPerformed: e.target.checked })}
+                      size="small"
+                    />
+                  }
+                  label="FM ทำเองโดยไม่มีแรงงาน"
+                  sx={{ mt: 0.5 }}
+                />
               </Box>
             </CardContent>
           </Card>
@@ -559,7 +591,21 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                 <Typography variant="caption">
                   เลือกพนักงาน ({otMorning.workerIds.length}) *จากรายการปกติ
                 </Typography>
-                {renderWorkerList('otMorning', otCandidates, otMorning.workerIds)}
+                <Box sx={otMorning.fmSelfPerformed ? { pointerEvents: 'none', opacity: 0.4 } : {}}>
+                  {renderWorkerList('otMorning', otCandidates, otMorning.workerIds)}
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={otMorning.fmSelfPerformed}
+                      disabled={otMorning.workerIds.length > 0}
+                      onChange={(e) => setOtMorning({ ...otMorning, fmSelfPerformed: e.target.checked })}
+                      size="small"
+                    />
+                  }
+                  label="FM ทำเองโดยไม่มีแรงงาน"
+                  sx={{ mt: 0.5 }}
+                />
               </CardContent>
             </Card>
           )}
@@ -612,7 +658,21 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                 <Typography variant="caption">
                   เลือกพนักงาน ({otNoon.workerIds.length}) *จากรายการปกติ
                 </Typography>
-                {renderWorkerList('otNoon', otCandidates, otNoon.workerIds)}
+                <Box sx={otNoon.fmSelfPerformed ? { pointerEvents: 'none', opacity: 0.4 } : {}}>
+                  {renderWorkerList('otNoon', otCandidates, otNoon.workerIds)}
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={otNoon.fmSelfPerformed}
+                      disabled={otNoon.workerIds.length > 0}
+                      onChange={(e) => setOtNoon({ ...otNoon, fmSelfPerformed: e.target.checked })}
+                      size="small"
+                    />
+                  }
+                  label="FM ทำเองโดยไม่มีแรงงาน"
+                  sx={{ mt: 0.5 }}
+                />
               </CardContent>
             </Card>
           )}
@@ -671,7 +731,21 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
                 <Typography variant="caption">
                   เลือกพนักงาน ({otEvening.workerIds.length}) *จากรายการปกติ
                 </Typography>
-                {renderWorkerList('otEvening', otCandidates, otEvening.workerIds)}
+                <Box sx={otEvening.fmSelfPerformed ? { pointerEvents: 'none', opacity: 0.4 } : {}}>
+                  {renderWorkerList('otEvening', otCandidates, otEvening.workerIds)}
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={otEvening.fmSelfPerformed}
+                      disabled={otEvening.workerIds.length > 0}
+                      onChange={(e) => setOtEvening({ ...otEvening, fmSelfPerformed: e.target.checked })}
+                      size="small"
+                    />
+                  }
+                  label="FM ทำเองโดยไม่มีแรงงาน"
+                  sx={{ mt: 0.5 }}
+                />
               </CardContent>
             </Card>
           )}
@@ -700,7 +774,7 @@ export const DailyReportEntryModal: React.FC<DailyReportEntryModalProps> = ({
           variant="contained"
           color="success"
           onClick={handleSave}
-          disabled={!regular.taskName || regular.workerIds.length === 0}
+          disabled={!regular.taskName || (regular.workerIds.length === 0 && !regular.fmSelfPerformed)}
           sx={{
             borderRadius: '10px',
             px: 4,

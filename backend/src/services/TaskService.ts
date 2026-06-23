@@ -2312,7 +2312,7 @@ export class TaskService {
           readBy: [],
           isSupportReport: isSupportReport
         };
-        await afterSaleDb.collection('notifications').add(notificationData);
+        await afterSaleDb.collection('lms_notifications').add(notificationData);
         console.log(`[TaskService] Created notification for daily report submission: ${notificationData.message}`);
       }
     } catch (notiError: any) {
@@ -3311,7 +3311,7 @@ export class TaskService {
           targetUserId: targetUid
         };
 
-        const docRef = afterSaleDb.collection('notifications').doc();
+        const docRef = afterSaleDb.collection('lms_notifications').doc();
         batch.set(docRef, notificationData);
         hasNotification = true;
       }

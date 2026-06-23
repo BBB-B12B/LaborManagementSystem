@@ -188,10 +188,21 @@ export const DailyReportDashboard = () => {
 
                                 {/* Worker Info */}
                                 <Box mt={2} display="flex" alignItems="center" gap={1.5} p={1.5} bgcolor="#f5f5f5" borderRadius={2}>
-                                    <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: 'primary.dark' }}>DC</Avatar>
-                                    <Typography variant="body2" fontWeight="medium">
-                                        พนักงาน: <span style={{ fontFamily: 'monospace' }}>{entry.dailyContractorId}</span>
-                                    </Typography>
+                                    {(entry.fmSelfPerformed || entry.dailyContractorId?.startsWith('FM:')) ? (
+                                        <>
+                                            <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: 'success.main' }}>FM</Avatar>
+                                            <Typography variant="body2" fontWeight="medium" color="success.dark">
+                                                FM ทำเองโดยไม่มีแรงงาน
+                                            </Typography>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: 'primary.dark' }}>DC</Avatar>
+                                            <Typography variant="body2" fontWeight="medium">
+                                                พนักงาน: <span style={{ fontFamily: 'monospace' }}>{entry.dailyContractorId}</span>
+                                            </Typography>
+                                        </>
+                                    )}
                                 </Box>
                             </Paper>
                         ))}

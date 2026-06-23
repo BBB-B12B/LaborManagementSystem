@@ -22,7 +22,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const snapshot = await afterSaleDb.collection('notifications')
+    const snapshot = await afterSaleDb.collection('lms_notifications')
       .where('createdAt', '>=', sevenDaysAgo)
       .orderBy('createdAt', 'desc')
       .get();
@@ -105,7 +105,7 @@ router.post('/:id/read', async (req: Request, res: Response, next: NextFunction)
       throw new AppError('Unauthorized', 401);
     }
 
-    const notiRef = afterSaleDb.collection('notifications').doc(id);
+    const notiRef = afterSaleDb.collection('lms_notifications').doc(id);
     const notiDoc = await notiRef.get();
 
     if (!notiDoc.exists) {
@@ -141,7 +141,7 @@ router.post('/read-all', async (req: Request, res: Response, next: NextFunction)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const snapshot = await afterSaleDb.collection('notifications')
+    const snapshot = await afterSaleDb.collection('lms_notifications')
       .where('createdAt', '>=', sevenDaysAgo)
       .get();
 
@@ -198,7 +198,7 @@ router.post('/subtask/:subtaskId/read', async (req: Request, res: Response, next
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const snapshot = await afterSaleDb.collection('notifications')
+    const snapshot = await afterSaleDb.collection('lms_notifications')
       .where('subtaskId', '==', targetSubtaskId)
       .get();
 

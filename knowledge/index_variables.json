@@ -805,10 +805,10 @@
     "WorkType": {
       "source": "frontend/src/services/dailyReportService.ts",
       "line": 10,
-      "line_end": 25,
+      "line_end": 26,
       "read_hint": {
         "offset": 5,
-        "limit": 30
+        "limit": 31
       },
       "type": "Interface",
       "keywords": [
@@ -824,10 +824,10 @@
     "ReportStatus": {
       "source": "frontend/src/services/dailyReportService.ts",
       "line": 11,
-      "line_end": 25,
+      "line_end": 26,
       "read_hint": {
         "offset": 6,
-        "limit": 29
+        "limit": 30
       },
       "type": "Interface",
       "keywords": [
@@ -842,10 +842,10 @@
     "DailyReportEntry": {
       "source": "frontend/src/services/dailyReportService.ts",
       "line": 13,
-      "line_end": 25,
+      "line_end": 26,
       "read_hint": {
         "offset": 8,
-        "limit": 27
+        "limit": 28
       },
       "type": "Interface",
       "keywords": [
@@ -859,10 +859,10 @@
     },
     "DailyReportSummary": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 27,
-      "line_end": 33,
+      "line": 28,
+      "line_end": 34,
       "read_hint": {
-        "offset": 22,
+        "offset": 23,
         "limit": 21
       },
       "type": "Interface",
@@ -877,10 +877,10 @@
     },
     "DailyReport": {
       "source": "frontend/src/types/index.ts",
-      "line": 35,
-      "line_end": 50,
+      "line": 36,
+      "line_end": 51,
       "read_hint": {
-        "offset": 30,
+        "offset": 31,
         "limit": 30
       },
       "type": "Interface",
@@ -894,10 +894,10 @@
     },
     "DailyWorkerReportLog": {
       "source": "backend/src/models/DailyReport.ts",
-      "line": 52,
-      "line_end": 57,
+      "line": 53,
+      "line_end": 58,
       "read_hint": {
-        "offset": 47,
+        "offset": 48,
         "limit": 20
       },
       "type": "Interface",
@@ -912,10 +912,10 @@
     },
     "DailyWorkerReport": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 59,
-      "line_end": 75,
+      "line": 60,
+      "line_end": 76,
       "read_hint": {
-        "offset": 54,
+        "offset": 55,
         "limit": 31
       },
       "type": "Interface",
@@ -930,10 +930,10 @@
     },
     "CreateDailyReportInput": {
       "source": "backend/src/models/DailyReport.ts",
-      "line": 77,
-      "line_end": 83,
+      "line": 78,
+      "line_end": 84,
       "read_hint": {
-        "offset": 72,
+        "offset": 73,
         "limit": 21
       },
       "type": "Interface",
@@ -948,10 +948,10 @@
     },
     "UpdateDailyReportInput": {
       "source": "backend/src/models/DailyReport.ts",
-      "line": 85,
-      "line_end": 89,
+      "line": 86,
+      "line_end": 90,
       "read_hint": {
-        "offset": 80,
+        "offset": 81,
         "limit": 19
       },
       "type": "Interface",
@@ -966,10 +966,10 @@
     },
     "calculateTotalHours": {
       "source": "backend/src/models/DailyReport.ts",
-      "line": 94,
-      "line_end": 101,
+      "line": 95,
+      "line_end": 102,
       "read_hint": {
-        "offset": 89,
+        "offset": 90,
         "limit": 22
       },
       "type": "Function",
@@ -985,10 +985,10 @@
     },
     "calculateNetHours": {
       "source": "frontend/src/components/forms/TimePicker.tsx",
-      "line": 106,
-      "line_end": 127,
+      "line": 107,
+      "line_end": 128,
       "read_hint": {
-        "offset": 101,
+        "offset": 102,
         "limit": 36
       },
       "type": "Function",
@@ -1004,10 +1004,10 @@
     },
     "dailyReportConverter": {
       "source": "backend/src/models/DailyReport.ts",
-      "line": 132,
-      "line_end": 170,
+      "line": 133,
+      "line_end": 171,
       "read_hint": {
-        "offset": 127,
+        "offset": 128,
         "limit": 53
       },
       "type": "Function",
@@ -3069,7 +3069,7 @@
     "UserService": {
       "source": "backend/src/services/auth/UserService.ts",
       "line": 17,
-      "line_end": 202,
+      "line_end": 207,
       "read_hint": {
         "offset": 12,
         "limit": 80
@@ -3085,10 +3085,10 @@
     },
     "userService": {
       "source": "backend/src/services/auth/UserService.ts",
-      "line": 204,
-      "line_end": 204,
+      "line": 209,
+      "line_end": 209,
       "read_hint": {
-        "offset": 199,
+        "offset": 204,
         "limit": 15
       },
       "type": "Function",
@@ -3208,10 +3208,10 @@
     },
     "dailyReportService": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 622,
-      "line_end": 622,
+      "line": 627,
+      "line_end": 627,
       "read_hint": {
-        "offset": 617,
+        "offset": 622,
         "limit": 15
       },
       "type": "Function",
@@ -3819,10 +3819,10 @@
     },
     "AddEntryInput": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 64,
-      "line_end": 68,
+      "line": 65,
+      "line_end": 69,
       "read_hint": {
-        "offset": 59,
+        "offset": 60,
         "limit": 19
       },
       "type": "Interface",
@@ -3839,10 +3839,10 @@
     },
     "DailyReportImportResult": {
       "source": "frontend/src/services/dailyReportService.ts",
-      "line": 70,
-      "line_end": 78,
+      "line": 71,
+      "line_end": 79,
       "read_hint": {
-        "offset": 65,
+        "offset": 66,
         "limit": 23
       },
       "type": "Interface",
@@ -6180,10 +6180,10 @@
     "password": {
       "source": "frontend/src/validation/baseSchemas.ts",
       "line": 111,
-      "line_end": 145,
+      "line_end": 144,
       "read_hint": {
         "offset": 106,
-        "limit": 49
+        "limit": 48
       },
       "type": "Function",
       "keywords": [
@@ -6197,10 +6197,10 @@
     "strongPassword": {
       "source": "frontend/src/validation/baseSchemas.ts",
       "line": 116,
-      "line_end": 145,
+      "line_end": 144,
       "read_hint": {
         "offset": 111,
-        "limit": 44
+        "limit": 43
       },
       "type": "Function",
       "keywords": [
@@ -6214,10 +6214,10 @@
     },
     "username": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 123,
-      "line_end": 145,
+      "line": 122,
+      "line_end": 144,
       "read_hint": {
-        "offset": 118,
+        "offset": 117,
         "limit": 37
       },
       "type": "Function",
@@ -6231,10 +6231,10 @@
     },
     "url": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 131,
-      "line_end": 145,
+      "line": 130,
+      "line_end": 144,
       "read_hint": {
-        "offset": 126,
+        "offset": 125,
         "limit": 29
       },
       "type": "Function",
@@ -6248,10 +6248,10 @@
     },
     "optionalUrl": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 136,
-      "line_end": 145,
+      "line": 135,
+      "line_end": 144,
       "read_hint": {
-        "offset": 131,
+        "offset": 130,
         "limit": 24
       },
       "type": "Function",
@@ -6266,10 +6266,10 @@
     },
     "baseNumber": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 141,
-      "line_end": 145,
+      "line": 140,
+      "line_end": 144,
       "read_hint": {
-        "offset": 136,
+        "offset": 135,
         "limit": 19
       },
       "type": "Function",
@@ -6283,10 +6283,10 @@
     },
     "positiveNumber": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 150,
-      "line_end": 182,
+      "line": 149,
+      "line_end": 181,
       "read_hint": {
-        "offset": 145,
+        "offset": 144,
         "limit": 47
       },
       "type": "Function",
@@ -6301,10 +6301,10 @@
     },
     "nonNegativeNumber": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 156,
-      "line_end": 182,
+      "line": 155,
+      "line_end": 181,
       "read_hint": {
-        "offset": 151,
+        "offset": 150,
         "limit": 41
       },
       "type": "Function",
@@ -6320,10 +6320,10 @@
     },
     "optionalNumber": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 162,
-      "line_end": 182,
+      "line": 161,
+      "line_end": 181,
       "read_hint": {
-        "offset": 157,
+        "offset": 156,
         "limit": 35
       },
       "type": "Function",
@@ -6338,10 +6338,10 @@
     },
     "numberWithRange": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 167,
-      "line_end": 182,
+      "line": 166,
+      "line_end": 181,
       "read_hint": {
-        "offset": 162,
+        "offset": 161,
         "limit": 30
       },
       "type": "Function",
@@ -6357,10 +6357,10 @@
     },
     "baseDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 173,
-      "line_end": 182,
+      "line": 172,
+      "line_end": 181,
       "read_hint": {
-        "offset": 168,
+        "offset": 167,
         "limit": 24
       },
       "type": "Function",
@@ -6374,10 +6374,10 @@
     },
     "optionalDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 192,
-      "line_end": 200,
+      "line": 191,
+      "line_end": 199,
       "read_hint": {
-        "offset": 187,
+        "offset": 186,
         "limit": 23
       },
       "type": "Function",
@@ -6392,10 +6392,10 @@
     },
     "pastDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 205,
-      "line_end": 208,
+      "line": 204,
+      "line_end": 207,
       "read_hint": {
-        "offset": 200,
+        "offset": 199,
         "limit": 18
       },
       "type": "Function",
@@ -6410,10 +6410,10 @@
     },
     "futureDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 213,
-      "line_end": 216,
+      "line": 212,
+      "line_end": 215,
       "read_hint": {
-        "offset": 208,
+        "offset": 207,
         "limit": 18
       },
       "type": "Function",
@@ -6428,10 +6428,10 @@
     },
     "timeString": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 221,
-      "line_end": 241,
+      "line": 220,
+      "line_end": 240,
       "read_hint": {
-        "offset": 216,
+        "offset": 215,
         "limit": 35
       },
       "type": "Function",
@@ -6446,10 +6446,10 @@
     },
     "optionalTimeString": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 229,
-      "line_end": 241,
+      "line": 228,
+      "line_end": 240,
       "read_hint": {
-        "offset": 224,
+        "offset": 223,
         "limit": 27
       },
       "type": "Function",
@@ -6465,10 +6465,10 @@
     },
     "baseBoolean": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 238,
-      "line_end": 241,
+      "line": 237,
+      "line_end": 240,
       "read_hint": {
-        "offset": 233,
+        "offset": 232,
         "limit": 18
       },
       "type": "Function",
@@ -6482,10 +6482,10 @@
     },
     "optionalBoolean": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 246,
-      "line_end": 255,
+      "line": 245,
+      "line_end": 254,
       "read_hint": {
-        "offset": 241,
+        "offset": 240,
         "limit": 24
       },
       "type": "Function",
@@ -6500,10 +6500,10 @@
     },
     "createEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 251,
-      "line_end": 255,
+      "line": 250,
+      "line_end": 254,
       "read_hint": {
-        "offset": 246,
+        "offset": 245,
         "limit": 19
       },
       "type": "Function",
@@ -6518,10 +6518,10 @@
     },
     "baseArray": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 260,
-      "line_end": 264,
+      "line": 259,
+      "line_end": 263,
       "read_hint": {
-        "offset": 255,
+        "offset": 254,
         "limit": 19
       },
       "type": "Function",
@@ -6535,10 +6535,10 @@
     },
     "nonEmptyArray": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 269,
-      "line_end": 272,
+      "line": 268,
+      "line_end": 271,
       "read_hint": {
-        "offset": 264,
+        "offset": 263,
         "limit": 18
       },
       "type": "Function",
@@ -6554,10 +6554,10 @@
     },
     "departmentEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 278,
-      "line_end": 315,
+      "line": 277,
+      "line_end": 314,
       "read_hint": {
-        "offset": 273,
+        "offset": 272,
         "limit": 52
       },
       "type": "Function",
@@ -6572,10 +6572,10 @@
     },
     "roleEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 286,
-      "line_end": 315,
+      "line": 285,
+      "line_end": 314,
       "read_hint": {
-        "offset": 281,
+        "offset": 280,
         "limit": 44
       },
       "type": "Function",
@@ -6590,10 +6590,10 @@
     },
     "PROJECT_STATUS_VALUES": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 291,
-      "line_end": 315,
+      "line": 290,
+      "line_end": 314,
       "read_hint": {
-        "offset": 286,
+        "offset": 285,
         "limit": 39
       },
       "type": "Function",
@@ -6607,10 +6607,10 @@
     },
     "projectStatusEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 292,
-      "line_end": 315,
+      "line": 291,
+      "line_end": 314,
       "read_hint": {
-        "offset": 287,
+        "offset": 286,
         "limit": 38
       },
       "type": "Function",
@@ -6626,10 +6626,10 @@
     },
     "workTypeEnum": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 300,
-      "line_end": 315,
+      "line": 299,
+      "line_end": 314,
       "read_hint": {
-        "offset": 295,
+        "offset": 294,
         "limit": 30
       },
       "type": "Function",
@@ -6681,10 +6681,10 @@
     },
     "emptyStringToNull": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 333,
-      "line_end": 336,
+      "line": 332,
+      "line_end": 335,
       "read_hint": {
-        "offset": 328,
+        "offset": 327,
         "limit": 18
       },
       "type": "Function",
@@ -6701,10 +6701,10 @@
     },
     "stringToNumber": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 341,
-      "line_end": 347,
+      "line": 340,
+      "line_end": 346,
       "read_hint": {
-        "offset": 336,
+        "offset": 335,
         "limit": 21
       },
       "type": "Function",
@@ -6720,10 +6720,10 @@
     },
     "stringToDate": {
       "source": "frontend/src/validation/baseSchemas.ts",
-      "line": 352,
-      "line_end": 358,
+      "line": 351,
+      "line_end": 357,
       "read_hint": {
-        "offset": 347,
+        "offset": 346,
         "limit": 21
       },
       "type": "Function",
@@ -7996,10 +7996,10 @@
     "userCreateSchema": {
       "source": "frontend/src/validation/userSchema.ts",
       "line": 37,
-      "line_end": 70,
+      "line_end": 67,
       "read_hint": {
         "offset": 32,
-        "limit": 48
+        "limit": 45
       },
       "type": "Function",
       "keywords": [
@@ -8012,10 +8012,10 @@
     },
     "userUpdateSchema": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 80,
-      "line_end": 113,
+      "line": 77,
+      "line_end": 110,
       "read_hint": {
-        "offset": 75,
+        "offset": 72,
         "limit": 48
       },
       "type": "Function",
@@ -8030,10 +8030,10 @@
     },
     "userFilterSchema": {
       "source": "frontend/src/validation/userSchema.ts",
-      "line": 144,
-      "line_end": 149,
+      "line": 141,
+      "line_end": 146,
       "read_hint": {
-        "offset": 139,
+        "offset": 136,
         "limit": 20
       },
       "type": "Function",
@@ -8047,10 +8047,10 @@
     },
     "ROLE_LABELS": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 154,
-      "line_end": 163,
+      "line": 151,
+      "line_end": 160,
       "read_hint": {
-        "offset": 149,
+        "offset": 146,
         "limit": 24
       },
       "type": "Function",
@@ -8065,10 +8065,10 @@
     },
     "DEPARTMENT_LABELS": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 168,
-      "line_end": 174,
+      "line": 165,
+      "line_end": 171,
       "read_hint": {
-        "offset": 163,
+        "offset": 160,
         "limit": 21
       },
       "type": "Function",
@@ -8083,10 +8083,10 @@
     },
     "getRoleLabel": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 179,
-      "line_end": 181,
+      "line": 176,
+      "line_end": 178,
       "read_hint": {
-        "offset": 174,
+        "offset": 171,
         "limit": 17
       },
       "type": "Function",
@@ -8103,10 +8103,10 @@
     },
     "getDepartmentLabel": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 186,
-      "line_end": 188,
+      "line": 183,
+      "line_end": 185,
       "read_hint": {
-        "offset": 181,
+        "offset": 178,
         "limit": 17
       },
       "type": "Function",
@@ -8123,10 +8123,10 @@
     },
     "UserCreateFormData": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 193,
-      "line_end": 207,
+      "line": 190,
+      "line_end": 204,
       "read_hint": {
-        "offset": 188,
+        "offset": 185,
         "limit": 29
       },
       "type": "Interface",
@@ -8143,10 +8143,10 @@
     },
     "UserUpdateFormData": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 194,
-      "line_end": 207,
+      "line": 191,
+      "line_end": 204,
       "read_hint": {
-        "offset": 189,
+        "offset": 186,
         "limit": 28
       },
       "type": "Interface",
@@ -8163,10 +8163,10 @@
     },
     "UserFilterData": {
       "source": "frontend/src/validation/userManagementSchema.ts",
-      "line": 195,
-      "line_end": 207,
+      "line": 192,
+      "line_end": 204,
       "read_hint": {
-        "offset": 190,
+        "offset": 187,
         "limit": 27
       },
       "type": "Interface",
@@ -8803,10 +8803,10 @@
     },
     "MemberManagementPage": {
       "source": "frontend/src/pages/member-management/index.tsx",
-      "line": 51,
-      "line_end": 111,
+      "line": 52,
+      "line_end": 112,
       "read_hint": {
-        "offset": 46,
+        "offset": 47,
         "limit": 75
       },
       "type": "ReactComponent",
@@ -9334,10 +9334,10 @@
     "UserDrawer": {
       "source": "frontend/src/pages/member-management/components/UserDrawer.tsx",
       "line": 21,
-      "line_end": 78,
+      "line_end": 74,
       "read_hint": {
         "offset": 16,
-        "limit": 72
+        "limit": 68
       },
       "type": "ReactComponent",
       "keywords": [
@@ -9350,10 +9350,10 @@
     },
     "UserFormProps": {
       "source": "frontend/src/pages/member-management/components/UserForm.tsx",
-      "line": 38,
-      "line_end": 44,
+      "line": 34,
+      "line_end": 40,
       "read_hint": {
-        "offset": 33,
+        "offset": 29,
         "limit": 21
       },
       "type": "Interface",
@@ -9368,10 +9368,10 @@
     },
     "UserForm": {
       "source": "frontend/src/pages/member-management/components/UserForm.tsx",
-      "line": 46,
-      "line_end": 106,
+      "line": 42,
+      "line_end": 102,
       "read_hint": {
-        "offset": 41,
+        "offset": 37,
         "limit": 75
       },
       "type": "ReactComponent",
@@ -9405,7 +9405,7 @@
     "UserImportDialog": {
       "source": "frontend/src/pages/member-management/components/UserImportDialog.tsx",
       "line": 84,
-      "line_end": 351,
+      "line_end": 373,
       "read_hint": {
         "offset": 79,
         "limit": 80
@@ -9537,7 +9537,7 @@
     "DCImportDialog": {
       "source": "frontend/src/pages/dc-management/components/DCImportDialog.tsx",
       "line": 89,
-      "line_end": 370,
+      "line_end": 369,
       "read_hint": {
         "offset": 84,
         "limit": 80
@@ -9609,7 +9609,7 @@
     "DailyReportDashboard": {
       "source": "frontend/src/pages/daily-reports/components/DailyReportDashboard.tsx",
       "line": 28,
-      "line_end": 239,
+      "line_end": 250,
       "read_hint": {
         "offset": 23,
         "limit": 80
@@ -9681,10 +9681,10 @@
     },
     "DailyReportEntryModal": {
       "source": "frontend/src/pages/daily-reports/mobile/DailyReportEntryModal.tsx",
-      "line": 64,
-      "line_end": 124,
+      "line": 66,
+      "line_end": 126,
       "read_hint": {
-        "offset": 59,
+        "offset": 61,
         "limit": 75
       },
       "type": "ReactComponent",
@@ -10447,10 +10447,10 @@
     "DepartmentSelect": {
       "source": "frontend/src/components/forms/DepartmentSelect.tsx",
       "line": 45,
-      "line_end": 83,
+      "line_end": 84,
       "read_hint": {
         "offset": 40,
-        "limit": 53
+        "limit": 54
       },
       "type": "ReactComponent",
       "keywords": [
@@ -10462,10 +10462,10 @@
     },
     "getDepartmentByCode": {
       "source": "frontend/src/components/forms/DepartmentSelect.tsx",
-      "line": 85,
-      "line_end": 87,
+      "line": 87,
+      "line_end": 89,
       "read_hint": {
-        "offset": 80,
+        "offset": 82,
         "limit": 17
       },
       "type": "Function",
@@ -10481,10 +10481,10 @@
     },
     "getDepartmentName": {
       "source": "frontend/src/components/forms/DepartmentSelect.tsx",
-      "line": 89,
-      "line_end": 92,
+      "line": 91,
+      "line_end": 94,
       "read_hint": {
-        "offset": 84,
+        "offset": 86,
         "limit": 18
       },
       "type": "Function",
@@ -10602,10 +10602,10 @@
     },
     "getLastSelectedProject": {
       "source": "frontend/src/components/forms/ProjectSelect.tsx",
-      "line": 283,
-      "line_end": 286,
+      "line": 284,
+      "line_end": 287,
       "read_hint": {
-        "offset": 278,
+        "offset": 279,
         "limit": 18
       },
       "type": "Function",
@@ -10656,10 +10656,10 @@
     "RoleSelect": {
       "source": "frontend/src/components/forms/RoleSelect.tsx",
       "line": 114,
-      "line_end": 172,
+      "line_end": 173,
       "read_hint": {
         "offset": 109,
-        "limit": 73
+        "limit": 74
       },
       "type": "ReactComponent",
       "keywords": [
@@ -10671,10 +10671,10 @@
     },
     "getRoleByCode": {
       "source": "frontend/src/components/forms/RoleSelect.tsx",
-      "line": 177,
-      "line_end": 179,
+      "line": 179,
+      "line_end": 181,
       "read_hint": {
-        "offset": 172,
+        "offset": 174,
         "limit": 17
       },
       "type": "Function",
@@ -10690,10 +10690,10 @@
     },
     "getRoleName": {
       "source": "frontend/src/components/forms/RoleSelect.tsx",
-      "line": 184,
-      "line_end": 187,
+      "line": 186,
+      "line_end": 189,
       "read_hint": {
-        "offset": 179,
+        "offset": 181,
         "limit": 18
       },
       "type": "Function",

@@ -84,6 +84,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       createdAt: now,
     };
 
+    const fmEntry = !!entryInput.fmSelfPerformed;
     const reportRef = collections.dailyReports.doc(reportId);
     const workerRef = reportRef.collection('workerEntries').doc(workerId);
 
@@ -92,18 +93,22 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       const reportDoc = await t.get(reportRef);
       const workerDoc = await t.get(workerRef);
       // ถ้า worker ยังไม่มี ต้องดึงข้อมูลชื่อพนักงานล่วงหน้า (ก่อนเกิด Write ใดๆ)
+      // FM entries skip the dailyContractors lookup — sentinel ID doesn't exist in that collection
       let dcData: any = null;
-      if (!workerDoc.exists) {
+      if (!workerDoc.exists && !fmEntry) {
         const dcDoc = await t.get(collections.dailyContractors.doc(workerId));
         dcData = dcDoc.data();
+      } else if (!workerDoc.exists && fmEntry) {
+        dcData = { name: 'FM', employeeId: '' };
       }
 
       // 2. ALL WRITES
+      // FM entries are pure performance records — do NOT count toward summary hours or worker count
       const deltas = {
         workerCountDelta: 0,
-        totalNetHoursDelta: newEntry.hours,
-        regularHoursDelta: newEntry.workType === 'regular' ? newEntry.hours : 0,
-        otHoursDelta: newEntry.workType !== 'regular' ? newEntry.hours : 0,
+        totalNetHoursDelta: fmEntry ? 0 : newEntry.hours,
+        regularHoursDelta: fmEntry ? 0 : (newEntry.workType === 'regular' ? newEntry.hours : 0),
+        otHoursDelta: fmEntry ? 0 : (newEntry.workType !== 'regular' ? newEntry.hours : 0),
       };
 
       if (!reportDoc.exists) {
@@ -130,7 +135,7 @@ export class DailyReportService extends BaseCrudService<DailyReport> {
       };
 
       if (!workerDoc.exists) {
-        deltas.workerCountDelta = 1;
+        if (!fmEntry) deltas.workerCountDelta = 1;
         const workerName = dcData?.name || 'Unknown';
         const employeeId = dcData?.employeeId || '';
 

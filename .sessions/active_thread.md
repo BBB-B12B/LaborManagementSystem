@@ -1,3 +1,3 @@
-task: T-045 Import Wizard + template cleanup
-phase: in_progress
-next: (1) remove hint row from user template, (2) rename/remove Project column from template since wizard handles it, (3) explain wizard UX to user
+task: T-046 FM Self-Performed Checkbox -- Daily Report
+phase: done
+next: T-047 or next feature as directed by user
