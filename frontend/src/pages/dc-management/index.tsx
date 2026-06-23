@@ -234,62 +234,76 @@ export default function DCManagementPage() {
     },
   });
 
-  const handleDownloadTemplate = () => {
-    // 1. Get user's first accessible project (if any)
+  const handleDownloadTemplate = async () => {
+    const { default: ExcelJS } = await import('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('DC Workers');
+
+    ws.columns = [
+      { header: 'EmployeeName', key: 'name', width: 26 },
+      { header: 'รหัสพนักงาน', key: 'empId', width: 16 },
+      { header: 'ตำแหน่ง', key: 'position', width: 16 },
+      { header: 'หน่วยงาน', key: 'dept', width: 30 },
+      { header: 'วันเกิด(วว/ดด/ปปปป)', key: 'dob', width: 22, numFmt: '@' },
+      { header: 'วันเริ่มงาน(วว/ดด/ปปปป)', key: 'start', width: 24, numFmt: '@' },
+      { header: 'สถานะใช้งาน(TRUE/FALSE)', key: 'isActive', width: 24 },
+      { header: 'ลาได้เงิน', key: 'paidLeave', width: 12 },
+      { header: 'ลาไม่ได้เงิน', key: 'unpaidLeave', width: 14 },
+      { header: 'มาสาย', key: 'late', width: 10 },
+      { header: 'ออกก่อน', key: 'earlyLeave', width: 12 },
+      { header: 'ขาดงาน', key: 'absent', width: 10 },
+    ];
+
+    ws.getRow(1).eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
     let userProjectName = '';
     if (user?.projectLocationIds && user.projectLocationIds.length > 0) {
       const firstProjectId = user.projectLocationIds[0];
-      const project = projects.find((p) => p.id === firstProjectId);
-      if (project) {
-        userProjectName = project.department || project.projectName || '';
+      const project = (projects as Project[]).find((p) => p.id === firstProjectId);
+      if (project) userProjectName = project.projectName || project.department || '';
+    }
+    const sampleRow = ws.addRow(['นายสมหมาย ใจดี', 'EMP001', 'กรรมกร', userProjectName, null, null, 'TRUE', '0', '0', '0', '0', '0']);
+    // Use richText to force text storage — prevents Excel from auto-converting to date serial
+    sampleRow.getCell(5).value = { richText: [{ text: '1990-01-01' }] };
+    sampleRow.getCell(6).value = { richText: [{ text: '2024-01-01' }] };
+
+    const projectNames = [...new Set(
+      (projects as Project[]).map(p => p.projectName || p.department).filter(Boolean)
+    )];
+
+    if (projectNames.length > 0) {
+      const refWs = wb.addWorksheet('Ref_Projects');
+      projectNames.forEach((name, i) => { refWs.getCell(`A${i + 1}`).value = name; });
+
+      const refRange = `'Ref_Projects'!$A$1:$A$${projectNames.length}`;
+      for (let row = 2; row <= 1000; row++) {
+        ws.getCell(`D${row}`).dataValidation = { type: 'list', allowBlank: true, formulae: [refRange] };
       }
     }
 
-    // 2. Define headers (Must match exactly what backend expects)
-    const headers = [
-      'EmployeeName',
-      'รหัสพนักงาน',
-      'ตำแหน่ง',
-      'หน่วยงาน',
-      'วันเกิด (ปปปป-ดด-วว)',
-      'วันเริ่มงาน (ปปปป-ดด-วว)',
-      'สถานะใช้งาน (TRUE/FALSE)',
-      'ลาได้เงิน',
-      'ลาไม่ได้เงิน',
-      'มาสาย',
-      'ออกก่อน',
-      'ขาดงาน',
-    ];
+    for (let row = 2; row <= 1000; row++) {
+      ws.getCell(`G${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"TRUE,FALSE"'],
+      };
+    }
 
-    // 3. Define example row with pre-filled project
-    const exampleRow = [
-      'นายสมหมาย ใจดี',
-      'EMP001',
-      'กรรมกร',
-      userProjectName,
-      '1990-01-01',
-      '2024-01-01',
-      'TRUE',
-      '0',
-      '0',
-      '0',
-      '0',
-      '0',
-    ];
-
-    // 4. Construct CSV string (with BOM for Excel Thai support)
-    const bom = '\uFEFF';
-    const csvContent = [headers.join(','), exampleRow.join(',')].join('\n');
-
-    // 5. Trigger download
-    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'dc-labor-data-template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('download', 'dc-labor-data-template.xlsx');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 

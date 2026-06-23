@@ -173,3 +173,19 @@
 {"ts":"2026-06-22T10:10:09Z","task":"T-044-fix daily-reports photo attach camera capture fix","phase":"done","session_total":0,"chat_total":14741,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T10:21:30Z","task":"T-044-fix daily-reports photo attach camera capture fix","phase":"done","session_total":52530,"chat_total":67271,"cache_read":0,"cache_write":0}
 {"ts":"2026-06-22T10:31:36Z","task":"T-044-fix daily-reports photo attach camera capture fix","phase":"done","session_total":66709,"chat_total":81450,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T02:32:10Z","task":"T-044-fix daily-reports photo attach camera capture fix","phase":"done","session_total":79284,"chat_total":94025,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T02:46:43Z","task":"T-045 Import Wizard dropdown for UserImportDialog + DCImportDialog","phase":"done","session_total":59763,"chat_total":74504,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T02:54:17Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":97673,"chat_total":112414,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T02:58:01Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":0,"chat_total":22741,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:00:29Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":0,"chat_total":22741,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:02:37Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":0,"chat_total":22741,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:18:07Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":60826,"chat_total":83567,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:21:53Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":81199,"chat_total":103940,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:30:56Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":115826,"chat_total":36871,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:34:04Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":122410,"chat_total":43455,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:39:19Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":137809,"chat_total":58854,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:40:55Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":150425,"chat_total":71470,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:51:57Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":172128,"chat_total":93173,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T03:59:35Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":203930,"chat_total":124975,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T04:01:29Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":256378,"chat_total":177423,"cache_read":0,"cache_write":0}
+{"ts":"2026-06-23T04:04:22Z","task":"T-045 Import Wizard + template cleanup","phase":"in_progress","session_total":262854,"chat_total":183899,"cache_read":0,"cache_write":0}

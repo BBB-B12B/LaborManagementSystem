@@ -41,6 +41,7 @@ import type {
 } from '@/validation/userManagementSchema';
 import { Layout, ProtectedRoute } from '@/components/layout';
 import { UserImportDialog } from '@/page-components/member-management/components/UserImportDialog';
+import { api } from '@/services/api/client';
 
 /**
  * Member Management List Page
@@ -220,6 +221,87 @@ export default function MemberManagementPage() {
     setFilters((prev) => ({ ...prev, pageSize: newPageSize, page: 1 }));
   };
 
+  const handleDownloadTemplate = async () => {
+    const { default: ExcelJS } = await import('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Users');
+
+    ws.columns = [
+      { header: 'Employee ID', key: 'empId', width: 16 },
+      { header: 'Username', key: 'username', width: 18 },
+      { header: 'Password', key: 'password', width: 16 },
+      { header: 'Full Name', key: 'fullName', width: 26 },
+      { header: 'Role ID', key: 'roleId', width: 12 },
+      { header: 'Department', key: 'dept', width: 14 },
+      { header: 'Project Location IDs (comma-separated)', key: 'projects', width: 42 },
+      { header: 'Is Active (TRUE/FALSE)', key: 'isActive', width: 22 },
+      { header: 'Notes', key: 'notes', width: 28 },
+    ];
+
+    ws.getRow(1).eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    ws.addRow(['EMP001', 'somchai.j', 'Pass@1234', 'สมชาย ใจดี', 'FM', 'PD01', '', 'TRUE', 'หัวหน้าไซต์']);
+
+    for (let row = 2; row <= 1000; row++) {
+      ws.getCell(`E${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: ['"AM,FM,SE,OE,PE,PM,PD,MD,LD"'],
+      };
+      ws.getCell(`F${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: ['"PD01,PD02,PD03,PD04,PD05,HO,WH"'],
+      };
+      ws.getCell(`H${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"TRUE,FALSE"'],
+      };
+    }
+
+    // Fetch projects → hidden reference sheet so users can look up IDs
+    try {
+      const res = await (api.get('/projects/active') as Promise<any>);
+      const projectList: { id: string; projectName: string; department: string }[] =
+        Array.isArray(res) ? res : (res.items ?? []);
+
+      if (projectList.length > 0) {
+        const refWs = wb.addWorksheet('โครงการ (อ้างอิง)');
+        refWs.columns = [
+          { header: 'ชื่อโครงการ / หน่วยงาน', key: 'name', width: 40 },
+          { header: 'Project ID (ใส่ในคอลัมน์ G คั่นด้วย ,)', key: 'id', width: 40 },
+        ];
+        refWs.getRow(1).font = { bold: true };
+        projectList.forEach(p => refWs.addRow([p.projectName, p.id]));
+      }
+    } catch { /* skip if fetch fails */ }
+
+    ws.getCell('G1').note =
+      'Project Location IDs\n' +
+      '• ใส่ Firestore ID คั่นด้วย , (comma)\n' +
+      '• ดู ID ได้ที่ sheet "โครงการ (อ้างอิง)"\n' +
+      '• ผู้อยู่หลายโครงการ: id1,id2,id3\n' +
+      '• หรือเว้นว่างแล้วเลือกใน Wizard หลังอัปโหลด';
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('download', 'user-data-template.xlsx');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // DataGrid columns
   const columns: GridColDef[] = [
     {
@@ -315,9 +397,7 @@ export default function MemberManagementPage() {
             variant="outlined"
             color="primary"
             startIcon={<FileDownload />}
-            component="a"
-            href="/user-data-template.csv"
-            download
+            onClick={handleDownloadTemplate}
           >
             ดาวน์โหลดเทมเพลต
           </Button>

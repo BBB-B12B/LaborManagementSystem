@@ -115,12 +115,20 @@ const toBoolean = (value: string): boolean => {
 
 const toDate = (value: string): Date | undefined => {
   if (!value) return undefined;
+
+  // Handle DD/MM/YYYY format (what Excel shows in Thai locale)
+  const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (ddmmyyyy) {
+    const iso = `${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`;
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
   const parsed = new Date(value);
   const time = parsed.getTime();
   if (Number.isNaN(time)) return undefined;
 
   // Sanity check for far future dates (e.g. timestamps in microseconds)
-  // If year > 3000, try dividing by 1000 if it brings it to reasonable range
   if (parsed.getFullYear() > 3000) {
     const reduced = new Date(time / 1000);
     if (reduced.getFullYear() >= 1970 && reduced.getFullYear() < 3000) {
@@ -472,7 +480,7 @@ router.post(
 
             const skillId = positionName;
 
-            const dateOfBirth = toDate(getValue(row, 'วันเกิด(ปปปป-ดด-วว)'));
+            const dateOfBirth = toDate(getValue(row, 'วันเกิด(วว/ดด/ปปปป)') || getValue(row, 'วันเกิด(ปปปป-ดด-วว)'));
             const projectIdsRaw =
               getValue(row, 'หน่วยงาน') || getValue(row, 'รหัสโครงการ(คั่นด้วยคอมมา)');
             let mappedProjectLocationId = '';
@@ -493,7 +501,7 @@ router.post(
               }
             }
 
-            const startDate = toDate(getValue(row, 'วันเริ่มงาน(ปปปป-ดด-วว)'));
+            const startDate = toDate(getValue(row, 'วันเริ่มงาน(วว/ดด/ปปปป)') || getValue(row, 'วันเริ่มงาน(ปปปป-ดด-วว)'));
             const isActive = toBoolean(getValue(row, 'สถานะใช้งาน(TRUE/FALSE)'));
 
             const dailyWageRate = toNumber(

@@ -1,11 +1,9 @@
-dt=2026-06-22
-s=0
-task=T-039 task-type toggle (standalone vs has-subtasks) — disambiguate empty subtasks
-cfp=37
-sk=coding
+dt=2026-06-23
+sk=coder
+sk_h=skip
+mece_h=skip
+p3=in_progress
+section=template-cleanup
+step=fix-hint-row-and-project-column
 compact_size=8000
-p3=not_started
-section=S0
-step=design confirmed by user — implementation not yet started (needs fresh Phase 1+2)
 session_reset=consumed
-notes=DESIGN CONFIRMED (Option A). Problem: a task with empty subtasks[] is ambiguous — "standalone, no subtasks ever" vs "has subtasks, just not created yet" look identical. The create form ALREADY has a `hasSubtasks` toggle (TaskCreateModal.tsx state ~line 121) but it is NOT persisted — toggle off just stores subtasks:[]. FIX: persist intent as a field on Task. Add `taskType: 'standalone' | 'pending' | 'hasSubtasks'` to both FE type (frontend/src/services/taskService.ts Task iface ~line 12-56) and BE model (backend/src/models/Task.ts). Behaviors: (1) toggle OFF=standalone → form shows assignee+dueDate on the main task → on save auto-create ONE mirror subtask = copy of main (reuses existing subtask-level tracking: dailyProgress/status/revision) but taskType=standalone tells UI to render as a single task, not a parent. (2) toggle ON but no subtasks added → save as taskType=pending → list shows "รอแตกงาน" badge + "เพิ่มงานย่อย" button. (3) subtasks added → taskType=hasSubtasks (current behavior). Checked & SAFE: backend dueDate-required validation (tasks.routes.ts:1636) only fires when subtasks exist → pending case passes unchanged; parent dueDate+assignees are derived from subtasks (TaskService.ts ~174-205) → mirror subtask keeps that logic working. Edit-mode: changing taskType later (standalone→add subtasks, pending→break down) = just update the field. SCOPE ~4-5 files: taskService.ts type + Task.ts model + TaskCreateModal.tsx (send taskType + render standalone assignee/date fields) + task-list card (show badge) + TaskService.ts createTask (set taskType + auto-mirror for standalone). Backend route: backend/src/api/routes/tasks.routes.ts POST /api/tasks ~1612-1666. NEXT SESSION: run Phase 1 (re-read TaskCreateModal.tsx create flow + TaskService.createTask + the task-list card component) → Phase 2 MECE plan → confirm → implement. User commits/pushes themselves; work on main (git-workflow-main-only). Do NOT commit/push.

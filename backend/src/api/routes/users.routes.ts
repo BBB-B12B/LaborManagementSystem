@@ -319,7 +319,6 @@ router.post(
           fullName,
           roleIdRaw,
           departmentRaw,
-          startDateValue,
         ].some((value) => !value);
 
         if (requiredMissing) {
@@ -345,16 +344,7 @@ router.post(
           continue;
         }
 
-        const startDate = toDate(startDateValue);
-        if (!startDate) {
-          summary.failed += 1;
-          logger.warn('User import skipped: invalid start date', {
-            rowNumber,
-            employeeId,
-            startDateValue,
-          });
-          continue;
-        }
+        const startDate = toDate(startDateValue) ?? new Date();
 
         const payload: CreateUserInput = {
           employeeId,

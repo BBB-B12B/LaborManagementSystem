@@ -8994,10 +8994,10 @@
     },
     "WorkspacePage": {
       "source": "frontend/src/pages/workspace/index.tsx",
-      "line": 113,
-      "line_end": 173,
+      "line": 114,
+      "line_end": 174,
       "read_hint": {
-        "offset": 108,
+        "offset": 109,
         "limit": 75
       },
       "type": "ReactComponent",
@@ -9385,10 +9385,10 @@
     },
     "UserImportDialogProps": {
       "source": "frontend/src/pages/member-management/components/UserImportDialog.tsx",
-      "line": 14,
-      "line_end": 21,
+      "line": 75,
+      "line_end": 82,
       "read_hint": {
-        "offset": 9,
+        "offset": 70,
         "limit": 22
       },
       "type": "Interface",
@@ -9404,10 +9404,10 @@
     },
     "UserImportDialog": {
       "source": "frontend/src/pages/member-management/components/UserImportDialog.tsx",
-      "line": 23,
-      "line_end": 107,
+      "line": 84,
+      "line_end": 351,
       "read_hint": {
-        "offset": 18,
+        "offset": 79,
         "limit": 80
       },
       "type": "ReactComponent",
@@ -9517,10 +9517,10 @@
     },
     "DCImportDialogProps": {
       "source": "frontend/src/pages/dc-management/components/DCImportDialog.tsx",
-      "line": 19,
-      "line_end": 26,
+      "line": 80,
+      "line_end": 87,
       "read_hint": {
-        "offset": 14,
+        "offset": 75,
         "limit": 22
       },
       "type": "Interface",
@@ -9536,10 +9536,10 @@
     },
     "DCImportDialog": {
       "source": "frontend/src/pages/dc-management/components/DCImportDialog.tsx",
-      "line": 28,
-      "line_end": 140,
+      "line": 89,
+      "line_end": 370,
       "read_hint": {
-        "offset": 23,
+        "offset": 84,
         "limit": 80
       },
       "type": "ReactComponent",
@@ -12931,9 +12931,13 @@
         "limit": 43
       },
       "keywords": [
+        "backend",
+        "controller",
+        "controllers",
         "get",
         "handler",
         "options",
+        "project",
         "support"
       ],
       "used_in": []
@@ -12941,13 +12945,15 @@
     "PhotoSourcePickerProps": {
       "type": "Interface",
       "source": "frontend\\src\\components\\forms\\PhotoSourcePicker.tsx",
-      "line": 17,
-      "line_end": 35,
+      "line": 6,
+      "line_end": 19,
       "read_hint": {
-        "offset": 12,
-        "limit": 33
+        "offset": 1,
+        "limit": 28
       },
       "keywords": [
+        "forms",
+        "frontend",
         "photo",
         "picker",
         "props",
