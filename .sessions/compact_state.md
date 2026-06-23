@@ -1,9 +1,9 @@
 dt=2026-06-23
 sk=coder
-sk_h=skip
-mece_h=skip
-p3=in_progress
-section=template-cleanup
-step=fix-hint-row-and-project-column
-compact_size=8000
+sk_h=unknown
+mece_h=unknown
+compact_size=14741
+p3=S4
+section=task-complete
+step=T046-done-but-wrong-component
 session_reset=consumed

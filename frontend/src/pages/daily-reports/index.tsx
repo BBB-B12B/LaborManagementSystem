@@ -851,6 +851,7 @@ export default function DailyReportPage() {
   const [siteReportData, setSiteReportData] = useState<any>(null);
   const [supportReportData, setSupportReportData] = useState<any>(null);
   const [selectedWorkers, setSelectedWorkers] = useState<any[]>([]);
+  const [fmSelfPerformed, setFmSelfPerformed] = useState(false);
   const [isAutofilledFromRequest, setIsAutofilledFromRequest] = useState(false);
 
   const regularActiveSlots = useMemo(() => {
@@ -901,6 +902,9 @@ export default function DailyReportPage() {
               }
             : INITIAL_EXISTING_SHIFT_PHOTOS,
         });
+
+        // Restore FM self-performed flag
+        setFmSelfPerformed(!!report.fmSelfPerformed);
 
         // Map workers back to selectedWorkers state
         if (report.labor || report.leave) {
@@ -979,6 +983,8 @@ export default function DailyReportPage() {
           setSelectedWorkers([]);
         }
 
+        setFmSelfPerformed(false);
+
         // Show auto-filled banner ONLY on reporting days (not future dates)
         const isFuture = pageMode === 'requests';
         if (!isFuture) {
@@ -988,6 +994,7 @@ export default function DailyReportPage() {
         setProgress(lp || selectedTask.dailyProgress || 0);
         setNote('');
         setSelectedWorkers([]);
+        setFmSelfPerformed(false);
         setExistingPhotos({ site: [], labor: INITIAL_EXISTING_SHIFT_PHOTOS });
       }
 
@@ -1573,6 +1580,7 @@ export default function DailyReportPage() {
     setProgress(task.dailyProgress || 0);
     setNote('');
     setSelectedWorkers([]);
+    setFmSelfPerformed(false);
     setSitePhotos([]);
     setSitePhotoPreviews([]);
     setLaborPhotos(INITIAL_SHIFT_PHOTOS);
@@ -2182,7 +2190,7 @@ export default function DailyReportPage() {
     const isFinalProgress = Number(progress) === 100;
     const isPhotoRequired = isFinalSubmit && (!isToday || isFinalProgress);
 
-    if (isFinalSubmit && !isActingAsSupport && !isAdvanceRequest && isPhotoRequired) {
+    if (isFinalSubmit && !isActingAsSupport && !isAdvanceRequest && !fmSelfPerformed && isPhotoRequired) {
       if (sitePhotos.length + existingPhotos.site.length < 2) {
         enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
         return;
@@ -2213,8 +2221,8 @@ export default function DailyReportPage() {
       }
     }
 
-    if (selectedWorkers.length === 0 && readonlySupportWorkers.length === 0) {
-      enqueueSnackbar('กรุณาเลือกแรงงาน DC หรือต้องมีแรงงาน Support อย่างน้อย 1 คน', {
+    if (selectedWorkers.length === 0 && readonlySupportWorkers.length === 0 && !fmSelfPerformed) {
+      enqueueSnackbar('กรุณาเลือกแรงงาน DC, ติ๊ก FM ทำเอง หรือต้องมีแรงงาน Support อย่างน้อย 1 คน', {
         variant: 'warning',
       });
       return;
@@ -2371,6 +2379,7 @@ export default function DailyReportPage() {
         progress: progress === '' ? previousProgress : (Number(progress) || 0),
         status: isAdvanceRequest ? undefined : (isFinalSubmit ? 'submitted' : 'draft'),
         note: note,
+        fmSelfPerformed: fmSelfPerformed || undefined,
         photos: {
           site: [...existingPhotos.site, ...newSitePhotoUrls],
           laborByShift: {
@@ -2436,6 +2445,7 @@ export default function DailyReportPage() {
       setSitePhotos([]);
       setLaborPhotos(INITIAL_SHIFT_PHOTOS);
       setSelectedWorkers([]);
+      setFmSelfPerformed(false);
       setProgress(0);
       setPreviousProgress(0);
       setNextProgress(null);
@@ -3118,19 +3128,40 @@ export default function DailyReportPage() {
                                   >
                                     <Users size={20} color="#3b82f6" /> การจัดการแรงงาน DC
                                   </Typography>
-                                  <Button
-                                    variant="contained"
-                                    startIcon={<Users size={16} />}
-                                    onClick={() => setIsWorkerModalOpen(true)}
-                                    sx={{
-                                      borderRadius: '10px',
-                                      textTransform: 'none',
-                                      bgcolor: '#3b82f6',
-                                    }}
-                                    disabled={isDateLockedByWagePeriod || isAfterCompletion || requestLocked}
-                                  >
-                                    เลือกแรงงาน DC
-                                  </Button>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Button
+                                      variant="contained"
+                                      startIcon={<Users size={16} />}
+                                      onClick={() => setIsWorkerModalOpen(true)}
+                                      sx={{
+                                        borderRadius: '10px',
+                                        textTransform: 'none',
+                                        bgcolor: '#3b82f6',
+                                      }}
+                                      disabled={isDateLockedByWagePeriod || isAfterCompletion || requestLocked || fmSelfPerformed}
+                                    >
+                                      เลือกแรงงาน DC
+                                    </Button>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={fmSelfPerformed}
+                                          disabled={selectedWorkers.length > 0 || isDateLockedByWagePeriod || isAfterCompletion || requestLocked}
+                                          onChange={(e) => {
+                                            setFmSelfPerformed(e.target.checked);
+                                            if (e.target.checked) setSelectedWorkers([]);
+                                          }}
+                                          size="small"
+                                          sx={{ color: '#16a34a', '&.Mui-checked': { color: '#16a34a' } }}
+                                        />
+                                      }
+                                      label={
+                                        <Typography variant="body2" sx={{ color: '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}>
+                                          FM ทำเองโดยไม่มีแรงงาน DC
+                                        </Typography>
+                                      }
+                                    />
+                                  </Box>
                                 </Box>
                                 <TableContainer
                                   component={Paper}

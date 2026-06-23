@@ -1,3 +1,4 @@
+// @unused: no page imports this component (verified 2026-06-23) — kept for reference, do not delete
 import React, { useState } from 'react';
 import {
     Box,
