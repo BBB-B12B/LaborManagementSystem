@@ -491,7 +491,7 @@ export default function DailyReportPage() {
     };
 
     // 1. Revision Creation Date (The best boundary for "Per-Card" view)
-    if (selectedTask?.revisionCreatedAt) {
+    if (selectedTask?.revisionCreatedAt && selectedTask?.revisionId && selectedTask.revisionId !== 'rev00') {
       addIfValid(selectedTask.revisionCreatedAt);
     } else if (boundaryDate) {
       // Fallback to original task boundary

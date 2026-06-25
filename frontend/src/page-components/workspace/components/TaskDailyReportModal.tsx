@@ -110,7 +110,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
 
   const resolvedTaskId = useMemo(() => {
     if (!task) return '';
-    return task.parentTaskId ? `${task.parentTaskId}__${task.id}` : task.id;
+    return task.id;
   }, [task]);
   
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
@@ -411,13 +411,6 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         return d;
       }
     }
-    if (task.createdAt) {
-      const d = parseSafeDate(task.createdAt);
-      if (d) {
-        d.setHours(0, 0, 0, 0);
-        return d;
-      }
-    }
     return null;
   }, [task, isActingAsSupport]);
 
@@ -433,7 +426,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     if (isActingAsSupport && task?.supportCreatedAt) {
       const sd = parseSafeDate(task.supportCreatedAt);
       if (sd) dates.push(sd);
-    } else if (!isActingAsSupport && task?.revisionCreatedAt) {
+    } else if (!isActingAsSupport && task?.revisionCreatedAt && task?.revisionId && task.revisionId !== 'rev00') {
       const rd = parseSafeDate(task.revisionCreatedAt);
       if (rd) dates.push(rd);
     } else if (boundaryDate) {
