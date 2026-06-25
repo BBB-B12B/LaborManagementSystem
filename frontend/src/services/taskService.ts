@@ -46,6 +46,7 @@ export interface Task {
   supportCreatedAt?: string;
   unlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
   supportUnlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
+  unapproveRequest?: { requestedAt: string | Date; requestedBy: string };
   subtasks?: Subtask[];
   /**
    * Explicit intent for this task (records what the creator chose — never inferred from subtasks.length):
@@ -128,6 +129,7 @@ export interface Subtask {
   supportUnlockedDates?: Record<string, { unlockedUntil: string | Date; unlockedBy: string }>;
   unlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
   supportUnlockRequests?: Record<string, { requestedAt: string | Date; requestedBy: string }>;
+  unapproveRequest?: { requestedAt: string | Date; requestedBy: string };
   dueDate: string | Date;
   editHistory?: EditHistoryRecord[];
   createdBy?: string;
@@ -268,6 +270,22 @@ export const taskService = {
    */
   requestTaskReportUnlock: async (id: string, dateStr: string, isSupportReport?: boolean, taskContext?: Record<string, string>): Promise<void> => {
     await api.post(`/tasks/${id}/request-unlock`, { dateStr, isSupportReport, taskContext });
+  },
+
+  /**
+   * FM requests to edit daily report after task has been approved (status='completed').
+   * Creates a pending unapproveRequest on the task; notifies LD.
+   */
+  requestUnapprove: async (id: string, taskContext?: Record<string, string>): Promise<void> => {
+    await api.post(`/tasks/${id}/request-unapprove`, { taskContext });
+  },
+
+  /**
+   * LD revokes an approved task back to 'for-checking', clearing the unapproveRequest.
+   * After this, FM can edit daily reports normally (3-day window resumes).
+   */
+  unapproveTask: async (id: string): Promise<void> => {
+    await api.post(`/tasks/${id}/unapprove`);
   },
 
   /**

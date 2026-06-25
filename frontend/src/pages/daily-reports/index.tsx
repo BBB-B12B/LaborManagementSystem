@@ -297,6 +297,7 @@ export default function DailyReportPage() {
   const [isUnlockRequestDialogOpen, setIsUnlockRequestDialogOpen] = useState(false);
   const [unlockRequestDate, setUnlockRequestDate] = useState<Date | null>(null);
   const [isSubmittingUnlockRequest, setIsSubmittingUnlockRequest] = useState(false);
+  const [isSubmittingUnapproveRequest, setIsSubmittingUnapproveRequest] = useState(false);
 
   // loadingSource: กำหนดว่าใครเป็น "เจ้าของ" Spinner ณ เวลานั้น
   // Priority: 'submit' > 'sync' > 'detail' > null
@@ -1216,7 +1217,9 @@ export default function DailyReportPage() {
     return false;
   }, [currentAdvanceRequest]);
 
-  const isFormDisabled = isDateLockedByWagePeriod || isAfterCompletion || requestLocked || (isReportSubmittedAndPast && !hasValidUnlock);
+  const isTaskApproved = selectedTask?.status === 'completed';
+  const isUnapproveRequested = !!selectedTask?.unapproveRequest;
+  const isFormDisabled = isTaskApproved || isDateLockedByWagePeriod || isAfterCompletion || requestLocked || (isReportSubmittedAndPast && !hasValidUnlock);
   const isAdvanceRequestUI = pageMode === 'requests';
   const isProgressLocked = isRetroactiveOver3Days || isFormDisabled;
 
@@ -1544,20 +1547,20 @@ export default function DailyReportPage() {
     }
 
     if (activeTab === 'pending') {
-      // Show only current revision tasks that are not yet 100% AND not completed
+      // Tasks with pending drafts stay in Active Tasks regardless of progress
       filtered = filtered.filter(
         (t) =>
           !t.isPastRevision &&
-          (t.dailyProgress || 0) < 100 &&
-          t.status !== 'completed'
+          t.status !== 'completed' &&
+          ((t.dailyProgress || 0) < 100 || (draftDatesByTaskId[t.id]?.length ?? 0) > 0)
       );
     } else if (activeTab === 'finish') {
-      // Show finished current revision (site 100%) OR status is completed OR any past revision
+      // Only move to Finish when progress=100% AND no draft reports pending
       filtered = filtered.filter(
         (t) =>
           t.isPastRevision ||
-          (t.dailyProgress || 0) >= 100 ||
-          t.status === 'completed'
+          t.status === 'completed' ||
+          ((t.dailyProgress || 0) >= 100 && !(draftDatesByTaskId[t.id]?.length > 0))
       );
     }
 
@@ -1565,7 +1568,7 @@ export default function DailyReportPage() {
       if (a.isPastRevision !== b.isPastRevision) return a.isPastRevision ? 1 : -1;
       return (a.dueDateEpoch || 0) - (b.dueDateEpoch || 0);
     });
-  }, [processedTasks, searchTerm, activeTab, pageMode, reportDate]);
+  }, [processedTasks, searchTerm, activeTab, pageMode, reportDate, draftDatesByTaskId]);
 
   // --- 3. Handlers ---
   const handleSelectTask = (task: any) => {
@@ -1628,6 +1631,35 @@ export default function DailyReportPage() {
     } finally {
       setIsSubmittingUnlockRequest(false);
       setIsUnlockRequestDialogOpen(false);
+    }
+  };
+
+  const handleRequestUnapprove = async () => {
+    if (!selectedTask) return;
+    setIsSubmittingUnapproveRequest(true);
+    try {
+      await taskService.requestUnapprove(selectedTask.id, {
+        projectId: selectedTask.projectId || '',
+        projectName: selectedTask.projectName || '',
+        workOrderId: selectedTask.workOrderId || '',
+        workOrderName: selectedTask.workOrderName || '',
+        categoryId: selectedTask.categoryId || '',
+        categoryName: selectedTask.categoryName || '',
+        taskId: selectedTask.parentTaskId || selectedTask.id || '',
+        taskName: selectedTask.taskName || '',
+        subtaskName: selectedTask.subtaskName || '',
+      });
+      toast.success('ส่งคำขอแก้ไขเรียบร้อยแล้ว รอ LD ยกเลิก Approve');
+      setSelectedTask((prev: any) => {
+        if (!prev) return prev;
+        return { ...prev, unapproveRequest: { requestedAt: new Date(), requestedBy: user?.id || '' } };
+      });
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    } catch (e: any) {
+      console.error('[DailyReport] Request unapprove error:', e);
+      toast.error(e?.message || 'ไม่สามารถส่งคำขอแก้ไขได้');
+    } finally {
+      setIsSubmittingUnapproveRequest(false);
     }
   };
 
@@ -2186,36 +2218,36 @@ export default function DailyReportPage() {
     }
 
     const isAdvanceRequest = pageMode === 'requests';
-    const isToday = isSameDay(reportDate, new Date());
-    const isFinalProgress = Number(progress) === 100;
-    const isPhotoRequired = isFinalSubmit && (!isToday || isFinalProgress);
 
-    if (isFinalSubmit && !isActingAsSupport && !isAdvanceRequest && !fmSelfPerformed && isPhotoRequired) {
+    if (!isActingAsSupport && !isAdvanceRequest) {
+      // Site photos required for all saves (draft + final submit, including FM self-performed)
       if (sitePhotos.length + existingPhotos.site.length < 2) {
         enqueueSnackbar('กรุณาแนบรูปถ่ายหน้างานอย่างน้อย 2 รูป', { variant: 'warning' });
         return;
       }
 
-      // Check Labor Photos based on active shifts
-      const shiftsMap: Array<{ key: keyof ShiftPhotos; label: string }> = [
-        { key: 'regular', label: 'เวลาทำงานปกติ' },
-        { key: 'otMorning', label: 'OT เช้า' },
-        { key: 'otNoon', label: 'OT เที่ยง' },
-        { key: 'otEvening', label: 'OT เย็น' },
-      ];
+      // Labor photos required on final submit only — not draft, not FM self-performed
+      if (isFinalSubmit && !fmSelfPerformed) {
+        const shiftsMap: Array<{ key: keyof ShiftPhotos; label: string }> = [
+          { key: 'regular', label: 'เวลาทำงานปกติ' },
+          { key: 'otMorning', label: 'OT เช้า' },
+          { key: 'otNoon', label: 'OT เที่ยง' },
+          { key: 'otEvening', label: 'OT เย็น' },
+        ];
 
-      for (const shift of shiftsMap) {
-        if (activeShifts[shift.key]) {
-          const totalPhotos =
-            laborPhotos[shift.key].length + existingPhotos.labor[shift.key].length;
-          const required = shift.key === 'regular' ? regularActiveSlots.length : 2;
-          const reqText = shift.key === 'regular' ? `(${regularActiveSlots.join('/')})` : '(เข้า/ออก)';
-          if (totalPhotos < required) {
-            enqueueSnackbar(
-              `กรุณาแนบรูปถ่ายแรงงาน (${shift.label}) ให้ครบ ${required} รูป ${reqText}`,
-              { variant: 'error' }
-            );
-            return;
+        for (const shift of shiftsMap) {
+          if (activeShifts[shift.key]) {
+            const totalPhotos =
+              laborPhotos[shift.key].length + existingPhotos.labor[shift.key].length;
+            const required = shift.key === 'regular' ? regularActiveSlots.length : 2;
+            const reqText = shift.key === 'regular' ? `(${regularActiveSlots.join('/')})` : '(เข้า/ออก)';
+            if (totalPhotos < required) {
+              enqueueSnackbar(
+                `กรุณาแนบรูปถ่ายแรงงาน (${shift.label}) ให้ครบ ${required} รูป ${reqText}`,
+                { variant: 'error' }
+              );
+              return;
+            }
           }
         }
       }
@@ -3058,7 +3090,50 @@ export default function DailyReportPage() {
                         </Box>
 
                         <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                          {isAfterCompletion ? (
+                          {isTaskApproved ? (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '100%',
+                                minHeight: 400,
+                                bgcolor: '#f0fdf4',
+                                borderRadius: '12px',
+                                border: '2px dashed #86efac',
+                                p: 4,
+                                gap: 2,
+                              }}
+                            >
+                              <Typography variant="h5" fontWeight={900} color="#166534" align="center">
+                                งานถูกอนุมัติแล้ว
+                              </Typography>
+                              <Typography variant="body2" color="#15803d" align="center">
+                                ไม่สามารถแก้ไข Daily Report ได้ ต้องขอให้ LD ยกเลิก Approve ก่อน
+                              </Typography>
+                              {isUnapproveRequested ? (
+                                <Box
+                                  sx={{
+                                    px: 3, py: 1.5, bgcolor: '#fef9c3', border: '1px solid #fde047',
+                                    borderRadius: '999px', color: '#854d0e', fontWeight: 700, fontSize: '0.85rem',
+                                  }}
+                                >
+                                  รอ LD ยกเลิก Approve อยู่...
+                                </Box>
+                              ) : (
+                                <Button
+                                  variant="contained"
+                                  color="warning"
+                                  disabled={isSubmittingUnapproveRequest}
+                                  onClick={handleRequestUnapprove}
+                                  sx={{ borderRadius: '999px', fontWeight: 700, px: 4, boxShadow: 'none' }}
+                                >
+                                  {isSubmittingUnapproveRequest ? 'กำลังส่งคำขอ...' : 'ขอแก้ไข'}
+                                </Button>
+                              )}
+                            </Box>
+                          ) : isAfterCompletion ? (
                             <Box
                               sx={{
                                 display: 'flex',
@@ -3752,7 +3827,7 @@ export default function DailyReportPage() {
                                   '&:hover': { bgcolor: '#059669' },
                                   boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
                                 }}
-                                disabled={isDateLockedByWagePeriod || isSubmitting}
+                                disabled={isFormDisabled || isSubmitting}
                                 onClick={() => handleSubmit(true)}
                               >
                                 ส่งรายงานสมบูรณ์

@@ -95,7 +95,7 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({
       reset();
       setSubmitError('');
     }
-  }, [open, task, reset]);
+  }, [open, task?.id, reset]);
 
   const filteredFms = React.useMemo(() => {
     const validFms = fmUsers.filter(
@@ -219,7 +219,7 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({
               <CircularProgress />
             </Box>
           ) : (
-            <Grid container spacing={3}>
+            <Grid container spacing={4}>
               {submitError && (
                 <Grid item xs={12}>
                   <Typography color="error" variant="body2">
@@ -307,7 +307,13 @@ export const TaskRejectModal: React.FC<TaskRejectModalProps> = ({
                             errors.assignees?.message || 'สามารถเลือก FM คนเดิมหรือคนใหม่ได้'
                           }
                           InputProps={{ ...params.InputProps, disableUnderline: true }}
-                          sx={inputStyles}
+                          sx={{
+                            ...inputStyles,
+                            '& .MuiFilledInput-root': {
+                              ...(inputStyles['& .MuiFilledInput-root'] as object),
+                              paddingTop: '28px',
+                            },
+                          }}
                         />
                       )}
                     />

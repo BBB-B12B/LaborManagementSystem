@@ -84,6 +84,7 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
     updatedAt: safeDate(data.updatedAt),
     createdBy: data.createdBy || '',
     updatedBy: data.updatedBy || '',
+    unapproveRequest: data.unapproveRequest || undefined,
   };
 };
 
@@ -133,7 +134,14 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
           upsertTask(mapFirestoreDocToTask(change.doc));
         }
         if (change.type === 'removed') {
-          removeTaskRealtime(mapFirestoreDocToTask(change.doc).id);
+          // If the task was removed from the active-status query because it transitioned
+          // to 'completed', keep it in cache (the completedTasksQuery may need a composite
+          // index that isn't deployed yet; upsert here ensures it never flickers out).
+          if (data?.status === 'completed') {
+            upsertTask(mapFirestoreDocToTask(change.doc));
+          } else {
+            removeTaskRealtime(mapFirestoreDocToTask(change.doc).id);
+          }
         }
       });
       setCacheLoading(false);
@@ -161,7 +169,15 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
             upsertSubtask(parentCompositeId, mapFirestoreDocToSubtask(change.doc));
           }
           if (change.type === 'removed') {
-            removeSubtaskRealtime(parentCompositeId, change.doc.id);
+            const removedData = change.doc.data();
+            // If the subtask transitioned to 'completed' it leaves the active-status query
+            // but may not yet appear in the completedSubtasksQuery (composite index may be
+            // missing). Keep it in cache so the card doesn't vanish from the board.
+            if (removedData?.status === 'completed') {
+              upsertSubtask(parentCompositeId, mapFirestoreDocToSubtask(change.doc));
+            } else {
+              removeSubtaskRealtime(parentCompositeId, change.doc.id);
+            }
           }
         }
       });
@@ -186,25 +202,27 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     // 2. Setup Task and Subtask Listeners
     if (startDate) {
       const activeStatuses = ['upcoming', 'in-progress', 'for-checking', 'rework'];
-      const dateString = startDate.toISOString();
-      
-      // Active Tasks
+
+      // Active Tasks (non-completed)
       const activeTasksQuery = query(collectionGroup(afterSaleDb, 'tasks'), where('status', 'in', activeStatuses));
       unsubscribes.push(onSnapshot(activeTasksQuery, handleTasksSnapshot, handleTasksError));
 
-      // Completed Tasks (This Month/Week/Day)
-      const completedTasksQuery = query(collectionGroup(afterSaleDb, 'tasks'), where('status', '==', 'completed'), where('updatedAt', '>=', dateString));
+      // Completed Tasks — single-field filter only (no composite index needed).
+      // The updatedAt date filter was removed: it required a composite index that is
+      // fragile (missing index causes query failure + task disappears), and the
+      // client-side filteredSubtasks memo already handles the date display gate.
+      const completedTasksQuery = query(collectionGroup(afterSaleDb, 'tasks'), where('status', '==', 'completed'));
       unsubscribes.push(onSnapshot(completedTasksQuery, handleTasksSnapshot, handleTasksError));
 
-      // Active Subtasks
+      // Active Subtasks (non-completed)
       const activeSubtasksQuery = query(collectionGroup(afterSaleDb, 'subtasks'), where('status', 'in', activeStatuses));
       unsubscribes.push(onSnapshot(activeSubtasksQuery, handleSubtasksSnapshot, handleSubtasksError));
 
-      // Completed Subtasks
-      const completedSubtasksQuery = query(collectionGroup(afterSaleDb, 'subtasks'), where('status', '==', 'completed'), where('updatedAt', '>=', dateString));
+      // Completed Subtasks — same reasoning as above
+      const completedSubtasksQuery = query(collectionGroup(afterSaleDb, 'subtasks'), where('status', '==', 'completed'));
       unsubscribes.push(onSnapshot(completedSubtasksQuery, handleSubtasksSnapshot, handleSubtasksError));
     } else {
-      // All Tasks
+      // All Tasks — no filter, catches every status change in one listener
       const tasksQuery = query(collectionGroup(afterSaleDb, 'tasks'));
       unsubscribes.push(onSnapshot(tasksQuery, handleTasksSnapshot, handleTasksError));
 

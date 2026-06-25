@@ -1032,6 +1032,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             workLogs: hasTimesheet ? (timesheet?.workLogs || []) : [],
             assigneeId: hasTimesheet ? (timesheet?.AssigneesID || null) : null,
             dailyReportHistory: hasTimesheet ? (timesheet?.editHistory || []) : [],
+            dailyReportStatus: hasTimesheet ? (timesheet?.status ?? null) : undefined,
             isHoliday,
             updatedAt: now,
             ...updatesObj,
@@ -1106,6 +1107,7 @@ triggerDocData // ข้อมูลจาก trigger doc (ใช้คำนว
             assigneeName: null, // จะอัปเดตด้านล่าง
             isFallbackAssignee: false, // จะอัปเดตด้านล่าง
             dailyReportHistory: hasTimesheet ? (timesheet?.editHistory || []) : [],
+            dailyReportStatus: hasTimesheet ? (timesheet?.status ?? null) : null,
             isHoliday,
             status,
             originalStatus,

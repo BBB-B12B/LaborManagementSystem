@@ -558,6 +558,72 @@ export class TaskService {
   }
 
   /**
+   * FM requests to edit a daily report after the task has been approved.
+   * Stores a pending unapproveRequest on the task/subtask document.
+   */
+  async requestUnapprove(id: string, requestedBy: string): Promise<void> {
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
+    const targetRef = subtaskRef || taskRef;
+    const doc = await targetRef.get();
+    if (!doc.exists) throw new AppError('Task/Subtask not found', 404);
+    if (doc.data()?.status !== 'completed') {
+      throw new AppError('งานยังไม่ถูก Approve', 400);
+    }
+    if (doc.data()?.unapproveRequest) {
+      throw new AppError('มีคำขอแก้ไขรออยู่แล้ว', 400);
+    }
+    await targetRef.update({
+      unapproveRequest: { requestedAt: new Date(), requestedBy },
+      updatedAt: new Date(),
+    });
+  }
+
+  /**
+   * LD revokes approval — task/subtask goes back to 'for-checking', unapproveRequest cleared.
+   */
+  async unapproveTask(id: string, updatedBy: string): Promise<void> {
+    const { taskRef, subtaskRef } = await this.resolveRefs(id);
+
+    await afterSaleDb.runTransaction(async (transaction) => {
+      // ── ALL READS FIRST ───────────────────────────────────────────────────────
+      const targetRef = subtaskRef || taskRef;
+      const doc = await transaction.get(targetRef);
+      if (!doc.exists) throw new AppError('Task/Subtask not found', 404);
+      if (doc.data()?.status !== 'completed') {
+        throw new AppError('งานไม่ได้อยู่ในสถานะ Approved', 400);
+      }
+
+      let subtasksSnap: FirebaseFirestore.QuerySnapshot | null = null;
+      if (subtaskRef) {
+        subtasksSnap = await transaction.get(taskRef.collection('subtasks'));
+      }
+
+      // ── ALL WRITES AFTER ──────────────────────────────────────────────────────
+      const now = new Date();
+      const updates = {
+        status: 'for-checking',
+        unapproveRequest: admin.firestore.FieldValue.delete(),
+        updatedAt: now,
+        updatedBy,
+      };
+
+      if (subtaskRef && subtasksSnap) {
+        transaction.update(subtaskRef, updates);
+
+        const allSubtasks = subtasksSnap.docs.map(d => {
+          if (d.id === subtaskRef.id) return { ...d.data(), status: 'for-checking' };
+          return d.data();
+        });
+        const anyCompleted = allSubtasks.some(st => st.status === 'completed');
+        const parentStatus = anyCompleted ? 'in-progress' : 'for-checking';
+        transaction.update(taskRef, { status: parentStatus, updatedAt: now, updatedBy });
+      } else {
+        transaction.update(taskRef, updates);
+      }
+    });
+  }
+
+  /**
    * ทีม Support เข้าร่วม Task เดิมของ Site
    * - สะสม Assignee ใน Task หลัก
    * - สร้าง collection `held` และ document `held00`
@@ -1818,6 +1884,11 @@ export class TaskService {
       dailyReportRef = targetRefForReport.collection('revisions').doc(currentRev).collection('dailyReports').doc(dateStr);
     }
 
+
+    // Block edits on approved tasks — FM must request unapprove first
+    if (!isSupportReport && dataForRev.status === 'completed') {
+      throw new AppError('งานถูกอนุมัติแล้ว ไม่สามารถแก้ไขได้ กรุณาขอแก้ไขผ่าน LD', 403);
+    }
 
     // Check if report already exists (to allow edits even if retroactive window is closed)
     const existingReportDoc = await dailyReportRef.get();

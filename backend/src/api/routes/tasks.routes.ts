@@ -1322,7 +1322,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     data.subtasks = subtasksSnapshot.docs.map((subDoc) => {
       const subData = subDoc.data() as any;
       return {
-        id: subData.id || `${woId}__${catId}__${taskId}__${subDoc.id}`,
+        id: subDoc.id,
         subtaskId: subData.subtaskId || '',
         subtaskName: subData.subtaskName || '',
         status: subData.status || 'upcoming',
@@ -1371,6 +1371,10 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         updatedBy: subData.updatedBy || '',
         historicalAssigneeIds: subData.historicalAssigneeIds || [],
         isDeletable: subData.isDeletable !== undefined ? subData.isDeletable : ((subData.dailyProgress || 0) === 0),
+        unapproveRequest: subData.unapproveRequest ? {
+          requestedAt: safeDate(subData.unapproveRequest.requestedAt),
+          requestedBy: subData.unapproveRequest.requestedBy || '',
+        } : undefined,
       };
     });
 
@@ -2163,6 +2167,111 @@ router.post('/:id/approve', async (req: Request, res: Response, next: NextFuncti
       success: true,
       message: 'อนุมัติงานสำเร็จ (Task approved successfully)',
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/request-unapprove
+router.post('/:id/request-unapprove', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const { taskContext } = req.body;
+
+    await taskService.requestUnapprove(id, userId);
+
+    // Send notification to LD supervisors
+    try {
+      let requesterName = 'พนักงาน';
+      const requesterDoc = await db.collection('users').doc(userId).get();
+      if (requesterDoc.exists) {
+        const rd = requesterDoc.data();
+        requesterName = rd?.name || rd?.username || requesterName;
+      }
+
+      const ctx = taskContext || {};
+      let projectId: string = ctx.projectId || '';
+      let subtaskName: string = ctx.subtaskName || '';
+
+      if (!projectId) {
+        const idParts = id.split('__');
+        if (idParts.length >= 4) {
+          const [woId, catId, taskId, subtaskId] = idParts;
+          const subtaskSnap = await afterSaleDb
+            .collection('workOrders').doc(woId)
+            .collection('categories').doc(catId)
+            .collection('tasks').doc(taskId)
+            .collection('subtasks').doc(subtaskId)
+            .get();
+          if (subtaskSnap.exists) {
+            const sd = subtaskSnap.data();
+            projectId = sd?.projectId || '';
+            subtaskName = subtaskName || sd?.subtaskName || '';
+          }
+        }
+      }
+
+      if (projectId) {
+        const SUPERVISOR_ROLES = ['LD', 'OE', 'PE', 'PM'];
+        const usersSnap = await db.collection('users')
+          .where('projectLocationIds', 'array-contains', projectId)
+          .get();
+
+        const supervisors = usersSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(u => SUPERVISOR_ROLES.includes(u.roleId || u.roleCode || ''));
+
+        const message = `${requesterName} ขอแก้ไข Daily Report ของงานที่ถูก Approve แล้ว${subtaskName ? ` (${subtaskName})` : ''}`;
+
+        const batch = afterSaleDb.batch();
+        for (const supervisor of supervisors) {
+          const notifRef = afterSaleDb.collection('lms_notifications').doc();
+          batch.set(notifRef, {
+            type: 'unapprove_requested',
+            projectId: ctx.projectId || projectId,
+            projectName: ctx.projectName || '',
+            workOrderId: ctx.workOrderId || '',
+            workOrderName: ctx.workOrderName || '',
+            categoryId: ctx.categoryId || '',
+            categoryName: ctx.categoryName || '',
+            taskId: ctx.taskId || '',
+            taskName: ctx.taskName || '',
+            subtaskId: id,
+            subtaskName,
+            message,
+            createdAt: new Date(),
+            createdBy: userId,
+            createdByName: requesterName,
+            readBy: [],
+            targetUserId: supervisor.id,
+          });
+        }
+        await batch.commit();
+        console.log(`[tasks.routes] Sent unapprove_requested notifications to ${supervisors.length} supervisors`);
+      }
+    } catch (notiError: any) {
+      console.error('Failed to send unapprove request notification:', notiError.message);
+    }
+
+    res.status(200).json({ success: true, message: 'ส่งคำขอแก้ไขเรียบร้อยแล้ว' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/:id/unapprove
+router.post('/:id/unapprove', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    await taskService.unapproveTask(id, userId);
+
+    res.status(200).json({ success: true, message: 'ยกเลิก Approve เรียบร้อยแล้ว งานกลับเป็น for-checking' });
   } catch (error) {
     next(error);
   }

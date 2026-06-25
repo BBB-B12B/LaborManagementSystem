@@ -88,6 +88,7 @@ interface DailyEmployeeTimesheet {
   };
   AssigneesID?: string;
   editHistory?: any[];
+  status?: 'draft' | 'submitted';
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -1166,6 +1167,7 @@ async function reconcile(
       workLogs:             hasTimesheet ? (timesheet?.workLogs || []) : [],
       assigneeId:           hasTimesheet ? (timesheet?.AssigneesID || null) : null,
       dailyReportHistory:   hasTimesheet ? (timesheet?.editHistory || []) : [],
+      dailyReportStatus:    hasTimesheet ? (timesheet?.status ?? null) : undefined,
       isHoliday,
       updatedAt: now,
       ...updatesObj,
@@ -1242,6 +1244,7 @@ async function reconcile(
       assigneeName:         null, // จะอัปเดตด้านล่าง
       isFallbackAssignee:   false, // จะอัปเดตด้านล่าง
       dailyReportHistory:   hasTimesheet ? (timesheet?.editHistory || []) : [],
+      dailyReportStatus:    hasTimesheet ? (timesheet?.status ?? null) : null,
       isHoliday,
       status,
       originalStatus,

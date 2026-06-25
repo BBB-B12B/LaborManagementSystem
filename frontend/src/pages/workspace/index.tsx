@@ -840,6 +840,7 @@ export default function WorkspacePage() {
           unlockRequests: subtask.unlockRequests || {},
           supportUnlockedDates: subtask.supportUnlockedDates || {},
           supportUnlockRequests: subtask.supportUnlockRequests || {},
+          unapproveRequest: subtask.unapproveRequest,
           // Custom parent task reference ID
           parentTaskId: task.id,
           isActive: subtask.isActive !== false,
@@ -2323,6 +2324,11 @@ export default function WorkspacePage() {
                               {laborCount > 0 && (
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   👷 กำลังพล: {laborCount} คน
+                                </Typography>
+                              )}
+                              {report.fmSelfPerformed && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  🔧 ไม่มีแรงงานทำงานนี้ (โฟร์แมนทำงานนี้ด้วยตัวเอง)
                                 </Typography>
                               )}
                             </Stack>

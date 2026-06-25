@@ -65,6 +65,7 @@ interface DailySummary {
   totalProgress: number;
   pastProgress: number;
   siteWorkerCount: number;
+  siteFmSelfPerformed: boolean;
   supportWorkerCount: number;
   siteTotalHours: number;
   supportTotalHours: number;
@@ -78,6 +79,7 @@ interface DailySummary {
   supportOtEvening: number;
   sitePhotos: string[];
   laborPhotos: string[];
+  siteReportStatus?: string;
 }
 
 const today = startOfDay(new Date());
@@ -272,6 +274,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           totalProgress: runningProgress,
           pastProgress: previousProgress,
           siteWorkerCount: siteStats.count,
+          siteFmSelfPerformed: !!entry.site?.fmSelfPerformed,
           supportWorkerCount: supportStats.count,
           siteTotalHours: siteStats.total,
           supportTotalHours: supportStats.total,
@@ -285,6 +288,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
           supportOtEvening: supportStats.otE,
           sitePhotos: entry.site?.photos?.site || [],
           laborPhotos: entry.site?.photos?.labor || [],
+          siteReportStatus: entry.site?.status,
         };
         
         if (entry.site && entry.site.progress !== undefined) {
@@ -520,6 +524,28 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     }
   };
 
+  // Latest site report status — used to gate approve/reject buttons (draft = not ready)
+  const latestSiteReportStatus = useMemo(() => {
+    if (!reportDates.length) return undefined;
+    const lastDate = [...reportDates].sort().pop()!;
+    return reportData[lastDate]?.siteReportStatus;
+  }, [reportDates, reportData]);
+
+  const handleUnapprove = async () => {
+    if (!task) return;
+    try {
+      setActionLoading(true);
+      await taskService.unapproveTask(resolvedTaskId);
+      enqueueSnackbar('ยกเลิก Approve เรียบร้อยแล้ว งานกลับเป็น "รอตรวจสอบ"', { variant: 'success' });
+      if (onTaskUpdated) onTaskUpdated();
+      onClose();
+    } catch (error: any) {
+      enqueueSnackbar(error.message || 'ไม่สามารถยกเลิก Approve ได้', { variant: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const CustomPickersDay = (props: PickersDayProps) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateStr = format(day, 'yyyy-MM-dd');
@@ -740,7 +766,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
               </Box>
             )}
 
-            {!isActingAsSupport && task?.dailyProgress === 100 && task?.status !== 'completed' && (
+            {!isActingAsSupport && task?.dailyProgress === 100 && task?.status !== 'completed' && latestSiteReportStatus !== 'draft' && (
               <>
                 <Button
                   variant="outlined"
@@ -765,6 +791,19 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                   Approve
                 </Button>
               </>
+            )}
+
+            {canApproveUnlock && task?.status === 'completed' && task?.unapproveRequest && (
+              <Button
+                variant="outlined"
+                color="warning"
+                size="small"
+                onClick={handleUnapprove}
+                disabled={actionLoading}
+                sx={{ borderRadius: 2, fontWeight: 700, px: { xs: 1.5, md: 2 }, minWidth: 0 }}
+              >
+                ยกเลิก Approve
+              </Button>
             )}
           </Stack>
         </Stack>
@@ -930,6 +969,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                             ) : (
                               <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
                                 {selectedSummary.siteWorkerCount} <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>คน</Typography>
+                              </Typography>
+                            )}
+                            {selectedSummary.siteFmSelfPerformed && (
+                              <Typography variant="caption" sx={{ color: '#64748b', mt: 0.5, textAlign: 'center' }}>
+                                ไม่มีแรงงานทำงานนี้ (โฟร์แมนทำงานนี้ด้วยตัวเอง)
                               </Typography>
                             )}
                           </Box>
