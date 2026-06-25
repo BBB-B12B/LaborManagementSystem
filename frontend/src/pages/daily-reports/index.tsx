@@ -494,21 +494,20 @@ export default function DailyReportPage() {
     if (selectedTask?.revisionCreatedAt && selectedTask?.revisionId && selectedTask.revisionId !== 'rev00') {
       addIfValid(selectedTask.revisionCreatedAt);
     } else if (boundaryDate) {
-      // Fallback to original task boundary
+      // Fallback to original task boundary (support tasks: supportCreatedAt)
       if (!isNaN(boundaryDate.getTime())) {
         dates.push(boundaryDate);
       }
+    } else {
+      // rev00 non-support task: allow 30 days back so users can backdate before creation
+      const thirtyDaysAgo = subDays(new Date(), 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+      dates.push(thirtyDaysAgo);
     }
 
     // 2. Earliest Report Date (If reports exist before the creation record)
     if (earliestReportDateStr) {
       addIfValid(earliestReportDateStr);
-    }
-
-    if (dates.length === 0) {
-      const fallback = subDays(new Date(), 30);
-      fallback.setHours(0, 0, 0, 0);
-      return fallback;
     }
 
     // For "แยกการ์ด ใครการ์ดมัน", we use the earliest available date for THIS revision

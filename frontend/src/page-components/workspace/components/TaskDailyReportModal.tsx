@@ -429,15 +429,14 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
     } else if (!isActingAsSupport && task?.revisionCreatedAt && task?.revisionId && task.revisionId !== 'rev00') {
       const rd = parseSafeDate(task.revisionCreatedAt);
       if (rd) dates.push(rd);
-    } else if (boundaryDate) {
-      dates.push(boundaryDate);
+    } else {
+      // rev00 non-support task: allow 30 days back so users can backdate before creation
+      dates.push(subDays(new Date(), 30));
     }
 
     if (earliestReportDateStr) {
       dates.push(new Date(earliestReportDateStr));
     }
-
-    if (dates.length === 0) return subDays(new Date(), 30);
 
     const minTimestamp = Math.min(...dates.map((d) => d.getTime()));
     const d = new Date(minTimestamp);

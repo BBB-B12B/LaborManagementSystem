@@ -85,6 +85,10 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
     createdBy: data.createdBy || '',
     updatedBy: data.updatedBy || '',
     unapproveRequest: data.unapproveRequest || undefined,
+    unlockRequests: data.unlockRequests || undefined,
+    supportUnlockRequests: data.supportUnlockRequests || undefined,
+    revisionCreatedAt: data.revisionCreatedAt || undefined,
+    supportCreatedAt: data.supportCreatedAt || undefined,
   };
 };
 
