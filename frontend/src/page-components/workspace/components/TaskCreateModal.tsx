@@ -444,7 +444,6 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       setValue('subtasks', copiedSubtasks, { shouldValidate: true });
       setHasSubtasks(true);
       setSelectedParentTaskId(null);
-      setValue('taskName', '', { shouldValidate: false });
       setOpenDuplicateDialog(false);
     } catch (err) {
       console.error('Failed to fetch subtasks for duplicate', err);
