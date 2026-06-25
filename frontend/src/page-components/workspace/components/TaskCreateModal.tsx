@@ -38,6 +38,7 @@ import { CategoryConfigModal } from './CategoryConfigModal';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/Add';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 // Form validation schema
 const taskSchema = z.object({
@@ -126,6 +127,11 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
   const [supportOriginalSubtaskId, setSupportOriginalSubtaskId] = useState<string | null>(null);
 
 
+
+  const [openDuplicateDialog, setOpenDuplicateDialog] = useState(false);
+  const [isFetchingDuplicateSubtasks, setIsFetchingDuplicateSubtasks] = useState(false);
+  const [bulkDueDateEnabled, setBulkDueDateEnabled] = useState(false);
+  const [bulkDueDate, setBulkDueDate] = useState<Date | null>(null);
 
   const [isEditingTaskName, setIsEditingTaskName] = useState(false);
   const [hasSubtasks, setHasSubtasks] = useState(false);
@@ -422,6 +428,31 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     }
   }, [selectedWorkOrderCode, selectedCategoryName, selectedParentTaskId, projectTasks, setValue]);
 
+  const handleDuplicateTask = async (sourceTask: any) => {
+    if (!sourceTask) return;
+    setIsFetchingDuplicateSubtasks(true);
+    try {
+      const subtasksData = await taskService.getSubtasks(sourceTask.id);
+      const copiedSubtasks = subtasksData.length > 0
+        ? subtasksData.map(st => ({
+            subtaskName: st.subtaskName,
+            assignees: st.assignees || [],
+            dueDate: null as any,
+            isSupportRequest: false,
+          }))
+        : [{ subtaskName: '', assignees: [], dueDate: null as any, isSupportRequest: false }];
+      setValue('subtasks', copiedSubtasks, { shouldValidate: true });
+      setHasSubtasks(true);
+      setSelectedParentTaskId(null);
+      setValue('taskName', '', { shouldValidate: false });
+      setOpenDuplicateDialog(false);
+    } catch (err) {
+      console.error('Failed to fetch subtasks for duplicate', err);
+    } finally {
+      setIsFetchingDuplicateSubtasks(false);
+    }
+  };
+
   const handleToggleSubtasks = (checked: boolean) => {
     setHasSubtasks(checked);
     if (checked) {
@@ -437,6 +468,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
     } else {
       setIsAddingSubtasksToNewTask(false);
       setSelectedParentTaskId(null);
+      setBulkDueDateEnabled(false);
+      setBulkDueDate(null);
       if (isEdit) {
         fields.forEach((item: any) => {
           if (item.subtaskId) {
@@ -447,6 +480,13 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
         });
       }
       setValue('subtasks', []);
+    }
+  };
+
+  const handleBulkDueDateChange = (date: Date | null) => {
+    setBulkDueDate(date);
+    if (date) {
+      fields.forEach((_, i) => setValue(`subtasks.${i}.dueDate`, date, { shouldValidate: true }));
     }
   };
 
@@ -1224,9 +1264,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         // ไม่กลับไปเป็น text ธรรมดาอีก เพื่อให้แก้/เปลี่ยนงานทีหลังได้เสมอ
                         if (!isEdit) {
                           return (
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                             <Autocomplete
+                              sx={{ flex: 1 }}
                               freeSolo
-                              fullWidth
                               options={filteredTasksForDropdown}
                               loading={isLoadingProjectTasks || isFetchingSubtasks}
                               getOptionLabel={(option) => {
@@ -1299,6 +1340,31 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                 />
                               )}
                             />
+                            {!isEdit && filteredTasksForDropdown.length > 0 && (
+                              <Tooltip title="คัดลอก subtasks จากงานเดิม" arrow placement="top">
+                                <Button
+                                  variant="outlined"
+                                  onClick={() => setOpenDuplicateDialog(true)}
+                                  disabled={isSubmitting}
+                                  sx={{
+                                    height: 40,
+                                    minWidth: 40,
+                                    px: 1.5,
+                                    borderRadius: '20px',
+                                    borderColor: '#cbd5e1',
+                                    color: '#475569',
+                                    flexShrink: 0,
+                                    textTransform: 'none',
+                                    fontSize: '0.75rem',
+                                    '&:hover': { borderColor: '#94a3b8', backgroundColor: '#f1f5f9' }
+                                  }}
+                                  startIcon={<ContentCopyIcon sx={{ fontSize: '1rem !important' }} />}
+                                >
+                                  <Box sx={{ display: { xs: 'none', sm: 'block' } }}>คัดลอก</Box>
+                                </Button>
+                              </Tooltip>
+                            )}
+                            </Box>
                           );
                         }
 
@@ -1507,14 +1573,81 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                         </Button>
                       </Box>
                       
+                      {/* Bulk due date row */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={bulkDueDateEnabled}
+                              onChange={(e) => {
+                                setBulkDueDateEnabled(e.target.checked);
+                                if (!e.target.checked) setBulkDueDate(null);
+                              }}
+                              disabled={isSubmitting}
+                              sx={{ p: 0.5 }}
+                            />
+                          }
+                          label={
+                            <Typography variant="caption" sx={{ color: '#475569', fontSize: '0.75rem' }}>
+                              ใช้วันครบกำหนดเดียวกันทั้งหมด
+                            </Typography>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                        {bulkDueDateEnabled && (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <DatePicker
+                              label=" "
+                              size="small"
+                              value={bulkDueDate}
+                              onChange={handleBulkDueDateChange}
+                              disabled={isSubmitting}
+                              sx={{
+                                width: 170,
+                                '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
+                                  borderRadius: '24px !important',
+                                  backgroundColor: '#ffffff !important',
+                                  height: 34,
+                                  paddingRight: '8px !important',
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: '#cbd5e1 !important',
+                                    borderWidth: '1px !important',
+                                    top: 0,
+                                  },
+                                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: '#94a3b8 !important',
+                                  },
+                                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: '#2563eb !important',
+                                    borderWidth: '1.5px !important',
+                                  },
+                                },
+                                '& .MuiOutlinedInput-notchedOutline legend': {
+                                  display: 'none',
+                                },
+                                '& .MuiInputLabel-root': { display: 'none' },
+                                '& .MuiInputBase-input': {
+                                  fontSize: '0.8rem',
+                                  py: '0 !important',
+                                  color: '#2563eb !important',
+                                  WebkitTextFillColor: '#2563eb !important',
+                                  fontWeight: 600,
+                                },
+                              }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+
                       {fields.map((item, index) => (
-                        <Box 
-                          key={item.id} 
-                          sx={{ 
-                            p: 2, 
-                            mb: 2, 
-                            borderRadius: '16px', 
-                            border: '1px solid #e2e8f0', 
+                        <Box
+                          key={item.id}
+                          sx={{
+                            p: 2,
+                            mb: 2,
+                            borderRadius: '16px',
+                            border: '1px solid #e2e8f0',
                             backgroundColor: '#f8fafc',
                             position: 'relative'
                           }}
@@ -1605,7 +1738,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                   <DatePicker
                                     label="วันที่ครบกำหนด *"
                                     value={field.value}
-                                    onChange={field.onChange}
+                                    onChange={(val) => {
+                                      field.onChange(val);
+                                      if (bulkDueDateEnabled) setBulkDueDateEnabled(false);
+                                    }}
                                     disabled={isSubmitting}
                                     error={!!errors.subtasks?.[index]?.dueDate}
                                     helperText={errors.subtasks?.[index]?.dueDate?.message as string}
@@ -1637,11 +1773,15 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                                         fontWeight: 600,
                                       },
                                       '& .MuiInputLabel-root': {
-                                        fontSize: '0.8rem',
-                                        mt: -0.25,
+                                        fontSize: '0.85rem',
+                                        mt: -0.75,
                                         color: '#64748b',
                                         '&.Mui-focused': {
                                           color: '#2563eb !important',
+                                          mt: 0,
+                                        },
+                                        '&.MuiInputLabel-shrink': {
+                                          mt: 0,
                                         }
                                       },
                                       '& .MuiIconButton-root': {
@@ -1873,6 +2013,40 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
       )}
 
     </Dialog>
+
+      {/* Duplicate Task Dialog */}
+      <Dialog open={openDuplicateDialog} onClose={() => setOpenDuplicateDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '1rem' }}>เลือกงานที่ต้องการคัดลอก</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            งานย่อยและผู้รับผิดชอบจะถูกคัดลอกมา — กรุณาระบุชื่องานใหม่และวันครบกำหนดด้วยตัวเอง
+          </Typography>
+          <Autocomplete
+            options={filteredTasksForDropdown}
+            getOptionLabel={(option) => option.taskName || ''}
+            loading={isFetchingDuplicateSubtasks}
+            onChange={(_, newValue) => { if (newValue) handleDuplicateTask(newValue); }}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id} style={{ padding: '12px 16px' }}>
+                {option.taskName}
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="เลือกงานต้นแบบ"
+                variant="outlined"
+                placeholder="ค้นหางาน..."
+                InputProps={{ ...params.InputProps }}
+                sx={inputStyles}
+              />
+            )}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setOpenDuplicateDialog(false)} color="inherit">ยกเลิก</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Confirmation Dialog */}
       <Dialog open={!!confirmData} onClose={() => !isConfirming && setConfirmData(null)} maxWidth="sm" fullWidth>

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * User Service
  * บริการจัดการผู้ใช้งาน
  *
@@ -19,11 +19,17 @@ export class UserService extends BaseCrudService<User> {
     super(collections.users as any, 'users');
   }
 
+  private normalizeUsername(username: string): string {
+    // Strip zero-width and other invisible Unicode characters that can sneak in from Excel/CSV imports
+    // U+200B=Zero-Width Space, U+200C=ZWNJ, U+200D=ZWJ, U+FEFF=BOM, U+00AD=Soft Hyphen
+    return username.trim().toLowerCase().replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, '');
+  }
+
   /**
    * Find user by username (Case Insensitive)
    */
   async findByUsername(username: string): Promise<User | null> {
-    const normalizedUsername = username.trim().toLowerCase();
+    const normalizedUsername = this.normalizeUsername(username);
     
     // 1. Try modern username field
     let users = await this.query([
@@ -76,7 +82,7 @@ export class UserService extends BaseCrudService<User> {
    * Create a new user with password hashing
    */
   async createUser(input: CreateUserInput, createdBy: string): Promise<User> {
-    const normalizedUsername = input.username.trim().toLowerCase();
+    const normalizedUsername = this.normalizeUsername(input.username);
 
     const existingByEmpId = await this.findByEmployeeId(input.employeeId);
     if (existingByEmpId) {
@@ -124,7 +130,7 @@ export class UserService extends BaseCrudService<User> {
 
     // Normalize username if being updated
     if (input.username) {
-      const normalizedUsername = input.username.trim().toLowerCase();
+      const normalizedUsername = this.normalizeUsername(input.username);
 
       // Check for duplicate only if username is changing
       if (normalizedUsername !== user.username) {
