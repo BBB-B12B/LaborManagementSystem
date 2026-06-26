@@ -862,7 +862,11 @@ export default function WorkspacePage() {
       // ป้องกัน Loop การยิงเปลี่ยนเส้นทางด้วย Router.replace ซ้ำซ้อนก่อนที่การนำทางจะสมบูรณ์
       if (handledSubtaskIdRef.current === querySubtaskId) return;
 
-      const foundCard = subtaskCards.find((card) => card.id === querySubtaskId);
+      // Support both plain subtask doc ID and 4-part composite (woId__catId__taskId__subtaskDocId)
+      const subtaskDocId = querySubtaskId.includes('__')
+        ? querySubtaskId.split('__').pop()
+        : querySubtaskId;
+      const foundCard = subtaskCards.find((card) => card.id === querySubtaskId || card.id === subtaskDocId);
       if (foundCard) {
         handledSubtaskIdRef.current = querySubtaskId; // ล็อก ID นี้เพื่อป้องกันการเข้ามตกรอบวนซ้ำ
         setSelectedTaskForReport(foundCard);

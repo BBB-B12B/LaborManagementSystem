@@ -286,6 +286,7 @@ export default function DailyReportPage() {
   // --- 1. State Management ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const handledNotifSubtaskIdRef = useRef<string | null>(null);
   const [draftDatesByTaskId, setDraftDatesByTaskId] = useState<Record<string, string[]>>({});
   const [pageMode, setPageMode] = useState<'daily-report' | 'requests'>('daily-report');
   const [reportDate, setReportDate] = useState<Date>(new Date());
@@ -1588,6 +1589,32 @@ export default function DailyReportPage() {
     setLaborPhotos(INITIAL_SHIFT_PHOTOS);
     setLaborPhotoPreviews(INITIAL_SHIFT_PREVIEWS);
   };
+
+  // Auto-select task from notification click (query params: subtaskId + optional date)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (processedTasks.length === 0) return;
+
+    const { subtaskId: querySubtaskId, date: queryDate } = router.query;
+    if (!querySubtaskId || typeof querySubtaskId !== 'string') return;
+    if (handledNotifSubtaskIdRef.current === querySubtaskId) return;
+
+    const found = processedTasks.find((t) => t.id === querySubtaskId);
+    if (!found) return;
+
+    handledNotifSubtaskIdRef.current = querySubtaskId;
+    handleSelectTask(found);
+
+    if (queryDate && typeof queryDate === 'string') {
+      const parsed = new Date(queryDate);
+      if (!isNaN(parsed.getTime())) {
+        setReportDate(parsed);
+      }
+    }
+
+    router.replace('/daily-reports', undefined, { shallow: true });
+  }, [router.isReady, router.query, processedTasks]);
 
   const handleRequestUnlockSubmit = async () => {
     if (!selectedTask || !unlockRequestDate) return;
