@@ -54,16 +54,17 @@ def main():
     root = repo_root()
     j = lambda *a: os.path.join(root, *a)
 
-    # sys_fixed = (CLAUDE.md + AGENTS.md bytes * 0.3) + 3500  (matches B1)
+    # sys_fixed: base const lives ONLY in scripts/sys_fixed_base.txt (single source · T-250)
     try:
-        sys_fixed = int((os.path.getsize(j("CLAUDE.md")) + os.path.getsize(j("AGENTS.md"))) * 0.3) + 3500
+        base = int(open(j("scripts", "sys_fixed_base.txt")).read().strip())
+        sys_fixed = int((os.path.getsize(j("CLAUDE.md")) + os.path.getsize(j("AGENTS.md"))) * 0.3) + base
     except Exception:
-        sys_fixed = 11070
+        sys_fixed = 19500
 
     cs_txt = read(j(".sessions", "compact_state.md"))
-    m = re.search(r"^compact_size=(\d+)", cs_txt, re.M)
+    m = re.search(r"^compact_size[:=]\s*(\d+)", cs_txt, re.M)  # T-262: accept ':' or '=' (drift-proof, matches session_reset L67)
     compact_size = int(m.group(1)) if m else 0
-    mm = re.search(r"^session_reset=(\w+)", cs_txt, re.M)
+    mm = re.search(r"^session_reset[:=]\s*(\w+)", cs_txt, re.M)  # T-261: accept ':' or '=' (drift-proof)
     reset_marker = mm.group(1) if mm else None
 
     at_txt = read(j(".sessions", "active_thread.md"))
@@ -87,11 +88,11 @@ def main():
     if not dry:
         with open(tok_path, "w") as f:
             f.write(
-                "SESSION_TOTAL: %d\nCHAT_TOTAL: %d\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n"
+                "SESSION_TOTAL: %d\nCHAT_TOTAL: %d\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\nFILES_READ: 0\nLONG_OUTPUTS: 0\n"
                 % (session, chat)
             )
         if reset_marker == "armed":
-            new_cs = re.sub(r"^session_reset=armed", "session_reset=consumed", cs_txt, flags=re.M)
+            new_cs = re.sub(r"^session_reset[:=]\s*armed", "session_reset: consumed", cs_txt, flags=re.M)  # T-261: accept ':'/'=' , normalize to ':'
             with open(j(".sessions", "compact_state.md"), "w") as f:
                 f.write(new_cs)
 

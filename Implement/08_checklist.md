@@ -76,7 +76,7 @@ Expected: ≥ 10 matches
 - [ ] `mece/SKILL.md` has Token Check block before `[cycle N]` emit
 - [ ] `mece/SKILL.md` has Feedback & Error Summary as Final Step before `[MECE]` done emit
 - [ ] **M1.5 reasoning pass**: `AGENTS.md` has `[M1.5] REASON` block between M1→M2 in Phase 2 · `mece/SKILL.md` Execution Protocol has `[S1-A.5]` between S1-A and S1-B
-  Verify: `grep -c "M1.5\|S1-A.5" AGENTS.md` → ≥ 2 · `grep -c "S1-A.5" .agents/skills/mece/SKILL.md` → ≥ 1
+  Verify: `grep -c "M1.5\|S1-A.5" AGENTS.md` → ≥ 2 · `grep -c "S1-A.5" .agents/skills/harness/mece/SKILL.md` → ≥ 1
 - [ ] **M1.5 named outputs**: `AGENTS.md [M1.5]` block has `dependency_map:` + `risk_flags:` named output fields written to mece_plan.md
   Verify: `grep -c "dependency_map\|risk_flags" AGENTS.md` → ≥ 2
 - [ ] **mece_plan_schema Section Template fields**: `docs/session_templates/mece_plan_schema.md` section template has `Tool:` + `Rollback:` + `Data_Sent:` + `Token:` fields per section
@@ -94,13 +94,13 @@ Expected: ≥ 10 matches
 - [ ] **Compact model (R3 thresholds)**: `CLAUDE.md R3` has SESSION 60-80k TOKEN PAUSE · 80-90k [compact-rec] · >90k HALT · CHAT 80-120k [compact-rec] · >120k HALT (the old 30k multi-section rule was removed — must NOT be present)
   Verify: `grep -c "60-80k\|80-90k\|compact-rec" CLAUDE.md` → ≥1 · `grep -c "30k" CLAUDE.md` → 0 · `grep -c "30k" AGENTS.md` → 0
 - [ ] **OmO Reviewer**: `AGENTS.md` has OmO Role Assignment table · `agent/SKILL.md` has Reviewer spawn block at Completion Gate
-  Verify: `grep -c "OmO\|Reviewer" AGENTS.md` → ≥ 4 · `grep -c "OmO Reviewer\|haiku sub-agent" .agents/skills/agent/SKILL.md` → ≥ 1
+  Verify: `grep -c "OmO\|Reviewer" AGENTS.md` → ≥ 4 · `grep -c "OmO Reviewer\|haiku sub-agent" .agents/skills/coding/agent/SKILL.md` → ≥ 1
 - [ ] **Reviewer prompt template**: `mece/SKILL.md` Phase 3 close block has 5-step template (not just "Verify-N list")
-  Verify: `grep -c "Prompt template\|exits 0\|PASS list\|FAIL list" .agents/skills/mece/SKILL.md` → ≥ 3
+  Verify: `grep -c "Prompt template\|exits 0\|PASS list\|FAIL list" .agents/skills/harness/mece/SKILL.md` → ≥ 3
 - [ ] **G0 Starter Interview**: `AGENTS.md` Phase 1 has G0 block before G1 · uses `AskUserQuestion` with options per question · reads REPO_MAP.md for affected-area options
   Verify: `grep -c "G0\|REPO_MAP\|options per question\|never open-ended" AGENTS.md` → ≥ 3
-- [ ] **CHAT_TOTAL counter**: both SESSION_TOTAL + CHAT_TOTAL in `.sessions/session_tokens.md` · B1 resets SESSION_TOTAL=0 · sets CHAT_TOTAL = sys_fixed = `(CLAUDE.md + AGENTS.md chars × 0.3) + 3500` (fallback 11070) on compact-restore OR phase≠in_progress · CHAT_TOTAL 80-120k → [compact-rec] strong · >120k → HALT
-  Verify: `grep -c "sys_fixed\|3500" AGENTS.md` → ≥1 · `grep -c "80-120k\|>120k" CLAUDE.md` → ≥1
+- [ ] **CHAT_TOTAL counter**: both SESSION_TOTAL + CHAT_TOTAL in `.sessions/session_tokens.md` · B1 resets SESSION_TOTAL=0 · sets CHAT_TOTAL = sys_fixed = `(CLAUDE.md + AGENTS.md chars × 0.3) + 11000` (fallback 19500) on compact-restore OR phase≠in_progress · CHAT_TOTAL 80-120k → [compact-rec] strong · >120k → HALT
+  Verify: `grep -c "sys_fixed\|11000" AGENTS.md` → ≥1 · `grep -c "80-120k\|>120k" CLAUDE.md` → ≥1
 - [ ] **LOOP_WEIGHT + TURN_COUNT fields**: `.sessions/session_tokens.md` has all 6 fields (SESSION_TOTAL · CHAT_TOTAL · CACHE_READ · CACHE_WRITE · TURN_COUNT · LOOP_WEIGHT)
   Verify: `grep -c "LOOP_WEIGHT\|TURN_COUNT" .sessions/session_tokens.md` → 2
 - [ ] **PostToolUse hook present**: `.claude/settings.json` has `PostToolUse` event incrementing LOOP_WEIGHT by weight (Agent/Workflow/WebFetch/WebSearch=3 · Write/mcp__*=2 · others=1)
@@ -126,10 +126,10 @@ Expected: ≥ 10 matches
 - [ ] **Delegation Contract ≤800 tokens**: `constraints:` = rule numbers only · `cycle_context:` = ≤5 bullets ≤150 chars
 - [ ] **MECE plan size caps**: ≤5 steps/section · ≤2 verify commands/section (≤60 chars each) · total ≤120 lines
 - [ ] **mece_plan Phase 0-3 Template enforcement**: `docs/session_templates/mece_plan_schema.md` has full Phase 0-3 blocks + Phase 3 Close Checklist + PATH A/B/C · AGENTS.md M5 references template + "no simplified format (CFP-019)" · mece/SKILL.md S1-E validates all 4 Phase blocks on write · no simplified format accepted
-  Verify: `grep -c "Phase-Checklist Template\|no simplified" AGENTS.md` → ≥ 1 · `grep -c "## Phase 0\|## Phase 1\|## Phase 2\|## Phase 3" .agents/skills/mece/SKILL.md` → ≥ 4 · `grep -c "PATH A\|PATH B\|PATH C" docs/session_templates/mece_plan_schema.md` → 3
+  Verify: `grep -c "Phase-Checklist Template\|no simplified" AGENTS.md` → ≥ 1 · `grep -c "## Phase 0\|## Phase 1\|## Phase 2\|## Phase 3" .agents/skills/harness/mece/SKILL.md` → ≥ 4 · `grep -c "PATH A\|PATH B\|PATH C" docs/session_templates/mece_plan_schema.md` → 3
 - [ ] **self_improve CFP archive gate**: triggers when CFP count > 20 → archives oldest entries → keeps 15 active
 - [ ] **Thai user-facing close rule**: `harness_editor/SKILL.md §Output Contract` has Thai summary block after `[harness-edit-done]` · `AGENTS.md §Completion Gate` has Thai summary rule · never English-only close to user
-  Verify: `grep -c "งานเสร็จแล้วครับ\|user-facing close\|Thai.*mandatory" .agents/skills/harness_editor/SKILL.md` → ≥ 1 · `grep -c "User-facing close\|Thai.*mandatory" AGENTS.md` → ≥ 1
+  Verify: `grep -c "งานเสร็จแล้วครับ\|user-facing close\|Thai.*mandatory" .agents/skills/harness/harness_editor/SKILL.md` → ≥ 1 · `grep -c "User-facing close\|Thai.*mandatory" AGENTS.md` → ≥ 1
 - [ ] **harness_editor Step 5 gate in mece_plan_schema**: `docs/session_templates/mece_plan_schema.md §Phase 3 Close Checklist` has conditional "if skill=harness_editor → Step 5 gate" block before session_handoff
   Verify: `grep -c "skill=harness_editor\|Step 5 gate" docs/session_templates/mece_plan_schema.md` → ≥ 1
 - [ ] **Behavioral Contract completeness**: every `SKILL.md` has all 5 elements — Trigger · Refusal · Workflow · Output Contract · Routing
@@ -146,7 +146,7 @@ Expected: ≥ 10 matches
 - [ ] **`[✓ gather]` writes `gather_complete.md`**: G3 emit step includes writing `.sessions/gather_complete.md` with `date: YYYY-MM-DD`
 - [ ] **Sub-agent `constraints:` block**: execution/coder agents MUST include `constraints:` block in prompt (roadmap check, gather/mece files, index sync, db-gate)
 - [ ] **R5 T0 Oracle**: `python scripts/lookup.py "<symbol>" --json` runs BEFORE any grep or Read (Tier 0 in lookup hierarchy)
-- [ ] **T0 emit format**: `[pre-read]` trace includes `Tier: T0` when lookup.py is called
+- [ ] **lookup-first discipline**: `[pre-read]` trace emitted after lookup.py is called (oracle run before Read)
 - [ ] **R8 session_indexer**: `python scripts/session_indexer.py` listed in R8 Index Sync table for session close event
 
 ### 1.1a `settings.json` hooks (enforcement layer)
@@ -211,18 +211,17 @@ Fix if missing: `Implement/03_config.md` → INVARIANTS.md template.
 
 All skill files must have: frontmatter (`name` + `description`) · `Sections[]` YAML · main content · Context Gate.
 
-Run this to check all 14 exist:
+Run this to check all 13 exist:
 ```bash
-ls .agents/skills/agent/SKILL.md .agents/skills/ascii_flow/SKILL.md \
-   .agents/skills/coder/SKILL.md .agents/skills/editor/SKILL.md \
-   .agents/skills/file_manager/SKILL.md .agents/skills/harness_doctor/SKILL.md \
-   .agents/skills/harness_editor/SKILL.md \
-   .agents/skills/identity/SKILL.md .agents/skills/mece/SKILL.md \
-   .agents/skills/self_improve/SKILL.md .agents/skills/session_manager/SKILL.md \
-   .agents/skills/token_auditor/SKILL.md .agents/skills/token_tracker/SKILL.md \
-   .agents/skills/variable_manager/SKILL.md 2>&1
+ls .agents/skills/coding/agent/SKILL.md .agents/skills/content/ascii_flow/SKILL.md \
+   .agents/skills/coding/coder/SKILL.md .agents/skills/coding/editor/SKILL.md \
+   .agents/skills/knowledge/index_manager/SKILL.md .agents/skills/harness/harness_doctor/SKILL.md \
+   .agents/skills/harness/harness_editor/SKILL.md \
+   .agents/skills/user/identity/SKILL.md .agents/skills/harness/mece/SKILL.md \
+   .agents/skills/harness/self_improve/SKILL.md .agents/skills/knowledge/session_manager/SKILL.md \
+   .agents/skills/harness/token_auditor/SKILL.md .agents/skills/harness/token_tracker/SKILL.md 2>&1
 ```
-Expected: 14 paths printed, zero "No such file" errors.
+Expected: 13 paths printed, zero "No such file" errors.
 
 Run this to check all 13 have a Context Gate:
 ```bash
@@ -237,18 +236,17 @@ Expected: 13
 | `agent` | `Orchestration Protocol\|Delegation Contract\|on_demand_files\|PURGE\|tokens_estimated` | 5 |
 | `coder` | `Roadmap Protocol\|Coding Standards\|Sections\|Responsibilities` | 4 |
 | `editor` | `Roadmap Protocol\|3-Tier\|Edit\|Sections\|Responsibilities` | 5 |
-| `file_manager` | `Backlink\|Triggers\|Pre-Analysis\|Sections` | 4 |
+| `index_manager` | `Mode Router\|Backlink\|symbol_indexer\|Sections` | 4 |
 | `identity` | `Fatal Constraint\|session_compactor\|git.*commit\|push` | 3 |
 | `mece` | `Plan Format\|Skill:.*MANDATORY\|Verify Pattern\|Feedback.*Error Summary` | 4 |
 | `self_improve` | `cfp_boot_count\|cfp-tally\|cfp-skip\|proposal-mismatch\|blocked-self-edit` | 5 |
 | `session_manager` | `BLOCKED\|Resume Flow\|mece_plan_hash\|cfp_deferred\|self_improve` | 5 |
-| `token_auditor` | `Self-Heal\|inject\|offending\|Audit` | 3 |
+| `token_auditor` | `token-drift\|audit-clean\|audit-done\|Flag Only` | 8 |
 | `token_tracker` | `SESSION_TOTAL\|TOKEN PAUSE\|tiered\|150 lines\|300 lines` | 4 |
-| `variable_manager` | `Triggers\|Pre-Analysis\|symbol_indexer\|Sections` | 4 |
 
 Verify a specific skill (swap in any skill name):
 ```bash
-grep -c "Orchestration Protocol\|Delegation Contract\|cycle_context\|detected.md" .agents/skills/agent/SKILL.md
+grep -c "Orchestration Protocol\|Delegation Contract\|cycle_context\|detected.md" .agents/skills/coding/agent/SKILL.md
 ```
 
 Fix if any skill is missing or incomplete: `Implement/04_skills.md` → find that skill's section → copy full content to `.agents/skills/<skill>/SKILL.md`.
@@ -260,9 +258,9 @@ Fix if any skill is missing or incomplete: `Implement/04_skills.md` → find tha
 ### 3.1 `.agents/skills/registry.md`
 
 ```bash
-grep -c "agent\|coder\|editor\|file_manager\|identity\|mece\|session_manager\|token_auditor\|token_tracker\|variable_manager" .agents/skills/registry.md
+grep -c "agent\|coder\|editor\|identity\|index_manager\|mece\|session_manager\|token_auditor\|token_tracker" .agents/skills/registry.md
 ```
-Expected: ≥ 10 (at least one match per skill)
+Expected: ≥ 9 (at least one match per skill)
 
 ### 3.2 `.agents/skills/skill-manifest.json`
 
@@ -586,7 +584,7 @@ echo "=== 1. Config Files ===" && \
 echo "=== 2. Skill Files ===" && \
   ls .agents/skills/*/SKILL.md | wc -l && \
   grep -l "Context Gate" .agents/skills/*/SKILL.md | wc -l && \
-  ls .agents/skills/self_improve/SKILL.md && \
+  ls .agents/skills/harness/self_improve/SKILL.md && \
 echo "=== 3. Routing ===" && \
   grep -c '"keywords"' .agents/skills/skill-manifest.json && \
   grep -c '"version": "2.1"\|on_demand_files' .agents/skills/skill-manifest.json && \
@@ -615,7 +613,7 @@ echo "=== ALL CHECKS DONE ==="
 === 2. Skill Files ===
 14              ← SKILL.md files (includes ascii_flow + harness_doctor + harness_editor + self_improve)
 14              ← files with Context Gate
-.agents/skills/self_improve/SKILL.md  ← confirmed present
+.agents/skills/harness/self_improve/SKILL.md  ← confirmed present
 === 3. Routing ===
 12              ← keywords entries in skill-manifest.json
 ≥7              ← manifest v2.1 present + on_demand_files entries

@@ -31,12 +31,12 @@ REGISTRY_PATH = "knowledge/topic_registry.json"
 
 def load_files():
     try:
-        idx = json.load(open(INDEX_PATH, encoding="utf-8"))
+        idx = json.load(open(INDEX_PATH))
     except FileNotFoundError:
         print(f"ERROR: {INDEX_PATH} not found", file=sys.stderr)
         sys.exit(1)
     try:
-        registry = json.load(open(REGISTRY_PATH, encoding="utf-8"))
+        registry = json.load(open(REGISTRY_PATH))
         valid_topics = set(registry["topics"])
     except FileNotFoundError:
         print(f"WARN: {REGISTRY_PATH} not found — skipping topic validation", file=sys.stderr)
@@ -226,7 +226,7 @@ def main():
             ]
 
     json.dump(idx, open(INDEX_PATH, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-    print(f"\n[backlink_analyzer] Written -> {INDEX_PATH}")
+    print(f"\n[backlink_analyzer] Written → {INDEX_PATH}")
 
 
 if __name__ == "__main__":

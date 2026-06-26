@@ -9,14 +9,14 @@ Copy this into `CLAUDE.md` at project root. Adjust token thresholds to match you
 
 ## Boot (3 tool calls max)
 ```
-[B1] Bash: (cs_dt=$(grep "^dt=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 | cut -d' ' -f1); today=$(date +%Y-%m-%d); compact_restore=false; [ "$cs_dt" = "$today" ] && compact_restore=true && echo "[compact-restore]" && cat .sessions/compact_state.md && echo "---"; phase=$(grep "^phase:" .sessions/active_thread.md 2>/dev/null | awk '{print $2}'); sys_fixed=$(python3 -c "import os; print(int((os.path.getsize('CLAUDE.md') + os.path.getsize('AGENTS.md'))*0.3) + 3500)" 2>/dev/null || echo 11070); if [ "$compact_restore" = "true" ]; then cs=$(grep "^compact_size=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 || echo "0"); ct=$((sys_fixed + ${cs:-0})); reset_marker=$(grep "^session_reset=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2); if [ "$reset_marker" = "armed" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; sed -i '' 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null || sed -i 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null; echo "[reset-consumed] SESSION=0 · marker armed→consumed"; else st=$(grep "^SESSION_TOTAL:" .sessions/session_tokens.md 2>/dev/null | awk '{print $2}'); st=${st:-0}; printf "SESSION_TOTAL: $st\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; echo "[reset-skip] marker=${reset_marker:-absent} · SESSION preserved=$st"; fi; elif [ "$phase" != "in_progress" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $sys_fixed\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; fi; [ -f .sessions/session_tokens.md ] && python3 -c "p='.sessions/session_tokens.md';L=[('LOOP_WEIGHT: 0' if x.startswith('LOOP_WEIGHT:') else x) for x in open(p).read().splitlines()];open(p,'w').write(chr(10).join(L)+chr(10))" 2>/dev/null; cat .sessions/active_thread.md 2>/dev/null | tail -4; echo "---"; cat .sessions/session_tokens.md 2>/dev/null; echo "---"; grep -n "\[/\]" docs/master_roadmap.md 2>/dev/null | head -3; echo "---"; echo "CFP_COUNT: $(grep -c '^## CFP-' CODING_FAILURE_PATTERNS.md 2>/dev/null || echo 0)")
+[B1] Bash: (cs_dt=$(grep "^dt=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 | cut -d' ' -f1); today=$(date +%Y-%m-%d); compact_restore=false; [ "$cs_dt" = "$today" ] && compact_restore=true && echo "[compact-restore]" && cat .sessions/compact_state.md && echo "---"; phase=$(grep "^phase:" .sessions/active_thread.md 2>/dev/null | awk '{print $2}'); sys_fixed=$(python3 -c "import os; b=int(open('scripts/sys_fixed_base.txt').read().strip()); print(int((os.path.getsize('CLAUDE.md') + os.path.getsize('AGENTS.md'))*0.3) + b)" 2>/dev/null || echo 19500); if [ "$compact_restore" = "true" ]; then cs=$(grep "^compact_size=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 || echo "0"); ct=$((sys_fixed + ${cs:-0})); reset_marker=$(grep "^session_reset=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2); if [ "$reset_marker" = "armed" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; sed -i '' 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null || sed -i 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null; echo "[reset-consumed] SESSION=0 · marker armed→consumed"; else st=$(grep "^SESSION_TOTAL:" .sessions/session_tokens.md 2>/dev/null | awk '{print $2}'); st=${st:-0}; printf "SESSION_TOTAL: $st\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; echo "[reset-skip] marker=${reset_marker:-absent} · SESSION preserved=$st"; fi; elif [ "$phase" != "in_progress" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $sys_fixed\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; fi; [ -f .sessions/session_tokens.md ] && python3 -c "p='.sessions/session_tokens.md';L=[('LOOP_WEIGHT: 0' if x.startswith('LOOP_WEIGHT:') else x) for x in open(p).read().splitlines()];open(p,'w').write(chr(10).join(L)+chr(10))" 2>/dev/null; cat .sessions/active_thread.md 2>/dev/null | tail -4; echo "---"; cat .sessions/session_tokens.md 2>/dev/null; echo "---"; grep -n "\[/\]" docs/master_roadmap.md 2>/dev/null | head -3; echo "---"; echo "CFP_COUNT: $(grep -c '^## CFP-' CODING_FAILURE_PATTERNS.md 2>/dev/null || echo 0)")
 [B2] IF [compact-restore] in B1 output → parse sk= from compact_state.md → use as skill_name · SKIP manifest read (~1,300 tokens saved)
      ELSE IF prompt contains `skill: <name>` → skip manifest read · ELSE: grep keywords[] from skill-manifest.json (not full read) → identify skill_name
 [B3] IF [compact-restore]: sha1 check sk_h= + mece_h= → hash match → SKIP SKILL.md + mece/SKILL.md reads (~2.9k tokens saved total)
      ELSE: Read .agents/skills/<skill_name>/SKILL.md offset=1 limit=80 → sections[] only · on_demand_files = lookup table for G2 (NOT loaded at boot)
-           Also: Read .agents/skills/mece/SKILL.md offset=31 limit=110 → §Plan Format + §Execution Protocol into working memory
+           Also: Read .agents/skills/harness/mece/SKILL.md offset=31 limit=110 → §Plan Format + §Execution Protocol into working memory
 ```
-→ B1 resets SESSION_TOTAL=0 · compact-restore: CHAT_TOTAL = compact_size + sys_fixed · fresh (phase≠in_progress): CHAT_TOTAL = sys_fixed (dynamic ≈ 11–13k) · sys_fixed = (CLAUDE.md+AGENTS.md chars × 0.3)+3500
+→ B1 resets SESSION_TOTAL=0 · compact-restore: CHAT_TOTAL = compact_size + sys_fixed · fresh (phase≠in_progress): CHAT_TOTAL = sys_fixed (dynamic ≈ 19–20k) · sys_fixed = (CLAUDE.md+AGENTS.md chars × 0.3)+11000
 → Load SESSION_TOTAL + CHAT_TOTAL from B1 into working memory (both sourced from session_tokens.md)
 → Load CFP_COUNT from B1 output → store as `cfp_boot_count` in working memory (used by self_improve)
 → If SESSION_TOTAL > 60k → warn user immediately before proceeding
@@ -49,7 +49,7 @@ If `[Boot]` trace has NOT been emitted yet:
 ## R1 · Token Tracking
 Two counters — both in working memory, sourced from files at Boot:
 - `SESSION_TOTAL` — resets at session close (per-task cost) · file: `.sessions/session_tokens.md`
-- `CHAT_TOTAL` — resets only on /compact · B1 sets to sys_fixed (dynamic: (CLAUDE.md+AGENTS.md chars × 0.3)+3500 ≈ 11–13k) · compact-restore: compact_size + sys_fixed
+- `CHAT_TOTAL` — resets only on /compact · B1 sets to sys_fixed (dynamic: (CLAUDE.md+AGENTS.md chars × 0.3)+11000 ≈ 19–20k · base single-sourced in scripts/sys_fixed_base.txt · T-250) · compact-restore: compact_size + sys_fixed
 - `CACHE_READ` / `CACHE_WRITE` — from API usage fields · `cache_hit% = CACHE_READ / (CACHE_READ + uncached_input) × 100` · target ≥ 60%
 
 **Provider formula selection (read `api_provider` / `token_formula` from detected.md — see §Provider Profiles):**
@@ -63,19 +63,23 @@ Two counters — both in working memory, sourced from files at Boot:
 Formulas: (baseline — `anthropic` and `generic` fallback)
 - Output = (thai_chars × 1.7) + (en_chars × 0.3)
 - Input = (user_msg_chars × 0.3) + tool_result_tokens
-- Per-turn CHAT_TOTAL growth: CHAT_TOTAL += 700 + turn_tokens × 1.5  (calibrated T-046: actual ≈ 1.5–2×)
+- Per-turn CHAT_TOTAL growth: CHAT_TOTAL += turn_tokens (SAME delta as SESSION — the ×1.5/+700 was dropped in code T-178; real API context ≈1.5–2× this lower bound, kept as a display note only · T-261 doc-follows-code)
 - 4-bucket: sys=sys_fixed/turns · tools=tool_result_tokens · hist=SESSION_TOTAL×0.4 · output=output_tokens
 - ⚠️ Cache invalidation: tool schema edit → prefix reset → CHAT_TOTAL spike ≈ +sys_fixed · detected via [spike:cache-collapse]
 - bucket_sys note: if schema edited this session → actual cost ≈ sys_fixed added back once (not amortized)
 
-Each turn (in order):
-1. Compute turn_tokens → SESSION_TOTAL += turn_tokens · CHAT_TOTAL += 700 + turn_tokens × 1.5
-2. Write SESSION_TOTAL + CHAT_TOTAL to session_tokens.md EVERY turn, before the footer (persist-every-turn — closes CFP-031). Reset SESSION_TOTAL to 0 ONLY on: (1) user-confirmed /compact at an explicit mece compact-checkpoint (PATH B writes `session_reset=armed`), OR (2) task done + session close (PATH A/C). NEVER reset on stale/leftover compact_state.md or mid-task fresh boot. CHAT_TOTAL resets on /compact only.
-   · T-180 single-source: `scripts/compact_reset.py` is the ONE place that recomputes counters after a compact (CHAT=compact_size+sys_fixed, LOOP=0, SESSION=0 if armed|phase:done else preserve, flips armed→consumed, prints `[compact-reset]`). Called by the SessionStart:compact hook (claude-code, automatic) and the C0 plain-text-confirm path (other providers). It mirrors the B1 formula exactly so B1 / hook / confirm never drift. Stuck-counter guard (C0.5): [compact-STOP] with ~same CHAT (±2k) across ≥2 turns = didn't-reset bug, not a real ceiling → run compact_reset.py instead of nagging.
+Accumulation is HOOK-OWNED (T-231): the PostToolUse hook (`scripts/posttool_track.py`) computes turn_tokens and accumulates SESSION_TOTAL += turn_tokens · CHAT_TOTAL += turn_tokens (SAME delta · no ×1.5/+700 · dropped in code T-178), writing both to session_tokens.md every tool call (persist-every-turn — closes CFP-031). turn_tokens = chars × provider tool_mult; mutations (Edit/Write/NotebookEdit) count tool_input only (echo dropped · T-261); single-delta backstop = 0.1 × WIN (12,800). The agent runs NO token arithmetic and does NOT hand-write these counters — a second agent-side write would double-count.
+
+Agent per-turn residual (in order): read `[token-state]` (absent → grep session_tokens.md) → JSONL (step 3 below) → R3 check → spike check → cache-warn → footer (step 4 below). Steps 3-4 keep their numbers below; steps 1-2 are now the hook's job, not the agent's.
+
+Reset policy (reference — applied by `scripts/compact_reset.py` / B1, NOT by agent per-turn math). Reset SESSION_TOTAL to 0 ONLY on: (1) user-confirmed /compact at an explicit mece compact-checkpoint (PATH B writes `session_reset=armed`), OR (2) task done + session close (PATH A/C). NEVER reset on stale/leftover compact_state.md or mid-task fresh boot. CHAT_TOTAL resets on /compact only.
+   · T-180 single-source: `scripts/compact_reset.py` is the ONE place that recomputes counters after a compact (CHAT=compact_size+sys_fixed, LOOP=0, SESSION=0 if armed|phase:done else preserve, flips armed→consumed, prints `[compact-reset]`). Called by the SessionStart:compact hook (claude-code, automatic) and the C0 plain-text-confirm path (other providers). It mirrors the B1 formula exactly so B1 / hook / confirm never drift. Stuck-counter guard (C0 Q3): [compact-STOP] with ~same CHAT (±2k) across ≥2 turns = didn't-reset bug, not a real ceiling → run compact_reset.py instead of nagging.
 3. Write JSONL entry → `.sessions/token_log.jsonl`: turn_id · timestamp · task_id · phase · session_total · chat_total · cache_read_tokens · cache_write_tokens · cache_hit_pct · bucket_sys/tools/hist/output · turn_tokens · hooks_overhead=700
    · bucket fields required — write 0 if value unknown (never omit fields from schema)
 4. Footer: `*(Turn: N · Loop_W: N | Session: ~NNNk | Chat: ~NNNk tokens)*` · if SESSION_TOTAL >5k add `[sys:Nk tools:Nk hist:Nk out:Nk]`
+   · ⚠️ LOWER BOUND (T-247): the displayed Chat/Session figure counts tool I/O only — it MISSES the system prompt, re-sent conversation history, and the model's own output. The real context window is ≈1.5–2× this number and is authoritative ONLY in the client's own context meter — trust that meter (not the footer) for any hard ceiling / compact decision. The footer is a relative trend signal, not the true total. Per-file pre-read sizing: `python3 scripts/tok.py <file>`.
    · Turn 1 with [compact-restore]: hook fires pre-B1 → use B1-written session_tokens.md values, not hook pre-B1 values
+   · ⚠️ Mid-turn live read (CFP-041): `[token-state]` is a **start-of-turn / prior-turn-end snapshot** — it does NOT include the current turn's tool I/O, so it lags reality by up to 1 turn. The PostToolUse hook writes the running total to `session_tokens.md` DURING the turn, so at any mid-turn DECISION point (compact_checkpoint · an R3/C0.5 threshold · before continuing past a checkpoint on a heavy-tool turn ≥5 calls / clone / bulk-copy) grep LIVE `.sessions/session_tokens.md` instead of reusing the snapshot — **reliable on any turn after T-235** (the hook early-exits on subagent tool calls via `agent_id`, so subagents no longer overwrite that file · CFP-041 root-fixed; only the snapshot's ≤1-turn lag remains). The footer value stays the start-of-turn total and is labelled as such (CLAUDE.md §R1 + AGENTS.md §C0 Q3 / §Compact-check). Detection: single-turn CHAT jump >40k between consecutive [token-state] reports.
 
 **Spike Detection — 6 alert types:**
 | Alert | Condition | Emit |
@@ -90,13 +94,9 @@ Each turn (in order):
 **Cache Guardrail:** cache_hit_pct < 60% AND cache_read > 0 → emit `[cache-warn] hit%: NN% (target ≥60%)`
 - ⚠️ Do not define token formulas in other skill files — use R1 values exclusively
 
-### Tool Result Tokens (tiered — applied per result before adding to SESSION_TOTAL)
+### Tool Result Tokens (flat — matches the hook code · doc-follows-code T-261)
 
-| Result size | Formula | Minimum |
-|---|---|---|
-| ≤ 150 lines | `result_chars × 0.3` | 200 tokens |
-| 151–300 lines | `result_chars × 0.5` | 200 tokens |
-| > 300 lines | `result_chars × 0.5 + 1,000 flat buffer` | 200 tokens |
+Per tool call: `chars × tool_mult` — ONE flat provider multiplier (anthropic 0.3 / openai·google 0.27 / generic 0.35). No line-count tiers: the old tiered table (×0.3/×0.5/+1,000) was never implemented in `posttool_track.py` — removed to kill the doc↔code drift (T-261). Mutations (Edit/Write/NotebookEdit) count `tool_input` only — the echoed response scales with file SIZE, not real context, so it is dropped (this was the +77k false-ceiling spike · T-261). A generous backstop caps any single delta at 0.1 × WIN (12,800) as a sanity guard. CHAT delta = SESSION delta (no ×1.5 / +700).
 
 Never use UTF-8 bytes ÷ 3 — undercounts Thai by up to 1.7×.
 
@@ -109,15 +109,15 @@ Max 5 tool calls/turn. Retry max 2×; diagnose on 2nd fail.
 
 ## Per-Turn Routing (every user message — before any work)
 
-Run C0 → **C0.5** → C1 → C2 → C3 before any work. Topic switch = close current session FIRST.
+Run C0 → C1 → C2 → C3 before any work. Topic switch = close current session FIRST.
 
-**C0.5 — LOOP_WEIGHT Gate (Behavior Contract — runs every turn before C1):**
+**C0 Q3 (aka C0.5) — LOOP_WEIGHT Gate (Behavior Contract — runs every turn before C1):**
 ```
-Pre:      read [token-state] hook → N=LOOP_W · S=SESSION_TOTAL · C=CHAT_TOTAL. PRIMARY signal = CHAT_TOTAL (real context size); LOOP_WEIGHT = SECONDARY tool-call-count hint, NOT token cost → neither hard-stops.
-Contract: HARD STOP (genuine ceiling): S >90k OR C >120k → MUST emit [compact-STOP] as FIRST line → write compact_state.md → STOP (no new work). This is the ONLY hard stop.
-          Strong rec (PRIMARY): C >80k (below ceiling) → MUST emit [compact-rec] strong as FIRST line — a recommendation WITH a choice, NOT a STOP. User decides; continue if they say so.
-          Light hint (SECONDARY): N >50 (below ceiling) → emit [compact-rec] light (1 line, optional, no block) — flags high call-count, not context size.
-          Precedence: ceiling > strong (CHAT_TOTAL >80k) > light (LOOP_WEIGHT >50). Ceiling met → emit [compact-STOP] only (skip rec tiers).
+Pre:      read [token-state] hook → B=signal-box N/4 · N=LOOP_W · S=SESSION_TOTAL · C=CHAT_TOTAL. PRIMARY signal = signal-box (4 drift-proof booleans · T-221); CHAT_TOTAL/SESSION/LOOP_WEIGHT = SECONDARY char-estimates (lower bound — tool I/O only; subagent pollution removed by T-235 · CFP-041 root-fixed) → never the primary trigger.
+Contract: HARD STOP (genuine ceiling · backstop): window-anchored — eff = CHAT × 1.75 (CF=175) compared to WIN=128k — AND signal-box ≥2, BOTH required → MUST emit [compact-STOP] as FIRST line → write compact_state.md → STOP (no new work). The estimate ALONE never hard-stops (T-247 · T-261): a lone over-threshold estimate with signal-box <2 is at most a [compact-rec]. Source of truth = the UserPromptSubmit hook in `.claude/settings.json` (these numbers describe it · doc-follows-code).
+          Strong rec (PRIMARY): signal-box ≥2/4 → MUST emit [compact-rec] strong as FIRST line — a recommendation WITH a choice, NOT a STOP. User decides; continue if they say so.
+          Light hint (SECONDARY): C >80k OR N >50 (below ceiling) → emit [compact-note] light (1 line, optional, no block) — flags estimate/call-count, not a primary trigger.
+          Precedence: ceiling (eff≥90%·WIN AND signal-box≥2) > strong (signal-box ≥2) > light (eff≥70%·WIN / CHAT >80k / LOOP_WEIGHT >50). Ceiling met → emit [compact-STOP] only (skip rec tiers).
 Post:     [compact-rec] strong MUST contain all 5 fields or response is invalid:
             Recommend /compact: <now | after this step | not yet>
             Why: <session ~Nk · what's heavy · pending task self-contained? y/n>
@@ -173,12 +173,13 @@ Routing shortcuts:
 | SESSION_TOTAL | >40k + turns ≥8 | rolling summary: summarize prior 4 turns → `.sessions/session_memory.md` · keep last 2 raw |
 | SESSION_TOTAL | >60k | finish current step → TOKEN PAUSE |
 | SESSION_TOTAL | 80-90k | 🟡 [compact-rec] strong — recommend /compact (NOT forced · user choice) |
-| SESSION_TOTAL | >90k | HALT → save state → report |
-| CHAT_TOTAL | >80k | 🟡 [compact-rec] strong — PRIMARY trigger: recommend /compact + user choice (NOT a STOP) |
-| CHAT_TOTAL | >120k | 🛑 HALT (hard ceiling) — save state → report |
-⚠️ CHAT_TOTAL undercount: true API context ≈ CHAT_TOTAL × 1.5–2× (triangular re-send) · use as lower bound · compact before CHAT_TOTAL > 80k to avoid spike
-| LOOP_WEIGHT | >50 | 🟡 [compact-rec] light hint only — SECONDARY: high call-count, not context size (no STOP) |
-> Hard STOP = SESSION_TOTAL >90k OR CHAT_TOTAL >120k only. PRIMARY rec signal = CHAT_TOTAL >80k (real context size); LOOP_WEIGHT >50 is a secondary call-count hint, never hard-stops (Phase C+D).
+| SESSION_TOTAL | >90k *(est)* | + signal-box ≥2 → HALT · estimate alone → [compact-rec] only (T-261) |
+| signal-box | ≥2/4 | 🟡 [compact-rec] strong — PRIMARY trigger (T-221): 4 drift-proof booleans · recommend /compact + user choice (NOT a STOP) |
+| CHAT_TOTAL | >80k | 🟡 [compact-note] light — SECONDARY estimate only (lower bound; subagent pollution removed by T-235 · CFP-041 root-fixed), not the primary trigger |
+| CHAT_TOTAL | eff≥90%·WIN(128k) | 🛑 + signal-box ≥2 → HALT (window-anchored backstop · T-261) · estimate alone → rec only |
+⚠️ CHAT_TOTAL undercount: true API context ≈ CHAT_TOTAL × 1.5–2× (triangular re-send) · use as lower bound · estimate only — trust signal-box for the compact decision
+| LOOP_WEIGHT | >50 | 🟡 [compact-note] light hint only — SECONDARY: high call-count, not context size (no STOP) |
+> Hard STOP = window-anchored eff (CHAT × 1.75) ≥ 90% of WIN=128k AND signal-box ≥2 — BOTH required (T-261); the estimate alone never hard-stops. PRIMARY rec signal = signal-box ≥2/4 (4 drift-proof booleans · T-221); eff ≥70%·WIN / CHAT_TOTAL >80k / LOOP_WEIGHT >50 are secondary estimate/call-count hints, never hard-stop (Phase C+D).
 
 ---
 
@@ -208,6 +209,7 @@ The active provider is set in detected.md `api_provider:` — runtime resolves t
 
 **Routing rule (R4) — model × EFFORT · baseline = Sonnet (MEDIUM) @ low-med effort · provider resolved via detected.md `api_provider` · robustness floor: every skill must run on a MEDIUM-tier model WITHOUT inference:**
 - `MODEL_LOW` @ low → lookup / grep / single-file read / Reviewer / Completion Gate
+- `MODEL_LOW` @ low (delegated) → **delegated mechanical MECE section** — a `[ ] S<N>` from a *confirmed* MECE plan that is self-contained (absolute paths + its own Verify-N) and mechanical (edit-as-instructed / format / bulk / report). Spawn it as a sub-agent via the `delegate` skill (resolve `model_low` from detected.md); self-verify the output (run the section's Verify-N), auto-retry once, then escalate to MODEL_MEDIUM + emit `[delegate-escalated]`. NEVER delegate planning / debug-judgment / security / R14-R15-gated paths.
 - `MODEL_MEDIUM` (Sonnet) @ low → mechanical edit / edit-as-instructed / classify / structured output
 - `MODEL_MEDIUM` (Sonnet) @ medium → multi-step execution / code edits / Phase 3 sections ≥2 (workhorse — must produce complete detailed output without inference)
 - `MODEL_HIGH` (Opus) @ high → MECE planning / architecture / structural reasoning ONLY (reserved — NOT for routine code edits)
@@ -298,7 +300,7 @@ Main agent must read directly — apply strict protocol:
 
 **Pre-Read Gate — emit BEFORE every Read call:**
 ```
-**[pre-read]** Target: `<symbol>` · Tier: T<1|2|3> · Line: <N> · Will read: offset=<N> limit=60
+**[pre-read]** Target: `<symbol>` · Line: <N> · Will read: offset=<N> limit=60
 ```
 Cannot fill Line? → grep not done yet → run grep first.
 
@@ -348,11 +350,24 @@ Default: table/bullet over prose. Comparison → table. Steps → numbered list.
 ---
 
 ## R8 · Index Sync (MANDATORY after every file change)
-| Event | Action |
-|---|---|
-| Create/delete/move file | Update knowledge/index_files.json + backlinks |
-| Edit file (add/remove imports) | Update backlinks in knowledge/index_files.json |
-| Create/delete/rename symbol | Update knowledge/index_variables.json + run python scripts/symbol_indexer.py |
+
+Every create/modify/delete/rename **must** update indexes before task marked done → emit `[r8-sync-check]`. This is the FULL trigger-event → must-update → regen-command map (AGENTS.md §Index Sync Invariant keeps the 1-line trigger + a pointer here · T-212/D1).
+
+| Trigger event (when) | Must update | Regen command (how) | idempotent? |
+|---|---|---|---|
+| File created/moved/deleted | `index_files.json` (index_manager mode:file) | `python3 scripts/backlink_analyzer.py` | yes (auto-safe) |
+| Symbol with cross-file dependency: created/renamed/deleted | `index_variables.json` · skip if symbol used only within its own file | `python3 scripts/symbol_indexer.py` | yes (auto-safe) |
+| Code file (.py/.ts/.js under scripts/ or src/) created/edited/deleted | `imports[]`/`imported_by[]` (hard import edges) in `index_files.json` — distinct from semantic `references[]`/`related[]` (see `knowledge/code_linkage_index.md`) | `python3 scripts/code_graph.py --write` (Tier-A regex import graph · hash-locked) | yes (auto-safe · T-192) |
+| Session closed | `index_sessions.json` | `python3 scripts/session_indexer.py` | yes (auto-safe) |
+| Harness rule file edited (CLAUDE.md · AGENTS.md · Implement/* · */SKILL.md · INVARIANTS.md · CODING_FAILURE_PATTERNS.md) | `rules_defined[]`/`rules_referenced[]` in `index_files.json` | `python3 scripts/rule_indexer.py` | yes (auto-safe · T-182) |
+| SKILL.md created/renamed | `skill-manifest.json` | manual (index_manager mode:file registers entry) | no (judgment) |
+| Tool script created/renamed | `tool-manifest.json` | manual (register entry) | no (judgment) |
+| `knowledge/` file modified | conflict check | `python3 scripts/knowledge_conflict_checker.py --file <path> --no-trigger` · EXCLUDE: index_*.json · error_index.md | no (judgment) |
+| Top-level root file/dir OR nested folder added/moved/removed/renamed | `REPO_MAP.md` AUTO structure block (folders incl. nested + per-folder file counts) | `python3 scripts/repo_map_check.py --sync` (auto-run at Stop · regenerates AUTO block · carries content-renames via `git -M` · adds TODO placeholder rows for genuinely-new items) | structure block = yes (idempotent · auto-safe) · descriptions = judgment (never overwritten · T-185/T-190) |
+
+> **Safety net (T-183 · T-190):** the Stop-hook reconciler `scripts/index_reconcile.py` runs at session close — it diffs git-changed files vs `index_files.json`, emits `[index-drift]` for anything stale, and **auto-runs the idempotent regenerators** (rule_indexer · backlink_analyzer · code_graph · symbol_indexer) so a missed manual update is caught, not silently lost. (session_indexer is NOT auto-run by this reconciler — index_sessions.json is regenerated by the session-close path · T-193.) *idempotent = re-running produces the same result, so it is always safe to auto-run.* It also **auto-runs `repo_map_check.py --sync`** (T-190): the REPO_MAP.md AUTO structure block is regenerated and content-renames carried via `git -M`. Safe to auto-apply because `--sync` only ever touches the marker-delimited AUTO block + adds TODO placeholder rows — curated descriptions live OUTSIDE the markers and are NEVER overwritten. Remaining judgment-type updates (manifests, knowledge conflict check) are only flagged, never auto-applied.
+
+> **HARD block (T-252 · closes CFP-043):** the Stop-hook reconciler above stays fail-safe (never blocks close). SEPARATELY, the **PreToolUse close-gate** now runs `python3 scripts/index_reconcile.py --check` (read-only HARD-drift detect — new file missing from `index_files.json` · deleted file still indexed · **deleted-skill-dir name still referenced in live `*.md` prose**, the CFP-043 gap that JSON-key/topic-backlink checks are blind to) and **BLOCKS the `phase: done` write** on any hit, printing the exact heal command (`python3 scripts/index_reconcile.py`). Escape hatch: `HARNESS_SKIP_INDEX_BLOCK=1`. A crash inside `--check` → exit 0 (fail-safe preserved — never traps the user). Net effect: index/backlink/doc-ref drift can no longer slip through to a session marked done. e2e-proven: clean tree→exit 0, injected un-indexed file→exit 2 BLOCK, cleanup→exit 0.
 
 ---
 
@@ -361,6 +376,8 @@ Default: table/bullet over prose. Comparison → table. Steps → numbered list.
 1. grep knowledge/error_index.md for symptom keyword
 2. grep knowledge/index_variables.json for affected symbol
 3. grep knowledge/index_files.json for backlinks
+
+**Disproof-first (P3 — always-on short form):** once the 3-step check is done, do NOT chase the first guess. Rank ≥2 hypotheses by cheapest-to-disprove, kill the cheapest first, and log each ruled-out cause so the search never loops back on a dead path. For a hard or repeating bug that the short form cannot isolate, load the **`debug` skill** — it owns the full disproof ladder + breadcrumb ledger (P3 deep form · `.agents/skills/harness/debug/SKILL.md`). The short form here and the debug skill are two delivery points for ONE discipline (reflex vs deep), not duplicates.
 
 **Step 0 — Recurring Fix Detection (run FIRST):**
 Signals: "ยังไม่หาย" · "แก้แล้วยัง" · "still broken" · "same error" · "กลับมาอีก" · "fix ไม่ผ่าน" · "ยังเจออยู่" · "ยังเป็นอยู่"
@@ -484,6 +501,19 @@ File: `.claude/settings.json` → `hooks.PostToolUse`
 
 ---
 
+## PreToolUse Hook — Git Guard (matcher "Bash" · T-227)
+
+File: `scripts/git_guard.py`, wired as a SECOND `hooks.PreToolUse` entry with `"matcher": "Bash"`
+(separate from the phase-gate entry below). Makes R14/R15's destructive-git contracts a HARD stop.
+
+Blocks (exit 2 = real block) 4 dangerous git patterns before they run: force-push
+(`--force`/`-f`/`--force-with-lease`) · `reset --hard` · `clean -f` · `branch -D`.
+- shlex-tokenized, COMMAND-POSITION match (git at start / after `&&`,`;`,`|`) — never raw substring,
+  so `echo git push --force` and a commit message containing the text do NOT false-block.
+- fail-OPEN on any parse error (a guard must never lock the agent out of git).
+- override: prefix `GIT_GUARD_OK=1 <cmd>` — detected as a command TOKEN (the hook sees the command
+  string, not the shell env the prefix would set). Use only after explicit user confirm.
+
 ## PreToolUse Hook — Phase Gate (ALL Edit/Write)
 
 File: `.claude/settings.json` → `hooks.PreToolUse`
@@ -598,7 +628,7 @@ Set `[/]` when starting → `[X]` when done.
   5. **MANDATORY tool call (same response):** Edit CODING_FAILURE_PATTERNS.md → append CFP entry immediately · no deferral
      CFP format: `## CFP-<N+1> · <title>` · Symptom · Root cause · Prevention · Detection signal
      After Edit: grep -c "^## CFP-" → verify count = N+1 · emit `[✓ CFP-<N+1>]`
-  6. Set c0_resolved = true → re-run C0→C0.5→C1→C2→C3 with original user message
+  6. Set c0_resolved = true → re-run C0→C1→C2→C3 with original user message
      (C0 detects c0_resolved → clears it → skips complaint check → proceeds to C1)
 ```
 
@@ -653,12 +683,12 @@ You are operating inside the **[PROJECT NAME]** project. Rules apply to ALL agen
 ## Boot Sequence (3 tool calls max)
 
 ```
-[B1] Bash: (cs_dt=$(grep "^dt=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 | cut -d' ' -f1); today=$(date +%Y-%m-%d); compact_restore=false; [ "$cs_dt" = "$today" ] && compact_restore=true && echo "[compact-restore]" && cat .sessions/compact_state.md && echo "---"; phase=$(grep "^phase:" .sessions/active_thread.md 2>/dev/null | awk '{print $2}'); sys_fixed=$(python3 -c "import os; print(int((os.path.getsize('CLAUDE.md') + os.path.getsize('AGENTS.md'))*0.3) + 3500)" 2>/dev/null || echo 11070); if [ "$compact_restore" = "true" ]; then cs=$(grep "^compact_size=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 || echo "0"); ct=$((sys_fixed + ${cs:-0})); reset_marker=$(grep "^session_reset=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2); if [ "$reset_marker" = "armed" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; sed -i '' 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null || sed -i 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null; echo "[reset-consumed] SESSION=0 · marker armed→consumed"; else st=$(grep "^SESSION_TOTAL:" .sessions/session_tokens.md 2>/dev/null | awk '{print $2}'); st=${st:-0}; printf "SESSION_TOTAL: $st\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; echo "[reset-skip] marker=${reset_marker:-absent} · SESSION preserved=$st"; fi; elif [ "$phase" != "in_progress" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $sys_fixed\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; fi; [ -f .sessions/session_tokens.md ] && python3 -c "p='.sessions/session_tokens.md';L=[('LOOP_WEIGHT: 0' if x.startswith('LOOP_WEIGHT:') else x) for x in open(p).read().splitlines()];open(p,'w').write(chr(10).join(L)+chr(10))" 2>/dev/null; cat .sessions/active_thread.md 2>/dev/null | tail -4; echo "---"; cat .sessions/session_tokens.md 2>/dev/null; echo "---"; grep -n "\[/\]" docs/master_roadmap.md 2>/dev/null | head -3; echo "---"; echo "CFP_COUNT: $(grep -c '^## CFP-' CODING_FAILURE_PATTERNS.md 2>/dev/null || echo 0)")
+[B1] Bash: (cs_dt=$(grep "^dt=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 | cut -d' ' -f1); today=$(date +%Y-%m-%d); compact_restore=false; [ "$cs_dt" = "$today" ] && compact_restore=true && echo "[compact-restore]" && cat .sessions/compact_state.md && echo "---"; phase=$(grep "^phase:" .sessions/active_thread.md 2>/dev/null | awk '{print $2}'); sys_fixed=$(python3 -c "import os; b=int(open('scripts/sys_fixed_base.txt').read().strip()); print(int((os.path.getsize('CLAUDE.md') + os.path.getsize('AGENTS.md'))*0.3) + b)" 2>/dev/null || echo 19500); if [ "$compact_restore" = "true" ]; then cs=$(grep "^compact_size=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2 || echo "0"); ct=$((sys_fixed + ${cs:-0})); reset_marker=$(grep "^session_reset=" .sessions/compact_state.md 2>/dev/null | cut -d= -f2); if [ "$reset_marker" = "armed" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; sed -i '' 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null || sed -i 's/^session_reset=armed/session_reset=consumed/' .sessions/compact_state.md 2>/dev/null; echo "[reset-consumed] SESSION=0 · marker armed→consumed"; else st=$(grep "^SESSION_TOTAL:" .sessions/session_tokens.md 2>/dev/null | awk '{print $2}'); st=${st:-0}; printf "SESSION_TOTAL: $st\nCHAT_TOTAL: $ct\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; echo "[reset-skip] marker=${reset_marker:-absent} · SESSION preserved=$st"; fi; elif [ "$phase" != "in_progress" ]; then printf "SESSION_TOTAL: 0\nCHAT_TOTAL: $sys_fixed\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\n" > .sessions/session_tokens.md; fi; [ -f .sessions/session_tokens.md ] && python3 -c "p='.sessions/session_tokens.md';L=[('LOOP_WEIGHT: 0' if x.startswith('LOOP_WEIGHT:') else x) for x in open(p).read().splitlines()];open(p,'w').write(chr(10).join(L)+chr(10))" 2>/dev/null; cat .sessions/active_thread.md 2>/dev/null | tail -4; echo "---"; cat .sessions/session_tokens.md 2>/dev/null; echo "---"; grep -n "\[/\]" docs/master_roadmap.md 2>/dev/null | head -3; echo "---"; echo "CFP_COUNT: $(grep -c '^## CFP-' CODING_FAILURE_PATTERNS.md 2>/dev/null || echo 0)")
 [B2] IF [compact-restore] in B1 output → parse sk= from compact_state.md → use as skill_name · SKIP manifest read (~1,300 tokens saved)
      ELSE IF prompt contains `skill: <name>` → skip manifest read · ELSE: grep keywords[] from skill-manifest.json (not full read) → identify skill_name
 [B3] IF [compact-restore]: sha1 check sk_h= + mece_h= → hash match → SKIP SKILL.md + mece/SKILL.md reads (~2.9k tokens saved total)
      ELSE: Read .agents/skills/<skill_name>/SKILL.md offset=1 limit=80 → sections[] only · on_demand_files = lookup table for G2 (NOT loaded at boot)
-           Also: Read .agents/skills/mece/SKILL.md offset=31 limit=110 → §Plan Format + §Execution Protocol into working memory
+           Also: Read .agents/skills/harness/mece/SKILL.md offset=31 limit=110 → §Plan Format + §Execution Protocol into working memory
 ```
 
 [B4] Platform Probe (run only if `.agents/platform/detected.md` has `platform: unknown`):
@@ -678,7 +708,7 @@ Reply line 1: `**[Boot]** Thread: <done|in_progress> · Tasks: <N open> · Skill
 
 ---
 
-## Per-Turn Routing (every user message — run C0→C0.5→C1→C2→C3 before any work)
+## Per-Turn Routing (every user message — run C0→C1→C2→C3 before any work)
 
 **Hard rule:** Agent detects topic switch autonomously — user must NOT need to say "close session".
 
@@ -688,13 +718,13 @@ Reply line 1: `**[Boot]** Thread: <done|in_progress> · Tasks: <N open> · Skill
   "ลืมบอกให้เพิ่ม X" = feature request → NOT C0
 - c0_resolved flag set → clear → skip C0 → proceed to C1 (prevents infinite C0 loop)
 - YES → [self-improve] → backfill → CFP log → c0_resolved=true → re-run C0-C3
-- NO → C0.5
+- NO → C0 Q3
 
-**C0.5 — Compact / Token Pre-Check (every turn, before C1):**
-- Read the `[token-state]` hook values: LOOP_W · SESSION · CHAT. PRIMARY signal = CHAT_TOTAL (real context size); LOOP_WEIGHT = secondary tool-call-count hint only.
-- CHAT_TOTAL > 80k → emit `[compact-rec]` strong (recommend /compact · NOT a stop · user decides)
-- LOOP_WEIGHT > 50 → emit `[compact-rec]` light hint only (secondary · optional · no stop)
-- HARD STOP only at the real ceiling: SESSION_TOTAL > 90k OR CHAT_TOTAL > 120k → emit `[compact-STOP]` → write compact_state.md → STOP
+**C0 Q3 (aka C0.5) — Compact / Token Pre-Check (every turn, before C1):**
+- Read the `[token-state]` hook values: BOX=signal-box N/4 · LOOP_W · SESSION · CHAT. PRIMARY signal = signal-box (4 drift-proof booleans · T-221); CHAT_TOTAL/LOOP_WEIGHT = secondary char-estimate/call-count hints only.
+- signal-box ≥2/4 → emit `[compact-rec]` strong (recommend /compact · NOT a stop · user decides)
+- CHAT_TOTAL > 80k OR LOOP_WEIGHT > 50 → emit `[compact-note]` light hint only (secondary · optional · no stop)
+- HARD STOP only at the real ceiling: window-anchored eff (CHAT × 1.75) ≥ 90%·WIN(128k) AND signal-box ≥2 (BOTH required · T-261; estimate alone never stops) → emit `[compact-STOP]` → write compact_state.md → STOP
 - Stuck-counter guard: `[compact-STOP]` firing with ~same CHAT_TOTAL (±2k) across ≥2 turns = the counter did NOT reset after a compact (the bug), NOT a real ceiling → run `python3 scripts/compact_reset.py --trigger=user-confirm` → surface its `[compact-reset]` line · do NOT keep nagging
 
 **C1 — Load:** Read `.sessions/active_thread.md` → extract task: field
@@ -725,7 +755,7 @@ Same topic   → match keywords[] → re-read SKILL.md if skill changes
 |---|---|
 | แก้ bug / fix / error / debug | editor |
 | สร้าง / implement / new / เพิ่ม | coder |
-| ย้าย / ลบ / rename file | file_manager |
+| ย้าย / ลบ / rename file | index_manager (mode:file) |
 | ปิด / close / done / จบ | session_manager |
 | plan / วางแผน / mece | mece |
 | review CFP / improve harness / self improve | self_improve |
@@ -742,13 +772,15 @@ Same topic   → match keywords[] → re-read SKILL.md if skill changes
 
 **[G0] Task clarity gate** — run ONCE before G1:
 - Skip G0 if task has ≥3 of: specific feature name · file/path · error message · "fix/add/update X in Y"
+- **Scope-grill ACTIVE mode (T-228)** — when C0 Q4 set `scope_grill=armed`: the Skip-G0 condition above is OVERRIDDEN — run the G0 `AskUserQuestion` set below EVEN IF the task looks clear, and append the out-of-scope question. This is not a new mechanism — it is the same G0 questions, forced on demand + one extra question. After answers → write the filled brief (incl. `out_of_scope`) to gather_complete.md, then proceed to G1.
 - Otherwise → `AskUserQuestion` — **MUST include options per question (never open-ended only)**:
   - Goal: what outcome? · options = [add feature / fix bug / refactor / other]
   - Affected area: which module/file? · options = sections from REPO_MAP.md (read at G0 — in Never-Full-Load whitelist)
   - Constraints: limits? · options = [none / list specific]
   - Definition of done: acceptance test? · options = [passes tests / UI works / data correct / other]
+  - Out-of-scope (scope-grill mode · always ask when `scope_grill=armed`): what must this task NOT touch? · options = [nothing specific / list files-or-areas to leave alone] → captured as `out_of_scope` in the brief; makes the T-230 scope-creep boundary explicit up front
 - **Refusal contract:** user ignores ≥2 rounds → emit `[gather-refused]` · HALT (don't proceed to G1)
-- **Output contract:** on spec complete → gather_complete.md must include: `objective` · `constraints` · `affected_files` · `acceptance_criteria` · `verification_intent`
+- **Output contract:** on spec complete → gather_complete.md must include: `objective` · `constraints` · `affected_files` · `out_of_scope` (non-goals — areas/files to leave alone · mandatory under scope-grill mode, "-" otherwise) · `acceptance_criteria` · `verification_intent`
 - G0 runs ONCE only → if still unclear → `[gather-stalled]`
 
 **Gather rules:**
@@ -1027,7 +1059,7 @@ Copy to `.agents/skills/skill-manifest.json`. Add or remove skills to match your
   "default_skill": "editor",
   "skills": {
     "editor": {
-      "path": ".agents/skills/editor/SKILL.md",
+      "path": ".agents/skills/coding/editor/SKILL.md",
       "keywords": ["แก้", "fix", "bug", "edit", "debug", "เปลี่ยน", "ปรับ", "อัปเดต", "update", "modify"],
       "on_demand_files": [
         { "path": "knowledge/index_variables.json", "when": "looking up symbol line number or used_in list", "how": "grep_only" },
@@ -1037,7 +1069,7 @@ Copy to `.agents/skills/skill-manifest.json`. Add or remove skills to match your
       ]
     },
     "coder": {
-      "path": ".agents/skills/coder/SKILL.md",
+      "path": ".agents/skills/coding/coder/SKILL.md",
       "keywords": ["สร้าง", "create", "new file", "implement", "feature", "add", "เพิ่ม"],
       "on_demand_files": [
         { "path": "knowledge/index_files.json",  "when": "checking file exists or backlinks before creating", "how": "grep_only" },
@@ -1045,22 +1077,17 @@ Copy to `.agents/skills/skill-manifest.json`. Add or remove skills to match your
         { "path": "INVARIANTS.md",               "when": "R14/R15 gate fires (DB change or destructive op)", "how": "targeted" }
       ]
     },
-    "file_manager": {
-      "path": ".agents/skills/file_manager/SKILL.md",
-      "keywords": ["move", "rename", "delete file", "restructure", "ย้าย", "ลบ", "เปลี่ยนชื่อ"],
+    "index_manager": {
+      "path": ".agents/skills/knowledge/index_manager/SKILL.md",
+      "keywords": ["move", "rename", "delete file", "restructure", "ย้าย", "ลบ", "เปลี่ยนชื่อ", "rename symbol", "refactor", "export", "symbol", "function name"],
+      "model_routing": { "floor_by_mode": { "file": "haiku", "symbol": "sonnet" } },
       "on_demand_files": [
-        { "path": "knowledge/index_files.json", "when": "updating backlinks for changed file", "how": "grep_only" }
-      ]
-    },
-    "variable_manager": {
-      "path": ".agents/skills/variable_manager/SKILL.md",
-      "keywords": ["rename symbol", "refactor", "export", "symbol", "function name"],
-      "on_demand_files": [
-        { "path": "knowledge/index_variables.json", "when": "updating symbol entry after code change", "how": "grep_only" }
+        { "path": "knowledge/index_files.json",     "when": "(mode:file) updating backlinks for changed file",  "how": "grep_only" },
+        { "path": "knowledge/index_variables.json", "when": "(mode:symbol) updating symbol entry after code change", "how": "grep_only" }
       ]
     },
     "session_manager": {
-      "path": ".agents/skills/session_manager/SKILL.md",
+      "path": ".agents/skills/knowledge/session_manager/SKILL.md",
       "keywords": ["จบ session", "close", "end session", "สรุป session", "ปิด session"],
       "on_demand_files": [
         { "path": ".sessions/active_thread.md",   "when": "checking current phase at routing",   "how": "full_ok" },
@@ -1069,36 +1096,36 @@ Copy to `.agents/skills/skill-manifest.json`. Add or remove skills to match your
       ]
     },
     "mece": {
-      "path": ".agents/skills/mece/SKILL.md",
+      "path": ".agents/skills/harness/mece/SKILL.md",
       "keywords": ["plan", "วางแผน", "mece", "orchestrate", "phases"],
       "on_demand_files": []
     },
     "agent": {
-      "path": ".agents/skills/agent/SKILL.md",
+      "path": ".agents/skills/coding/agent/SKILL.md",
       "keywords": ["orchestrate", "multi-step", "coordinate", "spawn", "จัดการหลายขั้นตอน", "cycle", "fan-out", "orchestrate cycles"],
       "on_demand_files": []
     },
     "identity": {
-      "path": ".agents/skills/identity/SKILL.md",
+      "path": ".agents/skills/user/identity/SKILL.md",
       "keywords": ["identity", "session state", "who am i", "current skill", "ตัวตน"],
       "on_demand_files": []
     },
     "token_auditor": {
-      "path": ".agents/skills/token_auditor/SKILL.md",
+      "path": ".agents/skills/harness/token_auditor/SKILL.md",
       "keywords": ["token limit", "context full", "approaching limit", "token threshold"],
       "on_demand_files": [
         { "path": ".sessions/session_tokens.md", "when": "reading current total for audit", "how": "full_ok" }
       ]
     },
     "token_tracker": {
-      "path": ".agents/skills/token_tracker/SKILL.md",
+      "path": ".agents/skills/harness/token_tracker/SKILL.md",
       "keywords": ["token count", "session total", "how many tokens", "นับ token"],
       "on_demand_files": [
         { "path": ".sessions/session_tokens.md", "when": "Boot B1 read (once) and checkpoint write", "how": "full_ok" }
       ]
     },
     "self_improve": {
-      "path": ".agents/skills/self_improve/SKILL.md",
+      "path": ".agents/skills/harness/self_improve/SKILL.md",
       "keywords": ["review CFP", "improve harness", "ปรับปรุง harness", "CFP review", "self improve", "failure pattern", "ปรับปรุงตัวเอง"],
       "on_demand_files": [
         { "path": "CODING_FAILURE_PATTERNS.md", "when": "reading CFP headers for analysis (grep -c first)", "how": "targeted" },
@@ -1107,7 +1134,7 @@ Copy to `.agents/skills/skill-manifest.json`. Add or remove skills to match your
       ]
     },
     "ascii_flow": {
-      "path": ".agents/skills/ascii_flow/SKILL.md",
+      "path": ".agents/skills/content/ascii_flow/SKILL.md",
       "trigger": "Creating or updating ASCII flow diagrams, architecture charts, flow documentation in .md files",
       "keywords": ["flow diagram", "ascii flow", "flowchart", "architecture diagram", "flow doc", "create flow", "update flow", "draw diagram", "draw flow"],
       "on_demand_files": [
@@ -1116,7 +1143,7 @@ Copy to `.agents/skills/skill-manifest.json`. Add or remove skills to match your
       "invoke_from": "Any skill that creates/edits a .md file containing box diagrams must call this skill"
     },
     "harness_doctor": {
-      "path": ".agents/skills/harness_doctor/SKILL.md",
+      "path": ".agents/skills/harness/harness_doctor/SKILL.md",
       "trigger": "CFP pattern recurred after a fix was applied — structural harness repair needed",
       "keywords": ["harness doctor", "fix harness pattern", "recurring cfp", "ซ่อม harness", "cfp recurred", "structural fix"],
       "on_demand_files": [
@@ -1143,8 +1170,8 @@ Copy to `.agents/skills/registry.md`. Human-readable fallback routing table.
 |---|---|
 | แก้ bug / fix / debug | editor |
 | สร้างไฟล์ใหม่ / create / implement | coder |
-| ย้าย / ลบ / rename file | file_manager |
-| rename symbol / refactor export | variable_manager |
+| ย้าย / ลบ / rename file | index_manager (mode:file) |
+| rename symbol / refactor export | index_manager (mode:symbol) |
 | จบ session / close / สรุป | session_manager |
 | วางแผน / orchestrate multi-step | agent |
 | token limit warning | token_auditor |
@@ -1157,7 +1184,7 @@ No match → load `agent` skill (fallback to routing).
 
 ## Micro-rules
 - MECE plan required for tasks >3 steps or any irreversible action
-- MECE plan sections MUST include `Skill:` field (editor|coder|file_manager|variable_manager|agent)
+- MECE plan sections MUST include `Skill:` field (editor|coder|index_manager|agent)
 - token_auditor gates: >60k warn · >90k halt
 - session_manager closes with 5 mandatory writes: Step 0 = self_improve CFP review FIRST → then session JSON + active_thread.md + session_tokens.md + session_handoff.md
 - session_handoff.md must include: mece_plan_hash · cfp_boot_count · cfp_deferred · cfp_dismissed · last_self_improve_session

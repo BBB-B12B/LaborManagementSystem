@@ -2826,10 +2826,10 @@
     },
     "taskService": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 3330,
-      "line_end": 3330,
+      "line": 3401,
+      "line_end": 3401,
       "read_hint": {
-        "offset": 3325,
+        "offset": 3396,
         "limit": 15
       },
       "type": "Function",
@@ -3069,7 +3069,7 @@
     "UserService": {
       "source": "backend/src/services/auth/UserService.ts",
       "line": 17,
-      "line_end": 207,
+      "line_end": 213,
       "read_hint": {
         "offset": 12,
         "limit": 80
@@ -3085,10 +3085,10 @@
     },
     "userService": {
       "source": "backend/src/services/auth/UserService.ts",
-      "line": 209,
-      "line_end": 209,
+      "line": 215,
+      "line_end": 215,
       "read_hint": {
-        "offset": 204,
+        "offset": 210,
         "limit": 15
       },
       "type": "Function",
@@ -9046,10 +9046,10 @@
     },
     "TaskCreateModal": {
       "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 93,
-      "line_end": 153,
+      "line": 94,
+      "line_end": 154,
       "read_hint": {
-        "offset": 88,
+        "offset": 89,
         "limit": 75
       },
       "type": "ReactComponent",
@@ -9064,10 +9064,10 @@
     },
     "TaskDailyReportModal": {
       "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
-      "line": 105,
-      "line_end": 165,
+      "line": 107,
+      "line_end": 167,
       "read_hint": {
-        "offset": 100,
+        "offset": 102,
         "limit": 75
       },
       "type": "ReactComponent",
@@ -9608,10 +9608,10 @@
     },
     "DailyReportDashboard": {
       "source": "frontend/src/pages/daily-reports/components/DailyReportDashboard.tsx",
-      "line": 28,
-      "line_end": 250,
+      "line": 29,
+      "line_end": 251,
       "read_hint": {
-        "offset": 23,
+        "offset": 24,
         "limit": 80
       },
       "type": "ReactComponent",
@@ -10824,10 +10824,10 @@
     },
     "Layout": {
       "source": "frontend/src/components/layout/Layout.tsx",
-      "line": 437,
-      "line_end": 553,
+      "line": 452,
+      "line_end": 568,
       "read_hint": {
-        "offset": 432,
+        "offset": 447,
         "limit": 80
       },
       "type": "ReactComponent",
@@ -10968,10 +10968,10 @@
     },
     "AdvanceRequestInput": {
       "source": "frontend/src/services/taskService.ts",
-      "line": 139,
-      "line_end": 144,
+      "line": 141,
+      "line_end": 146,
       "read_hint": {
-        "offset": 134,
+        "offset": 136,
         "limit": 20
       },
       "type": "Interface",
@@ -12207,10 +12207,10 @@
     },
     "reconciliationService": {
       "source": "frontend/src/services/reconciliationService.ts",
-      "line": 2809,
-      "line_end": 2809,
+      "line": 2810,
+      "line_end": 2810,
       "read_hint": {
-        "offset": 2804,
+        "offset": 2805,
         "limit": 15
       },
       "type": "Function",
@@ -12362,10 +12362,10 @@
     },
     "useRealtimeTasks": {
       "source": "frontend/src/hooks/useRealtimeTasks.ts",
-      "line": 90,
-      "line_end": 219,
+      "line": 95,
+      "line_end": 241,
       "read_hint": {
-        "offset": 85,
+        "offset": 90,
         "limit": 80
       },
       "type": "Hook",
@@ -12796,10 +12796,10 @@
     "onEmployeeChanged": {
       "type": "Function",
       "source": "functions\\src\\index.ts",
-      "line": 1336,
-      "line_end": 1376,
+      "line": 1339,
+      "line_end": 1379,
       "read_hint": {
-        "offset": 1331,
+        "offset": 1334,
         "limit": 55
       },
       "keywords": [
@@ -12814,10 +12814,10 @@
     "scheduledAbsenceCheck": {
       "type": "Function",
       "source": "functions\\src\\index.ts",
-      "line": 1530,
-      "line_end": 1549,
+      "line": 1533,
+      "line_end": 1552,
       "read_hint": {
-        "offset": 1525,
+        "offset": 1528,
         "limit": 34
       },
       "keywords": [
@@ -12832,10 +12832,10 @@
     "onWagePeriodApproved": {
       "type": "Function",
       "source": "functions\\src\\index.ts",
-      "line": 1558,
-      "line_end": 1634,
+      "line": 1561,
+      "line_end": 1637,
       "read_hint": {
-        "offset": 1553,
+        "offset": 1556,
         "limit": 80
       },
       "keywords": [
@@ -12851,10 +12851,10 @@
     "webhookTimesheetChanged": {
       "type": "Function",
       "source": "functions\\src\\index.ts",
-      "line": 1643,
-      "line_end": 1669,
+      "line": 1646,
+      "line_end": 1672,
       "read_hint": {
-        "offset": 1638,
+        "offset": 1641,
         "limit": 41
       },
       "keywords": [
@@ -12869,10 +12869,10 @@
     "onReconciliationChanged": {
       "type": "Function",
       "source": "functions\\src\\index.ts",
-      "line": 1678,
-      "line_end": 1751,
+      "line": 1681,
+      "line_end": 1754,
       "read_hint": {
-        "offset": 1673,
+        "offset": 1676,
         "limit": 80
       },
       "keywords": [
@@ -12945,10 +12945,10 @@
     "PhotoSourcePickerProps": {
       "type": "Interface",
       "source": "frontend\\src\\components\\forms\\PhotoSourcePicker.tsx",
-      "line": 6,
-      "line_end": 19,
+      "line": 7,
+      "line_end": 20,
       "read_hint": {
-        "offset": 1,
+        "offset": 2,
         "limit": 28
       },
       "keywords": [

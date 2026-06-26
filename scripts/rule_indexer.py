@@ -35,6 +35,9 @@ FILE_GLOBS = [
     "Implement/*.md",
     ".agents/skills/*/SKILL.md",
     ".agents/skills/*/SKILL_detail.md",
+    # T-215: skills bucketed 2 levels deep — keep BOTH so flat+nested resolve
+    ".agents/skills/*/*/SKILL.md",
+    ".agents/skills/*/*/SKILL_detail.md",
     "knowledge/*.md",
     "docs/master_roadmap.md",
 ]
@@ -123,10 +126,10 @@ def main():
     total_ref = sum(len(v["rules_referenced"]) for v in results.values())
 
     if args.dry_run:
-        print(f"[dry-run] scanned {len(files)} files - {len(results)} carry rules")
+        print(f"[dry-run] scanned {len(files)} files · {len(results)} carry rules")
         for rel, v in sorted(results.items()):
             print(f"  {rel}: defined={len(v['rules_defined'])} referenced={len(v['rules_referenced'])}")
-        print(f"[dry-run] totals: defined={total_def} referenced={total_ref} - NOTHING written")
+        print(f"[dry-run] totals: defined={total_def} referenced={total_ref} · NOTHING written")
         return 0
 
     # write into index_files.json (only existing entries — never invent keys)
@@ -150,7 +153,7 @@ def main():
         json.dump(index, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
 
-    print(f"[written] {updated} index entries updated - defined={total_def} referenced={total_ref}")
+    print(f"[written] {updated} index entries updated · defined={total_def} referenced={total_ref}")
     if skipped:
         print(f"[note] {len(skipped)} rule-bearing files not in index (skipped): {', '.join(skipped[:8])}")
     return 0

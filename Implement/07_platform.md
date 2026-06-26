@@ -2,6 +2,17 @@
 
 > Read when: setting up a new project on a platform other than Antigravity 2.0, or when [platform-unknown] is emitted at Boot.
 
+## Boot Init (B1 internals — externalized from AGENTS.md §Boot Sequence · T-212/D1)
+
+> B1 runs `bash scripts/boot_init.sh`. The trigger + one-line summary stay HOT in AGENTS.md; the formula bodies below are reference, loaded only when debugging boot.
+
+- B1 resets SESSION_TOTAL=0 · compact-restore: CHAT_TOTAL = compact_size + sys_fixed · fresh session: CHAT_TOTAL = sys_fixed · sys_fixed = (CLAUDE.md + AGENTS.md chars × 0.3) + 11000 · CFP_COUNT → cfp_boot_count in working memory
+- B1 single-source note (T-180): `scripts/compact_reset.py` mirrors this exact CHAT formula + the consume-once `session_reset=armed→consumed` flip. The SessionStart:compact hook (settings.json) and the C0 COMPACT-CONFIRM path both call it, so the post-compact recompute is identical whether it runs at boot, on the hook, or on a user confirm — no logic drift. `scripts/boot_init.sh` is the third caller of this same formula and MUST stay in sync.
+- B1 compact_state.md field format (canonical · single source · T-262): every field is `key: value` (COLON). All readers — `scripts/boot_init.sh`, `scripts/compact_reset.py`, the settings.json hook — MUST parse `[:=]` (tolerate `=` for back-compat with old files); every writer — the agent, the mece_plan_schema.md PATH B template, boot_init's consume `sed` — MUST emit colon. A new field-reader reuses the `[:=]` tolerant parse, NEVER `=`-only. (The `=`-only drift silently broke `compact_size` + `session_reset` reset AND `dt` compact-restore detection — T-261 audit → T-262 fix.)
+- B1 LOOP_WEIGHT reset (BUG-3 fix): LOOP_WEIGHT is context-window-scoped → forced to 0 on EVERY boot via the python normalization after the if/elif · this covers the in_progress-resume path (fresh process, phase=in_progress) where neither printf branch fires → previously left LOOP_WEIGHT stale and triggered a spurious turn-1 compact nag (now a soft [compact-rec]; pre-Phase-C it was a hard [compact-required] STOP) · a fresh OS process always has an empty context window · do NOT remove this normalization when deduping B1
+- B1 cache breakpoint: if compact_state.md has `prefix_hash=<val>` → compare vs `sha1sum CLAUDE.md | cut -c1-8` → mismatch → emit `[cache-miss-boot] prefix changed · cache cold this session`
+- B1 session_tokens.md format (8 fields · T-221): `SESSION_TOTAL: 0\nCHAT_TOTAL: N\nCACHE_READ: 0\nCACHE_WRITE: 0\nTURN_COUNT: 0\nLOOP_WEIGHT: 0\nFILES_READ: 0\nLONG_OUTPUTS: 0` — TURN_COUNT/FILES_READ/LONG_OUTPUTS feed the signal-box 4-box PRIMARY compact trigger (T-221). Every writer of this file MUST emit all 8 fields, or posttool_track.py re-appends the missing ones (CFP-031 guard). Add cache fields on fresh session init only if file is being reset
+
 ## What is the Platform Adapter?
 
 The harness does not hardcode any platform's tool names. Instead, it reads spawn tool configuration from `.agents/platform/detected.md` at Boot. This makes the harness work on any AI platform.

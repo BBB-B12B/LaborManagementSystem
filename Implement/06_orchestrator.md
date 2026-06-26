@@ -21,7 +21,7 @@ Orchestrator writes this file at **end of Phase 2 M5 AFTER user confirm** (align
 | .sessions/active_thread.md | `wc -m` | ___ | ___ | ___ |
 | skill-manifest.json (grep) | `grep keywords \| wc -m` (skip if [compact-restore]) | ___ | ___ | ___ |
 | .agents/skills/<name>/SKILL.md | `wc -m` (skip if sk_h match) | ___ | ___ | ___ |
-| .agents/skills/mece/SKILL.md (offset=31 limit=110) | `wc -m` (skip if mece_h match) | ___ | ___ | ___ |
+| .agents/skills/harness/mece/SKILL.md (offset=31 limit=110) | `wc -m` (skip if mece_h match) | ___ | ___ | ___ |
 Phase 0 total: TH ___ch · EN ___ch → ~___tok
 - [ ] B1: compact_state.md checked · active_thread read · SESSION_TOTAL reset/loaded · CFP_COUNT stored
 - [ ] B2-B3: [compact-restore] → sk= + sha1 check · OR manifest grep + SKILL.md read · sections[] loaded
@@ -52,7 +52,7 @@ Phase 0 total: TH ___ch · EN ___ch → ~___tok
 **[✓ MECE]** Goal: ___
 
 Section 1 — <name>:
-  Skill:    ___   ← MANDATORY — editor|coder|file_manager|variable_manager|agent
+  Skill:    ___   ← MANDATORY — editor|coder|index_manager|agent
   Tool:     ___   ← primary tool (Read|Edit|Write|Bash)
   Constraints:
     - ___         ← from §MECE Constraints Block in the section's SKILL.md
@@ -93,6 +93,58 @@ Section 1 — <name>:
 | `[ ]` | Not started |
 | `[/]` | In progress — mark before first tool call |
 | `[X]` | Done — mark after Verify-N passes |
+
+---
+
+### Phase 3 · REACT LOOP (execution detail)
+> Hot triggers live in AGENTS.md §Phase 3 · Execution Loop. This is the full how-to, lazy-loaded on entering the loop.
+
+```
+REACT LOOP (per section — repeat until section_complete OR token pause):
+  Token check: SESSION_TOTAL 60-80k → finish current step → PAUSE
+
+  [L1] SELECT  → next tool (R2 budget · R5 index-first)
+               → if next tool = Read: MUST emit [pre-read] Target: `<symbol>` · Line: <N> BEFORE calling Read (mandatory — no exception · CFP-034)
+  [L2] EXECUTE → run tool (R6 filter · R10 cap)
+  [L3] OBSERVE → verify result · unexpected → diagnose → retry once → BLOCKED
+  [L4] VERIFY  → (a) grep confirm → emit [✓ written]
+                 (b) run section Verify-N from MECE plan
+                 → optional automation: `python3 scripts/verify_runner.py --section S<N> --file .sessions/mece_plan.md` · PASS → proceed · FAIL → diagnose → retry once → BLOCKED
+                 FAIL → do NOT mark done → diagnose → retry or BLOCKED
+  [L4.5] PURGE → drop tool results from context per state-retention policy:
+    | Tool result type        | Policy                                      |
+    |-------------------------|---------------------------------------------|
+    | Bash verify/grep        | DROP immediately after verdict emitted      |
+    | Read · irrelevant       | DROP immediately ([post-read] irrelevant)   |
+    | Read · partial/relevant | KEEP excerpt only (≤10L) · drop full output |
+    | Edit success            | KEEP [✓ written] verdict + artifact path    |
+    | Write success           | KEEP [✓ written] verdict + artifact path    |
+    | tool result >50L        | OFFLOAD → write to .sessions/exec_log/<uuid>.txt · inject [result-offloaded] path=<file> lines=<N> · agent reads file if needed |
+    keep: [✓ written] verdict + artifact path + Verify-N result · drop: everything else
+    exec_log schema: .sessions/exec_log/<uuid>.txt — full tool result · agent reads on-demand via Read tool
+    ⚡ MANDATORY PURGE SIGNAL (CFP-033 fix): after EVERY tool result MUST emit ONE of:
+       [dropped] <tool-type> — result cleared after verdict
+       [kept: N lines] <tool-type> — excerpt only
+       [offloaded] path=<file> lines=<N>
+       silent keep (no signal) = [violation] BC-L4.5-purge → emit signal now · drop result
+  [L5] DECIDE  → section_done = [✓ written] AND Verify-N BOTH pass
+                 → mark mece_plan.md: `- [ ] S<N>` → `- [X] S<N>` (file write — not just memory)
+                 → steps remain: emit [loop] continue · → done: emit [loop] done
+```
+→ at [L2] if Bash targets build/script/python/git with likely >40L output: use `python3 scripts/safe_run.py "<cmd>"` OR pipe `2>&1 | grep -iE "error|warn|fail" | tail -20` · skip = R6 violation
+After each section → write session_handoff.md: sections_done + sections_pending + last_step + mece_plan_hash=`sha1sum .sessions/mece_plan.md | cut -c1-8` + resume_at=S<N>:step:<desc>
+
+BLOCKED: halt · show error+progress · ask "fix or skip?" · wait
+**Token Pause** (SESSION_TOTAL 60-80k during Phase 3): finish the current step · claude-code → emit `[token-pause]` · ask "continue?" → resume on yes · other provider → write compact_state.md → STOP.
+Compact check (every turn): use hook `[token-state]` values — EXCEPT at a mid-turn DECISION point or on a heavy-tool turn (≥5 calls / clone / bulk-copy), where you MUST grep LIVE `session_tokens.md` because [token-state] is a start-of-turn snapshot and lags by up to 1 turn (CFP-041). After T-235 the live file is subagent-clean (hook early-exits on `agent_id`), so the live grep is reliable on any turn — not just main-context ones. Thresholds → see C0.5 (§Per-Turn Routing): PRIMARY = CHAT_TOTAL · LOOP_WEIGHT secondary · hard STOP only at SESSION_TOTAL >90k OR CHAT_TOTAL >120k → [compact-STOP].
+  [compact-rec] strong emit (5 mandatory fields — no partial emit):
+    `[compact-rec] Recommend /compact: <now|after step|not yet> · Why: <session ~Nk · what's heavy · pending self-contained? y/n> · MUST vs SHOULD: SHOULD (below 90k/120k ceiling) · Resume brief: <paste-ready ≤5 lines> · Your call: "/compact" | "ทำต่อ"`
+Cache note: Anthropic prompt cache TTL = 5 min · /compact resets cache prefix cleanly · compact before long idle > 5 min preserves cache hits on next turn (10× cheaper reads)
+Tool schema serialization: JSON key ordering in tool definitions MUST be stable across turns — unstable serialization invalidates the prompt cache prefix silently (causes cache-collapse spike)
+bucket_sys note: amortizes sys_fixed across turns — if tool schema edited this session → cache prefix resets → actual cost ≈ sys_fixed added back once · [spike:cache-collapse] detects this
+Stable prefix rule: CLAUDE.md + AGENTS.md = stable prefix (cache_control these blocks — never change mid-session) · User message + tool results = dynamic suffix — never cache_control dynamic blocks.
+→ if editing SKILL.md or tool-def mid-session (SESSION_TOTAL>10k): emit `[schema-gate]` · wait confirm · after edit emit `[schema-changed] Cache prefix reset · CHAT_TOTAL += sys_fixed` · skip = cache-collapse violation
+Proactive cache invalidation: at boot → `sha1sum .agents/skills/*/SKILL.md 2>/dev/null | sort > .sessions/tool_schema_hash.txt` · per-turn: diff vs stored hash → mismatch → emit [cache-invalidated] + update `.sessions/tool_schema_hash.txt`
 
 ---
 

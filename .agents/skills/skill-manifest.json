@@ -27,7 +27,14 @@
   },
   "skills": {
     "mece": {
-      "path": ".agents/skills/mece/SKILL.md",
+      "path": ".agents/skills/harness/mece/SKILL.md",
+      "hand_off": [
+        {
+          "downstream": "skeptical_reviewer",
+          "artifact": ".sessions/mece_plan.md",
+          "role": "primary"
+        }
+      ],
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet-high",
@@ -70,8 +77,46 @@
         ]
       }
     },
+    "delegate": {
+      "path": ".agents/skills/coding/delegate/SKILL.md",
+      "model_routing": {
+        "floor": "haiku",
+        "recommended": "haiku",
+        "certified": "2026-06-17",
+        "method": "ported from 9arm qwen-agent pattern; runs the delegation gate + self-verify on the MEDIUM model without inference",
+        "notes": "Takes a confirmed mechanical MECE Phase-3 section, spawns a Haiku sub-agent (the model_low tier), self-verifies via the section Verify-N, auto-retries once, then escalates to MODEL_MEDIUM. Never delegates planning/judgment/R14-R15-gated paths."
+      },
+      "bucket": "in-progress",
+      "trigger": "Phase 3 — a confirmed, mechanical, self-contained [ ] S<N> section is routed to the cheap model instead of main context. Self-verify always mandatory; retry-once-then-escalate.",
+      "keywords": [
+        "delegate",
+        "offload",
+        "send to haiku",
+        "do this cheaply",
+        "cheap model",
+        "mechanical section",
+        "haiku",
+        "menial"
+      ],
+      "on_demand_files": [],
+      "skip_when": "section is planning/architecture/debug-judgment/security OR touches an R14/R15-gated path OR has no runnable Verify-N OR needs this conversation's context",
+      "activates_at": [
+        "Phase3-L1"
+      ],
+      "tools": {
+        "primary": [
+          "Agent",
+          "Bash"
+        ],
+        "avoid": [
+          "WebFetch",
+          "WebSearch",
+          "Workflow"
+        ]
+      }
+    },
     "identity": {
-      "path": ".agents/skills/identity/SKILL.md",
+      "path": ".agents/skills/user/identity/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "haiku",
@@ -115,7 +160,7 @@
     },
     "coder": {
       "domain": "coding",
-      "path": ".agents/skills/coder/SKILL.md",
+      "path": ".agents/skills/coding/coder/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet",
@@ -185,7 +230,7 @@
     },
     "editor": {
       "domain": "coding",
-      "path": ".agents/skills/editor/SKILL.md",
+      "path": ".agents/skills/coding/editor/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet",
@@ -268,98 +313,8 @@
         ]
       }
     },
-    "file_manager": {
-      "path": ".agents/skills/file_manager/SKILL.md",
-      "model_routing": {
-        "floor": "haiku",
-        "recommended": "haiku",
-        "certified": "2026-06-11",
-        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
-        "probe_tiers": 3,
-        "notes": "All 3 tiers comprehend doc; floor=haiku confirmed. recommended=haiku (mechanical index CRUD, fixed schema, no reasoning). High-tier flagged 4 items; verified 2026-06-11 = 0 real defects, 1 minor fixed (Q5 size-object required L69+L97 now also inline at step 2 L51 = FIXED 2026-06-11; Never-Full-Load = global harness rule; shallow-backlink-scan L29 minor; activates_at-vs-prose L38 minor non-blocking)."
-      },
-      "bucket": "stable",
-      "trigger": "MANDATORY after any file is created, moved, deleted, or has imports changed",
-      "keywords": [
-        "move file",
-        "delete file",
-        "rename file",
-        "restructure",
-        "new file created"
-      ],
-      "on_demand_files": [
-        {
-          "path": "knowledge/index_files.json",
-          "when": "updating backlinks for changed file",
-          "how": "grep_only"
-        }
-      ],
-      "auto_after": [
-        "coder"
-      ],
-      "activates_at": [
-        "B2",
-        "manual"
-      ],
-      "tools": {
-        "primary": [
-          "Bash",
-          "Write",
-          "Edit"
-        ],
-        "avoid": [
-          "Workflow"
-        ]
-      }
-    },
-    "variable_manager": {
-      "domain": "coding",
-      "path": ".agents/skills/variable_manager/SKILL.md",
-      "model_routing": {
-        "floor": "sonnet",
-        "recommended": "sonnet",
-        "certified": "2026-06-11",
-        "method": "3-tier comprehension probe (haiku-floor + sonnet-medium + sonnet-high)",
-        "probe_tiers": 3,
-        "notes": "haiku failed only Q6 (negative-answer artifact: automated skill never waits, same pattern as token_tracker); mid+high correct; 2 REAL defects FIXED: (1) L123 vs L75/L77 used_in manual contradiction reworded to symbol_indexer.py authoritative manual-seed-OK; (2) Workflow omitted symbol_indexer.py step for non-edit types vs BC L89 mandates all change types - added explicit step for ALL types; floor=sonnet (active multi-branch JSON mutation + contradiction = low-tier index-corruption risk per high-tier) recommended=sonnet"
-      },
-      "bucket": "stable",
-      "trigger": "MANDATORY after any symbol is created, renamed, deleted, or its body is edited",
-      "keywords": [
-        "new function",
-        "new component",
-        "rename symbol",
-        "delete function",
-        "refactor",
-        "new hook",
-        "new type"
-      ],
-      "on_demand_files": [
-        {
-          "path": "knowledge/index_variables.json",
-          "when": "updating symbol entry after code change",
-          "how": "grep_only"
-        }
-      ],
-      "auto_after": [
-        "coder",
-        "editor"
-      ],
-      "activates_at": [
-        "B2",
-        "manual"
-      ],
-      "tools": {
-        "primary": [
-          "Bash"
-        ],
-        "avoid": [
-          "Workflow"
-        ]
-      }
-    },
     "session_manager": {
-      "path": ".agents/skills/session_manager/SKILL.md",
+      "path": ".agents/skills/knowledge/session_manager/SKILL.md",
       "model_routing": {
         "floor": "sonnet",
         "recommended": "sonnet-high",
@@ -432,7 +387,7 @@
       }
     },
     "token_tracker": {
-      "path": ".agents/skills/token_tracker/SKILL.md",
+      "path": ".agents/skills/harness/token_tracker/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "haiku",
@@ -468,7 +423,7 @@
       }
     },
     "token_auditor": {
-      "path": ".agents/skills/token_auditor/SKILL.md",
+      "path": ".agents/skills/harness/token_auditor/SKILL.md",
       "model_routing": {
         "floor": "sonnet",
         "recommended": "sonnet",
@@ -506,7 +461,7 @@
       }
     },
     "self_improve": {
-      "path": ".agents/skills/self_improve/SKILL.md",
+      "path": ".agents/skills/harness/self_improve/SKILL.md",
       "bucket": "stable",
       "trigger": "At every session close (auto-called by session_manager §3 Step 0), OR user asks to review failure patterns or improve harness",
       "keywords": [
@@ -562,7 +517,7 @@
       }
     },
     "ascii_flow": {
-      "path": ".agents/skills/ascii_flow/SKILL.md",
+      "path": ".agents/skills/content/ascii_flow/SKILL.md",
       "model_routing": {
         "floor": "sonnet",
         "recommended": "sonnet",
@@ -613,7 +568,7 @@
       }
     },
     "agent": {
-      "path": ".agents/skills/agent/SKILL.md",
+      "path": ".agents/skills/coding/agent/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet",
@@ -652,7 +607,7 @@
       }
     },
     "harness_doctor": {
-      "path": ".agents/skills/harness_doctor/SKILL.md",
+      "path": ".agents/skills/harness/harness_doctor/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet-high",
@@ -701,7 +656,7 @@
       }
     },
     "harness_editor": {
-      "path": ".agents/skills/harness_editor/SKILL.md",
+      "path": ".agents/skills/harness/harness_editor/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet-high",
@@ -763,10 +718,23 @@
           "WebFetch",
           "WebSearch"
         ]
-      }
+      },
+      "owns_paths": [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "INVARIANTS.md",
+        "REPO_MAP.md",
+        "CODING_FAILURE_PATTERNS.md",
+        "Implement/**",
+        "knowledge/**",
+        "scripts/**",
+        "docs/**",
+        ".claude/settings.json",
+        ".agents/skills/**"
+      ]
     },
     "skeptical_reviewer": {
-      "path": ".agents/skills/skeptical_reviewer/SKILL.md",
+      "path": ".agents/skills/harness/skeptical_reviewer/SKILL.md",
       "model_routing": {
         "floor": "sonnet",
         "recommended": "sonnet-high",
@@ -808,8 +776,94 @@
         ]
       }
     },
+    "debug": {
+      "path": ".agents/skills/harness/debug/SKILL.md",
+      "hand_off": [
+        {
+          "downstream": "editor",
+          "artifact": "root-cause record",
+          "role": "primary"
+        }
+      ],
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet",
+        "certified": "pending",
+        "method": "authoring default — not yet probe-certified",
+        "probe_tiers": 0,
+        "notes": "Disproof-first root-cause debugging + breadcrumb ledger (P3 full form). Hypothesis ranking + falsification is reasoning-heavy -> floor sonnet. Locates cause only; fix delegated to coder/editor. Certify via 3-tier probe later."
+      },
+      "bucket": "draft",
+      "trigger": "Reproducible failure root-cause hunt; or R9 escalates a hard error case here",
+      "keywords": [
+        "debug",
+        "root cause",
+        "why does this fail",
+        "still broken",
+        "same error",
+        "find the bug"
+      ],
+      "on_demand_files": [],
+      "skip_when": "no reproducible failure (no-repro) · cause already obvious/trivial · design question (use skeptical_reviewer/scrutinize)",
+      "activates_at": [
+        "error",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Read",
+          "Bash"
+        ],
+        "avoid": [
+          "Write"
+        ]
+      }
+    },
+    "scrutinize": {
+      "path": ".agents/skills/harness/scrutinize/SKILL.md",
+      "model_routing": {
+        "floor": "sonnet",
+        "recommended": "sonnet-high",
+        "certified": "pending",
+        "method": "authoring default — not yet probe-certified",
+        "probe_tiers": 0,
+        "notes": "Outsider review + mandatory simpler-way pass. Judging 'materially simpler, same outcome' is reasoning-heavy -> recommended sonnet-high. Certify via 3-tier probe later."
+      },
+      "bucket": "draft",
+      "trigger": "Post-build/refactor outsider review + mandatory simpler-way pass; or manual 'is there a simpler way?'",
+      "keywords": [
+        "scrutinize",
+        "outsider review",
+        "fresh eyes",
+        "simpler way",
+        "is there a simpler way"
+      ],
+      "on_demand_files": [],
+      "skip_when": "artifact still drafting · trivial (<=3 lines/typo) · pre-execution plan review (use skeptical_reviewer)",
+      "activates_at": [
+        "post-build",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Read",
+          "Bash"
+        ],
+        "avoid": [
+          "Edit",
+          "Write"
+        ]
+      }
+    },
     "repo_researcher": {
-      "path": ".agents/skills/repo_researcher/SKILL.md",
+      "path": ".agents/skills/knowledge/repo_researcher/SKILL.md",
+      "hand_off": [
+        {
+          "downstream": "doc_builder",
+          "artifact": "knowledge/research/<repo>_summary.md",
+          "role": "supplementary"
+        }
+      ],
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet",
@@ -867,7 +921,14 @@
       }
     },
     "doc_builder": {
-      "path": ".agents/skills/doc_builder/SKILL.md",
+      "path": ".agents/skills/content/doc_builder/SKILL.md",
+      "hand_off": [
+        {
+          "downstream": "project_presenter",
+          "artifact": "HTML system manual + screenshots",
+          "role": "primary"
+        }
+      ],
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet-high",
@@ -894,7 +955,7 @@
       ],
       "on_demand_files": [
         {
-          "path": ".agents/skills/doc_builder/SKILL_detail.md",
+          "path": ".agents/skills/content/doc_builder/SKILL_detail.md",
           "when": "executing §3 screenshot plan, §4 playwright script, §5 MECE update, or §6 build HTML",
           "how": "full_ok"
         }
@@ -916,7 +977,7 @@
       }
     },
     "project_presenter": {
-      "path": ".agents/skills/project_presenter/SKILL.md",
+      "path": ".agents/skills/content/project_presenter/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet",
@@ -944,7 +1005,7 @@
       ],
       "on_demand_files": [
         {
-          "path": ".agents/skills/project_presenter/SKILL_detail.md",
+          "path": ".agents/skills/content/project_presenter/SKILL_detail.md",
           "when": "executing §2 interview loop, §4 storytelling .md, or §5 HTML generation",
           "how": "full_ok"
         },
@@ -971,7 +1032,7 @@
       }
     },
     "skill_auditor": {
-      "path": ".agents/skills/skill_auditor/SKILL.md",
+      "path": ".agents/skills/harness/skill_auditor/SKILL.md",
       "bucket": "stable",
       "trigger": "Auditing SKILL.md files for missing or weak framework components — gap analysis, quality check, BC over-enforcement detection",
       "keywords": [
@@ -1013,10 +1074,13 @@
         "method": "haiku-floor comprehension probe (med/high divergence not run this round)",
         "probe_tiers": 1,
         "notes": "FLOOR_STRUGGLE 1/5: Addition Gate criteria (Q1/Q2/Q3) defined in SKILL_detail.md not SKILL.md - forward-dependency, but SKILL.md L211-215 explicitly points to detail file so floor follows pointer. floor=haiku conditional on reading referenced detail. recommended=sonnet (audit = comprehension/reasoning). Suggested Addition: inline Addition Gate criteria summary in SKILL.md."
-      }
+      },
+      "owns_paths": [
+        ".agents/skills/**"
+      ]
     },
     "harness_doc_auditor": {
-      "path": ".agents/skills/harness_doc_auditor/SKILL.md",
+      "path": ".agents/skills/harness/harness_doc_auditor/SKILL.md",
       "bucket": "stable",
       "trigger": "Auditing rule/directive .md files (harness constitution) — CLAUDE.md, AGENTS.md, INVARIANTS.md, REPO_MAP.md, Implement/*.md, mece_plan_schema.md — for contradictions, scatter, ambiguous triggers, dead refs, token bloat, low-tier-unfollowable steps, wrong gate/BC enforcement, broken links",
       "keywords": [
@@ -1061,7 +1125,7 @@
       }
     },
     "user-coach": {
-      "path": ".agents/skills/user-coach/SKILL.md",
+      "path": ".agents/skills/user/user-coach/SKILL.md",
       "model_routing": {
         "floor": "haiku",
         "recommended": "sonnet",
@@ -1095,10 +1159,76 @@
         ],
         "avoid": []
       }
+    },
+    "index_manager": {
+      "domain": "coding",
+      "path": ".agents/skills/knowledge/index_manager/SKILL.md",
+      "model_routing": {
+        "floor": "per-mode",
+        "floor_by_mode": {
+          "symbol": "sonnet",
+          "file": "haiku"
+        },
+        "recommended": "per-mode (mode:symbol=sonnet · mode:file=haiku)",
+        "certified": "2026-06-23",
+        "method": "T-238 merge of the two prior index skills; per-mode floor preserved verbatim from both 3-tier certs (2026-06-11)",
+        "probe_tiers": 3,
+        "notes": "mode:file floor=haiku (mechanical index CRUD, fixed schema, inference-free; keyword->mode router lets a small model pick file-mode reliably). mode:symbol floor=sonnet (active multi-branch JSON mutation + cross-file rename tracing = low-tier index-corruption risk). Mode router is keyword-driven, NO inference. Per-mode floor: symbol->sonnet, file->haiku.",
+        "robustness_probe": "2026-06-23 haiku single-probe (T-238 S3): mode-pick 4/4 correct from router table alone, COULD_PICK_WITHOUT_GUESSING=yes -> mode:file confirmed haiku-runnable. Flagged 3 doc-clarity gaps (B1 size-object compute undefined; B2 symbol rename emit missing old/new; B3 caller-identity prereq framing) + 2 minor over-flags. NOT a full 3-tier re-cert."
+      },
+      "bucket": "stable",
+      "trigger": "MANDATORY after any file is created/moved/deleted/import-changed (mode:file) OR any symbol is created/renamed/deleted/body-edited (mode:symbol)",
+      "keywords": [
+        "move file",
+        "delete file",
+        "rename file",
+        "restructure",
+        "new file created",
+        "new function",
+        "new component",
+        "rename symbol",
+        "delete function",
+        "refactor",
+        "new hook",
+        "new type",
+        "index update",
+        "track variable",
+        "backlink sync"
+      ],
+      "on_demand_files": [
+        {
+          "path": "knowledge/index_files.json",
+          "when": "mode:file - updating backlinks for changed file",
+          "how": "grep_only"
+        },
+        {
+          "path": "knowledge/index_variables.json",
+          "when": "mode:symbol - updating symbol entry after code change",
+          "how": "grep_only"
+        }
+      ],
+      "auto_after": [
+        "coder",
+        "editor"
+      ],
+      "activates_at": [
+        "B2",
+        "manual"
+      ],
+      "tools": {
+        "primary": [
+          "Bash",
+          "Write",
+          "Edit"
+        ],
+        "avoid": [
+          "Workflow"
+        ]
+      }
     }
   },
   "fallback": {
-    "path": ".agents/skills/agent/SKILL.md",
+    "path": ".agents/skills/coding/agent/SKILL.md",
     "trigger": "No keyword matches any skill — use as default orchestration skill",
     "on_demand_files": [
       {

@@ -158,8 +158,8 @@ Path: `.sessions/cycle_N_<section_id>.json`
 **P2 — Heuristics (when Skill: not declared in MECE section):**
 - new files / features    → `coder`
 - modify / fix existing   → `editor`
-- file create/move/delete → also trigger `file_manager`
-- symbol create/rename    → also trigger `variable_manager`
+- file create/move/delete → also trigger `index_manager` (mode:file)
+- symbol create/rename    → also trigger `index_manager` (mode:symbol)
 
 **Multi-skill `Skill: X + Y`:**
 - Run X first → verify → then Y
@@ -270,7 +270,7 @@ description: Focused skill for implementing new features and creating applicatio
   steps: ["create files to standards", "write code", "self-correct linter errors", "[✓ written] verify each file"]
 - id: 3
   name: "Sync & Close"
-  steps: ["call file_manager", "call variable_manager", "python scripts/symbol_indexer.py", "roadmap [X]"]
+  steps: ["call index_manager (mode:file)", "call index_manager (mode:symbol)", "python scripts/symbol_indexer.py", "roadmap [X]"]
 \```
 
 # Coder Skill
@@ -291,7 +291,7 @@ You are the "Builder". When the Agent delegates a new feature task to you, focus
 **After completing code:**
 \```
 1. Mark roadmap: [X] T-<N>: <description> · session_<NNN>
-2. Call file_manager + variable_manager to sync indexes
+2. Call index_manager to sync indexes
 \```
 
 ## Domain Work Standards
@@ -308,7 +308,7 @@ Coding-specific standards (framework conventions, DB integrity, linting rules, U
 - Emit `[staged-drop] <path>` to signal that this content must not appear in subsequent context or `context_files:`
 
 ## Limitations
-- Do **NOT** manipulate `.agents/` or `*.json` index files directly — call `file_manager` + `variable_manager` skills after creating files.
+- Do **NOT** manipulate `.agents/` or `*.json` index files directly — call `index_manager` skills after creating files.
 - **DO** update `docs/master_roadmap.md` — roadmap entries are mandatory (see Roadmap Protocol above).
 - Source work scope: `src/`, `wrangler.toml`, `package.json`, `next.config.ts`.
 
@@ -400,7 +400,7 @@ Post:   every ERR-XXX entry has a valid topic: field
 Enforce: entry without topic: field = [violation] BC-topic-lookup → add topic before continuing
 ```
 
-# Step 4 — call variable_manager if any symbol body was changed
+# Step 4 — call index_manager (mode:symbol) if any symbol body was changed
 \```
 
 ## Editing Best Practices
@@ -425,7 +425,7 @@ Emit trace:
 \```
 → Got source + line? Emit pre-read gate → Read → STOP. Do NOT go to Tier 2.
 \```
-**[pre-read]** Target: `SymbolName` · Tier: T1 · Line: 42 · Will read: offset=37 limit=60
+**[pre-read]** Target: `SymbolName` · Line: 42 · Will read: offset=37 limit=60
 \```
 
 ---
@@ -442,7 +442,7 @@ Emit trace:
 \```
 → Got line number? Emit pre-read gate → Read → STOP.
 \```
-**[pre-read]** Target: `SymbolName` · Tier: T2 · Line: <N> · Will read: offset=<N-5> limit=60
+**[pre-read]** Target: `SymbolName` · Line: <N> · Will read: offset=<N-5> limit=60
 \```
 → Still no line number? → proceed to Tier 3.
 
@@ -462,7 +462,7 @@ Emit trace:
 
 Step 3b — read only that range:
 \```
-**[pre-read]** Target: `SymbolName` · Tier: T3 · Line: 42 · Will read: offset=37 limit=60
+**[pre-read]** Target: `SymbolName` · Line: 42 · Will read: offset=37 limit=60
 Read  file_path=src/path/to/file.ts  offset=37  limit=60
 \```
 
@@ -521,7 +521,8 @@ If during this task a new hard constraint was discovered → add to INVARIANTS.m
 
 ---
 
-## file_manager
+## index_manager (mode: file)
+> Merged from the former `index_manager` (mode:file) (T-238). Canonical: `.agents/skills/knowledge/index_manager/SKILL.md`. This block documents the **file** mode.
 
 ```markdown
 ---
@@ -643,7 +644,7 @@ Every instruction must be followable by a MEDIUM-tier model @ low-med effort WIT
 **[✓ MECE]** Goal: <one line>
 
 Section 1 — <name from Skill sections[0]>:
-  Skill:    <editor|coder|file_manager|variable_manager|agent>   ← MANDATORY
+  Skill:    <editor|coder|index_manager|agent>   ← MANDATORY
   Steps:    [A] → [B] → [C]
   Verify:   <checkable — grep/compile/read-back, never subjective>
   Rollback: <what to undo if this section fails>
@@ -817,9 +818,9 @@ Section 2 — Build:
   Rollback: delete created files
 
 Section 3 — Sync & Close:
-  Skill:    file_manager + variable_manager
-  [C] file_manager: update knowledge/index_files.json + backlinks
-  [D] variable_manager: update knowledge/index_variables.json
+  Skill:    index_manager
+  [C] index_manager (mode:file): update knowledge/index_files.json + backlinks
+  [D] index_manager (mode:symbol): update knowledge/index_variables.json
   [E] python scripts/symbol_indexer.py · Mark roadmap [X]
   Verify: symbol count increased · no stale backlinks
   Rollback: restore index from last known state
@@ -848,7 +849,7 @@ Section 3 — Modify Existing:
   Rollback: revert edits
 
 Section 4 — Sync & Close:
-  Skill:    file_manager + variable_manager
+  Skill:    index_manager
   [D] update indexes · python scripts/symbol_indexer.py · roadmap [X]
   Verify: symbol count updated · roadmap entries [X]
   Rollback: restore index from last known state
@@ -901,7 +902,7 @@ TOKEN CHECK before Cycle/Section N+1:
    "งานเสร็จแล้วครับ ✓
     Errors/retries: <list or 'none'>
     มีส่วนไหนที่ควรปรับปรุงไหมครับ? หรือมี pattern ใหม่ที่ควรเพิ่มใน CODING_FAILURE_PATTERNS.md?"
-3. If user identifies a new failure pattern → route to file_manager to add CFP entry
+3. If user identifies a new failure pattern → route to index_manager (mode:file) to add CFP entry
 4. Write final summary_context to active session JSON before marking phase: done
 ```
 **[MECE]**     ✓ All Cycles done · Roadmap updated · Thread: done
@@ -1394,7 +1395,7 @@ Step 3: Handle user response:
 ## §Section 4 — Implementation (harness edit)
 
 **Invariants (hard rules — never violate):**
-- MUST NOT edit `.agents/skills/self_improve/SKILL.md` itself → emit [blocked-self-edit] → present diff to user manually
+- MUST NOT edit `.agents/skills/harness/self_improve/SKILL.md` itself → emit [blocked-self-edit] → present diff to user manually
 - MUST NOT edit `INVARIANTS.md` without explicit user confirm
 
 \```
@@ -1443,7 +1444,8 @@ If during this task a new hard constraint was discovered → add to INVARIANTS.m
 
 ---
 
-## variable_manager
+## index_manager (mode: symbol)
+> Merged from the former `index_manager` (mode:symbol) (T-238). Canonical: `.agents/skills/knowledge/index_manager/SKILL.md`. This block documents the **symbol** mode.
 
 ```markdown
 ---
@@ -1495,7 +1497,11 @@ description: Structural fix agent for CFP patterns that recurred AFTER a fix was
   steps: ["grep audit targets for group", "check hooks in settings.json", "classify gap type a|b|c|d", "emit [audit-finding]"]
 - id: 3
   name: "Proposal"
-  steps: ["draft structural fix", "dry-run validate", "present proposal", "HALT for approval"]
+  steps: ["draft structural fix", "dry-run validate", "pin repro (T-255)", "present proposal", "HALT for approval"]
+  # repro-pin (T-255 · SINGLE SOURCE of the format = harness_doctor/SKILL.md §3): proposal states how the fix
+  #   will be validated → repro:{trigger, check, reproducible:yes|no}. yes → [repro-pinned] + store in
+  #   index_cfp_fix.json fixes[].repro (consumed by harness_editor Stage 3.6). no (behavioral drift) →
+  #   [repro-missing] → count-proxy (§1.4 recurrence) + weak-validation flag → PROCEED (SOFT · never blocks doctor).
 - id: 4
   name: "Approval Gate"
   steps: ["wait explicit user confirm", "no auto-proceed"]
@@ -1663,7 +1669,8 @@ Stage 1 · AUDIT (mandatory-first for structural SKILL.md edits): wc -l zone pro
 Stage 2 · PLAN (gate — cannot skip): mece_plan.md dated today + T-N roadmap [/] · Parallel-cycle scan — group sections with NO shared file-write AND no mutual dependency into ONE parallel Cycle (spawn agents + barrier to rejoin); shared file OR dependency → serial; >=5 files/>=300L → spawn agents (R4), <5 files → main-context serial · record grouping in `### Cycle grouping`
 Stage 3 · EDIT: [pre-edit] → targeted Edit → [✓ written] · SKILL.md edit → confirm 8 components survive · grep the file's ACTUAL section headers (never assume fixed names like "## Trigger")
 Stage 3.5 · BEHAVIORAL VERIFY (Signal Contract · trigger-gated): behavioural edit (BC/gate/signal/sequence) only → empirically test the rule. A BC is its own test spec — `Pre:` → trigger prompt, `Post:`/signal → expected output. Spawn a 3-config ladder cheapest-first with early-exit on first PASS — ① Haiku (floor) → ② Sonnet@medium → ③ Sonnet@high — each reading ONLY the edited file + trigger (isolation), score by signal-grep. No effort param on Agent tool → effort = prompt framing (medium="answer directly", high="reason step-by-step"). Haiku pass → [behave-pass] → Stage 4 · Haiku fail/Sonnet@medium pass → [behave-gap] (rule too subtle) → Stage 5 · only Sonnet@high pass → [behave-gap] effort:high (clear but needs deep reasoning) → Stage 5 · all 3 fail → [behave-fail] → Stage 5. k=3 per config for DB/boot gates. Log → knowledge/behave_test_log.jsonl. Non-behavioural edit → [behave-skip]. Full procedure: harness_editor/SKILL_detail.md §Stage 3.5
-Stage 4 · CLOSE (Index Sync + Docs Close): index sync (skill-manifest if new skill · topics[] from topic_registry.json · backlink_analyzer.py) · then Docs Close — edit a harness file → update its paired Implement/REPO doc in the SAME task per §Implement Map below · roadmap [/]→[X] · active_thread phase:done
+Stage 3.6 · FIX VALIDATION (bug/CFP-fix only · gates Stage 4 close): if the task is a bug/CFP-fix → restate the ORIGINAL failure → re-run the repro against the EDITED harness → gone: [fix-validated] cfp:<id> repro:<how> · still repros / cannot re-run: [fix-unvalidated] reason:<x>. [fix-unvalidated] BLOCKS the Stage 4 [C] roadmap [/]→[X] → loop Stage 5. Non-fix task → [fix-skip]. Closes the recurring "Doctor diagnoses → harness_editor edits → bug still there" hole (Stage 3/3.5 prove the edit is correct, NOT that the failure is gone — only a re-run of the original repro proves that). Distinct from Stage 3.5: 3.5 = "does the new rule fire?" · 3.6 = "is the original bug actually gone?"
+Stage 4 · CLOSE (Index Sync + Docs Close): index sync (skill-manifest if new skill · topics[] from topic_registry.json · backlink_analyzer.py) · then Docs Close — edit a harness file → update its paired Implement/REPO doc in the SAME task per §Implement Map below · roadmap [/]→[X] (bug/CFP-fix → requires [fix-validated] from Stage 3.6 first) · active_thread phase:done
 Stage 5 · CFP (abnormal → loop back · do NOT retry blindly): emit [escalate] → self_improve → harness_doctor · log CFP · re-enter the failed stage with a DIFFERENT approach · 3rd consecutive fail → [blocked] + halt for user
 
 ### Implement Map (Stage 4 — closed list · no guessing · the "edit harness file → update its paired Implement doc" rule)

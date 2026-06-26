@@ -109,41 +109,31 @@ def extract_keywords(name: str, existing: dict) -> list[str]:
 def scan_symbols() -> dict[str, dict]:
     """Return enriched symbol metadata for every exported symbol in src/."""
     result: dict[str, dict] = {}
-    scan_roots = []
-    if SRC_ROOT.exists():
-        scan_roots.append(SRC_ROOT)
-    else:
-        for folder in ["backend/src", "frontend/src", "functions/src"]:
-            p = PROJECT_ROOT / folder
-            if p.exists():
-                scan_roots.append(p)
-                
-    for scan_root in scan_roots:
-        for root, dirs, files in os.walk(scan_root):
-            dirs[:] = [d for d in dirs if d not in ("node_modules", ".next", "__pycache__")]
-            for filename in files:
-                if not filename.endswith((".ts", ".tsx")):
-                    continue
-                full = Path(root) / filename
-                rel = str(full.relative_to(PROJECT_ROOT))
-                try:
-                    lines = full.read_text(encoding="utf-8").splitlines()
-                except Exception:
-                    continue
-                for lineno, text in enumerate(lines, start=1):
-                    m = EXPORT_RE.match(text.strip())
-                    if m:
-                        kind = m.group(1)
-                        name = m.group(2)
-                        if name not in result:
-                            line_end = infer_line_end(lines, lineno)
-                            result[name] = {
-                                "file": rel,
-                                "line": lineno,
-                                "line_end": line_end,
-                                "read_hint": make_read_hint(lineno, line_end),
-                                "type": classify(name, rel, kind),
-                            }
+    for root, dirs, files in os.walk(SRC_ROOT):
+        dirs[:] = [d for d in dirs if d not in ("node_modules", ".next", "__pycache__")]
+        for filename in files:
+            if not filename.endswith((".ts", ".tsx")):
+                continue
+            full = Path(root) / filename
+            rel = str(full.relative_to(PROJECT_ROOT))
+            try:
+                lines = full.read_text(encoding="utf-8").splitlines()
+            except Exception:
+                continue
+            for lineno, text in enumerate(lines, start=1):
+                m = EXPORT_RE.match(text.strip())
+                if m:
+                    kind = m.group(1)
+                    name = m.group(2)
+                    if name not in result:
+                        line_end = infer_line_end(lines, lineno)
+                        result[name] = {
+                            "file": rel,
+                            "line": lineno,
+                            "line_end": line_end,
+                            "read_hint": make_read_hint(lineno, line_end),
+                            "type": classify(name, rel, kind),
+                        }
     return result
 
 

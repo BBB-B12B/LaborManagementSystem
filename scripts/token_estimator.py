@@ -27,12 +27,16 @@ def _compute_sys_fixed():
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         size = os.path.getsize(os.path.join(base, "CLAUDE.md")) + \
                os.path.getsize(os.path.join(base, "AGENTS.md"))
-        return int(size * 0.3) + 3500
-    except OSError:
-        return 11070  # fallback
+        # base const lives ONLY in scripts/sys_fixed_base.txt (single source · T-250); it estimates
+        # the base CC system prompt + tool schemas (NOT file-readable; client-runtime). Recalibrate
+        # by editing that ONE file. (was inline 11000 in 3 sites · T-249)
+        const = int(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "sys_fixed_base.txt")).read().strip())
+        return int(size * 0.3) + const
+    except Exception:
+        return 19500  # fallback (≈ 0.3×28k + base) — degraded path only
 
 SYSTEM_FIXED = _compute_sys_fixed()
-# dynamic: (CLAUDE.md + AGENTS.md chars × 0.3) + 3500 ≈ 11–13k
+# dynamic: (CLAUDE.md + AGENTS.md chars × 0.3) + base(sys_fixed_base.txt) ≈ 19–20k (T-249/T-250)
 
 HOOKS_PER_TURN = 700
 # deferred-tools manifest ~600 + HARNESS REMINDER ~100 (per CLAUDE.md R1)

@@ -2,19 +2,16 @@
 session_indexer.py
 Scans .sessions/session_*.json and builds knowledge/index_sessions.json.
 
-Each entry stores:
-  - path          : relative path to the session file
+index_sessions.json is a THIN POINTER index — heavy detail (files_changed, actions,
+friction) lives in the session_NNN.json detail file, not here. Each entry stores only:
+  - session_id    : the session it points back to
+  - path          : relative path to the rich detail file (read it for full detail)
   - tasks         : associated_tasks[] from the session
   - status        : completed | in_progress | blocked
-  - date          : inferred from session_id (session_NNN_YYYY-MM-DD) or file mtime
-  - keywords      : extracted from summary_context + files_changed + tasks
-  - summary       : first 200 chars of summary_context (excerpt for fast lookup)
-  - files_changed : list of changed files (if present)
+  - date          : from session JSON or file mtime
   - skill         : skill name from session JSON (or null)
-  - topic         : first task description or keywords[0] (or null)
-  - actions       : list of T-IDs completed in session
-  - friction      : list of blocked/error event descriptions
-  - promoted      : always false (never set by indexer)
+  - summary       : first 200 chars of summary_context (excerpt for fast lookup)
+  - keywords      : noise-filtered tokens (no pure-digit / line-count junk)
 
 Usage:
     python scripts/session_indexer.py
@@ -41,6 +38,8 @@ NOISE = {
 
 WORD_RE = re.compile(r"[a-zA-Z0-9_\-\.]+")
 CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+# Drop pure-digit tokens ("030") and line-count noise ("198l") — junk keywords.
+NUM_NOISE_RE = re.compile(r"^\d+[lL]?$")
 
 
 def tokenize_text(text: str) -> set[str]:
@@ -50,7 +49,7 @@ def tokenize_text(text: str) -> set[str]:
         parts = CAMEL_RE.split(word)
         for p in parts:
             p = p.lower().strip("._-")
-            if len(p) > 2 and p not in NOISE:
+            if len(p) > 2 and p not in NOISE and not NUM_NOISE_RE.match(p):
                 tokens.add(p)
     return tokens
 
@@ -86,85 +85,6 @@ def extract_keywords(session: dict, session_id: str) -> list[str]:
     return sorted(tokens)
 
 
-# Regex to find T-IDs like T-149, T-072, etc.
-TASK_ID_RE = re.compile(r"\bT-\d+\b")
-
-
-def extract_new_fields(session: dict, existing_keywords: list) -> dict:
-    """Extract the 5 new fields from a session JSON dict."""
-    try:
-        # skill: top-level "skill" key
-        skill = session.get("skill") or None
-
-        # topic: first task description or first keyword
-        topic = None
-        tasks_raw = session.get("tasks", session.get("associated_tasks", []))
-        if tasks_raw and isinstance(tasks_raw, list) and len(tasks_raw) > 0:
-            first = tasks_raw[0]
-            if isinstance(first, dict):
-                topic = first.get("description") or first.get("title") or None
-            elif isinstance(first, str):
-                topic = first
-        if not topic and existing_keywords:
-            topic = existing_keywords[0]
-
-        # actions: T-IDs from tasks where status = completed/done, or all T-IDs found by regex
-        actions = []
-        tasks_list = session.get("tasks", session.get("associated_tasks", []))
-        if isinstance(tasks_list, list):
-            for t in tasks_list:
-                if isinstance(t, dict):
-                    status = t.get("status", "").lower()
-                    desc = t.get("description", t.get("title", ""))
-                    ids = TASK_ID_RE.findall(desc)
-                    if status in ("completed", "done") or not status:
-                        actions.extend(ids)
-                elif isinstance(t, str):
-                    # Plain string like "T-119" or "T-119: some task"
-                    ids = TASK_ID_RE.findall(t)
-                    actions.extend(ids)
-        # Also scan task_id top-level field (session_001 schema)
-        task_id_field = session.get("task_id", "")
-        if task_id_field:
-            actions.extend(TASK_ID_RE.findall(str(task_id_field)))
-        # Deduplicate preserving order
-        seen = set()
-        unique_actions = []
-        for a in actions:
-            if a not in seen:
-                seen.add(a)
-                unique_actions.append(a)
-        actions = unique_actions
-
-        # friction: blocked/error events
-        friction = []
-        for key in ("blocked", "errors", "friction", "error_events"):
-            val = session.get(key)
-            if isinstance(val, list):
-                friction.extend([str(v) for v in val if v])
-            elif isinstance(val, str) and val:
-                friction.append(val)
-
-        # promoted: always false
-        promoted = False
-
-        return {
-            "skill": skill,
-            "topic": topic,
-            "actions": actions,
-            "friction": friction,
-            "promoted": promoted,
-        }
-    except Exception:
-        return {
-            "skill": None,
-            "topic": None,
-            "actions": [],
-            "friction": [],
-            "promoted": False,
-        }
-
-
 def infer_date(session_id: str, file_path: Path) -> str:
     # Try to extract date from path mtime
     try:
@@ -191,25 +111,20 @@ def scan_sessions() -> dict[str, dict]:
         excerpt = summary_full[:200].rstrip() + ("…" if len(summary_full) > 200 else "")
 
         keywords = extract_keywords(data, session_id)
-        new_fields = extract_new_fields(data, keywords)
 
         # Support both "associated_tasks" (old schema) and "tasks" (new schema)
         tasks = data.get("associated_tasks", data.get("tasks", []))
 
+        # THIN entry — pointer only. Heavy fields (files_changed/actions/friction)
+        # live in the detail file at `path`; read it when full detail is needed.
         result[session_id] = {
-            "path":          rel_path,
-            "tasks":         tasks,
-            "status":        data.get("status", "unknown"),
-            "date":          data.get("date") or infer_date(session_id, path),
-            "keywords":      keywords,
-            "summary":       excerpt,
-            "files_changed": data.get("files_changed", []),
-            # New fields
-            "skill":         new_fields["skill"],
-            "topic":         new_fields["topic"],
-            "actions":       new_fields["actions"],
-            "friction":      new_fields["friction"],
-            "promoted":      new_fields["promoted"],
+            "path":     rel_path,
+            "tasks":    tasks,
+            "status":   data.get("status", "unknown"),
+            "date":     data.get("date") or infer_date(session_id, path),
+            "skill":    data.get("skill") or None,
+            "summary":  excerpt,
+            "keywords": keywords,
         }
 
     return result
@@ -221,9 +136,10 @@ def build_index(sessions: dict[str, dict], rebuild: bool = False) -> None:
         try:
             with open(INDEX_PATH, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-                # Support both list and dict formats
+                # Support both list and dict formats. Key by session_id (NOT path) so a
+                # fresh thin scan overwrites the old heavy entry instead of duplicating it.
                 if isinstance(raw, list):
-                    existing = {e.get("path", str(i)): e for i, e in enumerate(raw)}
+                    existing = {e.get("session_id", e.get("path", str(i))): e for i, e in enumerate(raw)}
                 else:
                     existing = raw.get("sessions", {})
         except Exception:
@@ -257,8 +173,7 @@ def main():
     for sid, info in list(sessions.items())[-3:]:
         print(f"  {sid}")
         print(f"    tasks: {info['tasks']}  status: {info['status']}")
-        print(f"    skill: {info['skill']}  topic: {info['topic']}")
-        print(f"    actions: {info['actions']}")
+        print(f"    skill: {info['skill']}  date: {info['date']}")
         print(f"    keywords: {info['keywords'][:5]}")
 
 

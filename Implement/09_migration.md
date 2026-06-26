@@ -21,6 +21,7 @@ This guide is **self-contained**, **idempotent**, and **vendor-agnostic** (works
 | `.agents/skills/` exists but skill files have no `## Trigger` block | → this guide |
 | `knowledge/` indexes have old schema (missing `topics[]`, `backlinks[]`) | → this guide |
 | `.sessions/` has `chat_tokens.md` instead of `session_tokens.md` | → this guide |
+| `.agents/platform/detected.md` has stale model IDs / old `token_formula` from a prior harness | → this guide (M2.4 re-detects it) |
 | Tree structure doesn't match `REPO_MAP.md` | → this guide |
 | Harness files present but 08_checklist fails ≥3 sections | → this guide |
 
@@ -61,6 +62,7 @@ echo "SKIP_COPY=$SKIP_COPY"
 - Run **top to bottom: M0 → M1 → M2 → M3 → M4 → M5**. Do not reorder.
 - **Idempotent** — every step checks before writing, so re-running is always safe.
 - **Never touch** `src/`, `db_migrations/`, or user data in `knowledge/index_*.json` beyond the M1 re-index scripts.
+- **`detected.md` is ALWAYS re-detected, never preserved or copied** — M2.4 resets it and the agent re-runs B4 inline this run, so stale model IDs / `token_formula` from the old harness are discarded (this is the one harness file that is machine-specific — see M2.4).
 - **Last copy step stamps the version:** after M3 completes, run `cp "$HARNESS_SRC/VERSION" ./VERSION` so the next migration's M0.2 detects "already current".
 
 ---
@@ -91,7 +93,7 @@ ls .sessions/ | grep -E "chat_tokens|session_tokens"
 # If chat_tokens.md exists → migrate
 CHAT=$(grep "CHAT_TOTAL:" .sessions/chat_tokens.md 2>/dev/null | awk '{print $2}')
 SESSION=$(grep "SESSION_TOTAL:" .sessions/chat_tokens.md 2>/dev/null | awk '{print $2}')
-printf "SESSION_TOTAL: ${SESSION:-0}\nCHAT_TOTAL: ${CHAT:-11070}\n" > .sessions/session_tokens.md
+printf "SESSION_TOTAL: ${SESSION:-0}\nCHAT_TOTAL: ${CHAT:-19500}\n" > .sessions/session_tokens.md
 rm .sessions/chat_tokens.md
 echo "✓ session_tokens.md written"
 ```
@@ -197,7 +199,7 @@ echo "✓ directories checked"
 [ -f .sessions/active_thread.md ] || printf "task: \nphase: done\nnext: \n" > .sessions/active_thread.md
 
 # session_tokens.md (if not migrated in M1.1)
-[ -f .sessions/session_tokens.md ] || printf "SESSION_TOTAL: 0\nCHAT_TOTAL: 11070\n" > .sessions/session_tokens.md
+[ -f .sessions/session_tokens.md ] || printf "SESSION_TOTAL: 0\nCHAT_TOTAL: 19500\n" > .sessions/session_tokens.md
 
 # compact_state.md (create blank if missing)
 [ -f .sessions/compact_state.md ] || printf "dt=\ns=0k\ntask=none\ncfp=0\nsk=\nsk_h=\nmece_h=\np1=\np2=\np3=\nsection=\nstep=\nresume_at=none\n" > .sessions/compact_state.md
@@ -213,15 +215,36 @@ echo "✓ session files checked"
 echo "✓ mece_plan_schema.md present"
 ```
 
-### M2.4 · Platform detected.md
+### M2.4 · Platform detected.md — FORCE re-detection (never preserve stale values)
+
+> `detected.md` is **machine/provider-specific** — it holds the model IDs + `token_formula` for THIS
+> install. An old harness's copy carries **stale** values, and boot-time B4 will NOT refresh a file
+> whose `platform:`/`api_provider:` are already filled (B4 re-detects only when they are `unknown`/missing).
+> So migration MUST re-detect it **inline** — never copy it from `$HARNESS_SRC`, never blindly keep the old one.
 
 ```bash
-[ -f .agents/platform/detected.md ] \
-  && echo "✓ detected.md present" \
-  || echo "platform: unknown" > .agents/platform/detected.md && echo "created blank detected.md"
+# Back up the old values, then reset detection fields so the agent re-detects fresh THIS run
+if [ -f .agents/platform/detected.md ]; then
+  cp .agents/platform/detected.md .agents/platform/detected.md.bak
+  echo "✓ backed up old detected.md → detected.md.bak"
+fi
+printf "platform: unknown\napi_provider: unknown\n" > .agents/platform/detected.md
+echo "→ detected.md reset to unknown — agent MUST run B4 NOW (not next boot)"
 ```
 
-B4 will auto-detect and fill on next boot.
+**Agent action (mandatory · do NOT defer to next boot):** run **B4** from `AGENTS.md §Boot` right now —
+the platform probe (list tools → map platform) **and** the provider sub-probe (steps 1-3:
+platform→provider, else model-id heuristic) — then write the **full** `detected.md` with every field
+filled from `## Known Provider Profiles` (model_high/medium/low · api_provider · cache_mechanism ·
+context_cliff_tokens · token_formula · cache_write_cost). Never hardcode model IDs.
+
+Verify:
+```bash
+grep -E "^platform:|^api_provider:|^token_formula:|^model_(high|medium|low):" .agents/platform/detected.md
+# → no value may be "unknown" after B4 runs
+[ -f .agents/platform/detected.md.bak ] && diff .agents/platform/detected.md.bak .agents/platform/detected.md
+# → shows exactly which stale values (model IDs / token_formula) were refreshed
+```
 
 ### M2.5 · Required scripts (incl. current hook + index automation)
 

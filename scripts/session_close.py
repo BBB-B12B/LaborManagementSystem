@@ -10,6 +10,7 @@ Usage:
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import date
@@ -17,6 +18,45 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 SESSIONS_DIR = ROOT / ".sessions"
+
+
+def git_files_changed():
+    """Return sorted unique paths touched this session (git status --porcelain)."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=10
+        )
+        files = []
+        for line in result.stdout.splitlines():
+            p = line[3:].strip()
+            if " -> " in p:  # rename: keep destination
+                p = p.split(" -> ", 1)[1]
+            if p:
+                files.append(p)
+        return sorted(set(files))
+    except Exception:
+        return []
+
+
+def extract_task_ids(task):
+    """Pull T-IDs (T-199, T-198c) directly from the task string — accurate, no roadmap scan."""
+    return sorted(set(re.findall(r"T-\d+[a-z]?", task or "")))
+
+
+def detect_skill():
+    """Read the active skill from mece_plan.md, fall back to compact_state.md, else unknown."""
+    mece = SESSIONS_DIR / "mece_plan.md"
+    if mece.exists():
+        for line in mece.read_text(encoding="utf-8").splitlines()[:8]:
+            if line.startswith("skill:"):
+                return line.split(":", 1)[1].strip()
+    cs = SESSIONS_DIR / "compact_state.md"
+    if cs.exists():
+        for line in cs.read_text(encoding="utf-8").splitlines():
+            if line.startswith("sk="):
+                return line.split("=", 1)[1].strip()
+    return "unknown"
 
 
 def find_next_session_id():
@@ -36,14 +76,22 @@ def find_next_session_id():
     return max(numbers) + 1 if numbers else 1
 
 
-def write_session_json(session_id, task, dry_run=False):
-    """Write .sessions/session_NNN.json"""
+def write_session_json(session_id, task, summary=None, skill=None, dry_run=False):
+    """Write .sessions/session_NNN.json — the RICH source of truth for this session.
+
+    Holds full detail (files touched, T-IDs, skill, real summary); index_sessions.json
+    keeps only a thin pointer back to this file.
+    """
     path = SESSIONS_DIR / f"session_{session_id:03d}.json"
     content = {
         "session_id": f"session_{session_id:03d}",
         "status": "completed",
+        "date": date.today().isoformat(),
         "task": task,
-        "summary_context": "closed by session_close.py"
+        "task_ids": extract_task_ids(task),
+        "skill": skill or detect_skill(),
+        "files_changed": git_files_changed(),
+        "summary_context": summary or task,
     }
     if dry_run:
         print(f"[dry-run] {path}")
@@ -68,6 +116,8 @@ def write_session_tokens(chat_total, session_total=0, dry_run=False):
         "CACHE_WRITE: 0\n"
         "TURN_COUNT: 0\n"
         "LOOP_WEIGHT: 0\n"
+        "FILES_READ: 0\n"
+        "LONG_OUTPUTS: 0\n"
     )
     if dry_run:
         print(f"[dry-run] {path}")
@@ -129,15 +179,14 @@ def run_session_indexer(dry_run=False):
         print(f"[dry-run] python3 {ROOT / 'scripts' / 'session_indexer.py'}")
         return True
     try:
-        import sys as sys_module
         result = subprocess.run(
-            [sys_module.executable, str(ROOT / "scripts" / "session_indexer.py")],
+            ["python3", str(ROOT / "scripts" / "session_indexer.py")],
             cwd=str(ROOT),
             capture_output=True,
             timeout=10
         )
         if result.returncode == 0:
-            print("[session-indexer] completed")
+            print("[✓ session-indexer] completed")
             return True
         else:
             print(f"[warn] session_indexer.py failed (code {result.returncode})", file=sys.stderr)
@@ -153,14 +202,26 @@ def main():
     parser.add_argument("--next", default="", help="Next action")
     parser.add_argument("--session-total", type=int, default=0, help="SESSION_TOTAL value")
     parser.add_argument("--chat-total", type=int, default=0, help="CHAT_TOTAL value")
+    parser.add_argument("--summary", default="", help="Real summary text for the detail file")
+    parser.add_argument("--skill", default="", help="Skill name override (else auto-detected)")
+    parser.add_argument("--record-only", action="store_true",
+                        help="Write ONLY the detail file + run indexer (no token reset / handoff / active_thread rewrite). Safe for the Stop-hook reconciler to call.")
     parser.add_argument("--dry-run", action="store_true", help="Print paths only")
 
     args = parser.parse_args()
 
     session_id = find_next_session_id()
+    summary = args.summary or None
+    skill = args.skill or None
+
+    if args.record_only:
+        ok = write_session_json(session_id, args.task, summary=summary, skill=skill, dry_run=args.dry_run)
+        ok &= run_session_indexer(dry_run=args.dry_run)
+        print("[record-only] detail file + indexer only — no token reset / no handoff rewrite")
+        sys.exit(0 if ok else 1)
 
     if args.dry_run:
-        write_session_json(session_id, args.task, dry_run=True)
+        write_session_json(session_id, args.task, summary=summary, skill=skill, dry_run=True)
         write_session_tokens(args.chat_total, session_total=args.session_total, dry_run=True)
         write_active_thread(args.task, args.next, dry_run=True)
         write_session_handoff(args.task, args.next, dry_run=True)
@@ -168,14 +229,14 @@ def main():
         sys.exit(0)
 
     success = True
-    success &= write_session_json(session_id, args.task)
+    success &= write_session_json(session_id, args.task, summary=summary, skill=skill)
     success &= write_session_tokens(args.chat_total, session_total=args.session_total)
     success &= write_active_thread(args.task, args.next)
     success &= write_session_handoff(args.task, args.next)
     success &= run_session_indexer()
 
     if success:
-        print("[session-close] 5 files written")
+        print("[✓ session-close] 5 files written")
         sys.exit(0)
     else:
         sys.exit(1)

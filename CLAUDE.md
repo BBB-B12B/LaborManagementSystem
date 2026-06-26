@@ -12,7 +12,7 @@ Reply: `**[Boot]** Thread: <done|in_progress> · Tasks: <N> · Skill: <name> · 
 After task → write `.sessions/active_thread.md`: `task: · phase: done|in_progress|blocked · next:`
 
 ## Per-Turn Routing (every message — before any work)
-Run C0→C0.5→C1→C2→C3. → Full logic + topic switch criteria: **AGENTS.md §Per-Turn Routing**
+Run C0→C1→C2→C3. → Full logic + topic switch criteria: **AGENTS.md §Per-Turn Routing**
 
 ## Loop Architecture
 → Full Phase 1–3 detail + REACT LOOP: **AGENTS.md §Loop Architecture**
@@ -26,10 +26,10 @@ When all mece_plan.md sections are marked [X]: (0) verify all [X] → (1) Write 
 ## R1 · Token Tracking
 Two counters: `SESSION_TOTAL` (per-task) · `CHAT_TOTAL` (context window). **Reset SESSION_TOTAL to 0 ONLY on: (1) user-confirmed /compact at an explicit mece compact-checkpoint — PATH B arms `session_reset=armed` in compact_state.md, consumed once at next boot, OR (2) task done + session close (PATH A/C). NEVER reset on stale/leftover compact_state.md or mid-task fresh boot** (CFP-031). CHAT_TOTAL resets on /compact only.
 → Full formulas + JSONL + spike alerts: **Implement/03_config.md §Token Tracking**
-Each turn: the **PostToolUse hook (`scripts/posttool_track.py`) auto-accumulates SESSION_TOTAL + CHAT_TOTAL per tool call** (provider-aware estimate · reads token_formula from detected.md · still a lower bound — tool I/O only · CFP-028 + T-178) — agent does NOT hand-write these. Agent per turn: (1) read [token-state] values (2) write JSONL (3) check R3 (4) check spike (5) footer. (persist is now hook-side · closes CFP-031 + CFP-028)
+Each turn: the **PostToolUse hook (`scripts/posttool_track.py`) auto-accumulates SESSION_TOTAL + CHAT_TOTAL per tool call** — agent does NOT hand-write these (lower bound — tool I/O only). Agent per turn: (1) read [token-state] (2) write JSONL (3) check R3 (4) check spike (5) footer (6) at any mid-turn DECISION point (compact_checkpoint · R3/C0.5 threshold · heavy-tool turn) → grep LIVE `.sessions/session_tokens.md` (hook writes the running total there during the turn · snapshot lags ≤1 turn). → mechanics (provider-aware · hook-owned persist · T-231/T-235 · CFP-028/031/041): **Implement/03_config.md §Token Tracking**
 
-Footer: → use [token-state] hook values DIRECTLY · absent → grep session_tokens.md · values are **hook-estimated (≈ approximate lower bound — provider-aware multiplier per detected.md · hook sees tool I/O, not model output · CFP-028 fixed · T-178)** · agent reads them, never hand-writes/fabricates · format: `*(Turn: N · Loop_W: N | Session: ~NNNk | Chat: ~NNNk tokens)*` · Loop_W stale = CFP-031 · display 4-bucket when SESSION_TOTAL > 5k: `[sys:Nk tools:Nk hist:Nk out:Nk]`
-[compact-reset] emit (T-180 · hard): on ANY post-compact reset (SessionStart:compact hook · C0 plain-text confirm · C0.5 stuck-counter guard) the agent MUST surface the line printed by `scripts/compact_reset.py` — `[compact-reset] trigger: <hook|user-confirm> · CHAT_TOTAL→N · LOOP_WEIGHT→0 · SESSION_TOTAL→<0|preserved> · cache: cold`. Every reset is visible to the user — never silent.
+Footer: use [token-state] hook values DIRECTLY (absent → grep session_tokens.md) · agent reads, never hand-writes/fabricates · **lower bound — tool I/O only; real context ≈1.5–2× (trust the client meter for any ceiling/compact call)** · format: `*(Turn: N · Loop_W: N | Session: ~NNNk | Chat: ~NNNk tokens)*` · start-of-turn total, lags ≤1 turn (CFP-041) — live mid-turn figure → grep `.sessions/session_tokens.md` · 4-bucket when SESSION_TOTAL >5k: `[sys:Nk tools:Nk hist:Nk out:Nk]`
+[compact-reset] emit (T-180 · hard): on ANY post-compact reset (SessionStart:compact hook · C0 plain-text confirm · C0 Q3 stuck-counter guard) the agent MUST surface the line printed by `scripts/compact_reset.py` — `[compact-reset] trigger: <hook|user-confirm> · CHAT_TOTAL→N · LOOP_WEIGHT→0 · SESSION_TOTAL→<0|preserved> · cache: cold`. Every reset is visible to the user — never silent.
 → after footer: if cache_hit_pct < 60% AND cache_read_tokens > 0: emit `[cache-warn] hit%: NN% (target ≥60%) · recommend /compact before next task` · skip = R1 violation
 
 ## R2 · Tool Budget
@@ -37,17 +37,18 @@ Max 5 tool calls/turn. Retry max 2×; diagnose on 2nd fail.
 
 ## R3 · Session Pause Protocol
 → Full threshold table: **Implement/03_config.md §R3**
-Key: SESSION_TOTAL 60-80k → TOKEN PAUSE · 80-90k → [compact-rec] strong (recommend · not forced) · >90k → HALT (hard) · CHAT_TOTAL 80-120k → [compact-rec] strong (primary · recommend+choice) · >120k → HALT (hard) · LOOP_WEIGHT >50 → [compact-rec] light hint (secondary)
+Key: PRIMARY trigger = signal-box N/4 (4 drift-proof booleans from the UserPromptSubmit hook · N≥2 → [compact-rec] strong · T-221) — full logic in AGENTS.md C0 Q3. Char-estimate is SECONDARY/backstop only: window-anchored eff (CHAT×1.75) ≥90%·WIN(128k) AND signal-box ≥2 → HALT (hard ceiling · BOTH required · T-261; estimate alone never stops) · CHAT 80-120k / SESSION 60-90k / LOOP_WEIGHT >50 → light [compact-note] (optional · estimate is a lower bound — tool I/O only; subagent pollution removed by T-235 · CFP-041 root-fixed)
 Stuck-counter guard (T-180): [compact-STOP] firing with ~same CHAT_TOTAL (±2k) across ≥2 turns = the post-compact counter did NOT reset (CFP-037 · /compact is invisible to the agent), NOT a real ceiling → run `scripts/compact_reset.py` → emit [compact-reset] · do NOT keep nagging. Post-compact reset is provider-aware: claude-code auto via the SessionStart:compact hook · other providers via the C0 plain-text confirm path.
 
 ## R4 · Sub-agent Decision
 Probe: `find <path> -name "<pat>" | wc -l` → <5 files/<300L: main context · ≥5: spawn sub-agent (≤500 tok)
 Spawn: read `spawn_tool` from `detected.md` · platform-unknown → run B4 first
 → Spawn patterns + Phase routing table (~35% cost saving): **AGENTS.md §Sub-agent Rules** · **Implement/03_config.md §R4**
+→ Delegate a *confirmed* mechanical MECE section to the low tier (`model_low`) instead of running it in main context → **`delegate` skill** (self-verify + retry-once + escalate · never gated/judgment work).
 
 ## R5 · Index-First Lookup (hard)
 
-→ before Read: emit `[pre-read] Target: <symbol> · Tier: T<N> · Line: <N>` · after Read: emit `[post-read] Verdict: relevant|partial|irrelevant` · irrelevant → DROP · before Edit symbol: emit `[pre-edit] Symbol: <name> · used_in: <N> · safe: yes|review` · skip any emit = [violation] R5
+→ before Read: emit `[pre-read] Target: <symbol> · Line: <N>` · after Read: emit `[post-read] Verdict: relevant|partial|irrelevant` · irrelevant → DROP · before Edit symbol: emit `[pre-edit] Symbol: <name> · used_in: <N> · safe: yes|review` · skip any emit = [violation] R5
 
 ## Never-Full-Load (hard — no exceptions)
 
@@ -62,17 +63,11 @@ Never-Full-Load: prohibited files → grep/offset only:
 R6: `cmd 2>&1 | grep -iE "error|warn|fail" | tail -20` · R7: table/bullet > prose · comparison→table · steps→numbered · enum→bullet
 → R7b reply-style (hard): every reply + work-summary = concise · simple · clear · plain-person tone (talk like a person, not a manual) · technical term allowed ONLY with a simple gloss + everyday analogy (for user learning) · simplicity FIRST, always · no dense jargon · no long ceremony
 
-## R8 · Index Sync (fire on file changes)
-
-→ after file create/delete/move: run `python3 scripts/backlink_analyzer.py` (updates index_files.json) · edit imports → backlinks[] · symbol create/rename → `python3 scripts/symbol_indexer.py` · session close → `python3 scripts/session_indexer.py` · emit `[r8-sync-check]` · skip = [violation] R8-index-sync
+## R8 · Index Sync
+→ after file create/delete/move/symbol-change/session-close: run the matching indexer + emit `[r8-sync-check]` · skip = [violation] R8-index-sync → full event→command map: **Implement/03_config.md §R8**
 
 ## R9 · Error Protocol
-Step 0: "still broken"/"same error"/same ERR-XXX → grep roadmap prior AttemptID → read `### Failed Approaches:` → different approach → `[recurring] ERR-XXX · Prior: N · Previous: <summary> · New: <different>`
-Pre-debug: grep error_index.md · knowledge/index_variables.json · knowledge/index_files.json
-New error: `T-{Parent}-{BugID}-{Attempt}` · write error_index + `### Failed Approaches:`
-
-→ before new error_index.md entry: grep error_topics.md for topic id · no match → emit `[topic-missing]` · add topic first · then write entry · entry without topic: field = [violation] BC-topic-lookup
-→ when error_index entry has it_work:false: read failed_approaches: → choose approach NOT in list · emit `[active-fix] ERR-XXX · Avoiding: <prior> · Trying: <new>` · debug without reading failed_approaches = [violation] BC-active-fix
+→ on error / "still broken" / "same error" / same ERR-XXX: Step-0 recurrence check (grep roadmap + `### Failed Approaches:` → `[recurring]`) · pre-debug greps (error_index · index_variables · index_files) · new ERR = `T-{Parent}-{BugID}-{Attempt}` + BC-topic-lookup + BC-active-fix (each `[violation]`-enforced) · **disproof-first (P3 short form):** rank ≥2 hypotheses → disprove the cheapest-to-kill first → log each ruled-out (never re-test a killed one) · hard/looping case → load the `debug` skill (full ledger) → full protocol + signals: **Implement/03_config.md §R9**
 
 ## R10–R11 · Tool Cap + English
 R10: Truncate at 300 lines · >50L offload → `.sessions/exec_log/<uuid>.txt` · terse signals only
@@ -80,12 +75,10 @@ R10: Truncate at 300 lines · >50L offload → `.sessions/exec_log/<uuid>.txt` �
 R11: `.sessions/`, `knowledge/`, comments, commits → English only. Thai: user replies only.
 
 ## R12 · Post-Edit Verification
-
-→ after Edit/Write: src/ → re-read changed section · DB change → verify no ERR-007 · file create/delete → index_files.json updated · error fix → ERR-XXX in error_index + roadmap [X] · step marked [X] without checks = [violation] R12
+→ after Edit/Write: src/ re-read · DB → no ERR-007 · file create/delete → index_files.json · error fix → ERR-XXX + roadmap [X] · step [X] without checks = [violation] R12 → full table: **Implement/03_config.md §R12**
 
 ## R13 · Escalation
-
-→ on 2nd failed attempt OR tool error 2× OR R12 fail 2×: HALT · emit `[blocked] Task: <T-ID> · Attempts: 2 · Cause: <root> · Need: <missing>` · wait for user · 3rd attempt without [blocked] = [violation] R13
+→ on 2nd failed attempt OR tool error 2× OR R12 fail 2×: HALT · emit `[blocked] Task · Attempts · Cause · Need` · 3rd attempt without [blocked] = [violation] R13 → **Implement/03_config.md §R13**
 
 ## R14 · Destructive Action Gates
 
