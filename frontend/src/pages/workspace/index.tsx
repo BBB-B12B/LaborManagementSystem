@@ -37,6 +37,7 @@ import {
   List,
   ListItem,
   ListItemSecondaryAction,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -57,6 +58,7 @@ import {
   AccountTree as AccountTreeIcon,
   VisibilityOff as VisibilityOffIcon,
   RestoreFromTrash as RestoreIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -127,11 +129,13 @@ export default function WorkspacePage() {
   const { showLoading, hideLoading } = useFeedbackStore();
 
   const [activeTab, setActiveTab] = useState('This Month');
+  const [notificationReloadKey, setNotificationReloadKey] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId, user?.id);
+  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId, user?.id, notificationReloadKey);
 
   useEffect(() => {
     setLoading(isCacheLoading);
@@ -771,6 +775,7 @@ export default function WorkspacePage() {
   const handleResetFilters = () => {
     setActiveTab('All Tasks');
     setSelectedNode(null);
+    setSearchQuery('');
   };
 
   const handleDeleteCategoryOpen = (catId: string, currentName: string) => {
@@ -912,6 +917,18 @@ export default function WorkspacePage() {
     }
   }, [subtaskCards, selectedTaskForReport]);
 
+  // เมื่อมี subtaskId ใน URL (มาจากการคลิก notification) → force reload ข้อมูลจาก Firestore ใหม่
+  // เพื่อให้ card ถูก find() เจอ และ modal แสดงสถานะปัจจุบัน (ไม่ใช่ข้อมูลเก่าใน cache)
+  const routerQuerySubtaskId = router.isReady
+    ? typeof router.query.subtaskId === 'string' ? router.query.subtaskId : null
+    : null;
+  useEffect(() => {
+    if (!routerQuerySubtaskId) return;
+    if (handledSubtaskIdRef.current === routerQuerySubtaskId) return;
+    setNotificationReloadKey((k) => k + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerQuerySubtaskId]);
+
   // Filter subtasks by tab & Structure Tree selection
   const filteredSubtasks = useMemo(() => {
     const today = new Date();
@@ -964,8 +981,18 @@ export default function WorkspacePage() {
       }
     }
 
+    // 3. Filter by search query (taskName OR subtaskName)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(
+        (card) =>
+          (card.taskName || '').toLowerCase().includes(q) ||
+          (card.subtaskName || '').toLowerCase().includes(q)
+      );
+    }
+
     return filtered;
-  }, [subtaskCards, activeTab, selectedNode]);
+  }, [subtaskCards, activeTab, selectedNode, searchQuery]);
 
   // Click card handler (directly launches Daily Report modal)
   const handleSubtaskCardClick = (subtaskCard: Task) => {
@@ -1428,7 +1455,7 @@ export default function WorkspacePage() {
                 </Menu>
 
                 {/* Reset Filters button next to the tabs */}
-                {(activeTab !== 'All Tasks' || selectedNode !== null) && (
+                {(activeTab !== 'All Tasks' || selectedNode !== null || searchQuery !== '') && (
                   <Button
                     size="small"
                     variant="outlined"
@@ -1503,6 +1530,33 @@ export default function WorkspacePage() {
                   </Button>
                 )}
               </Stack>
+
+              {/* Search box — desktop */}
+              <TextField
+                size="small"
+                placeholder="ค้นหาชื่องาน..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{
+                  display: { xs: 'none', md: 'flex' },
+                  width: 240,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '999px',
+                    bgcolor: '#f8f9fb',
+                    fontSize: '0.875rem',
+                    '& fieldset': { borderColor: '#e5e7eb' },
+                    '&:hover fieldset': { borderColor: '#d1d5db' },
+                    '&.Mui-focused fieldset': { borderColor: '#FF7F32', borderWidth: 1.5 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 18, color: '#9ca3af' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
               {/* Mobile — collapsible action panel */}
               <Box sx={{ display: { xs: 'block', sm: 'none' }, width: '100%' }}>

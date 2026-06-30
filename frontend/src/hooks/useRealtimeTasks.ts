@@ -92,7 +92,7 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
   };
 };
 
-export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string, supportUserId?: string) => {
+export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string, supportUserId?: string, reloadKey?: number) => {
   const { upsertTask, removeTaskRealtime, upsertSubtask, removeSubtaskRealtime, setLoading: setCacheLoading } = useTaskCacheStore();
 
   useEffect(() => {
@@ -237,5 +237,5 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [projectIds.join(','), activeTab, supportEmployeeId, supportUserId]);
+  }, [projectIds.join(','), activeTab, supportEmployeeId, supportUserId, reloadKey]);
 };

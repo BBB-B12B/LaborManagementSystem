@@ -1937,7 +1937,13 @@ router.post('/:id/unlock-report', async (req: Request, res: Response, next: Next
         subtaskId: subtaskRawId || '',
         subtaskName: ctx.subtaskName || subtaskDocData?.subtaskName || '',
         reportDate: dateStr,
-        message: `${approverName} ได้ปลดล็อคสิทธิ์ให้คุณแก้ข้อมูลย้อนหลังวันที่ ${dateStr}`,
+        message: (() => {
+          const resolvedSubtaskName = ctx.subtaskName || subtaskDocData?.subtaskName || '';
+          const taskLabel = ctx.taskName && resolvedSubtaskName
+            ? `${ctx.taskName} > ${resolvedSubtaskName}`
+            : resolvedSubtaskName || ctx.taskName || '';
+          return `${approverName} ได้ปลดล็อคสิทธิ์ให้คุณแก้ข้อมูลย้อนหลังวันที่ ${dateStr}${taskLabel ? ` ในงาน "${taskLabel}"` : ''}`;
+        })(),
         createdAt: new Date(),
         createdBy: userId,
         createdByName: approverName,
@@ -2019,7 +2025,10 @@ router.post('/:id/request-unlock', async (req: Request, res: Response, next: Nex
           .map(d => ({ id: d.id, ...d.data() } as any))
           .filter(u => SUPERVISOR_ROLES.includes(u.roleId || u.roleCode || ''));
 
-        const message = `${requesterName} ขอปลดล็อคสิทธิ์สำหรับวันที่ ${dateStr}${subtaskName ? ` ในงาน "${subtaskName}"` : ''}`;
+        const taskLabel = ctx.taskName && subtaskName
+          ? `${ctx.taskName} > ${subtaskName}`
+          : subtaskName || ctx.taskName || '';
+        const message = `${requesterName} ขอปลดล็อคสิทธิ์สำหรับวันที่ ${dateStr}${taskLabel ? ` ในงาน "${taskLabel}"` : ''}`;
 
         const batch = afterSaleDb.batch();
         for (const supervisor of supervisors) {

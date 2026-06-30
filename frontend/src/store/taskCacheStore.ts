@@ -134,7 +134,11 @@ export const useTaskCacheStore = create<TaskCacheState>()((set, get) => ({
     set((state) => {
       const exists = state.tasks.some((t) => t.id === task.id);
       if (exists) {
-        return { tasks: state.tasks.map((t) => (t.id === task.id ? { ...t, ...task } : t)) };
+        return {
+          tasks: state.tasks.map((t) =>
+            t.id === task.id ? { ...t, ...task, subtasks: t.subtasks || [] } : t
+          ),
+        };
       } else {
         return { tasks: [task, ...state.tasks] };
       }
