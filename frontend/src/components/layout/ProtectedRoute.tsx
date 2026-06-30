@@ -16,6 +16,8 @@ import { useTranslation } from 'react-i18next';
 export interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRoles?: string[]; // Optional: restrict by role codes (AM, FM, SE, etc.)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  allowedCondition?: (user: any) => boolean; // Extra condition that bypasses requiredRoles check
 }
 
 /**
@@ -25,7 +27,7 @@ export interface ProtectedRouteProps {
  * - Redirects to login if not authenticated
  * - Shows access denied if role requirement not met
  */
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles }) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles, allowedCondition }) => {
   const router = useRouter();
   const { t } = useTranslation();
   const { isAuthenticated, user, isLoading } = useAuthStore();
@@ -51,6 +53,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
       if (userRole) {
         if (userRole === 'GOD') {
+          return;
+        }
+        // allowedCondition lets specific user+project combos bypass the role list
+        if (allowedCondition && allowedCondition(user)) {
           return;
         }
         const hasRequiredRole = requiredRoles.includes(userRole);

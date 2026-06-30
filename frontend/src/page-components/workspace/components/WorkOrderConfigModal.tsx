@@ -56,8 +56,11 @@ export const WorkOrderConfigModal: React.FC<Props> = ({ open, onClose, onSuccess
       const fetchLeaders = async () => {
         setLoadingLeaders(true);
         try {
-          const res = await memberService.getAllUsers({ roleId: 'LD', projectId, pageSize: 1000 });
-          setLeaders(res.users || []);
+          const [ldRes, amRes] = await Promise.all([
+            memberService.getAllUsers({ roleId: 'LD', projectId, pageSize: 1000 }),
+            memberService.getAllUsers({ roleId: 'AM', projectId, pageSize: 1000 }),
+          ]);
+          setLeaders([...(amRes.users || []), ...(ldRes.users || [])]);
         } catch (error) {
           console.error('Failed to fetch leaders', error);
         } finally {

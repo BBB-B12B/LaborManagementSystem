@@ -55,7 +55,7 @@ export const Navbar: React.FC = () => {
       label: t('nav.dailyReport'),
       path: '/daily-reports',
       icon: <DescriptionIcon />,
-      roles: ['SE', 'FM', 'LD'],
+      roles: ['SE', 'FM', 'LD', 'AM'],
     },
     {
       label: t('nav.management', 'การจัดการ'),

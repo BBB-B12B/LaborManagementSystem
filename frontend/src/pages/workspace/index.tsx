@@ -142,7 +142,9 @@ export default function WorkspacePage() {
   }, [isCacheLoading]);
 
   const toast = useToast();
-  const { canEditWorkspace } = usePermissions(user);
+  const { canEditWorkspace: _canEditBase } = usePermissions(user);
+  // AM (admin) can create/manage tasks in workspace — equivalent to LD-level task creation rights
+  const canEditWorkspace = _canEditBase || user?.roleCode === 'AM';
 
   const [projects, setProjects] = useState<any[]>([]);
 
@@ -1311,8 +1313,8 @@ export default function WorkspacePage() {
               onSubtaskClick={handleSubtaskClickInTree}
               onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
               onQuickAssignSubtask={canEditWorkspace ? handleQuickAssignSubtaskClick : undefined}
-              onEditWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleEditWorkOrderOpen : undefined}
-              onDeleteWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleDeleteWorkOrderOpen : undefined}
+              onEditWorkOrder={canEditWorkspace && !['LD', 'AM'].includes(user?.roleCode ?? '') ? handleEditWorkOrderOpen : undefined}
+              onDeleteWorkOrder={canEditWorkspace && !['LD', 'AM'].includes(user?.roleCode ?? '') ? handleDeleteWorkOrderOpen : undefined}
               onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
               onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
               onEditTask={canEditWorkspace ? handleEditTaskOpen : undefined}
@@ -1787,7 +1789,16 @@ export default function WorkspacePage() {
                     if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
                     return effectiveStatus === column.id;
                   })
-                  .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+                  .sort((a, b) => {
+                    const uid = user?.id;
+                    const eid = user?.employeeId;
+                    const isMine = (t: any) =>
+                      t.assignees?.some((x: any) => x.employeeId === eid || x.employeeId === uid);
+                    const aMe = isMine(a) ? 0 : 1;
+                    const bMe = isMine(b) ? 0 : 1;
+                    if (aMe !== bMe) return aMe - bMe;
+                    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                  });
 
                 const isMobileCompletedCol = column.id === 'completed';
                 const columnTasks = isMobileCompletedCol
@@ -1911,7 +1922,16 @@ export default function WorkspacePage() {
                   if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
                   return effectiveStatus === column.id;
                 })
-                .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+                .sort((a, b) => {
+                    const uid = user?.id;
+                    const eid = user?.employeeId;
+                    const isMine = (t: any) =>
+                      t.assignees?.some((x: any) => x.employeeId === eid || x.employeeId === uid);
+                    const aMe = isMine(a) ? 0 : 1;
+                    const bMe = isMine(b) ? 0 : 1;
+                    if (aMe !== bMe) return aMe - bMe;
+                    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                  });
 
               // For completed column: separate visible vs hidden
               const isCompletedCol = column.id === 'completed';

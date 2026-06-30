@@ -56,9 +56,9 @@ router.get('/work-orders', async (req: Request, res: Response, next: NextFunctio
     const userRole = authReq.user?.roleCode;
     let data = await projectConfigService.getWorkOrders(projectId);
 
-    if (userRole === 'LD' && authReq.user) {
-      data = data.filter(wo => 
-        wo.leaderId === authReq.user!.id || 
+    if (['LD', 'AM'].includes(userRole ?? '') && authReq.user) {
+      data = data.filter(wo =>
+        wo.leaderId === authReq.user!.id ||
         (wo.leaderIds && Array.isArray(wo.leaderIds) && wo.leaderIds.includes(authReq.user!.id)) ||
         (wo.AssignLD && Array.isArray(wo.AssignLD) && wo.AssignLD.includes(authReq.user!.id))
       );

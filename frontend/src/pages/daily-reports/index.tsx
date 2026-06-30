@@ -1258,9 +1258,10 @@ export default function DailyReportPage() {
           const isActive = t.isActive !== false;
 
           const role = String(currentUser.roleCode || currentUser.roleId || '').toUpperCase();
-          const isAdmin = ['AM', 'GOD', 'ADMIN'].includes(role);
 
-          if (isAdmin) return isActive;
+          // GOD/ADMIN (system-level) sees all tasks
+          // AM (project admin) falls through to assignee-based filtering — they only see tasks they own
+          if (role === 'GOD' || role === 'ADMIN') return isActive;
 
           const assignees = Array.isArray(t.assignees) ? t.assignees : [];
           const supportAssignees = Array.isArray(t.supportAssignees) ? t.supportAssignees : [];
@@ -1397,11 +1398,20 @@ export default function DailyReportPage() {
       // 1. If FM or Support FM (SFM): Fetch by department
       // 2. If Admin or others: Fetch by current project
       const isGOD = user?.roleCode === 'GOD';
+      const isAM = user?.roleCode === 'AM' || user?.roleId === 'AM';
       let workers: any[] = [];
 
       if (isGOD) {
         // GOD sees every DC in the system
         workers = await dcService.getAllDCs({}).then(res => res.dailyContractors);
+      } else if (isAM) {
+        // AM (project admin) has projectLocationIds — fetch workers per project location
+        const locId = user?.projectLocationIds?.[0];
+        if (!locId) {
+          console.warn('[DailyReport] AM user has no projectLocationIds:', user?.name);
+          return [];
+        }
+        workers = await dcService.getAllDCs({ projectLocationId: locId }).then(res => res.dailyContractors);
       } else {
         // Every role that can reach this page (FM/SE/LD/...) filters by department (สังกัด).
         // Many work-units (projectLocationId) sit under one department, so filtering by
@@ -2526,7 +2536,7 @@ export default function DailyReportPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD', 'AM']}>
       <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box
@@ -2794,6 +2804,25 @@ export default function DailyReportPage() {
                               task={task}
                               active={selectedTask?.id === task.id}
                               onClick={() => handleSelectTask(task)}
+                              onDraftDateClick={(dateStr) => {
+                                const draftDate = new Date(dateStr);
+                                handleSelectTask(task);
+                                setReportDate(draftDate);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const isLocked = isBefore(draftDate, subDays(today, 3));
+                                const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+                                const unlockedDates = task?.[unlockedDatesField];
+                                let hasValidUnlock = false;
+                                if (unlockedDates && unlockedDates[dateStr]) {
+                                  const unlockUntil = parseSafeDate(unlockedDates[dateStr].unlockedUntil) || new Date(0);
+                                  hasValidUnlock = unlockUntil > new Date();
+                                }
+                                if (isLocked && !hasValidUnlock) {
+                                  setUnlockRequestDate(draftDate);
+                                  setIsUnlockRequestDialogOpen(true);
+                                }
+                              }}
                               draftDates={draftDatesByTaskId[task.id]}
                             />
                           ))}
@@ -4369,11 +4398,13 @@ function TaskSidebarCard({
   task,
   active,
   onClick,
+  onDraftDateClick,
   draftDates,
 }: {
   task: any;
   active: boolean;
   onClick: () => void;
+  onDraftDateClick?: (dateStr: string) => void;
   draftDates?: string[];
 }) {
   const hasDrafts = Array.isArray(draftDates) && draftDates.length > 0;
@@ -4645,7 +4676,7 @@ function TaskSidebarCard({
                 return (
                   <Box
                     key={dateStr}
-                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                    onClick={(e) => { e.stopPropagation(); onDraftDateClick ? onDraftDateClick(dateStr) : onClick(); }}
                     sx={{
                       display: 'flex', alignItems: 'center', gap: 0.75,
                       px: 1, py: 0.5, borderRadius: '8px',

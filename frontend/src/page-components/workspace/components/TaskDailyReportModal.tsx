@@ -159,6 +159,7 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   // Roles that can approve/grant unlock requests
   const UNLOCK_APPROVER_ROLES = ['LD', 'OE', 'PE', 'PM'];
   const canApproveUnlock = UNLOCK_APPROVER_ROLES.includes(String(user?.roleCode || user?.roleId || '').toUpperCase());
+  const canApprove = canApproveUnlock;
 
   const fetchReports = useCallback(async (forceRefresh = false) => {
     if (!resolvedTaskId || !open) return;
@@ -517,8 +518,11 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   };
 
   // Latest site report status — used to gate approve/reject buttons (draft = not ready)
+  // 'draft' if ANY date still has a draft report — all dates must be submitted before approve
   const latestSiteReportStatus = useMemo(() => {
     if (!reportDates.length) return undefined;
+    const hasDraft = reportDates.some(d => reportData[d]?.siteReportStatus === 'draft');
+    if (hasDraft) return 'draft';
     const lastDate = [...reportDates].sort().pop()!;
     return reportData[lastDate]?.siteReportStatus;
   }, [reportDates, reportData]);
@@ -664,45 +668,45 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             >
               {task?.projectName} - {task?.categoryName}
             </Typography>
-            <Stack direction="row" alignItems="flex-start" sx={{ mt: 0.25, flexWrap: 'wrap', gap: 0.5 }}>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                color: '#1c1e2b',
+                fontSize: { xs: '0.82rem', md: '1rem' },
+                lineHeight: 1.4,
+                wordBreak: 'break-word',
+                mt: 0.25,
+              }}
+            >
+              <Box component="span" sx={{ color: '#FF7F32', fontFamily: 'monospace', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                {task?.taskId}
+                {task?.revisionId && task.revisionId !== 'rev00' && (
+                  <Box component="span" sx={{ color: '#ef4444' }}>
+                    -{task.revisionId}
+                  </Box>
+                )}
+              </Box>
+              {' · '}
+              {isActingAsSupport && task?.supportTaskName
+                ? task.supportTaskName
+                : (task?.subtaskName ? `${task.taskName} > ${task.subtaskName}` : task?.taskName)}
+            </Typography>
+
+            {task?.description && (
               <Typography
+                variant="caption"
                 sx={{
-                  fontWeight: 800,
-                  color: '#1c1e2b',
-                  fontSize: { xs: '0.82rem', md: '1rem' },
-                  lineHeight: 1.4,
+                  display: 'block',
+                  color: 'text.secondary',
+                  fontSize: { xs: '0.7rem', md: '0.75rem' },
+                  mt: 0.25,
+                  lineHeight: 1.5,
                   wordBreak: 'break-word',
-                  flex: '1 1 auto',
-                  minWidth: 0,
                 }}
               >
-                <Box component="span" sx={{ color: '#FF7F32', fontFamily: 'monospace', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                  {task?.taskId}
-                  {task?.revisionId && task.revisionId !== 'rev00' && (
-                    <Box component="span" sx={{ color: '#ef4444' }}>
-                      -{task.revisionId}
-                    </Box>
-                  )}
-                </Box>
-                {' · '}
-                {isActingAsSupport && task?.supportTaskName
-                  ? task.supportTaskName
-                  : (task?.subtaskName ? `${task.taskName} > ${task.subtaskName}` : task?.taskName)}
+                {task.description}
               </Typography>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.25, py: 0.4, borderRadius: '99px', flexShrink: 0 }}>
-                <Avatar sx={{ width: 20, height: 20, bgcolor: '#334155', fontSize: 10, fontWeight: 700, mr: 0.75 }}>
-                  {isActingAsSupport
-                    ? (task?.supportAssignees?.[0]?.name ? task.supportAssignees[0].name.substring(0, 2) : 'NA')
-                    : (task?.assignees?.[0]?.name ? task.assignees[0].name.substring(0, 2) : 'NA')}
-                </Avatar>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', fontSize: '0.7rem' }}>
-                  {isActingAsSupport
-                    ? (task?.supportAssignees?.[0]?.name || 'ไม่ระบุ')
-                    : (task?.assignees?.[0]?.name || 'ไม่ระบุ')}
-                </Typography>
-              </Box>
-            </Stack>
+            )}
           </Box>
 
           {/* Right: Action row — wraps naturally on mobile */}
@@ -714,6 +718,20 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
             gap={0.75}
             justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
           >
+            {/* Assignee chip */}
+            <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f1f5f9', px: 1.25, py: 0.4, borderRadius: '99px', flexShrink: 0 }}>
+              <Avatar sx={{ width: 20, height: 20, bgcolor: '#334155', fontSize: 10, fontWeight: 700, mr: 0.75 }}>
+                {isActingAsSupport
+                  ? (task?.supportAssignees?.[0]?.name ? task.supportAssignees[0].name.substring(0, 2) : 'NA')
+                  : (task?.assignees?.[0]?.name ? task.assignees[0].name.substring(0, 2) : 'NA')}
+              </Avatar>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', fontSize: '0.7rem' }}>
+                {isActingAsSupport
+                  ? (task?.supportAssignees?.[0]?.name || 'ไม่ระบุ')
+                  : (task?.assignees?.[0]?.name || 'ไม่ระบุ')}
+              </Typography>
+            </Box>
+
             {canApproveUnlock && pendingUnlockDates.length > 0 && (
               <Box
                 onClick={handleJumpToFirstUnlockRequest}
@@ -758,7 +776,15 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
               </Box>
             )}
 
-            {!isActingAsSupport && task?.dailyProgress === 100 && task?.status !== 'completed' && latestSiteReportStatus !== 'draft' && (
+            {!isActingAsSupport && canApprove && task?.dailyProgress === 100 && task?.status !== 'completed' && !loading && latestSiteReportStatus === 'draft' && (
+              <Box sx={{ bgcolor: '#fef9c3', color: '#854d0e', px: 1.5, py: 0.6, borderRadius: 2, display: 'flex', alignItems: 'center', border: '1px solid #fde047', gap: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  📋 รายงานยังเป็น Draft — รอ FM Submit
+                </Typography>
+              </Box>
+            )}
+
+            {!isActingAsSupport && canApprove && task?.dailyProgress === 100 && task?.status !== 'completed' && !loading && latestSiteReportStatus !== 'draft' && (
               <>
                 <Button
                   variant="outlined"
@@ -771,17 +797,21 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
                 >
                   Reject
                 </Button>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckCircleIcon />}
-                  onClick={handleApprove}
-                  disabled={actionLoading}
-                  size="small"
-                  sx={{ borderRadius: 2, fontWeight: 700, px: { xs: 1.5, md: 2 }, boxShadow: 'none', minWidth: 0 }}
-                >
-                  Approve
-                </Button>
+                <Tooltip title={pendingUnlockDates.length > 0 ? `มีคำขอปลดล็อค ${pendingUnlockDates.length} รายการ — กรุณาดำเนินการก่อน Approve` : ''} arrow>
+                  <span>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      startIcon={<CheckCircleIcon />}
+                      onClick={handleApprove}
+                      disabled={actionLoading || pendingUnlockDates.length > 0}
+                      size="small"
+                      sx={{ borderRadius: 2, fontWeight: 700, px: { xs: 1.5, md: 2 }, boxShadow: 'none', minWidth: 0 }}
+                    >
+                      Approve
+                    </Button>
+                  </span>
+                </Tooltip>
               </>
             )}
 
