@@ -7,7 +7,7 @@
 ## Boot Sequence (3 tool calls max)
 
 ```
-[B1] Bash: `bash scripts/boot_init.sh`  (emits: [compact-restore] if any · active_thread tail · session_tokens · roadmap [/] · CFP_COUNT)
+[B1] Bash: `BI=scripts/boot_init.sh; [ -f "$BI" ] || BI="$CLAUDE_PLUGIN_ROOT/scripts/boot_init.sh"; [ -f "$BI" ] || BI="$(ls -t ~/.claude/plugins/cache/*/harness-agent/*/scripts/boot_init.sh 2>/dev/null | head -1)"; bash "$BI"`  (resolve order: local `scripts/` → `$CLAUDE_PLUGIN_ROOT` → plugin-cache glob · NOTE `$CLAUDE_PLUGIN_ROOT` is EMPTY in a plain Bash tool call, so the glob fallback is what actually works for a plugin-only project (verified T-314) · boot_init.sh self-locates ENGINE from `$0` so `$ENG` never 404s · emits: [compact-restore] if any · active_thread tail · session_tokens · roadmap [/] · CFP_COUNT)
      → B1 internals (reset branches · CHAT formula · LOOP_WEIGHT normalization · cache breakpoint · compact_reset.py single-source sync): **Implement/07_platform.md §Boot Init**
 [B2] IF [compact-restore]: parse sk= → skill_name · parse section= + step= → resume_hint · SKIP manifest read
      IF prompt has `skill: <name>`: use directly · SKIP manifest
@@ -17,10 +17,11 @@
              no keyword aligns → emit [skill-miss] · default: agent (manifest fallback) · note reason
              (cannot silently proceed — [skill-miss] is a forcing function: agent MUST name default + reason)
              confirmed match used ≥2 turns → may append to manifest learned_routes[].examples (optional · never required)
-[B3] IF [compact-restore]: sha1sum <skill>/SKILL.md → compare sk_h · sha1sum harness/mece/SKILL.md → compare mece_h
-       match → SKIP read (~2.9k tokens saved) | mismatch → Read offset=1 limit=80
-     ELSE: Read .agents/skills/<bucket>/<skill_name>/SKILL.md offset=1 limit=80  (path from manifest — skills are bucketed under harness/ knowledge/ content/ coding/ user/)
-           Read .agents/skills/harness/mece/SKILL.md offset=31 limit=110
+[B3] Let <ENG> = the abs path printed on B1's `[engine-root]` line (quote it — may contain spaces). Read engine skills by SHELLING OUT to read_skill.py (code-resolves ENGINE_ROOT + fails LOUD on 404), substituting <ENG> literally each Bash call — NEVER a bare project-relative `Read .agents/skills/...`, which silently 404s in a plugin-only project with no local engine copy (T-314 S1 · HALT-1).
+     IF [compact-restore]: sha1sum "<ENG>/.agents/skills/<bucket>/<skill>/SKILL.md" → compare sk_h · sha1sum "<ENG>/.agents/skills/harness/mece/SKILL.md" → compare mece_h
+       match → SKIP read (~2.9k tokens saved) | mismatch → run the Bash read below
+     ELSE: Bash `python3 "<ENG>/scripts/read_skill.py" <bucket>/<skill_name> 1 80`  (path from manifest — skills bucketed under harness/ knowledge/ content/ coding/ user/ · lines 1–80)
+           Bash `python3 "<ENG>/scripts/read_skill.py" harness/mece 31 140`  (mece SKILL.md lines 31–140)
 ```
 - B1 internals (reset branches · CHAT/sys_fixed formula · compact_reset.py single-source · LOOP_WEIGHT normalization · cache breakpoint · session_tokens.md format): **Implement/07_platform.md §Boot Init**
 - on_demand_files = lookup table for G2 only — NEVER auto-load at B3
@@ -35,7 +36,9 @@
        step 3 — unresolved → set `api_provider: unknown`
      Fill: copy the matching row from `## Known Provider Profiles` table into the active fields →
            api_provider / cache_mechanism / context_cliff_tokens / token_formula / cache_write_cost
-       unknown → `token_formula: generic` · `cache_mechanism: none` · `context_cliff_tokens: 200000` (conservative floor) —
+     Fill (model-aware · from `## Known Model Windows + Tokenizers`): set by the ACTIVE model id →
+           context_window (Opus4.8/4.7/4.6 · Sonnet4.6 · Fable5 = 1000000 · Haiku4.5 = 200000) · tokenizer (Opus4.7/4.8 + Fable5 = opus-4.7-family · others re-baseline via count_tokens). token_budget = USER policy (default 128000), set once — NOT model-derived. context_window (real ceiling) and token_budget (spend cap) stay DISTINCT.
+       unknown → `token_formula: generic` · `cache_mechanism: none` · `context_cliff_tokens: 200000` (conservative floor) · `context_window: 200000` (conservative floor) —
        NEVER apply one provider's cache rule to another (generic fallback only · §R1 + Implement/03_config.md §Provider Profiles)
      (deterministic — a MODEL_MEDIUM agent runs steps 1-3 + Fill with no chat history + no inference)
 
@@ -53,9 +56,9 @@ compact-restore reply: append ` · Resume: S<N> — <step>` when section= + step
 
 ```
 [C0] Pre-work gate — 4 questions, resolve in order (c0_resolved=true in memory → clear flag → skip to C1):
-     Q1 compact-confirm? bare "compact แล้ว / compacted / เคลียร์แล้ว / compact เสร็จแล้ว" → run `python3 scripts/compact_reset.py --trigger=user-confirm` → surface its [compact-reset] line → C1. (claude-code also auto-resets via the SessionStart:compact hook; this is the fallback + manual re-sync.)
+     Q1 compact-confirm? bare "compact แล้ว / compacted / เคลียร์แล้ว / compact เสร็จแล้ว" → run `python3 scripts/compact_reset.py --trigger=user-confirm` → surface its [compact-reset] line → C1. (claude-code also auto-resets via the SessionStart:compact hook; this is the fallback + manual re-sync.) · plugin-only → `<ENG>/scripts/compact_reset.py` (R5 engine-script rule)
      Q2 complaint? "ลืม / you skipped / didn't log / harness says" + a harness step name (roadmap/CFP/index/pre-read/session/boot/skill/gate/MECE) → R16 self-improve → set c0_resolved=true → C1. ("ลืมบอกให้เพิ่ม X" = feature request → not C0, pass to C1.)
-     Q3 compact warranted now? (the token gate · formerly the separate C0.5) PRIMARY = signal-box N/4 from the UserPromptSubmit hook (turns≥20 · files_read≥5 · long_outputs≥3 · steps_left≥3 · T-221): N≥2 → [compact-rec] strong (a choice, NOT a STOP). HARD CEILING (the ONLY hard stop): window-anchored eff (CHAT×1.75) ≥90%·WIN(128k) AND signal-box ≥2 → [compact-STOP] write compact_state.md → STOP (BOTH required · T-261; a lone over-estimate with box<2 is only a [compact-rec]). SECONDARY char-estimate (lower bound): CHAT >80k or LOOP_W >50 → [compact-note] light hint only. → 5-field [compact-rec] template · precedence (ceiling>strong>light) · stuck-counter guard · start-of-turn snapshot lags ≤1 turn so grep LIVE `.sessions/session_tokens.md` at any DECISION/heavy-tool turn (CFP-041/T-235 · provider-aware reset): **Implement/03_config.md §Per-Turn**.
+     Q3 compact warranted now? (the token gate · formerly the separate C0.5) PRIMARY = signal-box N/4 from the UserPromptSubmit hook (turns≥20 · files_read≥5 · long_outputs≥3 · steps_left≥3 · T-221): N≥2 → [compact-rec] strong (a choice, NOT a STOP). NO HARD STOP from the estimate (T-286): even at window-anchored eff (CHAT×1.75) ≥90%·token_budget(128k) AND signal-box ≥2 → advisory [compact-rec] pointing to the CLIENT METER (real %) — the estimate is a LOWER BOUND and NEVER stops the session; the client meter is the single source for any ceiling/compact decision · token_budget(128k)=per-room spend cap, distinct from context_window(1M, detected.md). SECONDARY char-estimate (lower bound): CHAT >80k or LOOP_W >50 → [compact-note] light hint only. → 5-field [compact-rec] template · precedence (ceiling>strong>light) · stuck-counter guard · start-of-turn snapshot lags ≤1 turn so grep LIVE `.sessions/session_tokens.md` at any DECISION/heavy-tool turn (CFP-041/T-235 · provider-aware reset): **Implement/03_config.md §Per-Turn**.
      Q4 scope-grill invoked? (T-228) user message contains a scope-grill trigger — Thai "เจาะ scope" / "scope ก่อน" / "ซัก scope" · EN "scope-grill" / "grill scope" → set scope_grill=armed → on reaching Phase 1, force ACTIVE G0 (run the G0 questions even if the skip-when-clear condition is met) + add the out-of-scope question, then persist the filled brief (incl. out_of_scope) to gather_complete.md before G1. Detected here at C0 — BEFORE the G0-skip decision — so the trigger can never be lost to a "task looks clear → skip G0" shortcut. → active-G0 mechanics: **Implement/03_config.md §G0**.
      none → C1.
 
@@ -104,13 +107,13 @@ Key rules: G2 = 1 Bash call · user ask = 1 message · max 3 loops · max 5 clar
 
 ### Phase 2 · MECE Plan
 
-[M1] Read mece/SKILL.md → [M1.5] dependency_map + risk_flags + compact_checkpoint (≥3 sections → insert after ceil(N/2)) → [M2] build plan + Verify-N → [M3] user confirms → [M4] roadmap T-N → [M4.5] optional Skeptical Reviewer (also greps knowledge/out_of_scope.md → already-rejected guard · appends on a permanent `reject` · T-224) → [M5] Read docs/session_templates/mece_plan_schema.md → copy structure → fill task content → write mece_plan.md (Phase 0-3 template mandatory · NEVER write from memory — CFP-019) → [M6] emit [✓ MECE]
-→ Full M1–M6 detail + compact_checkpoint formula: **Implement/04_skills.md §Phase 2**
+[M1] Read mece/SKILL.md → [M1.5] dependency_map + risk_flags + compact_checkpoint (≥3 sections → insert after ceil(N/2)) → [M2] build plan + Verify-N → [M3] Read docs/session_templates/mece_plan_schema.md → copy structure → fill task content → write gather_complete.md + write mece_plan.md (Phase 0-3 template mandatory · NEVER write from memory — CFP-019) → [M4] optional Skeptical Reviewer (also greps knowledge/out_of_scope.md → already-rejected guard · appends on a permanent `reject` · T-224) → [M5] present plan to user → wait explicit confirm → [M6] roadmap: parent Task only (a NEW parent Task = full §6.2 block — Title/ContextTask/Goal/How-Check; schema: loop_engineer_spec.md §6.2 · NEVER per section — roadmap is big-task-only; usually already registered → just [X] at close) → [M7] emit [✓ MECE]
+→ Full M1–M7 detail + compact_checkpoint formula: **Implement/04_skills.md §Phase 2**
 
 → at M2: grep `activates_at` + `tools` per skill from manifest (grep only — never Read full manifest) → fill Tool:/Avoid: per section · skip = manifest-routing-miss
-→ at M5: Read mece_plan_schema.md → Write gather_complete.md → Write mece_plan.md → THEN present plan · writing from memory = CFP-019 · presenting without files written = CFP-027
+→ at M3: Read mece_plan_schema.md → Write gather_complete.md → Write mece_plan.md → THEN present plan (M5) · writing from memory = CFP-019 · presenting without files written = CFP-027
 
-**M5 verify** (before emitting [✓ MECE]): assess mece_plan.md is structurally complete — all Phase 0–3 blocks · Verify-N per Phase 3 section · compact_checkpoint if sections ≥3 · Phase 3 Close Checklist block. Complete → emit `[mece-schema-check] Phase2:ok · Verify-N:ok · checkpoint:ok · close-checklist:ok` → then [✓ MECE]. Gap found → re-read mece_plan_schema.md → rewrite missing block → re-assess.
+**M3 verify** (after writing mece_plan.md, before presenting to user): assess mece_plan.md is structurally complete — all Phase 0–3 blocks · Verify-N per Phase 3 section · compact_checkpoint if sections ≥3 · Phase 3 Close Checklist block. Complete → emit `[mece-schema-check] Phase2:ok · Verify-N:ok · checkpoint:ok · close-checklist:ok` → then present plan (M5). Gap found → re-read mece_plan_schema.md → rewrite missing block → re-assess. Final [✓ MECE] emitted at M7 after roadmap.
 
 **mece-compact** (after [✓ MECE]): emit `[mece-complete]` summary (task · sections · files · Verify-N count) + prompt "/compact แล้ว reply 'ลุย' เพื่อเริ่ม Phase 3 ครับ". Prefer starting Phase 3 in fresh context. If the user says "ลุย" directly without /compact → emit `[compact-skipped]` · proceed (fine).
 
@@ -124,9 +127,10 @@ REACT LOOP (per section): **[L1] Select → [L2] Execute → [L3] Observe → [L
 - [L1] next tool = Read → MUST emit `[pre-read] Target · Line` FIRST (CFP-034)
 - [L4] mark mece_plan `[ ] S<N>` → `[X]` ONLY when `[✓ written]` AND Verify-N both pass (file write, not memory)
 - [L4.5] PURGE: after EVERY tool result emit ONE of `[dropped]` / `[kept: N lines]` / `[offloaded]` · silent keep = [violation] BC-L4.5-purge
+- `[headroom] <technique>: <what> · saved ~N lines` — DETERMINISTIC emit from `safe_run.py` when an automated compressor fires (view-compress T-302 · offload T-301). Surface it so the user can verify headroom ran. Distinct LAYER from the manual purge signals above (agent judgment on one result). Boundary (single-source): compression only — selective-read range-trim keeps `[pre-read]`; topic/label lookup is NOT headroom.
 - after each section → write session_handoff.md (sections_done · resume_at=S<N> · mece_plan_hash=`sha1sum .sessions/mece_plan.md | cut -c1-8`)
-- Token: SESSION 60-80k → finish step → `[token-pause]` · thresholds → C0 Q3 (§Per-Turn Routing) · hard STOP eff(CHAT×1.75)≥90%·WIN(128k) AND signal-box≥2 → `[compact-STOP]`
-- [L2] Bash with likely >40L output → `python3 scripts/safe_run.py` OR pipe `2>&1 | grep -iE "error|warn|fail" | tail -20` (R6)
+- Token: SESSION 60-80k → finish step → `[token-pause]` · thresholds → C0 Q3 (§Per-Turn Routing) · estimate never hard-stops (T-286) · eff(CHAT×1.75)≥90%·token_budget(128k)+signal-box≥2 → advisory `[compact-rec]` → check CLIENT METER (real %)
+- [L2] Bash with likely >40L output → `python3 scripts/safe_run.py` OR pipe `2>&1 | grep -iE "error|warn|fail" | tail -20` (R6) · plugin-only → `<ENG>/scripts/safe_run.py` (R5 engine-script rule)
 - BLOCKED → halt · show error+progress · ask "fix or skip?" · wait
 - editing SKILL.md/tool-def mid-session (SESSION>10k) → emit `[schema-gate]` · wait confirm · after edit → `[schema-changed]`
 → full L1–L5 steps + PURGE table + safe_run/verify_runner + cache notes ([compact-rec] 5-field · TTL · stable-prefix · proactive-invalidation): **Implement/06_orchestrator.md §Phase 3 REACT LOOP**
@@ -144,7 +148,7 @@ REACT LOOP (per section): **[L1] Select → [L2] Execute → [L3] Observe → [L
 - Before /compact: run scripts/trim_exec_log.py + write session_summary to token_log.jsonl · SESSION >60k → compact first · 60-80k → TOKEN PAUSE.
 
 Session Health: <20k ✅ · 20–40k 💡 · 40–60k ⚠️ compact now · 60-80k 🛑 TOKEN PAUSE · emit `[session-health]` · Thai summary: `งานเสร็จแล้วครับ ✅`
-⚠️ CHAT_TOTAL undercount: true API context ≈ CHAT_TOTAL × 1.5–2× (triangular re-send) · use as lower bound · compact before CHAT_TOTAL > 80k to avoid spike
+⚠️ CHAT_TOTAL: when `CHAT_SRC=real` (claude-code/anthropic · read by `scripts/real_context.py` from the transcript's latest `usage`) CHAT_TOTAL is the REAL window-fill — no undercount, treat as truth (= client-meter number). When `CHAT_SRC=est` (fallback · no transcript) it is a LOWER BOUND: true API context ≈ estimate × 1.5–2× (triangular re-send) · compact before it climbs near budget. (T-287) The EST path is now CATEGORY-COMPLETE — `token_estimator.full_context_estimate` adds system + history + output (not tool-I/O-only), closing the old ~4× gap; the READ path stays Claude-only (off-Claude availability matrix in detected.md). (T-288)
 
 ---
 
