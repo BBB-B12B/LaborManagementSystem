@@ -1,0 +1,11 @@
+{
+  "id": "session_035",
+  "title": "T-051 Daily Report Log Revision Scoping",
+  "description": "Fixed the Daily Report Log popup (TaskDailyReportModal) showing a prior rejected revision's 100% on day-1 of a freshly-created revision. Frontend now filters reports by _revisionId to the current revision; backend getAllDailyReports dedup keyed by revision+date; task-list builders prefer authoritative currentRevision over stale revisionId; rejectTask stamps revisionId on subtask updates. ERR-091. tsc clean backend+frontend; behavioral verify pending on device.",
+  "status": "completed",
+  "affected_files": [
+    "frontend/src/page-components/workspace/components/TaskDailyReportModal.tsx",
+    "backend/src/services/TaskService.ts",
+    "backend/src/api/routes/tasks.routes.ts"
+  ]
+}

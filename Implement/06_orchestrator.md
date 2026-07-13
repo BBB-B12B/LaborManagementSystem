@@ -8,9 +8,9 @@ Two modes — identical file format, different execution:
 
 ### 14a. `.sessions/mece_plan.md` — Schema
 
-Orchestrator writes this file at **end of Phase 2 M5 AFTER user confirm** (aligns with AGENTS.md M3→M4→M5). Format = Phase-Checklist Template from `mece/SKILL.md §Phase-Checklist Template`. See that file for the canonical template — schema below is a reference summary.
+Orchestrator writes this file at **end of Phase 2 M3 BEFORE presenting the plan** (aligns with AGENTS.md M2→M3→M4→M5). Format = Phase-Checklist Template from `mece/SKILL.md §Phase-Checklist Template`. See that file for the canonical template — schema below is a reference summary.
 
-**Phase-Checklist Template format (written at M5):**
+**Phase-Checklist Template format (written at M3):**
 
 ```markdown
 ## Phase 0 — Boot (once per session · keep [X] on same-chat resume · reset [X]→[ ] before /compact)
@@ -127,6 +127,12 @@ REACT LOOP (per section — repeat until section_complete OR token pause):
        [kept: N lines] <tool-type> — excerpt only
        [offloaded] path=<file> lines=<N>
        silent keep (no signal) = [violation] BC-L4.5-purge → emit signal now · drop result
+    ⚡ HEADROOM EMIT (T-311 · distinct from the manual purge signals above): `safe_run.py` prints
+       `[headroom] <technique>: <what> · saved ~N lines` to stderr when an AUTOMATED compressor fires —
+       view-compress (T-302, table trim) or offload (T-301, park raw to exec_log). The agent surfaces it
+       so the user can verify headroom actually ran (deterministic — the script emits, agent can't forget).
+       Boundary (single-source): compression only. selective-read range-trim = `[pre-read]` (label lookup, not
+       compression) · topic/label lookup = NOT headroom. Manual purge ([dropped]/[kept]) stays its own layer.
   [L5] DECIDE  → section_done = [✓ written] AND Verify-N BOTH pass
                  → mark mece_plan.md: `- [ ] S<N>` → `- [X] S<N>` (file write — not just memory)
                  → steps remain: emit [loop] continue · → done: emit [loop] done

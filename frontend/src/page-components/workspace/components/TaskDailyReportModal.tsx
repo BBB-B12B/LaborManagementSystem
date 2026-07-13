@@ -182,6 +182,15 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
         siteReports = await dailyReportService.getAllTaskReports(resolvedTaskId, forceRefresh, false).catch(() => []);
       }
 
+      // T-051: scope reports to the CURRENT revision only. getAllTaskReports returns EVERY
+      // revision (each tagged _revisionId); without this filter a prior (rejected) revision's
+      // reports — including its 100% — bleed onto this revision's calendar. currentRevision is
+      // the authoritative field (rejectTask always bumps it); revisionId is a stale fallback.
+      const siteRevId = (task?.currentRevision || task?.revisionId || 'rev00').replace('help', 'rev');
+      const supportRevId = siteRevId.replace('rev', 'help');
+      siteReports = siteReports.filter((r: any) => ((r._revisionId || r.revisionId) ?? 'rev00') === siteRevId);
+      supportReports = supportReports.filter((r: any) => ((r._revisionId || r.revisionId) ?? 'help00') === supportRevId);
+
       // The reports to determine the current user's calendar dots
       const currentUserReports = isActingAsSupport ? supportReports : siteReports;
       const currentUserDates: string[] = [];

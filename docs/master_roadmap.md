@@ -228,3 +228,233 @@
 - [X] T-044: /daily-reports แนบรูป — popup เลือกถ่ายรูป/เลือกรูป/แนบไฟล์ (consistent Android+iOS) · PhotoSourcePicker.tsx + 4 sites in daily-reports/index.tsx · tsc EXIT=0
 - [X] T-045: Import Wizard — UserImportDialog + DCImportDialog: parse CSV client-side → preview table → dropdown Role/Dept/Project per row → rebuild CSV → submit · tsc EXIT=0
 - [X] T-046: FM Self-Performed Checkbox — Daily Report modal adds "FM ทำเองโดยไม่มีแรงงาน" checkbox per work section; FM entries use sentinel ID FM:{userId}, fmSelfPerformed=true; backend skips contractor lookup + zeroes summary deltas; dashboard shows FM chip · attempts:1 · tool_calls:18
+- [X] T-047 · P1 · depends_on: none · done 2026-07-11 · attempts:1 · tsc-clean · force-save download (fetch→blob + open-tab fallback) · behavioral-verify:pending-on-device
+    Title:        Diary Report "รูปถ่ายหน้างาน" — accept PDF/document attachments + add PDF preview popup with download button
+    ContextTask:  Painpoint from field: workers filling Daily/Diary Report sometimes need to attach a PDF or other document
+                  (not just a photo) under the "รูปถ่ายหน้างาน" (site photo) field, but upload is currently hardcoded to
+                  images only. Frontend: DailyReportForm.tsx:379-395 (field `imageUrls`, `accept="image/*"`, uses reusable
+                  FileUpload.tsx component, maxFiles=5, 5MB/file) and frontend/src/pages/daily-reports/index.tsx (multiple
+                  photo-upload sections ~lines 2900-3025, also hardcoded `accept="image/*"`; existing image preview is an
+                  MUI Dialog lightbox with carousel nav at lines 4259-4389, renderPhotoGrid at 1917-2025). Backend:
+                  media.routes.ts (POST /api/media/upload, /upload-multiple) + MediaController.ts already accept ANY file
+                  type server-side (multer memory storage, 10MB limit, no MIME whitelist) and store to Firebase Storage via
+                  storage.ts uploadBuffer(), returning url+filename+mimeType — so backend needs no structural change, just an
+                  optional defensive whitelist. Data model: DailyReport.ts stores `importFileUrls?: string[]` (URLs only, no
+                  mimetype/filename metadata) and dailyReportSchema.ts's `fileAttachmentIds` has no type constraint — the
+                  frontend needs the mimetype to decide "render as image vs render as PDF" at preview time, so either infer
+                  from the URL/filename extension (simplest) or extend the stored data to an object with {url, filename,
+                  mimeType}. No PDF viewer exists anywhere in the codebase today (grepped "pdf"/"react-pdf"/"pdfjs"/"iframe"
+                  — zero hits) — this is a new capability, not an extension of an existing one.
+    Goal:         (1) The "รูปถ่ายหน้างาน" upload field (and any other daily-report attachment upload point sharing the same
+                  pattern) accepts general document files broadly — not a narrow whitelist — covering at least
+                  PDF/.doc/.docx/.xls/.xlsx/.ppt/.pptx alongside existing image types (user confirmed 2026-07-10: "เปิดกว้าง
+                  ทุกไฟล์เอกสารทั่วไป"). (2) Clicking an attached PDF or image opens a popup/modal that renders the content
+                  inline with a visible Download button (PDF gets a real inline preview; image keeps existing lightbox).
+                  (3) Any other attached file type (non-PDF, non-image — e.g. .docx/.xlsx) that cannot be rendered inline
+                  gets a popup/entry with just a Download button (no broken inline-render attempt). (4) Existing image
+                  attach/preview behavior is unchanged (no regression on the current photo flow).
+    How-Check:    Manual: on /daily-reports (desktop) and daily-reports/mobile/create, attach a PDF under "รูปถ่ายหน้างาน" →
+                  submit succeeds → reopening the report and clicking the attached PDF thumbnail/entry opens a popup that
+                  renders the PDF content with a working Download button → attaching/previewing an image still works exactly
+                  as before. `npx tsc --noEmit` clean on both frontend and backend.
+    Out-of-Scope: Do NOT change the underlying Firebase Storage backend or the already-permissive multer config beyond an
+                  optional defensive MIME whitelist. Do NOT touch unrelated upload flows (e.g. Excel import in
+                  DailyReportUploadDialog.tsx, which is a different feature).
+    Relate File:  frontend/src/page-components/daily-reports/components/DailyReportForm.tsx,
+                  frontend/src/components/forms/FileUpload.tsx, frontend/src/pages/daily-reports/index.tsx,
+                  frontend/src/page-components/daily-reports/daily_report_ui_aftersale_reference.tsx,
+                  frontend/src/validation/dailyReportSchema.ts, backend/src/controllers/MediaController.ts,
+                  backend/src/api/routes/media.routes.ts, backend/src/models/DailyReport.ts
+- [X] T-048 · done 2026-07-12 · attempts:1 · tool_calls:~30 · P1 · depends_on: none
+    Title:        Workspace page — always-show overdue incomplete tasks past their month + add WorkOrder/Category filters
+                  + consolidate Filter and Add-task buttons into single dropdowns
+    ContextTask:  Workspace task list (frontend/src/pages/workspace/index.tsx) filters by date tab ("This Month" etc) at
+                  the filteredSubtasks useMemo (lines 945-971); the month-match condition (lines 966-968) currently hides
+                  ANY task/subtask whose dueDate falls outside the selected month, including tasks that are still
+                  incomplete — these become invisible backlog and can silently fall out of focus. Progress lives as
+                  `dailyProgress` (0-100) on both Task (Task.ts:38) and Subtask (Task.ts:85, plus `supportDailyProgress`
+                  at :92). Separately: workOrderId/workOrderCode/workOrderName (Task.ts:26-28) and categoryId/categoryName
+                  (Task.ts:29-30) — the "หมวดงานหลัก/Work Order" and "หมวดงานย่อย/Category" fields the user wants as
+                  filters — ALREADY EXIST on the Task model and are already used by the left-sidebar WorkspaceTree
+                  (Project → WorkOrder → Category → Task, selectedNode filter at index.tsx:978-980); no backend/data-model
+                  change needed, this is a UI filter-surfacing gap. Toolbar today (index.tsx:1350-1651) has 3+ separate
+                  controls competing for space: a date-tab Menu (1381-1457) + a Reset-filters button (1460-1485) + a
+                  "Newtasks" add button (1488-1509 desktop / 1592-1610 mobile) + an "Upload" (WBS import) button
+                  (1512-1533 / 1613-1631) — and "Download Template" is buried a level deeper inside WbsImportModal.tsx
+                  (277-284) rather than in the toolbar at all. User's ask: not enough horizontal room to add 2 more
+                  filters without consolidating first.
+    Goal:         (1) A task/subtask with dailyProgress < 100 is ALWAYS visible regardless of the active date-tab/month
+                  filter — only 100%-complete items are subject to the month cutoff. (2) Two new filter dimensions exist
+                  on the workspace toolbar: "หมวดงานหลัก" (WorkOrder, using existing workOrderId/workOrderCode/
+                  workOrderName) and "หมวดงานย่อย" (Category, using existing categoryId/categoryName) — usable
+                  independently of (and in addition to) the left-sidebar tree selection, to make focusing on one
+                  work-order/category fast without expanding the tree. (3) All filter controls (date-tab, reset, new
+                  WorkOrder filter, new Category filter) are consolidated behind ONE "Filter" button that opens a
+                  dropdown/popover containing all of them, including the clear/reset action inside it — no more standalone
+                  filter buttons cluttering the toolbar. (4) "Add task", "Upload" (WBS import), and "Download Template"
+                  are consolidated into ONE add-menu (e.g. split-button or dropdown) offering all three as sub-actions,
+                  replacing the current 2-3 separate toolbar buttons + the buried in-modal download link.
+    How-Check:    Manual on /workspace (desktop + mobile collapsed toolbar): (a) create/seed a task with dailyProgress<100
+                  and a dueDate outside the current month → confirm it still appears under "This Month" tab; a
+                  dailyProgress=100 task outside the month stays hidden as before. (b) open the new Filter dropdown →
+                  select a WorkOrder → list narrows to that work order's tasks; select a Category → narrows further;
+                  clear button inside the dropdown resets both + the date tab. (c) open the new Add-task dropdown →
+                  "Add single item" opens TaskCreateModal, "Upload" opens WbsImportModal, "Download Template" downloads
+                  the Excel template directly from the toolbar (no need to open the upload modal first). `npx tsc
+                  --noEmit` clean on frontend.
+    Out-of-Scope: Do NOT change the Task/Subtask backend model (workOrderId/categoryId/dailyProgress already exist) — this
+                  is a frontend filter-logic + toolbar-layout task only. Do NOT change WorkspaceTree's own tree-based
+                  filtering behavior, only add the two new toolbar-level filters alongside it.
+    Relate File:  frontend/src/pages/workspace/index.tsx, frontend/src/page-components/workspace/components/WorkspaceTree.tsx,
+                  frontend/src/page-components/workspace/components/WbsImportModal.tsx, backend/src/models/Task.ts
+- [X] T-049 · P1 · depends_on: none · done 2026-07-13 · tool_calls:~30 · code-complete + tsc-clean (FE+BE) · BROWSER-VERIFIED 2026-07-13: draft-gating proven (งานผนังชั้น1 100%+draft stayed In-Progress while ฝ้าส่วนกลาง 100%+submitted sat in For-Checking) · "จัดเก็บ" confirmed live in card ⋮ menu + Completed-column chip ("จัดเก็บ 1") · Unarchive icon + popover title code-verified. Note: T-048 always-show-overdue only rescues progress<100 tasks, so a 100%-draft task past its month is hidden under the month filter (visible under "ทั้งหมด") — flagged to user as a UX interaction.
+    Title:        Workspace "Complete" box — gate on draft daily-report status, not just progress=100 + rename
+                  "ซ่อน"→"จัดเก็บ" and fix the confusing trash-can unarchive icon
+    ContextTask:  (1) The Complete/In-Progress column grouping in frontend/src/pages/workspace/index.tsx (desktop
+                  lines 1912-1913, mobile lines 1704-1705, helper fn lines 104-105) currently moves a task/subtask into
+                  the "Complete" box purely on `dailyProgress >= 100` — it does NOT check whether the underlying daily
+                  report is still 'draft'. ReportStatus ('draft'|'submitted'|'verified'|'locked') lives on DailyReport.ts
+                  (line 11); TaskDailyReportModal.tsx already reads `latestSiteReportStatus === 'draft'` (lines 520-525)
+                  to gate its own "approve" button, so a precedent for checking this exists — the workspace grouping
+                  logic just never consulted it. Result: a task can visually land in "Complete" while its report is
+                  still a draft, which is misleading (mirrors the same "draft ≠ done" concern already fixed for the
+                  work-hours-tracking page in T-037). (2) The "hide completed task" action (TaskCard.tsx:307-313, label
+                  "ซ่อน" at line 312, VisibilityOffIcon at line 310, handler handleHide at 189-193) moves a completed
+                  task into a "hidden" popover ("งานที่ซ่อนไว้", index.tsx lines 2647-2737, opened via the "ซ่อน N" chip
+                  on the Completed column header). The unhide button inside that popover (index.tsx:2708, handler
+                  handleUnhideCard at 2705) uses the `RestoreFromTrash` MUI icon with tooltip "เอากลับมาแสดง" (line 2702)
+                  — user finds the trash-can icon confusing since nothing is being deleted, it's an un-archive action.
+    Goal:         (1) A task/subtask whose latest daily report status is 'draft' stays in the "In Progress" (or
+                  "for-checking") column even when dailyProgress reaches 100 — it only moves to "Complete" once the
+                  report is submitted/verified (not draft). (2) The "ซ่อน" action/label on a completed task is renamed
+                  to "จัดเก็บ" everywhere it appears (menu item text at TaskCard.tsx:312, plus the "ซ่อน N" chip/popover
+                  title "งานที่ซ่อนไว้" on the Completed column, renamed to reflect "จัดเก็บ"/"รายการที่จัดเก็บ").
+                  (3) The unarchive button in that popover no longer uses a trash-can icon — replace `RestoreFromTrash`
+                  with a non-trash icon (e.g. Unarchive/Restore-style icon that doesn't read as "delete") and change its
+                  tooltip/label to "ยกเลิกจัดเก็บ".
+    How-Check:    Manual on /workspace: (a) bring a task's dailyProgress to 100 while its linked daily report is still
+                  'draft' → task stays in "In Progress", not "Complete"; once the report is submitted/verified, the same
+                  task moves to "Complete". (b) on a Complete task, open its action menu → label reads "จัดเก็บ" (not
+                  "ซ่อน") → click it → task moves into the archived/จัดเก็บ collection. (c) open that collection's popover
+                  → the restore button shows a non-trash icon with tooltip/label "ยกเลิกจัดเก็บ" → clicking it brings the
+                  task back to "Complete". `npx tsc --noEmit` clean on frontend.
+    Out-of-Scope: Do NOT change the DailyReport status state machine itself (draft→submitted→verified→locked) — only
+                  consume the existing status to gate the workspace column. Do NOT change TaskDailyReportModal's own
+                  existing draft-gating logic for its approve button.
+    Relate File:  frontend/src/pages/workspace/index.tsx, frontend/src/page-components/workspace/components/TaskCard.tsx,
+                  frontend/src/page-components/workspace/components/TaskDailyReportModal.tsx,
+                  backend/src/models/DailyReport.ts
+- [X] T-050 · P0 · depends_on: none · done 2026-07-10 · attempts:1 · tsc EXIT=0 · device-verified by user · frontend-only fix (backend already correct — original both-sides assumption disproven at gather)
+    Title:        Bug: Daily Report OT checkbox wrongly disabled cross-job — laborer working Job B in regular hours
+                  can't get OT on Job A even though the two time-slots don't conflict
+    ContextTask:  In `frontend/src/page-components/daily-reports/mobile/DailyReportEntryModal.tsx`, `getOtCandidates()`
+                  (lines 292-297) only allows a laborer into the OT checkbox lists if
+                  `regular.workerIds.includes(w.id) || existingRegularWorkerIds.includes(w.id)`. The second condition,
+                  `existingRegularWorkerIds`, is populated in `DailyReportDashboard.tsx` (lines 243-246) as a GLOBAL pool
+                  of every laborer who has ANY regular-hours entry on ANY job that day — it does not check which
+                  specific job. Bug: laborer worked Job B during regular hours (not Job A) → tries to log OT on Job A →
+                  blocked, because the check sees "already has regular hours today" globally instead of "does regular
+                  hours on Job A specifically". Real-world case IS valid: regular-hours-on-Job-B + OT-on-Job-A for the
+                  same person same day should be allowed; the only actual constraint is no double-booking the SAME
+                  time-slot (e.g. can't be checked regular on both Job A and Job B, can't be checked ot_morning on both
+                  Job A and Job B). Data model already supports the needed granularity — `DailyReportEntry` (DailyReport.ts
+                  lines 13-26) carries `taskId` + `workType` per entry, so per-job-per-timeslot conflict detection is
+                  possible without a model change. Also found: there is currently ZERO backend validation of this at all
+                  — `DailyReportService.addWorkEntry()` (lines 71-187) just upserts deltas with no double-booking check,
+                  so even once the frontend is fixed, two different sessions/tabs could still double-book the same
+                  laborer/timeslot without a server-side guard.
+    Goal:         (1) A laborer's OT checkbox availability on Job A depends ONLY on whether that laborer is already
+                  booked (regular OR OT) on a DIFFERENT job for that SAME time-slot (regular / ot_morning / ot_noon /
+                  ot_evening) — not on whether they have any regular-hours entry anywhere else that day. (2) Laborer
+                  can be regular-hours on Job B and OT on Job A simultaneously on the same day. (3) Laborer CANNOT be
+                  checked into the same time-slot (e.g. regular, or ot_morning) on two different jobs at once — this
+                  conflict must be enforced both in the frontend checkbox UI (grayed out / blocked with a clear reason)
+                  AND server-side in `addWorkEntry()` (reject/error on a genuine same-timeslot double-booking, so
+                  concurrent edits from two tabs/sessions can't silently create one).
+    How-Check:    Manual: create 2 Daily Report entries same day same laborer — Job A regular-hours unchecked + Job A
+                  OT-morning checked, Job B regular-hours checked for the same laborer → both save successfully with no
+                  block. Then attempt to check Job A regular-hours for the same laborer while Job B regular-hours is
+                  already checked for them → blocked with a clear message (same time-slot conflict). Repeat the
+                  same-timeslot-conflict attempt via direct API call (bypassing frontend) → backend rejects it too.
+                  `npx tsc --noEmit` clean on frontend and backend.
+    Out-of-Scope: Do NOT redesign the WorkType enum or DailyReportEntry schema — the existing `taskId` + `workType`
+                  fields already carry enough info; this is a validation-logic fix only, not a data-model change.
+    Relate File:  frontend/src/page-components/daily-reports/mobile/DailyReportEntryModal.tsx,
+                  frontend/src/page-components/daily-reports/components/DailyReportDashboard.tsx,
+                  backend/src/services/dailyReport/DailyReportService.ts, backend/src/models/DailyReport.ts
+- [X] T-051 · P0 · done 2026-07-10 · attempts:1 · tool_calls:~22 · ERR-091 · depends_on: none
+    Title:        Bug: "Daily Report Log" calendar popup shows 100% on day-1 of a freshly-created task revision
+                  (Reject → Rev N+1) because it aggregates reports across ALL revisions instead of the current one
+    ContextTask:  When a Leader clicks "Reject" on a submitted task, `TaskService.rejectTask()` (backend/src/services/
+                  TaskService.ts lines 340-483) correctly creates a new revision with progress reset to 0
+                  (`dailyProgress: 0` at lines 397, 444-445, 473-474 for the task and each subtask) — the revision
+                  creation itself is NOT the bug. The bug is in report-fetching: `TaskService.getAllDailyReports()`
+                  (lines 2537-2549) queries `revisionsSnapshot = await targetRef.collection('revisions').get()` — ALL
+                  revisions, not just the current/active one — then merges every revision's daily reports into one
+                  `dateMap` keyed ONLY by calendar date (`!dateMap.has(d.id)` at line 2544, where `d.id` is a date, not a
+                  revision-scoped key). Result: if the OLD rejected revision's last report date happens to fall on the
+                  NEW revision's day-1 date, the old revision's 100%-progress report gets returned and displayed as if
+                  it belongs to the new revision. Frontend consumer:
+                  `frontend/src/page-components/workspace/components/TaskDailyReportModal.tsx` `fetchReports()`
+                  (lines 164-310) takes whatever `getAllDailyReports` returns at face value — line 265-266 sets
+                  `runningProgress = entry.site.progress` from the first report found per date, line 275 stores it as
+                  `totalProgress`, and the calendar day-cell coloring at lines 588-590 treats `totalProgress === 100` as
+                  "completed" — it has no revision-scoping guard of its own, it trusts the backend response
+                  (which does include a `_revisionId` per report at line 2545 that the frontend currently ignores).
+    Goal:         Opening the "Daily Report Log" popup for a freshly-created task revision (right after a Reject) shows
+                  0% progress on every day until an actual Daily Report is logged against THAT SPECIFIC revision — it
+                  must never display progress carried over from a prior (rejected) revision, even if calendar dates
+                  from the two revisions overlap.
+    How-Check:    Manual: reject a task that has at least one submitted daily report with progress=100 → a new Rev is
+                  created → open that new Rev's task card → click to open "Daily Report Log" → day 1 (and every day
+                  before any report is logged against the new Rev) shows 0%, not 100% → log a real Daily Report against
+                  the new Rev → that specific day now correctly shows its own progress. Confirm the OLD revision's log
+                  (viewed separately, if still accessible) still correctly shows its own historical 100% — this is a
+                  scoping fix, not a data-deletion. `npx tsc --noEmit` clean on backend and frontend.
+    Out-of-Scope: Do NOT change `rejectTask()`'s revision-creation/reset logic (already correct). Do NOT delete or
+                  migrate old revisions' daily report data — old revisions must remain viewable under their own
+                  identity, just never bleed into a different revision's calendar.
+    Relate File:  backend/src/services/TaskService.ts,
+                  frontend/src/page-components/workspace/components/TaskDailyReportModal.tsx
+- [X] T-052 · P1 · depends_on: none · done 2026-07-10 · attempts:1 · tsc EXIT=0 · device-verified via follow-up T-052b
+    ### Failed Approaches (T-052b shutter no-op debug — full detail in knowledge/error_index.md ERR-090):
+                  8 disproven theories before root cause: fullScreen→popup, toBlob error-logging, GPS highAccuracy,
+                  button-disabled/backdrop, stale dev-server, .next cache wipe, form-submit, service-worker. Actual
+                  root cause = MUI `<Dialog>` (Portal/aria-modal) eats the shutter tap; PhotoSourcePicker.tsx:29-49
+                  already documented this app's non-Portal constraint. Fix: rewrote GeotaggedCamera as a position:fixed
+                  overlay in the normal React tree. User confirmed on device 2026-07-10 ("ปิดได้เลยครับ").
+    Title:        Daily Report site-photo capture — custom in-app camera that stamps GPS location + timestamp onto the
+                  photo, with mandatory camera+location permission gating
+    ContextTask:  See .sessions/mece_plan.md (full 5-section plan, reviewed twice by skeptical_reviewer) and
+                  .sessions/gather_complete.md for full detail. Summary: native `<input capture="environment">`
+                  (PhotoSourcePicker.tsx:116-123) has no hook to overlay a live watermark, so a custom getUserMedia+canvas
+                  camera is required. New opt-in `enableGeoStamp` prop on PhotoSourcePicker, turned on ONLY at the 2
+                  genuine Daily Report site-photo call sites (daily-reports/index.tsx ~1984, ~2117) — NOT the 2 medical
+                  certificate call sites (~5154, ~5349) which are an unrelated leave-request feature.
+    Goal:         See gather_complete.md acceptance_criteria — first-use permission prompt (camera+geolocation), mandatory
+                  re-gate on every capture attempt until granted (with a clear "enable in settings" path once
+                  permanently denied, since JS cannot force a browser permission dialog to reappear), live GPS+timestamp
+                  watermark burned into the captured photo, gallery/attach-file paths and the 2 certificate call sites
+                  fully unchanged.
+    How-Check:    See mece_plan.md S5 Verify-1 (full manual checklist) + `npx tsc --noEmit` clean on frontend.
+    Out-of-Scope: No backend/data-model changes. No reverse-geocoding. The 2 medical-certificate call sites stay on the
+                  native camera untouched.
+    Relate File:  frontend/src/components/forms/PhotoSourcePicker.tsx, frontend/src/pages/daily-reports/index.tsx,
+                  frontend/src/components/camera/useCameraPermissions.ts (new),
+                  frontend/src/components/camera/watermarkStamp.ts (new),
+                  frontend/src/components/camera/GeotaggedCamera.tsx (new)
+
+- [X] T-053 · P0 · depends_on: none · done 2026-07-13 · attempts:1 · tsc EXIT=0 · browser-verified (console 0 error, single clean redirect)
+    Title:        Bug: white-screen / infinite router loop on logout and on unauthorized-route access (ProtectedRoute)
+    ContextTask:  Found during T-049 behavioral verification. ProtectedRoute.tsx useEffect had `router` in its dependency
+                  array while calling router.push('/login') | router.push('/unauthorized') inside. router identity churns
+                  during a route transition → effect re-runs → push fires again → aborts the in-flight navigation every
+                  render → console spams "Abort fetching component for route" and the page never finishes = white screen.
+                  Same root cause behind 3 symptoms: (1) logout → /login white screen, (2) Foreman opening /workspace →
+                  /unauthorized hang, (3) any protected route while logged out → hang.
+    Goal:         Logout and unauthorized-access redirect exactly once, cleanly, with no console loop and no white screen.
+    How-Check:    Logged-out navigate to /workspace → single redirect to /login, login form renders, read_console_messages
+                  returns 0 errors (previously spammed "Abort fetching component"). `npx tsc --noEmit` frontend EXIT=0.
+    Fix:          Removed `router` from the effect deps; guard each redirect with a redirectingRef + router.pathname check
+                  so it fires once; switched router.push → router.replace for both /login and /unauthorized.
+    Relate File:  frontend/src/components/layout/ProtectedRoute.tsx

@@ -1,0 +1,9 @@
+{
+  "id": "session_037",
+  "title": "T-048 Workspace: always-show incomplete + WorkOrder/Category filters + consolidated Filter & Add dropdowns",
+  "description": "On /workspace (frontend/src/pages/workspace/index.tsx): (1) incomplete work (dailyProgress<100) now always shows regardless of the date tab in filteredSubtasks — only 100%-complete items obey the month/week/today cutoff, so overdue backlog no longer silently disappears. (2) Added two toolbar filters, workOrderFilter + categoryFilter (state + step 2.5 predicates + workOrderOptions/categoryOptions useMemos derived from tasks with the same fallback ids as WorkspaceTree; category options scoped to the selected work order), independent of the left tree. (3) Consolidated the standalone date-tab Button+Menu and Reset button into ONE 'ตัวกรอง' Button (active-filter count badge) opening a Popover with date-range Chips + Work Order/Category TextField-selects + clear-all. (4) Consolidated desktop+mobile Newtasks/Upload buttons into ONE 'เพิ่มงาน' Button opening a shared Menu: เพิ่มงานใหม่ / อัปโหลด WBS / ดาวน์โหลด Template (new local handleDownloadTemplate via apiClient GET /tasks/import-wbs/template blob, same as WbsImportModal). Removed now-unused CalendarTodayIcon/ListItemIcon/ListItemText imports; added FilterAltIcon/DownloadIcon/apiClient. No backend/model change. tsc --noEmit exit 0. Scrutinize pass clean (no correctness gap). Browser verify blocked this session by sandbox (dev-server launch not permitted); behavioral verify pending on device.",
+  "status": "completed",
+  "affected_files": [
+    "frontend/src/pages/workspace/index.tsx"
+  ]
+}

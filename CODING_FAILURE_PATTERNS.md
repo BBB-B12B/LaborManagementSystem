@@ -158,7 +158,11 @@ In applications where dates are compared as strings (`YYYY-MM-DD` or `YYYY-MM`),
 1. If the user explicitly asks to follow the MECE plan process or complains about a missing plan, always build a `.sessions/mece_plan.md` first.
 2. Never skip MECE planning for bugs that involve multi-component integration (such as DB API and React state routing).
 
-**Detection signal:** User message contains "ทำไมไม่วางแผน mece มา" or "ทำไมไม่ทำตามกระบวนการ".
+**Detection signal:** User message contains "ทำไมไม่วางแผน mece มา" or "ทำไมไม่ทำตามกระบวนการ" or "ได้ดำเนินการตาม Skill ไหม" (incl. post-/compact "did you follow the process" checks).
+
+topic: phase-gate-skip
+count: 2
+recurrences: ["2026-07-10: reindex task (knowledge/index_files.json + index_variables.json full reindex) — agent classified the task as 'mechanical' and presented an ad-hoc table plan in chat instead of writing gather_complete.md + mece_plan.md before spawning the sub-agent. Caught by user: 'ทำไมไม่เห็นวางแผนลง mece_plan.md เลยตามขั้นตอน'. Root: 'mechanical/scripted work' was treated as an implicit MECE exemption — CLAUDE.md has no such exemption; Phase 2 applies to any src/knowledge edit regardless of how mechanical the edit logic is.", "2026-07-10: T-052 camera shutter bug — after a /compact the agent skipped the Boot Gate (B1-B3 trace never emitted) and Per-Turn Routing (C0-C3), then read + rewrote src/components/camera/GeotaggedCamera.tsx with no fresh Phase 1 gather / Phase 2 MECE. The PreToolUse phase-gate did NOT block because T-052's gather_complete.md + mece_plan.md were still dated today (stale-but-same-day) — so a genuinely un-planned edit slipped through the hook. Caught by user: 'ได้ดำเนินการตาม Skill ไหมครับ'. Root: treated 'continuing an in-flight bug' as exempt from re-Boot after /compact; process discipline is the agent's own responsibility, the hook is only a backstop and same-day plan files make it blind to a re-opened sub-bug."]
 
 ---
 
@@ -624,3 +628,39 @@ Detection: after creating a knowledge doc + running backlink_analyzer, grep the 
 topic: index_sync
 count: 0
 recurrences: []
+## CFP-047 · Post-task quiz + clarifying questions delivered as plain-text options instead of clickable AskUserQuestion
+Symptom: At task close the agent wrote the learning quiz and an optional decision ("record observe trait?") as a markdown list of lettered options (ก/ข/ค) in plain prose, forcing the user to type the answer. User flagged it: "ทำไมไม่ถามเป็น Ark" (= why not ask via AskUserQuestion).
+Root: feedback-post-task-learning-quiz.md carries a HARD delivery-format rule — quizzes (and any pick-one decision offered to the user) MUST be rendered via the AskUserQuestion tool (clickable choices), never as typed text options. The agent knew the quiz content rule but dropped the DELIVERY-FORMAT half of the rule, defaulting to prose because it is the cheaper path. The clickable format matters: it is lower-friction for a non-technical user and the only form the user-coach learning loop can reliably parse as a recorded answer.
+Prevention: any time the agent offers the user a pick-one/pick-many CHOICE — post-task quiz, an optional trait-record decision, an A/B approach question — deliver it through AskUserQuestion, not a markdown list. Plain-text options are reserved for open-ended free-text asks only. At Completion Gate "Feedback delivered" step, if a quiz is owed, the tool used MUST be AskUserQuestion.
+Detection: a turn that ends with lettered/bulleted options (ก/ข/ค, a/b/c) addressed to the user AND no AskUserQuestion tool call that turn = format violation; user replies with a "why not Ark / why not buttons" complaint.
+topic: user_modeling
+count: 0
+recurrences: []
+
+## CFP-048 · Answered a Question About a Skill's Trigger/Tools From Memory Instead of Re-Grepping skill-manifest.json + tool-manifest.json Fresh
+Symptom: Asked whether a situation warranted `harness_doctor`, the agent answered from recollection of a manifest read many turns earlier in the same (long) session, instead of re-grepping `skill-manifest.json`/`tool-manifest.json` in that turn before stating the trigger condition. The recalled answer ("CFP count ≥3") was directionally right but imprecise — a fresh grep revealed the manifest's actual `trigger` field text ("CFP pattern recurred after a fix was applied") and a `bucket: "draft"` status the recalled answer never surfaced. Caught by user: "ทำไมคุณไม่ดู skill_manifest กับ Tool list".
+Root: R5 Index-First Lookup exists to prevent recall-vs-registry drift, but was treated as satisfied by an earlier-in-session read rather than as a per-claim obligation — in a long session (many spawned agents, many turns since the original manifest dump), "I already read this once" quietly substituted for "I verified this now." Distinct from [[CFP-044]] (which governs actually INVOKING a skill's method without loading its SKILL.md) — this is about ASSERTING a fact about a skill's own metadata (trigger/tools/keywords) without a fresh grep backing the specific claim.
+Prevention: Any time the agent states a skill's trigger condition, tool list, or keywords as fact — not just invoking the skill, but describing when/how it applies — re-grep `skill-manifest.json` (and `tool-manifest.json` if tools are asserted) in that same turn before making the claim, regardless of how recently it was read earlier in the session. Session length does not grandfather a stale recollection into a verified fact.
+Detection: agent states a skill's trigger/tool/keyword facts with no grep of skill-manifest.json/tool-manifest.json among that turn's tool calls, AND user asks "ทำไมไม่ดู manifest/tool list" or similar.
+topic: boot-routing
+count: 0
+recurrences: []
+
+## CFP-049 · Phase 1 Gather Targeted a Component by Symptom Keyword Instead of the File the Roadmap ContextTask Already Named
+Symptom: For T-051 ("Daily Report Log calendar shows 100%"), Phase 1 gathered on `frontend/src/pages/daily-reports/index.tsx` — found by grepping the symptom words "daily report / calendar" — and built a full gather_complete.md + mece_plan.md + presented a plan the user confirmed, all against the WRONG component. The real consumer was `frontend/src/page-components/workspace/components/TaskDailyReportModal.tsx`, which the roadmap §6.2 ContextTask for T-051 had already named explicitly (with line numbers). The error surfaced only when the roadmap entry was read at Phase-3 start, forcing a mid-execution re-gather, a materially changed plan (+frontend, +dedup), and a second user confirmation.
+Root: The roadmap Task's `ContextTask:` field is the authoritative pointer to the exact file(s)/lines already diagnosed for a registered bug, but Phase 1 began keyword-grepping from the symptom text before reading it. Symptom words ("calendar", "daily report") matched a plausible-but-wrong file, and a self-consistent plan was built on it — the wrong target was never cross-checked against the ticket that had the right answer.
+Prevention: When a task is ALREADY registered on the roadmap (resuming a queued T-N), G1 MUST read that Task's full §6.2 block (Title/ContextTask/Goal/How-Check) FIRST — before symptom-keyword greps — and treat any file/line it names as the primary gather target, only widening the search if that pointer proves wrong. A confirmed plan built on a component the ContextTask did not name is a red flag to re-check the ticket.
+Detection: gather_complete.md `affected_files` names a file that the roadmap ContextTask for the same T-N does NOT mention, OR a plan is re-presented mid-Phase-3 after the "real" component is discovered.
+topic: phase1-gather
+count: 0
+recurrences: []
+
+## CFP-050 · Fixed a Bug + Updated Roadmap but Skipped error_index.md Logging Because the Session Was Framed as "Verification/Testing" Not "Debugging"
+Symptom: During a browser behavioral-verification session (T-049), a real bug was discovered and fixed (T-053, ProtectedRoute white-screen redirect loop): root-caused disproof-first, patched, tsc-clean, browser-verified, roadmap marked [X]. But NO ERR-XXX entry was written to knowledge/error_index.md. The gap was invisible until the user asked "did you handle the errors per the skill?" — forcing a backfill (ERR-092) one turn later.
+Root: R9's error-logging step is mentally attached to a "debugging session"; when a bug is found as a side-effect of a session framed as "testing/verification", the fix gets treated as a task deliverable (roadmap [X] + handoff) and the error_index write is silently dropped. Marking the roadmap [X] gave a false sense of "logged" — but the roadmap tracks TASK completion, not the ERROR record. error_index.md and the roadmap are two separate ledgers; closing one is not closing the other.
+Prevention: ANY fix to observable-broken behavior — regardless of whether the session is labelled debug, verify, test, or feature — MUST get an error_index.md ERR-XXX entry (Symptom / Root Cause / Failed Approaches ruled-out / Resolution) BEFORE the roadmap Task is marked [X]. At close-gate, if roadmap has a newly-[X] bug-fix task, grep error_index.md for its T-N; no match = R9 violation, backfill before closing.
+Detection: a roadmap entry marked [X] describing a bug fix (keywords: fix/bug/broken/white-screen/loop/crash) whose T-N does NOT appear in knowledge/error_index.md.
+topic: error-protocol
+count: 0
+recurrences: []
+

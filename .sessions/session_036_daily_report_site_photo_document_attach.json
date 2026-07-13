@@ -1,0 +1,9 @@
+{
+  "id": "session_036",
+  "title": "T-047 Daily Report Site-Photo Document Attach + Preview Popup",
+  "description": "Extended the daily-report site-photo ('รูปถ่ายหน้างาน') field to accept general documents (PDF/Office/txt/csv) alongside images, and added an attachment preview popup. Added a broad fileAccept to the site PhotoSourcePicker; module-local getFileName/getFileKind helpers infer kind from the URL extension (preserved in Firebase keys) or File.name for new blob files; grid tile renders <img> for images and a FileText icon-card for pdf/other; new previewFile state + openAttachmentPreview router shows PDFs inline via <iframe> with a Download button, images keep the existing lightbox (carousel filtered to image items), other types get a download-only card. Post-scrutinize refinement: handleDownload() force-saves via fetch->blob->objectURL with window.open fallback for CORS-blocked cross-origin. Single file changed; existing image path untouched (no regression). tsc clean; behavioral verify pending on device.",
+  "status": "completed",
+  "affected_files": [
+    "frontend/src/pages/daily-reports/index.tsx"
+  ]
+}

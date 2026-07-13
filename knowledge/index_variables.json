@@ -1663,10 +1663,6 @@
         "scan"
       ]
     },
-    "DiscrepancySeverity": {
-      "source": "backend/src/models/ScanDataDiscrepancy.ts",
-      "line": 9
-    },
     "DiscrepancyStatus": {
       "source": "frontend/src/validation/scanDataSchema.ts",
       "line": 33,
@@ -1690,18 +1686,6 @@
       "source": "frontend/src/services/scanDataService.ts",
       "line": 54
     },
-    "CreateScanDataDiscrepancyInput": {
-      "source": "backend/src/models/ScanDataDiscrepancy.ts",
-      "line": 32
-    },
-    "calculateSeverity": {
-      "source": "backend/src/models/ScanDataDiscrepancy.ts",
-      "line": 46
-    },
-    "scanDataDiscrepancyConverter": {
-      "source": "backend/src/models/ScanDataDiscrepancy.ts",
-      "line": 56
-    },
     "Skill": {
       "source": "frontend/src/services/skillService.ts",
       "line": 8,
@@ -1717,18 +1701,6 @@
         "services",
         "skill"
       ]
-    },
-    "CreateSkillInput": {
-      "source": "backend/src/models/Skill.ts",
-      "line": 20
-    },
-    "UpdateSkillInput": {
-      "source": "backend/src/models/Skill.ts",
-      "line": 29
-    },
-    "skillConverter": {
-      "source": "backend/src/models/Skill.ts",
-      "line": 41
     },
     "SocialSecurityCalculation": {
       "source": "backend/src/models/SocialSecurityCalculation.ts",
@@ -3438,10 +3410,6 @@
         "service",
         "services"
       ]
-    },
-    "skillService": {
-      "source": "backend/src/services/skill/SkillService.ts",
-      "line": 141
     },
     "additionalExpenseService": {
       "source": "backend/src/services/wage/AdditionalExpenseService.ts",
@@ -8484,40 +8452,6 @@
         "services"
       ]
     },
-    "loginSchema": {
-      "source": "frontend/src/pages/login/loginSchema.ts",
-      "line": 15,
-      "line_end": 19,
-      "read_hint": {
-        "offset": 10,
-        "limit": 19
-      },
-      "type": "Function",
-      "keywords": [
-        "frontend",
-        "login",
-        "pages",
-        "schema"
-      ]
-    },
-    "LoginFormData": {
-      "source": "frontend/src/pages/login/loginSchema.ts",
-      "line": 24,
-      "line_end": 26,
-      "read_hint": {
-        "offset": 19,
-        "limit": 17
-      },
-      "type": "Interface",
-      "keywords": [
-        "data",
-        "form",
-        "frontend",
-        "login",
-        "pages",
-        "schema"
-      ]
-    },
     "AnalogTimePicker": {
       "source": "frontend/src/components/AnalogTimePicker.tsx",
       "line": 3,
@@ -8686,14 +8620,6 @@
         "work"
       ]
     },
-    "WorkRecordComposerPage": {
-      "source": "frontend/src/pages/daily-reports/new.tsx",
-      "line": 2484
-    },
-    "DashboardPage": {
-      "source": "frontend/src/pages/dashboard/index.tsx",
-      "line": 168
-    },
     "DCManagementPage": {
       "source": "frontend/src/pages/dc-management/index.tsx",
       "line": 92,
@@ -8747,39 +8673,6 @@
         "index",
         "login",
         "page",
-        "pages"
-      ]
-    },
-    "LoginFormProps": {
-      "source": "frontend/src/pages/login/LoginForm.tsx",
-      "line": 26,
-      "line_end": 30,
-      "read_hint": {
-        "offset": 21,
-        "limit": 19
-      },
-      "type": "Interface",
-      "keywords": [
-        "form",
-        "frontend",
-        "login",
-        "pages",
-        "props"
-      ]
-    },
-    "LoginForm": {
-      "source": "frontend/src/pages/login/LoginForm.tsx",
-      "line": 35,
-      "line_end": 165,
-      "read_hint": {
-        "offset": 30,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "form",
-        "frontend",
-        "login",
         "pages"
       ]
     },
@@ -9009,222 +8902,6 @@
         "workspace"
       ]
     },
-    "CategoryConfigModal": {
-      "source": "frontend/src/pages/workspace/components/CategoryConfigModal.tsx",
-      "line": 38,
-      "line_end": 267,
-      "read_hint": {
-        "offset": 33,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "category",
-        "config",
-        "frontend",
-        "modal",
-        "pages",
-        "workspace"
-      ]
-    },
-    "TaskCard": {
-      "source": "frontend/src/pages/workspace/components/TaskCard.tsx",
-      "line": 52,
-      "line_end": 112,
-      "read_hint": {
-        "offset": 47,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "card",
-        "frontend",
-        "pages",
-        "task",
-        "workspace"
-      ]
-    },
-    "TaskCreateModal": {
-      "source": "frontend/src/pages/workspace/components/TaskCreateModal.tsx",
-      "line": 94,
-      "line_end": 154,
-      "read_hint": {
-        "offset": 89,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "create",
-        "frontend",
-        "modal",
-        "pages",
-        "task",
-        "workspace"
-      ]
-    },
-    "TaskDailyReportModal": {
-      "source": "frontend/src/pages/workspace/components/TaskDailyReportModal.tsx",
-      "line": 107,
-      "line_end": 167,
-      "read_hint": {
-        "offset": 102,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "daily",
-        "frontend",
-        "modal",
-        "pages",
-        "report",
-        "task",
-        "workspace"
-      ]
-    },
-    "TaskRejectModal": {
-      "source": "frontend/src/pages/workspace/components/TaskRejectModal.tsx",
-      "line": 49,
-      "line_end": 109,
-      "read_hint": {
-        "offset": 44,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "frontend",
-        "modal",
-        "pages",
-        "reject",
-        "task",
-        "workspace"
-      ]
-    },
-    "WorkOrderConfigModal": {
-      "source": "frontend/src/pages/workspace/components/WorkOrderConfigModal.tsx",
-      "line": 30,
-      "line_end": 325,
-      "read_hint": {
-        "offset": 25,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "config",
-        "frontend",
-        "modal",
-        "order",
-        "pages",
-        "work",
-        "workspace"
-      ]
-    },
-    "ProjectCreateModalProps": {
-      "source": "frontend/src/pages/project-management/components/ProjectCreateModal.tsx",
-      "line": 32,
-      "line_end": 37,
-      "read_hint": {
-        "offset": 27,
-        "limit": 20
-      },
-      "type": "Interface",
-      "keywords": [
-        "create",
-        "frontend",
-        "modal",
-        "pages",
-        "project",
-        "project-management",
-        "props"
-      ]
-    },
-    "ProjectCreateModal": {
-      "source": "frontend/src/pages/project-management/components/ProjectCreateModal.tsx",
-      "line": 49,
-      "line_end": 349,
-      "read_hint": {
-        "offset": 44,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "create",
-        "frontend",
-        "modal",
-        "pages",
-        "project",
-        "project-management"
-      ]
-    },
-    "ProjectDrawerProps": {
-      "source": "frontend/src/pages/project-management/components/ProjectDrawer.tsx",
-      "line": 14,
-      "line_end": 18,
-      "read_hint": {
-        "offset": 9,
-        "limit": 19
-      },
-      "type": "Interface",
-      "keywords": [
-        "drawer",
-        "frontend",
-        "pages",
-        "project",
-        "project-management",
-        "props"
-      ]
-    },
-    "ProjectDrawer": {
-      "source": "frontend/src/pages/project-management/components/ProjectDrawer.tsx",
-      "line": 20,
-      "line_end": 89,
-      "read_hint": {
-        "offset": 15,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "drawer",
-        "frontend",
-        "pages",
-        "project",
-        "project-management"
-      ]
-    },
-    "ProjectFormProps": {
-      "source": "frontend/src/pages/project-management/components/ProjectForm.tsx",
-      "line": 34,
-      "line_end": 40,
-      "read_hint": {
-        "offset": 29,
-        "limit": 21
-      },
-      "type": "Interface",
-      "keywords": [
-        "form",
-        "frontend",
-        "pages",
-        "project",
-        "project-management",
-        "props"
-      ]
-    },
-    "ProjectForm": {
-      "source": "frontend/src/pages/project-management/components/ProjectForm.tsx",
-      "line": 52,
-      "line_end": 112,
-      "read_hint": {
-        "offset": 47,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "form",
-        "frontend",
-        "pages",
-        "project",
-        "project-management"
-      ]
-    },
     "ProjectEditPage": {
       "source": "frontend/src/pages/project-management/[id]/edit.tsx",
       "line": 16,
@@ -9242,39 +8919,6 @@
         "pages",
         "project",
         "project-management"
-      ]
-    },
-    "OvertimeFormProps": {
-      "source": "frontend/src/pages/overtime/components/OvertimeForm.tsx",
-      "line": 49,
-      "line_end": 79,
-      "read_hint": {
-        "offset": 44,
-        "limit": 45
-      },
-      "type": "Interface",
-      "keywords": [
-        "form",
-        "frontend",
-        "overtime",
-        "pages",
-        "props"
-      ]
-    },
-    "OvertimeForm": {
-      "source": "frontend/src/pages/overtime/components/OvertimeForm.tsx",
-      "line": 95,
-      "line_end": 155,
-      "read_hint": {
-        "offset": 90,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "form",
-        "frontend",
-        "overtime",
-        "pages"
       ]
     },
     "OvertimeEditPage": {
@@ -9311,113 +8955,6 @@
         "overtime",
         "page",
         "pages"
-      ]
-    },
-    "UserDrawerProps": {
-      "source": "frontend/src/pages/member-management/components/UserDrawer.tsx",
-      "line": 14,
-      "line_end": 19,
-      "read_hint": {
-        "offset": 9,
-        "limit": 20
-      },
-      "type": "Interface",
-      "keywords": [
-        "drawer",
-        "frontend",
-        "member-management",
-        "pages",
-        "props",
-        "user"
-      ]
-    },
-    "UserDrawer": {
-      "source": "frontend/src/pages/member-management/components/UserDrawer.tsx",
-      "line": 21,
-      "line_end": 74,
-      "read_hint": {
-        "offset": 16,
-        "limit": 68
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "drawer",
-        "frontend",
-        "member-management",
-        "pages",
-        "user"
-      ]
-    },
-    "UserFormProps": {
-      "source": "frontend/src/pages/member-management/components/UserForm.tsx",
-      "line": 34,
-      "line_end": 40,
-      "read_hint": {
-        "offset": 29,
-        "limit": 21
-      },
-      "type": "Interface",
-      "keywords": [
-        "form",
-        "frontend",
-        "member-management",
-        "pages",
-        "props",
-        "user"
-      ]
-    },
-    "UserForm": {
-      "source": "frontend/src/pages/member-management/components/UserForm.tsx",
-      "line": 42,
-      "line_end": 102,
-      "read_hint": {
-        "offset": 37,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "form",
-        "frontend",
-        "member-management",
-        "pages",
-        "user"
-      ]
-    },
-    "UserImportDialogProps": {
-      "source": "frontend/src/pages/member-management/components/UserImportDialog.tsx",
-      "line": 75,
-      "line_end": 82,
-      "read_hint": {
-        "offset": 70,
-        "limit": 22
-      },
-      "type": "Interface",
-      "keywords": [
-        "dialog",
-        "frontend",
-        "import",
-        "member-management",
-        "pages",
-        "props",
-        "user"
-      ]
-    },
-    "UserImportDialog": {
-      "source": "frontend/src/pages/member-management/components/UserImportDialog.tsx",
-      "line": 84,
-      "line_end": 373,
-      "read_hint": {
-        "offset": 79,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "dialog",
-        "frontend",
-        "import",
-        "member-management",
-        "pages",
-        "user"
       ]
     },
     "EditUserPage": {
@@ -9460,133 +8997,6 @@
         "social-security-rules"
       ]
     },
-    "SocialSecurityRuleModal": {
-      "source": "frontend/src/pages/management/social-security-rules/components/SocialSecurityRuleModal.tsx",
-      "line": 59,
-      "line_end": 119,
-      "read_hint": {
-        "offset": 54,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "frontend",
-        "management",
-        "modal",
-        "pages",
-        "rule",
-        "security",
-        "social",
-        "social-security-rules"
-      ]
-    },
-    "DCFormProps": {
-      "source": "frontend/src/pages/dc-management/components/DCForm.tsx",
-      "line": 60,
-      "line_end": 67,
-      "read_hint": {
-        "offset": 55,
-        "limit": 22
-      },
-      "type": "Interface",
-      "keywords": [
-        "dc",
-        "dc-management",
-        "form",
-        "frontend",
-        "pages",
-        "props"
-      ]
-    },
-    "DCForm": {
-      "source": "frontend/src/pages/dc-management/components/DCForm.tsx",
-      "line": 91,
-      "line_end": 151,
-      "read_hint": {
-        "offset": 86,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "dc",
-        "dc-management",
-        "form",
-        "frontend",
-        "pages"
-      ]
-    },
-    "DCImportDialogProps": {
-      "source": "frontend/src/pages/dc-management/components/DCImportDialog.tsx",
-      "line": 80,
-      "line_end": 87,
-      "read_hint": {
-        "offset": 75,
-        "limit": 22
-      },
-      "type": "Interface",
-      "keywords": [
-        "dc",
-        "dc-management",
-        "dialog",
-        "frontend",
-        "import",
-        "pages",
-        "props"
-      ]
-    },
-    "DCImportDialog": {
-      "source": "frontend/src/pages/dc-management/components/DCImportDialog.tsx",
-      "line": 89,
-      "line_end": 369,
-      "read_hint": {
-        "offset": 84,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "dc",
-        "dc-management",
-        "dialog",
-        "frontend",
-        "import",
-        "pages"
-      ]
-    },
-    "DCModalProps": {
-      "source": "frontend/src/pages/dc-management/components/DCModal.tsx",
-      "line": 16,
-      "line_end": 21,
-      "read_hint": {
-        "offset": 11,
-        "limit": 20
-      },
-      "type": "Interface",
-      "keywords": [
-        "dc",
-        "dc-management",
-        "frontend",
-        "modal",
-        "pages",
-        "props"
-      ]
-    },
-    "DCModal": {
-      "source": "frontend/src/pages/dc-management/components/DCModal.tsx",
-      "line": 23,
-      "line_end": 117,
-      "read_hint": {
-        "offset": 18,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "dc",
-        "dc-management",
-        "frontend",
-        "modal",
-        "pages"
-      ]
-    },
     "EditDCPage": {
       "source": "frontend/src/pages/dc-management/[id]/edit.tsx",
       "line": 30,
@@ -9604,99 +9014,6 @@
         "frontend",
         "page",
         "pages"
-      ]
-    },
-    "DailyReportDashboard": {
-      "source": "frontend/src/pages/daily-reports/components/DailyReportDashboard.tsx",
-      "line": 29,
-      "line_end": 251,
-      "read_hint": {
-        "offset": 24,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "daily",
-        "daily-reports",
-        "dashboard",
-        "frontend",
-        "pages",
-        "report"
-      ]
-    },
-    "DailyReportFormProps": {
-      "source": "frontend/src/pages/daily-reports/components/DailyReportForm.tsx",
-      "line": 38,
-      "line_end": 63,
-      "read_hint": {
-        "offset": 33,
-        "limit": 40
-      },
-      "type": "Interface",
-      "keywords": [
-        "daily",
-        "daily-reports",
-        "form",
-        "frontend",
-        "pages",
-        "props",
-        "report"
-      ]
-    },
-    "DailyReportForm": {
-      "source": "frontend/src/pages/daily-reports/components/DailyReportForm.tsx",
-      "line": 78,
-      "line_end": 138,
-      "read_hint": {
-        "offset": 73,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "daily",
-        "daily-reports",
-        "form",
-        "frontend",
-        "pages",
-        "report"
-      ]
-    },
-    "ExcelImportModal": {
-      "source": "frontend/src/pages/daily-reports/components/ExcelImportModal.tsx",
-      "line": 32,
-      "line_end": 272,
-      "read_hint": {
-        "offset": 27,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "daily-reports",
-        "excel",
-        "frontend",
-        "import",
-        "modal",
-        "pages"
-      ]
-    },
-    "DailyReportEntryModal": {
-      "source": "frontend/src/pages/daily-reports/mobile/DailyReportEntryModal.tsx",
-      "line": 66,
-      "line_end": 126,
-      "read_hint": {
-        "offset": 61,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "daily",
-        "daily-reports",
-        "entry",
-        "frontend",
-        "mobile",
-        "modal",
-        "pages",
-        "report"
       ]
     },
     "DailyReportEditPage": {
@@ -10985,24 +10302,6 @@
         "task"
       ]
     },
-    "TaskSubtasksModal": {
-      "source": "frontend/src/pages/workspace/components/TaskSubtasksModal.tsx",
-      "line": 24,
-      "line_end": 228,
-      "read_hint": {
-        "offset": 19,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "frontend",
-        "modal",
-        "pages",
-        "subtasks",
-        "task",
-        "workspace"
-      ]
-    },
     "WorkspaceRequestsPage": {
       "source": "frontend/src/pages/workspace/requests.tsx",
       "line": 532,
@@ -11017,22 +10316,6 @@
         "page",
         "pages",
         "requests",
-        "workspace"
-      ]
-    },
-    "WorkspaceTree": {
-      "source": "frontend/src/pages/workspace/components/WorkspaceTree.tsx",
-      "line": 48,
-      "line_end": 108,
-      "read_hint": {
-        "offset": 43,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "frontend",
-        "pages",
-        "tree",
         "workspace"
       ]
     },
@@ -11104,14 +10387,6 @@
         "services"
       ]
     },
-    "NotificationState": {
-      "source": "frontend/src/store/notificationStore.ts",
-      "line": 4
-    },
-    "useNotificationStore": {
-      "source": "frontend/src/store/notificationStore.ts",
-      "line": 13
-    },
     "ParsedWbsRow": {
       "source": "backend/src/utils/wbsParser.ts",
       "line": 4,
@@ -11182,24 +10457,6 @@
         "parser",
         "utils",
         "wbs"
-      ]
-    },
-    "WbsImportModal": {
-      "source": "frontend/src/pages/workspace/components/WbsImportModal.tsx",
-      "line": 33,
-      "line_end": 93,
-      "read_hint": {
-        "offset": 28,
-        "limit": 75
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "frontend",
-        "import",
-        "modal",
-        "pages",
-        "wbs",
-        "workspace"
       ]
     },
     "useNotifications": {
@@ -12679,45 +11936,6 @@
         "pages"
       ]
     },
-    "ScanDataEditDialogProps": {
-      "source": "frontend/src/pages/scan-data-monitoring/components/ScanDataEditDialog.tsx",
-      "line": 17,
-      "line_end": 25,
-      "read_hint": {
-        "offset": 12,
-        "limit": 23
-      },
-      "type": "Interface",
-      "keywords": [
-        "data",
-        "dialog",
-        "edit",
-        "frontend",
-        "pages",
-        "props",
-        "scan",
-        "scan-data-monitoring"
-      ]
-    },
-    "ScanDataEditDialog": {
-      "source": "frontend/src/pages/scan-data-monitoring/components/ScanDataEditDialog.tsx",
-      "line": 27,
-      "line_end": 114,
-      "read_hint": {
-        "offset": 22,
-        "limit": 80
-      },
-      "type": "ReactComponent",
-      "keywords": [
-        "data",
-        "dialog",
-        "edit",
-        "frontend",
-        "pages",
-        "scan",
-        "scan-data-monitoring"
-      ]
-    },
     "getAfterSaleWorkOrderIds": {
       "source": "backend/src/api/routes/tasks.routes.ts",
       "line": 20,
@@ -12960,6 +12178,713 @@
         "source"
       ],
       "used_in": []
+    },
+    "DailyReportDashboard": {
+      "source": "frontend/src/page-components/daily-reports/components/DailyReportDashboard.tsx",
+      "line": 29,
+      "line_end": 251,
+      "read_hint": {
+        "offset": 24,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "daily",
+        "daily-reports",
+        "dashboard",
+        "page-components",
+        "report"
+      ]
+    },
+    "DailyReportFormProps": {
+      "source": "frontend/src/page-components/daily-reports/components/DailyReportForm.tsx",
+      "line": 38,
+      "line_end": 63,
+      "read_hint": {
+        "offset": 33,
+        "limit": 40
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "daily",
+        "daily-reports",
+        "form",
+        "page-components",
+        "props",
+        "report"
+      ]
+    },
+    "DailyReportForm": {
+      "source": "frontend/src/page-components/daily-reports/components/DailyReportForm.tsx",
+      "line": 78,
+      "line_end": 138,
+      "read_hint": {
+        "offset": 73,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "daily",
+        "daily-reports",
+        "form",
+        "page-components",
+        "report"
+      ]
+    },
+    "ExcelImportModal": {
+      "source": "frontend/src/page-components/daily-reports/components/ExcelImportModal.tsx",
+      "line": 32,
+      "line_end": 272,
+      "read_hint": {
+        "offset": 27,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "daily-reports",
+        "excel",
+        "import",
+        "modal",
+        "page-components"
+      ]
+    },
+    "DailyReportEntryModal": {
+      "source": "frontend/src/page-components/daily-reports/mobile/DailyReportEntryModal.tsx",
+      "line": 66,
+      "line_end": 126,
+      "read_hint": {
+        "offset": 61,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "daily",
+        "daily-reports",
+        "entry",
+        "mobile",
+        "modal",
+        "page-components",
+        "report"
+      ]
+    },
+    "DCFormProps": {
+      "source": "frontend/src/page-components/dc-management/components/DCForm.tsx",
+      "line": 60,
+      "line_end": 67,
+      "read_hint": {
+        "offset": 55,
+        "limit": 22
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dc",
+        "dc-management",
+        "form",
+        "page-components",
+        "props"
+      ]
+    },
+    "DCForm": {
+      "source": "frontend/src/page-components/dc-management/components/DCForm.tsx",
+      "line": 91,
+      "line_end": 151,
+      "read_hint": {
+        "offset": 86,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dc",
+        "dc-management",
+        "form",
+        "page-components"
+      ]
+    },
+    "DCImportDialogProps": {
+      "source": "frontend/src/page-components/dc-management/components/DCImportDialog.tsx",
+      "line": 80,
+      "line_end": 87,
+      "read_hint": {
+        "offset": 75,
+        "limit": 22
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dc",
+        "dc-management",
+        "dialog",
+        "import",
+        "page-components",
+        "props"
+      ]
+    },
+    "DCImportDialog": {
+      "source": "frontend/src/page-components/dc-management/components/DCImportDialog.tsx",
+      "line": 89,
+      "line_end": 369,
+      "read_hint": {
+        "offset": 84,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dc",
+        "dc-management",
+        "dialog",
+        "import",
+        "page-components"
+      ]
+    },
+    "DCModalProps": {
+      "source": "frontend/src/page-components/dc-management/components/DCModal.tsx",
+      "line": 16,
+      "line_end": 21,
+      "read_hint": {
+        "offset": 11,
+        "limit": 20
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dc",
+        "dc-management",
+        "modal",
+        "page-components",
+        "props"
+      ]
+    },
+    "DCModal": {
+      "source": "frontend/src/page-components/dc-management/components/DCModal.tsx",
+      "line": 23,
+      "line_end": 117,
+      "read_hint": {
+        "offset": 18,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dc",
+        "dc-management",
+        "modal",
+        "page-components"
+      ]
+    },
+    "LoginFormProps": {
+      "source": "frontend/src/page-components/login/LoginForm.tsx",
+      "line": 26,
+      "line_end": 30,
+      "read_hint": {
+        "offset": 21,
+        "limit": 19
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "login",
+        "page-components",
+        "props"
+      ]
+    },
+    "LoginForm": {
+      "source": "frontend/src/page-components/login/LoginForm.tsx",
+      "line": 35,
+      "line_end": 165,
+      "read_hint": {
+        "offset": 30,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "login",
+        "page-components"
+      ]
+    },
+    "loginSchema": {
+      "source": "frontend/src/page-components/login/loginSchema.ts",
+      "line": 15,
+      "line_end": 19,
+      "read_hint": {
+        "offset": 10,
+        "limit": 19
+      },
+      "type": "Function",
+      "keywords": [
+        "login",
+        "page-components",
+        "schema"
+      ]
+    },
+    "LoginFormData": {
+      "source": "frontend/src/page-components/login/loginSchema.ts",
+      "line": 24,
+      "line_end": 26,
+      "read_hint": {
+        "offset": 19,
+        "limit": 17
+      },
+      "type": "Interface",
+      "keywords": [
+        "data",
+        "form",
+        "login",
+        "page-components",
+        "schema"
+      ]
+    },
+    "SocialSecurityRuleModal": {
+      "source": "frontend/src/page-components/management/social-security-rules/components/SocialSecurityRuleModal.tsx",
+      "line": 59,
+      "line_end": 119,
+      "read_hint": {
+        "offset": 54,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "management",
+        "modal",
+        "page-components",
+        "rule",
+        "security",
+        "social",
+        "social-security-rules"
+      ]
+    },
+    "UserDrawerProps": {
+      "source": "frontend/src/page-components/member-management/components/UserDrawer.tsx",
+      "line": 14,
+      "line_end": 19,
+      "read_hint": {
+        "offset": 9,
+        "limit": 20
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "drawer",
+        "member-management",
+        "page-components",
+        "props",
+        "user"
+      ]
+    },
+    "UserDrawer": {
+      "source": "frontend/src/page-components/member-management/components/UserDrawer.tsx",
+      "line": 21,
+      "line_end": 74,
+      "read_hint": {
+        "offset": 16,
+        "limit": 68
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "drawer",
+        "member-management",
+        "page-components",
+        "user"
+      ]
+    },
+    "UserFormProps": {
+      "source": "frontend/src/page-components/member-management/components/UserForm.tsx",
+      "line": 34,
+      "line_end": 40,
+      "read_hint": {
+        "offset": 29,
+        "limit": 21
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "member-management",
+        "page-components",
+        "props",
+        "user"
+      ]
+    },
+    "UserForm": {
+      "source": "frontend/src/page-components/member-management/components/UserForm.tsx",
+      "line": 42,
+      "line_end": 102,
+      "read_hint": {
+        "offset": 37,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "member-management",
+        "page-components",
+        "user"
+      ]
+    },
+    "UserImportDialogProps": {
+      "source": "frontend/src/page-components/member-management/components/UserImportDialog.tsx",
+      "line": 75,
+      "line_end": 82,
+      "read_hint": {
+        "offset": 70,
+        "limit": 22
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dialog",
+        "import",
+        "member-management",
+        "page-components",
+        "props",
+        "user"
+      ]
+    },
+    "UserImportDialog": {
+      "source": "frontend/src/page-components/member-management/components/UserImportDialog.tsx",
+      "line": 84,
+      "line_end": 373,
+      "read_hint": {
+        "offset": 79,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "dialog",
+        "import",
+        "member-management",
+        "page-components",
+        "user"
+      ]
+    },
+    "OvertimeFormProps": {
+      "source": "frontend/src/page-components/overtime/components/OvertimeForm.tsx",
+      "line": 49,
+      "line_end": 79,
+      "read_hint": {
+        "offset": 44,
+        "limit": 45
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "overtime",
+        "page-components",
+        "props"
+      ]
+    },
+    "OvertimeForm": {
+      "source": "frontend/src/page-components/overtime/components/OvertimeForm.tsx",
+      "line": 95,
+      "line_end": 155,
+      "read_hint": {
+        "offset": 90,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "overtime",
+        "page-components"
+      ]
+    },
+    "ProjectCreateModalProps": {
+      "source": "frontend/src/page-components/project-management/components/ProjectCreateModal.tsx",
+      "line": 32,
+      "line_end": 37,
+      "read_hint": {
+        "offset": 27,
+        "limit": 20
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "create",
+        "modal",
+        "page-components",
+        "project",
+        "project-management",
+        "props"
+      ]
+    },
+    "ProjectCreateModal": {
+      "source": "frontend/src/page-components/project-management/components/ProjectCreateModal.tsx",
+      "line": 49,
+      "line_end": 349,
+      "read_hint": {
+        "offset": 44,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "create",
+        "modal",
+        "page-components",
+        "project",
+        "project-management"
+      ]
+    },
+    "ProjectDrawerProps": {
+      "source": "frontend/src/page-components/project-management/components/ProjectDrawer.tsx",
+      "line": 14,
+      "line_end": 18,
+      "read_hint": {
+        "offset": 9,
+        "limit": 19
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "drawer",
+        "page-components",
+        "project",
+        "project-management",
+        "props"
+      ]
+    },
+    "ProjectDrawer": {
+      "source": "frontend/src/page-components/project-management/components/ProjectDrawer.tsx",
+      "line": 20,
+      "line_end": 89,
+      "read_hint": {
+        "offset": 15,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "drawer",
+        "page-components",
+        "project",
+        "project-management"
+      ]
+    },
+    "ProjectFormProps": {
+      "source": "frontend/src/page-components/project-management/components/ProjectForm.tsx",
+      "line": 34,
+      "line_end": 40,
+      "read_hint": {
+        "offset": 29,
+        "limit": 21
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "page-components",
+        "project",
+        "project-management",
+        "props"
+      ]
+    },
+    "ProjectForm": {
+      "source": "frontend/src/page-components/project-management/components/ProjectForm.tsx",
+      "line": 52,
+      "line_end": 112,
+      "read_hint": {
+        "offset": 47,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "form",
+        "page-components",
+        "project",
+        "project-management"
+      ]
+    },
+    "CategoryConfigModal": {
+      "source": "frontend/src/page-components/workspace/components/CategoryConfigModal.tsx",
+      "line": 38,
+      "line_end": 267,
+      "read_hint": {
+        "offset": 33,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "category",
+        "config",
+        "modal",
+        "page-components",
+        "workspace"
+      ]
+    },
+    "TaskCard": {
+      "source": "frontend/src/page-components/workspace/components/TaskCard.tsx",
+      "line": 52,
+      "line_end": 112,
+      "read_hint": {
+        "offset": 47,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "card",
+        "page-components",
+        "task",
+        "workspace"
+      ]
+    },
+    "TaskCreateModal": {
+      "source": "frontend/src/page-components/workspace/components/TaskCreateModal.tsx",
+      "line": 94,
+      "line_end": 154,
+      "read_hint": {
+        "offset": 89,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "create",
+        "modal",
+        "page-components",
+        "task",
+        "workspace"
+      ]
+    },
+    "TaskDailyReportModal": {
+      "source": "frontend/src/page-components/workspace/components/TaskDailyReportModal.tsx",
+      "line": 107,
+      "line_end": 167,
+      "read_hint": {
+        "offset": 102,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "daily",
+        "modal",
+        "page-components",
+        "report",
+        "task",
+        "workspace"
+      ]
+    },
+    "TaskRejectModal": {
+      "source": "frontend/src/page-components/workspace/components/TaskRejectModal.tsx",
+      "line": 49,
+      "line_end": 109,
+      "read_hint": {
+        "offset": 44,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "modal",
+        "page-components",
+        "reject",
+        "task",
+        "workspace"
+      ]
+    },
+    "TaskSubtasksModal": {
+      "source": "frontend/src/page-components/workspace/components/TaskSubtasksModal.tsx",
+      "line": 24,
+      "line_end": 228,
+      "read_hint": {
+        "offset": 19,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "modal",
+        "page-components",
+        "subtasks",
+        "task",
+        "workspace"
+      ]
+    },
+    "WbsImportModal": {
+      "source": "frontend/src/page-components/workspace/components/WbsImportModal.tsx",
+      "line": 33,
+      "line_end": 93,
+      "read_hint": {
+        "offset": 28,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "import",
+        "modal",
+        "page-components",
+        "wbs",
+        "workspace"
+      ]
+    },
+    "WorkOrderConfigModal": {
+      "source": "frontend/src/page-components/workspace/components/WorkOrderConfigModal.tsx",
+      "line": 30,
+      "line_end": 328,
+      "read_hint": {
+        "offset": 25,
+        "limit": 80
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "config",
+        "modal",
+        "order",
+        "page-components",
+        "work",
+        "workspace"
+      ]
+    },
+    "WorkspaceTree": {
+      "source": "frontend/src/page-components/workspace/components/WorkspaceTree.tsx",
+      "line": 48,
+      "line_end": 108,
+      "read_hint": {
+        "offset": 43,
+        "limit": 75
+      },
+      "type": "PageComponent",
+      "keywords": [
+        "page-components",
+        "tree",
+        "workspace"
+      ]
+    },
+    "useCameraPermissions": {
+      "source": "frontend/src/components/camera/useCameraPermissions.ts",
+      "line": 22,
+      "line_end": 82,
+      "read_hint": {
+        "offset": 17,
+        "limit": 70
+      },
+      "type": "Hook",
+      "keywords": [
+        "camera",
+        "permissions",
+        "geolocation",
+        "hook",
+        "use"
+      ]
+    },
+    "drawWatermark": {
+      "source": "frontend/src/components/camera/watermarkStamp.ts",
+      "line": 21,
+      "line_end": 47,
+      "read_hint": {
+        "offset": 16,
+        "limit": 40
+      },
+      "type": "Function",
+      "keywords": [
+        "watermark",
+        "stamp",
+        "canvas",
+        "draw",
+        "camera"
+      ]
+    },
+    "GeotaggedCamera": {
+      "source": "frontend/src/components/camera/GeotaggedCamera.tsx",
+      "line": 20,
+      "line_end": 186,
+      "read_hint": {
+        "offset": 15,
+        "limit": 80
+      },
+      "type": "ReactComponent",
+      "keywords": [
+        "geotagged",
+        "camera",
+        "component",
+        "gps",
+        "watermark"
+      ]
     }
   }
 }

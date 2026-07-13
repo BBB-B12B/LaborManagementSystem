@@ -137,3 +137,23 @@ next-env.d.ts
 .pnp.js
 
 keys/
+
+# ============================================
+# macOS AppleDouble metadata (created on external/network volumes)
+# ============================================
+._*
+.AppleDouble
+.LSOverride
+
+# ============================================
+# Local harness backups / scratch / vendored tooling (do NOT push)
+# ============================================
+*.bak-*
+*.s2bak-*
+.harness_detach_backup_*/
+.harness_constitution_backup_*/
+Codeing_harness_killer-main/
+Speckit/
+.specify/
+specs/
+scratch/

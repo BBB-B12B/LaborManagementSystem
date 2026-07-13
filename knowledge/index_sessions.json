@@ -1,10 +1,10 @@
 [
   {
     "session_id": "session_001",
-    "path": ".sessions\\session_001.json",
+    "path": ".sessions/session_001.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -14,10 +14,10 @@
   },
   {
     "session_id": "session_002",
-    "path": ".sessions\\session_002.json",
+    "path": ".sessions/session_002.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -27,10 +27,10 @@
   },
   {
     "session_id": "session_003",
-    "path": ".sessions\\session_003.json",
+    "path": ".sessions/session_003.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -40,7 +40,7 @@
   },
   {
     "session_id": "session_001_labor_popups",
-    "path": ".sessions\\session_001_labor_popups.json",
+    "path": ".sessions/session_001_labor_popups.json",
     "tasks": [
       "T-000",
       "T-001",
@@ -49,7 +49,7 @@
       "T-004"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Integrated Codeing_harness_killer agent harness; created file and symbol indexing scripts and databases (index_files.json and index_variables.json); customized agent skills folder (.agents/skills) to…",
     "keywords": [
@@ -98,12 +98,12 @@
   },
   {
     "session_id": "session_002_merge_harness",
-    "path": ".sessions\\session_002_merge_harness.json",
+    "path": ".sessions/session_002_merge_harness.json",
     "tasks": [
       "T-007"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Merged upstream Codeing_harness_killer repository updates into local Codeing_harness_killer/ folder without affecting main app code or active agent configuration in the root directory.",
     "keywords": [
@@ -133,13 +133,13 @@
   },
   {
     "session_id": "session_003_daily_report_validation",
-    "path": ".sessions\\session_003_daily_report_validation.json",
+    "path": ".sessions/session_003_daily_report_validation.json",
     "tasks": [
       "T-005",
       "T-006"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Implemented daily report cross-task time overlap validation in TaskService.ts, fixed Firestore FAILED_PRECONDITION by temporary in-memory filtering, and corrected frontend error message extraction fro…",
     "keywords": [
@@ -187,13 +187,13 @@
   },
   {
     "session_id": "session_004_backlog_subtasks",
-    "path": ".sessions\\session_004_backlog_subtasks.json",
+    "path": ".sessions/session_004_backlog_subtasks.json",
     "tasks": [
       "T-011-001-04",
       "T-011-002-01"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Fixed backend submitDailyReport leaveType mapping logic to save leaveType correctly. Integrated Backlog page with new subtasks database structure, updating GET /api/tasks/backlog and unlock/request-un…",
     "keywords": [
@@ -231,12 +231,12 @@
   },
   {
     "session_id": "session_005_calendar_coloring",
-    "path": ".sessions\\session_005_calendar_coloring.json",
+    "path": ".sessions/session_005_calendar_coloring.json",
     "tasks": [
       "T-012-008-05"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Fixed calendar dots shifted alignment and progress coloring logic in TaskDailyReportModal.tsx. Resolved isActingAsSupport WH project location visibility mismatch for local tasks. Added COLLECTION_GROU…",
     "keywords": [
@@ -277,14 +277,14 @@
   },
   {
     "session_id": "session_011_unlock_request_flow",
-    "path": ".sessions\\session_011_unlock_request_flow.json",
+    "path": ".sessions/session_011_unlock_request_flow.json",
     "tasks": [
       "T-012-008-09",
       "T-012-008-10",
       "T-012-011"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "ตรวจสอบและแก้ไข Flow ของ FM ส่งคำขอปลดล็อคย้อนหลัง + Notification Routing Bug Fix:\n\n[Before] แก้ไข unlock request flow + calendar badge ก่อนหน้า\n\n[Added: Session 2026-05-27]\n(1) แก้บั๊ก FM กดการแจ้งเต…",
     "keywords": [
@@ -346,12 +346,12 @@
   },
   {
     "session_id": "session_012_page_route_protection",
-    "path": ".sessions\\session_012_page_route_protection.json",
+    "path": ".sessions/session_012_page_route_protection.json",
     "tasks": [
       "T-015"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "ปรับปรุงสิทธิ์การเข้าถึงเมนูและหน้าต่าง ๆ ตามบทบาทผู้ใช้งาน (Page-level Route Protection):\n\n- RESTRICTED หน้าหลัก (Dashboard) ให้เฉพาะบทบาท: 'AM', 'OE', 'PE', 'PM', 'PD', 'MD'\n- RESTRICTED รายงานประจำ…",
     "keywords": [
@@ -387,12 +387,12 @@
   },
   {
     "session_id": "session_013_uxui_workspace",
-    "path": ".sessions\\session_013_uxui_workspace.json",
+    "path": ".sessions/session_013_uxui_workspace.json",
     "tasks": [
       "T-016"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "UX/UI Workspace Session — แก้ไขและปรับปรุง:\n\n1. [Structure Tree] ย้าย DueDate color indicator มาแสดงบนการ์ดใน WorkspaceTree.tsx โดยใช้แถบสีแทนจุดสี:\n   - แถบสีน้ำเงิน: เหลือเวลา > 7 วัน\n   - แถบสีน้ำส…",
     "keywords": [
@@ -451,7 +451,7 @@
   },
   {
     "session_id": "session_014_ui_log_workspace",
-    "path": ".sessions\\session_014_ui_log_workspace.json",
+    "path": ".sessions/session_014_ui_log_workspace.json",
     "tasks": [
       "T-012-009-05",
       "T-014-005-01",
@@ -459,7 +459,7 @@
       "T-014-005-03"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "UI Log Workspace & Due Date Status Colors Session — ปรับปรุงและแก้ไขหน้าประวัติการแก้ไขรายงาน และพัฒนา Logic ปุ่มแสดงสถานะ Due Date:\n\n1. [History Diff UI] แสดงข้อมูลเปรียบเทียบก่อน-หลังการแก้ไขในแท็บ…",
     "keywords": [
@@ -515,13 +515,13 @@
   },
   {
     "session_id": "session_015_subtasks_deletion",
-    "path": ".sessions\\session_015_subtasks_deletion.json",
+    "path": ".sessions/session_015_subtasks_deletion.json",
     "tasks": [
       "T-016-001-08",
       "T-016-001-09"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Subtask Deletion & Redesign Session (T-016-001-08, T-016-001-09):\n\n1. [UI Redesign] ปรับโครงสร้างแบบฟอร์มการกรอกข้อมูล Subtask จากรูปแบบตารางเป็นแบบกล่องการ์ดแนวตั้ง (Card/Box Layout) ที่สวยงามและพรีเ…",
     "keywords": [
@@ -576,13 +576,13 @@
   },
   {
     "session_id": "session_016_history_modal_edithistory",
-    "path": ".sessions\\session_016_history_modal_edithistory.json",
+    "path": ".sessions/session_016_history_modal_edithistory.json",
     "tasks": [
       "T-012-009-07",
       "T-012-009-08"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "History Modal & EditHistory Refactor Session (T-012-009-07, T-012-009-08):\n\n1. [LaborSummaryPanel] สร้าง component แยก LaborSummaryPanel แสดงรายชื่อกำลังพลทั้งหมดในวันนั้นแบบ collapsible พร้อมกะทำงานค…",
     "keywords": [
@@ -649,13 +649,13 @@
   },
   {
     "session_id": "session_017_workspace_requests_redesign",
-    "path": ".sessions\\session_017_workspace_requests_redesign.json",
+    "path": ".sessions/session_017_workspace_requests_redesign.json",
     "tasks": [
       "T-012-009-09",
       "T-012-009-10"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Workspace Requests Table & Dashboard Stats Redesign (T-012-009-09, T-012-009-10):\n\n1. [Backend] Updated `/api/tasks/requests-all` and `/api/tasks/reports-all` API endpoints in tasks.routes.ts to fetch…",
     "keywords": [
@@ -758,7 +758,7 @@
   },
   {
     "session_id": "session_018_daily_report_requests_switcher",
-    "path": ".sessions\\session_018_daily_report_requests_switcher.json",
+    "path": ".sessions/session_018_daily_report_requests_switcher.json",
     "tasks": [
       "T-020-001-04",
       "T-020-001-04-01",
@@ -768,7 +768,7 @@
       "T-020-001-05-10"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Daily Report / Requests Switcher & Task Card Align (T-020, T-020-001-04, T-020-001-04-01):\n\n[Previous session] 1. Sidebar UI Aligned, 2. Local Switcher Mode, 3. Requests Constraints, 4. Bug Fixed (sel…",
     "keywords": [
@@ -837,12 +837,12 @@
   },
   {
     "session_id": "session_019_mobile_buttons_grill",
-    "path": ".sessions\\session_019_mobile_buttons_grill.json",
+    "path": ".sessions/session_019_mobile_buttons_grill.json",
     "tasks": [
       "mobile-ui-design"
     ],
     "status": "in_progress",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Designing mobile navigation/toolbar buttons for various pages (/grill-me)",
     "keywords": [
@@ -861,12 +861,12 @@
   },
   {
     "session_id": "session_020_mobile_create_task_popup",
-    "path": ".sessions\\session_020_mobile_create_task_popup.json",
+    "path": ".sessions/session_020_mobile_create_task_popup.json",
     "tasks": [
       "mobile-popup-design"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Redesigning mobile 'Create New Task' popup fields, font sizes, and dropdown layouts for consistent styling (/grill-me)",
     "keywords": [
@@ -889,12 +889,12 @@
   },
   {
     "session_id": "session_021_mobile_labor_table_redesign",
-    "path": ".sessions\\session_021_mobile_labor_table_redesign.json",
+    "path": ".sessions/session_021_mobile_labor_table_redesign.json",
     "tasks": [
       "mobile-labor-table"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Redesigned the Labor & Plans table for mobile viewports using a responsive card-based layout with compact chips for shifts/OT hours and progress bar.",
     "keywords": [
@@ -921,12 +921,12 @@
   },
   {
     "session_id": "session_022_hide_export_mobile",
-    "path": ".sessions\\session_022_hide_export_mobile.json",
+    "path": ".sessions/session_022_hide_export_mobile.json",
     "tasks": [
       "hide-export-mobile"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Hid the 'Export to Excel' button on mobile viewports on the requests workspace page.",
     "keywords": [
@@ -946,12 +946,12 @@
   },
   {
     "session_id": "session_023_quick_subtask_roles",
-    "path": ".sessions\\session_023_quick_subtask_roles.json",
+    "path": ".sessions/session_023_quick_subtask_roles.json",
     "tasks": [
       "quick-subtask-roles"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Modified assignee dropdown in Quick Subtask popup and Edit Subtask form in index.tsx to fetch and display users with both FM and SE roles. Fetched both roles in parallel on the client side using Promi…",
     "keywords": [
@@ -996,12 +996,12 @@
   },
   {
     "session_id": "session_024_backlog_leave_popup",
-    "path": ".sessions\\session_024_backlog_leave_popup.json",
+    "path": ".sessions/session_024_backlog_leave_popup.json",
     "tasks": [
       "T-012-009-15"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Surgically removed the leaveType select dropdown from the Edit Work Time popup in daily-reports/list.tsx. Added a useEffect hook to automatically synchronize the leaveType state based on the presence…",
     "keywords": [
@@ -1060,12 +1060,12 @@
   },
   {
     "session_id": "session_025_update_notification_types",
-    "path": ".sessions\\session_025_update_notification_types.json",
+    "path": ".sessions/session_025_update_notification_types.json",
     "tasks": [
       "update-notification-types"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Updated frontend notification types in notificationService.ts to support 'task_assigned', 'management_submit', and 'unlock_request', made projectId and taskId optional in the interface, and added proj…",
     "keywords": [
@@ -1102,12 +1102,12 @@
   },
   {
     "session_id": "session_026_task_assigned_notifications",
-    "path": ".sessions\\session_026_task_assigned_notifications.json",
+    "path": ".sessions/session_026_task_assigned_notifications.json",
     "tasks": [
       "T-012-009-17"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Implemented backend notification triggers when tasks and subtasks are assigned to users (FM or SE). Added a sendAssignmentNotifications helper in TaskService.ts to query the users collection in Projec…",
     "keywords": [
@@ -1150,12 +1150,12 @@
   },
   {
     "session_id": "session_027_mobile_dailyreport",
-    "path": ".sessions\\session_027_mobile_dailyreport.json",
+    "path": ".sessions/session_027_mobile_dailyreport.json",
     "tasks": [
       "mobile-dailyreport"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Added responsive mobile worker cards UI (WorkerMobileCard) to the daily-reports page to clean up the layout on narrow screens. Improved backend error reporting in TaskService.ts to resolve conflicting…",
     "keywords": [
@@ -1198,12 +1198,12 @@
   },
   {
     "session_id": "session_000_bootstrap",
-    "path": ".sessions\\session_000_bootstrap.json",
+    "path": ".sessions/session_000_bootstrap.json",
     "tasks": [
       "T-000"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Integrated Agent System Harness into LaborManagementSystem, verified all 22 required files, generated file indices (298 files) and symbol indices (629 symbols), and fully initialized the system.",
     "keywords": [
@@ -1229,13 +1229,13 @@
   },
   {
     "session_id": "session_001_reconciliation",
-    "path": ".sessions\\session_001_reconciliation.json",
+    "path": ".sessions/session_001_reconciliation.json",
     "tasks": [
       "T-001-001-01",
       "T-001-001-02"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Resolved issue where assigneeName was saved as null/Unknown in reconciliationRecords. Designed a flexible name resolution helper (getAssigneeName) that supports direct ID lookup, lowercase 'employeeId…",
     "keywords": [
@@ -1301,12 +1301,12 @@
   },
   {
     "session_id": "session_002_api_path_clarification",
-    "path": ".sessions\\session_002_api_path_clarification.json",
+    "path": ".sessions/session_002_api_path_clarification.json",
     "tasks": [
       "none"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Clarified the daily report Firestore path transition to include the subtasks level, updated the API call documentation and TypeScript code template to support the new path structure (/workOrders/{work…",
     "keywords": [
@@ -1353,12 +1353,12 @@
   },
   {
     "session_id": "session_003_realtime_reconciliation_fix",
-    "path": ".sessions\\session_003_realtime_reconciliation_fix.json",
+    "path": ".sessions/session_003_realtime_reconciliation_fix.json",
     "tasks": [
       "none"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Investigated the real-time reconciliation issue where leave label ('ลางาน X ชม.') and medical certificate evidence button ('เปิดหลักฐาน') were missing on the UI upon real-time webhook sync (webhookTim…",
     "keywords": [
@@ -1430,12 +1430,12 @@
   },
   {
     "session_id": "session_004_assignee_name_functions_fix",
-    "path": ".sessions\\session_004_assignee_name_functions_fix.json",
+    "path": ".sessions/session_004_assignee_name_functions_fix.json",
     "tasks": [
       "T-001-001-03"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Cloud Functions assigneeName Null Bug (T-001-001-03 / ERR-003): Resolved issue where assigneeName was null for specific employees (like ID 411435) within Firestore triggers by fetching it correctly fr…",
     "keywords": [
@@ -1474,13 +1474,13 @@
   },
   {
     "session_id": "session_005_daily_report_leave_photos_fix",
-    "path": ".sessions\\session_005_daily_report_leave_photos_fix.json",
+    "path": ".sessions/session_005_daily_report_leave_photos_fix.json",
     "tasks": [
       "T-001-001-04",
       "T-001-001-05"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "1. Leave photo display on modal (T-001-001-04 / ERR-004): Prevented daily report work photos from leaking into leave history rows inside the Daily Report modal by forcing photoIn and photoOut to null…",
     "keywords": [
@@ -1555,12 +1555,12 @@
   },
   {
     "session_id": "session_006_worklogs_reconciliation",
-    "path": ".sessions\\session_006_worklogs_reconciliation.json",
+    "path": ".sessions/session_006_worklogs_reconciliation.json",
     "tasks": [
       "T-001-002-01"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "T-001-002-01: เพิ่มการบันทึก workLogs (subtaskName, taskName) จาก After-Sale ใน reconciliationRecords ทั้ง Cloud Functions path และ Backend Express path\n\nสิ่งที่ทำ (Backend/Functions):\n1. functions/sr…",
     "keywords": [
@@ -1633,13 +1633,13 @@
   },
   {
     "session_id": "session_007_summarycard_bugfix",
-    "path": ".sessions\\session_007_summarycard_bugfix.json",
+    "path": ".sessions/session_007_summarycard_bugfix.json",
     "tasks": [
       "BUG-summarycard-display",
       "T-001-001-07"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "BUG-summarycard-display & T-001-001-07: แก้บั๊กการแสดงผล Summary Cards และ Breakdown ในหน้า Work Hour Monitoring\n\nRoot Cause 1: ตัวเลข 'รอแก้ไข + แก้ไขแล้ว > ผิดปกติทั้งหมด' เกิดจาก resolvedCount นับร…",
     "keywords": [
@@ -1700,12 +1700,12 @@
   },
   {
     "session_id": "session_008_export_excel",
-    "path": ".sessions\\session_008_export_excel.json",
+    "path": ".sessions/session_008_export_excel.json",
     "tasks": [
       "T-002"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "T-002: ระบบ Export รายงานสำหรับโฟร์แมนแบบ Multi-sheet (v2+C+D)\n\nความสำเร็จในเซสชันนี้:\n1. รวมปุ่ม Export เป็นปุ่มเดี่ยว 'Export รายงาน (Excel)' โดยไม่มี dialog ป๊อปอัป\n2. ออกแบบไฟล์ Excel แบบ Multi-sh…",
     "keywords": [
@@ -1737,12 +1737,12 @@
   },
   {
     "session_id": "session_009_lateminutes_fix",
-    "path": ".sessions\\session_009_lateminutes_fix.json",
+    "path": ".sessions/session_009_lateminutes_fix.json",
     "tasks": [
       "T-001-001-06"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "T-001-001-06: แก้ไขการคำนวณและแสดงผลเวลาสาย/ออกก่อน (เปลี่ยนจาก Max เป็น Sum) และปรับปรุงดีไซน์สีป้ายแยกแยะ\n\nความสำเร็จในเซสชันนี้:\n1. แก้ไขบั๊กการคำนวณสะสมเวลาสาย/ออกก่อน จากเดิมที่ดึงเฉพาะค่าสูงสุดข…",
     "keywords": [
@@ -1780,12 +1780,12 @@
   },
   {
     "session_id": "session_010_make_reason_optional",
-    "path": ".sessions\\session_010_make_reason_optional.json",
+    "path": ".sessions/session_010_make_reason_optional.json",
     "tasks": [
       "T-010-reason-optional"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "T-010-reason-optional: ปรับปรุงช่อง 'เหตุผลการแก้ไข' ให้ไม่จำเป็นต้องกรอก (Optional) ใน modal แก้ไขเวลาสแกนนิ้ว\n\nความสำเร็จในเซสชันนี้:\n1. แก้ไข Backend (reconciliationController.ts) ให้ฟิลด์ `reason`…",
     "keywords": [
@@ -1835,12 +1835,12 @@
   },
   {
     "session_id": "session_011_wage_period_filter",
-    "path": ".sessions\\session_011_wage_period_filter.json",
+    "path": ".sessions/session_011_wage_period_filter.json",
     "tasks": [
       "T-003"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "T-003: เชื่อมโยงตัวกรองงวดงานในหน้าติดตามชั่วโมงการทำงาน และแก้ไขความคลาดเคลื่อนเขตเวลาตอนคำนวณค่าแรง\n\nความสำเร็จในเซสชันนี้:\n1. แก้ไข Backend (WagePeriodService.ts) โดยการเปลี่ยนจากการแปลงรูปแบบวันที…",
     "keywords": [
@@ -1903,13 +1903,13 @@
   },
   {
     "session_id": "session_012_wage_calculation_ui",
-    "path": ".sessions\\session_012_wage_calculation_ui.json",
+    "path": ".sessions/session_012_wage_calculation_ui.json",
     "tasks": [
       "T-003",
       "Wage-Calculation-UI-Enhance"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Wage Calculation UI Enhancements (Option 1 & Option 2):\n\nRoot Cause/Need: คอลัมน์รายการหักสวัสดิการเช่าอุปกรณ์ต่าง ๆ (ตู้เย็น, ทีวี, แอร์, เครื่องเสียง, ผู้ติดตาม) ของพนักงานรายบุคคลไม่ได้แสดงแยกเป็นค…",
     "keywords": [
@@ -1946,13 +1946,13 @@
   },
   {
     "session_id": "session_013_audit_history",
-    "path": ".sessions\\session_013_audit_history.json",
+    "path": ".sessions/session_013_audit_history.json",
     "tasks": [
       "Audit-friendly-History-Display",
       "DevicePunches-AuditTrail-Integrity"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Audit-friendly History Display + Audit Trail Integrity:\n\n1. Audit-friendly History Display (เสร็จสมบูรณ์ก่อนหน้า):\n- ออกแบบหน้าต่างประวัติการแก้ไขใหม่ใน Work Hour Monitoring และ Wage Calculation\n- แสด…",
     "keywords": [
@@ -2019,12 +2019,12 @@
   },
   {
     "session_id": "session_014_branch_merge",
-    "path": ".sessions\\session_014_branch_merge.json",
+    "path": ".sessions/session_014_branch_merge.json",
     "tasks": [
       "T-005"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Successfully merged the dailyReport branch into the integration branch. In response to user feedback, restored the mobile DailyReportEntryModal.tsx and create.tsx to match the dailyReport branch 100%…",
     "keywords": [
@@ -2096,12 +2096,12 @@
   },
   {
     "session_id": "session_017_leave_review_bugfix",
-    "path": ".sessions\\session_017_leave_review_bugfix.json",
+    "path": ".sessions/session_017_leave_review_bugfix.json",
     "tasks": [
       "Bugfix-Leave-Review"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Fixed PENDING_LEAVE_REVIEW override bug in Cloud Functions. Ensure originalStatus is captured. Fixed collectionGroup bug in TaskService by reading DailyEmployeeTimesheets sourceReport instead.",
     "keywords": [
@@ -2135,14 +2135,14 @@
   },
   {
     "session_id": "session_018_wage_calculation_fix",
-    "path": ".sessions\\session_018_wage_calculation_fix.json",
+    "path": ".sessions/session_018_wage_calculation_fix.json",
     "tasks": [
       "Wage-Calculation-N+1-Fix",
       "Late-Records-Route",
       "ScanData-UI-Fix"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Fixed N+1 query timeout in WagePeriodService calculateWages by batch-fetching compensation details. Added caching for SocialSecurityRules. Added missing /late-records API route. Fixed ReconciliationSe…",
     "keywords": [
@@ -2213,12 +2213,12 @@
   },
   {
     "session_id": "session_019_wage_period_filter",
-    "path": ".sessions\\session_019_wage_period_filter.json",
+    "path": ".sessions/session_019_wage_period_filter.json",
     "tasks": [
       "Wage-Period-Filter-UI"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Added auto-filtering logic to ScanDataMonitoringPage to filter by wage period dates based on the selected project, similar to WorkHourMonitoringPage.",
     "keywords": [
@@ -2244,12 +2244,12 @@
   },
   {
     "session_id": "session_020_leave_evidence_embed",
-    "path": ".sessions\\session_020_leave_evidence_embed.json",
+    "path": ".sessions/session_020_leave_evidence_embed.json",
     "tasks": [
       "Unified-Evidence-Viewer"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Unified image viewer and file review dialogs in WorkHourComparisonTable.tsx. Implemented native PDF rendering via iframe, and download representation cards for other files, allowing unified leave revi…",
     "keywords": [
@@ -2285,12 +2285,12 @@
   },
   {
     "session_id": "session_021_realtime_trigger_optimization",
-    "path": ".sessions\\session_021_realtime_trigger_optimization.json",
+    "path": ".sessions/session_021_realtime_trigger_optimization.json",
     "tasks": [
       "T-008"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Implemented backend performance optimizations for contractor lookup and fallback assignee caching. Added lightweight real-time event listener via reconciliationTriggers collection in frontend and adde…",
     "keywords": [
@@ -2335,13 +2335,13 @@
   },
   {
     "session_id": "session_022_scan_data_optimization",
-    "path": ".sessions\\session_022_scan_data_optimization.json",
+    "path": ".sessions/session_022_scan_data_optimization.json",
     "tasks": [
       "T-018-01-04",
       "T-018-01-05"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Investigated the reconciliation record status reverting back to CONFLICTED. Identified that the backend updates scanData punches to 7 (MATCHED status), but the document write triggers the production G…",
     "keywords": [
@@ -2438,12 +2438,12 @@
   },
   {
     "session_id": "session_023_wage_calc_optimize",
-    "path": ".sessions\\session_023_wage_calc_optimize.json",
+    "path": ".sessions/session_023_wage_calc_optimize.json",
     "tasks": [
       "T-WAGE-OPT-01"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Audited and optimized the 'คำนวณค่าแรง' (Wage Calculation) page across 3 files: index.tsx, [id].tsx, and wageService.ts. Found 14 issues across 3 priority levels. Fixed all critical and medium issues:…",
     "keywords": [
@@ -2565,12 +2565,12 @@
   },
   {
     "session_id": "session_028_workspace_requests_realtime",
-    "path": ".sessions\\session_028_workspace_requests_realtime.json",
+    "path": ".sessions/session_028_workspace_requests_realtime.json",
     "tasks": [
       "workspace-requests-realtime"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Migrated workspace requests page from high-read REST polling to Firestore real-time onSnapshot listeners. Added projectId/projectName backend payloads, backfilled existing documents, built Zustand sto…",
     "keywords": [
@@ -2630,12 +2630,12 @@
   },
   {
     "session_id": "session_029_dailyreport_db_opt",
-    "path": ".sessions\\session_029_dailyreport_db_opt.json",
+    "path": ".sessions/session_029_dailyreport_db_opt.json",
     "tasks": [
       "T-021"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Optimized daily reports database reads and query indexing. Added collection group indexes for dailyReports collection in firestore.indexes.json. Refactored submitDailyReport overlap check to query onl…",
     "keywords": [
@@ -2693,12 +2693,12 @@
   },
   {
     "session_id": "session_030_dailyreport_fe_opt",
-    "path": ".sessions\\session_030_dailyreport_fe_opt.json",
+    "path": ".sessions/session_030_dailyreport_fe_opt.json",
     "tasks": [
       "T-021"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Optimized daily reports page frontend performance. Implemented HEIC image upload safety and 30-second timeout inside compressImage to prevent browser hang, falling back to original image on error/time…",
     "keywords": [
@@ -2781,12 +2781,12 @@
   },
   {
     "session_id": "session_031_dailyreport_cache_fix",
-    "path": ".sessions\\session_031_dailyreport_cache_fix.json",
+    "path": ".sessions/session_031_dailyreport_cache_fix.json",
     "tasks": [
       "daily-report-cache-cleanup"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Added frontend caching (staleTime: 5 mins) for the backlog list in list.tsx and query invalidation for 'daily-report-backlog' in index.tsx upon daily report submission to optimize tab transition laten…",
     "keywords": [
@@ -2843,12 +2843,12 @@
   },
   {
     "session_id": "session_032_merge_harness",
-    "path": ".sessions\\session_032_merge_harness.json",
+    "path": ".sessions/session_032_merge_harness.json",
     "tasks": [
       "T-032"
     ],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "Merged the updated agent harness configuration and automated scripts from Downloads into the project root directory. Preserved project-specific rules, roadmap, custom invariants, and project failure p…",
     "keywords": [
@@ -2899,10 +2899,10 @@
   },
   {
     "session_id": "session_004",
-    "path": ".sessions\\session_004.json",
+    "path": ".sessions/session_004.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -2912,10 +2912,10 @@
   },
   {
     "session_id": "session_005",
-    "path": ".sessions\\session_005.json",
+    "path": ".sessions/session_005.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -2925,10 +2925,10 @@
   },
   {
     "session_id": "session_033_database_secondary_opts",
-    "path": ".sessions\\session_033_database_secondary_opts.json",
+    "path": ".sessions/session_033_database_secondary_opts.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "",
     "keywords": [
@@ -2939,10 +2939,10 @@
   },
   {
     "session_id": "session_006",
-    "path": ".sessions\\session_006.json",
+    "path": ".sessions/session_006.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -2952,10 +2952,10 @@
   },
   {
     "session_id": "session_034_wage_calculation_db_opt",
-    "path": ".sessions\\session_034_wage_calculation_db_opt.json",
+    "path": ".sessions/session_034_wage_calculation_db_opt.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "",
     "keywords": [
@@ -2966,10 +2966,10 @@
   },
   {
     "session_id": "session_007",
-    "path": ".sessions\\session_007.json",
+    "path": ".sessions/session_007.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -2979,10 +2979,10 @@
   },
   {
     "session_id": "session_008",
-    "path": ".sessions\\session_008.json",
+    "path": ".sessions/session_008.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -2992,10 +2992,10 @@
   },
   {
     "session_id": "session_009",
-    "path": ".sessions\\session_009.json",
+    "path": ".sessions/session_009.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -3005,10 +3005,10 @@
   },
   {
     "session_id": "session_010",
-    "path": ".sessions\\session_010.json",
+    "path": ".sessions/session_010.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -3018,10 +3018,10 @@
   },
   {
     "session_id": "session_011",
-    "path": ".sessions\\session_011.json",
+    "path": ".sessions/session_011.json",
     "tasks": [],
     "status": "completed",
-    "date": "2026-06-22",
+    "date": "2026-07-08",
     "skill": null,
     "summary": "closed by session_close.py",
     "keywords": [
@@ -3031,7 +3031,7 @@
   },
   {
     "session_id": "session_012",
-    "path": ".sessions\\session_012.json",
+    "path": ".sessions/session_012.json",
     "tasks": [],
     "status": "completed",
     "date": "2026-06-26",
@@ -3049,6 +3049,55 @@
       "sessions",
       "t-046",
       "token_log.jsonl"
+    ]
+  },
+  {
+    "session_id": "session_035_daily_report_log_revision_scoping",
+    "path": ".sessions/session_035_daily_report_log_revision_scoping.json",
+    "tasks": [],
+    "status": "completed",
+    "date": "2026-07-10",
+    "skill": null,
+    "summary": "",
+    "keywords": [
+      "daily",
+      "log",
+      "report",
+      "revision",
+      "scoping"
+    ]
+  },
+  {
+    "session_id": "session_036_daily_report_site_photo_document_attach",
+    "path": ".sessions/session_036_daily_report_site_photo_document_attach.json",
+    "tasks": [],
+    "status": "completed",
+    "date": "2026-07-11",
+    "skill": null,
+    "summary": "",
+    "keywords": [
+      "attach",
+      "daily",
+      "document",
+      "photo",
+      "report",
+      "site"
+    ]
+  },
+  {
+    "session_id": "session_037_workspace_incomplete_visibility_filters_toolbar",
+    "path": ".sessions/session_037_workspace_incomplete_visibility_filters_toolbar.json",
+    "tasks": [],
+    "status": "completed",
+    "date": "2026-07-12",
+    "skill": null,
+    "summary": "",
+    "keywords": [
+      "filters",
+      "incomplete",
+      "toolbar",
+      "visibility",
+      "workspace"
     ]
   }
 ]

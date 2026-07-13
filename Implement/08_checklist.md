@@ -572,6 +572,41 @@ If missing: start any agent task — Boot B1 creates them automatically.
 
 ---
 
+## 10. Machine-Install Track (T-309 · optional — run only if installing the engine machine-wide)
+
+Full guide: [10_machine_install.md](10_machine_install.md). These checks verify the engine/project
+split. All run from `[PROJECT_ROOT]`; the install/init tests write only to a throwaway sandbox.
+
+```bash
+# 10.1 installer copies engine dirs (copy-not-move) + is idempotent
+bash scripts/machine_install.sh ~/.claude-test
+diff -rq scripts ~/.claude-test/scripts >/dev/null && echo "10.1a copy ok"
+n=$(bash scripts/machine_install.sh ~/.claude-test --dry-run 2>&1 | grep -c "^scripts/\|^\.agents/"); [ "$n" -eq 0 ] && echo "10.1b idempotent: 0 transfers on re-run" || echo "10.1b: $n pending transfers (NOT idempotent)"
+```
+Expected: `10.1a copy ok`; a second real run transfers 0 files. Source repo stays intact (copy, not move).
+
+```bash
+# 10.2 per-project bootstrap = fully isolated, ZERO harness carryover
+SB=$(mktemp -d); python3 scripts/project_init.py "$SB" >/dev/null
+python3 -c "import json,sys; d=json.load(open('$SB/knowledge/topic_registry.json')); \
+blob=json.dumps(d); leak=[t for t in ['boot_sequence','mece_planning','react_loop'] if t in blob]; \
+sys.exit(0 if (d['version']=='3.1' and d['topics']==[] and not leak) else 1)" \
+  && echo "10.2a fresh registry: v3 shape, zero harness topics"
+test ! -f "$SB/knowledge/user_learning_profile.json" && echo "10.2b profile absent in project (USER-tier, machine-wide)"
+rm -rf "$SB"
+```
+Expected: both lines print. A new project inherits no topics, no profile — "Project ใคร Project มัน".
+
+```bash
+# 10.3 byte-identical self-hosted (HARNESS_ENGINE_ROOT unset → engine==project == pre-T-309)
+python3 -c "import sys; sys.path.insert(0,'scripts'); import harness_paths as h; \
+import os; want=os.path.realpath(os.getcwd()); \
+print('10.3 byte-identical' if os.path.realpath(str(h.project_root()))==want==os.path.realpath(str(h.engine_root())) else '10.3 FAIL')"
+```
+Expected: `10.3 byte-identical` — self-hosted resolves both roots to the repo, identical to the old `Path(__file__).parent.parent`.
+
+---
+
 ## Summary Verification Script
 
 Run all checks in one pass from `[PROJECT_ROOT]`:

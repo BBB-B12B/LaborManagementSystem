@@ -685,7 +685,7 @@ compact_checkpoint: IF sections ≥ 3 OR (sections × 6) > 30
 \```
 Rules:
 - `dependency_map` → drives Sequential vs Parallel grouping in Cycle block
-- `risk_flags` → any flag present → trigger M4.5 Skeptical Reviewer gate
+- `risk_flags` → any flag present → trigger M4 Skeptical Reviewer gate (runs after write, before present)
 - `compact_checkpoint` → proactive LOOP_WEIGHT management — prevents context bloat mid-task
 - Empty list `[]` is valid (no deps / no risks)
 
@@ -760,7 +760,7 @@ Section 2 — Confirm & Register:
 
 On failure → STOP → report which step failed → do not auto-recover.
 
-**Behavior Contract — M5 Write-Before-Present (CFP-027 fix):**
+**Behavior Contract — M3 Write-Before-Present (CFP-027 fix):**
 ```
 Pre:    M2 plan built · about to present to user
 Contract: MUST call Write tool for gather_complete.md + mece_plan.md BEFORE response text showing plan

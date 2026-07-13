@@ -37,6 +37,8 @@ import {
   CalendarRange,
   Info,
   Lock,
+  FileText,
+  Download,
 } from 'lucide-react';
 import {
   Box,
@@ -134,6 +136,29 @@ const getImageUrl = (url: string) => {
   // Ensure the path starts with /
   const cleanPath = url.startsWith('/') ? url : `/${url}`;
   return `${backendUrl}${cleanPath}`;
+};
+
+// T-047: infer an attachment's display name + kind from a filename or storage URL.
+// Firebase Storage keys preserve the original extension (`<ts>-<name>.<ext>`), so the
+// URL alone is enough for saved files; for freshly-picked files the caller passes the
+// File.name (blob: URLs carry no extension).
+const getFileName = (nameOrUrl: string): string => {
+  if (!nameOrUrl) return 'ไฟล์';
+  try {
+    let s = nameOrUrl.split('?')[0];
+    s = decodeURIComponent(s);
+    const seg = s.split('/').pop() || s;
+    return seg.replace(/^\d{10,}-/, ''); // strip the `Date.now()-` upload prefix
+  } catch {
+    return nameOrUrl.split('/').pop() || nameOrUrl;
+  }
+};
+
+const getFileKind = (nameOrUrl: string): 'image' | 'pdf' | 'other' => {
+  const ext = getFileName(nameOrUrl).split('.').pop()?.toLowerCase() || '';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif'].includes(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  return 'other';
 };
 
 const parseSafeDate = (val: any): Date | null => {
@@ -1074,6 +1099,13 @@ export default function DailyReportPage() {
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
+  // T-047: non-image attachment preview (PDF inline / other download-only). Kept separate
+  // from previewImages so the existing image lightbox behavior is untouched.
+  const [previewFile, setPreviewFile] = useState<{
+    url: string;
+    kind: 'pdf' | 'other';
+    name: string;
+  } | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(false);
 
   // Preload all preview images to cache in background for instant viewing
@@ -1759,14 +1791,8 @@ export default function DailyReportPage() {
       prev.map((w) => {
         if (w.id === workerId) {
           let updatedTimes = { ...w.times, [field]: value };
-          if (field === 'regular' && value === false) {
-            updatedTimes.otMorning = false;
-            updatedTimes.otNoon = false;
-            updatedTimes.otEvening = false;
-            updatedTimes.otMorningTime = '';
-            updatedTimes.otNoonTime = '';
-            updatedTimes.otEveningTime = '';
-          }
+          // T-050: regular and OT are independent per job — unticking regular must NOT wipe OT.
+          // (The full-day-leave OT-wipe in updateWorkerLeave is a separate, correct rule and stays.)
 
           // Validation: If setting regular to true or changing regTime
           if ((field === 'regular' && value === true) || field === 'regTime') {
@@ -1914,6 +1940,47 @@ export default function DailyReportPage() {
     }
   };
 
+  // T-047: route a clicked attachment to the right preview. Images use the existing
+  // lightbox (carousel restricted to image items so a PDF never becomes a broken frame);
+  // PDFs and other docs open the dedicated file-preview dialog.
+  const openAttachmentPreview = (
+    items: Array<{ url: string; kind: 'image' | 'pdf' | 'other'; name: string }>,
+    index: number
+  ) => {
+    const clicked = items[index];
+    if (!clicked) return;
+    if (clicked.kind === 'image') {
+      const imageItems = items.filter((it) => it.kind === 'image');
+      const imgIndex = imageItems.findIndex((it) => it.url === clicked.url);
+      setPreviewImages(imageItems.map((it) => it.url));
+      setPreviewIndex(imgIndex < 0 ? 0 : imgIndex);
+    } else {
+      setPreviewFile({ url: clicked.url, kind: clicked.kind, name: clicked.name });
+    }
+  };
+
+  // T-047: force-save an attachment. Firebase Storage URLs are cross-origin, so a plain
+  // <a download> is ignored by the browser (it just navigates). Fetching to a blob and
+  // saving the object URL forces a real download. If the fetch is blocked (e.g. the bucket
+  // has no CORS config), fall back to opening the URL so the user can still save it.
+  const handleDownload = async (url: string, name: string) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`download failed: ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = name || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const renderPhotoGrid = (
     photos: File[],
     existingUrls: string[],
@@ -1927,12 +1994,18 @@ export default function DailyReportPage() {
       ...existingUrls.map((url, i) => ({
         id: `ex-${i}`,
         url: getImageUrl(url),
+        // T-047: saved files carry their extension in the URL → infer kind/name from it.
+        kind: getFileKind(url),
+        name: getFileName(url),
         isExisting: true,
         originalIndex: i,
       })),
       ...photos.map((file, i) => ({
         id: `new-${i}`,
         url: previews[i],
+        // T-047: freshly-picked files use a blob: URL (no extension) → read the File.name.
+        kind: getFileKind(file.name),
+        name: file.name,
         isExisting: false,
         originalIndex: i,
       })),
@@ -1953,15 +2026,47 @@ export default function DailyReportPage() {
               bgcolor: '#ffffff',
             }}
           >
-            <img
-              src={item.url}
-              alt="Site"
-              onClick={() => {
-                setPreviewImages(allPhotoItems.map((p) => p.url));
-                setPreviewIndex(i);
-              }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
-            />
+            {/* T-047: images render as before; PDF/other docs render as a file card (no broken <img>). */}
+            {item.kind === 'image' ? (
+              <img
+                src={item.url}
+                alt="Site"
+                onClick={() => openAttachmentPreview(allPhotoItems, i)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
+              />
+            ) : (
+              <Box
+                onClick={() => openAttachmentPreview(allPhotoItems, i)}
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                  p: 1.5,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  bgcolor: '#f8fafc',
+                }}
+              >
+                <FileText size={40} color={item.kind === 'pdf' ? '#ef4444' : '#64748b'} />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: '#475569',
+                    wordBreak: 'break-word',
+                    lineHeight: 1.2,
+                    maxHeight: 48,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {item.name}
+                </Typography>
+              </Box>
+            )}
             <IconButton
               size="small"
               onClick={() => onRemove(item.originalIndex, item.isExisting)}
@@ -1983,6 +2088,12 @@ export default function DailyReportPage() {
         {!disabled && allPhotoItems.length < 10 && (
           <PhotoSourcePicker
             multiple
+            enableGeoStamp
+            // T-047: allow attaching general documents (PDF/Office/text) under "รูปถ่ายหน้างาน",
+            // not just images. This surfaces the "แนบไฟล์" option in the picker. Camera/gallery
+            // stay image-only; the file option accepts the broad document set below.
+            fileAccept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+            fileLabel="แนบไฟล์/เอกสาร"
             onSelect={(files) => onUpload(files)}
             sx={{
               width: 140,
@@ -2116,6 +2227,7 @@ export default function DailyReportPage() {
               ) : !isActingAsSupport ? (
                 <PhotoSourcePicker
                   disabled={isGridDisabled}
+                  enableGeoStamp
                   onSelect={(files) => handleLaborShiftPhotoUpload(files, shiftKey)}
                   sx={{
                     width: 140,
@@ -4387,6 +4499,83 @@ export default function DailyReportPage() {
               )}
             </Box>
           </Dialog>
+
+          {/* T-047: PDF / document preview popup — PDF renders inline via <iframe>; any other
+              type shows a download-only card. Both always expose a Download button. */}
+          <Dialog
+            open={!!previewFile}
+            onClose={() => setPreviewFile(null)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+                fontWeight: 800,
+                pr: 1,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                <FileText size={20} color={previewFile?.kind === 'pdf' ? '#ef4444' : '#64748b'} />
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {previewFile?.name}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setPreviewFile(null)} size="small">
+                <X size={20} />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers sx={{ p: previewFile?.kind === 'pdf' ? 0 : 3 }}>
+              {previewFile?.kind === 'pdf' ? (
+                <Box sx={{ width: '100%', height: '75vh' }}>
+                  <iframe
+                    src={previewFile.url}
+                    title={previewFile.name}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 2,
+                    py: 4,
+                  }}
+                >
+                  <FileText size={64} color="#64748b" />
+                  <Typography
+                    sx={{ fontWeight: 700, color: '#475569', textAlign: 'center', wordBreak: 'break-word' }}
+                  >
+                    {previewFile?.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#94a3b8', textAlign: 'center' }}>
+                    ไฟล์นี้แสดงตัวอย่างในหน้าไม่ได้ กดดาวน์โหลดเพื่อเปิดดูครับ
+                  </Typography>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<Download size={18} />}
+                onClick={() => previewFile && handleDownload(previewFile.url, previewFile.name)}
+              >
+                ดาวน์โหลด
+              </Button>
+            </DialogActions>
+          </Dialog>
           {/* Global Loading Overlay is handled by Layout/GlobalFeedback */}
         </Layout>
       </LocalizationProvider>
@@ -4997,7 +5186,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otMorning}
             onChange={(e) => onUpdate('otMorning', e.target.checked)}
-            disabled={isReadOnly || !worker.times.regular}
+            disabled={isReadOnly}
           />
           {worker.times.otMorning ? (
             <TimeRangePicker
@@ -5019,7 +5208,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otNoon}
             onChange={(e) => onUpdate('otNoon', e.target.checked)}
-            disabled={isReadOnly || !worker.times.regular}
+            disabled={isReadOnly}
           />
           {worker.times.otNoon ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -5073,7 +5262,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otEvening}
             onChange={(e) => onUpdate('otEvening', e.target.checked)}
-            disabled={isReadOnly || !worker.times.regular}
+            disabled={isReadOnly}
           />
           {worker.times.otEvening ? (
             <TimeRangePicker

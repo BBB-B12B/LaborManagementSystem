@@ -29,6 +29,9 @@ export interface Task {
   revisionId?: string;
   revisionName?: string;
   dailyProgress: number;
+  // T-049: latest site daily-report status ('draft'|'submitted'|...) denormalized from the
+  // backend so the workspace board can gate the For-Checking column on a still-draft report.
+  latestSiteReportStatus?: string;
   attachmentsCount: number;
   isActive: boolean;
   isSupportRequest?: boolean;
@@ -117,6 +120,7 @@ export interface Subtask {
   status: TaskStatus;
   assignees: TaskAssignee[];
   dailyProgress: number;
+  latestSiteReportStatus?: string; // T-049: see Task.latestSiteReportStatus
   currentRevision: string;
   createdAt: string;
   updatedAt: string;

@@ -6,7 +6,7 @@
  * Redirects to login if user is not authenticated
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Box } from '@mui/material';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -32,6 +32,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
   const { t } = useTranslation();
   const { isAuthenticated, user, isLoading } = useAuthStore();
   const [hasMounted, setHasMounted] = useState(false);
+  // Guard against re-entrant redirects: once we start navigating to /login or
+  // /unauthorized, `router` changes identity mid-transition and would otherwise
+  // re-run this effect and fire router.push again — aborting the in-flight
+  // navigation on every render (the "Abort fetching component" white-screen loop).
+  const redirectingRef = useRef(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -43,9 +48,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
     // Redirect to login if not authenticated
     if (!isAuthenticated) {
-      router.push('/login');
+      if (!redirectingRef.current && router.pathname !== '/login') {
+        redirectingRef.current = true;
+        router.replace('/login');
+      }
       return;
     }
+
+    // Authenticated again — clear the guard so future logouts still redirect.
+    redirectingRef.current = false;
 
     // Check role requirements if specified
     if (requiredRoles && requiredRoles.length > 0 && user) {
@@ -63,12 +74,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
         if (!hasRequiredRole) {
           // User doesn't have required role - show error or redirect
-          router.push('/unauthorized');
+          if (!redirectingRef.current && router.pathname !== '/unauthorized') {
+            redirectingRef.current = true;
+            router.replace('/unauthorized');
+          }
           return;
         }
       }
     }
-  }, [isAuthenticated, isLoading, user, requiredRoles, router]);
+    // `router` is intentionally omitted: its identity churns during a route
+    // transition and would re-trigger the redirect loop above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isLoading, user, requiredRoles]);
 
   // Show loading spinner while checking authentication or before hydration completes
   if (!hasMounted || isLoading) {

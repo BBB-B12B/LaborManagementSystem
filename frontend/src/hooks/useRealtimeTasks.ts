@@ -72,6 +72,7 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
     status: data.status || 'upcoming',
     assignees: data.assignees || [],
     dailyProgress: data.dailyProgress || 0,
+    latestSiteReportStatus: data.latestSiteReportStatus ?? undefined, // T-049: gate For-Checking on draft
     currentRevision: data.currentRevision || 'rev00',
     revisionId: data.revisionId || data.currentRevision || 'rev00',
     revisionName: data.revisionName || '',

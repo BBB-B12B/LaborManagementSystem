@@ -26,6 +26,7 @@ When all mece_plan.md sections are marked [X]: (0) verify all [X] → (1) Write 
 ## R1 · Token Tracking
 Two counters: `SESSION_TOTAL` (per-task) · `CHAT_TOTAL` (context window). **Reset SESSION_TOTAL to 0 ONLY on: (1) user-confirmed /compact at an explicit mece compact-checkpoint — PATH B arms `session_reset=armed` in compact_state.md, consumed once at next boot, OR (2) task done + session close (PATH A/C). NEVER reset on stale/leftover compact_state.md or mid-task fresh boot** (CFP-031). CHAT_TOTAL resets on /compact only.
 → Full formulas + JSONL + spike alerts: **Implement/03_config.md §Token Tracking**
+**T-287:** on claude-code/anthropic, CHAT_TOTAL = REAL window-fill read from the session transcript by `scripts/real_context.py` (single source = the client-meter number); the hook char-estimate is the cross-platform FALLBACK only. SESSION_TOTAL stays the per-task estimate.
 Each turn: the **PostToolUse hook (`scripts/posttool_track.py`) auto-accumulates SESSION_TOTAL + CHAT_TOTAL per tool call** — agent does NOT hand-write these (lower bound — tool I/O only). Agent per turn: (1) read [token-state] (2) write JSONL (3) check R3 (4) check spike (5) footer (6) at any mid-turn DECISION point (compact_checkpoint · R3/C0.5 threshold · heavy-tool turn) → grep LIVE `.sessions/session_tokens.md` (hook writes the running total there during the turn · snapshot lags ≤1 turn). → mechanics (provider-aware · hook-owned persist · T-231/T-235 · CFP-028/031/041): **Implement/03_config.md §Token Tracking**
 
 Footer: use [token-state] hook values DIRECTLY (absent → grep session_tokens.md) · agent reads, never hand-writes/fabricates · **lower bound — tool I/O only; real context ≈1.5–2× (trust the client meter for any ceiling/compact call)** · format: `*(Turn: N · Loop_W: N | Session: ~NNNk | Chat: ~NNNk tokens)*` · start-of-turn total, lags ≤1 turn (CFP-041) — live mid-turn figure → grep `.sessions/session_tokens.md` · 4-bucket when SESSION_TOTAL >5k: `[sys:Nk tools:Nk hist:Nk out:Nk]`
@@ -37,7 +38,7 @@ Max 5 tool calls/turn. Retry max 2×; diagnose on 2nd fail.
 
 ## R3 · Session Pause Protocol
 → Full threshold table: **Implement/03_config.md §R3**
-Key: PRIMARY trigger = signal-box N/4 (4 drift-proof booleans from the UserPromptSubmit hook · N≥2 → [compact-rec] strong · T-221) — full logic in AGENTS.md C0 Q3. Char-estimate is SECONDARY/backstop only: window-anchored eff (CHAT×1.75) ≥90%·WIN(128k) AND signal-box ≥2 → HALT (hard ceiling · BOTH required · T-261; estimate alone never stops) · CHAT 80-120k / SESSION 60-90k / LOOP_WEIGHT >50 → light [compact-note] (optional · estimate is a lower bound — tool I/O only; subagent pollution removed by T-235 · CFP-041 root-fixed)
+Key: PRIMARY trigger = signal-box N/4 (4 drift-proof booleans from the UserPromptSubmit hook · N≥2 → [compact-rec] strong · T-221) — full logic in AGENTS.md C0 Q3. Char-estimate is SECONDARY/advisory only and NEVER hard-stops (T-286): even at eff (CHAT×1.75) ≥90%·token_budget(128k) AND signal-box ≥2 → advisory [compact-rec] pointing to the CLIENT METER (real %) — the client meter is the single source for any ceiling/compact decision · token_budget(128k)=per-room spend cap, distinct from context_window(1M) · CHAT 80-120k / SESSION 60-90k / LOOP_WEIGHT >50 → light [compact-note] (optional · estimate is a lower bound — tool I/O only; subagent pollution removed by T-235 · CFP-041 root-fixed)
 Stuck-counter guard (T-180): [compact-STOP] firing with ~same CHAT_TOTAL (±2k) across ≥2 turns = the post-compact counter did NOT reset (CFP-037 · /compact is invisible to the agent), NOT a real ceiling → run `scripts/compact_reset.py` → emit [compact-reset] · do NOT keep nagging. Post-compact reset is provider-aware: claude-code auto via the SessionStart:compact hook · other providers via the C0 plain-text confirm path.
 
 ## R4 · Sub-agent Decision
@@ -49,6 +50,7 @@ Spawn: read `spawn_tool` from `detected.md` · platform-unknown → run B4 first
 ## R5 · Index-First Lookup (hard)
 
 → before Read: emit `[pre-read] Target: <symbol> · Line: <N>` · after Read: emit `[post-read] Verdict: relevant|partial|irrelevant` · irrelevant → DROP · before Edit symbol: emit `[pre-edit] Symbol: <name> · used_in: <N> · safe: yes|review` · skip any emit = [violation] R5
+→ indexed file → `python3 scripts/lookup.py <topic|file-path|phrase>` first → `type:label` read_hint → Read that offset/limit range only (T-307) · **plugin-only project (no local `scripts/`) — GENERAL RULE (single source) for EVERY engine-script invocation in this constitution (lookup.py · safe_run.py · compact_reset.py · boot_init.sh · any `scripts/X`): prefix with B1's `[engine-root]` abs path → e.g. `python3 "<ENG>/scripts/lookup.py" …` · self-hosted (local `scripts/` exists) → run as-is** (T-314)
 
 ## Never-Full-Load (hard — no exceptions)
 
@@ -88,9 +90,11 @@ Pre:    about to delete/overwrite knowledge/ or .sessions/mece_plan.md · OR any
 Contract: MUST emit [gate] signal and HALT — no execution until explicit user confirm received
           emit: [gate] Action: `<what>` · Scope: `<files>` · Risk: `<why>` · Waiting: confirm
 Post:   action proceeds ONLY after user types explicit confirmation
-Enforce: destructive action without [gate] emit + confirm = [violation] R14 → HALT · re-emit [gate] immediately
+Headless: if running headless / autonomous-loop (no human in the loop to type confirm) → the gate can NEVER be satisfied by a human "yes" → MUST escalate to a PR / human-review queue and HALT. NEVER auto-confirm its own destructive action (no self-issued "yes"). A blocked headless action waits for out-of-band human review, it does not proceed.
+Enforce: destructive action without [gate] emit + confirm = [violation] R14 → HALT · re-emit [gate] immediately · headless self-confirm = [violation] R14-headless → HALT
 ```
 > Domain-specific protected paths (e.g. coding's `src/`, `src/db/`) live in the active domain pack `## paths`. Core enforces this generic mechanism for ALL projects.
+> ⚠️ **The `Headless:` clause above is documentation of INTENT, not the enforcing mechanism.** In headless mode a prose rule is soft — the model can still talk itself into "yes". The HARD enforcement point is a follow-up danger-gate **hook** (T-304 · PreToolUse) that blocks the destructive tool call before it runs and routes it to the PR/human queue. As of T-304 this hook is LIVE: `scripts/danger_gate.py` (registered in .claude/settings.json PreToolUse) hard-blocks (exit 2) a destructive/gated call when headless and escalates it to .sessions/review_queue/ + trips .sessions/loop_paused instead of self-confirming.
 
 ## R15 · Domain Hard-Stop Gate
 
@@ -102,6 +106,7 @@ Contract: HALT immediately — emit the gate's exact signal (e.g. coding's [db-g
 Post:   edit proceeds ONLY after the user types the explicit confirmation the gate demands (coding pack: explicit "yes" — not "ok"/"continue")
 Enforce: a gated edit without its signal + explicit confirm = [violation] R15 → HALT · REVERT · re-emit the gate signal
 ```
+> Headless note: same as R14 — in headless mode a domain hard-stop gate has no human to give the confirmation word → escalate to the PR/human-review queue and HALT, never self-confirm. Hard enforcement (LIVE · T-304) = `scripts/danger_gate.py`, the PreToolUse danger-gate hook that hard-blocks + escalates to the review queue when headless.
 > Core defines this hard-stop MECHANISM for all projects. The concrete trigger + signal + payload (e.g. coding's `src/db/` DB-gate) live INLINE in the active domain pack `## domain_gates` — read that block and enforce it exactly.
 
 ## R16 · Self-Improvement (C0 detection)
@@ -115,7 +120,8 @@ Signals: "ทำไมไม่ทำตาม" · "you skipped" · "didn't log"
 - BC-E: append recurrence on the matched entry → count++ → emit `[recurrence-logged]` (count<3) · `[fix-required]` (≥3) · `[fix-escalated]` (≥5)
 
 ## R-Roadmap · Log Before Starting
-`[ ] T-<N>: desc · [ ]→[/]→[X]` · grep before creating — no dupes · Completion: `[X] T-N: desc (→ERR-XXX) · attempts:N · tool_calls:N`
+Every NEW roadmap Task = a full **§6.2 block** (`- [ ] T-N · P0|P1|P2 · depends_on:` + indented `Title:`/`ContextTask:`/`Goal:`/`How-Check:` required; `Out-of-Scope:`/`Relate File:` optional). Free-text one-liners are legacy — old finished ones stay as-is, do NOT write new ones. **Grain:** roadmap holds BIG tasks only (≥3 steps OR complex); MECE sections belong in `mece_plan.md` only — NEVER on the roadmap (mece S2-B registers only the parent §6.2 Task · per-section registration removed in T-300). Small work (<3 steps AND simple) → the standing **Small-Tasks Pool** (T-299), one line + its own How-Check. grep before creating — no dupes · Completion: `[X] T-N · done <date> · attempts:N · tool_calls:N`.
+→ full schema + field table + Pool lifecycle: **knowledge/loop_engineer_spec.md §6.2 + §6.5** (single source).
 
 ## Knowledge Base Paths
 `knowledge/index_files.json` · `knowledge/index_variables.json` · `error_index.md` · `docs/master_roadmap.md` · `INVARIANTS.md` · `REPO_MAP.md` · `.sessions/session_*.json` · `CODING_FAILURE_PATTERNS.md`

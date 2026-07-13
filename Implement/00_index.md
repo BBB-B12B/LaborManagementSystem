@@ -15,6 +15,7 @@
 | [07_platform.md](07_platform.md) | Platform adapter — auto-detection, known platform mappings, co-development dialogue for unknown platforms | When deploying on a new platform or when [platform-unknown] is emitted |
 | [08_checklist.md](08_checklist.md) | Post-installation verification — 22 required files, per-file section checks, summary script | After completing Track A or Track B setup |
 | [09_migration.md](09_migration.md) | Upgrade guide for existing harness (old version → current) — 4 tracks: M1 re-format indexes · M2 re-structure tree · M3 update/overwrite skills+config · M4 verify | When upgrading from an older harness version |
+| [10_machine_install.md](10_machine_install.md) | Machine-install track (T-309) — engine once at `~/.claude/` (shared, byte-identical) + per-project isolated data; `machine_install.sh`, `project_init.py`, `topic_bootstrap.py`, the `HARNESS_ENGINE_ROOT`/`CLAUDE_PROJECT_DIR` split | When installing the engine machine-wide or scaffolding a new project against a shared engine |
 
 ## Agent Reading Order
 

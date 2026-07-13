@@ -394,6 +394,7 @@ export class TaskService {
         // A2. Update subtask document (reset progress, bump revision, status → rework, reset support fields)
         transaction.update(subtaskRef, {
           currentRevision: nextRevId,
+          revisionId: nextRevId,
           dailyProgress: 0,
           status: 'rework',
           assignees: newAssignees,
@@ -470,6 +471,7 @@ export class TaskService {
 
           transaction.update(stDoc.ref, {
             currentRevision: nextRevId,
+            revisionId: nextRevId,
             dailyProgress: 0,
             status: 'upcoming',
             updatedAt: now,
@@ -1025,7 +1027,7 @@ export class TaskService {
           assignees: subData.assignees || [],
           dailyProgress: subData.dailyProgress || 0,
           currentRevision: subData.currentRevision || 'rev00',
-          revisionId: subData.revisionId || subData.currentRevision || 'rev00',
+          revisionId: subData.currentRevision || subData.revisionId || 'rev00',
           revisionName: subData.revisionName || '',
           revisionCreatedAt: subData.revisionCreatedAt ? safeDate(subData.revisionCreatedAt) : safeDate(subData.createdAt),
           isSupportRequest: subData.isSupportRequest || false,
@@ -2207,6 +2209,11 @@ export class TaskService {
             transaction.update(subtaskRef, {
               dailyProgress: progress,
               status: newStatus,
+              // T-049: denormalize the latest site-report status onto the subtask so the
+              // realtime workspace board can keep a 100%-but-still-draft task in "In Progress"
+              // instead of advancing it to "For Checking". null when status is absent → FE treats
+              // as submitted (no gating).
+              latestSiteReportStatus: finalReportData.status ?? null,
               updatedAt: now,
               updatedBy: updatedBy,
               historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
@@ -2243,6 +2250,8 @@ export class TaskService {
             transaction.update(taskRef, {
               dailyProgress: progress,
               status: newStatus,
+              // T-049: denormalize latest site-report status (see subtask branch above)
+              latestSiteReportStatus: finalReportData.status ?? null,
               updatedAt: now,
               updatedBy: updatedBy,
               historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
@@ -2541,9 +2550,10 @@ export class TaskService {
         const reports = await revDoc.ref.collection('dailyReports').get();
         reports.docs.forEach(d => {
           const data = d.data();
-          if (data.reportDate && !dateMap.has(d.id)) {
+          const revKey = `${revDoc.id}_${d.id}`;
+          if (data.reportDate && !dateMap.has(revKey)) {
             allReports.push({ ...data, _revisionId: revDoc.id });
-            dateMap.set(d.id, true);
+            dateMap.set(revKey, true);
           }
         });
       }
@@ -2556,9 +2566,10 @@ export class TaskService {
         const reports = await hDoc.ref.collection('dailyReports').get();
         reports.docs.forEach(d => {
           const data = d.data();
-          if (data.reportDate && !dateMap.has(d.id)) {
+          const helpKey = `${hDoc.id}_${d.id}`;
+          if (data.reportDate && !dateMap.has(helpKey)) {
             allReports.push({ ...data, _revisionId: hDoc.id });
-            dateMap.set(d.id, true);
+            dateMap.set(helpKey, true);
           }
         });
       }

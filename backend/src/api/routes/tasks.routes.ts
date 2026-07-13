@@ -1329,7 +1329,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         assignees: subData.assignees || [],
         dailyProgress: subData.dailyProgress || 0,
         currentRevision: subData.currentRevision || 'rev00',
-        revisionId: subData.revisionId || subData.currentRevision || 'rev00',
+        revisionId: subData.currentRevision || subData.revisionId || 'rev00',
         revisionName: subData.revisionName || '',
         revisionCreatedAt: subData.revisionCreatedAt ? safeDate(subData.revisionCreatedAt) : safeDate(subData.createdAt),
         isSupportRequest: subData.isSupportRequest || false,
