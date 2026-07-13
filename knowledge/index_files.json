@@ -5403,11 +5403,6 @@
     "associated_tasks": [],
     "backlinks": []
   },
-  "frontend/src/pages/daily-reports/mobile/create.tsx": {
-    "description": "Module: create.tsx",
-    "associated_tasks": [],
-    "backlinks": []
-  },
   "frontend/src/pages/daily-reports/[id]/edit.tsx": {
     "description": "Daily Report Edit Page",
     "associated_tasks": [],
@@ -5473,33 +5468,13 @@
     "associated_tasks": [],
     "backlinks": []
   },
-  "frontend/src/page-components/daily-reports/components/DailyReportDashboard.tsx": {
-    "description": "Module: DailyReportDashboard.tsx",
-    "associated_tasks": [],
-    "backlinks": []
-  },
   "frontend/src/page-components/daily-reports/components/DailyReportForm.tsx": {
     "description": "Module: DailyReportForm.tsx",
     "associated_tasks": [],
     "backlinks": []
   },
-  "frontend/src/page-components/daily-reports/components/DailyReportUploadDialog.tsx": {
-    "description": "Module: DailyReportUploadDialog.tsx",
-    "associated_tasks": [],
-    "backlinks": []
-  },
-  "frontend/src/page-components/daily-reports/components/ExcelImportModal.tsx": {
-    "description": "Module: ExcelImportModal.tsx",
-    "associated_tasks": [],
-    "backlinks": []
-  },
   "frontend/src/page-components/daily-reports/daily_report_ui_aftersale_reference.tsx": {
     "description": "Module: daily_report_ui_aftersale_reference.tsx",
-    "associated_tasks": [],
-    "backlinks": []
-  },
-  "frontend/src/page-components/daily-reports/mobile/DailyReportEntryModal.tsx": {
-    "description": "Module: DailyReportEntryModal.tsx",
     "associated_tasks": [],
     "backlinks": []
   },

@@ -101,6 +101,18 @@ type ExistingShiftPhotos = {
 };
 
 const INITIAL_SHIFT_PHOTOS: ShiftPhotos = { regular: [], otMorning: [], otNoon: [], otEvening: [] };
+
+// T-054 · single source of truth for shift default times — used by every fallback
+// across this file (data-init blocks, bulk picker, and BOTH the desktop
+// WorkerTableRow + mobile WorkerMobileCard views) so the two views + the data
+// layer can never drift again. OT cells are disabled ONLY by isReadOnly (T-050:
+// OT is independent of the regular shift — do NOT re-add a "requires regular" gate).
+const SHIFT_DEFAULT_TIMES = {
+  regular: '08:00 - 17:00',
+  otMorning: '06:00 - 08:00',
+  otNoon: '12:00 - 13:00',
+  otEvening: '18:00 - 21:00',
+} as const;
 const INITIAL_SHIFT_PREVIEWS: ShiftPhotoPreviews = {
   regular: [],
   otMorning: [],
@@ -949,13 +961,13 @@ export default function DailyReportPage() {
               employeeId: l?.employeeId || lv?.employeeId || '',
               times: {
                 regular: l?.shifts?.normal || false,
-                regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+                regTime: l?.shiftTimes?.day || SHIFT_DEFAULT_TIMES.regular,
                 otMorning: l?.shifts?.otMorning || false,
-                otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+                otMorningTime: l?.shiftTimes?.otMorning || SHIFT_DEFAULT_TIMES.otMorning,
                 otNoon: l?.shifts?.otNoon || false,
-                otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+                otNoonTime: l?.shiftTimes?.otNoon || SHIFT_DEFAULT_TIMES.otNoon,
                 otEvening: l?.shifts?.otEvening || false,
-                otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+                otEveningTime: l?.shiftTimes?.otEvening || SHIFT_DEFAULT_TIMES.otEvening,
               },
               leave: {
                 active: lv?.leaveShifts?.custom || false,
@@ -988,13 +1000,13 @@ export default function DailyReportPage() {
               employeeId: l?.employeeId || '',
               times: {
                 regular: l?.shifts?.normal || false,
-                regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+                regTime: l?.shiftTimes?.day || SHIFT_DEFAULT_TIMES.regular,
                 otMorning: l?.shifts?.otMorning || false,
-                otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+                otMorningTime: l?.shiftTimes?.otMorning || SHIFT_DEFAULT_TIMES.otMorning,
                 otNoon: l?.shifts?.otNoon || false,
-                otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+                otNoonTime: l?.shiftTimes?.otNoon || SHIFT_DEFAULT_TIMES.otNoon,
                 otEvening: l?.shifts?.otEvening || false,
-                otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+                otEveningTime: l?.shiftTimes?.otEvening || SHIFT_DEFAULT_TIMES.otEvening,
               },
               leave: {
                 active: false,
@@ -1070,13 +1082,13 @@ export default function DailyReportPage() {
         employeeId: l?.employeeId || lv?.employeeId || '',
         times: {
           regular: l?.shifts?.normal || false,
-          regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+          regTime: l?.shiftTimes?.day || SHIFT_DEFAULT_TIMES.regular,
           otMorning: l?.shifts?.otMorning || false,
-          otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+          otMorningTime: l?.shiftTimes?.otMorning || SHIFT_DEFAULT_TIMES.otMorning,
           otNoon: l?.shifts?.otNoon || false,
-          otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+          otNoonTime: l?.shiftTimes?.otNoon || SHIFT_DEFAULT_TIMES.otNoon,
           otEvening: l?.shifts?.otEvening || false,
-          otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+          otEveningTime: l?.shiftTimes?.otEvening || SHIFT_DEFAULT_TIMES.otEvening,
         },
         leave: {
           active: lv?.leaveShifts?.custom || false,
@@ -1258,13 +1270,13 @@ export default function DailyReportPage() {
   // Bulk Time State for Popup (T-903)
   const [bulkTime, setBulkTime] = useState({
     regular: true,
-    regTime: '08:00 - 17:00',
+    regTime: SHIFT_DEFAULT_TIMES.regular,
     otMorning: false,
-    otMorningTime: '06:00 - 08:00',
+    otMorningTime: SHIFT_DEFAULT_TIMES.otMorning,
     otNoon: false,
-    otNoonTime: '12:00 - 13:00',
+    otNoonTime: SHIFT_DEFAULT_TIMES.otNoon,
     otEvening: false,
-    otEveningTime: '18:00 - 21:00',
+    otEveningTime: SHIFT_DEFAULT_TIMES.otEvening,
   });
 
   // --- 2. Data Fetching ---
@@ -3358,8 +3370,10 @@ export default function DailyReportPage() {
                                 <Box
                                   sx={{
                                     display: 'flex',
+                                    flexDirection: { xs: 'column', md: 'row' },
                                     justifyContent: 'space-between',
-                                    alignItems: 'center',
+                                    alignItems: { xs: 'stretch', md: 'center' },
+                                    gap: { xs: 1.5, md: 0 },
                                     mb: 2,
                                   }}
                                 >
@@ -3370,7 +3384,15 @@ export default function DailyReportPage() {
                                   >
                                     <Users size={20} color="#3b82f6" /> การจัดการแรงงาน DC
                                   </Typography>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      flexDirection: { xs: 'column', md: 'row' },
+                                      alignItems: { xs: 'stretch', md: 'center' },
+                                      gap: 1,
+                                      width: { xs: '100%', md: 'auto' },
+                                    }}
+                                  >
                                     <Button
                                       variant="contained"
                                       startIcon={<Users size={16} />}
@@ -3379,6 +3401,7 @@ export default function DailyReportPage() {
                                         borderRadius: '10px',
                                         textTransform: 'none',
                                         bgcolor: '#3b82f6',
+                                        width: { xs: '100%', md: 'auto' },
                                       }}
                                       disabled={isDateLockedByWagePeriod || isAfterCompletion || requestLocked || fmSelfPerformed}
                                     >
@@ -4173,7 +4196,7 @@ export default function DailyReportPage() {
                   />
                   {bulkTime.otMorning ? (
                     <TimeRangePicker
-                      value={bulkTime.otMorningTime || '08:00 - 12:00'}
+                      value={bulkTime.otMorningTime || SHIFT_DEFAULT_TIMES.otMorning}
                       onChange={(val) => handleBulkTimeChange('otMorningTime', val)}
                     />
                   ) : (
@@ -4266,7 +4289,7 @@ export default function DailyReportPage() {
                   />
                   {bulkTime.otEvening ? (
                     <TimeRangePicker
-                      value={bulkTime.otEveningTime || '18:00 - 21:00'}
+                      value={bulkTime.otEveningTime || SHIFT_DEFAULT_TIMES.otEvening}
                       onChange={(val) => handleBulkTimeChange('otEveningTime', val)}
                     />
                   ) : (
@@ -5168,7 +5191,7 @@ function WorkerTableRow({
           />
           {worker.times.regular ? (
             <TimeRangePicker
-              value={worker.times.regTime || '08:00 - 17:00'}
+              value={worker.times.regTime || SHIFT_DEFAULT_TIMES.regular}
               onChange={(val) => onUpdate('regTime', val)}
               disabled={isReadOnly}
             />
@@ -5190,7 +5213,7 @@ function WorkerTableRow({
           />
           {worker.times.otMorning ? (
             <TimeRangePicker
-              value={worker.times.otMorningTime || '08:00 - 12:00'}
+              value={worker.times.otMorningTime || SHIFT_DEFAULT_TIMES.otMorning}
               onChange={(val) => onUpdate('otMorningTime', val)}
               disabled={isReadOnly}
             />
@@ -5266,7 +5289,7 @@ function WorkerTableRow({
           />
           {worker.times.otEvening ? (
             <TimeRangePicker
-              value={worker.times.otEveningTime || '18:00 - 21:00'}
+              value={worker.times.otEveningTime || SHIFT_DEFAULT_TIMES.otEvening}
               onChange={(val) => onUpdate('otEveningTime', val)}
               disabled={isReadOnly}
             />
@@ -5513,10 +5536,10 @@ function WorkerMobileCard({ worker, onUpdate, onUpdateLeave, onUploadCert, onRem
       {/* Expanded body */}
       {expanded && (
         <Box sx={{ px: 2, pb: 1.5, pt: 0.5, borderTop: '1px solid #f1f5f9' }}>
-          {timeRow('ปกติ', worker.times?.regular, (v) => onUpdate('regular', v), !!isReadOnly, worker.times?.regTime || '08:00 - 17:00', (v) => onUpdate('regTime', v))}
-          {timeRow('OT เช้า', worker.times?.otMorning, (v) => onUpdate('otMorning', v), !!isReadOnly || !worker.times?.regular, worker.times?.otMorningTime || '06:00 - 08:00', (v) => onUpdate('otMorningTime', v))}
-          {timeRow('OT เที่ยง', worker.times?.otNoon, (v) => onUpdate('otNoon', v), !!isReadOnly || !worker.times?.regular, undefined, undefined, '12:00 - 13:00')}
-          {timeRow('OT เย็น', worker.times?.otEvening, (v) => onUpdate('otEvening', v), !!isReadOnly || !worker.times?.regular, worker.times?.otEveningTime || '18:00 - 21:00', (v) => onUpdate('otEveningTime', v))}
+          {timeRow('ปกติ', worker.times?.regular, (v) => onUpdate('regular', v), !!isReadOnly, worker.times?.regTime || SHIFT_DEFAULT_TIMES.regular, (v) => onUpdate('regTime', v))}
+          {timeRow('OT เช้า', worker.times?.otMorning, (v) => onUpdate('otMorning', v), !!isReadOnly, worker.times?.otMorningTime || SHIFT_DEFAULT_TIMES.otMorning, (v) => onUpdate('otMorningTime', v))}
+          {timeRow('OT เที่ยง', worker.times?.otNoon, (v) => onUpdate('otNoon', v), !!isReadOnly, undefined, undefined, SHIFT_DEFAULT_TIMES.otNoon)}
+          {timeRow('OT เย็น', worker.times?.otEvening, (v) => onUpdate('otEvening', v), !!isReadOnly, worker.times?.otEveningTime || SHIFT_DEFAULT_TIMES.otEvening, (v) => onUpdate('otEveningTime', v))}
           {!isReadOnly && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75 }}>
               <Checkbox size="small" sx={{ p: 0 }} checked={!!worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} />

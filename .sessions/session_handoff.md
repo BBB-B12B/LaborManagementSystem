@@ -1,21 +1,21 @@
 skill_name: editor
-CFP_COUNT: 46
-task: T-049 (P1) — Workspace: gate For-Checking column on draft daily-report status + rename ซ่อน→จัดเก็บ + swap trash-can unarchive icon — CODE-COMPLETE + tsc-clean FE+BE (behavioral verify pending on device)
+CFP_COUNT: 47
+task: T-054 · Eliminate mobile/PC logic-drift (daily-reports + workspace) — single-source logic, CSS-only responsive
 
-sections_done: S1 (backend denormalize), S2 (FE type), S3 (FE hook map), S4 (FE grouping gate + consolidate), S5 (rename labels), S6 (icon swap), S7 (tsc FE+BE)
-mece_plan_hash: (pending PATH A clear at close-gate)
+sections_done: S1 (shared shift-cell rules + OT drift fix), S2 (DC header responsive), S3 (bucketedColumns memo), S4 (delete 5 dead files), S5 (verify + index sync)
+mece_plan_hash: (cleared at close via PATH A)
 
-objective: On /workspace, a subtask reaching dailyProgress=100 whose latest daily report is still 'draft' must stay in "In Progress" and only advance to "For Checking" once the report is submitted (user-confirmed: gate the For-Checking step, not Complete — because Complete already required approve, which already requires non-draft). Plus rename the "ซ่อน" archive action/labels to "จัดเก็บ" and replace the trash-can unarchive icon.
+objective: Remove duplicated mobile/PC logic that drifts; keep ONE logic set, differ only by CSS/responsive layout (daily-reports + workspace).
 
-key finding (surfaced to user): roadmap premise was wrong — progress>=100 already routed to 'for-checking' (not 'completed'); Complete needs status==='completed' via approveTask, gated on non-draft report. Board is realtime (useRealtimeTasks/Firestore onSnapshot), not REST; report status was NOT on the subtask doc. Solution = denormalize.
+outcome: DONE. Changes:
+  - frontend/src/pages/daily-reports/index.tsx: SHIFT_DEFAULT_TIMES const (~line 110) shared by WorkerMobileCard + WorkerTableRow; removed mobile-only OT "requires regular" gate (the reported bug); ALL shift-time-default literals wired to the const (26 uses; literals live only in the const def); unified otMorning default 08:00-12:00 → 06:00-08:00 (user-confirmed override); DC header responsive (flexDirection xs:column/md:row + full-width button on xs). Leave-time literals ('time:'/'leaveTimes' 08:00-17:00) intentionally NOT wired — semantically distinct from shift.
+  - frontend/src/pages/workspace/index.tsx: bucketedColumns useMemo shared by BOTH kanban branches (killed allMobileColTasks/allColumnTasks/mobileHiddenTasks forks; mobileHiddenTasks→hiddenTasks).
+  - Deleted 5 dead files: pages/daily-reports/mobile/create.tsx, page-components/daily-reports/mobile/DailyReportEntryModal.tsx, page-components/daily-reports/components/{DailyReportDashboard,DailyReportUploadDialog,ExcelImportModal}.tsx (all 0 external refs).
+  - knowledge/index_files.json synced (-5 entries; valid JSON; 0 dangling refs).
+  - docs/master_roadmap.md: T-054 §6.2 completion block.
 
-outcome: Done. 5 files changed:
-  - backend/src/services/TaskService.ts (S1): in submitDailyReport, isLatestDate && !isSupportReport branch, added `latestSiteReportStatus: finalReportData.status ?? null` to BOTH the subtask update and the no-subtask task update (report status = reportData.status = 'draft'|'submitted', set at daily-reports/index.tsx:2560 isFinalSubmit). Additive only; no state-machine change.
-  - frontend/src/services/taskService.ts (S2): added optional `latestSiteReportStatus?: string` to interface Task AND interface Subtask.
-  - frontend/src/hooks/useRealtimeTasks.ts (S3): mapped `latestSiteReportStatus: data.latestSiteReportStatus ?? undefined` in the subtask mapper.
-  - frontend/src/pages/workspace/index.tsx (S4/S5/S6): getEffectiveSubtaskStatus — when progress>=100 && status!=='completed' && latestSiteReportStatus==='draft' → return 'in-progress' (else 'for-checking'; absent → no gate). Added `latestSiteReportStatus: subtask.latestSiteReportStatus` to subtaskCards mergedTask so cards carry the subtask value (not parent's). Consolidated the 3 inline copies of the status logic (mobile count, mobile bucket, desktop bucket) to call getEffectiveSubtaskStatus(t) — single source of truth. Renamed labels ซ่อน→จัดเก็บ (chip "จัดเก็บ N", mobile chip, popover title "รายการที่จัดเก็บ", empty "ไม่มีรายการที่จัดเก็บ"). Swapped RestoreFromTrash→Unarchive icon import+usage, tooltip "เอากลับมาแสดง"→"ยกเลิกจัดเก็บ". Updated stale comment.
-  - frontend/src/page-components/workspace/components/TaskCard.tsx (S5): menu label "ซ่อน"→"จัดเก็บ".
+validation: `cd frontend && npx tsc --noEmit` EXIT=0 · `npm run build` EXIT=0 (Node 20, 33/33 static pages, /daily-reports + /workspace built) · index_files.json valid JSON · plan skeptical_reviewer revise→go · artifact scrutinize 4-pass done.
 
-validation: `cd frontend && npx tsc --noEmit` exit 0; `cd backend && npx tsc --noEmit` exit 0. Browser verify blocked by sandbox (dev-server). Data path traced: subtaskCards→filteredSubtasks→getEffectiveSubtaskStatus (reads latestSiteReportStatus).
+not_done_by_assistant: browser behavioral test on the authed mobile page (OT toggle w/o regular · DC buttons · board columns) — assistant cannot log in per security policy; user to verify on device.
 
-caveat (user-approved): existing subtasks lack the field until a new report is submitted post-deploy → treated as submitted (no gating) so the board doesn't reshuffle old tasks. Only forward-looking submits gate.
+next: commit staged (T-054 only, tree clean). Push to main triggers Cloudflare + Firebase deploy → awaits explicit user go. Related open item: task_641cb094 (fix CFP-044 review-gate for plugin-only + Thai verify verbs) — separate session.

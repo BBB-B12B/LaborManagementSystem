@@ -458,3 +458,23 @@
     Fix:          Removed `router` from the effect deps; guard each redirect with a redirectingRef + router.pathname check
                   so it fires once; switched router.push → router.replace for both /login and /unauthorized.
     Relate File:  frontend/src/components/layout/ProtectedRoute.tsx
+
+- [X] T-054 · P1 · depends_on: none · done 2026-07-13 · attempts:1 · tsc EXIT=0 · frontend-only · single-source refactor (skeptical_reviewer: revise→go)
+    Title:        Eliminate mobile/PC logic-drift in daily-reports + workspace (one logic set, CSS-only responsive difference)
+    ContextTask:  User principle — mobile and PC must share ONE logic set; only CSS may differ, never two logic copies that
+                  drift. Audit (3 parallel agents, 314 files) found live drift + a dead parallel flow. Folds in 2 reported
+                  issues: (1) mobile OT-เย็น still required ปกติ ticked while desktop was fixed by T-050; (2) DC button row
+                  unbalanced on mobile. skeptical_reviewer caught a self-contradiction (S1 changed a desktop default vs the
+                  "never change desktop" constraint) → user confirmed otMorning default 06:00-08:00 → verdict go.
+    Goal:         Mobile OT enabled without ปกติ (matches desktop); shift default times single-sourced; DC header responsive;
+                  workspace board bucketing single-sourced; dead pre-T-050 flow removed.
+    How-Check:    frontend npx tsc --noEmit EXIT=0. grep: !worker.times?.regular=0 · SHIFT_DEFAULT_TIMES shared 8 · bucketed
+                  Columns shared 9 · allMobileColTasks/allColumnTasks/mobileHiddenTasks=0. 3 dead files git-rm'd, index_files
+                  .json synced (−3 entries, valid JSON), 0 dangling refs. Browser behavioral test deferred to user (authed
+                  page — assistant cannot log in per security policy).
+    Fix:          S1 SHIFT_DEFAULT_TIMES const shared by WorkerTableRow+WorkerMobileCard; removed mobile OT "requires
+                  regular" gate; unified otMorning default 08:00-12:00→06:00-08:00 (user-confirmed) incl. bulk picker
+                  (drift #3, found during verify). S2 DC header flexDirection xs:column/md:row + full-width button on xs.
+                  S3 bucketedColumns useMemo shared by both kanban branches. S4 git rm mobile/create.tsx +
+                  DailyReportEntryModal.tsx + DailyReportDashboard.tsx.
+    Relate File:  frontend/src/pages/daily-reports/index.tsx · frontend/src/pages/workspace/index.tsx

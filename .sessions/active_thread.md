@@ -1,6 +1,15 @@
-task: T-049 browser behavioral verification + T-053 white-screen/router-loop bug fix
+task: T-054 · Eliminate mobile/PC logic-drift (daily-reports + workspace) — single-source logic, CSS-only responsive
 phase: done
-next: BOTH DONE & browser-verified. (1) T-053 ProtectedRoute redirect-loop fixed — logout→/login + Foreman→/workspace no longer white-screen; logged-out protected-route nav = single clean redirect, console 0 error; tsc EXIT=0; roadmap [X] T-053. (2) T-049 draft-gating PROVEN on Leader board: created a draft report on งานผนังชั้น 1 (progress=100, status=draft via FM-self-performed + 2 injected site photos; POST /reports 201) → on Admin2/PD02 workspace board it STAYED in "In Progress" (100%) while ฝ้าส่วนกลาง (100% submitted) sat in "For Checking"; approved ฝ้าส่วนกลาง → Completed; "จัดเก็บ" confirmed in the completed card's ⋮ menu (was ซ่อน) and the Completed-column chip "จัดเก็บ 1" (was ซ่อน N) after archiving; Unarchive icon + popover title "รายการที่จัดเก็บ" are code-verified (not re-shot live — chip popover toggled with screenshot timing). T-047/T-048 verified earlier this session.
-KNOWN UX INTERACTION (flagged to user, not a T-049 regression): T-048 always-show-overdue only rescues progress<100 tasks, so a 100%-but-draft overdue task disappears under the month filter and only shows under "ทั้งหมด". Consider: should a 100%-draft task still be always-shown? (open question for user)
-TEST-DATA LEFT IN MOCKUP (user said free to mutate — offer to revert): งานผนังชั้น 1 has a draft daily report @100% + 4 test photos; ฝ้าส่วนกลาง was approved→completed→archived.
-prev_done: T-053 (bug), T-049 (verified), T-047/T-048 (verified). Roles: admin1/PD01=Foreman (daily-reports only), admin2/PD02=Leader (workspace+reports). Neither has การจัดการ menu → T-024 still needs an admin account to verify.
+next: user to browser-verify OT toggle + DC buttons on real mobile (authed page); optional separate task — audit page-components/daily-reports/mobile/ leftover files (DailyReportForm/UploadDialog/ExcelImportModal — possible duplicates of components/).
+
+## Summary (2026-07-13)
+- S1 · SHIFT_DEFAULT_TIMES const shared by WorkerTableRow (desktop) + WorkerMobileCard (mobile); removed mobile OT "requires regular" gate (the reported bug); unified otMorning default 08:00-12:00 -> 06:00-08:00 (user-confirmed)
+- S2 · DC header responsive (flexDirection xs:column/md:row, full-width button on xs)
+- S3 · bucketedColumns useMemo shared by both workspace kanban branches (killed allMobileColTasks/allColumnTasks/mobileHiddenTasks forks)
+- S4 · git rm 3 dead files (mobile/create.tsx, DailyReportEntryModal.tsx, DailyReportDashboard.tsx); index_files.json synced (-3)
+- +drift#3 · bulk OT picker defaults wired to SHIFT_DEFAULT_TIMES (found during verify, user-confirmed)
+- Plan skeptical-reviewed (revise -> go) before execution
+- tsc EXIT=0 · 0 dangling refs · index_files.json valid JSON
+- NOT DONE by assistant: browser behavioral test (authed page, cannot log in per security policy)
+
+prev_done: T-053 (bug fix + verified), T-049 (verified), T-047/T-048 (verified).

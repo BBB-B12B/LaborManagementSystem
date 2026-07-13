@@ -1066,6 +1066,34 @@ export default function WorkspacePage() {
     return filtered;
   }, [subtaskCards, activeTab, selectedNode, searchQuery, workOrderFilter, categoryFilter]);
 
+  // T-054: single source of truth for per-column bucketing (sort + completed
+  // visible/hidden split), computed once and consumed by BOTH the mobile and
+  // desktop kanban branches so the two views can never drift. Keyed by column.id.
+  const bucketedColumns = useMemo(() => {
+    const uid = user?.id;
+    const eid = user?.employeeId;
+    const isMine = (t: any) =>
+      t.assignees?.some((x: any) => x.employeeId === eid || x.employeeId === uid);
+
+    const result: Record<string, { visible: any[]; hidden: any[] }> = {};
+    for (const column of COLUMNS) {
+      const all = filteredSubtasks
+        .filter((t) => getEffectiveSubtaskStatus(t) === column.id)
+        .sort((a, b) => {
+          const aMe = isMine(a) ? 0 : 1;
+          const bMe = isMine(b) ? 0 : 1;
+          if (aMe !== bMe) return aMe - bMe;
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        });
+      const isCompletedCol = column.id === 'completed';
+      result[column.id] = {
+        visible: isCompletedCol ? all.filter((t) => !hiddenCompletedIds.includes(t.id)) : all,
+        hidden: isCompletedCol ? all.filter((t) => hiddenCompletedIds.includes(t.id)) : [],
+      };
+    }
+    return result;
+  }, [filteredSubtasks, user?.id, user?.employeeId, hiddenCompletedIds]);
+
   // Click card handler (directly launches Daily Report modal)
   const handleSubtaskCardClick = (subtaskCard: Task) => {
     setSelectedTaskForReport(subtaskCard);
@@ -1807,14 +1835,8 @@ export default function WorkspacePage() {
                 }}
               >
                 {COLUMNS.map((column) => {
-                  const count = filteredSubtasks.filter((t) => {
-                    // T-049: single source of truth for column bucketing (incl. draft-report gating)
-                    const effectiveStatus = getEffectiveSubtaskStatus(t);
-                    if (effectiveStatus !== column.id) return false;
-                    // Exclude hidden completed cards from tab count
-                    if (column.id === 'completed' && hiddenCompletedIds.includes(t.id)) return false;
-                    return true;
-                  }).length;
+                  // T-054: read visible count from shared bucketedColumns
+                  const count = bucketedColumns[column.id].visible.length;
                   const isActive = mobileActiveColumn === column.id;
                   return (
                     <Box
@@ -1883,39 +1905,18 @@ export default function WorkspacePage() {
               }}
             >
               {COLUMNS.filter((col) => col.id === mobileActiveColumn).map((column) => {
-                const allMobileColTasks = filteredSubtasks
-                  .filter((t) => {
-                    // T-049: single source of truth for column bucketing (incl. draft-report gating)
-                    const effectiveStatus = getEffectiveSubtaskStatus(t);
-                    if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
-                    return effectiveStatus === column.id;
-                  })
-                  .sort((a, b) => {
-                    const uid = user?.id;
-                    const eid = user?.employeeId;
-                    const isMine = (t: any) =>
-                      t.assignees?.some((x: any) => x.employeeId === eid || x.employeeId === uid);
-                    const aMe = isMine(a) ? 0 : 1;
-                    const bMe = isMine(b) ? 0 : 1;
-                    if (aMe !== bMe) return aMe - bMe;
-                    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                  });
-
+                // T-054: read from shared bucketedColumns (single source for both views)
                 const isMobileCompletedCol = column.id === 'completed';
-                const columnTasks = isMobileCompletedCol
-                  ? allMobileColTasks.filter(t => !hiddenCompletedIds.includes(t.id))
-                  : allMobileColTasks;
-                const mobileHiddenTasks = isMobileCompletedCol
-                  ? allMobileColTasks.filter(t => hiddenCompletedIds.includes(t.id))
-                  : [];
+                const columnTasks = bucketedColumns[column.id].visible;
+                const hiddenTasks = bucketedColumns[column.id].hidden;
 
                 return (
                   <Box key={column.id}>
                     {/* Mobile: "จัดเก็บ" (archived) chip for completed column */}
-                    {isMobileCompletedCol && mobileHiddenTasks.length > 0 && (
+                    {isMobileCompletedCol && hiddenTasks.length > 0 && (
                       <Chip
                         icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
-                        label={`จัดเก็บ ${mobileHiddenTasks.length} รายการ — กดดู`}
+                        label={`จัดเก็บ ${hiddenTasks.length} รายการ — กดดู`}
                         size="small"
                         onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
                         sx={{
@@ -2005,32 +2006,10 @@ export default function WorkspacePage() {
             }}
           >
             {COLUMNS.map((column) => {
-              const allColumnTasks = filteredSubtasks
-                .filter((t) => {
-                  // T-049: single source of truth for column bucketing (incl. draft-report gating)
-                  const effectiveStatus = getEffectiveSubtaskStatus(t);
-                  if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
-                  return effectiveStatus === column.id;
-                })
-                .sort((a, b) => {
-                    const uid = user?.id;
-                    const eid = user?.employeeId;
-                    const isMine = (t: any) =>
-                      t.assignees?.some((x: any) => x.employeeId === eid || x.employeeId === uid);
-                    const aMe = isMine(a) ? 0 : 1;
-                    const bMe = isMine(b) ? 0 : 1;
-                    if (aMe !== bMe) return aMe - bMe;
-                    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                  });
-
-              // For completed column: separate visible vs hidden
+              // T-054: read from shared bucketedColumns (single source for both views)
               const isCompletedCol = column.id === 'completed';
-              const columnTasks = isCompletedCol
-                ? allColumnTasks.filter(t => !hiddenCompletedIds.includes(t.id))
-                : allColumnTasks;
-              const hiddenTasks = isCompletedCol
-                ? allColumnTasks.filter(t => hiddenCompletedIds.includes(t.id))
-                : [];
+              const columnTasks = bucketedColumns[column.id].visible;
+              const hiddenTasks = bucketedColumns[column.id].hidden;
 
               return (
                 <Box
