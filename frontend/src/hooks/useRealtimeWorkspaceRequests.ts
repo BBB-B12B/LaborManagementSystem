@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { collectionGroup, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, collectionGroup, query, where, onSnapshot } from 'firebase/firestore';
 import { afterSaleDb } from '@/services/firebase/config';
 import useWorkspaceRequestsCacheStore from '@/store/workspaceRequestsCacheStore';
 
@@ -36,6 +36,17 @@ export const useRealtimeWorkspaceRequests = (
       if (val instanceof Date) return val;
       return null;
     };
+
+    // 0. Listen to workOrders to filter out After-Sale system work (type 'AfterSale' or 'PreHandover')
+    const woQuery = query(collection(afterSaleDb, 'workOrders'), where('type', 'in', ['AfterSale', 'PreHandover']));
+    const unsubWo = onSnapshot(woQuery, (snapshot) => {
+      const hiddenIds: string[] = [];
+      snapshot.forEach((doc) => {
+        hiddenIds.push(doc.id);
+      });
+      useWorkspaceRequestsCacheStore.setState({ hiddenWorkOrderIds: hiddenIds });
+    }, (err) => console.warn('WorkOrders listener failed', err));
+    unsubscribes.push(unsubWo);
 
     // 1. Listen to tasks to build tasksMeta lookup map
     const tasksQuery = query(

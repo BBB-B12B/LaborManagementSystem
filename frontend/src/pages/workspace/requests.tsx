@@ -631,12 +631,17 @@ export default function WorkspaceRequestsPage() {
   const dailyReports = useWorkspaceRequestsCacheStore((s) => s.dailyReports);
   const tasksMeta = useWorkspaceRequestsCacheStore((s) => s.tasksMeta);
   const subtasksMeta = useWorkspaceRequestsCacheStore((s) => s.subtasksMeta);
+  const hiddenWorkOrderIds = useWorkspaceRequestsCacheStore((s) => s.hiddenWorkOrderIds);
   const isDataLoading = useWorkspaceRequestsCacheStore((s) => s.isLoading);
 
   const rawData = useMemo(() => {
     const list = dataType === 'requests' ? requests : dailyReports;
+    // ซ่อนงานที่ผูกกับ workOrder ประเภท After-Sale (AfterSale/PreHandover) แม้จะอยู่ใน project เดียวกับ Labor
+    const visibleList = hiddenWorkOrderIds.length === 0
+      ? list
+      : list.filter((item: any) => !hiddenWorkOrderIds.includes(String(item.taskId).split('__')[0]));
 
-    return list.map((item: any) => {
+    return visibleList.map((item: any) => {
       // ดึง meta ข้อมูลของ Task และ Subtask
       const parentMeta = tasksMeta[item.taskId] || null;
       const subMeta = item.subtaskId ? subtasksMeta[item.subtaskId] : null;
@@ -663,7 +668,7 @@ export default function WorkspaceRequestsPage() {
         projectName: parentMeta?.projectName || item.projectName || '',
       };
     });
-  }, [dataType, requests, dailyReports, tasksMeta, subtasksMeta, usersMap]);
+  }, [dataType, requests, dailyReports, tasksMeta, subtasksMeta, hiddenWorkOrderIds, usersMap]);
   // 3. แตกและจัดเรียงข้อมูลกำลังพลให้เป็นรายบรรทัด (1 แถวต่อ 1 Subtask)
   const unfilteredRows = useMemo(() => {
     const rows: any[] = [];
