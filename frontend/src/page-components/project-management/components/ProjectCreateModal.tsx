@@ -19,6 +19,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import BusinessIcon from '@mui/icons-material/Business';
 import CodeIcon from '@mui/icons-material/Code';
+import TagIcon from '@mui/icons-material/Tag';
 import PersonIcon from '@mui/icons-material/Person';
 import LabelIcon from '@mui/icons-material/Label';
 import {
@@ -66,6 +67,7 @@ export const ProjectCreateModal: React.FC<ProjectCreateModalProps> = ({
     defaultValues: {
       code: '',
       projectCode: '',
+      referenceCode: '',
       department: '',
       projectName: '',
       status: PROJECT_STATUS_OPTIONS[0],
@@ -209,6 +211,34 @@ export const ProjectCreateModal: React.FC<ProjectCreateModalProps> = ({
                       startAdornment: (
                         <InputAdornment position="start">
                           <CodeIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                        </InputAdornment>
+                      ),
+                      sx: { borderRadius: '12px' },
+                    }}
+                  />
+                )}
+              />
+            </Grid>
+
+            {/* Reference Code (user-typed, must be unique) */}
+            <Grid item xs={12}>
+              <Controller
+                name="referenceCode"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="รหัสอ้างอิงโครงการ"
+                    placeholder="ระบุรหัสอ้างอิงของโครงการ (ต้องไม่ซ้ำกับโครงการอื่น)"
+                    required
+                    error={!!errors.referenceCode}
+                    helperText={errors.referenceCode?.message}
+                    disabled={isSubmitting || isLoading}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <TagIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                         </InputAdornment>
                       ),
                       sx: { borderRadius: '12px' },

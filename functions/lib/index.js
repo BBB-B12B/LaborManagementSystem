@@ -43,9 +43,16 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onReconciliationChanged = exports.webhookTimesheetChanged = exports.onWagePeriodApproved = exports.scheduledAbsenceCheck = exports.onEmployeeChanged = exports.onScanDataChanged = void 0;
+exports.onReconciliationChanged = exports.webhookTimesheetChanged = exports.onWagePeriodApproved = exports.scheduledAbsenceCheck = exports.onEmployeeChanged = exports.onScanDataChanged = exports.dailyContractorSync = exports.projectSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firebase_functions_1 = require("firebase-functions");
+// ─── Re-export standalone triggers ──────────────────────────────────────────
+// projectSync: one-way sync Labor `Project` -> After Sale `projects`.
+var labor_projectSync_1 = require("./labor-projectSync");
+Object.defineProperty(exports, "projectSync", { enumerable: true, get: function () { return labor_projectSync_1.projectSync; } });
+// dailyContractorSync: one-way sync Labor WH workers -> After Sale `dailyContractors`.
+var labor_dailyContractorSync_1 = require("./labor-dailyContractorSync");
+Object.defineProperty(exports, "dailyContractorSync", { enumerable: true, get: function () { return labor_dailyContractorSync_1.dailyContractorSync; } });
 // ─── Initialize Firebase Admin — Labor Management (default) ─────────────────
 if (!admin.apps.length) {
     admin.initializeApp();

@@ -15,6 +15,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 export interface ProjectData {
   code?: string;
   projectCode?: string;
+  referenceCode?: string;
   projectName: string;
   department: string;
   projectManager?: string | null;
@@ -103,6 +104,16 @@ const isCodeTaken = async (code: string): Promise<boolean> => {
   return !existing.empty;
 };
 
+/**
+ * referenceCode is the user-typed, human-chosen project code (distinct from
+ * `code` — the auto-generated P00X doc id — and `projectCode`, which already
+ * holds the project's abbreviation). It must be unique across projects.
+ */
+const isReferenceCodeTaken = async (referenceCode: string, excludeId?: string): Promise<boolean> => {
+  const existing = await getProjectCollection().where('referenceCode', '==', referenceCode).get();
+  return existing.docs.some((doc) => doc.id !== excludeId);
+};
+
 const resolveProjectCode = async (preferred?: string): Promise<string> => {
   let candidate = preferred?.trim()?.toUpperCase();
   if (!candidate) {
@@ -123,9 +134,18 @@ export async function createProject(data: ProjectData, createdBy: string): Promi
   const codeUpper = await resolveProjectCode(data.code);
   const projectCodeValue = data.projectCode ? data.projectCode.trim() : '';
   const projectNameValue = data.projectName ? data.projectName.trim() : '';
+  const referenceCodeValue = data.referenceCode ? data.referenceCode.trim() : '';
 
   if (!projectCodeValue) {
     throw new Error('Project code is required');
+  }
+
+  if (!referenceCodeValue) {
+    throw new Error('กรุณาระบุรหัสอ้างอิงโครงการ');
+  }
+
+  if (await isReferenceCodeTaken(referenceCodeValue)) {
+    throw new Error(`รหัสอ้างอิงโครงการ ${referenceCodeValue} ถูกใช้งานแล้ว กรุณาเลือกรหัสอื่น`);
   }
 
   if (!projectNameValue) {
@@ -141,6 +161,7 @@ export async function createProject(data: ProjectData, createdBy: string): Promi
   const projectData = {
     code: codeUpper,
     projectCode: projectCodeValue,
+    referenceCode: referenceCodeValue,
     projectName: projectNameValue,
     department: data.department.trim(),
     projectManager: data.projectManager ? data.projectManager.trim() : null,
@@ -190,6 +211,18 @@ export async function updateProject(
     projectCodeValue = trimmed;
   }
 
+  let referenceCodeValue: string | undefined;
+  if (data.referenceCode !== undefined) {
+    const trimmed = typeof data.referenceCode === 'string' ? data.referenceCode.trim() : '';
+    if (!trimmed) {
+      throw new Error('กรุณาระบุรหัสอ้างอิงโครงการ');
+    }
+    if (await isReferenceCodeTaken(trimmed, id)) {
+      throw new Error(`รหัสอ้างอิงโครงการ ${trimmed} ถูกใช้งานแล้ว กรุณาเลือกรหัสอื่น`);
+    }
+    referenceCodeValue = trimmed;
+  }
+
   if (data.department !== undefined && !String(data.department).trim()) {
     throw new Error('กรุณาระบุสังกัดโครงการ');
   }
@@ -200,6 +233,7 @@ export async function updateProject(
 
   const updateData: any = {
     projectCode: projectCodeValue,
+    referenceCode: referenceCodeValue,
     projectName:
       data.projectName !== undefined
         ? data.projectName

@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import LabelIcon from '@mui/icons-material/Label';
 import CodeIcon from '@mui/icons-material/Code';
+import TagIcon from '@mui/icons-material/Tag';
 import BusinessIcon from '@mui/icons-material/Business';
 import PersonIcon from '@mui/icons-material/Person';
 import {
@@ -30,6 +31,7 @@ import {
 } from '@/validation/projectSchema';
 import { useToast } from '@/components/common/Toast';
 import projectService from '@/services/projectService';
+import { getSpecificErrorMessage } from '@/utils/errorHandler';
 
 export interface ProjectFormProps {
   defaultValues?: Partial<ProjectFormData>;
@@ -67,6 +69,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       ...defaultValues,
       code: defaultValues?.code ?? (mode === 'create' ? 'P001' : ''),
       projectCode: defaultValues?.projectCode ?? '',
+      referenceCode: defaultValues?.referenceCode ?? '',
       department: defaultValues?.department ?? '',
       projectName: defaultValues?.projectName ?? '',
       status: defaultValues?.status ?? PROJECT_STATUS_OPTIONS[0],
@@ -151,7 +154,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       await onSubmit(payload);
       toast.success(mode === 'create' ? 'บันทึกข้อมูลสำเร็จ' : 'อัปเดตข้อมูลสำเร็จ');
     } catch (error) {
-      toast.error(`เกิดข้อผิดพลาด: ${(error as Error).message}`);
+      toast.error(`เกิดข้อผิดพลาด: ${getSpecificErrorMessage(error)}`);
     }
   };
 
@@ -225,6 +228,33 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                   startAdornment: (
                     <InputAdornment position="start">
                       <CodeIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: '12px' },
+                }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Controller
+            name="referenceCode"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label="รหัสอ้างอิงโครงการ"
+                required
+                error={!!errors.referenceCode}
+                helperText={errors.referenceCode?.message ?? 'รหัสของโครงการเอง ต้องไม่ซ้ำกับโครงการอื่น'}
+                disabled={isLoading || isSubmitting}
+                InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <TagIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                     </InputAdornment>
                   ),
                   sx: { borderRadius: '12px' },

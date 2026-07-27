@@ -12,6 +12,12 @@
 import * as admin from 'firebase-admin';
 import { firestore } from 'firebase-functions';
 
+// ─── Re-export standalone triggers ──────────────────────────────────────────
+// projectSync: one-way sync Labor `Project` -> After Sale `projects`.
+export { projectSync } from './labor-projectSync';
+// dailyContractorSync: one-way sync Labor WH workers -> After Sale `dailyContractors`.
+export { dailyContractorSync } from './labor-dailyContractorSync';
+
 // ─── Initialize Firebase Admin — Labor Management (default) ─────────────────
 if (!admin.apps.length) {
   admin.initializeApp();

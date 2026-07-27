@@ -23,6 +23,7 @@ import { projectService, type Project } from '@/services/projectService';
 import { ProjectDrawer } from '@/page-components/project-management/components/ProjectDrawer';
 import { ProjectCreateModal } from '@/page-components/project-management/components/ProjectCreateModal';
 import { PROJECT_STATUS_OPTIONS, type ProjectFormData } from '@/validation/projectSchema';
+import { getSpecificErrorMessage } from '@/utils/errorHandler';
 
 const CODE_PREFIX = 'P';
 const CODE_PAD = 3;
@@ -92,7 +93,7 @@ export default function ProjectListPage() {
       handleCloseDrawer();
     },
     onError: (error: any) => {
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการสร้างโครงการ');
+      toast.error(getSpecificErrorMessage(error));
     },
   });
 
@@ -136,6 +137,7 @@ export default function ProjectListPage() {
       setDrawerInitialValues({
         code: detail.code,
         projectCode: detail.projectCode || '',
+        referenceCode: detail.referenceCode || '',
         projectName: detail.projectName,
         department: detail.department,
         status: detail.status,

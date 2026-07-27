@@ -190,6 +190,7 @@ export async function createProjectHandler(req: Request, res: Response): Promise
     const data = {
       code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
       projectCode: req.body.projectCode !== undefined ? String(req.body.projectCode).trim() : '',
+      referenceCode: req.body.referenceCode !== undefined ? String(req.body.referenceCode).trim() : '',
       projectName: req.body.projectName ? String(req.body.projectName).trim() : '',
       department: req.body.department ? String(req.body.department).trim() : '',
       projectManager:
@@ -238,6 +239,8 @@ export async function updateProjectHandler(req: Request, res: Response): Promise
       code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
       projectCode:
         req.body.projectCode !== undefined ? String(req.body.projectCode).trim() : undefined,
+      referenceCode:
+        req.body.referenceCode !== undefined ? String(req.body.referenceCode).trim() : undefined,
       projectName:
         req.body.projectName !== undefined ? String(req.body.projectName).trim() : undefined,
       department:

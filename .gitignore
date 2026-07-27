@@ -157,3 +157,5 @@ Speckit/
 .specify/
 specs/
 scratch/
+
+**/after-sale-key.json

@@ -19,6 +19,7 @@ export interface Project {
   id: string;
   code: string;
   projectCode: string;
+  referenceCode: string;
   projectName: string;
   department: string;
   projectManager?: string | null;
@@ -46,6 +47,7 @@ class ProjectService {
     return {
       ...project,
       projectCode: project.projectCode ?? '',
+      referenceCode: project.referenceCode ?? '',
       projectName: project.projectName ?? '',
       department: project.department ?? '',
       projectManager: project.projectManager ?? null,

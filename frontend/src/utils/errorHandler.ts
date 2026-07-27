@@ -115,3 +115,13 @@ export const getUserErrorMessage = (error: any): string => {
   const errorInfo = handleError(error);
   return errorInfo.message;
 };
+
+/**
+ * Like getUserErrorMessage, but prefers the backend's specific `message`
+ * (e.g. "project code X is already taken") over the generic Thai `error`
+ * summary. Use where the specific reason is what the user needs to act on.
+ */
+export const getSpecificErrorMessage = (error: any): string => {
+  const data = error?.response?.data;
+  return data?.message || data?.error || error?.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+};
