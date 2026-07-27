@@ -193,8 +193,8 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
       useTaskCacheStore.getState().setError(`[Subtasks Realtime Error]: ${err.message}`);
     };
 
-    // 1. Listen to workOrders to filter out type === 'AfterSale'
-    const woQuery = query(collection(afterSaleDb, 'workOrders'), where('type', '==', 'AfterSale'));
+    // 1. Listen to workOrders to filter out After-Sale system work (type 'AfterSale' or 'PreHandover')
+    const woQuery = query(collection(afterSaleDb, 'workOrders'), where('type', 'in', ['AfterSale', 'PreHandover']));
     const unsubWo = onSnapshot(woQuery, (snapshot) => {
       const hiddenIds: string[] = [];
       snapshot.forEach(doc => {
