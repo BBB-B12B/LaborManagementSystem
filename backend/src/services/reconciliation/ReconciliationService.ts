@@ -694,12 +694,16 @@ export class ReconciliationService {
         );
 
     // 2. ดึง Scan Data จาก Local Firestore
+    // หมายเหตุ: ต้องขยาย endDate ไปสิ้นสุดวัน (23:59:59 เวลาไทย) ไม่งั้น new Date(endDate)
+    // จะได้เที่ยงคืนพอดี ทำให้ query workDate<=endDate แทบไม่เจอ doc ไหนเลยทั้งวัน (T-fix-scan-range)
+    const scanRangeStart = new Date(`${startDate}T00:00:00.000+07:00`);
+    const scanRangeEnd = new Date(`${endDate}T23:59:59.999+07:00`);
     const scanRecords = isAllProjects
-      ? await scanDataService.getByDateRange(new Date(startDate), new Date(endDate))
+      ? await scanDataService.getByDateRange(scanRangeStart, scanRangeEnd)
       : await scanDataService.getByProjectAndDate(
           projectLocationId,
-          new Date(startDate),
-          new Date(endDate)
+          scanRangeStart,
+          scanRangeEnd
         );
 
     // 2.5 ดึง existing Reconciliation Records มาทั้งหมดในช่วงนี้
