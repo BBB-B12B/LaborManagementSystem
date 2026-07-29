@@ -62,6 +62,7 @@ if (!admin.apps.length) {
 const afterSaleApp = admin.apps.find(a => a?.name === 'afterSale')
     ?? admin.initializeApp({ projectId: 'after-sale-system' }, 'afterSale');
 const db = admin.firestore(); // Labor Management Firestore
+db.settings({ ignoreUndefinedProperties: true }); // segments[].conflictReason ฯลฯ อาจเป็น undefined ได้ตามปกติ
 const afterSaleDb = admin.firestore(afterSaleApp); // After-Sale Firestore
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function generateReconciliationId(employeeId, workDate) {
