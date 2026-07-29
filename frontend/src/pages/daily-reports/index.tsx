@@ -898,13 +898,26 @@ export default function DailyReportPage() {
     const activeRegularWorkers = selectedWorkers.filter((w) => w.times?.regular);
     if (activeRegularWorkers.length === 0) return defaultSlots;
     const regTimes = new Set(activeRegularWorkers.map((w) => w.times?.regTime || '08:00 - 17:00'));
-    if (regTimes.size === 1 && regTimes.has('08:00 - 12:00')) {
-      return ['เข้า', 'พักเที่ยง'];
-    }
-    if (regTimes.size === 1 && regTimes.has('13:00 - 17:00')) {
-      return ['เข้าบ่าย', 'ออก'];
-    }
-    return defaultSlots;
+    if (regTimes.size !== 1) return defaultSlots;
+
+    const regTime = Array.from(regTimes)[0];
+    const [startStr, endStr] = regTime.split(' - ');
+    const toHour = (t?: string) => {
+      if (!t) return NaN;
+      const [h, m] = t.split(':').map(Number);
+      if (Number.isNaN(h)) return NaN;
+      return h + (Number.isNaN(m) ? 0 : m) / 60;
+    };
+    const startHour = toHour(startStr);
+    const endHour = toHour(endStr);
+    if (Number.isNaN(startHour) || Number.isNaN(endHour)) return defaultSlots;
+
+    // จบก่อนหรือพอดีเที่ยง = ไม่มีช่วงบ่ายต่อ ไม่ต้องมีรูปพักเที่ยง/เข้าบ่าย
+    if (endHour <= 12) return [`เข้า (${startStr})`, `ออก (${endStr})`];
+    // เริ่มบ่ายเป็นต้นไป = ไม่มีช่วงเช้า ไม่ต้องมีรูปเข้าเช้า/พักเที่ยง
+    if (startHour >= 13) return [`เข้าบ่าย (${startStr})`, `ออก (${endStr})`];
+    // คร่อมพักเที่ยง (เริ่มเช้า จบบ่าย) ต้องมีครบ 4 ช่วง
+    return [`เข้า (${startStr})`, 'พักเที่ยง (12:00)', 'เข้าบ่าย (13:00)', `ออก (${endStr})`];
   }, [selectedWorkers, isActingAsSupport]);
 
   useEffect(() => {

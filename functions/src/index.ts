@@ -11,6 +11,12 @@
 
 import * as admin from 'firebase-admin';
 import { firestore } from 'firebase-functions';
+import {
+  classifyBySegments as classifyBySegmentsEngine,
+  ClassifyBySegmentsParams,
+  buildSegmentSnapshots as buildSegmentSnapshotsEngine,
+  JobSegmentEntry,
+} from './segmentEngine';
 
 // ─── Re-export standalone triggers ──────────────────────────────────────────
 // projectSync: one-way sync Labor `Project` -> After Sale `projects`.
@@ -75,6 +81,8 @@ interface DailyEmployeeTimesheet {
   projectLocationId: string;
   lastUpdated: string;
   workLogs?: any[];
+  // N งานย่อยต่อวัน (After-Sale 2026-07 format) — shadow-mode เท่านั้นตอนนี้ ยังไม่ใช้ตัดสิน status จริง
+  jobSegments?: Record<string, JobSegmentEntry>;
   leave?: LeaveEntry[];   // ถ้ามี entries → สถานะ LEAVE
   // New Leave Structure
   leaveStatus?: { isFullDay?: boolean; leaveShifts?: any; leaveTimes?: any; leaveType?: string; medCertFileUrl?: string };
@@ -137,296 +145,27 @@ interface PunchClassifyResult {
   note?: string | null;
 }
 
-interface ClassifyBySegmentsParams {
-  shiftTimes?: { day?: string; otMorning?: string; otNoon?: string; otEvening?: string; };
-  scanPunches: string[];
-  timesheetNormalHours?: number;
-  timesheetOtMorning?: number;
-  timesheetOtNoon?: number;
-  timesheetOtEvening?: number;
-  dailyReportHours?: number;
-  isHoliday?: boolean;
-  isLeave?: boolean;
-  leaveHours?: number;
-}
-
 /**
  * [PRIMARY] กำหนดสถานะโดยเปรียบเทียบจาก Segments
- * ใช้ shiftTimes เป็น source of truth ในการสร้างช่วงเวลาที่ควรจะมีการสแกน
+ * ตัว logic จริงอยู่ที่ ./segmentEngine.ts (ไฟล์นี้ sync มาจาก
+ * backend/src/services/reconciliation/segmentEngine.ts อัตโนมัติตอน build —
+ * ห้ามแก้ logic ซ้ำที่นี่ แก้ที่ backend แล้ว `npm run build` ที่นี่ใหม่)
  */
 function classifyBySegments(params: ClassifyBySegmentsParams): PunchClassifyResult {
-  const {
-    shiftTimes,
-    scanPunches,
-    timesheetNormalHours,
-    timesheetOtMorning,
-    timesheetOtNoon,
-    timesheetOtEvening,
-    dailyReportHours,
-    isHoliday,
-    isLeave,
-    leaveHours,
-  } = params;
-
-  const scanCount = (scanPunches || []).length;
-
-  const isFullDayLeave = isLeave === true && (leaveHours ?? 0) >= 8;
-  const isPartialLeave = isLeave === true && (leaveHours ?? 0) > 0 && (leaveHours ?? 0) < 8;
-  const noWorkHours = !dailyReportHours || dailyReportHours === 0;
-  
-  const dailyWorkExists = !!shiftTimes?.day || (dailyReportHours !== undefined && dailyReportHours > 0);
-  const dailyExists = dailyWorkExists || isPartialLeave;
-
-  if (isFullDayLeave && noWorkHours) {
-    return { status: 'LEAVE', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false };
-  }
-
-  if (isHoliday && noWorkHours) {
-    if (scanCount > 0) {
-      return { status: 'CONFLICTED', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: `วันหยุดแต่พบข้อมูลการสแกนนิ้ว (${scanCount} ครั้ง)` };
-    }
-    return { status: 'HOLIDAY', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false };
-  }
-
-  if (isPartialLeave && !dailyWorkExists) {
-    if (scanCount > 0) {
-      return { status: 'CONFLICTED', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว (${scanCount} ครั้ง)` };
-    }
-    return { status: 'MISSING_DAILY', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ` };
-  }
-
-  if (!dailyExists && scanCount === 0) return { status: 'ABSENT', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false };
-  if (!dailyExists && scanCount > 0) return { status: 'MISSING_DAILY', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false };
-  
-  if (dailyExists && scanCount === 0) {
-    return { status: 'MISSING_SCAN', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: 'ไม่พบข้อมูลการสแกนนิ้ว' };
-  }
-  
-  if (dailyExists && scanCount === 1) {
-    return { status: 'CONFLICTED', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${scanPunches[0]}) — Admin ต้องเติมเวลาที่ขาด` };
-  }
-
-  if (!shiftTimes || !shiftTimes.day) {
-    return { status: 'MISSING_DAILY', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)' };
-  }
-
-  const parseTime = (timeStr?: string): { start: number; end: number } | null => {
-    if (!timeStr) return null;
-    const parts = timeStr.split('-').map(s => s.trim());
-    if (parts.length !== 2) return null;
-    return { start: punchToMinutes(parts[0]), end: punchToMinutes(parts[1]) };
-  };
-
-  const segments: { start: number; end: number; type: string }[] = [];
-  const dayShift = parseTime(shiftTimes.day);
-  const otMorning = parseTime(shiftTimes.otMorning);
-  const otNoon = parseTime(shiftTimes.otNoon);
-  const otEvening = parseTime(shiftTimes.otEvening);
-
-  if (!dayShift) {
-      return { status: 'MISSING_DAILY', approvedNormalHours: 0, approvedOtMorning: 0, approvedOtNoon: 0, approvedOtEvening: 0, totalApprovedHours: 0, approvalSource: 'daily_report', lateMinutes: 0, earlyLeaveMinutes: 0, isLate: false, isEarlyLeave: false, note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)' };
-  }
-
-  if (otMorning) {
-    segments.push({ start: otMorning.start, end: otMorning.end, type: 'otMorning' });
-  }
-
-  const hasOtNoon = !!otNoon;
-  const hasOtEveningConnected = otEvening && otEvening.start === dayShift.end;
-
-  if (hasOtNoon) {
-    segments.push({ start: dayShift.start, end: dayShift.end, type: 'normal' });
-  } else {
-    if (dayShift.end <= 12 * 60) {
-      segments.push({ start: dayShift.start, end: dayShift.end, type: 'morning' });
-    } else if (dayShift.start >= 13 * 60) {
-      if (hasOtEveningConnected) {
-        segments.push({ start: dayShift.start, end: otEvening.end, type: 'combined_afternoon_evening' });
-      } else {
-        segments.push({ start: dayShift.start, end: dayShift.end, type: 'afternoon' });
-      }
-    } else {
-      segments.push({ start: dayShift.start, end: 12 * 60, type: 'morning' });
-      if (hasOtEveningConnected) {
-        segments.push({ start: 13 * 60, end: otEvening.end, type: 'combined_afternoon_evening' });
-      } else {
-        segments.push({ start: 13 * 60, end: dayShift.end, type: 'afternoon' });
-      }
-    }
-  }
-
-  if (otEvening) {
-    if (!(hasOtEveningConnected && !hasOtNoon)) {
-      segments.push({ start: otEvening.start, end: otEvening.end, type: 'otEvening' });
-    }
-  }
-
-  const sortedScans = scanPunches.map(p => punchToMinutes(p)).sort((a, b) => a - b);
-  
-  let isConflicted = false;
-  let conflictNote = '';
-  let totalLateMinutes = 0;
-  let totalEarlyLeaveMinutes = 0;
-  let penaltyOtMorning = 0;
-  let penaltyOtEvening = 0;
-
-  const formatTime = (mins: number) => {
-    const h = Math.floor(mins / 60).toString().padStart(2, '0');
-    const m = (mins % 60).toString().padStart(2, '0');
-    return `${h}:${m}`;
-  };
-
-  const usedPunches = new Set<number>();
-
-  const conflictNotes: string[] = [];
-
-  for (const seg of segments) {
-    const segIndex = segments.indexOf(seg);
-    const nextSeg = segments[segIndex + 1];
-    const available = sortedScans.filter(t => !usedPunches.has(t));
-
-    let closestIn = -1;
-    let minInDiff = Infinity;
-    for (const t of available) {
-      if (t > seg.end) continue;
-      const diff = Math.abs(t - seg.start);
-      if (diff < minInDiff) { minInDiff = diff; closestIn = t; }
-      else if (diff === minInDiff && t < closestIn) { closestIn = t; }
-    }
-
-    let closestOut = -1;
-    let minOutDiff = Infinity;
-    for (const t of available) {
-      if (t <= closestIn) continue;
-      const diff = Math.abs(t - seg.end);
-      if (diff < minOutDiff) { minOutDiff = diff; closestOut = t; }
-      else if (diff === minOutDiff && t > closestOut) { closestOut = t; }
-    }
-
-    if (closestIn !== -1) usedPunches.add(closestIn);
-    // Allow boundary-shared punches to be reused as IN of the next segment
-    if (closestOut !== -1) {
-      const isBoundaryShared = nextSeg && seg.end === nextSeg.start;
-      if (!isBoundaryShared) {
-        usedPunches.add(closestOut);
-      }
-    }
-
-    let late = 0;
-    let early = 0;
-
-    // ── Transition scan bypass rules (OT เช้า ↔ กะปกติ) ──
-    const isMorningTransition = seg.start === 480 && otMorning; // กะเช้าปกติที่ทำ OT ต่อเนื่อง
-    const isOtMorningTransition = seg.type === 'otMorning' && nextSeg && seg.end === nextSeg.start; // กะ OT เช้าที่ทำเชื่อมต่อกะปกติ
-
-    if (closestIn === -1 || minInDiff > 90) {
-      // ถ้ายินยอมให้ข้ามรอยต่อ 08:00 และพนักงานมีสแกนเข้างานจริงตอน 06:00
-      const prevHasIn = isMorningTransition && sortedScans.some((t) => t <= 480 + 90 && t >= otMorning.start - 90);
-      if (!isMorningTransition || !prevHasIn) {
-        isConflicted = true;
-        conflictNotes.push(`ไม่พบสแกน IN สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
-        continue;
-      }
-    } else {
-      // มีสแกน IN: เช็คเรื่องลบเวลาสายไม่เกิน 5 นาที
-      const rawLate = closestIn - seg.start;
-      // ถ้าเป็นช่วงกะปกติ (08:00) และมี OT เช้าเชื่อมต่อ และสายไม่เกิน 5 นาที -> ปรับเป็นไม่สาย
-      if (isMorningTransition && rawLate <= 5) {
-        late = 0;
-      } else {
-        late = Math.max(0, rawLate);
-      }
-    }
-
-    if (closestOut === -1 || minOutDiff > 90) {
-      // ถ้ายินยอมให้ข้ามรอยต่อ 08:00 และพนักงานมีสแกนออกงานจริงช่วงเลิกงาน (12:00 หรือ 17:00)
-      const nextHasOut = isOtMorningTransition && sortedScans.some((t) => t >= seg.end - 90 && t <= nextSeg.end + 90);
-      if (!isOtMorningTransition || !nextHasOut) {
-        isConflicted = true;
-        conflictNotes.push(`ไม่พบสแกน OUT สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`);
-        continue;
-      }
-    } else {
-      early = Math.max(0, seg.end - closestOut);
-    }
-
-    if (late > 30) {
-      isConflicted = true;
-      conflictNotes.push(`สแกนเข้าสายเกิน 30 นาทีในรอบ ${formatTime(seg.start)} (${late} นาที)`);
-    }
-    if (early > 30) {
-      isConflicted = true;
-      conflictNotes.push(`สแกนออกก่อนเกิน 30 นาทีในรอบ ${formatTime(seg.end)} (${early} นาที)`);
-    }
-
-    if (late > 0) {
-      totalLateMinutes += late;
-      if (seg.type === 'otMorning' || (otMorning && seg.start === otMorning.start)) {
-        penaltyOtMorning += late;
-      }
-    }
-    if (early > 0) {
-      totalEarlyLeaveMinutes += early;
-      if (seg.type === 'otEvening' || seg.type === 'combined_afternoon_evening') {
-        penaltyOtEvening += early;
-      }
-    }
-  }
-
-  if (conflictNotes.length > 0) {
-    conflictNote = conflictNotes.join(', ');
-  }
-
-  if (isConflicted) {
-    return {
-      status: 'CONFLICTED',
-      approvedNormalHours: timesheetNormalHours ?? 0,
-      approvedOtMorning: timesheetOtMorning ?? 0,
-      approvedOtNoon: timesheetOtNoon ?? 0,
-      approvedOtEvening: timesheetOtEvening ?? 0,
-      totalApprovedHours: (timesheetNormalHours || 0) + (timesheetOtMorning || 0) + (timesheetOtNoon || 0) + (timesheetOtEvening || 0),
-      approvalSource: 'daily_report',
-      lateMinutes: totalLateMinutes,
-      earlyLeaveMinutes: totalEarlyLeaveMinutes,
-      isLate: totalLateMinutes > 0,
-      isEarlyLeave: totalEarlyLeaveMinutes > 0,
-      note: conflictNote
-    };
-  }
-
-  let approvedNormal = timesheetNormalHours ?? dailyReportHours ?? 0;
-  let approvedMorning = timesheetOtMorning ?? 0;
-  let approvedNoon = timesheetOtNoon ?? 0;
-  let approvedEvening = timesheetOtEvening ?? 0;
-  let autoNote = '';
-
-  if (penaltyOtMorning > 0 && approvedMorning > 0) {
-    const penaltyMins = Math.ceil(penaltyOtMorning / 30) * 30;
-    approvedMorning = Math.max(0, approvedMorning - (penaltyMins / 60));
-    autoNote += `สายช่วง OT เช้า ${penaltyOtMorning} นาที (หัก ${penaltyMins} นาที) `;
-  }
-
-  if (penaltyOtEvening > 0 && approvedEvening > 0) {
-    const penaltyMins = Math.ceil(penaltyOtEvening / 30) * 30;
-    approvedEvening = Math.max(0, approvedEvening - (penaltyMins / 60));
-    autoNote += `ออกก่อนช่วง OT เย็น ${penaltyOtEvening} นาที (หัก ${penaltyMins} นาที) `;
-  }
-
-  const totalApproved = approvedNormal + approvedMorning + approvedNoon + approvedEvening;
-
+  const r = classifyBySegmentsEngine(params);
   return {
-    status: 'MATCHED',
-    approvedNormalHours: approvedNormal,
-    approvedOtMorning: approvedMorning,
-    approvedOtNoon: approvedNoon,
-    approvedOtEvening: approvedEvening,
-    totalApprovedHours: totalApproved,
-    approvalSource: 'daily_report',
-    lateMinutes: totalLateMinutes,
-    earlyLeaveMinutes: totalEarlyLeaveMinutes,
-    isLate: totalLateMinutes > 0,
-    isEarlyLeave: totalEarlyLeaveMinutes > 0,
-    note: autoNote || null,
+    status: r.status,
+    approvedNormalHours: r.approvedNormalHours ?? 0,
+    approvedOtMorning: r.approvedOtMorning ?? 0,
+    approvedOtNoon: r.approvedOtNoon ?? 0,
+    approvedOtEvening: r.approvedOtEvening ?? 0,
+    totalApprovedHours: r.totalApprovedHours ?? 0,
+    approvalSource: r.approvalSource ?? 'daily_report',
+    lateMinutes: r.lateMinutes ?? 0,
+    earlyLeaveMinutes: r.earlyLeaveMinutes ?? 0,
+    isLate: r.isLate ?? false,
+    isEarlyLeave: r.isEarlyLeave ?? false,
+    note: r.note,
   };
 }
 
@@ -996,15 +735,23 @@ async function reconcile(
   let isLate = false;
   let isEarlyLeave = false;
   let conflictNote: string | null | undefined;
+  // [SHADOW MODE] ผล classify คู่ขนานด้วย jobSegments — undefined = ไม่มี jobSegments/ไม่ได้รัน
+  // ไม่กระทบ status/conflictNote จริงด้านบน ใช้เก็บไว้เทียบก่อน cutover เท่านั้น
+  let shadowStatus: ReconciliationStatus | undefined;
+  let shadowNote: string | null | undefined;
+  let shadowMatch: boolean | undefined;
 
   const hasTimesheet = timesheetDoc.exists;
+  // Daily report ที่ยังเป็น draft (ยังไม่ submit) ให้ถือว่ายังไม่มีการลงเวลาทำงานเลย —
+  // ป้องกันไม่ให้ report ที่กรอกไว้แต่ยังไม่ submit ถูก classify เป็น MATCHED
+  const isDraftReport = hasTimesheet && timesheet?.status === 'draft';
   const isLeave      = leaveEntries.length > 0 && totalLeaveHours > 0;
   const isFullDayLeave = isLeave && totalLeaveHours >= 8;
   const isPartialLeave = isLeave && totalLeaveHours > 0 && totalLeaveHours < 8;
   const noWorkHours = !totalTimesheetHours || totalTimesheetHours === 0;
 
   // ตรวจสอบว่ามีการลง "งาน" (Work) ใน Daily Report หรือยัง
-  const dailyWorkExists = (hasTimesheet && totalTimesheetHours > 0);
+  const dailyWorkExists = (hasTimesheet && !isDraftReport && totalTimesheetHours > 0);
   
   // ถ้าลาบางส่วน ให้ถือว่า daily report มีอยู่เสมอ (แม้จะเป็นแค่ข้อมูลลา)
   const dailyExists = dailyWorkExists || isPartialLeave;
@@ -1082,7 +829,7 @@ async function reconcile(
         isLate = result.isLate;
         isEarlyLeave = result.isEarlyLeave;
         conflictNote = result.note;
-        
+
         // เก็บยอดที่อนุมัติ
         updatesObj = {
           approvedNormalHours: result.approvedNormalHours,
@@ -1092,6 +839,26 @@ async function reconcile(
           totalApprovedHours: result.totalApprovedHours,
           approvalSource: result.approvalSource,
         };
+
+        // ── [SHADOW MODE] คำนวณคู่ขนานด้วย jobSegments (ถ้ามี) — ไม่แตะ status/note จริงข้างบน ──
+        if (!isDraftReport && timesheet?.jobSegments && Object.keys(timesheet.jobSegments).length > 0) {
+          const shadowResult = classifyBySegments({
+            shiftTimes: timesheet?.shiftTimes,
+            jobSegments: timesheet.jobSegments,
+            scanPunches: effectiveScan,
+            timesheetNormalHours: tsNormalHours,
+            timesheetOtMorning: tsOtMorning,
+            timesheetOtNoon: tsOtNoon,
+            timesheetOtEvening: tsOtEvening,
+            dailyReportHours: totalTimesheetHours,
+            isHoliday,
+            isLeave,
+            leaveHours: totalLeaveHours,
+          });
+          shadowStatus = shadowResult.status;
+          shadowNote = shadowResult.note ?? null;
+          shadowMatch = shadowResult.status === status;
+        }
       } else {
         // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า CONFLICTED (กรณี B)
         status = 'CONFLICTED';
@@ -1128,6 +895,11 @@ async function reconcile(
 
   const finalDoc = await recordRef.get();
 
+  // UI-ready segment breakdown (display only — see segmentEngine.ts buildSegmentSnapshots)
+  const segments = hasTimesheet
+    ? buildSegmentSnapshotsEngine(timesheet?.shiftTimes, scanPunches, dailyReportPhotos as any, leaveEntries)
+    : [];
+
   if (finalDoc.exists) {
     const existing = finalDoc.data() as any;
 
@@ -1157,6 +929,7 @@ async function reconcile(
       timesheetOtEvening:   hasTimesheet ? tsOtEvening     : null,
       dailyReportPunches:   hasTimesheet ? dailyReportPunches : [],
       shiftTimes:           hasTimesheet ? timesheet?.shiftTimes : null,
+      jobSegments:          hasTimesheet ? (timesheet?.jobSegments || null) : null,
       lateMinutes,
       earlyLeaveMinutes,
       isLate,
@@ -1175,8 +948,12 @@ async function reconcile(
       dailyReportHistory:   hasTimesheet ? (timesheet?.editHistory || []) : [],
       dailyReportStatus:    hasTimesheet ? (timesheet?.status ?? null) : undefined,
       isHoliday,
+      segments,
       updatedAt: now,
       ...updatesObj,
+      ...(shadowStatus !== undefined
+        ? { shadowStatus, shadowNote: shadowNote ?? null, shadowMatch, shadowComputedAt: now }
+        : {}),
     };
 
     if (hasTimesheet && timesheet?.AssigneesID) {
@@ -1232,6 +1009,7 @@ async function reconcile(
       timesheetOtEvening:   hasTimesheet ? tsOtEvening     : null,
       dailyReportPunches:   hasTimesheet ? dailyReportPunches : [],
       shiftTimes:           hasTimesheet ? timesheet?.shiftTimes : null,
+      jobSegments:          hasTimesheet ? (timesheet?.jobSegments || null) : null,
       lateMinutes,
       earlyLeaveMinutes,
       isLate,
@@ -1252,12 +1030,16 @@ async function reconcile(
       dailyReportHistory:   hasTimesheet ? (timesheet?.editHistory || []) : [],
       dailyReportStatus:    hasTimesheet ? (timesheet?.status ?? null) : null,
       isHoliday,
+      segments,
       status,
       originalStatus,
       statusHistory:        [newStatusEntry],
       createdAt:            now,
       updatedAt:            now,
       ...updatesObj,
+      ...(shadowStatus !== undefined
+        ? { shadowStatus, shadowNote: shadowNote ?? null, shadowMatch, shadowComputedAt: now }
+        : {}),
     };
 
     if (hasTimesheet && timesheet?.AssigneesID) {

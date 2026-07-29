@@ -13,7 +13,6 @@ import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import {
   ReconciliationRecord,
   ReconciliationStatus,
-  ApprovalSource,
   StatusHistoryEntry,
   CreateReconciliationRecordInput,
   generateReconciliationId,
@@ -21,6 +20,14 @@ import {
 } from '../../models/ReconciliationRecord';
 import { ScanEditEntry, generateScanDocId, scanDataConverter } from '../../models/ScanData';
 import { COLLECTIONS } from '../../config/collections';
+import {
+  classifyBySegments as classifyBySegmentsEngine,
+  classifyByPunchCoverage as classifyByPunchCoverageEngine,
+  punchToMinutes as punchToMinutesEngine,
+  buildSegmentSnapshots as buildSegmentSnapshotsEngine,
+  ClassifyResult,
+  JobSegmentEntry,
+} from './segmentEngine';
 import {
   projectBDailyReportService,
   toTimesheetSummary,
@@ -95,21 +102,8 @@ export interface PaginatedReconciliationResult {
   pageSize: number;
 }
 
-export interface ClassifyResult {
-  status: ReconciliationStatus;
-  suggestedHours?: number;
-  note?: string | null;
-  lateMinutes?: number;
-  earlyLeaveMinutes?: number;
-  isLate?: boolean;
-  isEarlyLeave?: boolean;
-  approvedNormalHours?: number;
-  approvedOtMorning?: number;
-  approvedOtNoon?: number;
-  approvedOtEvening?: number;
-  totalApprovedHours?: number;
-  approvalSource?: ApprovalSource;
-}
+// ClassifyResult is defined in ./segmentEngine (imported above) — kept as the
+// single shared shape between this service and the Cloud Function.
 
 // ---------------------------------------------------------------------------
 // ReconciliationService
@@ -234,18 +228,22 @@ export class ReconciliationService {
 
   /**
    * แปลง HH:mm เป็นจำนวนนาทีจากเที่ยงคืน
+   * (thin delegate — ตัว implementation จริงอยู่ที่ segmentEngine.ts เพียงจุดเดียว)
    */
   private punchToMinutes(punch: string): number {
-    const [h, m] = punch.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
+    return punchToMinutesEngine(punch);
   }
 
   /**
    * [PRIMARY] กำหนดสถานะโดยเปรียบเทียบจาก Segments
-   * ใช้ shiftTimes เป็น source of truth ในการสร้างช่วงเวลาที่ควรจะมีการสแกน
+   * ตัว logic จริงอยู่ที่ ./segmentEngine.ts (classifyBySegments) — ไฟล์เดียวที่ต้องแก้
+   * (Cloud Function ที่ functions/src/segmentEngine.ts เป็นสำเนาที่ sync มาจากไฟล์นั้นอัตโนมัติ
+   * ผ่าน scripts/sync-segment-engine.js ตอน build ห้ามแก้ logic ซ้ำที่นี่)
    */
   classifyBySegments(params: {
     shiftTimes?: { day?: string; otMorning?: string; otNoon?: string; otEvening?: string };
+    // shadow-mode: ถ้ามีค่า engine จะใช้แทน shiftTimes ในการตัดสิน — ดู segmentEngine.ts
+    jobSegments?: Record<string, JobSegmentEntry>;
     scanPunches: string[];
     timesheetNormalHours?: number;
     timesheetOtMorning?: number;
@@ -256,340 +254,12 @@ export class ReconciliationService {
     isLeave?: boolean;
     leaveHours?: number;
   }): ClassifyResult {
-    const {
-      shiftTimes,
-      scanPunches,
-      timesheetNormalHours,
-      timesheetOtMorning,
-      timesheetOtNoon,
-      timesheetOtEvening,
-      dailyReportHours,
-      isHoliday,
-      isLeave,
-      leaveHours,
-    } = params;
-
-    const scanCount = (scanPunches || []).length;
-
-    // --- Base cases ---
-    const isFullDayLeave = isLeave === true && (leaveHours ?? 0) >= 8;
-    const isPartialLeave = isLeave === true && (leaveHours ?? 0) > 0 && (leaveHours ?? 0) < 8;
-    const noWorkHours = !dailyReportHours || dailyReportHours === 0;
-
-    const dailyWorkExists =
-      !!shiftTimes?.day || (dailyReportHours !== undefined && dailyReportHours > 0);
-    const dailyExists = dailyWorkExists || isPartialLeave;
-
-    if (isFullDayLeave && noWorkHours) {
-      return { status: 'LEAVE' };
-    }
-
-    if (isHoliday && noWorkHours) {
-      if (scanCount > 0) {
-        return {
-          status: 'CONFLICTED',
-          suggestedHours: 0,
-          note: `วันหยุดแต่พบข้อมูลการสแกนนิ้ว (${scanCount} ครั้ง)`,
-        };
-      }
-      return { status: 'HOLIDAY' };
-    }
-
-    if (isPartialLeave && !dailyWorkExists) {
-      if (scanCount > 0) {
-        return {
-          status: 'CONFLICTED',
-          suggestedHours: 0,
-          note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว (${scanCount} ครั้ง)`,
-        };
-      }
-      return {
-        status: 'MISSING_DAILY',
-        suggestedHours: 0,
-        note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ`,
-      };
-    }
-
-    if (!dailyExists && scanCount === 0) return { status: 'ABSENT' };
-    if (!dailyExists && scanCount > 0) return { status: 'MISSING_DAILY' };
-
-    if (dailyExists && scanCount === 0) {
-      return { status: 'MISSING_SCAN', suggestedHours: 0, note: 'ไม่พบข้อมูลการสแกนนิ้ว' };
-    }
-
-    if (dailyExists && scanCount === 1) {
-      return {
-        status: 'CONFLICTED',
-        suggestedHours: 0,
-        note: `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${scanPunches[0]}) — Admin ต้องเติมเวลาที่ขาด`,
-      };
-    }
-
-    if (!shiftTimes || !shiftTimes.day) {
-      return {
-        status: 'MISSING_DAILY',
-        note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)',
-      };
-    }
-
-    // --- Parse Segments ---
-    const parseTime = (timeStr?: string): { start: number; end: number } | null => {
-      if (!timeStr) return null;
-      const parts = timeStr.split('-').map((s) => s.trim());
-      if (parts.length !== 2) return null;
-      return { start: this.punchToMinutes(parts[0]), end: this.punchToMinutes(parts[1]) };
-    };
-
-    const segments: { start: number; end: number; type: string }[] = [];
-    const dayShift = parseTime(shiftTimes.day);
-    const otMorning = parseTime(shiftTimes.otMorning);
-    const otNoon = parseTime(shiftTimes.otNoon);
-    const otEvening = parseTime(shiftTimes.otEvening);
-
-    if (!dayShift) {
-      return {
-        status: 'MISSING_DAILY',
-        note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)',
-      };
-    }
-
-    if (otMorning) {
-      segments.push({ start: otMorning.start, end: otMorning.end, type: 'otMorning' });
-    }
-
-    const hasOtNoon = !!otNoon;
-    const hasOtEveningConnected = otEvening && otEvening.start === dayShift.end;
-
-    if (hasOtNoon) {
-      segments.push({ start: dayShift.start, end: dayShift.end, type: 'normal' });
-    } else {
-      if (dayShift.end <= 12 * 60) {
-        segments.push({ start: dayShift.start, end: dayShift.end, type: 'morning' });
-      } else if (dayShift.start >= 13 * 60) {
-        if (hasOtEveningConnected) {
-          segments.push({
-            start: dayShift.start,
-            end: otEvening.end,
-            type: 'combined_afternoon_evening',
-          });
-        } else {
-          segments.push({ start: dayShift.start, end: dayShift.end, type: 'afternoon' });
-        }
-      } else {
-        segments.push({ start: dayShift.start, end: 12 * 60, type: 'morning' });
-        if (hasOtEveningConnected) {
-          segments.push({ start: 13 * 60, end: otEvening.end, type: 'combined_afternoon_evening' });
-        } else {
-          segments.push({ start: 13 * 60, end: dayShift.end, type: 'afternoon' });
-        }
-      }
-    }
-
-    if (otEvening) {
-      if (!(hasOtEveningConnected && !hasOtNoon)) {
-        segments.push({ start: otEvening.start, end: otEvening.end, type: 'otEvening' });
-      }
-    }
-
-    // --- Segment Checking ---
-    const sortedScans = scanPunches.map((p) => this.punchToMinutes(p)).sort((a, b) => a - b);
-
-    let isConflicted = false;
-    let conflictNote = '';
-    let totalLateMinutes = 0;
-    let totalEarlyLeaveMinutes = 0;
-    let penaltyOtMorning = 0;
-    let penaltyOtEvening = 0;
-
-    const formatTime = (mins: number) => {
-      const h = Math.floor(mins / 60)
-        .toString()
-        .padStart(2, '0');
-      const m = (mins % 60).toString().padStart(2, '0');
-      return `${h}:${m}`;
-    };
-
-    const usedPunches = new Set<number>();
-
-    const conflictNotes: string[] = [];
-
-    for (const seg of segments) {
-      const segIndex = segments.indexOf(seg);
-      const nextSeg = segments[segIndex + 1];
-      const available = sortedScans.filter((t) => !usedPunches.has(t));
-
-      let closestIn = -1;
-      let minInDiff = Infinity;
-      for (const t of available) {
-        if (t > seg.end) continue;
-        const diff = Math.abs(t - seg.start);
-        if (diff < minInDiff) {
-          minInDiff = diff;
-          closestIn = t;
-        } else if (diff === minInDiff && t < closestIn) {
-          closestIn = t;
-        }
-      }
-
-      let closestOut = -1;
-      let minOutDiff = Infinity;
-      for (const t of available) {
-        if (t <= closestIn) continue;
-        const diff = Math.abs(t - seg.end);
-        if (diff < minOutDiff) {
-          minOutDiff = diff;
-          closestOut = t;
-        } else if (diff === minOutDiff && t > closestOut) {
-          closestOut = t;
-        }
-      }
-
-      if (closestIn !== -1) usedPunches.add(closestIn);
-      // Only mark closestOut as "used" if it is NOT the exact start of the next segment
-      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning)
-      if (closestOut !== -1) {
-        const isBoundaryShared = nextSeg && seg.end === nextSeg.start;
-        if (!isBoundaryShared) {
-          usedPunches.add(closestOut);
-        }
-      }
-
-      let late = 0;
-      let early = 0;
-
-      // ── Transition scan bypass rules (OT เช้า ↔ กะปกติ) ──
-      const isMorningTransition = seg.start === 480 && otMorning; // กะเช้าปกติที่ทำ OT ต่อเนื่อง
-      const isOtMorningTransition = seg.type === 'otMorning' && nextSeg && seg.end === nextSeg.start; // กะ OT เช้าที่ทำเชื่อมต่อกะปกติ
-
-      if (closestIn === -1 || minInDiff > 90) {
-        // ถ้ายินยอมให้ข้ามรอยต่อ 08:00 และพนักงานมีสแกนเข้างานจริงตอน 06:00
-        const prevHasIn = isMorningTransition && sortedScans.some((t) => t <= 480 + 90 && t >= otMorning.start - 90);
-        if (!isMorningTransition || !prevHasIn) {
-          isConflicted = true;
-          conflictNotes.push(
-            `ไม่พบสแกน IN สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`
-          );
-          continue;
-        }
-      } else {
-        // มีสแกน IN: เช็คเรื่องลบเวลาสายไม่เกิน 5 นาที
-        const rawLate = closestIn - seg.start;
-        // ถ้าเป็นช่วงกะปกติ (08:00) และมี OT เช้าเชื่อมต่อ และสายไม่เกิน 5 นาที -> ปรับเป็นไม่สาย
-        if (isMorningTransition && rawLate <= 5) {
-          late = 0;
-        } else {
-          late = Math.max(0, rawLate);
-        }
-      }
-
-      if (closestOut === -1 || minOutDiff > 90) {
-        // ถ้ายินยอมให้ข้ามรอยต่อ 08:00 และพนักงานมีสแกนออกงานจริงช่วงเลิกงาน (12:00 หรือ 17:00)
-        const nextHasOut = isOtMorningTransition && sortedScans.some((t) => t >= seg.end - 90 && t <= nextSeg.end + 90);
-        if (!isOtMorningTransition || !nextHasOut) {
-          isConflicted = true;
-          conflictNotes.push(
-            `ไม่พบสแกน OUT สำหรับ segment ${formatTime(seg.start)}–${formatTime(seg.end)}`
-          );
-          continue;
-        }
-      } else {
-        early = Math.max(0, seg.end - closestOut);
-      }
-
-      if (late > 30) {
-        isConflicted = true;
-        conflictNotes.push(`สแกนเข้าสายเกิน 30 นาทีในรอบ ${formatTime(seg.start)} (${late} นาที)`);
-      }
-      if (early > 30) {
-        isConflicted = true;
-        conflictNotes.push(`สแกนออกก่อนเกิน 30 นาทีในรอบ ${formatTime(seg.end)} (${early} นาที)`);
-      }
-
-      if (late > 0) {
-        totalLateMinutes += late;
-        if (seg.type === 'otMorning' || (otMorning && seg.start === otMorning.start)) {
-          penaltyOtMorning += late;
-        }
-      }
-      if (early > 0) {
-        totalEarlyLeaveMinutes += early;
-        if (seg.type === 'otEvening' || seg.type === 'combined_afternoon_evening') {
-          penaltyOtEvening += early;
-        }
-      }
-    }
-
-    if (conflictNotes.length > 0) {
-      conflictNote = conflictNotes.join(', ');
-    }
-
-    if (isConflicted) {
-      return {
-        status: 'CONFLICTED',
-        suggestedHours: dailyReportHours,
-        approvedNormalHours: timesheetNormalHours,
-        approvedOtMorning: timesheetOtMorning,
-        approvedOtNoon: timesheetOtNoon,
-        approvedOtEvening: timesheetOtEvening,
-        totalApprovedHours:
-          (timesheetNormalHours || 0) +
-          (timesheetOtMorning || 0) +
-          (timesheetOtNoon || 0) +
-          (timesheetOtEvening || 0),
-        approvalSource: 'daily_report',
-        lateMinutes: totalLateMinutes,
-        earlyLeaveMinutes: totalEarlyLeaveMinutes,
-        isLate: totalLateMinutes > 0,
-        isEarlyLeave: totalEarlyLeaveMinutes > 0,
-        note: conflictNote,
-      };
-    }
-
-    // --- MATCHED Case ---
-    let approvedNormal = timesheetNormalHours ?? dailyReportHours ?? 0;
-    let approvedMorning = timesheetOtMorning ?? 0;
-    let approvedNoon = timesheetOtNoon ?? 0;
-    let approvedEvening = timesheetOtEvening ?? 0;
-    let autoNote = '';
-
-    if (penaltyOtMorning > 0 && approvedMorning > 0) {
-      const penaltyMins = Math.ceil(penaltyOtMorning / 30) * 30;
-      approvedMorning = Math.max(0, approvedMorning - penaltyMins / 60);
-      autoNote += `สายช่วง OT เช้า ${penaltyOtMorning} นาที (หัก ${penaltyMins} นาที) `;
-    }
-
-    if (penaltyOtEvening > 0 && approvedEvening > 0) {
-      const penaltyMins = Math.ceil(penaltyOtEvening / 30) * 30;
-      approvedEvening = Math.max(0, approvedEvening - penaltyMins / 60);
-      autoNote += `ออกก่อนช่วง OT เย็น ${penaltyOtEvening} นาที (หัก ${penaltyMins} นาที) `;
-    }
-
-    const totalApproved = approvedNormal + approvedMorning + approvedNoon + approvedEvening;
-
-    return {
-      status: 'MATCHED',
-      suggestedHours: dailyReportHours,
-      approvedNormalHours: approvedNormal,
-      approvedOtMorning: approvedMorning,
-      approvedOtNoon: approvedNoon,
-      approvedOtEvening: approvedEvening,
-      totalApprovedHours: totalApproved,
-      approvalSource: 'daily_report',
-      lateMinutes: totalLateMinutes,
-      earlyLeaveMinutes: totalEarlyLeaveMinutes,
-      isLate: totalLateMinutes > 0,
-      isEarlyLeave: totalEarlyLeaveMinutes > 0,
-      note: autoNote || null,
-    };
+    return classifyBySegmentsEngine(params);
   }
 
   /**
    * [PRIMARY] กำหนดสถานะโดยเปรียบ punch coverage
-   * เอา dailyReportPunches เป็น source of truth
-   * เช็คว่า scan ครอบช่วงเวลาทำงานทั้งหมดไหม (รวม OT)
-   *
-   * CONFLICTED: มี OT (เช้า/เย็น) แต่ scan ไม่ครอบ boundary ของ OT
-   * MATCHED:    ทุกกรณีอื่น + เก็บ lateMinutes / earlyLeaveMinutes
+   * ตัว logic จริงอยู่ที่ ./segmentEngine.ts (classifyByPunchCoverage) — ไฟล์เดียวที่ต้องแก้
    */
   classifyByPunchCoverage(params: {
     dailyReportPunches: string[];
@@ -603,176 +273,45 @@ export class ReconciliationService {
     isLeave?: boolean;
     leaveHours?: number; // จำนวนชั่วโมงที่ลา (ใช้แยกลาเต็มวัน vs บางส่วน)
   }): ClassifyResult {
-    const {
-      dailyReportPunches,
+    return classifyByPunchCoverageEngine(params);
+  }
+
+  /**
+   * [SHADOW MODE] คำนวณผล classify คู่ขนานด้วย jobSegments (ถ้ามี) เพื่อเทียบกับผลจริง
+   * ไม่มีผลต่อ status/note ที่ใช้งานจริงหรือแสดงใน UI ใดๆ — เก็บไว้ตรวจสอบก่อน cutover เท่านั้น
+   * (jobSegments คือ N งานย่อยต่อวัน, After-Sale 2026-07 format — ดู segmentEngine.ts JobSegmentEntry)
+   */
+  private computeShadowClassification(
+    jobSegments: Record<string, JobSegmentEntry> | undefined,
+    shiftTimes: { day?: string; otMorning?: string; otNoon?: string; otEvening?: string } | undefined,
+    scanPunches: string[],
+    realStatus: ReconciliationStatus,
+    params: {
+      timesheetNormalHours?: number;
+      timesheetOtMorning?: number;
+      timesheetOtNoon?: number;
+      timesheetOtEvening?: number;
+      dailyReportHours?: number;
+      isHoliday?: boolean;
+      isLeave?: boolean;
+      leaveHours?: number;
+    },
+    now: Date
+  ): Partial<ReconciliationRecord> {
+    if (!jobSegments || Object.keys(jobSegments).length === 0) return {};
+
+    const shadowResult = this.classifyBySegments({
+      shiftTimes,
+      jobSegments,
       scanPunches,
-      timesheetNormalHours,
-      timesheetOtMorning,
-      timesheetOtNoon,
-      timesheetOtEvening,
-      dailyReportHours,
-      isHoliday,
-      isLeave,
-      leaveHours,
-    } = params;
-
-    const dailyPunchesValid = Array.isArray(dailyReportPunches) && dailyReportPunches.length >= 2;
-    const scanCount = (scanPunches || []).length;
-    const scanValid = scanCount >= 2;
-
-    // --- Base cases ---
-    // ลาเต็มวัน = ลา >= 8 ชั่วโมง (8 ชม. ปกติ ไม่นับ OT)
-    const isFullDayLeave = isLeave === true && (leaveHours ?? 0) >= 8;
-    // ลาบางส่วน = มี leaveHours แต่ < 8 → ยังต้องทำงานบางส่วน
-    const isPartialLeave = isLeave === true && (leaveHours ?? 0) > 0 && (leaveHours ?? 0) < 8;
-    const noWorkHours = !dailyReportHours || dailyReportHours === 0;
-
-    // ตรวจสอบว่ามีการลง "งาน" (Work) ใน Daily Report หรือยัง
-    const dailyWorkExists =
-      dailyPunchesValid || (dailyReportHours !== undefined && dailyReportHours > 0);
-
-    // ถ้าลาบางส่วน ให้ถือว่า daily report มีอยู่เสมอ (แม้จะเป็นแค่ข้อมูลลา)
-    const dailyExists = dailyWorkExists || isPartialLeave;
-
-    // 1. ลาเต็มวัน (>= 8 ชั่วโมง) และไม่มีชั่วโมงทำงานเลย (รวม OT)
-    if (isFullDayLeave && noWorkHours) {
-      return { status: 'LEAVE' };
-    }
-
-    // 2. ถ้าเป็นวันหยุดและไม่มีชั่วโมงทำงาน (ไม่มาทำ OT)
-    if (isHoliday && noWorkHours) {
-      if (scanCount > 0) {
-        return {
-          status: 'CONFLICTED',
-          suggestedHours: 0,
-          note: `วันหยุดแต่พบข้อมูลการสแกนนิ้ว (${scanCount} ครั้ง)`,
-        };
-      }
-      return { status: 'HOLIDAY' };
-    }
-
-    // 3. กรณีลาบางส่วน แต่ไม่มีการลงเวลาทำงานใน Daily Report (Incomplete Report)
-    if (isPartialLeave && !dailyWorkExists) {
-      if (scanCount > 0) {
-        return {
-          status: 'CONFLICTED',
-          suggestedHours: 0,
-          note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว (${scanCount} ครั้ง)`,
-        };
-      }
-      return {
-        status: 'MISSING_DAILY',
-        suggestedHours: 0,
-        note: `แจ้งลา ${leaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ`,
-      };
-    }
-
-    // 3. Fallback สำหรับ Base cases ปกติ
-    if (!dailyExists && !scanValid) {
-      return { status: 'ABSENT' };
-    }
-    if (!dailyExists && scanValid) return { status: 'MISSING_DAILY' };
-    if (dailyExists && !scanValid) {
-      // กรณีมี daily แต่สแกนไม่พอ
-      if (scanCount === 0) {
-        return {
-          status: 'MISSING_SCAN',
-          suggestedHours: 0,
-          note: 'ไม่พบข้อมูลการสแกนนิ้ว',
-        };
-      } else {
-        // มี 1 ครั้ง -> CONFLICTED (กรณี B)
-        return {
-          status: 'CONFLICTED',
-          suggestedHours: 0,
-          note: `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${scanPunches[0]}) — Admin ต้องเติมเวลาที่ขาด`,
-        };
-      }
-    }
-
-    // --- Punch Coverage Check ---
-    if (!dailyPunchesValid) {
-      return {
-        status: 'MISSING_DAILY',
-        note: 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)',
-      };
-    }
-
-    // หาจุดเริ่มและจุดจบที่ขอมา (รวม OT ทุกช่วง)
-    const sortedReportPunches = [...dailyReportPunches].sort();
-    const reportStart = this.punchToMinutes(sortedReportPunches[0]);
-    const reportEnd = this.punchToMinutes(sortedReportPunches[sortedReportPunches.length - 1]);
-
-    // หาจุดสแกนจริง (หัว-ท้าย) — ไม่สนใจจำนวนสแกนตรงกลาง
-    const sortedScan = [...(scanPunches || [])].sort();
-    const scanFirstIn = this.punchToMinutes(sortedScan[0]);
-    const scanLastOut = this.punchToMinutes(sortedScan[sortedScan.length - 1]);
-
-    const lateMinutes = Math.max(0, scanFirstIn - reportStart);
-    const earlyLeaveMinutes = Math.max(0, reportEnd - scanLastOut);
-
-    // --- CONFLICT Threshold (30 นาที) ---
-    // ไม่ว่าจะเป็นเวลาปกติ หรือ OT ถ้าสาย/ออกก่อนเกิน 30 นาที -> CONFLICTED (กรณี A)
-    const CONFLICT_THRESHOLD = 30;
-    const isLateConflict = lateMinutes > CONFLICT_THRESHOLD;
-    const isEarlyLeaveConflict = earlyLeaveMinutes > CONFLICT_THRESHOLD;
-
-    if (isLateConflict || isEarlyLeaveConflict) {
-      return {
-        status: 'CONFLICTED',
-        lateMinutes,
-        earlyLeaveMinutes,
-        isLate: isLateConflict,
-        isEarlyLeave: isEarlyLeaveConflict,
-        note: isEarlyLeaveConflict
-          ? `ออกก่อนเกิน ${CONFLICT_THRESHOLD} นาที (${earlyLeaveMinutes} นาที) — ต้องตรวจสอบ Daily Report`
-          : `สายเกิน ${CONFLICT_THRESHOLD} นาที (${lateMinutes} นาที) — ต้องตรวจสอบ Daily Report`,
-      };
-    }
-
-    // --- MATCHED Case ---
-    // เมื่อผ่านการเช็ค Conflict มาได้ (สาย/ออกก่อน <= 30 นาที)
-    let approvedNormalHours = timesheetNormalHours ?? dailyReportHours ?? 0;
-    let approvedOtMorning = timesheetOtMorning ?? 0;
-    let approvedOtNoon = timesheetOtNoon ?? 0;
-    let approvedOtEvening = timesheetOtEvening ?? 0;
-    let autoNote = '';
-
-    // Auto-Penalty สำหรับ OT (ถ้าสาย/ออกก่อนไม่เกิน 30 นาที)
-    const isLateForOT = lateMinutes > 0 && (timesheetOtMorning ?? 0) > 0;
-    const isEarlyLeaveFromOT = earlyLeaveMinutes > 0 && (timesheetOtEvening ?? 0) > 0;
-
-    if (isLateForOT) {
-      const penaltyMins = Math.ceil(lateMinutes / 30) * 30;
-      approvedOtMorning = Math.max(0, (timesheetOtMorning ?? 0) - penaltyMins / 60);
-      autoNote += `สายช่วง OT เช้า ${lateMinutes} นาที (หัก ${penaltyMins} นาที) `;
-    }
-
-    if (isEarlyLeaveFromOT) {
-      const penaltyMins = Math.ceil(earlyLeaveMinutes / 30) * 30;
-      approvedOtEvening = Math.max(0, (timesheetOtEvening ?? 0) - penaltyMins / 60);
-      autoNote += `ออกก่อนช่วง OT เย็น ${earlyLeaveMinutes} นาที (หัก ${penaltyMins} นาที) `;
-    }
-
-    // หมายเหตุ: สำหรับเวลาปกติ (08:00-17:00) ไม่ต้องหัก approvedNormalHours เพราะระบบ HR จัดการเอง
-
-    const totalApproved =
-      approvedNormalHours + approvedOtMorning + approvedOtNoon + approvedOtEvening;
+      ...params,
+    });
 
     return {
-      status: 'MATCHED',
-      suggestedHours: dailyReportHours,
-      approvedNormalHours,
-      approvedOtMorning,
-      approvedOtNoon,
-      approvedOtEvening,
-      totalApprovedHours: totalApproved,
-      approvalSource: 'daily_report',
-      lateMinutes,
-      earlyLeaveMinutes,
-      isLate: lateMinutes > 0,
-      isEarlyLeave: earlyLeaveMinutes > 0,
-      note: autoNote || null,
+      shadowStatus: shadowResult.status,
+      shadowNote: shadowResult.note ?? null,
+      shadowMatch: shadowResult.status === realStatus,
+      shadowComputedAt: now,
     };
   }
 
@@ -793,31 +332,34 @@ export class ReconciliationService {
     if (!existing) {
       // สร้างใหม่
       const isLeaveCalculated = input.leaveHours !== undefined ? input.leaveHours > 0 : undefined;
-      const inputShiftTimes = input.shiftTimes;
+      // Daily report ที่ยังเป็น draft (ยังไม่ submit) ให้ถือว่ายังไม่มี daily report เลย —
+      // ป้องกันไม่ให้ report ที่กรอกไว้แต่ยังไม่ submit ถูก classify เป็น MATCHED
+      const isDraftReport = input.dailyReportStatus === 'draft';
+      const inputShiftTimes = isDraftReport ? undefined : input.shiftTimes;
 
       let classified: ClassifyResult;
       if (inputShiftTimes && inputShiftTimes.day) {
         classified = this.classifyBySegments({
           shiftTimes: inputShiftTimes,
           scanPunches: input.scanPunches ?? [],
-          timesheetNormalHours: input.timesheetNormalHours,
-          timesheetOtMorning: input.timesheetOtMorning,
-          timesheetOtNoon: input.timesheetOtNoon,
-          timesheetOtEvening: input.timesheetOtEvening,
-          dailyReportHours: input.dailyReportHours,
+          timesheetNormalHours: isDraftReport ? undefined : input.timesheetNormalHours,
+          timesheetOtMorning: isDraftReport ? undefined : input.timesheetOtMorning,
+          timesheetOtNoon: isDraftReport ? undefined : input.timesheetOtNoon,
+          timesheetOtEvening: isDraftReport ? undefined : input.timesheetOtEvening,
+          dailyReportHours: isDraftReport ? undefined : input.dailyReportHours,
           isHoliday: input.isHoliday ?? isHoliday,
           isLeave: isLeaveCalculated ?? isLeave,
           leaveHours: input.leaveHours,
         });
       } else {
         classified = this.classifyByPunchCoverage({
-          dailyReportPunches: input.dailyReportPunches ?? [],
+          dailyReportPunches: isDraftReport ? [] : (input.dailyReportPunches ?? []),
           scanPunches: input.scanPunches ?? [],
-          timesheetNormalHours: input.timesheetNormalHours,
-          timesheetOtMorning: input.timesheetOtMorning,
-          timesheetOtNoon: input.timesheetOtNoon,
-          timesheetOtEvening: input.timesheetOtEvening,
-          dailyReportHours: input.dailyReportHours,
+          timesheetNormalHours: isDraftReport ? undefined : input.timesheetNormalHours,
+          timesheetOtMorning: isDraftReport ? undefined : input.timesheetOtMorning,
+          timesheetOtNoon: isDraftReport ? undefined : input.timesheetOtNoon,
+          timesheetOtEvening: isDraftReport ? undefined : input.timesheetOtEvening,
+          dailyReportHours: isDraftReport ? undefined : input.dailyReportHours,
           isHoliday: input.isHoliday ?? isHoliday,
           isLeave: isLeaveCalculated ?? isLeave,
           leaveHours: input.leaveHours,
@@ -831,6 +373,34 @@ export class ReconciliationService {
         reason: 'สร้างอัตโนมัติโดยระบบ',
         note: classified.note,
       };
+
+      // UI-ready segment breakdown (display only — see segmentEngine.ts buildSegmentSnapshots)
+      const segments = buildSegmentSnapshotsEngine(
+        inputShiftTimes,
+        input.scanPunches ?? [],
+        input.dailyReportPhotos,
+        input.leaveEntries
+      );
+
+      const shadow = isDraftReport
+        ? {}
+        : this.computeShadowClassification(
+            input.jobSegments,
+            inputShiftTimes,
+            input.scanPunches ?? [],
+            classified.status,
+            {
+              timesheetNormalHours: isDraftReport ? undefined : input.timesheetNormalHours,
+              timesheetOtMorning: isDraftReport ? undefined : input.timesheetOtMorning,
+              timesheetOtNoon: isDraftReport ? undefined : input.timesheetOtNoon,
+              timesheetOtEvening: isDraftReport ? undefined : input.timesheetOtEvening,
+              dailyReportHours: isDraftReport ? undefined : input.dailyReportHours,
+              isHoliday: input.isHoliday ?? isHoliday,
+              isLeave: isLeaveCalculated ?? isLeave,
+              leaveHours: input.leaveHours,
+            },
+            now
+          );
 
       return {
         ...input,
@@ -854,6 +424,8 @@ export class ReconciliationService {
         assigneeId: input.assigneeId,
         assigneeName: input.assigneeName,
         dailyReportHistory: input.dailyReportHistory ?? [],
+        segments,
+        ...shadow,
       };
     }
 
@@ -869,15 +441,20 @@ export class ReconciliationService {
       isLeave ??
       (existing.leaveHours !== undefined ? existing.leaveHours > 0 : undefined);
 
+    // Daily report ที่ยังเป็น draft (ยังไม่ submit) ให้ถือว่ายังไม่มี daily report เลย —
+    // ห้าม fallback ไปใช้ค่าที่เคย submit ไว้ก่อนหน้า (กรณี submitted ถูกแก้กลับเป็น draft)
+    const isDraftReport = input.dailyReportStatus === 'draft';
+
     // เลือก punch data ที่ดีที่สุด — ใช้ input ถ้ามี มิฉะนั้น fallback existing
-    const effectiveDailyPunches =
-      (input.dailyReportPunches?.length ?? 0) > 0
+    const effectiveDailyPunches = isDraftReport
+      ? []
+      : (input.dailyReportPunches?.length ?? 0) > 0
         ? input.dailyReportPunches!
         : (existing.dailyReportPunches ?? []);
     const effectiveScanPunches =
       (input.scanPunches?.length ?? 0) > 0 ? input.scanPunches! : (existing.scanPunches ?? []);
 
-    const inputShiftTimes = input.shiftTimes ?? existing?.shiftTimes;
+    const inputShiftTimes = isDraftReport ? undefined : (input.shiftTimes ?? existing?.shiftTimes);
 
     let classified: ClassifyResult;
 
@@ -885,11 +462,11 @@ export class ReconciliationService {
       classified = this.classifyBySegments({
         shiftTimes: inputShiftTimes,
         scanPunches: effectiveScanPunches,
-        timesheetNormalHours: input.timesheetNormalHours ?? existing.timesheetNormalHours,
-        timesheetOtMorning: input.timesheetOtMorning ?? existing.timesheetOtMorning,
-        timesheetOtNoon: input.timesheetOtNoon ?? existing.timesheetOtNoon,
-        timesheetOtEvening: input.timesheetOtEvening ?? existing.timesheetOtEvening,
-        dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
+        timesheetNormalHours: isDraftReport ? undefined : (input.timesheetNormalHours ?? existing.timesheetNormalHours),
+        timesheetOtMorning: isDraftReport ? undefined : (input.timesheetOtMorning ?? existing.timesheetOtMorning),
+        timesheetOtNoon: isDraftReport ? undefined : (input.timesheetOtNoon ?? existing.timesheetOtNoon),
+        timesheetOtEvening: isDraftReport ? undefined : (input.timesheetOtEvening ?? existing.timesheetOtEvening),
+        dailyReportHours: isDraftReport ? undefined : (input.dailyReportHours ?? existing.dailyReportHours),
         isHoliday: effectiveIsHoliday,
         isLeave: effectiveIsLeave,
         leaveHours: input.leaveHours ?? existing.leaveHours,
@@ -899,11 +476,11 @@ export class ReconciliationService {
       classified = this.classifyByPunchCoverage({
         dailyReportPunches: effectiveDailyPunches,
         scanPunches: effectiveScanPunches,
-        timesheetNormalHours: input.timesheetNormalHours ?? existing.timesheetNormalHours,
-        timesheetOtMorning: input.timesheetOtMorning ?? existing.timesheetOtMorning,
-        timesheetOtNoon: input.timesheetOtNoon ?? existing.timesheetOtNoon,
-        timesheetOtEvening: input.timesheetOtEvening ?? existing.timesheetOtEvening,
-        dailyReportHours: input.dailyReportHours ?? existing.dailyReportHours,
+        timesheetNormalHours: isDraftReport ? undefined : (input.timesheetNormalHours ?? existing.timesheetNormalHours),
+        timesheetOtMorning: isDraftReport ? undefined : (input.timesheetOtMorning ?? existing.timesheetOtMorning),
+        timesheetOtNoon: isDraftReport ? undefined : (input.timesheetOtNoon ?? existing.timesheetOtNoon),
+        timesheetOtEvening: isDraftReport ? undefined : (input.timesheetOtEvening ?? existing.timesheetOtEvening),
+        dailyReportHours: isDraftReport ? undefined : (input.dailyReportHours ?? existing.dailyReportHours),
         isHoliday: effectiveIsHoliday,
         isLeave: effectiveIsLeave,
         leaveHours: input.leaveHours ?? existing.leaveHours,
@@ -913,7 +490,49 @@ export class ReconciliationService {
     const newStatus = classified.status;
     const statusChanged = newStatus !== existing.status;
 
+    // UI-ready segment breakdown (display only — see segmentEngine.ts buildSegmentSnapshots)
+    const segments = buildSegmentSnapshotsEngine(
+      inputShiftTimes,
+      effectiveScanPunches,
+      input.dailyReportPhotos ?? existing.dailyReportPhotos,
+      input.leaveEntries ?? existing.leaveEntries
+    );
+
+    const effectiveJobSegments = input.jobSegments ?? existing.jobSegments;
+    const shadow = isDraftReport
+      ? {}
+      : this.computeShadowClassification(
+          effectiveJobSegments,
+          inputShiftTimes,
+          effectiveScanPunches,
+          newStatus,
+          {
+            timesheetNormalHours: isDraftReport
+              ? undefined
+              : (input.timesheetNormalHours ?? existing.timesheetNormalHours),
+            timesheetOtMorning: isDraftReport
+              ? undefined
+              : (input.timesheetOtMorning ?? existing.timesheetOtMorning),
+            timesheetOtNoon: isDraftReport
+              ? undefined
+              : (input.timesheetOtNoon ?? existing.timesheetOtNoon),
+            timesheetOtEvening: isDraftReport
+              ? undefined
+              : (input.timesheetOtEvening ?? existing.timesheetOtEvening),
+            dailyReportHours: isDraftReport
+              ? undefined
+              : (input.dailyReportHours ?? existing.dailyReportHours),
+            isHoliday: effectiveIsHoliday,
+            isLeave: effectiveIsLeave,
+            leaveHours: input.leaveHours ?? existing.leaveHours,
+          },
+          now
+        );
+
     const updates: Partial<ReconciliationRecord> = {
+      segments,
+      jobSegments: effectiveJobSegments,
+      ...shadow,
       projectLocationId: input.projectLocationId,
       homeProjectId: input.homeProjectId ?? existing.homeProjectId,
       workLocationIds: input.workLocationIds ?? existing.workLocationIds,
@@ -1315,6 +934,7 @@ export class ReconciliationService {
         dailyReportPhotos: summary.dailyReportPhotos,
         dailyReportPunches: summary.dailyReportPunches,
         shiftTimes: summary.shiftTimes,
+        jobSegments: summary.jobSegments,
         scanPunches: scanEntry?.punches,
         leaveHours: summary.leaveHours,
         leaveEntries: summary.leaveEntries,
@@ -1572,6 +1192,7 @@ export class ReconciliationService {
           : undefined,
         dailyReportPhotos: summary?.dailyReportPhotos,
         dailyReportPunches: summary?.dailyReportPunches,
+        jobSegments: summary?.jobSegments,
         // fallback: allScans (HH:mm:ss) หรือ Time1-6 ถ้า punches ยังว่าง (docs เก่าจาก bulk import)
         scanPunches: scanData ? extractScanPunches(scanData) : [],
         devicePunches: scanData?.devicePunches || [],

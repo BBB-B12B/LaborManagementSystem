@@ -8,6 +8,8 @@
  * Document ID Format: REC_[employeeId]_[workDate]  e.g. REC_EMP001_2026-04-23
  */
 
+import type { SegmentSnapshot, JobSegmentEntry } from '../services/reconciliation/segmentEngine';
+
 // ---------------------------------------------------------------------------
 // Enums & Sub-types
 // ---------------------------------------------------------------------------
@@ -114,6 +116,23 @@ export interface ReconciliationRecord {
   dailyReportPunches?: string[]; // Array ของเวลาจาก Daily Report เช่น ["08:00", "17:00"]
   scanPunches?: string[]; // Array ของเวลาสแกนนิ้ว
   devicePunches?: string[]; // Array ของเวลาสแกนนิ้วดิบจากเครื่อง
+
+  // --- Segment breakdown สำเร็จรูปสำหรับ UI (คำนวณครั้งเดียวที่ backend) ---
+  // แทนที่ frontend ต้องจับคู่ punch เอง — ดู segmentEngine.ts buildSegmentSnapshots()
+  // undefined = record เก่าที่ยังไม่เคย reclassify — UI ต้อง fallback ไปคำนวณเองแบบเดิม
+  segments?: SegmentSnapshot[];
+
+  // --- jobSegments (N งานย่อยต่อวัน, After-Sale 2026-07 format) — pass-through เท่านั้น ---
+  jobSegments?: Record<string, JobSegmentEntry>;
+
+  // --- Shadow-mode classification (T-shadow-jobSegments) ---
+  // คำนวณคู่ขนานด้วย jobSegments เมื่อมีค่า เพื่อเทียบกับผลจริง (status/note ด้านบน)
+  // ไม่ถูกใช้ตัดสิน MATCHED/CONFLICTED และไม่แสดงใน UI ใดๆ — ใช้สำหรับตรวจสอบก่อน cutover เท่านั้น
+  // undefined = record นี้ไม่มี jobSegments หรือยังไม่เคยรัน shadow (ต่างจาก false ที่แปลว่า "รันแล้วไม่ตรงกัน")
+  shadowStatus?: ReconciliationStatus;
+  shadowNote?: string | null;
+  shadowMatch?: boolean;
+  shadowComputedAt?: Date;
 
   // --- Punch Coverage Analysis (logic ใหม่ แทน hours comparison) ---
   lateMinutes?: number; // สายกี่นาที (scanFirstIn > reportStart)
@@ -223,6 +242,7 @@ export interface CreateReconciliationRecordInput {
   workLogs?: any[];
   dailyReportHistory?: any[];
   dailyReportStatus?: 'draft' | 'submitted';
+  jobSegments?: Record<string, JobSegmentEntry>;
 }
 
 // ลบ ApproveReconciliationInput ออกแล้ว — ไม่มีการ approve รายวันอีกต่อไป
@@ -277,6 +297,12 @@ export const reconciliationRecordConverter = {
       data.dailyReportPunches = record.dailyReportPunches;
     if (record.scanPunches !== undefined) data.scanPunches = record.scanPunches;
     if (record.devicePunches !== undefined) data.devicePunches = record.devicePunches;
+    if (record.segments !== undefined) data.segments = record.segments;
+    if (record.jobSegments !== undefined) data.jobSegments = record.jobSegments;
+    if (record.shadowStatus !== undefined) data.shadowStatus = record.shadowStatus;
+    if (record.shadowNote !== undefined) data.shadowNote = record.shadowNote;
+    if (record.shadowMatch !== undefined) data.shadowMatch = record.shadowMatch;
+    if (record.shadowComputedAt !== undefined) data.shadowComputedAt = record.shadowComputedAt;
     if (record.suggestedHours !== undefined) data.suggestedHours = record.suggestedHours;
     if (record.lateMinutes !== undefined) data.lateMinutes = record.lateMinutes;
     if (record.earlyLeaveMinutes !== undefined) data.earlyLeaveMinutes = record.earlyLeaveMinutes;
@@ -418,6 +444,12 @@ export const reconciliationRecordConverter = {
       dailyReportPunches: data.dailyReportPunches,
       scanPunches: data.scanPunches,
       devicePunches: devicePunches,
+      segments: data.segments,
+      jobSegments: data.jobSegments,
+      shadowStatus: data.shadowStatus,
+      shadowNote: data.shadowNote,
+      shadowMatch: data.shadowMatch,
+      shadowComputedAt: data.shadowComputedAt ? toDate(data.shadowComputedAt) : undefined,
       suggestedHours: data.suggestedHours,
       lateMinutes: data.lateMinutes,
       earlyLeaveMinutes: data.earlyLeaveMinutes,
