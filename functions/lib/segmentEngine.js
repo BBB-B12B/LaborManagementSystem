@@ -321,6 +321,14 @@ function matchSegmentsToPunches(segments, scanPunches) {
             conflictReason: segReason,
         });
     }
+    const consumedMinutes = new Set();
+    perSegment.forEach((m) => {
+        if (m.matchedInMinutes != null)
+            consumedMinutes.add(m.matchedInMinutes);
+        if (m.matchedOutMinutes != null)
+            consumedMinutes.add(m.matchedOutMinutes);
+    });
+    const extraPunches = sortedScans.filter((t) => !consumedMinutes.has(t));
     return {
         perSegment,
         isConflicted,
@@ -329,6 +337,7 @@ function matchSegmentsToPunches(segments, scanPunches) {
         totalEarlyLeaveMinutes,
         penaltyOtMorning,
         penaltyOtEvening,
+        extraPunches,
     };
 }
 function classifyBaseCases(params) {
@@ -418,7 +427,30 @@ function classifyBySegments(params) {
         }
     }
     const outcome = matchSegmentsToPunches(segments, scanPunches);
-    if (outcome.isConflicted) {
+    // สแกนที่เหลือไม่ตรงกับ segment ไหนเลย (เช่น สแกนหลังเวลาที่ Daily Report บอกว่าเลิกงาน) —
+    // เป็นสัญญาณว่ามีเวลาทำงานที่ยังไม่ถูกบันทึกไว้ ต้องบังคับ CONFLICTED เสมอ ไม่ว่า segment
+    // ที่ประกาศไว้จะตรงครบแค่ไหนก็ตาม ไม่งั้นสแกนส่วนเกินนี้จะถูกมองข้ามไปเงียบๆ (พบจากรีวิวจริงกับผู้ใช้)
+    const extraNote = outcome.extraPunches.length > 0
+        ? `พบสแกน ${outcome.extraPunches.map(formatTime).join(', ')} ที่ไม่ตรงช่วงเวลาใด`
+        : null;
+    // Daily Report ที่ประกาศช่วงเวลาทำงาน "ปกติ" (ไม่นับ otMorning/otEvening ซึ่งเป็นส่วนเสริม)
+    // สั้นกว่า 1 วันมาตรฐาน (08:00-17:00) โดยไม่มีใบลา/วันหยุดมารองรับส่วนที่ขาด — ต้องบังคับ
+    // CONFLICTED เสมอเช่นกัน เพราะไม่รู้ว่าลืมลงข้อมูล (report/สแกน) หรือลาแล้วลืมลงใบลา หรือ
+    // ตั้งใจให้สั้นจริงๆ ปล่อยให้ admin เป็นคนตัดสินใจแทนที่จะปล่อยผ่านเป็น MATCHED เงียบๆ
+    const NORMAL_DAY_START = 8 * 60; // 08:00
+    const NORMAL_DAY_END = 17 * 60; // 17:00
+    const coverageSegments = segments.filter((s) => s.type !== 'otMorning' && s.type !== 'otEvening');
+    const coverageStart = coverageSegments.length > 0 ? Math.min(...coverageSegments.map((s) => s.start)) : null;
+    const coverageEnd = coverageSegments.length > 0 ? Math.max(...coverageSegments.map((s) => s.end)) : null;
+    const isShortDay = !isLeave &&
+        !isHoliday &&
+        coverageStart !== null &&
+        coverageEnd !== null &&
+        (coverageStart > NORMAL_DAY_START || coverageEnd < NORMAL_DAY_END);
+    const shortDayNote = isShortDay
+        ? `Daily Report ลงเวลาแค่ ${formatTime(coverageStart)}-${formatTime(coverageEnd)} ไม่ครบวันทำงานมาตรฐาน (08:00-17:00) และไม่มีใบลา/วันหยุดรองรับ`
+        : null;
+    if (outcome.isConflicted || extraNote || shortDayNote) {
         return {
             status: 'CONFLICTED',
             suggestedHours: dailyReportHours,
@@ -432,7 +464,7 @@ function classifyBySegments(params) {
             earlyLeaveMinutes: outcome.totalEarlyLeaveMinutes,
             isLate: outcome.totalLateMinutes > 0,
             isEarlyLeave: outcome.totalEarlyLeaveMinutes > 0,
-            note: outcome.conflictNote,
+            note: [outcome.conflictNote, extraNote, shortDayNote].filter(Boolean).join(' · ') || null,
         };
     }
     let approvedNormal = timesheetNormalHours ?? dailyReportHours ?? 0;

@@ -204,24 +204,25 @@ describe('classifyBySegments — jobSegments (N งานย่อยต่อ�
     expect(result.status).toBe('CONFLICTED');
   });
 
-  it('MATCHED — production sample จริงจาก After-Sale (2026-07-27): 2 งานต่อเนื่องกันพอดี (08:00-10:00 ต่อ 10:00-15:00) ไม่ต้องสแกนตรงรอยต่อ 10:00 แต่ยังต้องสแกนพักเที่ยงจริง', () => {
-    // ข้อมูลจริงจาก DailyEmployeeTimesheets (employeeNumber 888888, date 2026-07-27):
-    // งาน ARC-0001-005-0001 "08:00 - 10:00" ต่อด้วยงาน ARC-0001-004-0001 "10:00 - 15:00" ทันที
-    // legacy shiftTimes.day (dual-write) สรุปมาเป็นก้อนเดียว "08:00 - 15:00" พอดี
-    //
-    // สิ่งที่ mergeContiguousSegments รับประกันคือ "ไม่ต้องมีสแกนตรงรอยต่อสลับงาน" (10:00)
-    // เท่านั้น — ไม่ได้แปลว่าทั้งวันไม่มีพักเที่ยง ช่วง 08:00-15:00 ยังคร่อมเที่ยงอยู่ดี
-    // จึงยังต้องมีสแกนออก-เข้าพักเที่ยง (12:00/13:00) เหมือนกรณี shiftTimes เดิม —
-    // เทสนี้จงใจ "ไม่" ใส่สแกน 10:00 (พิสูจน์ว่าไม่ต้องการจริง) แต่ยังใส่ 12:00/13:00 ครบ
+  it('CONFLICTED — production sample จริงจาก After-Sale (employeeNumber 888888, 2026-07-27): ผู้ใช้ตั้งใจลง Daily Report ไม่ครบ (6 ชม.) เพื่อทดสอบ logic เอง สแกนจริงมีแค่ 08:00/12:00/13:00 (ไม่มี 15:00) — ต้อง CONFLICTED ทั้งเพราะขาดสแกน OUT และเพราะวันสั้นกว่ามาตรฐาน', () => {
+    // แก้ไข 2026-07-30: fixture เดิมของเทสนี้ใส่สแกนผิด (มี '15:00' เกินมา ซึ่งไม่มีจริงใน
+    // ฐานข้อมูล) ทำให้เข้าใจผิดว่าเป็น "production sample ที่ยืนยันว่าถูกต้องแล้วเป็น MATCHED"
+    // — ผู้ใช้ตรวจสอบ Firestore จริงแล้วพบว่า scanPunches ของวันนี้มีแค่ 3 ค่า (ไม่มี 15:00)
+    // และ status จริงในระบบคือ CONFLICTED มาตั้งแต่ต้น (note: "ไม่พบสแกน OUT สำหรับ
+    // segment 13:00–15:00") — เป็นพฤติกรรมเดิมที่ถูกต้องอยู่แล้ว ไม่เกี่ยวกับกฎ short-day
+    // เลย (segment บ่ายขาด OUT ไปตั้งแต่แรก) กฎ short-day แค่เพิ่ม note อีกท่อนเข้ามา
+    // ไม่ได้เปลี่ยนสถานะ — แก้ fixture ให้ตรงกับข้อมูลจริงแทน
     const result = classifyBySegments({
       jobSegments: {
         'ARC-0001-005-0001': { taskId: 'ARC-0001-005', subtaskId: 'ARC-0001-005-0001', shiftTimes: { day: '08:00 - 10:00' } },
         'ARC-0001-004-0001': { taskId: 'ARC-0001-004', subtaskId: 'ARC-0001-004-0001', shiftTimes: { day: '10:00 - 15:00' } },
       },
-      scanPunches: ['08:00', '12:00', '13:00', '15:00'],
+      scanPunches: ['08:00', '12:00', '13:00'],
       timesheetNormalHours: 6,
     });
-    expect(result.status).toBe('MATCHED');
+    expect(result.status).toBe('CONFLICTED');
+    expect(result.note).toContain('ไม่พบสแกน OUT สำหรับ segment 13:00–15:00');
+    expect(result.note).toContain('ไม่ครบวันทำงานมาตรฐาน');
   });
 
   it('CONFLICTED — production sample เดียวกัน แต่ขาดสแกนพักเที่ยงจริง (มีแค่เข้า-ออกทั้งวัน ไม่พอ)', () => {
@@ -236,6 +237,81 @@ describe('classifyBySegments — jobSegments (N งานย่อยต่อ�
       timesheetNormalHours: 6,
     });
     expect(result.status).toBe('CONFLICTED');
+  });
+});
+
+describe('classifyBySegments — extraPunches (สแกนเหลือที่ไม่ตรง segment ไหนเลย ต้องบังคับ CONFLICTED)', () => {
+  it('CONFLICTED — สแกนหลังเวลาที่ Daily Report บอกว่าเลิกงาน (17:00) ไกลเกิน tolerance ของ OUT (15:00) ต้องยัง CONFLICTED และ note ต้องบอกสแกนที่เหลือด้วย', () => {
+    const result = classifyBySegments({
+      shiftTimes: { day: '08:00 - 15:00' },
+      scanPunches: ['08:00', '12:00', '13:00', '17:00'],
+      timesheetNormalHours: 6,
+    });
+    expect(result.status).toBe('CONFLICTED');
+    expect(result.note).toContain('ไม่พบสแกน OUT');
+    expect(result.note).toContain('17:00');
+  });
+
+  it('CONFLICTED — ทุก segment ที่ประกาศไว้ตรงครบ (ไม่งั้นจะเป็น MATCHED) แต่มีสแกนเหลือที่ไม่ตรงช่วงไหนเลย ต้องไม่ถูกมองข้ามเป็น MATCHED เงียบๆ', () => {
+    const result = classifyBySegments({
+      shiftTimes: { day: '08:00 - 15:00' },
+      scanPunches: ['08:00', '12:00', '13:00', '15:00', '17:00'],
+      timesheetNormalHours: 6,
+    });
+    expect(result.status).toBe('CONFLICTED');
+    expect(result.note).toContain('17:00');
+  });
+
+  it('MATCHED — ไม่มีสแกนเหลือเลย ยัง MATCHED ตามปกติ (ไม่กระทบเคสที่ไม่มีความผิดปกติ)', () => {
+    // ใช้วันเต็ม 08:00-17:00 (ไม่ใช่ 08:00-12:00 แบบเดิม) เพื่อแยกเทสนี้ออกจากกฎ
+    // short-day ใหม่ด้านล่าง — เทสนี้เช็คเฉพาะว่า extraPunches ไม่กระทบเคสปกติ
+    const result = classifyBySegments({
+      shiftTimes: { day: '08:00 - 17:00' },
+      scanPunches: ['08:00', '12:00', '13:00', '17:00'],
+      timesheetNormalHours: 8,
+    });
+    expect(result.status).toBe('MATCHED');
+    expect(result.note).toBeFalsy();
+  });
+});
+
+describe('classifyBySegments — short-day (ลงเวลาสั้นกว่ามาตรฐาน 08:00-17:00 โดยไม่มีใบลา/วันหยุดรองรับ)', () => {
+  it('CONFLICTED — ลงแค่ 08:00-12:00 (ครึ่งวันเช้า) สแกนตรงเป๊ะ แต่ไม่มีใบลา/วันหยุดรองรับช่วงบ่ายที่หายไป (เคสที่ผู้ใช้ยกมา 2026-07-30)', () => {
+    const result = classifyBySegments({
+      shiftTimes: { day: '08:00 - 12:00' },
+      scanPunches: ['08:00', '12:00'],
+      timesheetNormalHours: 4,
+    });
+    expect(result.status).toBe('CONFLICTED');
+    expect(result.note).toContain('ไม่ครบวันทำงานมาตรฐาน');
+  });
+
+  it('MATCHED — ลาครึ่งวันบ่าย (isLeave=true) + ลงเช้าอย่างเดียว ไม่ต้อง flag short-day เพราะมีใบลารองรับ', () => {
+    const result = classifyBySegments({
+      shiftTimes: { day: '08:00 - 12:00' },
+      scanPunches: ['08:00', '12:00'],
+      timesheetNormalHours: 4,
+      isLeave: true,
+      leaveHours: 4,
+    });
+    expect(result.status).toBe('MATCHED');
+  });
+
+  it('HOLIDAY path ไม่ถูกกระทบ — isHoliday=true + ไม่มีชั่วโมงทำงาน + ไม่มีสแกน ยังเป็น HOLIDAY ตามปกติ (short-day ไม่เข้ามาเกี่ยว)', () => {
+    const result = classifyBySegments({
+      scanPunches: [],
+      isHoliday: true,
+    });
+    expect(result.status).toBe('HOLIDAY');
+  });
+
+  it('MATCHED — วันเต็ม 08:00-17:00 ตรงมาตรฐานพอดี ไม่ถูก flag short-day', () => {
+    const result = classifyBySegments({
+      shiftTimes: { day: '08:00 - 17:00' },
+      scanPunches: ['08:00', '12:00', '13:00', '17:00'],
+      timesheetNormalHours: 8,
+    });
+    expect(result.status).toBe('MATCHED');
   });
 });
 
