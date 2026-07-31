@@ -16,6 +16,7 @@ import {
   detectFileType,
 } from '../../services/scanData/ScanDataImportUtils';
 import { ReconciliationService } from '../../services/reconciliation/ReconciliationService';
+import { bangkokInstantDayBounds } from '../../utils/bangkokTime';
 
 import * as XLSX from 'xlsx';
 
@@ -107,8 +108,8 @@ router.get(
       const options = {
         projectId: (projectId || projectLocationId) as string,
         contractorId: (contractorId || employeeNumber) as string,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
+        startDate: startDate ? bangkokInstantDayBounds(startDate as string).start : undefined,
+        endDate: endDate ? bangkokInstantDayBounds(endDate as string).end : undefined,
         page: parseInt(req.query.page as string) || 1,
         pageSize: parseInt(req.query.pageSize as string) || 50,
         onlyDeleted: req.query.onlyDeleted === 'true',
@@ -151,8 +152,8 @@ router.get('/late', async (req: Request, res: Response) => {
     const { projectId, startDate, endDate } = req.query;
     const lateRecords = await scanDataService.getLateRecords(
       projectId as string | undefined,
-      startDate ? new Date(startDate as string) : undefined,
-      endDate ? new Date(endDate as string) : undefined
+      startDate ? bangkokInstantDayBounds(startDate as string).start : undefined,
+      endDate ? bangkokInstantDayBounds(endDate as string).end : undefined
     );
     res.json({ success: true, data: lateRecords });
   } catch (error: any) {
@@ -191,8 +192,8 @@ router.get('/export', async (req: Request, res: Response) => {
 
     const rows = await scanDataService.getAggregatedDataForExport({
       projectLocationId: projectLocationId as string,
-      startDate: new Date(startDate as string),
-      endDate: new Date(endDate as string),
+      startDate: bangkokInstantDayBounds(startDate as string).start,
+      endDate: bangkokInstantDayBounds(endDate as string).end,
       onlyDeleted: req.query.onlyDeleted === 'true',
     });
 

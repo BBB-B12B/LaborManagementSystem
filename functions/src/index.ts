@@ -765,6 +765,10 @@ async function reconcile(
     const hasJobSegmentsForClassify =
       !isDraftReport && !!timesheet?.jobSegments && Object.keys(timesheet.jobSegments).length > 0;
     const effectiveDailyReportHours = isDraftReport ? undefined : totalTimesheetHours;
+    // เดิมจุดนี้ลืม gate ด้วย isDraftReport (จุดอื่นในบล็อกนี้ gate หมดแล้ว) ทำให้ report
+    // ที่ยังเป็น draft แต่มี dailyReportPunches ค้างอยู่ (สกัดจาก shiftTimes เดิม) ถูกเอาไป
+    // เทียบกับสแกนนิ้วจนตัดสินเป็น MATCHED ทั้งที่ยังไม่ submit
+    const effectiveDailyReportPunches = isDraftReport ? [] : dailyReportPunches;
 
     // niche เดิม: วันที่มีแต่ OT (ไม่มี shiftTimes.day/jobSegments แต่ dailyReportPunches
     // สกัดจาก otMorning/otNoon/otEvening ได้ >=2 จุด) — segmentEngine ต้องมี shiftTimes.day
@@ -772,12 +776,12 @@ async function reconcile(
     const useLegacyPunchCoverage =
       !effectiveShiftTimesForClassify?.day &&
       !hasJobSegmentsForClassify &&
-      dailyReportPunches.length >= 2 &&
+      effectiveDailyReportPunches.length >= 2 &&
       effectiveScan.length >= 2;
 
     const result: PunchClassifyResult = useLegacyPunchCoverage
       ? classifyByPunchCoverage({
-          dailyReportPunches,
+          dailyReportPunches: effectiveDailyReportPunches,
           scanPunches: effectiveScan,
           normalHours: tsNormalHours,
           otMorningHours: tsOtMorning,

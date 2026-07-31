@@ -797,6 +797,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       photoOut?: string | null;
       isLeaveSegment?: boolean;
       isGapSegment?: boolean;
+      isStandardBreak?: boolean;
     };
 
     // สร้าง segments ของ "1 งาน" (1 ชุด shiftTimes+photos) — เรียกครั้งเดียวเมื่อไม่มี
@@ -1002,7 +1003,12 @@ const WorkHourComparisonTable: React.FC<Props> = ({
     // มาตรฐานออกจากช่องว่างเสมอ แม้ช่องว่างจะกว้างกว่าแค่ชั่วโมงพักก็ตาม (เช่น 10:00-13:00
     // ต้องเหลือ "ไม่มีข้อมูล" จริงแค่ 10:00-12:00 ไม่ใช่ทั้ง 10:00-13:00) ส่วนที่ทับกับช่วงพัก
     // มาตรฐานพอดีจะโชว์แถวก็ต่อเมื่อมีสแกนหลงเข้ามาจริงในช่วงนั้น (แปลว่าอาจมีการทำงานที่ไม่ได้
-    // แจ้งไว้) สแกนที่ตรงขอบพอดีไม่นับ เพราะเป็น IN/OUT ของ segment ข้างเคียงอยู่แล้ว
+    // แจ้งไว้) สแกนที่ตรงขอบพอดีไม่นับ เพราะเป็น IN/OUT ของ segment ข้างเคียงอยู่แล้ว —
+    // เช็คตรงนี้ (ก่อน Pass 1) แยกไม่ออกว่าสแกนไหน "หลงจริง" กับสแกนไหนที่จะถูก segment
+    // ข้างเคียงจับไปเป็น IN/OUT ของตัวเอง (เช่น 12:01 อาจเป็น OUT ของงานเช้าที่จบ 12:00)
+    // จึงต้องแทรกแถวพักมาตรฐานไว้ก่อนเสมอ (isStandardBreak: true) แล้วให้ Pass 1/Pass 2
+    // ตัดสินสแกนที่หลงจริงตามลำดับที่ถูกต้อง ค่อยกรองแถวที่ไม่มีสแกนหลงออกทีหลัง (ดู filter
+    // หลัง Pass 2 ด้านล่าง)
     const STANDARD_BREAKS: { start: number; end: number; keySuffix: string }[] = [
       { start: 12 * 60, end: 13 * 60, keySuffix: 'lunch' },
       { start: 17 * 60, end: 18 * 60, keySuffix: 'evening' },
@@ -1016,7 +1022,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       const gapStart = seg.expectedEnd;
       const gapEnd = next.expectedStart;
 
-      const pushGapRow = (start: number, end: number, keySuffix: string) => {
+      const pushGapRow = (start: number, end: number, keySuffix: string, isStandardBreak = false) => {
         withGaps.push({
           key: `gap_${idx}_${keySuffix}`,
           jobKey: '_gap',
@@ -1029,6 +1035,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           photoIn: null,
           photoOut: null,
           isGapSegment: true,
+          isStandardBreak,
         });
       };
 
@@ -1044,10 +1051,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         if (cursor < overlapStart) {
           pushGapRow(cursor, overlapStart, `p${pieceIdx++}`);
         }
-        const hasScanDuringBreak = scanMinsList.some((t: number) => t > brk.start && t < brk.end);
-        if (hasScanDuringBreak) {
-          pushGapRow(overlapStart, overlapEnd, brk.keySuffix);
-        }
+        // แทรกไว้ก่อนเสมอ (ไม่เช็ค hasScanDuringBreak ตรงนี้) — ให้ Pass 1/Pass 2 ตัดสิน
+        // สแกนหลงจริงก่อน ค่อยกรองแถวที่ไม่มีสแกนหลงออกทีหลัง
+        pushGapRow(overlapStart, overlapEnd, brk.keySuffix, true);
         cursor = overlapEnd;
       });
       if (cursor < gapEnd) {
@@ -1133,10 +1139,16 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       });
     });
 
-    const segments = baseSegments.map((seg) => ({
-      ...seg,
-      ...realResults.get(seg)!,
-    }));
+    // แถวพักมาตรฐาน (isStandardBreak) ที่ Pass 1/Pass 2 หาสแกนหลงไม่เจอเลย (actualIn/actualOut
+    // เป็น null ทั้งคู่) = ช่วงพักปกติจริงๆ ไม่ต้องโชว์แถว — กรองออกตรงนี้ หลังจากรู้ผลจับคู่
+    // สแกนที่ถูกต้องแล้วเท่านั้น (ก่อนหน้านี้จะเช็คไม่ถูกเพราะยังไม่รู้ว่าสแกนไหนถูก segment
+    // ข้างเคียงจับไปเป็น IN/OUT ของตัวเองแล้ว)
+    const segments = baseSegments
+      .map((seg) => ({
+        ...seg,
+        ...realResults.get(seg)!,
+      }))
+      .filter((seg) => !seg.isStandardBreak || seg.actualIn !== null || seg.actualOut !== null);
 
     // แทรกแถวเพิ่มถ้ามีสแกนหลุดออกมาก่อน segment แรกเริ่ม หรือหลัง segment สุดท้ายจบ (เช่น
     // สแกนเลยเวลามาหลังเลิกงานโดยไม่มี OT ประกาศไว้) — กลไก "ไม่มีข้อมูล" ด้านบนจับได้แค่
@@ -1309,19 +1321,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         } else if (!hasIn && hasOut && contiguousPrev) {
           isBypassed = true;
           bypassReason = 'ทำงานต่อเนื่องข้ามงาน (ไม่มีสแกนรอยต่อ)';
-        }
-      }
-
-      // Gap-preceded IN suppression — segment ก่อนหน้า (ตามลำดับเวลา) คือ "ไม่มีข้อมูล"
-      // (ไม่มีงาน + ไม่มีสแกนเลย) แสดงว่าไม่มีทางรู้ได้อยู่แล้วว่าคนงานกลับเข้างานตอนไหน
-      // ขึ้น "ขาด IN" ซ้ำเป็นการ double-flag กับแถว "ไม่มีข้อมูล" ที่แสดงแยกไปแล้ว — ไม่ต้องเตือนซ้ำ
-      // (มีผลเฉพาะตอน OUT ยังยืนยันได้ปกติ ถ้า OUT ก็ขาดด้วยยังถือเป็นขาดสแกนทั้ง segment ตามเดิม)
-      if (!isBypassed && !isThisSegmentLeave && !seg.isGapSegment && !hasIn && hasOut) {
-        const segIdx = segments.indexOf(seg);
-        const prevSeg = segments[segIdx - 1];
-        if (prevSeg?.isGapSegment) {
-          isBypassed = true;
-          bypassReason = 'ทำงานต่อเนื่องหลังช่วงไม่มีข้อมูล (ไม่ต้องมีสแกนเข้ายืนยันซ้ำ)';
         }
       }
 

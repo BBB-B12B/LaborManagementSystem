@@ -120,7 +120,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       );
       if (overlapping) {
         throw new AppError(
-          `งวดที่สร้างมีวันที่ซ้อนทับกับงวด ${overlapping.periodCode} (${overlapping.startDate.toLocaleDateString('th-TH')} - ${overlapping.endDate.toLocaleDateString('th-TH')}) ของโครงการนี้`,
+          `งวดที่สร้างมีวันที่ซ้อนทับกับงวด ${overlapping.periodCode} (${overlapping.startDate.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' })} - ${overlapping.endDate.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' })}) ของโครงการนี้`,
           409
         );
       }

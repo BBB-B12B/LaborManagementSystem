@@ -134,8 +134,16 @@ export function classifyScanBehavior(scanTime: Date): ScanBehavior {
   if (!scanTime || !(scanTime instanceof Date)) {
     return 'regular_in';
   }
-  const hour = scanTime.getHours();
-  const minute = scanTime.getMinutes();
+  // Bangkok wall-clock hour/minute — plain .getHours()/.getMinutes() would read
+  // the server process's own timezone (UTC on Cloud Run), not Thai local time.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(scanTime);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
   const timeInMinutes = hour * 60 + minute;
 
   // OT เช้า: 03:00-07:30

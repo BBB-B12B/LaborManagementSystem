@@ -112,9 +112,19 @@ export function validatePeriodDays(startDate: Date, endDate: Date): boolean {
  * สร้างรหัสงวด
  */
 export function generatePeriodCode(startDate: Date): string {
-  const year = startDate.getFullYear();
-  const month = String(startDate.getMonth() + 1).padStart(2, '0');
-  const day = startDate.getDate();
+  // Bangkok calendar date — plain .getFullYear()/.getMonth()/.getDate() would read
+  // the server process's own timezone (UTC on Cloud Run), not Thai local time,
+  // and can land on the wrong day (and therefore the wrong period code).
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(startDate);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const year = get('year');
+  const month = get('month');
+  const day = Number(get('day'));
   const period = day === 1 ? 'P1' : 'P2';
   return `${year}${month}-${period}`;
 }

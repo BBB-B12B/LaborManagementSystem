@@ -135,7 +135,10 @@ class ScanDataService extends BaseCrudService<ScanData> {
         scanDateTime: input.scanDateTime,
         scanDate,
         scanBehavior: classifyScanBehavior(input.scanDateTime),
-        workDate: input.scanDateTime,
+        // workDate = Bangkok midnight of the scan's day (grouping key only —
+        // real scan time lives in scanDateTime/allScans/punches), matching the
+        // CSV bulk-import path's convention.
+        workDate: new Date(`${scanDate}T00:00:00.000+07:00`),
         roundedTime: input.scanDateTime,
         isLate: false,
         lateMinutes: 0,
@@ -1094,7 +1097,9 @@ class ScanDataService extends BaseCrudService<ScanData> {
         throw new AppError('ไม่พบช่วงเวลา (shiftTimes) ใน Daily Report', 400);
       }
 
-      const scanDateStart = new Date(`${workDateStr}T00:00:00.000Z`);
+      // ระบุ +07:00 ตรงๆ ให้ตรงกับ CSV import path — ห้ามใช้ Z (UTC) ที่นี่ เพราะ
+      // จะทำให้ workDate ที่บันทึกเพี้ยนไป 7 ชั่วโมงจากที่ import ปกติ
+      const scanDateStart = new Date(`${workDateStr}T00:00:00.000+07:00`);
       const uniqueKey = ScanDataService.generateScanDocKey(employeeNumber, workDateStr);
       let docRef = collections.scanData.doc(uniqueKey);
       const scanDoc = await docRef.get();
@@ -1106,7 +1111,6 @@ class ScanDataService extends BaseCrudService<ScanData> {
         existingData = scanDoc.data() as ScanData;
       } else {
         // Fallback: Query by Bangkok timezone offset (+07:00) to find legacy documents
-        const scanDateStart = new Date(`${workDateStr}T00:00:00.000+07:00`);
         const scanDateEnd = new Date(`${workDateStr}T23:59:59.999+07:00`);
         const scanQuery = await collections.scanData
           .where('employeeNumber', '==', employeeNumber)
