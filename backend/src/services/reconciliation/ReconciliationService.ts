@@ -336,11 +336,15 @@ export class ReconciliationService {
       // ป้องกันไม่ให้ report ที่กรอกไว้แต่ยังไม่ submit ถูก classify เป็น MATCHED
       const isDraftReport = input.dailyReportStatus === 'draft';
       const inputShiftTimes = isDraftReport ? undefined : input.shiftTimes;
+      const jobSegmentsForClassify = isDraftReport ? undefined : input.jobSegments;
+      const hasJobSegmentsForClassify =
+        !!jobSegmentsForClassify && Object.keys(jobSegmentsForClassify).length > 0;
 
       let classified: ClassifyResult;
-      if (inputShiftTimes && inputShiftTimes.day) {
+      if ((inputShiftTimes && inputShiftTimes.day) || hasJobSegmentsForClassify) {
         classified = this.classifyBySegments({
           shiftTimes: inputShiftTimes,
+          jobSegments: jobSegmentsForClassify,
           scanPunches: input.scanPunches ?? [],
           timesheetNormalHours: isDraftReport ? undefined : input.timesheetNormalHours,
           timesheetOtMorning: isDraftReport ? undefined : input.timesheetOtMorning,
@@ -455,12 +459,17 @@ export class ReconciliationService {
       (input.scanPunches?.length ?? 0) > 0 ? input.scanPunches! : (existing.scanPunches ?? []);
 
     const inputShiftTimes = isDraftReport ? undefined : (input.shiftTimes ?? existing?.shiftTimes);
+    const effectiveJobSegments = input.jobSegments ?? existing.jobSegments;
+    const jobSegmentsForClassify = isDraftReport ? undefined : effectiveJobSegments;
+    const hasJobSegmentsForClassify =
+      !!jobSegmentsForClassify && Object.keys(jobSegmentsForClassify).length > 0;
 
     let classified: ClassifyResult;
 
-    if (inputShiftTimes && inputShiftTimes.day) {
+    if ((inputShiftTimes && inputShiftTimes.day) || hasJobSegmentsForClassify) {
       classified = this.classifyBySegments({
         shiftTimes: inputShiftTimes,
+        jobSegments: jobSegmentsForClassify,
         scanPunches: effectiveScanPunches,
         timesheetNormalHours: isDraftReport ? undefined : (input.timesheetNormalHours ?? existing.timesheetNormalHours),
         timesheetOtMorning: isDraftReport ? undefined : (input.timesheetOtMorning ?? existing.timesheetOtMorning),
@@ -498,7 +507,6 @@ export class ReconciliationService {
       input.leaveEntries ?? existing.leaveEntries
     );
 
-    const effectiveJobSegments = input.jobSegments ?? existing.jobSegments;
     const shadow = isDraftReport
       ? {}
       : this.computeShadowClassification(
@@ -1282,6 +1290,16 @@ export class ReconciliationService {
    * ดึงรายการตาม filter พร้อม server-side pagination
    * ใช้ Firestore Count Aggregate สำหรับ total และ offset+limit สำหรับ paging
    */
+  /**
+   * draft = คิดเหมือนไม่มี Daily Report เลย (ตาม isDraftReport gating ใน mergeAndClassify)
+   * แต่ถ้ามีสแกนนิ้ว/เหตุผลจริงอื่นแล้วได้ผลเป็นอะไรที่ไม่ใช่ ABSENT (เช่น MISSING_DAILY)
+   * นั่นคือข้อเท็จจริงที่เกิดขึ้นแล้ว ควรโชว์ทันที — ซ่อนเฉพาะกรณี draft+ABSENT (ยังไม่มีอะไรเกิดขึ้นเลย
+   * อาจเป็นแค่โฟร์แมนกำลังกรอกร่างอยู่ ยังไม่ถึงเวลาเข้างานหรือยังไม่สแกน)
+   */
+  private isHiddenDraftAbsence(r: ReconciliationRecord): boolean {
+    return r.dailyReportStatus === 'draft' && r.status === 'ABSENT';
+  }
+
   async getRecords(filter: ReconciliationFilter): Promise<PaginatedReconciliationResult> {
     const page = filter.page ?? 0;
     const pageSize = filter.pageSize ?? 100;
@@ -1297,7 +1315,7 @@ export class ReconciliationService {
 
     const visibleRecords = dataSnap.docs
       .map((doc) => reconciliationRecordConverter.fromFirestore(doc))
-      .filter((r) => r.dailyReportStatus !== 'draft');
+      .filter((r) => !this.isHiddenDraftAbsence(r));
 
     const total = visibleRecords.length;
     const start = page * pageSize;
@@ -1660,7 +1678,7 @@ export class ReconciliationService {
     // Exclude drafts; show missing-field (legacy/mockup) + 'submitted'.
     const records = docsSnap.docs
       .map((doc) => reconciliationRecordConverter.fromFirestore(doc))
-      .filter((r) => r.dailyReportStatus !== 'draft');
+      .filter((r) => !this.isHiddenDraftAbsence(r));
 
     const abnormalSet = new Set<ReconciliationStatus>(abnormalStatuses);
     const isResolved = (r: ReconciliationRecord) => r.resolvedAt != null;

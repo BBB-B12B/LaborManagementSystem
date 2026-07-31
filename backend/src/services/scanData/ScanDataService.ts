@@ -554,13 +554,14 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const uniqueKey = ScanDataService.generateScanDocKey(group.employeeNumber, scanDate);
         const docRef = collections.scanData.doc(uniqueKey);
 
-        const workDate = new Date(group.workDate);
+        // ระบุ +07:00 ตรงๆ แทนการ parse เป็น UTC แล้ว setHours ด้วยเวลา local ของ process
+        // (ถ้า process รันคนละ timezone กับที่ตั้งใจ เที่ยงคืนจะเคลื่อนไปคนละวัน)
+        const workDate = new Date(`${group.workDate}T00:00:00.000+07:00`);
         if (isNaN(workDate.getTime())) {
           logger.warn(`Invalid workDate for ${group.employeeNumber}: ${group.workDate}`);
           failedRecords++;
           continue;
         }
-        workDate.setHours(0, 0, 0, 0);
 
         // ✅ Check if date is locked by an approved wage period
         if (isLockedDate(group.workDate)) {

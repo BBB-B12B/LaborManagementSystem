@@ -172,11 +172,21 @@ export function buildSegmentsFromShiftTimes(shiftTimes?: {
   otEvening?: string;
 }): Segment[] | null {
   const dayShift = parseTimeRange(shiftTimes?.day);
-  if (!dayShift) return null;
-
   const otMorning = parseTimeRange(shiftTimes?.otMorning);
   const otNoon = parseTimeRange(shiftTimes?.otNoon);
   const otEvening = parseTimeRange(shiftTimes?.otEvening);
+
+  if (!dayShift) {
+    // ไม่มีเวลาทำงานปกติ (day) เลย — เช่นงานย่อยหนึ่งใน jobSegments ที่ทำ OT ล้วนๆ
+    // ไม่มีชั่วโมงปกติในงานนั้น ยังต้องสร้าง segment ให้ OT ที่ประกาศไว้ ไม่ทิ้งไปเงียบๆ
+    // (ไม่งั้นสแกนของ OT ช่วงนั้นจะกลายเป็น "สแกนเกินที่ไม่ตรงช่วงเวลาใด" แทนที่จะถูกจับคู่)
+    if (!otMorning && !otNoon && !otEvening) return null;
+    const otOnlySegments: Segment[] = [];
+    if (otMorning) otOnlySegments.push({ start: otMorning.start, end: otMorning.end, type: 'otMorning' });
+    if (otNoon) otOnlySegments.push({ start: otNoon.start, end: otNoon.end, type: 'otNoon' });
+    if (otEvening) otOnlySegments.push({ start: otEvening.start, end: otEvening.end, type: 'otEvening' });
+    return otOnlySegments;
+  }
 
   const segments: Segment[] = [];
 
@@ -339,10 +349,17 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
       }
     }
 
+    // ถ้า closestIn ไม่ผ่าน threshold (>90 นาทีจาก start) ถือว่ายังไม่ใช่ IN ที่ใช้ได้จริง
+    // ต้องปล่อยกลับเข้า pool ก่อนหา OUT ไม่งั้น scan ตัวเดียวที่เหลือ (ซึ่งจริงๆคือ OUT ของ
+    // segment นี้) จะถูก "จอง" ไว้เป็น IN ที่ไม่ผ่านไปแล้ว เหลือ pool ว่างให้หา OUT ไม่ได้เลย
+    // (บั๊กเดิม: segment ที่ขาด IN แต่มี OUT ตัวเดียวจะรายงานว่าขาดทั้ง IN และเจอ scan เกิน
+    // ที่ไม่ตรงช่วงเวลาใด ทั้งที่ scan ตัวนั้นคือ OUT ของ segment นี้เอง)
+    const effectiveIn = closestIn !== -1 && minInDiff <= 90 ? closestIn : -1;
+
     let closestOut = -1;
     let minOutDiff = Infinity;
     for (const t of available) {
-      if (t <= closestIn) continue;
+      if (t <= effectiveIn) continue;
       const diff = Math.abs(t - seg.end);
       if (diff < minOutDiff) {
         minOutDiff = diff;
@@ -352,7 +369,7 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
       }
     }
 
-    if (closestIn !== -1) usedPunches.add(closestIn);
+    if (effectiveIn !== -1) usedPunches.add(effectiveIn);
     // Allow boundary-shared punches to be reused as IN of the next segment
     if (closestOut !== -1) {
       const isBoundaryShared = nextSeg && seg.end === nextSeg.start;

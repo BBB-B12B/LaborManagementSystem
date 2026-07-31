@@ -11,6 +11,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { reconciliationService } from '../../services/reconciliationService';
 import { RECON_COLORS, MIN_FONT_SIZE } from '../../constants/theme';
 
@@ -88,12 +89,17 @@ const SummaryStats: React.FC<Props> = ({
   endDate,
 }) => {
   const { data: statsData, isLoading } = useQuery({
-    queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: [
+      'reconciliation-stats',
+      project,
+      startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+      endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
+    ],
     queryFn: () =>
       reconciliationService.getStats({
         homeProjectId: project !== 'all' ? project : undefined,
-        startDate: startDate ? startDate.toISOString() : undefined,
-        endDate: endDate ? endDate.toISOString() : undefined,
+        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
       }),
     staleTime: 60000,
   });

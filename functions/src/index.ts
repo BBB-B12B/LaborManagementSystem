@@ -747,134 +747,82 @@ async function reconcile(
   // ป้องกันไม่ให้ report ที่กรอกไว้แต่ยังไม่ submit ถูก classify เป็น MATCHED
   const isDraftReport = hasTimesheet && timesheet?.status === 'draft';
   const isLeave      = leaveEntries.length > 0 && totalLeaveHours > 0;
-  const isFullDayLeave = isLeave && totalLeaveHours >= 8;
-  const isPartialLeave = isLeave && totalLeaveHours > 0 && totalLeaveHours < 8;
-  const noWorkHours = !totalTimesheetHours || totalTimesheetHours === 0;
-
-  // ตรวจสอบว่ามีการลง "งาน" (Work) ใน Daily Report หรือยัง
-  const dailyWorkExists = (hasTimesheet && !isDraftReport && totalTimesheetHours > 0);
-  
-  // ถ้าลาบางส่วน ให้ถือว่า daily report มีอยู่เสมอ (แม้จะเป็นแค่ข้อมูลลา)
-  const dailyExists = dailyWorkExists || isPartialLeave;
 
   if (isMultipleProjects) {
     status = 'CONFLICTED';
     conflictNote = multipleProjectsReason;
   } else if (!isRegistered && hasScan) {
     status = 'UNREGISTERED_EMPLOYEE';
-  } else if (isFullDayLeave && noWorkHours) {
-    // --- Full Day Leave Priority ---
-    status = 'LEAVE';
-    if (hasScan) {
-      status = 'CONFLICTED';
-      conflictNote = 'ลางานเต็มวันแต่พบข้อมูลการสแกนนิ้ว';
-    }
-  } else if (isHoliday && noWorkHours) {
-    // --- Holiday Priority ---
-    status = 'HOLIDAY';
-    if (hasScan) {
-      status = 'CONFLICTED';
-      conflictNote = 'วันหยุดแต่พบข้อมูลการสแกนนิ้ว';
-    }
-  } else if (isPartialLeave && !dailyWorkExists) {
-    // --- Incomplete Report (Leave only, no work) ---
-    if (hasScan) {
-      status = 'CONFLICTED';
-      conflictNote = `แจ้งลา ${totalLeaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ และพบข้อมูลสแกนนิ้ว`;
-    } else {
-      status = 'MISSING_DAILY';
-      conflictNote = `แจ้งลา ${totalLeaveHours} ชม. แต่ใน Daily Report ไม่มีการลงเวลาทำงานส่วนที่เหลือ`;
-    }
-  } else if (!hasScan && !dailyExists) {
-    status = 'ABSENT';
-  } else if (hasScan && !dailyExists) {
-    status = 'MISSING_DAILY';
-  } else if (!hasScan && dailyExists) {
-    status = 'MISSING_SCAN';
-    if (isPartialLeave) {
-      conflictNote = `ลา ${totalLeaveHours} ชม. แต่ไม่พบข้อมูลการสแกนนิ้วในช่วงเวลาทำงานที่เหลือ`;
-    }
   } else {
-    // มีทั้งสองแหล่ง — ใช้ punch coverage
+    // ── Delegate ไปที่ shared engine (segmentEngine.ts classifyBySegments) ──────
+    // classifyBaseCases ภายในครอบคลุม LEAVE/HOLIDAY/ABSENT/MISSING_DAILY/MISSING_SCAN/
+    // single-scan-CONFLICTED อยู่แล้ว (jobSegments-aware) เหมือนฝั่ง backend
+    // ReconciliationService — เดิมโค้ดตรงนี้ hand-roll cascade ซ้ำโดยใช้ dailyReportPunches
+    // (สกัดจาก shiftTimes เท่านั้น) เป็นตัวตัดสิน ทำให้ record ที่มีแต่ jobSegments (ไม่มี
+    // shiftTimes.day) ตกไปที่ MISSING_DAILY เสมอ ไม่ว่า classifyBySegments จะได้ผลอะไรก็ตาม
     const effectiveScan = scanPunches;
+    const effectiveShiftTimesForClassify = isDraftReport ? undefined : timesheet?.shiftTimes;
+    const hasJobSegmentsForClassify =
+      !isDraftReport && !!timesheet?.jobSegments && Object.keys(timesheet.jobSegments).length > 0;
+    const effectiveDailyReportHours = isDraftReport ? undefined : totalTimesheetHours;
 
-    if (dailyReportPunches.length >= 2) {
-      if (effectiveScan.length >= 2) {
-        let result: PunchClassifyResult;
-        if (timesheet?.shiftTimes?.day) {
-          result = classifyBySegments({
-            shiftTimes: timesheet.shiftTimes,
-            scanPunches: effectiveScan,
-            timesheetNormalHours: tsNormalHours,
-            timesheetOtMorning: tsOtMorning,
-            timesheetOtNoon: tsOtNoon,
-            timesheetOtEvening: tsOtEvening,
-            dailyReportHours: totalTimesheetHours,
-            isHoliday,
-            isLeave,
-            leaveHours: totalLeaveHours,
-          });
-        } else {
-          result = classifyByPunchCoverage({
-            dailyReportPunches,
-            scanPunches: effectiveScan,
-            normalHours: tsNormalHours,
-            otMorningHours: tsOtMorning,
-            otNoonHours: tsOtNoon,
-            otEveningHours: tsOtEvening,
-          });
-        }
-        status = result.status;
-        lateMinutes = result.lateMinutes;
-        earlyLeaveMinutes = result.earlyLeaveMinutes;
-        isLate = result.isLate;
-        isEarlyLeave = result.isEarlyLeave;
-        conflictNote = result.note;
+    // niche เดิม: วันที่มีแต่ OT (ไม่มี shiftTimes.day/jobSegments แต่ dailyReportPunches
+    // สกัดจาก otMorning/otNoon/otEvening ได้ >=2 จุด) — segmentEngine ต้องมี shiftTimes.day
+    // ถึงจะสร้าง segment ได้ จึงยังต้องคง punch-coverage diff เดิมไว้เฉพาะ niche นี้
+    const useLegacyPunchCoverage =
+      !effectiveShiftTimesForClassify?.day &&
+      !hasJobSegmentsForClassify &&
+      dailyReportPunches.length >= 2 &&
+      effectiveScan.length >= 2;
 
-        // เก็บยอดที่อนุมัติ
-        updatesObj = {
-          approvedNormalHours: result.approvedNormalHours,
-          approvedOtMorning: result.approvedOtMorning,
-          approvedOtNoon: result.approvedOtNoon,
-          approvedOtEvening: result.approvedOtEvening,
-          totalApprovedHours: result.totalApprovedHours,
-          approvalSource: result.approvalSource,
-        };
+    const result: PunchClassifyResult = useLegacyPunchCoverage
+      ? classifyByPunchCoverage({
+          dailyReportPunches,
+          scanPunches: effectiveScan,
+          normalHours: tsNormalHours,
+          otMorningHours: tsOtMorning,
+          otNoonHours: tsOtNoon,
+          otEveningHours: tsOtEvening,
+        })
+      : classifyBySegments({
+          shiftTimes: effectiveShiftTimesForClassify,
+          jobSegments: hasJobSegmentsForClassify ? timesheet!.jobSegments : undefined,
+          scanPunches: effectiveScan,
+          timesheetNormalHours: tsNormalHours,
+          timesheetOtMorning: tsOtMorning,
+          timesheetOtNoon: tsOtNoon,
+          timesheetOtEvening: tsOtEvening,
+          dailyReportHours: effectiveDailyReportHours,
+          isHoliday,
+          isLeave,
+          leaveHours: totalLeaveHours,
+        });
 
-        // ── [SHADOW MODE] คำนวณคู่ขนานด้วย jobSegments (ถ้ามี) — ไม่แตะ status/note จริงข้างบน ──
-        if (!isDraftReport && timesheet?.jobSegments && Object.keys(timesheet.jobSegments).length > 0) {
-          const shadowResult = classifyBySegments({
-            shiftTimes: timesheet?.shiftTimes,
-            jobSegments: timesheet.jobSegments,
-            scanPunches: effectiveScan,
-            timesheetNormalHours: tsNormalHours,
-            timesheetOtMorning: tsOtMorning,
-            timesheetOtNoon: tsOtNoon,
-            timesheetOtEvening: tsOtEvening,
-            dailyReportHours: totalTimesheetHours,
-            isHoliday,
-            isLeave,
-            leaveHours: totalLeaveHours,
-          });
-          shadowStatus = shadowResult.status;
-          shadowNote = shadowResult.note ?? null;
-          shadowMatch = shadowResult.status === status;
-        }
-      } else {
-        // มีสแกน แต่ไม่ครบ 2 ครั้ง (ไม่มีคู่เข้า-ออก) — ถือว่า CONFLICTED (กรณี B)
-        status = 'CONFLICTED';
-        conflictNote = effectiveScan.length === 1 
-          ? `ข้อมูลสแกนนิ้วไม่เพียงพอ (พบเพียงครั้งเดียว: ${effectiveScan[0]}) — Admin ต้องเติมเวลาที่ขาด`
-          : 'ไม่พบข้อมูลการสแกนนิ้ว';
-        
-        if (effectiveScan.length === 0) {
-           status = 'MISSING_SCAN'; // ถ้าไม่มีเลยจริงๆ ค่อยเป็น MISSING_SCAN
-        }
-      }
-    } else {
-      // ไม่มีข้อมูลช่วงเวลาใน Daily Report
-      status = 'MISSING_DAILY';
-      conflictNote = 'Daily Report ไม่มีข้อมูลช่วงเวลาทำงาน (Shift Times)';
+    status = result.status;
+    lateMinutes = result.lateMinutes;
+    earlyLeaveMinutes = result.earlyLeaveMinutes;
+    isLate = result.isLate;
+    isEarlyLeave = result.isEarlyLeave;
+    conflictNote = result.note;
+
+    // เก็บยอดที่อนุมัติ
+    updatesObj = {
+      approvedNormalHours: result.approvedNormalHours,
+      approvedOtMorning: result.approvedOtMorning,
+      approvedOtNoon: result.approvedOtNoon,
+      approvedOtEvening: result.approvedOtEvening,
+      totalApprovedHours: result.totalApprovedHours,
+      approvalSource: result.approvalSource,
+    };
+
+    // ── [SHADOW MODE] เก็บผลไว้เทียบ — ตอนนี้ status จริงใช้ jobSegments อยู่แล้วเมื่อมีค่า
+    // (ผ่าน useLegacyPunchCoverage ที่กันเฉพาะ niche OT-only) shadowMatch จึงควรเป็น true
+    // เสมอต่อจากนี้ — สัญญาณยืนยันว่า cutover ทำงานถูกต้อง จะลบ block นี้ในรอบ cleanup
+    // ถัดไปหลัง cutover เสถียรแล้วในโปรดักชัน
+    if (hasJobSegmentsForClassify) {
+      shadowStatus = result.status;
+      shadowNote = result.note ?? null;
+      shadowMatch = true;
     }
   }
 
@@ -1373,8 +1321,10 @@ export const onWagePeriodApproved = firestore
       // ปรับให้ครอบคลุมเวลา 00:00:00 ถึง 23:59:59 (เวลาไทย)
       // แต่เนื่องจาก workDate ใน reconciliationRecords เป็น string YYYY-MM-DD
       // เราสามารถ query ง่ายๆ ด้วยการเปรียบเทียบ string ได้เลย (YYYY-MM-DD เรียงลำดับได้)
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
+      // ใช้ timeZone เอเชีย/กรุงเทพ ไม่ใช่ toISOString() (UTC) — มิฉะนั้นเที่ยงคืนเวลาไทยจะ
+      // เลื่อนถอยไปเป็นวันก่อนหน้าใน UTC ทำให้ query พลาดวันขอบเขตของงวด (เหมือน WagePeriodService.ts)
+      const startDateStr = startDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+      const endDateStr = endDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
 
       console.log(`[onWagePeriodApproved] Locking period ${event.params['periodId']}: ${startDateStr} to ${endDateStr}`);
 

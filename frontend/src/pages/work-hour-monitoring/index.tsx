@@ -18,6 +18,7 @@ import {
   KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { wageService, type WagePeriod } from '@/services/wageService';
 import { useToast } from '@/components/common';
 import { Layout, ProtectedRoute } from '@/components/layout';
@@ -311,15 +312,15 @@ export default function WorkHourMonitoringPage() {
     try {
       const params: any = {};
       if (project !== 'all') params.homeProjectId = project;
-      if (startDate) params.startDate = startDate.toISOString().split('T')[0];
-      if (endDate) params.endDate = endDate.toISOString().split('T')[0];
+      if (startDate) params.startDate = format(startDate, 'yyyy-MM-dd');
+      if (endDate) params.endDate = format(endDate, 'yyyy-MM-dd');
 
       const blob = await reconciliationService.exportToExcel(params);
 
       const dateStr =
         startDate && endDate
-          ? `${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`
-          : new Date().toISOString().split('T')[0];
+          ? `${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}`
+          : format(new Date(), 'yyyy-MM-dd');
 
       reconciliationService.downloadExcelFile(blob, `รายงานความผิดปกติ_${dateStr}.xlsx`);
       toast.success('ดาวน์โหลดรายงานเรียบร้อยแล้ว');
