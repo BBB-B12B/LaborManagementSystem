@@ -1108,11 +1108,17 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       // This prevents a far-away punch from being "used" by the wrong segment
       if (hasValidIn) usedPunches.add(closestIn);
       // Mirror backend logic: don't mark OUT as used if it equals the next segment's expectedStart
-      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning)
+      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning) — only
+      // applies when the next segment is another REAL work segment. A STANDARD_BREAK placeholder
+      // always sits at this same boundary (e.g. เช้า ends 12:00, gap_lunch starts 12:00) but has
+      // no IN of its own to share the punch with — treating it as boundary-shared here left the
+      // real OUT punch unconsumed, so it leaked into the break's own stray-scan check (Pass 2)
+      // and made the "no data" placeholder reappear even though the punch was already accounted for.
       if (closestOut !== -1 && minOutDiff <= 90) {
         const segIdx = baseSegments.indexOf(seg);
         const nextSeg = baseSegments[segIdx + 1];
-        const isBoundaryShared = nextSeg && seg.expectedEnd === nextSeg.expectedStart;
+        const isBoundaryShared =
+          nextSeg && !nextSeg.isGapSegment && seg.expectedEnd === nextSeg.expectedStart;
         if (!isBoundaryShared) {
           usedPunches.add(closestOut);
         }
