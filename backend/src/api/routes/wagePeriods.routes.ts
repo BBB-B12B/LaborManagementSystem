@@ -40,10 +40,13 @@ router.get(
       const { projectCode, status } = req.query;
 
       // RBAC: users only see wage periods for their assigned projects.
-      // AM/GOD/MD are super users and see all projects (mirrors projectController).
+      // Only MD (FR-A-008) and GOD (system superuser) see all projects — AM is
+      // "all management features" per AUTHORIZATION.md, not "all projects", and
+      // is scoped by projectLocationIds like every other role (auth.ts checkProjectAccess
+      // uses the same MD-only bypass).
       const authReq = req as AuthRequest;
       const userRole = authReq.user?.roleCode || (authReq.user as any)?.roleId;
-      const isSuperUser = userRole === 'AM' || userRole === 'GOD' || userRole === 'MD';
+      const isSuperUser = userRole === 'GOD' || userRole === 'MD';
       const userProjects = authReq.user?.projectLocationIds || [];
 
       if (projectCode && !isSuperUser && !userProjects.includes(projectCode as string)) {
@@ -115,9 +118,10 @@ router.get('/:id', authorize(['AM', 'PM', 'PD', 'MD']), async (req: Request, res
     }
 
     // RBAC: block access to periods outside the caller's assigned projects.
+    // Only MD/GOD bypass — see the GET / handler above for why AM is excluded.
     const authReq = req as AuthRequest;
     const userRole = authReq.user?.roleCode || (authReq.user as any)?.roleId;
-    const isSuperUser = userRole === 'AM' || userRole === 'GOD' || userRole === 'MD';
+    const isSuperUser = userRole === 'GOD' || userRole === 'MD';
     const userProjects = authReq.user?.projectLocationIds || [];
     if (!isSuperUser && !userProjects.includes(period.projectCode)) {
       throw new AppError('Wage period not found', 404);
