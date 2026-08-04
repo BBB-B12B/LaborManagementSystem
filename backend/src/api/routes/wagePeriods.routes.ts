@@ -29,6 +29,7 @@ router.get(
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
   ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -37,6 +38,18 @@ router.get(
       }
 
       const { projectCode, status } = req.query;
+
+      // RBAC: users only see wage periods for their assigned projects.
+      // AM/GOD/MD are super users and see all projects (mirrors projectController).
+      const authReq = req as AuthRequest;
+      const userRole = authReq.user?.roleCode || (authReq.user as any)?.roleId;
+      const isSuperUser = userRole === 'AM' || userRole === 'GOD' || userRole === 'MD';
+      const userProjects = authReq.user?.projectLocationIds || [];
+
+      if (projectCode && !isSuperUser && !userProjects.includes(projectCode as string)) {
+        throw new AppError('Access denied for this project', 403);
+      }
+
       let periodsData;
 
       if (projectCode) {
@@ -48,17 +61,24 @@ router.get(
           pageSize: items.length || 50,
         };
       } else if (status) {
-        const items = await wagePeriodService.getByStatus(status as any);
+        let items = await wagePeriodService.getByStatus(status as any);
+        if (!isSuperUser) {
+          items = items.filter((item) => userProjects.includes(item.projectCode));
+        }
         periodsData = {
           wagePeriods: items,
           total: items.length,
           page: 1,
           pageSize: items.length || 50,
         };
+      } else if (!isSuperUser && userProjects.length === 0) {
+        // No project assignment and not a super user -> nothing to show
+        periodsData = { wagePeriods: [], total: 0, page: 1, pageSize: 50 };
       } else {
         const result = await wagePeriodService.getAll({
           page: parseInt(req.query.page as string) || 1,
           pageSize: parseInt(req.query.pageSize as string) || 50,
+          allowedProjectCodes: isSuperUser ? undefined : userProjects,
         });
         periodsData = {
           wagePeriods: result.items,
@@ -73,7 +93,8 @@ router.get(
         data: periodsData,
       });
     } catch (error: any) {
-      res.status(500).json({
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
         success: false,
         error: error.message,
       });
@@ -85,11 +106,20 @@ router.get(
  * GET /api/wage-periods/:id
  * ดึงข้อมูล Wage Period ตาม ID
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authorize(['AM', 'PM', 'PD', 'MD']), async (req: Request, res: Response) => {
   try {
     const period = await wagePeriodService.getById(req.params.id);
 
     if (!period) {
+      throw new AppError('Wage period not found', 404);
+    }
+
+    // RBAC: block access to periods outside the caller's assigned projects.
+    const authReq = req as AuthRequest;
+    const userRole = authReq.user?.roleCode || (authReq.user as any)?.roleId;
+    const isSuperUser = userRole === 'AM' || userRole === 'GOD' || userRole === 'MD';
+    const userProjects = authReq.user?.projectLocationIds || [];
+    if (!isSuperUser && !userProjects.includes(period.projectCode)) {
       throw new AppError('Wage period not found', 404);
     }
 
@@ -406,7 +436,7 @@ router.delete(
  * ลบงวดค่าแรง (Soft Delete)
  * [T-350] แก้ไขปัญหา 404 error เมื่อกดถังขยะ
  */
-router.delete('/:id', async (req: any, res: Response) => {
+router.delete('/:id', authorize(['AM', 'PM', 'PD', 'MD']), async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
