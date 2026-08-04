@@ -1,116 +1,466 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>คู่มือ SE / FM — วิศวกรหน้างาน / หัวหน้างาน</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คู่มือการใช้งาน SE/FM — รายงานประจำวัน</title>
+  <style>
+    :root {
+      --orange: #ff6b2b;
+      --dark: #1a1a2e;
+      --card: #ffffff;
+      --bg: #f5f6fa;
+      --text: #333;
+      --muted: #777;
+      --border: #e0e0e0;
+      --green: #2ecc71;
+      --blue: #3498db;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+
+    /* Header */
+    .header { background: var(--dark); color: white; padding: 24px 40px; display: flex; align-items: center; gap: 16px; }
+    .header-logo { background: var(--orange); color: white; width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header p { font-size: 13px; color: #aaa; margin-top: 2px; }
+    .header-badge { margin-left: auto; background: rgba(255,107,43,0.2); color: var(--orange); border: 1px solid var(--orange); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600; }
+
+    /* TOC */
+    .toc { background: white; border-bottom: 3px solid var(--orange); padding: 20px 40px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .toc span { color: var(--muted); font-size: 13px; font-weight: 600; margin-right: 4px; }
+    .toc a { background: var(--bg); border: 1px solid var(--border); color: var(--text); text-decoration: none; padding: 6px 16px; border-radius: 20px; font-size: 13px; transition: all .2s; }
+    .toc a:hover { background: var(--orange); color: white; border-color: var(--orange); }
+
+    /* Main layout */
+    .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+
+    /* Section */
+    .section { margin-bottom: 60px; }
+    .section-header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 2px solid var(--orange); }
+    .section-num { background: var(--orange); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; flex-shrink: 0; }
+    .section-header h2 { font-size: 22px; font-weight: 700; }
+    .section-header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    /* Step card */
+    .step { background: white; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 24px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+    .step-header { padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px; border-bottom: 1px solid var(--bg); }
+    .step-num { background: var(--orange); color: white; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; margin-top: 1px; }
+    .step-content h3 { font-size: 16px; font-weight: 700; }
+    .step-content p { font-size: 14px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .step-content .note { background: #fff8f0; border-left: 3px solid var(--orange); padding: 8px 12px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; margin-top: 10px; }
+    .step-content .tip { background: #f0f9ff; border-left: 3px solid var(--blue); padding: 8px 12px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; margin-top: 10px; }
+    .step img { width: 100%; display: block; border-top: 1px solid var(--border); }
+    .step figcaption { padding: 10px 20px; font-size: 12px; color: var(--muted); background: var(--bg); }
+
+    /* Info box */
+    .info-box { background: white; border-radius: 12px; border: 1px solid var(--border); padding: 20px 24px; margin-bottom: 24px; }
+    .info-box h4 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--orange); }
+    .info-box table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .info-box table th { background: var(--bg); padding: 8px 12px; text-align: left; font-weight: 600; border: 1px solid var(--border); }
+    .info-box table td { padding: 8px 12px; border: 1px solid var(--border); }
+
+    /* Color legend */
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+
+    /* FAQ */
+    .faq-item { background: white; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; }
+    .faq-q { padding: 14px 18px; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .faq-q:hover { background: var(--bg); }
+    .faq-a { padding: 0 18px 14px; font-size: 14px; color: var(--muted); line-height: 1.6; display: none; }
+
+    /* PDF button */
+    .pdf-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--dark); color: white; padding: 10px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; border: none; margin-top: 16px; }
+    .pdf-btn:hover { background: #2a2a3e; }
+
+    footer { background: var(--dark); color: #aaa; text-align: center; padding: 24px; font-size: 13px; margin-top: 60px; }
+
+    @media print { .toc, .header-badge, .pdf-btn { display: none; } }
+  </style>
 </head>
 <body>
 
-<header class="site-header">
-  <h1>📘 คู่มือการใช้งานระบบบริหารจัดการแรงงาน</h1>
-  <div class="subtitle">บทบาท: SE (วิศวกรประจำหน้างาน) &amp; FM (หัวหน้างาน) — สิทธิ์การเข้าถึงเท่ากัน</div>
-  <nav class="nav">
-    <a href="index.html">หน้าแรก</a>
-    <a href="god.html">GOD</a>
-    <a href="am.html">AM</a>
-    <a href="pm.html">PM</a>
-    <a href="se_fm.html" class="active">SE / FM</a>
-    <a href="md.html">MD</a>
-    <a href="pd.html">PD</a>
-    <a href="pe.html">PE</a>
-    <a href="oe.html">OE</a>
-    <a href="ld.html">LD</a>
-  </nav>
-</header>
+<div class="header">
+  <div class="header-logo">LM</div>
+  <div>
+    <h1>คู่มือการใช้งาน — SE / FM</h1>
+    <p>Labor Management System · รายงานประจำวัน</p>
+  </div>
+  <div class="header-badge">เวอร์ชัน 2026</div>
+</div>
+
+<div class="toc">
+  <span>ไปยัง:</span>
+  <a href="#daily-report">1. ลงรายงานประจำวัน</a>
+  <a href="#requests">2. วางแผนล่วงหน้า</a>
+  <a href="#faq">คำถามที่พบบ่อย</a>
+</div>
 
 <div class="container">
-  <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › SE / FM</div>
 
-  <h2>SE และ FM ทำอะไรได้บ้าง</h2>
-  <p><strong>SE (วิศวกรประจำหน้างาน)</strong> และ <strong>FM (หัวหน้างาน)</strong> ทำงานหน้างานเป็นหลัก สองบทบาทนี้ใช้เมนูชุดเดียวกัน
-     ได้แก่ <strong>Daily Reports</strong> (รายงานประจำวัน), <strong>Overtime</strong> (ทำงานล่วงเวลา) และ <strong>DC Management</strong> (แรงงานรายวัน)</p>
-  <div class="note">ความต่างเล็กน้อยที่ต้องรู้:
-    <ul style="margin:6px 0">
-      <li><strong>Daily Reports:</strong> SE <em>สร้าง/แก้</em> รายงานได้ · FM <em>เปิดดูได้อย่างเดียว</em> (สร้าง/แก้/ลบไม่ได้)</li>
-      <li><strong>Overtime:</strong> เมนูนี้สำหรับ <strong>SE</strong> (FM ไม่มีสิทธิ์เข้าหน้า Overtime)</li>
-    </ul>
-  </div>
-  <p><strong>ทางลัด:</strong> <a href="#daily-reports">Daily Reports</a> · <a href="#overtime">Overtime</a> · <a href="#dc">DC Management</a></p>
+  <!-- ==================== SECTION 1: DAILY REPORT ==================== -->
+  <div class="section" id="daily-report">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div>
+        <h2>วิธีลงรายงานประจำวัน</h2>
+        <p>ทำตามทีละขั้นตอน — ไม่ต้องข้าม</p>
+      </div>
+    </div>
 
-  <!-- ============ DAILY REPORTS ============ -->
-  <h2 id="daily-reports">1 · Daily Reports (รายงานประจำวัน)</h2>
-  <p>หน้า <code>/daily-reports</code> — บันทึกความคืบหน้าของงานหน้างานในแต่ละวัน พร้อมจำนวนแรงงาน ชั่วโมงงาน และรูปภาพ</p>
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>เข้าสู่ระบบ</h3>
+          <p>เปิด browser แล้วไปที่หน้า Login — กรอก <strong>ชื่อผู้ใช้</strong> และ <strong>รหัสผ่าน</strong> ที่ได้รับมา แล้วกด <strong>เข้าสู่ระบบ</strong></p>
+          <div class="note">📌 ถ้าหน้าจอค้างที่ "กำลังโหลด..." เกิน 5 วินาที — ให้รีเฟรชหน้าใหม่ 1 ครั้ง</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/step_login_01_page.png" alt="หน้า Login ระบบ Labor Management">
+      <figcaption>หน้า Login — กรอก ชื่อผู้ใช้ และ รหัสผ่าน</figcaption>
+    </div>
 
-  <h3>1.1 เปิดหน้าและสลับแท็บสถานะ</h3>
-  <ol class="steps">
-    <li>คลิกเมนู <strong>"รายงานประจำวัน"</strong></li>
-    <li>สลับแท็บ <strong>"รอดำเนินการ (pending)"</strong> และ <strong>"เสร็จสิ้น (finish)"</strong> เพื่อดูรายงานตามสถานะ</li>
-    <li>ใช้ช่อง <strong>"ค้นหา/เลือกรายชื่อแรงงาน (Worker Filter)"</strong> เพื่อกรอง</li>
-  </ol>
-  <figure><img src="assets/se_fm/daily_report_pending_tab.png" alt="แท็บรอดำเนินการ" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: daily_report_pending_tab.png]&lt;/span&gt;'"><figcaption>แท็บรายงานรอดำเนินการ</figcaption></figure>
-  <figure><img src="assets/se_fm/daily_report_finish_tab.png" alt="แท็บเสร็จสิ้น" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: daily_report_finish_tab.png]&lt;/span&gt;'"><figcaption>แท็บรายงานเสร็จสิ้น</figcaption></figure>
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>เข้าหน้ารายงานประจำวัน</h3>
+          <p>หลัง login สำเร็จ ระบบพาไปหน้า <strong>รายงานประจำวัน</strong> อัตโนมัติ — จะเห็น Sidebar ซ้ายมือแสดงรายการงานทั้งหมดที่ได้รับมอบหมาย</p>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_11_pending_tab.png" alt="หน้าหลัก Daily Reports — แสดง Sidebar งาน พร้อม Tab Dailyreport และ Requests">
+      <figcaption>หน้าหลัก — แท็บบน: Dailyreport / Requests · Sidebar ซ้าย = รายการงาน · ขวา = พื้นที่ลงรายงาน</figcaption>
+    </div>
 
-  <h3>1.2 สร้างรายงานประจำวัน <span style="font-size:.8rem;color:var(--c-muted)">(SE)</span></h3>
-  <ol class="steps">
-    <li>กดปุ่ม <strong>"สร้างรายงาน"</strong></li>
-    <li>เลือก <strong>"เลือกการ์ดงาน (Task) *"</strong> ที่ต้องการรายงาน และ <strong>"สถานที่ / โครงการ"</strong></li>
-    <li>เลือก <strong>"แรงงานรายวัน *"</strong> ที่มาทำงาน — ระบุสถานะ <strong>ปกติ / ลา / ขาดงาน / Support</strong></li>
-    <li>กรอก <strong>"งานที่ทำ / รายละเอียดงาน *"</strong>, <strong>"ชั่วโมงที่ทำได้"</strong> และชั่วโมง <strong>OT เช้า / OT เที่ยง / OT เย็น</strong> (ถ้ามี)</li>
-    <li>ระบุ <strong>"วันที่ทำงาน"</strong> · ใส่ <strong>"หมายเหตุ (ถ้ามี)"</strong></li>
-    <li>กด <strong>"บันทึก"</strong></li>
-  </ol>
-  <figure><img src="assets/se_fm/daily_report_form.png" alt="ฟอร์มรายงานประจำวัน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: daily_report_form.png]&lt;/span&gt;'"><figcaption>ฟอร์มสร้างรายงานประจำวัน</figcaption></figure>
-  <div class="tip">มี <strong>"โหมดวางแผนล่วงหน้า"</strong> และปุ่ม <strong>"ดึงแผนงาน"</strong> ช่วยดึงแผนแรงงานเข้ามาในรายงานอัตโนมัติ ลดการกรอกซ้ำ</div>
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>คลิกเลือกงานที่ต้องการลงรายงาน</h3>
+          <p>ใน Sidebar ให้ <strong>คลิกที่การ์ดงาน</strong> ที่ต้องการลงรายงานวันนี้ — ฝั่งขวาจะเปลี่ยนจาก "เลือกงานเพื่อเริ่มบันทึกรายงาน" เป็นฟอร์มของงานนั้น</p>
+          <div class="note">📌 ถ้าการ์ดงานมี Progress 100% จะลงรายงานเพิ่มไม่ได้ — ให้เลือกงานอื่น</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_03_empty_state.png" alt="ก่อนเลือกงาน — ยังไม่มีฟอร์ม">
+      <figcaption>ก่อนคลิกงาน — ฝั่งขวาแสดง "เลือกงานเพื่อเริ่มบันทึกรายงาน"</figcaption>
+    </div>
 
-  <h3>1.3 แนบรูปภาพประกอบรายงาน</h3>
-  <ol class="steps">
-    <li>ในฟอร์มรายงาน เลื่อนไปที่ <strong>"อัปโหลดรูปภาพ (ถ้ามี)"</strong></li>
-    <li>กดเพื่อเลือกรูปจากเครื่อง/ถ่ายภาพหน้างาน → แนบได้หลายรูป</li>
-    <li>กด <strong>"บันทึก"</strong> เพื่อแนบรูปเข้ากับรายงาน</li>
-  </ol>
-  <figure><img src="assets/se_fm/daily_report_photos.png" alt="แนบรูปภาพ" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: daily_report_photos.png]&lt;/span&gt;'"><figcaption>การแนบรูปภาพในรายงาน</figcaption></figure>
-  <div class="note"><strong>FM:</strong> เปิดหน้านี้เพื่อดูรายงานและรูปภาพได้ทั้งหมด แต่ปุ่มสร้าง/แก้/ลบจะไม่แสดง</div>
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>คลิกงานแล้ว — ฟอร์มเปิด</h3>
+          <p>หลังคลิกงาน ฟอร์มจะเปิดทางขวามือ แสดงชื่องาน รหัสงาน วันที่ปัจจุบัน และส่วนจัดการแรงงาน — ระบบเลือกวันที่ปัจจุบันให้อัตโนมัติ</p>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_04_task_selected.png" alt="ฟอร์มเปิดหลังคลิกงาน">
+      <figcaption>ฟอร์มเปิดแล้ว — แสดงชื่องาน รหัสงาน และวันที่ปัจจุบัน</figcaption>
+    </div>
 
-  <!-- ============ OVERTIME ============ -->
-  <h2 id="overtime">2 · Overtime (ทำงานล่วงเวลา) <span style="font-size:.85rem;color:var(--c-muted)">— SE</span></h2>
-  <p>หน้า <code>/overtime</code> — บันทึกและขออนุมัติการทำงานล่วงเวลาของแรงงานรายวัน</p>
+    <!-- Step 5: Calendar -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h3>เลือกวันที่ที่ต้องการลงรายงาน</h3>
+          <p>กดปุ่มปฏิทิน 📅 ด้านบนขวาของฟอร์ม — ปฏิทินจะเปิดขึ้น ให้คลิกวันที่ต้องการ</p>
+          <div class="note">
+            📌 <strong>กฎ 3 วัน</strong> — ลงย้อนหลังได้ไม่เกิน 3 วัน หากวันใดมีสีแดง = ล็อกแล้ว (ต้องขอปลดล็อก)
+          </div>
+          <div class="tip">🎨 <strong>ความหมายสีในปฏิทิน:</strong><br>
+            <span class="dot" style="background:#059669"></span> ส่งแล้ว (ครบ 100%) &nbsp;
+            <span class="dot" style="background:#d97706"></span> ส่งแล้ว (กำลังทำ) &nbsp;
+            <span class="dot" style="background:#f59e0b"></span> ยังไม่ได้ส่ง (ยังมีเวลา) &nbsp;
+            <span class="dot" style="background:#e74c3c"></span> ไม่มีข้อมูล (ล็อกแล้ว) &nbsp;
+            <span class="dot" style="background:#a855f7"></span> ขอปลดล็อกย้อนหลัง
+          </div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_06_date_clicked.png" alt="ปฏิทินเปิด — แสดงสีแต่ละวัน">
+      <figcaption>ปฏิทิน — แต่ละสีบอกสถานะของวันนั้น Legend แสดงที่ด้านล่าง</figcaption>
+    </div>
 
-  <h3>2.1 ดูรายการ OT</h3>
-  <ol class="steps">
-    <li>คลิกเมนู <strong>"ทำงานล่วงเวลา"</strong> — ระบบแสดงรายการคำขอ OT ทั้งหมด</li>
-  </ol>
-  <figure><img src="assets/se_fm/overtime_list.png" alt="รายการ OT" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: overtime_list.png]&lt;/span&gt;'"><figcaption>รายการคำขอ OT</figcaption></figure>
+    <!-- Step 6: Form detail -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <h3>ตรวจสอบข้อมูลแรงงาน DC และเวลา Shift</h3>
+          <p>หลังเลือกวันแล้ว ฟอร์มจะแสดงตารางแรงงาน — แต่ละแถวคือ 1 คน พร้อมเวลา Shift ที่ตั้งไว้ ตรวจสอบหรือแก้ไขได้</p>
+          <div class="note">📌 Shift มี 4 ประเภท: Day (ปกติ) · OT เข้า · OT เที่ยง · OT เย็น — ติ๊กเฉพาะที่ทำงานจริง</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_07_form_top.png" alt="ฟอร์มแรงงาน DC พร้อม Shift เวลา">
+      <figcaption>ตารางแรงงาน — แต่ละแถวตั้ง Shift เวลาการทำงาน และช่อง Leave = วันลา</figcaption>
+    </div>
 
-  <h3>2.2 สร้างคำขอ OT</h3>
-  <ol class="steps">
-    <li>กดปุ่ม <strong>"สร้าง OT"</strong></li>
-    <li>เลือก <strong>"โครงการ/สังกัด *"</strong> และ <strong>"แรงงานรายวัน *"</strong></li>
-    <li>กรอก <strong>"งาน/รายละเอียดงาน *"</strong> (เช่น "ระบุรายละเอียดงาน OT ที่ทำ")</li>
-    <li>เลือก <strong>"วันที่ *"</strong>, <strong>"เวลาเริ่ม OT *"</strong> และ <strong>"เวลาจบ OT *"</strong></li>
-    <li>ระบุ <strong>"ชั่วโมง OT"</strong> — ระบบคำนวณ <strong>"ค่าแรง OT รวม (1.5x)"</strong> ให้อัตโนมัติ</li>
-    <li>แนบรูปได้ที่ <strong>"อัปโหลดรูปภาพ (ถ้ามี)"</strong> · ใส่ <strong>"หมายเหตุ (ถ้ามี)"</strong></li>
-    <li>กด <strong>"บันทึก"</strong> · กด <strong>"ยกเลิก"</strong> เพื่อปิดโดยไม่บันทึก</li>
-  </ol>
-  <figure><img src="assets/se_fm/overtime_create_form.png" alt="ฟอร์มสร้าง OT" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: overtime_create_form.png]&lt;/span&gt;'"><figcaption>ฟอร์มสร้างคำขอ OT (คำนวณ 1.5x อัตโนมัติ)</figcaption></figure>
+    <!-- Step 7: Add workers -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">7</div>
+        <div class="step-content">
+          <h3>เพิ่มหรือเปลี่ยนแรงงาน — กดปุ่ม "เลือกแรงงาน DC"</h3>
+          <p>ถ้าต้องการเพิ่มหรือเปลี่ยนแรงงาน ให้กดปุ่ม <strong>เลือกแรงงาน DC</strong> (สีส้ม) — dialog จะเปิด ค้นหาชื่อแรงงาน ติ๊กเลือก ตั้ง Shift เวลา แล้วกด <strong>ยืนยันรายการ</strong></p>
+          <div class="tip">
+            💡 <strong>Shift ใน Dialog:</strong> Day = เวลาปกติ 08:00–17:00 | OT เข้า/เที่ยง/เย็น = เวลา OT แต่ละช่วง
+          </div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_09_worker_dialog.png" alt="Dialog เลือกแรงงาน DC พร้อมตั้ง Shift">
+      <figcaption>Dialog เลือกแรงงาน — ติ๊กชื่อ + ตั้งเวลา Shift + กด "ยืนยันรายการ"</figcaption>
+    </div>
 
-  <h3>2.3 ดูประวัติ OT</h3>
-  <ol class="steps">
-    <li>ที่รายการ OT กด <strong>"ดูประวัติ"</strong> เพื่อเปิดหน้าประวัติการแก้ไข (<code>/overtime/[id]/history</code>)</li>
-  </ol>
-  <div class="crosslink">ผู้ที่เข้า Overtime ได้ด้วย: OE, PE, PM, PD และ AM</div>
+    <!-- Step 7b: FM self -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">7b</div>
+        <div class="step-content">
+          <h3>ถ้าวันนั้นไม่มีแรงงาน DC — ติ๊ก "FM ทำเองโดยไม่มีแรงงาน DC"</h3>
+          <p>มุมขวาบนของส่วนแรงงาน มี checkbox <strong>"FM ทำเองโดยไม่มีแรงงาน DC"</strong> — ติ๊กถ้างานวันนั้น FM ดูแลเองโดยไม่มี DC</p>
+          <div class="note">📌 เมื่อติ๊กแล้ว ระบบจะข้ามส่วนแรงงานทั้งหมด ไม่ต้องเลือกแรงงาน</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_12_action_buttons.png" alt="ฟอร์มแสดง FM ทำเองและ Action buttons">
+      <figcaption>Checkbox "FM ทำเองโดยไม่มีแรงงาน DC" อยู่มุมขวาบนของส่วนแรงงาน</figcaption>
+    </div>
 
-  <!-- ============ DC ============ -->
-  <h2 id="dc">3 · DC Management (แรงงานรายวัน)</h2>
-  <div class="crosslink">SE และ FM เข้าถึง DC Management ได้ · วิธีใช้แบบทีละขั้นตอนอยู่ที่
-     → <a href="am.html#dc-management">หน้า AM › DC Management</a></div>
+    <!-- Step 8: Photos -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">8</div>
+        <div class="step-content">
+          <h3>แนบรูปภาพ (บังคับ — ถ้าไม่ครบส่งไม่ได้)</h3>
+          <p>ในส่วน Progress มีปุ่มแนบรูปตาม Shift ที่ใช้ — กดแต่ละปุ่มเพื่ออัปโหลดรูปถ่าย ตัวเลขจะอัปเดตเป็น "แนบแล้ว N/2 รูป"</p>
+          <div class="info-box" style="margin-top:12px; padding:14px 16px;">
+            <h4>จำนวนรูปที่ต้องแนบ</h4>
+            <table>
+              <tr><th>ประเภทรูป</th><th>จำนวนขั้นต่ำ</th><th>หมายเหตุ</th></tr>
+              <tr><td>รูปหน้างาน (รูปล่าง)</td><td>2 รูป</td><td>บังคับทั้ง Draft และ Final Submit</td></tr>
+              <tr><td>แรงงาน Shift ปกติ (Day)</td><td>2–4 รูป</td><td>ขึ้นกับช่วงเวลา Shift (เข้า/พักเที่ยง/เข้าบ่าย/ออก) · บังคับเฉพาะ Final Submit</td></tr>
+              <tr><td>OT เข้า / OT เที่ยง / OT เย็น</td><td>2 รูปต่อ Shift</td><td>เฉพาะ Shift ที่ใช้ · บังคับเฉพาะ Final Submit</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_04_task_selected.png" alt="ส่วนแนบรูปหน้างาน — แสดงปุ่ม 'แนบแล้ว 0/2 รูป'">
+      <figcaption>ปุ่มแนบรูป — แสดง "แนบแล้ว 0/2 รูป (ขั้นต่ำ)" · กดปุ่มเพื่ออัปโหลดรูปให้ครบทุกปุ่ม</figcaption>
+    </div>
 
-  <footer class="site-footer">
-    <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
-    <p>คู่มือ SE / FM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
-  </footer>
-</div>
+    <!-- Step 9: Progress -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">9</div>
+        <div class="step-content">
+          <h3>กรอก Progress ความคืบหน้า</h3>
+          <p>กรอก <strong>เปอร์เซ็นต์ความคืบหน้า</strong> ของงานวันนี้ในช่องตัวเลข (0–100%) และกรอก <strong>หมายเหตุ</strong> ถ้ามีสิ่งที่ต้องแจ้ง FM</p>
+          <div class="note">📌 Progress 100% หมายถึงงานเสร็จสมบูรณ์ — จะปิดไม่ให้ลงรายงานเพิ่มในงานนั้น</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_12_action_buttons.png" alt="ส่วน Progress และ หมายเหตุ">
+      <figcaption>ช่องกรอก Progress (%) และ หมายเหตุ ก่อนกด Submit</figcaption>
+    </div>
+
+    <!-- Step 10: Submit -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">10</div>
+        <div class="step-content">
+          <h3>ส่งรายงาน — เลือก "บันทึกฉบับร่าง" หรือ "ส่งรายงานสมบูรณ์"</h3>
+          <p>ที่ด้านล่างสุดของฟอร์มมี 3 ปุ่ม:</p>
+          <ul style="margin: 8px 0 0 20px; font-size:14px; color: var(--muted);">
+            <li><strong>ยกเลิก</strong> — ปิดฟอร์มโดยไม่บันทึก</li>
+            <li><strong>บันทึกฉบับร่าง</strong> — บันทึกไว้ก่อน แก้ไขได้ภายหลัง (Status: Draft)</li>
+            <li><strong>ส่งรายงานสมบูรณ์</strong> — ส่งให้ผู้ตรวจสอบ (LD/PM/PE/OE) ตรวจ (Status: Submitted)</li>
+          </ul>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_12_action_buttons.png" alt="ปุ่ม ยกเลิก บันทึกฉบับร่าง ส่งรายงานสมบูรณ์">
+      <figcaption>ปุ่ม 3 ตัวล่างสุด — ซ้าย: ยกเลิก · กลาง: Draft · ขวา: Submit</figcaption>
+    </div>
+
+    <!-- Step 11: Check status -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">11</div>
+        <div class="step-content">
+          <h3>ตรวจสอบสถานะรายงานใน Sidebar</h3>
+          <p>กลับมาดู Sidebar — การ์ดงานจะแสดงป้ายสถานะล่าสุด แท็บ <strong>Active Tasks</strong> คืองานที่ยังทำอยู่ แท็บ <strong>Finish</strong> คืองานที่ส่งครบแล้ว</p>
+          <div class="info-box" style="margin-top:12px; padding:14px 16px;">
+            <h4>ความหมายของสถานะ</h4>
+            <table>
+              <tr><th>Status</th><th>สี</th><th>หมายความว่า</th></tr>
+              <tr><td>Draft</td><td style="color:#f39c12">■ เหลือง</td><td>บันทึกร่างไว้ ยังไม่ส่ง</td></tr>
+              <tr><td>Submitted</td><td style="color:#3498db">■ น้ำเงิน</td><td>ส่งแล้ว รอ LD/PM/PE/OE ตรวจ</td></tr>
+              <tr><td>Verified</td><td style="color:#2ecc71">■ เขียว</td><td>LD/PM/PE/OE ตรวจผ่านแล้ว</td></tr>
+              <tr><td>Locked</td><td style="color:#e74c3c">■ แดง</td><td>ล็อกแล้ว แก้ไขไม่ได้</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_11_pending_tab.png" alt="แท็บ Active Tasks แสดงสถานะงาน พร้อม Draft badge">
+      <figcaption>แท็บ Active Tasks — การ์ดงานที่มี Draft ค้างจะแสดงป้าย "Draft N ฉบับ" สีส้ม</figcaption>
+    </div>
+
+    <!-- Step 12: Unlock -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">12</div>
+        <div class="step-content">
+          <h3>กรณีวันถูกล็อก — กดขอปลดล็อก</h3>
+          <p>ถ้าเลือกวันในปฏิทินแล้วเห็นสีแดงหรือฟอร์มไม่เปิด ให้กดปุ่ม <strong>"ขอลงข้อมูลย้อนหลัง"</strong> — ระบบจะส่งคำขอให้ LD / PM / PE / OE อนุมัติปลดล็อก</p>
+          <div class="note">📌 รอ LD/PM/PE/OE อนุมัติก่อน ถึงจะกลับมาลงรายงานได้ — ดูการแจ้งเตือนที่ไอคอน 🔔 มุมขวาบน</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_06_date_clicked.png" alt="ปฏิทินแสดงสีวันที่ล็อก">
+      <figcaption>วันที่สีแดงในปฏิทิน = ล็อกแล้ว — ต้องขอปลดล็อกก่อน</figcaption>
+    </div>
+
+  </div><!-- /section 1 -->
+
+
+  <!-- ==================== SECTION 2: REQUESTS ==================== -->
+  <div class="section" id="requests">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div>
+        <h2>วิธีวางแผนล่วงหน้า (Requests)</h2>
+        <p>ส่งแผนงานล่วงหน้าก่อนวันทำงานจริง — ระบบจะดึงมาให้อัตโนมัติในวันนั้น</p>
+      </div>
+    </div>
+
+    <!-- Req Step 1 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>กดแท็บ "Requests" ที่ด้านบน</h3>
+          <p>ที่ด้านบนของหน้ามี 2 แท็บ — กดแท็บ <strong>Requests</strong> เพื่อสลับเป็นโหมดวางแผนล่วงหน้า (แท็บสีส้ม = แท็บที่เลือกอยู่)</p>
+        </div>
+      </div>
+      <img src="assets/se_fm/req_01_before_click.png" alt="แท็บ Dailyreport และ Requests">
+      <figcaption>แท็บ 2 ตัวด้านบน — กด "Requests" เพื่อสลับโหมดวางแผน</figcaption>
+    </div>
+
+    <!-- Req Step 2 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>เลือกงานใน Sidebar แล้วเลือกวันที่อนาคต</h3>
+          <p>คลิกเลือกงานใน Sidebar เหมือนเดิม → แล้วคลิกวันที่ <strong>อนาคต</strong> ในปฏิทิน (พรุ่งนี้ขึ้นไป) — ฟอร์มวางแผนจะเปิดขึ้น</p>
+          <div class="note">📌 Requests ใช้วางแผนล่วงหน้าเท่านั้น — ไม่สามารถเลือกวันในอดีตได้</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/req_02_requests_main.png" alt="หน้า Requests — แท็บสีส้ม">
+      <figcaption>แท็บ Requests เปิดอยู่ (สีส้ม) — เลือกงานใน Sidebar แล้วเลือกวันอนาคต</figcaption>
+    </div>
+
+    <!-- Req Step 3 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>กรอกแผนงานล่วงหน้าแล้วกด "บันทึกแผนงานล่วงหน้า"</h3>
+          <p>กรอกแรงงาน DC ที่วางแผนจะใช้ ตั้ง Shift เวลา ใส่ Progress ที่คาดว่าจะได้ แล้วกดปุ่ม <strong>บันทึกแผนงานล่วงหน้า</strong></p>
+          <div class="tip">
+            💡 <strong>ประโยชน์:</strong> เมื่อถึงวันจริง ระบบจะดึงข้อมูลที่วางแผนไว้มาเติมให้อัตโนมัติ — ไม่ต้องกรอกซ้ำ
+          </div>
+        </div>
+      </div>
+      <img src="assets/se_fm/req_03_request_form.png" alt="Sidebar แสดงรายการงานในโหมด Requests">
+      <figcaption>เลือกงานใน Sidebar → คลิกวันอนาคต → ฟอร์มวางแผนจะเปิดให้กรอก</figcaption>
+    </div>
+
+    <!-- Req Step 4 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>วันจริง — ระบบดึงแผนมาให้อัตโนมัติ</h3>
+          <p>เมื่อถึงวันที่วางแผนไว้ สลับกลับแท็บ <strong>Dailyreport</strong> → เลือกงานเดิม → เลือกวันนั้น — ข้อมูลแรงงานและ Shift จะปรากฏอัตโนมัติ ตรวจสอบ แก้ไขถ้าจำเป็น แล้ว Submit ปกติ</p>
+          <div class="note">📌 ถ้าแรงงานลาหรือ OT เปลี่ยน แก้ไขในฟอร์มได้เลย — ข้อมูลแผนไม่ถูกส่งจนกว่าจะกด Submit</div>
+        </div>
+      </div>
+      <img src="assets/se_fm/dr_09_worker_dialog.png" alt="ฟอร์มวันจริงที่ระบบดึงแผนมาให้">
+      <figcaption>วันจริง — ฟอร์มมีข้อมูลแรงงานจากแผนล่วงหน้า แก้ไขได้ก่อน Submit</figcaption>
+    </div>
+
+  </div><!-- /section 2 -->
+
+
+  <!-- ==================== FAQ ==================== -->
+  <div class="section" id="faq">
+    <div class="section-header">
+      <div class="section-num">?</div>
+      <div>
+        <h2>คำถามที่พบบ่อย</h2>
+        <p>กดที่คำถามเพื่อดูคำตอบ</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        ลงรายงานไม่ได้ ขึ้น "ไม่สามารถลงงานในวันนี้ได้เนื่องจาก Progress 100% แล้ว" <span>▾</span>
+      </div>
+      <div class="faq-a">งานนั้นถูกปิด (Progress 100%) แล้ว — ไม่สามารถลงรายงานเพิ่มได้อีก ถ้าต้องการแก้ไขให้ติดต่อ FM เพื่อปรับ Progress</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        ลืมลงรายงานเมื่อวาน จะย้อนหลังได้ไหม <span>▾</span>
+      </div>
+      <div class="faq-a">ได้ แต่ไม่เกิน 3 วันย้อนหลัง — ถ้าเกิน 3 วัน วันนั้นจะถูกล็อก ให้กดปุ่ม "ขอลงข้อมูลย้อนหลัง" แล้วรอ LD/PM/PE/OE อนุมัติก่อน</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        ปุ่ม "ส่งรายงานสมบูรณ์" กดไม่ได้ (สีเทา) <span>▾</span>
+      </div>
+      <div class="faq-a">ฟอร์มอยู่ในสถานะล็อก — ปุ่มเป็นสีเทาเมื่อ: (1) รายงานวันนั้นถูก Submit ไปแล้วและเป็นวันผ่านมาแล้ว (ต้องขอปลดล็อกก่อน) (2) แผนงานล่วงหน้าวันนั้นถูกตรวจสอบแล้ว (3) Progress งานถึง 100% แล้ว · หมายเหตุ: ถ้าแค่ข้อมูลไม่ครบ ปุ่มยังกดได้ปกติ — ระบบจะแจ้งเตือนให้กรอกให้ครบก่อน ไม่ใช่ทำให้ปุ่มเป็นสีเทา</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        ส่งรายงานไปแล้ว แต่ต้องการแก้ไข <span>▾</span>
+      </div>
+      <div class="faq-a">มี 2 กรณี — (1) รายงาน Submit แล้วแต่งานยังไม่ถูก Approve: กดปุ่มปฏิทิน 📅 → คลิกวันที่ต้องการแก้ไข → กด "ขอลงข้อมูลย้อนหลัง" → รอ LD/PM/PE/OE อนุมัติ → กลับมาแก้ไขได้ · (2) งานถูก Approve แล้ว (สถานะ Completed): ปุ่ม "ขอแก้ไข" จะปรากฏที่หน้าฟอร์ม → กด → ระบบส่งคำขอให้ LD ยกเลิก Approve</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        ไม่เห็นงานใน Sidebar เลย <span>▾</span>
+      </div>
+      <div class="faq-a">งานถูกมอบหมายโดย PM — ถ้าไม่มีงานแสดงให้ติดต่อ PM หรือ Admin เพื่อให้ assign งานก่อน</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        Draft กับ Submitted ต่างกันอย่างไร <span>▾</span>
+      </div>
+      <div class="faq-a">Draft = บันทึกร่างไว้ ยังไม่ส่ง แก้ไขได้ตลอด | Submitted = ส่งแล้ว รอ LD/PM/PE/OE ตรวจ ถ้าจะแก้ต้องขออนุมัติก่อน</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="var a=this.nextElementSibling; a.style.display=a.style.display==='block'?'none':'block'">
+        วางแผนล่วงหน้าแล้ว วันจริงต้องทำอะไรอีก <span>▾</span>
+      </div>
+      <div class="faq-a">วันจริงให้ไปแท็บ Dailyreport → เลือกงาน → เลือกวันนั้น — ระบบดึงแผนมาให้ ตรวจสอบ แก้ไขถ้าจำเป็น แล้ว Submit ปกติ</div>
+    </div>
+
+  </div><!-- /faq -->
+
+  <button class="pdf-btn" onclick="window.print()">🖨 Export PDF / พิมพ์คู่มือนี้</button>
+
+</div><!-- /container -->
+
+<footer>
+  Labor Management System · คู่มือ SE/FM รายงานประจำวัน · 2026
+</footer>
 
 </body>
 </html>

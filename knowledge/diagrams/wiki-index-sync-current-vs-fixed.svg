@@ -1,0 +1,131 @@
+<svg viewBox="0 0 680 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ttl dsc">
+<title id="ttl">LLM Wiki — full pipeline + how backlinks are built</title>
+<desc id="dsc">End-to-end flow: session ends (Stop hook) → index_reconcile.py compares disk to index → ADD/EDIT/DELETE branches → backlink_analyzer.py rebuilds cross-links from weighted shared topic tags → other indexers refresh → a close-gate blocks done if index != disk. Each box is tagged with the file that performs it. A zoom panel shows two cards linking because they share a topic.</desc>
+<style>
+  .th { font: 600 17px Georgia, serif; fill:#2C2C2A; }
+  .t  { font: 500 12.5px sans-serif; fill:#2C2C2A; }
+  .ts { font: 400 10.5px sans-serif; fill:#444441; }
+  .bx { fill:#FFFFFF; stroke:#D3D1C7; stroke-width:1.2; }
+  .hadd{ fill:#EAF3DE; stroke:#639922; stroke-width:1.6; }
+  .hedit{ fill:#FAEEDA; stroke:#BA7517; stroke-width:1.6; }
+  .hdel{ fill:#FCEBEB; stroke:#E24B4A; stroke-width:1.6; }
+  .btl{ fill:#E1F5EE; stroke:#1D9E75; stroke-width:1.4; }
+  .fil{ fill:#E6F1FB; stroke:#185FA5; stroke-width:1.2; }
+  .gate{ fill:#FAEEDA; stroke:#BA7517; stroke-width:1.6; }
+  .tag{ font: 400 10px ui-monospace, monospace; fill:#185FA5; }
+</style>
+<defs>
+  <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="680" height="800" fill="#FBFAF7"/>
+
+<text x="40" y="26" class="th">LLM Wiki — full pipeline + how backlinks are built</text>
+<text x="40" y="46" class="ts">Rule: disk = single source of truth. The arrow-tag on each box = the script/file that does that step.</text>
+
+<rect class="bx" x="40" y="60" width="600" height="40" rx="8"/>
+<text x="632" y="74" class="tag" text-anchor="end">↳ Stop hook · .claude/settings.json</text>
+<text x="340" y="92" class="t" text-anchor="middle">A work session ends → the auto-librarian starts</text>
+<line x1="340" y1="100" x2="340" y2="112" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+
+<rect class="bx" x="40" y="112" width="600" height="40" rx="8"/>
+<text x="632" y="126" class="tag" text-anchor="end">↳ index_reconcile.py</text>
+<text x="340" y="144" class="t" text-anchor="middle">Compare every file on disk against the cards in the index</text>
+<line x1="340" y1="152" x2="340" y2="160" stroke="#5F5E5A" stroke-width="1.5"/>
+<line x1="132" y1="160" x2="548" y2="160" stroke="#5F5E5A" stroke-width="1.5"/>
+<line x1="132" y1="160" x2="132" y2="168" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+<line x1="340" y1="160" x2="340" y2="168" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+<line x1="548" y1="160" x2="548" y2="168" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+
+<rect class="hadd" x="40" y="168" width="184" height="28" rx="7"/>
+<text x="132" y="187" class="t" text-anchor="middle">ADD a file</text>
+<rect class="hedit" x="248" y="168" width="184" height="28" rx="7"/>
+<text x="340" y="187" class="t" text-anchor="middle">EDIT a file</text>
+<rect class="hdel" x="456" y="168" width="184" height="28" rx="7"/>
+<text x="548" y="187" class="t" text-anchor="middle">DELETE a file</text>
+
+<rect class="bx" x="40" y="206" width="184" height="74" rx="8"/>
+<text x="214" y="220" class="tag" text-anchor="end">↳ index_reconcile.py</text>
+<text x="132" y="240" class="ts" text-anchor="middle">on disk, but no card</text>
+<text x="132" y="254" class="ts" text-anchor="middle">→ add a blank card (stub)</text>
+<text x="132" y="270" class="ts" text-anchor="middle">writes: index_files.json +1</text>
+
+<rect class="bx" x="248" y="206" width="184" height="74" rx="8"/>
+<text x="422" y="220" class="tag" text-anchor="end">↳ index_reconcile.py</text>
+<text x="340" y="240" class="ts" text-anchor="middle">card exists, content changed</text>
+<text x="340" y="254" class="ts" text-anchor="middle">→ queue for re-linking</text>
+<text x="340" y="270" class="ts" text-anchor="middle">hands off to regenerators</text>
+
+<rect class="bx" x="456" y="206" width="184" height="74" rx="8"/>
+<text x="630" y="220" class="tag" text-anchor="end">↳ index_reconcile.py</text>
+<text x="548" y="240" class="ts" text-anchor="middle">card exists, file is gone</text>
+<text x="548" y="254" class="ts" text-anchor="middle">→ remove the card</text>
+<text x="548" y="270" class="ts" text-anchor="middle">writes: index_files.json &#8722;1</text>
+
+<line x1="132" y1="280" x2="132" y2="292" stroke="#5F5E5A" stroke-width="1.5"/>
+<line x1="548" y1="280" x2="548" y2="292" stroke="#5F5E5A" stroke-width="1.5"/>
+<line x1="340" y1="280" x2="340" y2="292" stroke="#5F5E5A" stroke-width="1.5"/>
+<line x1="132" y1="292" x2="548" y2="292" stroke="#5F5E5A" stroke-width="1.5"/>
+<line x1="340" y1="292" x2="340" y2="300" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+
+<rect class="bx" x="40" y="302" width="600" height="38" rx="8"/>
+<text x="340" y="326" class="t" text-anchor="middle">Something changed? → rebuild the cross-links &amp; refresh the indexes</text>
+<line x1="162" y1="340" x2="162" y2="350" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+<line x1="380" y1="340" x2="380" y2="350" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+<line x1="558" y1="340" x2="558" y2="350" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+
+<rect class="btl" x="40" y="352" width="244" height="92" rx="8"/>
+<text x="274" y="366" class="tag" text-anchor="end">↳ backlink_analyzer.py</text>
+<text x="162" y="388" class="t" text-anchor="middle">Build BACKLINKS</text>
+<text x="162" y="405" class="ts" text-anchor="middle">compare topic tags on every card;</text>
+<text x="162" y="419" class="ts" text-anchor="middle">link the ones that share enough</text>
+<text x="162" y="435" class="ts" text-anchor="middle">writes: related[] / backlinks[]</text>
+
+<rect class="bx" x="300" y="352" width="160" height="92" rx="8"/>
+<text x="450" y="366" class="tag" text-anchor="end">↳ rule/code/symbol</text>
+<text x="380" y="392" class="t" text-anchor="middle">Refresh other</text>
+<text x="380" y="409" class="t" text-anchor="middle">indexes</text>
+<text x="380" y="427" class="ts" text-anchor="middle">rules · code map · symbols</text>
+
+<rect class="bx" x="476" y="352" width="164" height="92" rx="8"/>
+<text x="630" y="366" class="tag" text-anchor="end">↳ backfill_…index.py</text>
+<text x="558" y="390" class="t" text-anchor="middle">Fill blank cards</text>
+<text x="558" y="408" class="ts" text-anchor="middle">write each description</text>
+<text x="558" y="424" class="ts" text-anchor="middle">manual for now (T-271)</text>
+
+<line x1="340" y1="444" x2="340" y2="454" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a2)"/>
+
+<rect class="gate" x="40" y="456" width="600" height="46" rx="8"/>
+<text x="632" y="470" class="tag" text-anchor="end">↳ index_reconcile.py --check · .claude/settings.json</text>
+<text x="340" y="490" class="t" text-anchor="middle">Before work is marked "done": is the index still = disk? If not → BLOCKED, heal first</text>
+
+<text x="40" y="534" class="th" style="font-size:14px">Zoom in — how two cards become "linked" (a backlink)</text>
+
+<text x="235" y="558" class="ts" text-anchor="middle">share #harness → linked</text>
+<path d="M130,576 Q235,548 340,576" stroke="#1D9E75" stroke-width="2" fill="none"/>
+
+<rect class="fil" x="40" y="576" width="180" height="74" rx="8"/>
+<text x="130" y="600" class="t" text-anchor="middle">token_tracking.md</text>
+<text x="130" y="620" class="ts" text-anchor="middle">#harness  #token</text>
+<text x="130" y="638" class="ts" text-anchor="middle">(main=2pt · side=1pt)</text>
+
+<rect class="fil" x="250" y="576" width="180" height="74" rx="8"/>
+<text x="340" y="600" class="t" text-anchor="middle">boot_init.md</text>
+<text x="340" y="620" class="ts" text-anchor="middle">#harness  #session</text>
+<text x="340" y="638" class="ts" text-anchor="middle">(main=2pt · side=1pt)</text>
+
+<rect class="bx" x="460" y="576" width="180" height="74" rx="8"/>
+<text x="550" y="600" class="t" text-anchor="middle">recipe.md</text>
+<text x="550" y="620" class="ts" text-anchor="middle">#cooking</text>
+<text x="550" y="638" class="ts" text-anchor="middle">no shared tag → not linked</text>
+
+<rect class="btl" x="40" y="666" width="600" height="50" rx="8"/>
+<text x="632" y="680" class="tag" text-anchor="end">↳ backlink_analyzer.py</text>
+<text x="340" y="697" class="t" text-anchor="middle">Each shared tag scores points (main topic = 2, side topic = 1). Add them up:</text>
+<text x="340" y="711" class="ts" text-anchor="middle">enough points → "related"; a lot of points → a stronger "backlink".</text>
+
+<rect class="bx" x="40" y="728" width="600" height="40" rx="8"/>
+<text x="340" y="746" class="ts" text-anchor="middle">Safe to repeat: a file is either on disk or not — add &amp; delete never collide, so re-running changes nothing (idempotent).</text>
+<text x="340" y="760" class="ts" text-anchor="middle">Colours: green = ADD · amber = EDIT/gate · red = DELETE · blue = a file · teal = backlink step</text>
+</svg>

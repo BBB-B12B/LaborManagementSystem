@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "manual-doc",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "5500", "frontend/public/doc/manual"],
+      "port": 5500
+    }
+  ]
+}

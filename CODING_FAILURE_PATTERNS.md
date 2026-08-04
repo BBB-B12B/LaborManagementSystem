@@ -564,3 +564,12 @@ Detection: [compact-STOP] repeats with ~identical CHAT across ≥2 turns; OR a /
 topic: token-tracking
 count: 0
 recurrences: []
+
+## CFP-041 · Skipped Mandatory Skill Sub-step (scrutinize / P2 Simpler-Way)
+Symptom: Agent finishes a doc_builder (or any skill with "P2 always-on pointer") and closes the task without invoking `scrutinize` for the Simpler-Way pass — the SKILL.md §Simpler-Way block is read but treated as advisory, not mandatory.
+Root: Agent conflates "I answered the user's question" with "skill is complete" — misses that SKILL.md may define mandatory post-build probes (P2, M4.5, close-gate, etc.) that are not part of the user's explicit request.
+Prevention: After completing any skill section, re-read the skill's hard rules and post-build hooks before emitting done. If SKILL.md has "P2 always-on pointer" → invoke `scrutinize` inline. Skipping = [violation] R16.
+Detection: User says "ทำไมไม่ใช้ X" / "you skipped" + skill-defined sub-step name → R16 self-improve → backfill immediately → CFP entry.
+topic: skill-execution
+count: 1
+recurrences: ["2026-06-26 doc_builder manual build: skipped scrutinize §Simpler-Way before finalizing se_fm.html"]

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือ FM — หัวหน้างาน (Foreman)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <h1>📘 คู่มือการใช้งานระบบบริหารจัดการแรงงาน</h1>
+  <div class="subtitle">บทบาท: FM (หัวหน้างาน / Foreman)</div>
+  <nav class="nav">
+    <a href="index.html">หน้าแรก</a>
+    <a href="god.html">GOD</a>
+    <a href="am.html">AM</a>
+    <a href="pm.html">PM</a>
+    <a href="se_fm.html">SE</a>
+    <a href="fm.html" class="active">FM</a>
+    <a href="md.html">MD</a>
+    <a href="pd.html">PD</a>
+    <a href="pe.html">PE</a>
+    <a href="oe.html">OE</a>
+    <a href="ld.html">LD</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › FM</div>
+
+  <h2>FM ทำอะไรได้บ้าง</h2>
+  <p><strong>FM (หัวหน้างาน / Foreman)</strong> เป็นบทบาทที่ทำงานหน้างานโดยตรง หน้าที่หลักคือ
+     <strong>บันทึกรายงานประจำวัน</strong> เพื่อติดตามความคืบหน้างาน และ <strong>จัดการข้อมูลแรงงานรายวัน (DC)</strong>
+     ในสังกัดของตนเอง</p>
+
+  <div class="table-wrap" style="margin:16px 0">
+    <table>
+      <thead>
+        <tr><th style="text-align:left">เมนู</th><th>สิทธิ์</th><th style="text-align:left">รายละเอียด</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="feat">Daily Reports</td><td class="yes">✓ สร้าง/แก้ไข</td><td style="text-align:left;font-size:.85rem">บันทึกรายงานประจำวัน ระบุแรงงาน งาน ชั่วโมง รูปภาพ</td></tr>
+        <tr><td class="feat">DC Management</td><td class="yes">✓ เต็มสิทธิ์</td><td style="text-align:left;font-size:.85rem">เพิ่ม/แก้ไข/ดูข้อมูลแรงงานรายวันในสังกัด</td></tr>
+        <tr><td class="feat">Overtime</td><td class="no">—</td><td style="text-align:left;font-size:.85rem">ไม่มีสิทธิ์เข้าหน้านี้</td></tr>
+        <tr><td class="feat">Workspace</td><td class="no">—</td><td style="text-align:left;font-size:.85rem">ไม่มีสิทธิ์เข้าหน้านี้</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>ทางลัด:</strong>
+    <a href="#daily-reports">Daily Reports</a> ·
+    <a href="#fm-self">FM ทำเอง</a> ·
+    <a href="#photos">การถ่ายรูป</a> ·
+    <a href="#submit">การส่งรายงาน</a> ·
+    <a href="#dc">DC Management</a>
+  </p>
+
+  <!-- ============ DAILY REPORTS ============ -->
+  <h2 id="daily-reports">1 · Daily Reports (รายงานประจำวัน)</h2>
+  <p>หน้า <code>/daily-reports</code> — บันทึกสิ่งที่ทำในแต่ละวัน พร้อมแรงงานที่ใช้ ชั่วโมงงาน และรูปภาพหน้างาน</p>
+
+  <h3>1.1 เปิดหน้า Daily Reports</h3>
+  <ol class="steps">
+    <li>คลิกเมนู <strong>"รายงานประจำวัน"</strong> ในแถบเมนูซ้าย</li>
+    <li>ระบบจะแสดงรายการรายงานของโครงการในสังกัดคุณ สลับดูได้ระหว่างแท็บ
+        <strong>"รอดำเนินการ (Pending)"</strong> และ <strong>"เสร็จสิ้น (Finish)"</strong></li>
+    <li>ใช้ช่อง <strong>"ค้นหา"</strong> หรือ <strong>"กรองแรงงาน"</strong> เพื่อหารายงานที่ต้องการ</li>
+  </ol>
+  <figure><img src="assets/se_fm/daily_report_pending_tab.png" alt="แท็บรอดำเนินการ" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: daily_report_pending_tab.png]&lt;/span&gt;'"><figcaption>หน้ารายการรายงานประจำวัน — แท็บรอดำเนินการ</figcaption></figure>
+
+  <h3>1.2 สร้างรายงานประจำวัน</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"+ สร้างรายงาน"</strong> (มุมขวาบน)</li>
+    <li>เลือก <strong>"การ์ดงาน (Task) *"</strong> ที่ต้องการรายงาน — ระบบแสดงเฉพาะ Task ที่กำหนดให้กับสังกัดคุณ</li>
+    <li>เลือก <strong>"วันที่ทำงาน *"</strong> — วันที่ย้อนหลังเกิน 3 วันจะถูกล็อก ต้องขอ Unlock จาก SE/PM ก่อน</li>
+  </ol>
+  <div class="note">ปฏิทินจะแสดงสีวันที่มีรายงานแล้ว และวันที่ยังขาดรายงาน ช่วยให้ตรวจสอบได้ง่าย</div>
+
+  <h3>1.3 กรอกรายละเอียดงาน</h3>
+  <ol class="steps">
+    <li>กรอก <strong>"รายละเอียดงาน / งานที่ทำ *"</strong> — อธิบายว่าทำงานอะไรในวันนั้น เช่น "เทปูนคานชั้น 3 แกน A-B"</li>
+    <li>ปรับ <strong>"ความคืบหน้า (%)"</strong> — เลื่อน Slider หรือพิมพ์ตัวเลข 0–100 เพื่อระบุว่างานทั้งหมดเสร็จกี่เปอร์เซ็นต์แล้ว</li>
+    <li>กรอก <strong>"หมายเหตุ"</strong> (ถ้ามี) — เพิ่มข้อความเพิ่มเติม เช่น ปัญหาที่พบ วัสดุที่ขาด</li>
+  </ol>
+
+  <h3>1.4 เลือกแรงงาน DC และชั่วโมงทำงาน</h3>
+  <ol class="steps">
+    <li>กดปุ่ม <strong>"เลือกแรงงาน DC"</strong> เพื่อเปิดหน้าต่างเลือกแรงงาน
+        <ul style="margin:6px 0 6px 0">
+          <li>ค้นหาด้วยชื่อหรือรหัสแรงงาน</li>
+          <li>ติ๊กเลือกแรงงานที่มาทำงานวันนั้น</li>
+          <li>กด <strong>"ยืนยัน"</strong></li>
+        </ul>
+    </li>
+    <li>สำหรับแต่ละ Shift ที่ทำงาน ให้กรอกเวลาเข้า-ออก:
+        <ul style="margin:6px 0 6px 0">
+          <li><strong>Shift ปกติ:</strong> เวลาเข้า / พักเที่ยง / เข้าบ่าย / เวลาออก</li>
+          <li><strong>OT เช้า</strong> (ถ้ามี): เวลาเริ่ม–สิ้นสุด OT ก่อน 08:00</li>
+          <li><strong>OT เที่ยง</strong> (ถ้ามี): เวลาเริ่ม–สิ้นสุด OT ช่วงพักเที่ยง</li>
+          <li><strong>OT เย็น</strong> (ถ้ามี): เวลาเริ่ม–สิ้นสุด OT หลังเลิกงาน</li>
+        </ul>
+    </li>
+    <li>ระบุสถานะแรงงานแต่ละคน: <strong>ปกติ / ลา / ขาดงาน / Support</strong></li>
+  </ol>
+  <div class="tip">ถ้าไม่มี OT ไม่ต้องกรอก — ปล่อยว่างไว้ได้เลย ระบบจะคำนวณเฉพาะ Shift ที่กรอกเวลาไว้</div>
+
+  <!-- ============ FM SELF ============ -->
+  <h2 id="fm-self">2 · FM ทำเอง (กรณีไม่มี DC ช่วย)</h2>
+  <p>ในบางวันที่ FM ลงมือทำงานเองโดยไม่มีแรงงาน DC ร่วม ให้ใช้ตัวเลือก <strong>"FM ทำเอง"</strong></p>
+
+  <h3>2.1 วิธีใช้</h3>
+  <ol class="steps">
+    <li>ในฟอร์มสร้างรายงาน ที่ส่วน <strong>"แรงงาน"</strong> ให้ติ๊กเลือก <strong>"FM ทำเอง"</strong></li>
+    <li>เมื่อติ๊กแล้ว ปุ่ม "เลือกแรงงาน DC" จะถูกปิดอัตโนมัติ — ไม่ต้องเลือกแรงงาน</li>
+    <li>กรอกรายละเอียดงาน ชั่วโมง ความคืบหน้า และหมายเหตุตามปกติ</li>
+    <li>ไม่ต้องแนบรูปแรงงาน (labor photos) — ระบบจะข้ามขั้นตอนนี้ให้อัตโนมัติ</li>
+  </ol>
+  <div class="note">
+    <strong>เงื่อนไข:</strong>
+    <ul style="margin:6px 0">
+      <li>ถ้าเลือกแรงงาน DC ไปแล้ว จะติ๊ก "FM ทำเอง" ไม่ได้ — ต้องลบแรงงานออกก่อน</li>
+      <li>ถ้าติ๊ก "FM ทำเอง" แล้ว จะเลือกแรงงาน DC ไม่ได้ — ต้องยกเลิกติ๊กก่อน</li>
+    </ul>
+  </div>
+
+  <!-- ============ PHOTOS ============ -->
+  <h2 id="photos">3 · การถ่ายรูปและแนบรูปภาพ</h2>
+  <p>รายงานที่ <strong>Submit จริง (ไม่ใช่ Draft)</strong> ต้องมีรูปภาพครบตามที่กำหนด</p>
+
+  <h3>3.1 รูปภาพหน้างาน (Site Photos)</h3>
+  <ol class="steps">
+    <li>ในฟอร์มรายงาน เลื่อนไปที่ส่วน <strong>"รูปภาพหน้างาน"</strong></li>
+    <li>กดปุ่มกล้อง/อัปโหลด เลือกแหล่งที่มา:
+        <ul style="margin:6px 0 6px 0">
+          <li><strong>ถ่ายรูปใหม่</strong> (กล้องมือถือ)</li>
+          <li><strong>อัปโหลดจากคลัง</strong> (Gallery)</li>
+        </ul>
+    </li>
+    <li>แนบได้หลายรูป กดค้างแล้วลากเพื่อเรียงลำดับ</li>
+    <li>กดไอคอน <strong>✕</strong> ที่รูปเพื่อลบออก</li>
+  </ol>
+
+  <h3>3.2 รูปภาพแรงงาน (Labor Photos) — ยกเว้นถ้าติ๊ก FM ทำเอง</h3>
+  <ol class="steps">
+    <li>แนบรูปแรงงานแยกตาม Shift: <strong>Shift ปกติ</strong>, <strong>OT เช้า</strong>, <strong>OT เที่ยง</strong>, <strong>OT เย็น</strong></li>
+    <li>แต่ละ Shift ที่เปิดใช้งาน ต้องมีรูปอย่างน้อย 1 รูป ก่อน Submit จริง</li>
+    <li>ถ้าไม่มี OT — ไม่ต้องแนบรูป OT</li>
+  </ol>
+  <div class="tip">แนะนำให้ถ่ายรูปคนงานพร้อมกับบอร์ดวันที่ หรือป้ายโครงการ เพื่อป้องกันการโต้แย้งในภายหลัง</div>
+
+  <!-- ============ SUBMIT ============ -->
+  <h2 id="submit">4 · การบันทึกและส่งรายงาน</h2>
+
+  <h3>4.1 บันทึกแบบ Draft (ยังไม่เสร็จ)</h3>
+  <ol class="steps">
+    <li>กรอกข้อมูลบางส่วนแล้วยังไม่พร้อม Submit</li>
+    <li>กดปุ่ม <strong>"บันทึก Draft"</strong> — ระบบเซฟข้อมูลไว้ก่อน ยังไม่ส่งให้ SE/PM ตรวจ</li>
+    <li>รายงาน Draft จะปรากฏที่แท็บ <strong>"รอดำเนินการ"</strong> พร้อมป้าย <em>Draft</em></li>
+    <li>กลับมาแก้ไขและ Submit ได้ภายหลัง</li>
+  </ol>
+
+  <h3>4.2 Submit จริง (ส่งรายงาน)</h3>
+  <ol class="steps">
+    <li>ตรวจสอบข้อมูลให้ครบ: รายละเอียดงาน · แรงงาน · เวลา · รูปภาพ</li>
+    <li>กดปุ่ม <strong>"Submit"</strong> หรือ <strong>"ส่งรายงาน"</strong></li>
+    <li>ระบบตรวจสอบความครบถ้วน:
+        <ul style="margin:6px 0 6px 0">
+          <li>ต้องมีแรงงาน DC <em>หรือ</em> ติ๊ก "FM ทำเอง"</li>
+          <li>ต้องมีรูปหน้างาน (Site Photos)</li>
+          <li>ต้องมีรูปแรงงานแต่ละ Shift (ยกเว้น FM ทำเอง)</li>
+        </ul>
+    </li>
+    <li>เมื่อ Submit สำเร็จ รายงานจะย้ายไปสถานะ <strong>"รอตรวจสอบ"</strong> และ SE/PM จะได้รับการแจ้งเตือน</li>
+  </ol>
+  <div class="note">หลัง Submit แล้ว — FM ยังแก้ไขรายงานได้จนกว่า SE/PM จะ Approve ครับ</div>
+  <figure><img src="assets/se_fm/daily_report_finish_tab.png" alt="แท็บรายงานเสร็จสิ้น" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: daily_report_finish_tab.png]&lt;/span&gt;'"><figcaption>แท็บรายงานเสร็จสิ้น — รายการที่ Submit แล้ว</figcaption></figure>
+
+  <h3>4.3 สรุปขั้นตอนทั้งหมด</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>#</th><th style="text-align:left">ขั้นตอน</th><th style="text-align:left">รายละเอียด</th><th>บังคับ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td style="text-align:left">เลือก Task</td><td style="text-align:left">การ์ดงานที่ทำ</td><td class="yes">✓</td></tr>
+        <tr><td>2</td><td style="text-align:left">เลือกวันที่</td><td style="text-align:left">วันที่ทำงาน (ย้อนหลังได้ไม่เกิน 3 วัน)</td><td class="yes">✓</td></tr>
+        <tr><td>3</td><td style="text-align:left">กรอกรายละเอียดงาน</td><td style="text-align:left">อธิบายว่าทำอะไร</td><td class="yes">✓</td></tr>
+        <tr><td>4</td><td style="text-align:left">ระบุความคืบหน้า (%)</td><td style="text-align:left">0–100%</td><td style="color:var(--c-muted)">แนะนำ</td></tr>
+        <tr><td>5</td><td style="text-align:left">เลือกแรงงาน DC</td><td style="text-align:left">หรือติ๊ก FM ทำเอง</td><td class="yes">✓ (เลือกอย่างใดอย่างหนึ่ง)</td></tr>
+        <tr><td>6</td><td style="text-align:left">กรอกเวลาทำงาน</td><td style="text-align:left">เข้า/พัก/ออก สำหรับแต่ละ Shift</td><td class="yes">✓</td></tr>
+        <tr><td>7</td><td style="text-align:left">กรอก OT</td><td style="text-align:left">เช้า/เที่ยง/เย็น (ถ้ามี)</td><td style="color:var(--c-muted)">ถ้ามี OT</td></tr>
+        <tr><td>8</td><td style="text-align:left">แนบรูปหน้างาน</td><td style="text-align:left">Site Photos</td><td class="yes">✓ (ก่อน Submit)</td></tr>
+        <tr><td>9</td><td style="text-align:left">แนบรูปแรงงาน</td><td style="text-align:left">Labor Photos แต่ละ Shift</td><td style="color:var(--c-muted)">ยกเว้น FM ทำเอง</td></tr>
+        <tr><td>10</td><td style="text-align:left">หมายเหตุ</td><td style="text-align:left">ข้อความเพิ่มเติม</td><td style="color:var(--c-muted)">ไม่บังคับ</td></tr>
+        <tr><td>11</td><td style="text-align:left">Submit / Draft</td><td style="text-align:left">ส่งรายงาน หรือบันทึก Draft ไว้ก่อน</td><td class="yes">✓</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============ DC ============ -->
+  <h2 id="dc">5 · DC Management (แรงงานรายวัน)</h2>
+  <p>FM มีสิทธิ์เต็มในการจัดการข้อมูลแรงงานรายวัน (DC) ในสังกัดของตนเอง
+     ได้แก่ เพิ่มแรงงาน แก้ไขข้อมูล และดูประวัติ</p>
+  <div class="crosslink">วิธีใช้ DC Management แบบทีละขั้นตอนอยู่ที่
+     → <a href="am.html#dc-management">หน้า AM › DC Management</a></div>
+
+  <footer class="site-footer">
+    <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
+    <p>คู่มือ FM (หัวหน้างาน) · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-25</p>
+  </footer>
+</div>
+
+</body>
+</html>

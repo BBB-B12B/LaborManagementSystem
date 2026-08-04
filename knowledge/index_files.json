@@ -2293,7 +2293,8 @@
     "imports": [],
     "extracted_at_hash": "15454201",
     "imported_by": [
-      "scripts/posttool_track.py"
+      "scripts/posttool_track.py",
+      "scripts/tok.py"
     ],
     "related": []
   },
@@ -2312,6 +2313,56 @@
   "scripts/capture_manual.py": {
     "imports": [],
     "extracted_at_hash": "1b1bbe7b",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/build_backlink_graph.py": {
+    "imports": [],
+    "extracted_at_hash": "5a088e3e",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/capture_manual.js": {
+    "imports": [],
+    "extracted_at_hash": "c180fa57",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/cfp_fix_probe.py": {
+    "imports": [],
+    "extracted_at_hash": "0189e01c",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/cfp_recurrence.py": {
+    "imports": [],
+    "extracted_at_hash": "25720674",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/git_guard.py": {
+    "imports": [],
+    "extracted_at_hash": "d85a6f87",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/review_intent.py": {
+    "imports": [],
+    "extracted_at_hash": "4905e3f6",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/skill_gate.py": {
+    "imports": [],
+    "extracted_at_hash": "7d120c2b",
+    "imported_by": [],
+    "related": []
+  },
+  "scripts/tok.py": {
+    "imports": [
+      "scripts/token_estimator.py"
+    ],
+    "extracted_at_hash": "0ae01b6e",
     "imported_by": [],
     "related": []
   }
