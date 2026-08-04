@@ -28,7 +28,10 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import harness_paths
+
+ROOT = str(harness_paths.project_root())
 INDEX = os.path.join(ROOT, "knowledge", "index_files.json")
 
 # Directories that contain code worth graphing. scripts/ has python today;
@@ -69,6 +72,8 @@ def collect_code_files():
         for dirpath, dirnames, filenames in os.walk(base):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
             for fn in filenames:
+                if fn.startswith("._"):
+                    continue  # macOS AppleDouble ghost (`._name.py`) — not a real source file
                 if fn.endswith(PY_EXT) or fn.endswith(TS_EXT):
                     files.append(os.path.join(dirpath, fn))
     return sorted(files)

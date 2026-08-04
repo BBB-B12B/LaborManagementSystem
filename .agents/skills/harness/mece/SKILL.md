@@ -13,7 +13,7 @@ description: >
   steps: ["load target Skill sections[]", "S1-A.5 REASON pass (dependency_map + risk_flags)", "map steps per section", "Verify + Rollback + Constraints per section", "write + validate mece_plan.md"]
 - id: 2
   name: "Confirm & Register"
-  steps: ["send plan → wait confirm", "R-Roadmap [ ] T-<N> per section", "emit [✓ MECE]"]
+  steps: ["send plan → wait confirm", "R-Roadmap: parent §6.2 Task only (never per section)", "emit [✓ MECE]"]
 ```
 
 ---
@@ -46,8 +46,9 @@ description: >
 Three skip cases — each stated in full so it is followable WITHOUT reading another section:
 - Single-file edit (backlinks = 0, no ERR doc needed) → emit `[mece-skip] reason: single-file` → return to main agent
 - Read-only / lookup task (no file create/edit/delete · no DB write · ≤3 steps) → emit `[mece-skip] reason: read-only` → return to main agent
+- Grain guard (T-328) — a genuinely 1–2 line standalone (<3 steps AND simple) is NOT a lone section: route it to the **Small-Tasks Pool** (CLAUDE.md R-Roadmap · T-299), NOT a MECE plan/section — planning overhead must never exceed the work. EXCEPTION: if it shares a tier + skill with sibling mechanical work, group it into that batch (D·amortize) instead of the Pool.
 - Resuming (`.sessions/mece_plan.md` has pending `[ ]` sections) → do NOT re-plan · skip Phases 1+2 · load the existing plan · jump to the first pending section
-Emit format: `[mece-skip] reason: <read-only | single-file | resuming>` → return to main agent.
+Emit format: `[mece-skip] reason: <read-only | single-file | resuming | grain-too-small>` → return to main agent (grain-too-small → route to Small-Tasks Pool · T-328).
 → if plan has 0 parallel sections: emit `[mece-sequential] No Cycle grouping needed — all sections are sequential`
 → if plan has ≥2 independent sections: emit `[mece-cycle-required] Use Cycle block syntax (see S1-A.5 template)`
 
@@ -132,7 +133,15 @@ Enforce: Phase 3 REACT loop entry without [✓ mece-valid] = [violation] BC-mece
          Send plan → wait for explicit user approval before writing roadmap entries
            Assess from context whether the user has genuinely approved the plan — not just acknowledged it
            Ambiguous response ("interesting", "I see") → ask once: "ยืนยัน plan นี้ไหมครับ?"
-[S2-B] R-Roadmap: add [ ] T-<N>: <section-name> per section
+[S2-A.5] Context-Prep (T-345 · proactive headroom · ONLY after confirm — never during drafting; = schema M5.5):
+         For each Phase-3 section whose Context-full source is HEAVY (region >~80 lines OR read-once OR window-pressuring)
+         AND not tiny/already-cached → prepare a per-project slice:
+           `python3 scripts/plan_ctx.py prepare --task T-<N> --section S<M> --source <file> --lines <a>-<b>` (add --compress for tabular)
+           → writes .sessions/plan_ctx/<task>/S<M>.md (gitignored) + emits [ctx-prepared] · fill the section's Context-shrunk: + Context-full:
+         SELECTIVE (the over-eng guard) — prompt-cache makes re-reading a SMALL file ~free (and blanket compression can hurt cache reuse),
+         so a tiny/already-cached or whole-file-needed source: SKIP + write `whole-file-needed: <reason>` (do NOT pre-compress it).
+         PROACTIVE prep (prepare once) — distinct from T-344's REACTIVE [headroom] nudge. Emit defined once in orchestrator §14d.
+[S2-B] R-Roadmap: register ONLY the parent §6.2 Task (full block — schema: loop_engineer_spec.md §6.2) — NEVER one entry per section. The roadmap is big-task-only; sections live in mece_plan.md alone. Skip entirely if the parent Task is already on the roadmap (this is the usual case — just [X] it at close).
 [S2-C] Emit [✓ MECE]
 ```
 
@@ -146,6 +155,7 @@ Primary artifact: `.sessions/mece_plan.md` (mandatory). It MUST contain:
 - Per section: Context · Skill · Model · Tool · Input_From · Constraints · Steps · Verify · Rollback (all mandatory)
 - `### Cycle grouping` block (mandatory)
 - `compact_checkpoint` block if sections ≥ 3 (mandatory)
+- Tagging subtask (T-320 · Hard Rule 9) — mandatory IF any section touches a `knowledge/*.md` file · points to the tag-gate (reuse-first), never duplicates it
 - Phase 3 Close Checklist (mandatory)
 Plan Format (above) = field-level EXAMPLE · `docs/session_templates/mece_plan_schema.md` = canonical contract (schema wins on any conflict).
 Signals: see ## Output Contract below.
@@ -154,7 +164,7 @@ Signals: see ## Output Contract below.
 
 | Action | Emit | Label |
 |---|---|---|
-| Plan ready | `[✓ MECE] Plan covers <N> sections in <M> Cycles · user confirmed · roadmap entries added` | **mandatory** |
+| Plan ready | `[✓ MECE] Plan covers <N> sections in <M> Cycles · user confirmed · parent Task on roadmap` | **mandatory** |
 | Validate pass | `[✓ mece-valid]` — all 4 S1-E checks pass | **mandatory** |
 | Validate fail | `[mece-fail] Step: <S1-E check> · Cause: <which field missing>` | **mandatory** |
 | Plan skipped | `[mece-skip] reason: <read-only | single-file | resuming>` | **mandatory** |
@@ -164,7 +174,7 @@ Signals: see ## Output Contract below.
 
 Required files written:
 - `.sessions/mece_plan.md` — **Phase-Checklist Template mandatory** (docs/session_templates/mece_plan_schema.md) — Phase 0–3 blocks required · no simplified format (CFP-019) · S1-E validates on write
-- `docs/master_roadmap.md` — `[ ] T-<N>` per section (M4, before Phase 3)
+- `docs/master_roadmap.md` — the parent `[ ] T-<N>` §6.2 Task only (before Phase 3) · NEVER one entry per section (roadmap = big-task-only)
 
 ## Hard Rules
 1. Never write mece_plan.md from memory — read `docs/session_templates/mece_plan_schema.md` first · copy structure verbatim (CFP-019).
@@ -177,6 +187,7 @@ Required files written:
 - Quality heuristic: any section with >5 steps → decompose into two named sections before sending to user.
 8. Post-exec intent check: when all S[N] marked [X], assess next user message intent before running Close Checklist —
    new task or topic detected → C3 topic-switch first (not restart Phase 2 directly) · never keyword-match to decide.
+9. **Tagging fold-in (T-320 · Case 2):** if ANY Phase-3 section creates/edits a `knowledge/*.md` doc, auto-insert a tagging subtask that POINTS TO the tag-gate — `scripts/tag_gate.py` reuse-first `resolve()` (match existing topic/label, never mint a synonym) → register topic+label in `topic_registry.json`. Reference the gate, do NOT duplicate its logic (single source). The SAME gate hard-blocks at close via `index_reconcile.py --check` (Case 1, no-plan path). Mirrors `cfp_fix_plan_gate.py`. Non-knowledge file ops are exempt (see `_tag_gate_in_scope`).
 
 ## On-Demand Wire Triggers (load only when condition fires — never pre-load)
 
@@ -218,5 +229,5 @@ required-inputs:
   - mece_plan.md written (not from memory — built from the schema template)
   - every Phase 3 section carries a Verify-N line
 on-missing: HALT · emit `[handoff-blocked] missing:<inputs>` · ask the user · NO partial flow (no plan / no Verify-N → nothing to review)
-on-present: offer to flow to skeptical_reviewer (M4.5) — get an adversarial verdict before the user confirms
-owner-note: mece stays SOLE owner of the plan; skeptical_reviewer only reads + returns a verdict, never edits the plan
+on-present: MUST flow to skeptical_reviewer (M4 · MANDATORY · auto · T-350) — skeptical writes `.sessions/.skeptical_ok` (stripped-plan-hash + verdict) → emit `[sr-done] verdict:<go|revise|reject>` → only THEN present to the user. Gate 3 (skill_gate) hard-blocks Phase-3 entry until `.skeptical_ok` matches the current plan (escape HARNESS_SKIP_REVIEW_GATE=1).
+owner-note: mece stays SOLE owner of the plan; skeptical_reviewer only reads + returns a verdict, never edits the plan (it writes ONLY the `.sessions/.skeptical_ok` proof, never the plan itself)

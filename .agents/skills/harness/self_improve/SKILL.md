@@ -75,6 +75,14 @@ Step 1: grep "^## CFP-" CODING_FAILURE_PATTERNS.md → extract titles
 Step 2: count recurrences per CFP-N using window_count (90-day) from index_cfp_fix.json — NOT lifetime count
          stale=true entries (last_seen >90d or null): deprioritize in ranking — still match but moved to P3 tier
          if index_cfp_fix.json not yet migrated (no window_count field): fallback to count field + emit [decay-missing]
+Step 2b (T-319 STAGE 2 · CROSS-MACHINE escalation): for the ≥3 [fix-required] / ≥5 [fix-escalated]
+         DECISION, use the cross-machine EFFECTIVE count, not the local window_count alone. Run
+           `python3 scripts/cfp_effective.py <topic>`   (plugin-only: prefix the B1 [engine-root] abs path · R5)
+         → prints `effective = own 90-day window_count + Σ every OTHER machine's fresh (≤90d) window_count`
+           for that topic (a machine gone quiet >90d contributes 0 — the recency guarantee holds), plus the
+           matching [fix-required]/[fix-escalated] signal line. A failure rare on THIS machine but common
+           across the fleet still crosses the line. No shared store / all foreign origins stale →
+           effective == local window_count (byte-for-byte local-only behavior · backward-compat).
 Step 3: Priority queue:
          P1 — current session (CFP-N where N > cfp_boot_count) → always first · multiple: lowest N
          P2 — historical (N ≤ cfp_boot_count) by window_count · only if P1 empty

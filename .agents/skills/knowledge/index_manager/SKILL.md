@@ -148,6 +148,7 @@ Prohibited: "Updated the index for you" · "I've gone ahead and..." · silent no
 - (symbol) never accept a rename without also calling `editor` — index_manager indexes the rename, it does not perform it.
 - (symbol) never run without a change type — ambiguous type writes the wrong entry.
 - Caller must provide the target — index_manager has no discovery; assume nothing.
+- (file · T-320) tagging a `knowledge/*.md` doc is a HARD gate, not advice: assign topic+label REUSE-FIRST via `scripts/tag_gate.py resolve()` (match an existing topic/label before minting; synonyms are rejected) → register in `topic_registry.json`. An untagged knowledge doc is exit-2 blocked at close by `index_reconcile.py --check`. Per-op escape: `HARNESS_SKIP_TAG_GATE=1`.
 
 ## Routing
 → Return to the calling skill (coder/editor/harness_editor) after the emit.

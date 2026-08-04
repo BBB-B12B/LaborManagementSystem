@@ -1,10 +1,23 @@
+<!-- DOC-MAP:START (auto · gen_doc_labels.py) -->
+<!-- topic: doc_navigation · jump: python3 scripts/lookup.py "<label>" -->
+- L14 · ## 7. Onboarding Protocol — Fresh Project
+- L194 · ## 8. Integration Protocol — Existing Project (Seamless)
+- L264 · ## 9. Track C — Upgrade Existing Harness (old version → current)
+- L280 · ## 10. Verification Checklist
+- L331 · ## 10. Quick-Reference Card
+- L347 · ## 11. Project .gitignore — Harness Files
+- L354 · ### Paste into project `.gitignore`
+- L389 · ### What to KEEP in project repo (project-specific harness state)
+- L398 · ### Two-repo pattern (recommended)
+<!-- DOC-MAP:END -->
+
 ## 7. Onboarding Protocol — Fresh Project
 
 Follow these steps in order when setting up on a brand-new project.
 
 ```
 Step 1: Create directories
-  mkdir -p knowledge knowledge/cfp-proposals knowledge/cfp-proposals/applied knowledge/recipes .agents/skills/file_manager .agents/skills/variable_manager scripts .sessions
+  mkdir -p knowledge knowledge/cfp-proposals knowledge/cfp-proposals/applied knowledge/recipes .agents/skills/knowledge/index_manager scripts .sessions
 
 Step 2: Write CLAUDE.md
   Use template from Section 4. Adjust R3 token thresholds to your model.
@@ -14,17 +27,16 @@ Step 2.5: Write governance docs
   docs/domain_rules.md   → create empty file: "# Domain Rules\n\n<!-- Add business rules here -->"
 
 Step 3: Write all agent infrastructure files
-  a. Skill files (all 10) — copy from 04_skills.md Sections 5a–5j:
-     .agents/skills/file_manager/SKILL.md
-     .agents/skills/variable_manager/SKILL.md
-     .agents/skills/mece/SKILL.md
-     .agents/skills/coder/SKILL.md
-     .agents/skills/editor/SKILL.md
-     .agents/skills/session_manager/SKILL.md
-     .agents/skills/token_auditor/SKILL.md
-     .agents/skills/token_tracker/SKILL.md
-     .agents/skills/identity/SKILL.md
-     .agents/skills/agent/SKILL.md
+  a. Skill files (all 9) — copy from 04_skills.md Sections 5a–5j:
+     .agents/skills/knowledge/index_manager/SKILL.md
+     .agents/skills/harness/mece/SKILL.md
+     .agents/skills/coding/coder/SKILL.md
+     .agents/skills/coding/editor/SKILL.md
+     .agents/skills/knowledge/session_manager/SKILL.md
+     .agents/skills/harness/token_auditor/SKILL.md
+     .agents/skills/harness/token_tracker/SKILL.md
+     .agents/skills/user/identity/SKILL.md
+     .agents/skills/coding/agent/SKILL.md
   b. skill-manifest.json — copy from 03_config.md skill-manifest.json Template
   c. registry.md — copy from 03_config.md registry.md Template
   d. scripts/symbol_indexer.py — see 05_scripts.md
@@ -107,12 +119,19 @@ Step 4c: Configure Claude Code settings (.claude/settings.json)
     SessionStart (matcher "compact") → scripts/compact_reset.py --trigger=hook
         recomputes counters after /compact (CHAT=compact_size+sys_fixed · LOOP_WEIGHT=0 · SESSION=0 if session_reset=armed)
     UserPromptSubmit → inline token-state emitter (reads .sessions/session_tokens.md →
-        prints `[token-state] SESSION/LOOP_W/CHAT` · emits [compact-rec] at CHAT>80k / [compact-STOP] at SESSION>90k|CHAT>120k
-        per C0.5 thresholds · consumes session_reset=armed) + scripts/learning_profile.py analyze
+        prints `[token-state] SESSION/LOOP_W/CHAT` + signal-box N/4 · emits advisory `[compact-rec]` (signal-box PRIMARY · char-estimate NEVER hard-stops — T-286 · client meter = only ceiling)
+        · consumes session_reset=armed) + scripts/learning_profile.py analyze
     PreToolUse (matcher Edit|Write|Read|NotebookEdit) → inline python gate (3 guards):
         · never-full-load — blocks Read of prohibited files (knowledge/index_*.json · CODING_FAILURE_PATTERNS.md · docs/master_roadmap.md · INVARIANTS.md · knowledge/error_index.md)
         · phase gate — blocks Edit/Write to src/ unless gather_complete.md AND mece_plan.md are BOTH dated today
         · close-gate — blocks writing "phase: done" to active_thread.md until .sessions/.close_checklist_ack exists
+    PreToolUse (matcher Edit|Write) → scripts/cfp_fix_plan_gate.py (T-316 · fixes CFP-048)
+        · cfp-fix-plan gate — blocks (exit 2) a Write/Edit of a CFP-fix mece_plan.md that carries no loop-closure section (self_improve subtasks) · override HARNESS_SKIP_CFP_PLAN_GATE=1 · fail-safe exit 0 on error
+    PreToolUse (matcher Bash) → scripts/git_guard.py (T-227 · separate entry from the gate above)
+        · git-guard — hard-blocks (exit 2) 4 dangerous git patterns BEFORE they run: force-push
+          (--force/-f/--force-with-lease) · reset --hard · clean -f · branch -D
+        · shlex command-position match (no substring false-block) · fail-open on parse error
+        · override: prefix `GIT_GUARD_OK=1` (detected as a command token, not shell env)
     PostToolUse → scripts/posttool_track.py (auto-accumulates SESSION_TOTAL + CHAT_TOTAL per tool call · provider-aware via detected.md token_formula)
     Stop → scripts/write_context_cache.sh + scripts/index_reconcile.py
         (index_reconcile = safety net: diffs git-changed files vs index_files.json, auto-runs idempotent regenerators
@@ -185,7 +204,7 @@ Step 1: Detect project type
   Adjust scan patterns in Step 4 accordingly.
 
 Step 2: Create agent directories (skip if exist)
-  mkdir -p knowledge knowledge/cfp-proposals knowledge/cfp-proposals/applied knowledge/recipes .agents/skills/file_manager .agents/skills/variable_manager scripts .sessions
+  mkdir -p knowledge knowledge/cfp-proposals knowledge/cfp-proposals/applied knowledge/recipes .agents/skills/knowledge/index_manager scripts .sessions
 
 Step 2.5: Auto-discover project context
   a. Map directory structure:
@@ -206,7 +225,7 @@ Step 2.5: Auto-discover project context
 
   d. Check recent activity:
      git log --oneline -10 2>/dev/null || echo "no git"
-     → Note active files/areas in REPO_MAP.md §Quick Lookup Commands
+     → Note active files/areas in REPO_MAP.md
 
   e. Scan for existing CLAUDE.md / AGENTS.md:
      - Found → ADD missing rules only (do NOT overwrite)
@@ -267,11 +286,10 @@ Run after onboarding or integration. All items must pass before starting develop
 [ ] knowledge/index_variables.json — exists, valid JSON, "variables" key present
 [ ] knowledge/error_index.md     — exists (may be empty), uses T-{Parent}-{BugID}-{Attempt} format
 [ ] .agents/skills/skill-manifest.json — exists, valid JSON, keywords → skill routing defined
-[ ] .agents/skills/mece/SKILL.md — exists
-[ ] .agents/skills/coder/SKILL.md — exists, contains Roadmap Protocol
-[ ] .agents/skills/editor/SKILL.md — exists, contains Roadmap Protocol
-[ ] .agents/skills/file_manager/SKILL.md  — exists
-[ ] .agents/skills/variable_manager/SKILL.md — exists
+[ ] .agents/skills/harness/mece/SKILL.md — exists
+[ ] .agents/skills/coding/coder/SKILL.md — exists, contains Roadmap Protocol
+[ ] .agents/skills/coding/editor/SKILL.md — exists, contains Roadmap Protocol
+[ ] .agents/skills/knowledge/index_manager/SKILL.md — exists (mode:file + mode:symbol)
 [ ] scripts/symbol_indexer.py    — exists, runs without error
 [ ] .sessions/active_thread.md   — exists, phase: done
 [ ] .sessions/mece_plan.md       — exists (may be empty template); if has [ ] sections → resume flow active
@@ -286,11 +304,11 @@ Run after onboarding or integration. All items must pass before starting develop
 [ ] knowledge/cfp-proposals/applied/ — exists (CFP archive)
 [ ] knowledge/recipes/          — exists (load-on-demand procedure notes)
 [ ] docs/master_roadmap.md      — exists, has at least T-000 entry
-[ ] .agents/skills/session_manager/SKILL.md — exists, contains session close flow
-[ ] .agents/skills/token_auditor/SKILL.md — exists, contains threshold gate
-[ ] .agents/skills/token_tracker/SKILL.md — exists
-[ ] .agents/skills/identity/SKILL.md — exists
-[ ] `.agents/skills/agent/SKILL.md` — contains Orchestration Protocol (Cycle fan-out, 7 steps) + Delegation Contract (goal/constraints/output_format/on_demand_files/cycle_context)
+[ ] .agents/skills/knowledge/session_manager/SKILL.md — exists, contains session close flow
+[ ] .agents/skills/harness/token_auditor/SKILL.md — exists, contains threshold gate
+[ ] .agents/skills/harness/token_tracker/SKILL.md — exists
+[ ] .agents/skills/user/identity/SKILL.md — exists
+[ ] `.agents/skills/coding/agent/SKILL.md` — contains Orchestration Protocol (Cycle fan-out, 7 steps) + Delegation Contract (goal/constraints/output_format/on_demand_files/cycle_context)
 [ ] python scripts/symbol_indexer.py — exits 0, reports symbol count > 0
 ```
 

@@ -114,7 +114,7 @@ Contract: grep .sessions/mece_plan.md for "status: task-complete" in Phase 1-3 b
           found → proceed to Step 0 normally
           absent (Phase 3 has [ ] or [X] sections without PATH A) →
             run Close Checklist from docs/session_templates/mece_plan_schema.md §Close Checklist first
-            PATH A: head -n $(grep -n "^## Phase 1" .sessions/mece_plan.md | head -1 | cut -d: -f1) .sessions/mece_plan.md > /tmp/mh.md && printf "\n## Phase 1–3 — cleared\nstatus: task-complete\n" >> /tmp/mh.md && mv /tmp/mh.md .sessions/mece_plan.md
+            PATH A: python3 scripts/clear_plan.py
           skip = [violation] BC-close-checklist-precheck → run checklist now · then Step 0
 Post:   mece_plan.md Phase 1-3 cleared (status: task-complete present) · safe to Step 0
 Enforce: Step 0 started without "status: task-complete" in mece_plan.md = [violation] BC-close-checklist-precheck → stop · run checklist first

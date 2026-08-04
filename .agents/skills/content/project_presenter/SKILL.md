@@ -30,6 +30,10 @@ description: >
 > `present_output/<project_name>/` root that lives OUTSIDE the target project.
 > The target project is never modified — no file is created or edited inside it.
 
+> **Family:** part of the **content family** (doc_builder · project_presenter ·
+> interactive_teaching_material). Shared pattern + one-way handoff →
+> `.agents/skills/content/CONTENT_FAMILY.md`.
+
 ---
 
 ## When to Invoke

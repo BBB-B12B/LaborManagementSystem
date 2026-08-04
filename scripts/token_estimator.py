@@ -23,16 +23,22 @@ import sys
 # ── Constants ─────────────────────────────────────────────────────────────────
 def _compute_sys_fixed():
     import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import harness_paths
     try:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base = str(harness_paths.project_root())
         size = os.path.getsize(os.path.join(base, "CLAUDE.md")) + \
                os.path.getsize(os.path.join(base, "AGENTS.md"))
-        return int(size * 0.3) + 3500
-    except OSError:
-        return 11070  # fallback
+        # base const lives ONLY in scripts/sys_fixed_base.txt (single source · T-250); it estimates
+        # the base CC system prompt + tool schemas (NOT file-readable; client-runtime). Recalibrate
+        # by editing that ONE file. (was inline 11000 in 3 sites · T-249)
+        const = int(open(str(harness_paths.engine_path("scripts", "sys_fixed_base.txt"))).read().strip())
+        return int(size * 0.3) + const
+    except Exception:
+        return 19500  # fallback (≈ 0.3×28k + base) — degraded path only
 
 SYSTEM_FIXED = _compute_sys_fixed()
-# dynamic: (CLAUDE.md + AGENTS.md chars × 0.3) + 3500 ≈ 11–13k
+# dynamic: (CLAUDE.md + AGENTS.md chars × 0.3) + base(sys_fixed_base.txt) ≈ 19–20k (T-249/T-250)
 
 HOOKS_PER_TURN = 700
 # deferred-tools manifest ~600 + HARNESS REMINDER ~100 (per CLAUDE.md R1)
@@ -50,13 +56,19 @@ PROVIDER_MULTS = {
 }
 
 
-def _load_provider_formula(path=None):
-    """Read token_formula from detected.md (provider-aware). Unknown/absent -> 'generic'."""
+def _load_provider_formula(path=None, content=None):
+    """Read token_formula from detected.md (provider-aware). Unknown/absent -> 'generic'.
+    T-357: pass `content` (already-read detected.md text) to skip a redundant file
+    read — a hot-path caller that already holds the file hands it in. `content=None`
+    (the default) preserves every existing caller: it reads `path` (or the default
+    location) exactly as before."""
     import os
-    if path is None:
-        path = os.path.join(os.path.dirname(__file__), "..", ".agents", "platform", "detected.md")
     try:
-        for line in open(path):
+        if content is None:
+            if path is None:
+                path = os.path.join(os.path.dirname(__file__), "..", ".agents", "platform", "detected.md")
+            content = open(path).read()
+        for line in content.splitlines():
             if line.startswith("token_formula:"):
                 tf = line.split(":", 1)[1].strip()
                 return tf if tf in PROVIDER_MULTS else "generic"
@@ -106,6 +118,40 @@ def estimate_turn(user_chars=0, tool_chars=0, thai_chars=0, en_chars=0, chat_tot
         "new_chat_total":   round(new_chat_total),
         "hooks_per_turn":   HOOKS_PER_TURN,
     }
+
+
+# ── Full-context estimate for the EST fallback path (B · T-288) ──────────────────
+# The live hook's est branch surfaces an accumulated CHAT_TOTAL that posttool_track
+# builds from TOOL I/O ONLY (the smallest bucket). That undercounts true context ~4x
+# because it never includes: the system prompt (present EVERY turn), user messages,
+# model output, and the per-turn history re-send. full_context_estimate() restores
+# those categories so the est path is category-complete, not ~4x low.
+# Only the EST path calls this; the REAL path (real_context.py transcript) stays the
+# single CHAT source wherever a transcript exists and never touches this. (T-288)
+EST_HISTORY_FACTOR = 2.5
+# tool-I/O lower bound -> +user msgs +model output +history re-send.
+# Coarse by design (it is a fallback guess); calibrate per-vendor with
+# calibrate_tokenizer.py (C). Was the hook's inline CF=1.75; raised to ~2.5 per
+# research that the homemade estimate ran ~3-4x low (knowledge/token_accounting_principles.md).
+
+
+def full_context_estimate(chat_total, system_fixed=SYSTEM_FIXED):
+    """Convert a TOOL-I/O-only accumulated chat_total (posttool_track lower bound)
+    into a full-context estimate for the EST fallback (non-Claude / no transcript).
+
+    Adds the fixed system-prompt floor (present every turn, never counted by
+    posttool) and scales the conversation portion for the categories posttool omits
+    (user msgs + model output + history re-send). Returns an int. The REAL path
+    never calls this — real_context.py stays the single CHAT source where a
+    transcript exists.
+    """
+    try:
+        ct = int(chat_total)
+    except (TypeError, ValueError):
+        ct = 0
+    if ct < 0:
+        ct = 0
+    return round(system_fixed + ct * EST_HISTORY_FACTOR)
 
 
 def run_test():
@@ -182,6 +228,9 @@ def main():
                         help="Number of turns for --simulate (default: 25)")
     parser.add_argument("--schema-drift", action="store_true",
                         help="Simulate cache prefix reset (tool schema edited) — adds sys_fixed once")
+    parser.add_argument("--full-context", action="store_true",
+                        help="EST-fallback (B): print the full-context estimate (system+history+output) "
+                             "for --chat-total as a single int. Used by the settings.json est branch only.")
     args = parser.parse_args()
 
     if args.test:
@@ -193,6 +242,11 @@ def main():
                      tool_chars=args.tool_chars or 600,
                      thai_chars=args.thai_chars or 60,
                      en_chars=args.en_chars    or 400)
+        return
+
+    if getattr(args, 'full_context', False):
+        # EST fallback (B): emit a single int the settings.json est branch captures.
+        print(full_context_estimate(args.chat_total))
         return
 
     result = estimate_turn(

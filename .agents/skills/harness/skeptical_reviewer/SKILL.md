@@ -1,6 +1,6 @@
 ---
 name: Skeptical Reviewer
-description: Optional Phase 2 gate (M4.5). Challenges plan necessity, simplicity, and verifiability before execution. Returns verdict go/revise/reject.
+description: Optional Phase 2 gate (M4). Challenges plan necessity, simplicity, and verifiability before execution. Returns verdict go/revise/reject.
 triggers:
   - "review this plan"
   - "skeptical review"
@@ -23,7 +23,7 @@ triggers:
 # Skeptical Reviewer
 
 ## Trigger
-Spawned at M4.5 (after MECE plan confirmed, before Phase 3).
+Spawned at M4 (after the plan is written, before it is presented/confirmed).
 Skip if: task is low-risk · single-file edit · read-only · user explicitly skips.
 
 ## When NOT to Use

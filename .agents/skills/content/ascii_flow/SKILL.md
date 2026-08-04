@@ -45,6 +45,14 @@ Reference style: `knowledge/harness_flow_20260525.md`
 - Diagram has >20 nodes — split into sub-diagrams first, then invoke per sub-diagram
 - Stakeholder output needs publication-quality rendering (PDF export, slide deck, or print media)
 - Task is real-time data visualization or dynamic chart generation — use a charting library instead
+- **Output is a human-facing knowledge diagram** (a saved architecture / family / overview meant to be VIEWED by a person) → produce **SVG**, not ASCII · policy T-284
+
+## Audience rule — ASCII vs SVG (hard · ask this FIRST, before drawing)
+Who reads the output?
+1. **A person** — a saved knowledge diagram opened to understand something → **SVG** (hand-author / hand off · ascii_flow does NOT produce these)
+2. **AI / diff** — an agent-facing flow reference (e.g. `knowledge/harness_flow_*.md`, diffable text) → **ASCII** (ascii_flow · correct)
+3. **Terminal / chatbot reply** — an inline answer → **ASCII**
+Unsure → if it is a saved file a person opens to understand → SVG. (Policy: roadmap T-284.)
 
 ## Refusal Contract
 Skip entirely (emit `[ascii-skip]`) if:
@@ -57,6 +65,7 @@ Skip entirely (emit `[ascii-skip]`) if:
 - Diagram-only scope. ascii_flow produces diagrams and flow docs. It does not modify code, config, or prose text — only .md files containing box/connector diagrams.
 - Minimal node discipline. Add nodes only for entities that appear in the flow. Do not invent intermediate nodes to "fill out" the diagram — every box must correspond to a real component or decision.
 - Reference before inventing. Check knowledge/harness_flow_*.md for existing diagram conventions before establishing new ones — consistency across docs matters more than local elegance.
+- Layout craft (shared with SVG diagrams). Detail-at-real-grain + shared-step-as-one-block + align-by-stage rules live in `@.agents/skills/diagram-craft.md` — single source, do not restate here.
 
 ## Prerequisites
 **Refuse (emit `[ascii-skip]`) without all of these:**

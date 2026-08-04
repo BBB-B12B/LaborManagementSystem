@@ -221,7 +221,7 @@ Section 1 — Scope & Design:                       [Cycle 1 · serial]
     - [pre-read] T0 lookup → emit [pre-read] · [post-read] verdict
   Steps:    [A] R4 scope probe → find src/ -name "*.ts" | wc -l
             [B] identify sections: coder vs editor vs index_manager (mode:file) · dependency_map[] → Cycle grouping
-            [C] pre-assign roadmap T-IDs for all sections
+            [C] pre-assign section IDs (S<N>) for all sections in mece_plan.md — NOT roadmap T-Ns (roadmap = parent Task only)
   Verify:   grep -c "? " .sessions/mece_plan.md = 0 (no unresolved placeholders)
   Rollback: n/a (read-only)
   Data_Sent: Thai ___ch | ENG: ___ch
@@ -346,7 +346,7 @@ Section 3 — Close:                                [Cycle 3 · serial]
 
 ---
 
-## §Checklist — Phase-Checklist Template (write to mece_plan.md at M5)
+## §Checklist — Phase-Checklist Template (write to mece_plan.md at M3)
 
 Every mece_plan.md MUST include Phase 0-3 blocks below. Agent fills `___` at runtime.
 **Pre-fill rule:** leave ALL `___` as-is at plan creation — fill only at runtime. Never hardcode 0k/0ch.
@@ -410,7 +410,7 @@ Phase 2 total: TH ___ch · EN ___ch → ~___tok
 - [ ] S<N> [✓ written] + Verify PASS · Data_Sent: TH ___ch · EN ___ch
       → TOKEN CHECK  (>50k → /compact · >60k → TOKEN PAUSE)
 - [ ] R8 index sync done (if files/symbols changed)
-- [ ] Roadmap [X] all sections annotated
+- [ ] Roadmap [X] parent Task annotated (one entry per Task, not per section)
 - [ ] Spawn Reviewer (MODEL_LOW · read-only):
       "You are a read-only reviewer. Do NOT edit any file.
       0. Classify task_type from mece_plan.md →
@@ -435,10 +435,7 @@ Phase 2 total: TH ___ch · EN ___ch → ~___tok
                 missing = invalid close → re-run before Clear
       Enforce:  mece_plan_schema PATH A/C BC · session_manager §3 · CFP-030
 - [ ] Clear mece_plan.md Phase 1–3 (keeps Phase 0 [X]):
-      head -n $(grep -n "^## Phase 1" .sessions/mece_plan.md | head -1 | cut -d: -f1) \
-      .sessions/mece_plan.md > /tmp/mece_h.md && \
-      printf "\n## Phase 1–3 — cleared\nstatus: task-complete\n" >> /tmp/mece_h.md && \
-      mv /tmp/mece_h.md .sessions/mece_plan.md
+      python3 scripts/clear_plan.py   # deterministic PATH A clear (T-329) — single source: scripts/clear_plan.py
 - [ ] Write compact_state.md (BEFORE /compact):
       dt=<today> s=___k task=___ cfp=___
       sk=___ sk_h=<8chars> mece_h=<8chars>

@@ -54,6 +54,9 @@ First calibrate difficulty from history — run `python3 scripts/learning_profil
 - in between → keep the mixed default below.
 Then offer a short quiz:
 - 2-3 questions on the concepts just used, in plain Thai.
+- **Delivery (hard · corrected 2026-06-29 · CFP-46):** ask via the **AskUserQuestion tool** — one call carrying all questions as clickable choices. NEVER plain-text "ก/ข/ค" appended to a summary (user reads that as ignoring the spec). Never reveal or hint the correct option. If a question is "explain in your own words", put it in the same call as an open option or ask it as the follow-up after the choices.
+- **No position tell (hard · T-311):** vary WHERE the correct option sits across the 2-3 questions — never always first. For a LEARNING quiz the position must not leak the answer. This is the OPPOSITE of an AskUserQuestion *decision* question (there the recommended option leads); a learning quiz measures understanding, so no positional signal.
+- **Plausible distractors (hard · T-311):** every wrong option must be a believable near-miss or a real misconception the user might actually hold — not an obvious strawman. If a wrong option looks clearly bad on its face, it tests nothing (too easy · pure elimination). Make the learner reason, not eliminate.
 - Mixed format: one multiple-choice, one true/false or fill-in-blank, one "explain in your own words".
 - Anchor each question to something concrete from the task — and, when natural, ladder it toward the user's stated learning goal in the profile (memory: `user-profile-non-technical` — grow alongside Claude) so practice builds toward what they want to become, never abstract trivia.
 - Wait for answers. Grade gently and explain every item, right or wrong.

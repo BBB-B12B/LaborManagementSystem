@@ -38,7 +38,7 @@ description: >
 
 ## When NOT to Use
 - The artifact is still being drafted / mid-write → wait for a finished-enough version · a moving target produces noise findings.
-- You need an adversarial PLAN review BEFORE execution (necessity, flaws, wrong-layer) → that is `skeptical_reviewer` (M4.5 gate) · scrutinize reviews an artifact's clarity + simplicity, it is not the pre-execution gate.
+- You need an adversarial PLAN review BEFORE execution (necessity, flaws, wrong-layer) → that is `skeptical_reviewer` (M4 gate) · scrutinize reviews an artifact's clarity + simplicity, it is not the pre-execution gate.
 - The task is trivial (≤3 lines · typo · single obvious change) → emit `[scrutinize-skip] reason:trivial` · no ceremony.
 - User wants praise / validation → scrutinize is outsider-critical by default · redirect to a presenter skill if encouragement is the goal.
 - You need correctness / bug-finding (does the code WORK?) → that is `code-review` (diff bugs) or `debug` (a live failure) · scrutinize judges clarity + simplicity of a finished artifact, not whether it is correct.

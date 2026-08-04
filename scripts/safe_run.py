@@ -18,10 +18,19 @@ import subprocess
 import sys
 import re
 import shlex
+import os
+import uuid
+
+try:
+    import view_compress  # T-302 — table-aware view compressor (same dir as this script)
+except ImportError:
+    view_compress = None  # fallback: generic filter_output path (view compression off)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 THRESHOLD   = 40   # lines: below this → pass through unchanged
 CHUNK_SIZE  = 25   # lines: non-signal lines to show when output is long
+# NOTE: view_compress.py keeps an intentional COPY of this pattern (import-free
+# on purpose so this script never fails to start) — change it here → update there (T-302)
 SIGNAL_RE   = re.compile(
     r'error|warn|fail|exception|traceback|✗|✘|assert|fatal|critical|denied|refused',
     re.IGNORECASE
@@ -85,6 +94,28 @@ def filter_output(raw: str) -> str:
     return "\n".join(parts)
 
 
+EXEC_LOG_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, ".sessions", "exec_log"
+)
+
+
+def park_output(raw: str):
+    """Park the RAW pre-filter output to .sessions/exec_log/<id>.txt (T-301).
+
+    Returns the offload id, or None on any failure — parking must never
+    break the command output (fallback = old lossy behaviour, no marker).
+    Parked copies are pruned by trim_exec_log.py (max 50 files / 24h).
+    """
+    try:
+        os.makedirs(EXEC_LOG_DIR, exist_ok=True)
+        offload_id = uuid.uuid4().hex[:8]
+        with open(os.path.join(EXEC_LOG_DIR, f"{offload_id}.txt"), "w") as f:
+            f.write(raw)
+        return offload_id
+    except Exception:
+        return None
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python3 scripts/safe_run.py \"command\"", file=sys.stderr)
@@ -92,7 +123,44 @@ def main():
 
     cmd = " ".join(sys.argv[1:])
     raw_output, exit_code = run_command(cmd)
-    filtered = filter_output(raw_output)
+    raw_lines = raw_output.splitlines()
+    raw_line_count = len(raw_lines)
+
+    # T-302: table/CSV → deterministic head/tail+sample view (signal lines always
+    # kept). The lossy view is safe because the lossless copy is parked below (T-301).
+    if (
+        raw_line_count > THRESHOLD
+        and view_compress
+        and view_compress.detect_content_type(raw_lines) == "table"
+    ):
+        # T-311: bind the compressed list so the saving can be reported
+        compressed = view_compress.compress_table(raw_lines)
+        filtered = "\n".join(compressed)
+        kept = len(compressed)
+        # T-311: headroom observability — an automated compressor actually ran.
+        # stderr only, so stdout (the parsed content) stays byte-identical.
+        print(
+            f"[headroom] view-compress: {raw_line_count}→{kept} lines"
+            f" · saved ~{raw_line_count - kept} lines",
+            file=sys.stderr,
+        )
+    else:
+        filtered = filter_output(raw_output)
+
+    # T-301: long output → park the raw copy first, so truncation is reversible
+    if raw_line_count > THRESHOLD:
+        offload_id = park_output(raw_output)
+        if offload_id:
+            filtered += (
+                f"\n<<offload:{offload_id}>> full output parked ({raw_line_count} lines)"
+                f" · retrieve: python3 scripts/exec_log_get.py --id {offload_id}"
+            )
+            # T-311: headroom observability — offload mechanism fired (stderr only)
+            print(
+                f"[headroom] offload: parked {raw_line_count} lines"
+                f" → exec_log/{offload_id}",
+                file=sys.stderr,
+            )
 
     print(filtered)
 

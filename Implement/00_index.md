@@ -9,12 +9,13 @@
 | [01_overview.md](01_overview.md) | System capabilities, directory structure, index schemas | Always — first read |
 | [02_setup.md](02_setup.md) | Onboarding (fresh project), Integration (existing project), Verification checklist | When setting up a project |
 | [03_config.md](03_config.md) | CLAUDE.md, AGENTS.md, INVARIANTS.md, REPO_MAP.md templates | When writing config files |
-| [04_skills.md](04_skills.md) | All 10 skill SKILL.md templates (file_manager, variable_manager, mece, coder, editor, session_manager, token_auditor, token_tracker, identity, agent) | When writing skill files |
+| [04_skills.md](04_skills.md) | All 9 skill SKILL.md templates (index_manager, mece, coder, editor, session_manager, token_auditor, token_tracker, identity, agent) | When writing skill files |
 | [05_scripts.md](05_scripts.md) | symbol_indexer.py spec | When writing the indexer script |
 | [06_orchestrator.md](06_orchestrator.md) | Dual-mode execution, mece_plan.md schema, Cycle orchestration, cycle_N_*.json result files, sub-agent loop logic, token budget | When setting up orchestration or sub-agent spawn patterns (R4) |
 | [07_platform.md](07_platform.md) | Platform adapter — auto-detection, known platform mappings, co-development dialogue for unknown platforms | When deploying on a new platform or when [platform-unknown] is emitted |
 | [08_checklist.md](08_checklist.md) | Post-installation verification — 22 required files, per-file section checks, summary script | After completing Track A or Track B setup |
 | [09_migration.md](09_migration.md) | Upgrade guide for existing harness (old version → current) — 4 tracks: M1 re-format indexes · M2 re-structure tree · M3 update/overwrite skills+config · M4 verify | When upgrading from an older harness version |
+| [10_machine_install.md](10_machine_install.md) | Machine-install track (T-309) — engine once at `~/.claude/` (shared, byte-identical) + per-project isolated data; `machine_install.sh`, `project_init.py`, `topic_bootstrap.py`, the `HARNESS_ENGINE_ROOT`/`CLAUDE_PROJECT_DIR` split; **AI-guided plugin setup from a downloaded repo** (🤖 AI-runnable vs 👤 user-interactive `/plugin` steps) | When installing the engine machine-wide, guiding a user who downloaded the repo through plugin setup, or scaffolding a new project against a shared engine |
 
 ## Agent Reading Order
 
@@ -67,10 +68,10 @@ These files are updated automatically by agent skills — no manual refresh need
 | File | Updated by |
 |---|---|
 | `docs/master_roadmap.md` | All skills — task status [ ] → [/] → [X] |
-| `knowledge/index_variables.json` | variable_manager + symbol_indexer.py after every code change |
-| `knowledge/index_files.json` | file_manager — on every file create/move/delete |
+| `knowledge/index_variables.json` | index_manager (mode:symbol) + symbol_indexer.py after every code change |
+| `knowledge/index_files.json` | index_manager (mode:file) — on every file create/move/delete |
 | `knowledge/error_index.md` | editor skill — on every bug fix |
-| `REPO_MAP.md` | file_manager + coder — when directories change |
+| `REPO_MAP.md` | index_manager (mode:file) + coder — when directories change |
 | `INVARIANTS.md §I2` | Any skill — when new hard constraint discovered (Context Gate) |
 | `CODING_FAILURE_PATTERNS.md` | editor skill — when bug fix requires ≥2 attempts |
 | `AGENTS.md §Critical Rules` | coder + editor — when new library added |

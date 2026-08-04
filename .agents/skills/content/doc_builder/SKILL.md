@@ -22,6 +22,10 @@ description: >
 # doc_builder Skill
 
 ## Overview
+> **Family:** part of the **content family** (doc_builder · project_presenter ·
+> interactive_teaching_material). Shared pattern + one-way handoff →
+> `.agents/skills/content/CONTENT_FAMILY.md`.
+
 Analyzes any web app project codebase → generates interlinked HTML manual pages
 produces a Playwright screenshot capture script → optionally exports to PDF via `pdf` skill.
 

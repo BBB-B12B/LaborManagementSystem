@@ -30,6 +30,16 @@ import os
 import shlex
 import sys
 
+# T-312 S3: resolve the harness-project marker (sibling engine module).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+try:
+    from harness_paths import is_harness_project as _is_harness_project
+except Exception:  # resolver unavailable -> preserve legacy behavior (enforce)
+    def _is_harness_project():
+        return True
+
 SHELL_SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "{", "}"}
 
 # git global options that consume the NEXT token as their value. The real
@@ -124,6 +134,8 @@ def has_override(tokens):
 
 
 def main():
+    if not _is_harness_project():
+        sys.exit(0)  # T-312 S3: plugin-global no-op on non-harness projects
     try:
         data = json.load(sys.stdin)
     except Exception:
@@ -153,4 +165,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as exc:  # loud fail-open (T-355)
+        try:
+            import gatelib; gatelib.report_fail_open("git_guard", exc)
+        except Exception:      # F1: helper failure must not crash the gate
+            sys.stderr.write("[gate-error] gate:git_guard · fail-open(allowed) · %r\n" % (exc,))
+        sys.exit(0)

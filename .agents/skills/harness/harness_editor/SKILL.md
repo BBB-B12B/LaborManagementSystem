@@ -83,6 +83,7 @@ grep "^date:" .sessions/mece_plan.md | grep $(date +%Y-%m-%d)   # plan dated tod
 grep "\[/\] T-" docs/master_roadmap.md                          # task tracked [/]
 ```
 → both present → `[✓ gates-pass]` · either missing → `[harness-refused] reason:<no-plan|no-task-id>` · HALT
+- **CFP-fix fold-in (gate · CFP-048):** task edits `CODING_FAILURE_PATTERNS.md` / goal = "fix CFP-N|ERR-N" → MUST `[skill-active] self_improve` + fold the loop-closure section (Stage 3.6 fix-validation + CFP→APPLIED + SI-N log + cfp_topics/index_cfp_fix sync) into mece_plan BEFORE presenting · detail → SKILL_detail §"Stage 2 · CFP-fix fold-in" · hard-blocked by `scripts/cfp_fix_plan_gate.py`
 - **Recite-verbatim (P4 · high-stakes opener):** before passing this gate on a structural / self-editing change, recite the gate's exact rule back FIRST — emit `[recite] gate:PLAN · pass-iff: (plan-dated-today AND task-[/]) · else [harness-refused]`. Reading the rule aloud before acting is what stops it being skipped on autopilot.
 - **Parallel-cycle scan** (save wall-clock time): group sections with NO shared file-write AND no mutual dependency into ONE parallel Cycle (spawn agents + barrier to rejoin) · shared file OR dependency → serial · ≥5 files/≥300L → spawn agents (R4) · <5 files → main-context serial · record the grouping in the plan's `### Cycle grouping` block
 
@@ -98,14 +99,12 @@ After a *behavioural* edit (BC / gate / signal-contract / step-sequence) — ski
 - Verdict (early-exit): Haiku PASS → `[behave-pass]` → Stage 4 · Haiku fail / Sonnet@medium PASS → `[behave-gap]` (rule too subtle for the robustness floor) → loop Stage 5 · only Sonnet@high PASS → `[behave-gap]` `effort:high` (rule clear but needs deep reasoning) → loop Stage 5 · all 3 fail → `[behave-fail]` → Stage 5. Log every run to `knowledge/behave_test_log.jsonl` (feedback + regression suite).
 → full procedure: @.agents/skills/harness/harness_editor/SKILL_detail.md §Stage 3.5
 
-### Stage 3.6 · FIX VALIDATION  (any bug-fix — CFP or code/ERR-N — gates Stage 4 close)
-→ if bug-fix: read the ORIGINAL failure repro BY FIX-TYPE (which branch? a CFP entry exists for this fix → CFP path · else → ERR-N path) — CFP/harness-fix → `index_cfp_fix.json` fixes[].repro · code/non-CFP fix → `error_index.md` ERR-N (trigger+check). Both use the repro-pin FORMAT defined by `harness_doctor` §3 (single source · reproducible:no → no on-demand repro → use count-proxy) → re-run repro.check against the edited harness →
-  gone: `[fix-validated] cfp:<id> repro:<how>` · still repros / cannot re-run: `[fix-unvalidated] reason:<x>`
-  `[fix-unvalidated]` BLOCKS Stage 4 [C] roadmap [X] → loop Stage 5 · non-fix task: `[fix-skip]`
+### Stage 3.6 · FIX VALIDATION — bug-fix re-runs its ORIGINAL repro (CFP → `index_cfp_fix.json` fixes[].repro · code/ERR → `error_index.md` ERR-N) → `[fix-validated] cfp:<id>` else `[fix-unvalidated]` BLOCKS Stage 4 [C] roadmap [X] → loop S5 · non-fix `[fix-skip]` · repro-pin format + count-proxy branch → SKILL_detail §Stage 3.6
 
 ### Stage 4 · CLOSE  (Index Sync + Docs Close — mandatory, same task)
 Edit a harness file → its paired Implement doc MUST update the same task (see §Implement Map).
 - Index sync: new skill → `skill-manifest.json` + `registry.md` · new `knowledge/`|`Implement/` file → `index_manager` (mode:file) + `python3 scripts/backlink_analyzer.py` (assign `topics[]` from `topic_registry.json`) · no `src/` symbol → skip `index_manager` (mode:symbol)
+- Defer flow/process-summary docs: if the knowledge file is a process/flow summary (.md with inline SVG + redraw table, e.g. `knowledge/file-lifecycle-flow.md`), do NOT author/edit it here — hand off to the `flow_summarizer` skill (single owner · builds from real sources + maintains source-hash freshness).
 
 **Behavior Contract — Docs Close (must complete before [harness-edit-done]):**
 ```
@@ -120,10 +119,8 @@ Post:   [harness-edit-done] flow_updated:yes · all [A-E] verified
 Enforce: flow_updated:no = [violation] BC-docs-close → complete · re-emit
 ```
 
-### Stage 5 · CFP  (abnormal → loop back · do NOT retry blindly)
-Trigger: a BC was violated · OR the same edit failed 2× · OR a recurring harness-rule violation surfaced.
-- emit `[escalate] reason:<bc-violation|repeat-fail|recurring>` → self_improve §1-3 (log CFP) → structural/recurring also → `[escalate-to-harness_doctor]`
-- **LOOP BACK**: re-enter the failed stage with a DIFFERENT approach — read the prior failed approach first, never repeat it · 3rd failure → `[blocked]` · wait
+### Stage 5 · CFP  (abnormal → loop back · never retry blindly)
+Trigger (BC violated · same edit failed 2× · recurring harness-rule violation) → `[escalate] reason:<bc-violation|repeat-fail|recurring>` → self_improve §1-3 (log CFP) · structural/recurring also `[escalate-to-harness_doctor]` · **LOOP BACK** re-enter the failed stage with a DIFFERENT approach (read prior failed approach first, never repeat) · 3rd failure → `[blocked]` wait
 
 @.agents/skills/harness/harness_editor/SKILL_detail.md
 

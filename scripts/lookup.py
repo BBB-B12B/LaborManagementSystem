@@ -64,7 +64,17 @@ def _rag_query(query: str, top_k: int = 8) -> list[dict]:
     except Exception:
         return []
 
-PROJECT_ROOT   = Path(__file__).resolve().parent.parent
+# T-309 S2: resolve project data root via the shared path manager so lookup
+# reads the CURRENT project's knowledge/ even when the engine is installed
+# machine-wide. Self-hosted (engine==project) -> byte-identical to the old
+# Path(__file__).parent.parent behavior.
+try:
+    import harness_paths
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import harness_paths
+
+PROJECT_ROOT   = harness_paths.project_root()
 INDEX_VARS     = PROJECT_ROOT / "knowledge/index_variables.json"
 INDEX_FILES    = PROJECT_ROOT / "knowledge/index_files.json"
 INDEX_SESSIONS = PROJECT_ROOT / "knowledge/index_sessions.json"
@@ -296,6 +306,56 @@ def search_sessions(query: str, top_n: int = 5) -> list[dict]:
     return out
 
 
+def search_labels(query: str, top_n: int = 8) -> list[dict]:
+    """Surface labeled line-ranges from index_files.json `labels_by_topic`
+    (T-307, consolidated into the one oracle). Matches the query against the
+    file PATH (file-first use case: query IS the path an agent holds), the
+    topic id, or the label text — so a path, a topic, or a phrase all resolve
+    to a Read range. Same data the creation/drift path uses (single source)."""
+    data = load_index(INDEX_FILES)
+    files_dict = data.get("files", data) if isinstance(data, dict) and "files" in data else data
+    if not isinstance(files_dict, dict):
+        return []
+    tokens = set(tokenize(query))
+    q = query.strip().lower()
+    results = []
+    for path, entry in files_dict.items():
+        if not isinstance(entry, dict):
+            continue
+        for topic, rows in entry.get("labels_by_topic", {}).items():
+            if not isinstance(rows, list):
+                continue
+            for r in rows:
+                label = r.get("label", "")
+                lines = r.get("lines", [])
+                if not label or len(lines) != 2:
+                    continue
+                start, end = lines
+                score = 0
+                if q == path.lower():
+                    score += 8                      # exact path = file-first hit
+                elif q and q in path.lower():
+                    score += 3
+                if q == topic.lower() or topic.lower() in tokens:
+                    score += 5
+                score += 2 * len(tokens & set(tokenize(label)))
+                if score <= 0:
+                    continue
+                results.append({
+                    "type": "label",
+                    "name": f"{topic}: {label}",
+                    "file": path,
+                    "line": start,
+                    "line_end": end,
+                    "read_hint": {"offset": start, "limit": max(1, end - start + 1)},
+                    "keywords": [topic],
+                    "score": score,
+                    "source": "index_files.labels_by_topic",
+                })
+    results.sort(key=lambda x: -x["score"])
+    return results[:top_n]
+
+
 def format_human(results: list[dict]) -> str:
     if not results:
         return "No matches found."
@@ -342,6 +402,7 @@ def main():
 
     sym_results     = [] if (file_only or session_only) else search_symbols(query)
     file_results    = [] if session_only else search_files(query)
+    label_results   = [] if session_only else search_labels(query)
     session_results = search_sessions(query)
 
     if not session_only and RAG_BASE_URL:
@@ -350,11 +411,11 @@ def main():
             seen = {h["file"] for h in rag_hits}
             sym_results  = [r for r in sym_results  if r.get("file") not in seen]
             file_results = [r for r in file_results if r.get("file") not in seen]
-            combined = rag_hits + sym_results + file_results + session_results
+            combined = rag_hits + label_results + sym_results + file_results + session_results
         else:
-            combined = sym_results + file_results + session_results
+            combined = label_results + sym_results + file_results + session_results
     else:
-        combined = sym_results + file_results + session_results
+        combined = label_results + sym_results + file_results + session_results
     combined.sort(key=lambda x: -x["score"])
 
     if json_out:

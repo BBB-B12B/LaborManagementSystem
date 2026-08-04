@@ -1,4 +1,23 @@
 # Implement/04_skills.md — Skill Templates
+<!-- DOC-MAP:START (auto · gen_doc_labels.py) -->
+<!-- topic: doc_navigation · jump: python3 scripts/lookup.py "<label>" -->
+- L26 · ## Skill Authoring — Robustness Floor (applies to every template below)
+- L40 · ## agent
+- L205 · ## ascii_flow
+- L274 · ## coder
+- L340 · ## editor
+- L543 · ## index_manager (mode: file)
+- L578 · ## identity
+- L621 · ## mece
+- L936 · ## session_manager
+- L1186 · ## token_auditor
+- L1245 · ## token_tracker
+- L1323 · ## self_improve
+- L1466 · ## index_manager (mode: symbol)
+- L1501 · ## harness_doctor
+- L1651 · ## harness_editor
+<!-- DOC-MAP:END -->
+
 
 This file contains full bootstrap templates for all 10 agent skills. Each section is a verbatim copy of the corresponding `.agents/skills/<name>/SKILL.md` on main, with project-specific paths replaced by `[PROJECT_ROOT]`.
 
@@ -30,7 +49,7 @@ description: Fallback orchestration skill. Loaded when no keyword matches. Re-ro
 \```
 - id: 1
   name: "Route & Orchestrate"
-  steps: ["read registry.md fast-match table", "re-evaluate user intent", "load correct skill → hand off"]
+  steps: ["grep skill-manifest.json keywords[] → fast-match", "re-evaluate user intent", "load correct skill → hand off"]
 \```
 
 ---
@@ -44,7 +63,7 @@ Orchestrator skill. Handles two responsibilities:
 
 ## Routing Protocol
 \```
-1. Read .agents/skills/registry.md → fast-match table
+1. grep `keywords[]` from `.agents/skills/skill-manifest.json` (canonical routing source · B2) → fast-match table (never full-read the manifest)
 2. Re-evaluate user intent against all skill keywords[]
 3. Load matched skill SKILL.md → hand off to Phase 1 (Info Gather Loop)
 4. If still no match → ask user to clarify intent
@@ -88,7 +107,7 @@ Orchestrator skill. Handles two responsibilities:
 **Token Check before spawning Cycle N+1:**
 - Read SESSION_TOTAL from .sessions/session_tokens.md
 - > 60k AND compact not yet run this transition? → run Mid-Session Compact → emit [compact-rec] (recommend, not forced) → then spawn
-- 60-80k? → TOKEN PAUSE (do not spawn next cycle until user confirms resume) · > 90k → HALT
+- 60-80k? → TOKEN PAUSE (do not spawn next cycle until user confirms resume) · above → advisory [compact-rec] + check CLIENT METER (real %) · estimate NEVER hard-stops (T-286)
 - ≤ 60k? → spawn immediately
 6. Call `<spawn_tool>` for Cycle N+1 — inject cycle_N results as `cycle_context:` in each Subagent Prompt
 7. Repeat until all Cycles done → Completion Gate:
@@ -158,8 +177,8 @@ Path: `.sessions/cycle_N_<section_id>.json`
 **P2 — Heuristics (when Skill: not declared in MECE section):**
 - new files / features    → `coder`
 - modify / fix existing   → `editor`
-- file create/move/delete → also trigger `file_manager`
-- symbol create/rename    → also trigger `variable_manager`
+- file create/move/delete → also trigger `index_manager` (mode:file)
+- symbol create/rename    → also trigger `index_manager` (mode:symbol)
 
 **Multi-skill `Skill: X + Y`:**
 - Run X first → verify → then Y
@@ -270,7 +289,7 @@ description: Focused skill for implementing new features and creating applicatio
   steps: ["create files to standards", "write code", "self-correct linter errors", "[✓ written] verify each file"]
 - id: 3
   name: "Sync & Close"
-  steps: ["call file_manager", "call variable_manager", "python scripts/symbol_indexer.py", "roadmap [X]"]
+  steps: ["call index_manager (mode:file)", "call index_manager (mode:symbol)", "python scripts/symbol_indexer.py", "roadmap [X]"]
 \```
 
 # Coder Skill
@@ -291,7 +310,7 @@ You are the "Builder". When the Agent delegates a new feature task to you, focus
 **After completing code:**
 \```
 1. Mark roadmap: [X] T-<N>: <description> · session_<NNN>
-2. Call file_manager + variable_manager to sync indexes
+2. Call index_manager to sync indexes
 \```
 
 ## Domain Work Standards
@@ -308,7 +327,7 @@ Coding-specific standards (framework conventions, DB integrity, linting rules, U
 - Emit `[staged-drop] <path>` to signal that this content must not appear in subsequent context or `context_files:`
 
 ## Limitations
-- Do **NOT** manipulate `.agents/` or `*.json` index files directly — call `file_manager` + `variable_manager` skills after creating files.
+- Do **NOT** manipulate `.agents/` or `*.json` index files directly — call `index_manager` skills after creating files.
 - **DO** update `docs/master_roadmap.md` — roadmap entries are mandatory (see Roadmap Protocol above).
 - Source work scope: `src/`, `wrangler.toml`, `package.json`, `next.config.ts`.
 
@@ -400,7 +419,7 @@ Post:   every ERR-XXX entry has a valid topic: field
 Enforce: entry without topic: field = [violation] BC-topic-lookup → add topic before continuing
 ```
 
-# Step 4 — call variable_manager if any symbol body was changed
+# Step 4 — call index_manager (mode:symbol) if any symbol body was changed
 \```
 
 ## Editing Best Practices
@@ -425,7 +444,7 @@ Emit trace:
 \```
 → Got source + line? Emit pre-read gate → Read → STOP. Do NOT go to Tier 2.
 \```
-**[pre-read]** Target: `SymbolName` · Tier: T1 · Line: 42 · Will read: offset=37 limit=60
+**[pre-read]** Target: `SymbolName` · Line: 42 · Will read: offset=37 limit=60
 \```
 
 ---
@@ -442,7 +461,7 @@ Emit trace:
 \```
 → Got line number? Emit pre-read gate → Read → STOP.
 \```
-**[pre-read]** Target: `SymbolName` · Tier: T2 · Line: <N> · Will read: offset=<N-5> limit=60
+**[pre-read]** Target: `SymbolName` · Line: <N> · Will read: offset=<N-5> limit=60
 \```
 → Still no line number? → proceed to Tier 3.
 
@@ -462,7 +481,7 @@ Emit trace:
 
 Step 3b — read only that range:
 \```
-**[pre-read]** Target: `SymbolName` · Tier: T3 · Line: 42 · Will read: offset=37 limit=60
+**[pre-read]** Target: `SymbolName` · Line: 42 · Will read: offset=37 limit=60
 Read  file_path=src/path/to/file.ts  offset=37  limit=60
 \```
 
@@ -521,7 +540,8 @@ If during this task a new hard constraint was discovered → add to INVARIANTS.m
 
 ---
 
-## file_manager
+## index_manager (mode: file)
+> Merged from the former `index_manager` (mode:file) (T-238). Canonical: `.agents/skills/knowledge/index_manager/SKILL.md`. This block documents the **file** mode.
 
 ```markdown
 ---
@@ -643,7 +663,7 @@ Every instruction must be followable by a MEDIUM-tier model @ low-med effort WIT
 **[✓ MECE]** Goal: <one line>
 
 Section 1 — <name from Skill sections[0]>:
-  Skill:    <editor|coder|file_manager|variable_manager|agent>   ← MANDATORY
+  Skill:    <editor|coder|index_manager|agent>   ← MANDATORY
   Steps:    [A] → [B] → [C]
   Verify:   <checkable — grep/compile/read-back, never subjective>
   Rollback: <what to undo if this section fails>
@@ -684,7 +704,7 @@ compact_checkpoint: IF sections ≥ 3 OR (sections × 6) > 30
 \```
 Rules:
 - `dependency_map` → drives Sequential vs Parallel grouping in Cycle block
-- `risk_flags` → any flag present → trigger M4.5 Skeptical Reviewer gate
+- `risk_flags` → M4 Skeptical Reviewer ALWAYS runs after write, before present (MANDATORY · auto · T-350) — risk_flags only ESCALATE severity, they no longer gate WHETHER it runs
 - `compact_checkpoint` → proactive LOOP_WEIGHT management — prevents context bloat mid-task
 - Empty list `[]` is valid (no deps / no risks)
 
@@ -696,7 +716,7 @@ Rules:
   - Priority-first: signal lines (error/warn/fail) shown first · never truncated
   - Non-signal: first 25 lines + "[+N more]"
 - **Reviewer inline threshold:** Verify-N ≤ 3 + no src/ changes → run grep commands directly (skip spawn · saves ~8-11k)
-- **Compact model (R3):** SESSION 60-80k → TOKEN PAUSE · 80-90k → [compact-rec] (recommend, not forced) · >90k → HALT · CHAT >80k → [compact-rec] · >120k → HALT (the old 30k multi-section rule was removed)
+- **Compact model (R3):** SESSION 60-80k → TOKEN PAUSE · 80k+ → [compact-rec] (recommend, not forced) · CHAT >80k → [compact-note] light · estimate NEVER hard-stops — CLIENT METER (real %) is the only ceiling (T-286 · canonical R3 / §Per-Turn C0 Q3). (the old 30k multi-section rule was removed)
 
 ## Verify Pattern Lookup (use when writing DoD for each section)
 
@@ -759,7 +779,7 @@ Section 2 — Confirm & Register:
 
 On failure → STOP → report which step failed → do not auto-recover.
 
-**Behavior Contract — M5 Write-Before-Present (CFP-027 fix):**
+**Behavior Contract — M3 Write-Before-Present (CFP-027 fix):**
 ```
 Pre:    M2 plan built · about to present to user
 Contract: MUST call Write tool for gather_complete.md + mece_plan.md BEFORE response text showing plan
@@ -817,9 +837,9 @@ Section 2 — Build:
   Rollback: delete created files
 
 Section 3 — Sync & Close:
-  Skill:    file_manager + variable_manager
-  [C] file_manager: update knowledge/index_files.json + backlinks
-  [D] variable_manager: update knowledge/index_variables.json
+  Skill:    index_manager
+  [C] index_manager (mode:file): update knowledge/index_files.json + backlinks
+  [D] index_manager (mode:symbol): update knowledge/index_variables.json
   [E] python scripts/symbol_indexer.py · Mark roadmap [X]
   Verify: symbol count increased · no stale backlinks
   Rollback: restore index from last known state
@@ -848,7 +868,7 @@ Section 3 — Modify Existing:
   Rollback: revert edits
 
 Section 4 — Sync & Close:
-  Skill:    file_manager + variable_manager
+  Skill:    index_manager
   [D] update indexes · python scripts/symbol_indexer.py · roadmap [X]
   Verify: symbol count updated · roadmap entries [X]
   Rollback: restore index from last known state
@@ -888,7 +908,7 @@ Section 3 — Sync & Close:
 TOKEN CHECK before Cycle/Section N+1:
 - Write SESSION_TOTAL (working memory) to file: `printf "SESSION_TOTAL: ___k\n" > .sessions/session_tokens.md` (fill ___k from memory) · then read + verify: `cat .sessions/session_tokens.md`
 - > 60k AND compact not yet run this cycle? → run Mid-Session Compact (see CLAUDE.md R3) → emit [compact-rec] (recommend, not forced) → then proceed
-- 60-80k? → TOKEN PAUSE immediately (do not start next cycle) · > 90k → HALT
+- 60-80k? → TOKEN PAUSE immediately (do not start next cycle) · above → advisory [compact-rec] + check CLIENT METER (real %) · estimate NEVER hard-stops (T-286)
 - ≤ 60k? → proceed to next Cycle/Section
 ```
 **[cycle N]**  All <X> sections done · results: .sessions/cycle_N_*.json · spawning Cycle <N+1>
@@ -901,7 +921,7 @@ TOKEN CHECK before Cycle/Section N+1:
    "งานเสร็จแล้วครับ ✓
     Errors/retries: <list or 'none'>
     มีส่วนไหนที่ควรปรับปรุงไหมครับ? หรือมี pattern ใหม่ที่ควรเพิ่มใน CODING_FAILURE_PATTERNS.md?"
-3. If user identifies a new failure pattern → route to file_manager to add CFP entry
+3. If user identifies a new failure pattern → route to index_manager (mode:file) to add CFP entry
 4. Write final summary_context to active session JSON before marking phase: done
 ```
 **[MECE]**     ✓ All Cycles done · Roadmap updated · Thread: done
@@ -990,7 +1010,7 @@ Triggered automatically. Does NOT pause work or ask user.
 5. Treat summary as new context anchor — old tool results no longer re-referenced
 6. Continue task immediately — no interruption
 ```
-**Compact cadence:** recommended at >60k (`[compact-rec]` · not forced · user decides), then TOKEN PAUSE takes over at 60-80k if compact alone is insufficient, HALT at >90k.
+**Compact cadence:** recommended at >60k (`[compact-rec]` · not forced · user decides), then TOKEN PAUSE takes over at 60-80k if compact alone is insufficient. No estimate-based HALT — above that stays advisory [compact-rec] pointing to the CLIENT METER (real %), the only ceiling (T-286).
 
 ---
 
@@ -1214,7 +1234,7 @@ Confirm `[post-read]` verdict was emitted for every Read call this session. Flag
 
 2. **Self-Healing** → if a skill caused the waste, add a STRICT rule to that skill's SKILL.md `## Sections` steps to prevent recurrence.
 
-3. **Halt Threshold** → if SESSION_TOTAL > 90k: set session `"status": "paused_limit_reached"` → HALT → notify user per R3.
+3. **Pause Threshold (advisory)** → SESSION_TOTAL is an ESTIMATE and NEVER hard-stops (T-286): above the TOKEN PAUSE band → emit advisory `[compact-rec]` + check the CLIENT METER (real %), the only ceiling, before pausing. Set `"status": "paused_limit_reached"` only on a real (client-meter) ceiling, per R3.
 
 ## Context Gate
 If during this task a new hard constraint was discovered → add to INVARIANTS.md §I2 before closing task
@@ -1292,7 +1312,7 @@ Never use UTF-8 bytes ÷ 3 — undercounts Thai by up to 1.7×.
 |---|---|
 | > 60k | **[compact-rec]** — recommend /compact (not forced · non-blocking), continue work |
 | 60-80k | TOKEN PAUSE → finish current loop step → save state → ask user |
-| > 90k | HALT immediately → save state → report to user |
+| > 90k *(est)* | advisory [compact-rec] + check CLIENT METER (real %) · estimate NEVER hard-stops (T-286) |
 
 ## Context Gate
 If during this task a new hard constraint was discovered → add to INVARIANTS.md §I2 before closing task
@@ -1394,7 +1414,7 @@ Step 3: Handle user response:
 ## §Section 4 — Implementation (harness edit)
 
 **Invariants (hard rules — never violate):**
-- MUST NOT edit `.agents/skills/self_improve/SKILL.md` itself → emit [blocked-self-edit] → present diff to user manually
+- MUST NOT edit `.agents/skills/harness/self_improve/SKILL.md` itself → emit [blocked-self-edit] → present diff to user manually
 - MUST NOT edit `INVARIANTS.md` without explicit user confirm
 
 \```
@@ -1443,7 +1463,8 @@ If during this task a new hard constraint was discovered → add to INVARIANTS.m
 
 ---
 
-## variable_manager
+## index_manager (mode: symbol)
+> Merged from the former `index_manager` (mode:symbol) (T-238). Canonical: `.agents/skills/knowledge/index_manager/SKILL.md`. This block documents the **symbol** mode.
 
 ```markdown
 ---
@@ -1495,7 +1516,11 @@ description: Structural fix agent for CFP patterns that recurred AFTER a fix was
   steps: ["grep audit targets for group", "check hooks in settings.json", "classify gap type a|b|c|d", "emit [audit-finding]"]
 - id: 3
   name: "Proposal"
-  steps: ["draft structural fix", "dry-run validate", "present proposal", "HALT for approval"]
+  steps: ["draft structural fix", "dry-run validate", "pin repro (T-255)", "present proposal", "HALT for approval"]
+  # repro-pin (T-255 · SINGLE SOURCE of the format = harness_doctor/SKILL.md §3): proposal states how the fix
+  #   will be validated → repro:{trigger, check, reproducible:yes|no}. yes → [repro-pinned] + store in
+  #   index_cfp_fix.json fixes[].repro (consumed by harness_editor Stage 3.6). no (behavioral drift) →
+  #   [repro-missing] → count-proxy (§1.4 recurrence) + weak-validation flag → PROCEED (SOFT · never blocks doctor).
 - id: 4
   name: "Approval Gate"
   steps: ["wait explicit user confirm", "no auto-proceed"]
@@ -1560,11 +1585,11 @@ Step 3: Emit [diagnosis]
 | `skip_planning` | CLAUDE.md R13 · AGENTS.md §Loop Architecture · PreToolUse hook |
 | `boot_gap` | CLAUDE.md §Boot · AGENTS.md §Boot Sequence · PreToolUse hook |
 | `skip_verification` | AGENTS.md §Phase 3 L4 · CLAUDE.md R12 |
-| `rule_drift` | CLAUDE.md §R<N> matching violation · AGENTS.md §Quick Reference |
+| `rule_drift` | CLAUDE.md §R<N> matching violation · AGENTS.md §Per-Turn Routing |
 | `premature_report` | AGENTS.md §Completion Gate |
-| `index_desync` | CLAUDE.md R8 · AGENTS.md §Backlink Rule |
+| `index_desync` | CLAUDE.md R8 · Implement/03_config.md §Backlink Rule |
 | `db_safety` | CLAUDE.md R15 · INVARIANTS.md §I2 |
-| `token_management` | CLAUDE.md R3 · AGENTS.md §TOKEN PAUSE |
+| `token_management` | CLAUDE.md R3 · AGENTS.md §Completion Gate |
 
 ```
 Step 1: Grep audit targets for target_group (one Bash call)
@@ -1660,10 +1685,11 @@ Signals that trigger harness_editor: "edit CLAUDE.md / AGENTS.md / SKILL.md / kn
 ## Workflow — 5-stage cycle (AUDIT → PLAN → EDIT → CLOSE · CFP loops back on abnormal)
 Stages 1→4 run forward. Abnormal at any stage → Stage 5 CFP → loop back to the failed stage with a DIFFERENT approach (never retry the same way twice).
 Stage 1 · AUDIT (mandatory-first for structural SKILL.md edits): wc -l zone probe · structural SKILL.md edit → spawn skill_auditor (MANDATORY) · minor / non-SKILL.md edit → emit `[audit-skip]` + reason
-Stage 2 · PLAN (gate — cannot skip): mece_plan.md dated today + T-N roadmap [/] · Parallel-cycle scan — group sections with NO shared file-write AND no mutual dependency into ONE parallel Cycle (spawn agents + barrier to rejoin); shared file OR dependency → serial; >=5 files/>=300L → spawn agents (R4), <5 files → main-context serial · record grouping in `### Cycle grouping`
+Stage 2 · PLAN (gate — cannot skip): mece_plan.md dated today + T-N roadmap [/] · Parallel-cycle scan — group sections with NO shared file-write AND no mutual dependency into ONE parallel Cycle (spawn agents + barrier to rejoin); shared file OR dependency → serial; >=5 files/>=300L → spawn agents (R4), <5 files → main-context serial · record grouping in `### Cycle grouping` · **CFP-fix fold-in (CFP-048):** task edits CODING_FAILURE_PATTERNS.md / goal="fix CFP-N|ERR-N" → load self_improve + fold the loop-closure section (fix-validation + CFP→APPLIED + SI-N log + cfp_topics/index sync) into mece_plan BEFORE presenting · hard-blocked by scripts/cfp_fix_plan_gate.py (detail: SKILL_detail §"Stage 2 · CFP-fix fold-in")
 Stage 3 · EDIT: [pre-edit] → targeted Edit → [✓ written] · SKILL.md edit → confirm 8 components survive · grep the file's ACTUAL section headers (never assume fixed names like "## Trigger")
 Stage 3.5 · BEHAVIORAL VERIFY (Signal Contract · trigger-gated): behavioural edit (BC/gate/signal/sequence) only → empirically test the rule. A BC is its own test spec — `Pre:` → trigger prompt, `Post:`/signal → expected output. Spawn a 3-config ladder cheapest-first with early-exit on first PASS — ① Haiku (floor) → ② Sonnet@medium → ③ Sonnet@high — each reading ONLY the edited file + trigger (isolation), score by signal-grep. No effort param on Agent tool → effort = prompt framing (medium="answer directly", high="reason step-by-step"). Haiku pass → [behave-pass] → Stage 4 · Haiku fail/Sonnet@medium pass → [behave-gap] (rule too subtle) → Stage 5 · only Sonnet@high pass → [behave-gap] effort:high (clear but needs deep reasoning) → Stage 5 · all 3 fail → [behave-fail] → Stage 5. k=3 per config for DB/boot gates. Log → knowledge/behave_test_log.jsonl. Non-behavioural edit → [behave-skip]. Full procedure: harness_editor/SKILL_detail.md §Stage 3.5
-Stage 4 · CLOSE (Index Sync + Docs Close): index sync (skill-manifest if new skill · topics[] from topic_registry.json · backlink_analyzer.py) · then Docs Close — edit a harness file → update its paired Implement/REPO doc in the SAME task per §Implement Map below · roadmap [/]→[X] · active_thread phase:done
+Stage 3.6 · FIX VALIDATION (bug/CFP-fix only · gates Stage 4 close): if the task is a bug/CFP-fix → restate the ORIGINAL failure → re-run the repro against the EDITED harness → gone: [fix-validated] cfp:<id> repro:<how> · still repros / cannot re-run: [fix-unvalidated] reason:<x>. [fix-unvalidated] BLOCKS the Stage 4 [C] roadmap [/]→[X] → loop Stage 5. Non-fix task → [fix-skip]. Closes the recurring "Doctor diagnoses → harness_editor edits → bug still there" hole (Stage 3/3.5 prove the edit is correct, NOT that the failure is gone — only a re-run of the original repro proves that). Distinct from Stage 3.5: 3.5 = "does the new rule fire?" · 3.6 = "is the original bug actually gone?"
+Stage 4 · CLOSE (Index Sync + Docs Close): index sync (skill-manifest if new skill · topics[] from topic_registry.json · backlink_analyzer.py) · then Docs Close — edit a harness file → update its paired Implement/REPO doc in the SAME task per §Implement Map below · roadmap [/]→[X] (bug/CFP-fix → requires [fix-validated] from Stage 3.6 first) · active_thread phase:done
 Stage 5 · CFP (abnormal → loop back · do NOT retry blindly): emit [escalate] → self_improve → harness_doctor · log CFP · re-enter the failed stage with a DIFFERENT approach · 3rd consecutive fail → [blocked] + halt for user
 
 ### Implement Map (Stage 4 — closed list · no guessing · the "edit harness file → update its paired Implement doc" rule)

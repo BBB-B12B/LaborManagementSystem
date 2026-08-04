@@ -13,12 +13,16 @@ Usage:
 import json
 import os
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness_paths
 
 # Resolve the target project from this script's own location (scripts/ -> project root),
 # matching repo_map_check.py. A copied-in script auto-targets whatever project it lives in
 # — no hardcoded path, no dependence on the caller's cwd.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = harness_paths.project_root()
 INDEX_VARS_PATH = PROJECT_ROOT / "knowledge/index_variables.json"
 INDEX_FILES_PATH = PROJECT_ROOT / "knowledge/index_files.json"
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -109,41 +113,31 @@ def extract_keywords(name: str, existing: dict) -> list[str]:
 def scan_symbols() -> dict[str, dict]:
     """Return enriched symbol metadata for every exported symbol in src/."""
     result: dict[str, dict] = {}
-    scan_roots = []
-    if SRC_ROOT.exists():
-        scan_roots.append(SRC_ROOT)
-    else:
-        for folder in ["backend/src", "frontend/src", "functions/src"]:
-            p = PROJECT_ROOT / folder
-            if p.exists():
-                scan_roots.append(p)
-                
-    for scan_root in scan_roots:
-        for root, dirs, files in os.walk(scan_root):
-            dirs[:] = [d for d in dirs if d not in ("node_modules", ".next", "__pycache__")]
-            for filename in files:
-                if not filename.endswith((".ts", ".tsx")):
-                    continue
-                full = Path(root) / filename
-                rel = str(full.relative_to(PROJECT_ROOT))
-                try:
-                    lines = full.read_text(encoding="utf-8").splitlines()
-                except Exception:
-                    continue
-                for lineno, text in enumerate(lines, start=1):
-                    m = EXPORT_RE.match(text.strip())
-                    if m:
-                        kind = m.group(1)
-                        name = m.group(2)
-                        if name not in result:
-                            line_end = infer_line_end(lines, lineno)
-                            result[name] = {
-                                "file": rel,
-                                "line": lineno,
-                                "line_end": line_end,
-                                "read_hint": make_read_hint(lineno, line_end),
-                                "type": classify(name, rel, kind),
-                            }
+    for root, dirs, files in os.walk(SRC_ROOT):
+        dirs[:] = [d for d in dirs if d not in ("node_modules", ".next", "__pycache__")]
+        for filename in files:
+            if not filename.endswith((".ts", ".tsx")):
+                continue
+            full = Path(root) / filename
+            rel = str(full.relative_to(PROJECT_ROOT))
+            try:
+                lines = full.read_text(encoding="utf-8").splitlines()
+            except Exception:
+                continue
+            for lineno, text in enumerate(lines, start=1):
+                m = EXPORT_RE.match(text.strip())
+                if m:
+                    kind = m.group(1)
+                    name = m.group(2)
+                    if name not in result:
+                        line_end = infer_line_end(lines, lineno)
+                        result[name] = {
+                            "file": rel,
+                            "line": lineno,
+                            "line_end": line_end,
+                            "read_hint": make_read_hint(lineno, line_end),
+                            "type": classify(name, rel, kind),
+                        }
     return result
 
 

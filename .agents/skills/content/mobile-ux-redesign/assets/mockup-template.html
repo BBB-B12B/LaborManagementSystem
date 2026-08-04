@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup Template — mobile-ux-redesign</title>
+<!--
+  HOW TO USE (step 6 of the mobile-ux-redesign skill):
+  1. Duplicate this file per group of screens (e.g. mockup-group1.html).
+  2. For each catalogued surface, copy a .device block into .wrap and fill it with
+     the VERBATIM copy + real icons + real data from your catalog.
+  3. Change ONLY layout / font-size / wrapping. Keep every word + icon exact.
+  4. Icons: <svg class="ic"><use href="#i-NAME"></use></svg>  (sprite inlined below;
+     add more with extract_icons.mjs). Size via classes .s14 .s16 .s18 .s22 .s24 .s28.
+  5. Open in a browser; each .device is a real 375px phone frame (722px tall, scrolls).
+  6. Verify with references/verify.md before showing the user.
+  Reusable component blocks live at the bottom under "COMPONENT LIBRARY".
+-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+<symbol id="i-layout-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+<symbol id="i-clipboard-list" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+<symbol id="i-clipboard-check" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+<symbol id="i-check-circle-2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+<symbol id="i-user-2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-file-spreadsheet" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></symbol>
+<symbol id="i-package" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-square-pen" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></symbol>
+<symbol id="i-edit-2" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></symbol>
+<symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></symbol>
+<symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></symbol>
+<symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+<symbol id="i-building-2" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-sliders-horizontal" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+<symbol id="i-hard-hat" viewBox="0 0 24 24"><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M14 6a6 6 0 0 1 6 6v3"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><rect x="2" y="15" width="20" height="4" rx="1"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-qr-code" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+<symbol id="i-trending-up" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+<symbol id="i-paperclip" viewBox="0 0 24 24"><path d="M13.234 20.252 21 12.3"/><path d="m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486"/></symbol>
+<symbol id="i-check-square" viewBox="0 0 24 24"><path d="M21 10.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.5"/><path d="m9 11 3 3L22 4"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+<symbol id="i-user-check" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+</svg>
+<style>
+  :root {
+    --font: "Noto Sans Thai","IBM Plex Sans Thai","Sarabun",-apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",sans-serif;
+    --mono: "SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,monospace;
+    --bg:#eef0f7; --surface:#fff; --surface-2:#f7f8fc;
+    --ink:#171a2b; --ink-2:#545a75; --ink-3:#8b90a8; --line:#e3e6f0; --line-2:#eceef5;
+    --brand:#4f46c9; --brand-2:#6d5ef0; --brand-soft:#ece9fd;
+    --ok:#16a34a; --danger:#dc2626;
+    --radius:18px;
+    --shadow:0 1px 2px rgba(23,26,43,.04),0 8px 28px -12px rgba(23,26,43,.18);
+    --shadow-sm:0 1px 2px rgba(23,26,43,.05),0 4px 12px -8px rgba(23,26,43,.15);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0d0f1a;--surface:#171a29;--surface-2:#1e2233;--ink:#eceefb;--ink-2:#a6abc7;--ink-3:#71768f;
+    --line:#2a2f45;--line-2:#222639;--brand-soft:#241f4a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -12px rgba(0,0,0,.6);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.35),0 6px 16px -10px rgba(0,0,0,.5);
+  }}
+  :root[data-theme="light"]{--bg:#eef0f7;--surface:#fff;--surface-2:#f7f8fc;--ink:#171a2b;--ink-2:#545a75;--ink-3:#8b90a8;--line:#e3e6f0;--line-2:#eceef5;--brand-soft:#ece9fd;--shadow:0 1px 2px rgba(23,26,43,.04),0 8px 28px -12px rgba(23,26,43,.18);}
+  :root[data-theme="dark"]{--bg:#0d0f1a;--surface:#171a29;--surface-2:#1e2233;--ink:#eceefb;--ink-2:#a6abc7;--ink-3:#71768f;--line:#2a2f45;--line-2:#222639;--brand-soft:#241f4a;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -12px rgba(0,0,0,.6);}
+
+  *{box-sizing:border-box}
+  body{margin:0}
+  .page{font-family:var(--font);background:radial-gradient(1200px 600px at 80% -10%,rgba(109,94,240,.10),transparent 60%),var(--bg);color:var(--ink);min-height:100vh;padding:clamp(20px,4vw,52px) clamp(14px,4vw,44px) 90px;line-height:1.5}
+  .wrap{max-width:1200px;margin:0 auto}
+
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-2);background:var(--brand-soft);padding:6px 12px;border-radius:999px}
+  .mast h1{font-size:clamp(27px,5vw,44px);line-height:1.05;margin:18px 0 10px;letter-spacing:-.02em;font-weight:800;text-wrap:balance}
+  .mast h1 span{color:var(--brand-2)}
+  .mast p.lead{font-size:clamp(15px,2vw,18px);color:var(--ink-2);max-width:64ch;margin:0}
+  .rules{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .rule{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px;box-shadow:var(--shadow-sm)}
+  .rule svg{width:16px;height:16px;color:var(--brand-2)}
+
+  .section{margin-top:54px}
+  .section>.head{margin-bottom:22px}
+  .section .tag{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--brand-2);letter-spacing:.03em}
+  .section h2{font-size:clamp(20px,3vw,26px);margin:6px 0;letter-spacing:-.01em;font-weight:800}
+  .section h2+p{margin:0;color:var(--ink-2);font-size:15px;max-width:70ch}
+  .divider{height:1px;background:var(--line);margin:54px 0 0;border:0}
+
+  .screen{display:grid;grid-template-columns:375px 1fr;gap:38px;align-items:start}
+  .screen.two{grid-template-columns:375px 375px 1fr}
+  @media (max-width:1080px){.screen.two{grid-template-columns:375px 1fr}}
+  @media (max-width:900px){.screen,.screen.two{grid-template-columns:1fr;gap:26px;justify-items:center}}
+  .notes{padding-top:4px}
+  @media (max-width:900px){.notes{max-width:375px}}
+  .notes h3{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .fix{display:flex;gap:11px;margin-bottom:14px;align-items:flex-start}
+  .fix .ba{flex-shrink:0;width:42px;font-size:10.5px;font-weight:800;text-align:center;padding-top:2px;letter-spacing:.02em}
+  .fix .keep{color:var(--brand-2)} .fix .after{color:var(--ok)}
+  .fix .txt{font-size:13.5px;color:var(--ink-2)}
+  .fix .txt b{color:var(--ink);font-weight:700}
+  .fix .txt .old{color:var(--danger);text-decoration:line-through;text-decoration-color:rgba(220,38,38,.5)}
+  .fix .txt code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
+
+  .device{width:375px;flex-shrink:0;background:var(--surface);border:1px solid var(--line);border-radius:40px;padding:10px;box-shadow:var(--shadow);position:relative;margin-top:34px}
+  .device .cap{position:absolute;top:-30px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink-3);white-space:nowrap}
+  .device .screenframe{border-radius:30px;overflow:hidden;border:1px solid var(--line-2);height:722px;overflow-y:auto;position:relative;scrollbar-width:thin;background:#f3f3fb}
+  .device .screenframe::-webkit-scrollbar{width:5px}
+  .device .screenframe::-webkit-scrollbar-thumb{background:rgba(120,120,150,.35);border-radius:3px}
+  .device .measure{position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+
+  /* ============ APP (light UI, faithful) ============ */
+  .app{
+    --a-bg:#f3f3fb;--a-surface:#fff;--a-ink:#1c2033;--a-ink-2:#626985;--a-ink-3:#9aa0b8;
+    --a-line:#e9eaf3;--a-brand:#4f46e5;--a-brand-2:#6366f1;--a-brand-soft:#eeebfd;
+    --a-ok:#16a34a;--a-ok-soft:#dcfce7;--a-danger:#ef4444;--a-danger-soft:#fdeaea;
+    --a-emerald:#10b981;--a-emerald-soft:#d5f5e8;--a-teal:#0d9488;--a-teal-soft:#d6f1ed;
+    --a-amber:#f59e0b;--a-amber-soft:#fdf0dc;--a-blue:#3b82f6;--a-blue-soft:#e5efff;
+    background:var(--a-bg);color:var(--a-ink);min-height:100%;font-family:var(--font);font-size:14px
+  }
+  .app *{box-sizing:border-box}
+  .ic{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;width:20px;height:20px;flex-shrink:0;display:block}
+  .ic.s14{width:14px;height:14px} .ic.s16{width:16px;height:16px} .ic.s18{width:18px;height:18px}
+  .ic.s22{width:22px;height:22px} .ic.s24{width:24px;height:24px} .ic.s26{width:26px;height:26px} .ic.s28{width:28px;height:28px}
+  .ic.fill{fill:currentColor;stroke:none}
+
+  .app .topbar{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--a-surface);border-bottom:1px solid var(--a-line);position:sticky;top:0;z-index:5}
+  .app .topbar .brand{font-weight:800;color:var(--a-brand);font-size:16px;letter-spacing:-.01em}
+  .app .iconbtn{width:40px;height:40px;border-radius:11px;border:1px solid var(--a-line);background:var(--a-surface);display:grid;place-items:center;color:var(--a-ink-2);position:relative;flex-shrink:0;cursor:pointer}
+  .app .iconbtn .dot{position:absolute;top:-5px;right:-5px;background:var(--a-danger);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:grid;place-items:center;padding:0 4px;border:2px solid var(--a-surface)}
+  .app .body{padding:14px 13px 26px}
+
+  .app .pagehead{margin-bottom:15px}
+  .app .pagehead .row{display:flex;align-items:center;gap:11px}
+  .app .pagehead .av{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;flex-shrink:0}
+  .app .pagehead h1{font-size:20px;font-weight:800;margin:0;letter-spacing:-.01em;line-height:1.15}
+  .app .pagehead p{font-size:12.5px;color:var(--a-ink-2);margin:5px 0 0;line-height:1.35}
+
+  .app .search{display:flex;align-items:center;gap:10px;height:46px;padding:0 14px;background:var(--a-surface);border:1px solid var(--a-line);border-radius:13px;color:var(--a-ink-3);font-size:14px;margin-bottom:13px}
+  .app .seg{display:flex;background:var(--a-brand-soft);border-radius:12px;padding:4px;gap:4px;margin-bottom:12px}
+  .app .seg button{flex:1;border:0;background:transparent;font-family:inherit;font-size:13px;font-weight:700;color:var(--a-ink-2);padding:9px 6px;border-radius:9px;min-height:40px;cursor:pointer;white-space:nowrap}
+  .app .seg button.on{background:var(--a-surface);color:var(--a-brand);box-shadow:var(--shadow-sm)}
+  .app .seg.stack{flex-direction:column;background:transparent;padding:0;gap:8px}
+  .app .seg.stack button{background:var(--a-surface);border:1px solid var(--a-line);min-height:46px;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .app .seg.stack button.on{background:var(--a-brand);color:#fff;border-color:var(--a-brand)}
+
+  .app .chiprow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:15px;scrollbar-width:none}
+  .app .chiprow::-webkit-scrollbar{display:none}
+  .app .chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:10px;white-space:nowrap;background:var(--a-surface);border:1px solid var(--a-line);font-size:13px;font-weight:600;color:var(--a-ink-2);cursor:pointer}
+  .app .chip.on{background:var(--a-brand);border-color:var(--a-brand);color:#fff}
+
+  .app .seclabel{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--a-ink-2);margin:18px 2px 10px;text-transform:uppercase;letter-spacing:.02em}
+  .app .seclabel .ib{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .app .seclabel .cnt{margin-left:auto;font-size:12px;background:var(--a-brand-soft);color:var(--a-brand);border-radius:20px;padding:2px 9px;font-weight:800}
+
+  .app .card{background:var(--a-surface);border:1px solid var(--a-line);border-radius:16px;padding:13px;margin-bottom:11px;box-shadow:var(--shadow-sm)}
+  .app .code{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--a-ink)}
+  .app .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:7px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+  .app .b-rev{background:var(--a-danger-soft);color:#e11d48}
+  .app .b-cat{background:var(--a-teal-soft);color:var(--a-teal)}
+  .app .b-ok{background:var(--a-ok-soft);color:var(--a-ok)}
+  .app .b-late{background:var(--a-danger-soft);color:var(--a-danger)}
+  .app .b-blue{background:var(--a-blue-soft);color:var(--a-blue)}
+  .app .b-amber{background:var(--a-amber-soft);color:#b45309}
+
+  .app .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;border-radius:12px;border:0;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;padding:0 16px}
+  .app .btn.sm{height:38px;font-size:13px;padding:0 12px}
+  .app .btn-primary{background:var(--a-brand);color:#fff}
+  .app .btn-teal{background:var(--a-teal);color:#fff}
+  .app .btn-full{width:100%}
+  .app .btn-ghost{background:var(--a-surface);border:1px solid var(--a-line);color:var(--a-ink)}
+  .app .btn-danger{background:var(--a-danger-soft);color:var(--a-danger)}
+
+  .app .prog{height:8px;background:var(--a-line);border-radius:5px;overflow:hidden}
+  .app .prog>i{display:block;height:100%;border-radius:5px;background:var(--a-brand-2)}
+  .app .meta{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
+  .app .meta .k{color:var(--a-ink-3)} .app .meta .v{font-weight:700}
+  .app .dash{border:0;border-top:1px dashed var(--a-line);margin:11px 0}
+  .app .loc{font-size:12.5px;color:var(--a-ink-2);margin-top:8px;display:flex;align-items:center;gap:6px}
+
+  /* Entry action rows */
+  .app .actionrow{display:flex;align-items:center;gap:12px;background:var(--a-surface);border:1px solid var(--a-line);border-radius:16px;padding:12px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+  .app .actionrow .ic-tile{width:46px;height:46px;border-radius:13px;flex-shrink:0;display:grid;place-items:center}
+  .app .actionrow .tt{flex:1;min-width:0}
+  .app .actionrow .tt b{display:block;font-size:15px;font-weight:800;line-height:1.25}
+  .app .actionrow .tt span{display:block;font-size:12px;color:var(--a-ink-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .app .actionrow .add{width:44px;height:44px;border-radius:12px;flex-shrink:0;background:var(--a-brand);color:#fff;display:grid;place-items:center;border:0;cursor:pointer}
+  .app .empty{border:1.5px dashed var(--a-line);border-radius:14px;padding:22px 14px;text-align:center;color:var(--a-ink-3);font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:8px}
+
+  /* month + toolbar */
+  .app .toolrow{display:flex;gap:8px;margin-bottom:13px}
+  .app .toolbtn{flex:1;height:42px;border-radius:12px;border:1px solid var(--a-line);background:var(--a-surface);display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:13.5px;font-weight:700;color:var(--a-ink);cursor:pointer}
+  .app .filtgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .app .filt{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--a-line);background:var(--a-surface);font-size:12.5px;font-weight:600;color:var(--a-ink-2);white-space:nowrap;overflow:hidden}
+  .app .filt span{overflow:hidden;text-overflow:ellipsis}
+  .app .month{display:flex;align-items:center;justify-content:space-between;background:var(--a-surface);border:1px solid var(--a-line);border-radius:13px;padding:8px 10px;margin-bottom:11px}
+  .app .month b{font-size:15px;font-weight:800;white-space:nowrap}
+  .app .month .nav{width:36px;height:36px;border-radius:10px;border:1px solid var(--a-line);background:var(--a-surface);color:var(--a-ink-2);display:grid;place-items:center;cursor:pointer}
+
+  /* progress ring */
+  .app .ring{width:44px;height:44px;flex-shrink:0;position:relative;display:grid;place-items:center}
+  .app .ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+  .app .ring span{font-size:11px;font-weight:800;color:var(--a-ink-2)}
+
+  /* drawer */
+  .app .drawer-wrap{position:absolute;inset:0;display:flex}
+  .app .drawer{width:270px;background:var(--a-surface);height:100%;display:flex;flex-direction:column;box-shadow:8px 0 24px rgba(0,0,0,.12);z-index:2}
+  .app .drawer-scrim{flex:1;background:rgba(15,23,42,.42)}
+  .app .drawer .dh{padding:16px 16px 14px;border-bottom:1px solid var(--a-line)}
+  .app .drawer .dh .brand{font-size:18px;font-weight:800;color:var(--a-brand)}
+  .app .drawer .user{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .app .drawer .user .uav{width:38px;height:38px;border-radius:11px;background:var(--a-brand-soft);color:var(--a-brand);display:grid;place-items:center}
+  .app .drawer .user b{font-size:14px;font-weight:800;display:block}
+  .app .drawer .user span{font-size:12px;color:var(--a-ink-3)}
+  .app .drawer nav{padding:10px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
+  .app .navitem{display:flex;align-items:center;gap:12px;padding:12px 12px;border-radius:11px;font-size:14px;font-weight:600;color:var(--a-ink-2);cursor:pointer}
+  .app .navitem.on{background:var(--a-brand-soft);color:var(--a-brand);font-weight:700}
+  .app .drawer .logout{margin:10px;display:flex;align-items:center;gap:10px;padding:12px;border-radius:11px;font-size:14px;font-weight:700;color:var(--a-danger);background:var(--a-danger-soft);border:0;cursor:pointer}
+
+  /* notification dropdown */
+  .app .notif-head{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--a-line)}
+  .app .notif-head b{font-size:16px;font-weight:800}
+  .app .notif-head span{font-size:12px;color:var(--a-ink-3)}
+  .app .notif{display:flex;gap:11px;padding:13px 14px;border-bottom:1px solid var(--a-line-2)}
+  .app .notif.unread{background:#f0f7ff}
+  .app .notif .nd{width:9px;height:9px;border-radius:50%;background:var(--a-brand);margin-top:5px;flex-shrink:0}
+  .app .notif .nd.read{background:transparent}
+  .app .notif b{font-size:13.5px;font-weight:700;display:block}
+  .app .notif p{font-size:12.5px;color:var(--a-ink-2);margin:2px 0 4px}
+  .app .notif .nm{font-size:11.5px;color:var(--a-ink-3)}
+
+  /* modal sheet */
+  .app .sheet{position:absolute;inset:0;z-index:20}
+  .app .sheet .bd{position:absolute;inset:0;background:rgba(15,23,42,.5)}
+  .app .sheet .panel{position:absolute;left:0;right:0;bottom:0;background:var(--a-bg);border-radius:20px 20px 0 0;max-height:96%;display:flex;flex-direction:column;overflow:hidden}
+  .app .sheet .ph{display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--a-line);background:var(--a-surface)}
+  .app .sheet .ph .pt{flex:1;min-width:0}
+  .app .sheet .ph .pt b{font-size:15px;font-weight:800;display:block;line-height:1.2}
+  .app .sheet .ph .pt span{font-size:11.5px;color:var(--a-ink-3)}
+  .app .sheet .pb{overflow-y:auto;padding:14px;scrollbar-width:thin}
+  .app .sheet .pf{display:flex;flex-direction:column;gap:8px;padding:11px 14px;border-top:1px solid var(--a-line);background:var(--a-surface)}
+  .app .grip{width:38px;height:4px;border-radius:3px;background:var(--a-line);margin:7px auto 0}
+
+  /* form fields */
+  .app .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .app .field>label{font-size:12px;font-weight:700;color:var(--a-ink-2)}
+  .app .field .req{color:var(--a-danger)}
+  .app .inp{min-height:42px;border:1px solid var(--a-line);border-radius:10px;padding:10px 12px;font:inherit;font-size:13.5px;background:var(--a-surface);color:var(--a-ink);display:flex;align-items:center}
+  .app .inp.ph{color:var(--a-ink-3)}
+  .app .inp.sel{justify-content:space-between}
+  .app .grid2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .app .grid1{display:grid;grid-template-columns:1fr;gap:0}
+  .app .barlabel{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:800;margin:6px 0 12px}
+  .app .barlabel i{width:4px;height:18px;border-radius:3px;display:block}
+  .app .photo-tile{border:1.5px dashed var(--a-line);border-radius:11px;height:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--a-ink-3);font-size:11.5px}
+  .app .preset{display:flex;gap:6px;flex-wrap:wrap}
+  .app .preset button{flex:1;min-width:56px;height:38px;border-radius:9px;border:1px solid var(--a-line);background:var(--a-surface);font:inherit;font-size:13px;font-weight:700;color:var(--a-ink-2);cursor:pointer}
+  .app .preset button.on{background:var(--a-brand);color:#fff;border-color:var(--a-brand)}
+  .app .toggle{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:11px;border:1px solid var(--a-line);background:var(--a-surface);font-size:13px;font-weight:700}
+  .app .toggle .sw{width:40px;height:24px;border-radius:20px;background:var(--a-line);position:relative;margin-left:auto;flex-shrink:0}
+  .app .toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+
+  .app .qrbox{width:170px;height:170px;margin:6px auto 0;background:#fff;border:1px solid var(--a-line);border-radius:14px;display:grid;place-items:center;color:var(--a-ink)}
+  .app .qrbox svg{width:120px;height:120px}
+
+  .app .infocard{background:var(--a-surface);border:1px solid var(--a-line);border-radius:12px;padding:11px;margin-bottom:8px}
+  .app .infocard .il{font-size:11px;color:var(--a-ink-3);font-weight:600;display:flex;align-items:center;gap:6px}
+  .app .infocard .iv{font-size:13.5px;font-weight:700;margin-top:3px}
+  .app .ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .app .ba-ph{border-radius:10px;height:92px;display:flex;align-items:flex-end;padding:7px;font-size:10px;font-weight:800;color:#fff;position:relative;overflow:hidden}
+  .app .ba-ph.before{background:linear-gradient(160deg,#64748b,#475569)}
+  .app .ba-ph.after{background:linear-gradient(160deg,#22c55e,#16a34a)}
+  .app .sign{border-top:1px dashed var(--a-line);padding-top:8px;text-align:center;font-size:11px;color:var(--a-ink-2)}
+
+  /* wrapper foot */
+  .foot{margin-top:40px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow-sm)}
+  .foot h3{margin:0 0 8px;font-size:16px}
+  .foot p{margin:0 0 6px;color:var(--ink-2);font-size:14px}
+  .pill-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .pill-list .pill{font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2)}
+  .pill-list .pill.done{background:#dcfce7;border-color:transparent;color:#15803d}
+  @media (prefers-color-scheme:dark){.pill-list .pill.done{background:#14331f;color:#4ade80}}
+
+  .modalgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(375px,1fr));gap:44px 24px;justify-items:center;margin-top:8px}
+</style>
+<body class="page">
+<div class="wrap">
+
+  <div class="mast">
+    <span class="eyebrow"><svg class="ic s16"><use href="#i-layout-dashboard"></use></svg> MOBILE MOCKUP</span>
+    <h1>Screen group — <span>faithful @375</span></h1>
+    <p class="lead">Verbatim copy + real icons. Only layout / font / wrapping changed. Review before code.</p>
+  </div>
+
+  <!-- ===================== EXAMPLE DEVICE FRAME ===================== -->
+  <div class="screen">
+    <div class="device"><span class="cap">Example · Screen name</span>
+      <div class="screenframe"><div class="app">
+
+        <!-- topbar -->
+        <div class="topbar">
+          <button class="iconbtn"><svg class="ic s22"><use href="#i-menu"></use></svg></button>
+          <span class="brand">App Name</span>
+          <button class="iconbtn"><svg class="ic s22"><use href="#i-bell"></use></svg><span class="dot">3</span></button>
+        </div>
+
+        <div class="body">
+          <!-- page head -->
+          <div class="pagehead"><div class="row">
+            <div class="av" style="background:var(--a-brand-soft);color:var(--a-brand)"><svg class="ic s24"><use href="#i-clipboard-list"></use></svg></div>
+            <div><h1>Page title</h1><p>Verbatim subtitle from the source</p></div>
+          </div></div>
+
+          <!-- search + chip-scroll row (desktop multi-col filter → scroll row) -->
+          <div class="search"><svg class="ic s18"><use href="#i-search"></use></svg> ค้นหา…</div>
+          <div class="chiprow">
+            <span class="chip on">ทั้งหมด</span>
+            <span class="chip">รอดำเนินการ</span>
+            <span class="chip">เสร็จสิ้น</span>
+            <span class="chip">ตีกลับ</span>
+          </div>
+
+          <!-- a faithful card (identifier code stays nowrap monospace) -->
+          <div class="card">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span class="code">ART-2026-WOA-0014</span>
+              <span class="badge b-rev">REV. 1</span>
+              <span class="badge b-cat">งานสี</span>
+            </div>
+            <div style="font-size:15px;font-weight:800">รายการงานตามต้นฉบับ</div>
+            <div class="dash"></div>
+            <div class="prog"><i style="width:60%"></i></div>
+            <div class="meta" style="margin-top:8px"><span class="k">ความคืบหน้า</span><span class="v">60%</span></div>
+          </div>
+
+          <button class="btn btn-primary btn-full"><svg class="ic s16"><use href="#i-plus"></use></svg> ปุ่มเต็มแถว</button>
+        </div>
+
+      </div></div>
+    </div>
+    <div class="notes">
+      <h3><svg class="ic s16"><use href="#i-square-pen"></use></svg> Fix notes</h3>
+      <div class="fix"><span class="ba after">AFTER</span><div class="txt"><b>What changed here</b> and why — one line per change. Keep copy verbatim.</div></div>
+    </div>
+  </div>
+
+  <!-- ===================== COMPONENT LIBRARY (copy blocks below) ===================== -->
+  <hr class="divider">
+  <div class="section"><div class="head"><span class="tag">COMPONENT LIBRARY</span><h2>Reusable mobile blocks</h2><p>Copy a block into a .device frame. All faithful to the source; only shapes are mobile.</p></div>
+
+  <div class="modalgrid">
+
+    <!-- (A) bottom-sheet modal: header pinned + footer pinned + body scrolls -->
+    <div class="device"><span class="cap">A · Bottom-sheet modal</span>
+      <div class="screenframe"><div class="app" style="position:relative">
+        <div class="body" style="filter:blur(1px);opacity:.5"><div class="card">หน้าเบื้องหลัง…</div></div>
+        <div class="sheet"><div class="bd"></div>
+          <div class="panel">
+            <div class="grip"></div>
+            <div class="ph"><div class="pt"><b>หัวข้อ Modal (verbatim)</b><span>คำอธิบายรอง</span></div>
+              <button class="iconbtn"><svg class="ic s18"><use href="#i-x"></use></svg></button></div>
+            <div class="pb">
+              <div class="field"><label>ป้ายกำกับ <span class="req">*</span></label><div class="inp ph">พิมพ์ที่นี่…</div></div>
+              <div class="field"><label>ตัวเลือก</label><div class="inp sel">เลือก <svg class="ic s16"><use href="#i-chevron-down"></use></svg></div></div>
+            </div>
+            <div class="pf"><button class="btn btn-primary btn-full">ยืนยัน</button>
+              <button class="btn btn-ghost btn-full">ยกเลิก</button></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- (B) stat grid 2x2 (desktop repeat(4,1fr) → mobile 2x2) -->
+    <div class="device"><span class="cap">B · Stat grid 2×2</span>
+      <div class="screenframe"><div class="app"><div class="body">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+          <div class="card" style="margin:0"><div class="meta"><span class="k">งานทั้งหมด</span></div><div style="font-size:1.65rem;font-weight:800">128</div></div>
+          <div class="card" style="margin:0"><div class="meta"><span class="k">เสร็จสิ้น</span></div><div style="font-size:1.65rem;font-weight:800;color:var(--a-ok)">96</div></div>
+          <div class="card" style="margin:0"><div class="meta"><span class="k">ค้าง</span></div><div style="font-size:1.65rem;font-weight:800;color:var(--a-amber)">24</div></div>
+          <div class="card" style="margin:0"><div class="meta"><span class="k">เกินกำหนด</span></div><div style="font-size:1.65rem;font-weight:800;color:var(--a-danger)">8</div></div>
+        </div>
+      </div></div></div>
+    </div>
+
+    <!-- (C) donut chart as inline SVG. Arc = stroke-dasharray on a circle.
+         C = 2*pi*r. For r=54 -> C=339.29. A segment of fraction f: dasharray = (f*C) (C - f*C).
+         Rotate each next segment with stroke-dashoffset = -(sum of previous f)*C. Rotate group -90deg to start at top. -->
+    <div class="device"><span class="cap">C · Donut (inline SVG)</span>
+      <div class="screenframe"><div class="app"><div class="body">
+        <div class="card" style="display:grid;place-items:center">
+          <svg width="150" height="150" viewBox="0 0 120 120">
+            <g transform="rotate(-90 60 60)" fill="none" stroke-width="16">
+              <circle cx="60" cy="60" r="54" stroke="var(--a-line)"/>
+              <!-- 55% ok (green): dasharray = 0.55*339.29=186.6 , rest=152.7 -->
+              <circle cx="60" cy="60" r="54" stroke="#16a34a" stroke-dasharray="186.6 152.7" stroke-dashoffset="0"/>
+              <!-- 30% amber, starts after 55%: offset = -0.55*339.29 = -186.6 ; dasharray=0.30*C=101.8 -->
+              <circle cx="60" cy="60" r="54" stroke="#f59e0b" stroke-dasharray="101.8 237.5" stroke-dashoffset="-186.6"/>
+              <!-- remaining 15% danger: offset = -(0.85)*C = -288.4 ; dasharray=0.15*C=50.9 -->
+              <circle cx="60" cy="60" r="54" stroke="#ef4444" stroke-dasharray="50.9 288.4" stroke-dashoffset="-288.4"/>
+            </g>
+            <text x="60" y="58" text-anchor="middle" font-size="20" font-weight="800" fill="currentColor">75%</text>
+            <text x="60" y="74" text-anchor="middle" font-size="9" fill="#9aa0b8">เสร็จ</text>
+          </svg>
+        </div>
+      </div></div></div>
+    </div>
+
+    <!-- (D) kanban N-columns -> collapsible accordion rows (dot + count). Default collapsed. -->
+    <div class="device"><span class="cap">D · Kanban → accordion</span>
+      <div class="screenframe"><div class="app"><div class="body">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--a-line)">
+            <span style="width:10px;height:10px;border-radius:50%;background:#3b82f6"></span>
+            <b style="flex:1;font-size:14px">กำลังดำเนินการ</b>
+            <span class="badge b-blue">5</span>
+            <svg class="ic s18"><use href="#i-chevron-down"></use></svg>
+          </div>
+          <div style="padding:12px 14px;background:var(--a-bg);display:flex;flex-direction:column;gap:8px">
+            <div class="card" style="margin:0"><span class="code">WOA-0012</span><div style="font-weight:700;margin-top:4px">การ์ดงานเต็มความกว้าง</div></div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:13px 14px">
+            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a"></span>
+            <b style="flex:1;font-size:14px">เสร็จสิ้น</b>
+            <span class="badge b-ok">12</span>
+            <svg class="ic s18" style="transform:rotate(-90deg)"><use href="#i-chevron-down"></use></svg>
+          </div>
+        </div>
+      </div></div></div>
+    </div>
+
+    <!-- (E) wide table -> its OWN horizontal-scroll frame + swipe hint (page never scrolls sideways) -->
+    <div class="device"><span class="cap">E · Table (own h-scroll)</span>
+      <div class="screenframe"><div class="app"><div class="body">
+        <div style="font-size:11px;color:var(--a-ink-3);margin-bottom:6px">← ปัดเพื่อดูเพิ่ม →</div>
+        <div style="overflow-x:auto;border:1px solid var(--a-line);border-radius:12px">
+          <table style="border-collapse:collapse;min-width:560px;font-size:12.5px">
+            <thead><tr style="background:var(--a-surface-2,#f7f8fc)">
+              <th style="padding:10px;text-align:left;white-space:nowrap">รหัส</th>
+              <th style="padding:10px;text-align:left;white-space:nowrap">รายการ</th>
+              <th style="padding:10px;text-align:left;white-space:nowrap">สถานะ</th>
+              <th style="padding:10px;text-align:left;white-space:nowrap">กำหนดส่ง</th>
+            </tr></thead>
+            <tbody><tr style="border-top:1px solid var(--a-line)">
+              <td style="padding:10px;white-space:nowrap" class="code">WOA-0012</td>
+              <td style="padding:10px;white-space:nowrap">งานสีภายนอก</td>
+              <td style="padding:10px"><span class="badge b-ok">เสร็จ</span></td>
+              <td style="padding:10px;white-space:nowrap">16 ก.ค.</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </div></div></div>
+    </div>
+
+    <!-- (F) star-rating row + segmented scale (1fr 1fr rating grid -> full-width segmented) -->
+    <div class="device"><span class="cap">F · Rating + segmented</span>
+      <div class="screenframe"><div class="app"><div class="body">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;font-size:13px">คุณภาพงาน</span>
+            <span style="display:flex;gap:4px;color:#f59e0b">
+              <svg class="ic s18 fill"><use href="#i-star"></use></svg><svg class="ic s18 fill"><use href="#i-star"></use></svg>
+              <svg class="ic s18 fill"><use href="#i-star"></use></svg><svg class="ic s18 fill"><use href="#i-star"></use></svg>
+              <svg class="ic s18"><use href="#i-star"></use></svg>
+            </span>
+          </div>
+        </div>
+        <div class="seg"><button class="on">ผ่าน</button><button>แก้ไข</button></div>
+      </div></div></div>
+    </div>
+
+  </div>
+  </div>
+
+</div>
+</body>
+</html>

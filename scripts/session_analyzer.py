@@ -14,7 +14,10 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness_paths
+
+ROOT = harness_paths.project_root()
 INDEX_PATH = ROOT / "knowledge" / "index_sessions.json"
 PROMOTIONS_PATH = ROOT / ".sessions" / "promotions.md"
 THRESHOLD = 3

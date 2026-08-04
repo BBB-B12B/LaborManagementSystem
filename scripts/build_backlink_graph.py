@@ -32,7 +32,10 @@ import os
 import sys
 from collections import defaultdict
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import harness_paths
+
+ROOT = str(harness_paths.project_root())
 INDEX = os.path.join(ROOT, "knowledge", "index_files.json")
 OUT_DIR = os.path.join(ROOT, "knowledge", "diagrams")
 OUT = os.path.join(OUT_DIR, "backlink-graph.html")
@@ -117,6 +120,7 @@ def build_model(index: dict) -> dict:
             "id": p,
             "label": os.path.basename(p),
             "topic": t,
+            "domain": index[p].get("domain", "harness") if isinstance(index[p], dict) else "harness",
             "color": topic_color(t),
             "wdeg": wdeg.get(p, 0),
             # truncate long summaries but signal there's more with an ellipsis
@@ -319,7 +323,11 @@ const maxW = Math.max(1, ...nodes.map(n=>n.wdeg));
 for(const n of nodes){ n.r = 3.2 + 6.5*Math.sqrt(n.wdeg/maxW); }
 
 // ---- force-sim params (exposed for the Plus panel) ----
-const SIM = { repel: 1.0, center: 1.0, linkForce: 1.0, linkDist: 1.0, cluster: 0.012 };
+const SIM = { repel: 1.0, center: 1.0, linkForce: 1.0, linkDist: 1.0, cluster: 0.012, domainSep: 0.03 };
+// domain layout (v3 · T-278): pull each domain's nodes toward a horizontal anchor so
+// harness / content form visibly separate clusters; ring colour cues the domain.
+const DOMAIN_ANCHOR = { harness: -380, content: 380, data: 0 };
+const DOMAIN_RING   = { harness: "#4e79a7", content: "#e15759", data: "#59a14f" };
 const BASE_REPEL = 900, BASE_LINK_K = 0.04, BASE_LINK_LEN = 46, BASE_CENTER = 0.012;
 let frozen = false, showOrphans = true, showArrows = false;
 // --- cooling: the sim sheds energy each tick and STOPS once settled (like a
@@ -416,6 +424,11 @@ function tick(){
     let cx=0, cy=0; for(const n of arr){ cx+=n.x; cy+=n.y; } cx/=arr.length; cy/=arr.length;
     for(const n of arr){ n.vx += (cx-n.x)*SIM.cluster*aF; n.vy += (cy-n.y)*SIM.cluster*aF; }
   }
+  // domain separation pull (v3 · T-278): nudge each node toward its domain x-anchor
+  for(const n of nodes){
+    const ax = (n.domain in DOMAIN_ANCHOR) ? DOMAIN_ANCHOR[n.domain] : 0;
+    n.vx += (ax - n.x) * SIM.domainSep * aF;
+  }
   for(const n of nodes){
     n.vx += (0 - n.x)*centerK*aF; n.vy += (0 - n.y)*centerK*aF;
     n.vx*=0.86; n.vy*=0.86;
@@ -452,6 +465,9 @@ function draw(){
     ctx.globalAlpha = dim ? 0.18 : 1;
     ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
     ctx.fillStyle = n.color; ctx.fill();
+    // domain ring (v3 · T-278): coloured outline marks which domain the node belongs to
+    const ring = DOMAIN_RING[n.domain];
+    if(ring && !dim){ ctx.lineWidth = Math.max(1, r*0.30); ctx.strokeStyle = ring; ctx.stroke(); }
     if(n===selected){ ctx.lineWidth=2; ctx.strokeStyle="#fff"; ctx.stroke(); }
     else if(searchHits && searchHits.has(n)){ ctx.lineWidth=1.5; ctx.strokeStyle="#ffd166"; ctx.stroke(); }
     ctx.globalAlpha = 1;

@@ -1,4 +1,4 @@
-harness_version: 2026-06-16
+harness_version: 2026-07-10
 git_sha: 1566ea7
 # Version stamp for one-command migration (Implement/09_migration.md M0).
 # Compare $HARNESS_SRC/VERSION (cloned source) vs ./VERSION (target) to decide

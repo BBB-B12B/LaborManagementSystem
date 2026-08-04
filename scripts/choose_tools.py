@@ -17,9 +17,13 @@ import json
 import argparse
 import os
 import re
+import sys
 from pathlib import Path
 
-BASE = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness_paths
+
+BASE = harness_paths.engine_root()
 SKILL_MANIFEST = BASE / ".agents" / "skills" / "skill-manifest.json"
 TOOL_MANIFEST = BASE / ".agents" / "tools" / "tool-manifest.json"
 

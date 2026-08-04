@@ -20,20 +20,36 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness_paths
+
 MAX_AGE_HOURS = 24
 MAX_FILES = 50
 
 
 def get_exec_log_dir():
-    base = Path(__file__).parent.parent
+    base = harness_paths.project_root()
     return base / ".sessions" / "exec_log"
+
+
+def _safe_mtime(f: Path):
+    """mtime of f, or None if it vanished. On macOS external/network volumes the OS writes
+    `._name.txt` AppleDouble companion files; unlinking a real file removes its companion, so a
+    `._` entry captured by glob() can disappear mid-run and f.stat() would then raise."""
+    try:
+        return f.stat().st_mtime
+    except OSError:
+        return None
 
 
 def trim(exec_dir: Path, max_age_hours: int, max_files: int, dry_run: bool = False):
     if not exec_dir.exists():
         return {"deleted": 0, "kept": 0, "reason": "dir_missing"}
 
-    files = sorted(exec_dir.glob("*.txt"), key=lambda f: f.stat().st_mtime, reverse=True)
+    # Skip macOS AppleDouble metadata files: glob("*.txt") matches `._name.txt`, but they are not
+    # real exec logs and they vanish when their companion is unlinked (see _safe_mtime).
+    candidates = [f for f in exec_dir.glob("*.txt") if not f.name.startswith("._")]
+    files = sorted(candidates, key=lambda f: _safe_mtime(f) or 0.0, reverse=True)
     now = datetime.now(timezone.utc).timestamp()
     cutoff = now - (max_age_hours * 3600)
 
@@ -41,11 +57,14 @@ def trim(exec_dir: Path, max_age_hours: int, max_files: int, dry_run: bool = Fal
     kept = []
 
     for i, f in enumerate(files):
-        too_old = f.stat().st_mtime < cutoff
+        mtime = _safe_mtime(f)
+        if mtime is None:
+            continue  # vanished between glob and now — nothing to delete
+        too_old = mtime < cutoff
         over_limit = i >= max_files
         if too_old or over_limit:
             if not dry_run:
-                f.unlink()
+                f.unlink(missing_ok=True)
             deleted.append(f.name)
         else:
             kept.append(f.name)

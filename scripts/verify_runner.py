@@ -13,7 +13,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness_paths
+
+ROOT = harness_paths.project_root()
 DEFAULT_PLAN = ROOT / ".sessions" / "mece_plan.md"
 
 

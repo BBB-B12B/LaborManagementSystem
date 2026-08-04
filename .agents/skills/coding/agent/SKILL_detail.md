@@ -53,8 +53,12 @@ Validation (main agent checks before Cycle N+1):
 
 ## §Environment — Environment & Paths
 
-- Libraries: `/Volumes/BriteBrain/Libraries`
-- IDE Context: `/Volumes/BriteBrain/IDE`
-- Python install: `pip install <pkg> --target=/Volumes/BriteBrain/Libraries/python`
-- NPM install: `npm install <pkg> --prefix=/Volumes/BriteBrain/Libraries/npm`
-- Execution: `export PYTHONPATH=$PYTHONPATH:/Volumes/BriteBrain/Libraries/python`
+> Machine-specific — set these per machine before using the coding agent. This file
+> ships to every machine via the engine, so it MUST NOT hardcode one machine's mount:
+> `export HARNESS_LIB_ROOT=/path/to/Libraries`  ·  `export HARNESS_IDE_ROOT=/path/to/IDE`
+
+- Libraries: `$HARNESS_LIB_ROOT`
+- IDE Context: `$HARNESS_IDE_ROOT`
+- Python install: `pip install <pkg> --target="$HARNESS_LIB_ROOT/python"`
+- NPM install: `npm install <pkg> --prefix="$HARNESS_LIB_ROOT/npm"`
+- Execution: `export PYTHONPATH="$PYTHONPATH:$HARNESS_LIB_ROOT/python"`

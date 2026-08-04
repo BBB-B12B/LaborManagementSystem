@@ -27,7 +27,7 @@ triggers:
 
 # Delegate
 
-Offload **already-planned, mechanical** MECE sections to a **Haiku** sub-agent so the expensive reasoning models (Opus/Sonnet) stay reserved for planning and judgment. The cheap model is named in `detected.md` as `model_low` — never hardcode the id; resolve it from the active provider.
+Offload **already-planned, mechanical** MECE sections to a **cheap-tier** sub-agent — haiku (`model_low`) or sonnet (`model_medium`) — so **opus** (`model_high`) stays reserved for planning and judgment. T-328: a `model_medium` section spawns to **sonnet**, it does NOT fall back to opus-in-main. Resolve tier ids from `detected.md` — never hardcode.
 
 ## Operating Stance
 A passed MECE plan **is** the standalone delegate prompt. Each `[ ] S<N>` section already carries tight scope, absolute paths, minimal context, and a Verify-N acceptance test — exactly the conditions where Haiku is reliable and cheap. You do not invent a new "is this menial?" judgment: the trigger is simply "this section came out of a confirmed MECE plan and is mechanical." Unplanned / exploratory / judgment work never reaches this stage as a clean section, so it is never delegated.
@@ -54,7 +54,8 @@ Missing any → `[delegate-refused]` + state which prerequisite failed.
 1. **Eligibility gate** — check the three Prerequisites + the When-NOT list. Any fail → `[delegate-refused] reason: <gate>` → run the section in main context (this is a routing choice, not an error).
 2. **Context-budget check** — estimate the section's footprint (bytes of files it must read/write ÷ 4 ≈ tokens). If it would pull in large/many files at once, split it into bounded per-file chunks before delegating, or keep it.
 3. **Build the prompt** — feed the MECE section **verbatim** as the sub-agent prompt. It already has absolute paths + acceptance criteria. Add nothing from this chat.
-4. **Spawn** — `Agent(prompt=<section>, model=<model_low from detected.md>)`, scoping tools to the minimum the section needs (e.g. Read/Edit for an edit task). Resolve `model_low` from `detected.md` — never hardcode `claude-haiku-4-5`.
+4. **Spawn** — `Agent(prompt=<section>, model=<the section's DECLARED tier from detected.md>)` — model_low→haiku, model_medium→sonnet (T-328: the `Model:` field is BINDING — spawn to the tier the plan declared, never silently to opus). Scope tools to the minimum the section needs. Resolve the tier id from `detected.md` — never hardcode `claude-haiku-4-5`.
+   **Batch (D·amortize · T-328)** — if ≥2 sibling sections share the SAME cheap tier and are mechanical with no mutual dependency, spawn them as ONE batch: the spawn overhead is paid ONCE (amortized across the group) instead of once per section. Self-verify each item independently; a failed item retries once then escalates on its own, its siblings unaffected. Never batch judgment / sensitive / MAIN sections.
 5. **Self-verify (mandatory)** — run the section's Verify-N against the result yourself. Haiku is cheaper and less reliable; never accept its word.
 6. **On failure** — Verify-N fails → **auto-retry once** with the same prompt → still fails → **escalate** to MODEL_MEDIUM (Sonnet) / main context per the R13 ladder + emit `[delegate-escalated] S<N> · reason: <verify failure>`. Never silently accept a failed delegate result.
 7. **Report** — `[delegate-done] S<N> · model: haiku · verify: PASS` (or the escalation line).

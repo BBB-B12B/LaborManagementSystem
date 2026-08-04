@@ -31,12 +31,12 @@ REGISTRY_PATH = "knowledge/topic_registry.json"
 
 def load_files():
     try:
-        idx = json.load(open(INDEX_PATH, encoding="utf-8"))
+        idx = json.load(open(INDEX_PATH))
     except FileNotFoundError:
         print(f"ERROR: {INDEX_PATH} not found", file=sys.stderr)
         sys.exit(1)
     try:
-        registry = json.load(open(REGISTRY_PATH, encoding="utf-8"))
+        registry = json.load(open(REGISTRY_PATH))
         valid_topics = set(registry["topics"])
     except FileNotFoundError:
         print(f"WARN: {REGISTRY_PATH} not found — skipping topic validation", file=sys.stderr)
@@ -123,10 +123,32 @@ def validate_topics(idx, valid_topics):
         print(f"WARN: {len(warn_summary)} entries missing summary (run backfill_knowledge_index.py)", file=sys.stderr)
 
 
+def domain_of(meta):
+    """FACET 3 (v3 · T-278): field of work. Deterministic — read frontmatter-derived
+    `domain` key; absent → 'harness' (back-compat: every pre-v3 entry IS harness)."""
+    return meta.get("domain", "harness")
+
+
+def ref_paths(meta):
+    """Explicit references[] target paths (the only way a cross-domain link is allowed).
+    Handles both dict {"path": ...} and bare-string reference shapes."""
+    out = set()
+    for r in meta.get("references", []) or []:
+        if isinstance(r, dict):
+            p = r.get("path")
+            if p:
+                out.add(p)
+        elif isinstance(r, str):
+            out.add(r)
+    return out
+
+
 def compute_related(idx, min_score=2):
     results = {}
     paths = [p for p in idx.keys() if isinstance(idx[p], dict)]
     weights = {p: topic_weights(idx[p]) for p in paths}
+    domains = {p: domain_of(idx[p]) for p in paths}
+    refs = {p: ref_paths(idx[p]) for p in paths}
 
     for path_a in paths:
         wa = weights[path_a]
@@ -138,6 +160,12 @@ def compute_related(idx, min_score=2):
         for path_b in paths:
             if path_a == path_b:
                 continue
+            # FACET 3 gate (v3 · T-278): files in different domains do NOT link on
+            # topic overlap alone — only via an explicit references[] edge either way.
+            if domains[path_a] != domains[path_b] \
+                    and path_b not in refs[path_a] and path_a not in refs[path_b]:
+                continue
+
             wb = weights[path_b]
             shared = set(wa) & set(wb)
             if not shared:
@@ -197,6 +225,21 @@ def main():
     total_links = sum(len(v) for v in related_map.values())
     entries_with_related = sum(1 for v in related_map.values() if v)
 
+    # T-268(b): an entry that HAS topics but computes ZERO related[] links is "islanded"
+    # — reachable by no other doc. ADVISORY (stderr, exit unchanged): the common cause is
+    # off-vocabulary topics that intersect nothing (T-189 vocab cleanup will reduce these).
+    islanded = [p for p in related_map
+                if not related_map[p]
+                and isinstance(idx.get(p), dict)
+                and topic_weights(idx[p])]
+    if islanded:
+        print(f"[islanded-doc] {len(islanded)} file(s) have topics but zero related[] links "
+              "(advisory — many may clear after topic-vocab cleanup T-189):", file=sys.stderr)
+        for p in islanded[:10]:
+            print(f"  [islanded-doc] {p}", file=sys.stderr)
+        if len(islanded) > 10:
+            print(f"  … +{len(islanded)-10} more", file=sys.stderr)
+
     print(f"[backlink_analyzer] Analyzed {len(idx)} files")
     print(f"  Entries with related links: {entries_with_related}/{len(idx)}")
     print(f"  Total related[] links computed: {total_links}")
@@ -220,13 +263,23 @@ def main():
     for path, entries in related_map.items():
         if path in idx:
             # Strip shared_topics from persisted output (verbose, keep index lean)
-            idx[path]["related"] = [
+            new_related = [
                 {"path": e["path"], "strength": e["strength"], "score": e["score"]}
                 for e in entries
             ]
+            # T-268(a): WARN before clobbering a NON-EMPTY related[] whose value differs
+            # from the freshly computed one. Recompute is deterministic from topics, so a
+            # diff means topics shifted or someone hand-edited — never silent. stderr only,
+            # exit stays 0 (index_reconcile's execute_regen reads the exit code).
+            old_related = idx[path].get("related") if isinstance(idx[path], dict) else None
+            if old_related and old_related != new_related:
+                print(f"[backlink-overwrite] {path}: related[] changed "
+                      f"({len(old_related)}→{len(new_related)} links) — topics shifted or hand-edit",
+                      file=sys.stderr)
+            idx[path]["related"] = new_related
 
     json.dump(idx, open(INDEX_PATH, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-    print(f"\n[backlink_analyzer] Written -> {INDEX_PATH}")
+    print(f"\n[backlink_analyzer] Written → {INDEX_PATH}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,45 @@
 # 09 — Migration Guide (Old Harness → Current Version)
+<!-- DOC-MAP:START (auto · gen_doc_labels.py) -->
+<!-- topic: doc_navigation · jump: python3 scripts/lookup.py "<label>" -->
+- L47 · ## One-command usage
+- L58 · ## When to use
+- L75 · ## M0 — Preflight (run first · resolves source + skips redundant work)
+- L79 · ### M0.1 · Clone the current harness source
+- L89 · ### M0.2 · Version check — skip redundant file-copy
+- L105 · ### M0.3 · Run contract (hard rules for the whole migration)
+- L115 · ## Track C — Upgrade Existing Harness
+- L117 · ### Overview (4 tracks — run in order)
+- L130 · ## M1 — Re-format Indexes
+- L132 · ### M1.1 · session_tokens.md (was chat_tokens.md)
+- L148 · ### M1.2 · index_files.json — add missing fields
+- L179 · ### M1.3 · index_variables.json — re-run indexer
+- L187 · ### M1.4 · index_cfp_fix.json — check schema
+- L212 · ### M1.5 · Regenerate indexes, code graph + REPO_MAP (inline — no cross-file pointer)
+- L228 · ## M2 — Re-structure Harness Tree
+- L232 · ### M2.1 · Required directories
+- L240 · ### M2.2 · Required session files
+- L255 · ### M2.3 · mece_plan_schema.md template
+- L263 · ### M2.4 · Platform detected.md — FORCE re-detection (never preserve stale values)
+- L294 · ### M2.5 · Required scripts (incl. current hook + index automation)
+- L307 · ### M2.6 · Re-wire hooks (.claude/settings.json)
+- L321 · ## M3 — Update / Overwrite Skills + Config
+- L325 · ### M3.1 · Files to OVERWRITE (copy from current harness)
+- L341 · ### M3.2 · Files to PRESERVE (do not touch)
+- L352 · ### M3.3 · Skill overwrite procedure
+- L368 · ### M3.4 · Add new skills not in old version
+- L394 · ### M3.5 · Merge CODING_FAILURE_PATTERNS.md
+- L404 · ### M3.6 · Stamp the version (last copy step)
+- L415 · ## M4 — Verify (Run 08_checklist.md)
+- L449 · ## Rollback Plan
+- L460 · ## M5 — T-067+T-068 Migration (Loop Weight + Behavior Contract)
+- L464 · ### Step 1 — session_tokens.md: add TURN_COUNT + LOOP_WEIGHT fields
+- L479 · ### Step 2 — PostToolUse hook: add to .claude/settings.json
+- L490 · ### Step 3 — AGENTS.md: verify C0.5 BC gate present
+- L499 · ### Step 4 — compact_checkpoint awareness for existing mece_plans
+- L505 · ### Step 5 — error_index.md: migrate entries to new schema + add BC hooks
+- L541 · ### Step 6 — Verify all M5 steps
+<!-- DOC-MAP:END -->
+
 
 > Use this guide when a project already has an older version of the harness installed.
 > Do NOT use for fresh projects — use Track A in `02_setup.md` instead.
@@ -21,8 +62,13 @@ This guide is **self-contained**, **idempotent**, and **vendor-agnostic** (works
 | `.agents/skills/` exists but skill files have no `## Trigger` block | → this guide |
 | `knowledge/` indexes have old schema (missing `topics[]`, `backlinks[]`) | → this guide |
 | `.sessions/` has `chat_tokens.md` instead of `session_tokens.md` | → this guide |
+| `.agents/platform/detected.md` has stale model IDs / old `token_formula` from a prior harness | → this guide (M2.4 re-detects it) |
 | Tree structure doesn't match `REPO_MAP.md` | → this guide |
 | Harness files present but 08_checklist fails ≥3 sections | → this guide |
+
+> **Just bumping to a newer engine version** (already on the current harness, no schema/tree
+> change)? You do **not** need this guide — see `Implement/10_machine_install.md` §Update
+> (`git pull` + `/plugin update`, or re-run the idempotent `machine_install.sh`).
 
 ---
 
@@ -61,6 +107,7 @@ echo "SKIP_COPY=$SKIP_COPY"
 - Run **top to bottom: M0 → M1 → M2 → M3 → M4 → M5**. Do not reorder.
 - **Idempotent** — every step checks before writing, so re-running is always safe.
 - **Never touch** `src/`, `db_migrations/`, or user data in `knowledge/index_*.json` beyond the M1 re-index scripts.
+- **`detected.md` is ALWAYS re-detected, never preserved or copied** — M2.4 resets it and the agent re-runs B4 inline this run, so stale model IDs / `token_formula` from the old harness are discarded (this is the one harness file that is machine-specific — see M2.4).
 - **Last copy step stamps the version:** after M3 completes, run `cp "$HARNESS_SRC/VERSION" ./VERSION` so the next migration's M0.2 detects "already current".
 
 ---
@@ -91,7 +138,7 @@ ls .sessions/ | grep -E "chat_tokens|session_tokens"
 # If chat_tokens.md exists → migrate
 CHAT=$(grep "CHAT_TOTAL:" .sessions/chat_tokens.md 2>/dev/null | awk '{print $2}')
 SESSION=$(grep "SESSION_TOTAL:" .sessions/chat_tokens.md 2>/dev/null | awk '{print $2}')
-printf "SESSION_TOTAL: ${SESSION:-0}\nCHAT_TOTAL: ${CHAT:-11070}\n" > .sessions/session_tokens.md
+printf "SESSION_TOTAL: ${SESSION:-0}\nCHAT_TOTAL: ${CHAT:-19500}\n" > .sessions/session_tokens.md
 rm .sessions/chat_tokens.md
 echo "✓ session_tokens.md written"
 ```
@@ -197,7 +244,7 @@ echo "✓ directories checked"
 [ -f .sessions/active_thread.md ] || printf "task: \nphase: done\nnext: \n" > .sessions/active_thread.md
 
 # session_tokens.md (if not migrated in M1.1)
-[ -f .sessions/session_tokens.md ] || printf "SESSION_TOTAL: 0\nCHAT_TOTAL: 11070\n" > .sessions/session_tokens.md
+[ -f .sessions/session_tokens.md ] || printf "SESSION_TOTAL: 0\nCHAT_TOTAL: 19500\n" > .sessions/session_tokens.md
 
 # compact_state.md (create blank if missing)
 [ -f .sessions/compact_state.md ] || printf "dt=\ns=0k\ntask=none\ncfp=0\nsk=\nsk_h=\nmece_h=\np1=\np2=\np3=\nsection=\nstep=\nresume_at=none\n" > .sessions/compact_state.md
@@ -213,15 +260,36 @@ echo "✓ session files checked"
 echo "✓ mece_plan_schema.md present"
 ```
 
-### M2.4 · Platform detected.md
+### M2.4 · Platform detected.md — FORCE re-detection (never preserve stale values)
+
+> `detected.md` is **machine/provider-specific** — it holds the model IDs + `token_formula` for THIS
+> install. An old harness's copy carries **stale** values, and boot-time B4 will NOT refresh a file
+> whose `platform:`/`api_provider:` are already filled (B4 re-detects only when they are `unknown`/missing).
+> So migration MUST re-detect it **inline** — never copy it from `$HARNESS_SRC`, never blindly keep the old one.
 
 ```bash
-[ -f .agents/platform/detected.md ] \
-  && echo "✓ detected.md present" \
-  || echo "platform: unknown" > .agents/platform/detected.md && echo "created blank detected.md"
+# Back up the old values, then reset detection fields so the agent re-detects fresh THIS run
+if [ -f .agents/platform/detected.md ]; then
+  cp .agents/platform/detected.md .agents/platform/detected.md.bak
+  echo "✓ backed up old detected.md → detected.md.bak"
+fi
+printf "platform: unknown\napi_provider: unknown\n" > .agents/platform/detected.md
+echo "→ detected.md reset to unknown — agent MUST run B4 NOW (not next boot)"
 ```
 
-B4 will auto-detect and fill on next boot.
+**Agent action (mandatory · do NOT defer to next boot):** run **B4** from `AGENTS.md §Boot` right now —
+the platform probe (list tools → map platform) **and** the provider sub-probe (steps 1-3:
+platform→provider, else model-id heuristic) — then write the **full** `detected.md` with every field
+filled from `## Known Provider Profiles` (model_high/medium/low · api_provider · cache_mechanism ·
+context_cliff_tokens · token_formula · cache_write_cost). Never hardcode model IDs.
+
+Verify:
+```bash
+grep -E "^platform:|^api_provider:|^token_formula:|^model_(high|medium|low):" .agents/platform/detected.md
+# → no value may be "unknown" after B4 runs
+[ -f .agents/platform/detected.md.bak ] && diff .agents/platform/detected.md.bak .agents/platform/detected.md
+# → shows exactly which stale values (model IDs / token_formula) were refreshed
+```
 
 ### M2.5 · Required scripts (incl. current hook + index automation)
 
@@ -229,8 +297,10 @@ B4 will auto-detect and fill on next boot.
 # Copy the whole harness scripts/ dir (idempotent — overwrites with current versions)
 mkdir -p scripts
 cp "$HARNESS_SRC/scripts/"*.py "$HARNESS_SRC/scripts/"*.sh scripts/ 2>/dev/null
-ls scripts/ | grep -E "lookup.py|session_indexer.py|symbol_indexer.py|backlink_analyzer.py|code_graph.py|index_reconcile.py|repo_map_check.py|rule_indexer.py|posttool_track.py|compact_reset.py|verify_runner.py|safe_run.py|trim_exec_log.py"
+ls scripts/ | grep -E "lookup.py|session_indexer.py|symbol_indexer.py|backlink_analyzer.py|code_graph.py|index_reconcile.py|repo_map_check.py|rule_indexer.py|posttool_track.py|compact_reset.py|verify_runner.py|safe_run.py|trim_exec_log.py|headroom_hook.py|plan_ctx.py"
 ```
+
+`plan_ctx.py` (T-345 · Context-send Standard proactive layer) — invoked by the mece skill at plan time (M5.5), NOT a hook, so it needs no settings.json wiring; just present in `scripts/`. A new upgrade reason for consumers.
 
 Full purpose + trigger of each script: Implement/05_scripts.md §9.
 
@@ -244,7 +314,7 @@ grep -oE "SessionStart|UserPromptSubmit|PreToolUse|PostToolUse|\"Stop\"" .claude
 
 Must list all 5. Missing any → copy the matching hook block from the current harness `.claude/settings.json`:
 - SessionStart (matcher "compact") → compact_reset.py · UserPromptSubmit → token-state emitter + learning_profile.py
-- PreToolUse → never-full-load + phase-gate + close-gate · PostToolUse → posttool_track.py · Stop → write_context_cache.sh + index_reconcile.py
+- PreToolUse → never-full-load + phase-gate + close-gate · PostToolUse → posttool_track.py + headroom_hook.py (T-344 Context-send Standard: auto-nudge + park on Bash output >80L — a new upgrade reason for consumers) · Stop → write_context_cache.sh + index_reconcile.py
 
 ---
 

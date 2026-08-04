@@ -32,7 +32,10 @@ import subprocess
 from pathlib import Path
 from datetime import date
 
-REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness_paths
+
+REPO = harness_paths.project_root()
 REPO_MAP = REPO / "REPO_MAP.md"
 
 # top-level entries that should never count as drift (transient / tooling / generated)
@@ -75,7 +78,7 @@ def scan_repo():
 def compute_drift():
     """Return dict of drift sets (best-effort; never raises)."""
     try:
-        text = REPO_MAP.read_text(encoding="utf-8")
+        text = REPO_MAP.read_text()
     except OSError as exc:
         return {"error": f"cannot read REPO_MAP.md: {exc}"}
     doc_files, doc_dirs = parse_repo_map(text)
@@ -159,7 +162,7 @@ def sync_structure(drift):
     tree = scan_repo_recursive()
     new_text = sync_structure_block(drift["_text"], tree)
     if new_text != drift["_text"]:
-        REPO_MAP.write_text(new_text, encoding="utf-8")
+        REPO_MAP.write_text(new_text)
         drift["_text"] = new_text
         print(f"[repo-map-sync] structure block updated — {len(tree)} folders mapped")
     else:
@@ -267,7 +270,7 @@ def append_placeholders(drift):
         added += len(drift["new_dirs"])
 
     if added:
-        REPO_MAP.write_text(text, encoding="utf-8")
+        REPO_MAP.write_text(text)
         print(f"[repo-map-append] added {added} placeholder entr(y/ies) → REPO_MAP.md "
               f"(fill in the real descriptions · existing rows untouched)")
         if drift["stale_files"] or drift["stale_dirs"]:

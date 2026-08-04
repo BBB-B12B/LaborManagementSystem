@@ -80,7 +80,7 @@ Q4: ใส่เป็น note/bullet ได้ ไม่ต้อง gate?
 | Phase Transition Gate | **BC** | Pre(2 files) + branches(proceed/STOP) + Post(both verified today) + Enforce |
 | C3 topic-switch | **Signal Contract** | if C2 detects → emit [topic-switch] → /compact · 1 seam, no Post |
 | R5 pre-read / post-read | **Signal Contract** | before/after Read → emit [pre-read]/[post-read] · 1 condition each |
-| M5 write-before-present | **Signal Contract** | → at M5: Write files THEN present · 1 seam |
+| M3 write-before-present | **Signal Contract** | → at M3: Write files THEN present · 1 seam |
 | R12 post-edit verify | **Signal Contract** | after Edit/Write → re-read section · 1 condition → 1 action |
 | R8 index sync | **Signal Contract** | after file change → update indexes · emit [r8-sync-check] |
 | Thai user replies only | **CONV** | Style — ไม่มี enforcement consequence |
@@ -134,3 +134,28 @@ Goal: after a harness edit, empirically confirm a fresh model *obeys* the rule �
    - all 3 FAIL → `[behave-fail]` (rule not landing at all) → loop Stage 5.
 6. **k=3 sample** — single sample by default. For DB gates (R15) and boot-sequence edits, run k=3 per config and require unanimous PASS (these are high-blast-radius; one lucky pass is not enough).
 7. **Log** — append one JSON line per run to `knowledge/behave_test_log.jsonl`: this is both the feedback capture and the future regression suite (replay past trigger prompts after later edits).
+
+---
+
+## Stage 2 — CFP-fix fold-in (detail)
+
+Trigger (any one): the task edits `CODING_FAILURE_PATTERNS.md`; OR the goal / gather_complete `task:` reads "fix CFP-N" / "fix ERR-N"; OR a section `File:` line touches `CODING_FAILURE_PATTERNS.md`. When detected at Stage 2 PLAN, `[skill-active] self_improve` MUST be loaded and the mece_plan MUST carry a **loop-closure section** BEFORE it is presented. (This is exactly what CFP-048 was missing — self_improve only fires at session_close/manual, so at plan time nothing folded these subtasks in.)
+
+The loop-closure section MUST contain all four subtasks:
+1. **Fix-validation re-run** (→ Stage 3.6) — re-run the original repro against the edited harness → `[fix-validated]` gates the roadmap [X]; `[fix-unvalidated]` blocks close.
+2. **CFP entry → APPLIED** — flip the CFP-N block in `CODING_FAILURE_PATTERNS.md` from `proposed`/`open` to `APPLIED` (with the fixing T-id). "APPLIED" in the MD == `status: resolved` in `index_cfp_fix.json` (same state, two files).
+3. **SI-N log** — append one entry to `.sessions/self_improve_log.md` (what recurred · root · structural fix).
+4. **cfp_topics + index sync** — reconcile `knowledge/index_cfp_fix.json` (status / count / window) + `knowledge/cfp_topics.md` (cfp_ids list).
+
+Enforcement is not prose alone: `scripts/cfp_fix_plan_gate.py` (PreToolUse) hard-blocks a Write/Edit of `.sessions/mece_plan.md` that is a CFP-fix plan yet carries no loop-closure marker → exit 2. Escape hatch: `HARNESS_SKIP_CFP_PLAN_GATE=1`.
+
+## Stage 3.6 — Fix Validation (detail)
+
+Read the ORIGINAL failure repro BY FIX-TYPE:
+- a CFP entry exists for this fix → **CFP path** → `index_cfp_fix.json` fixes[].repro
+- code / non-CFP fix → **ERR path** → `error_index.md` ERR-N (trigger + check)
+
+Both use the repro-pin FORMAT defined by `harness_doctor` §3 (single source). `reproducible: no` → no on-demand repro exists → fall back to the **count-proxy** (the recurrence count stops climbing once the fix lands). Re-run `repro.check` against the edited harness:
+- gone → `[fix-validated] cfp:<id> repro:<how>`
+- still repros / cannot re-run → `[fix-unvalidated] reason:<x>` → BLOCKS Stage 4 [C] roadmap [X] → loop Stage 5
+- non-fix task → `[fix-skip]`

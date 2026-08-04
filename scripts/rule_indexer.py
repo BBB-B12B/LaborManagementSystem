@@ -22,7 +22,12 @@ import os
 import re
 import sys
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import harness_paths
+
+# PROJECT data (index + project doc files) vs ENGINE resources (.agents/*).
+REPO = str(harness_paths.project_root())
+ENGINE = str(harness_paths.engine_root())
 INDEX = os.path.join(REPO, "knowledge", "index_files.json")
 
 # --- which files carry harness rules -------------------------------------
@@ -35,6 +40,9 @@ FILE_GLOBS = [
     "Implement/*.md",
     ".agents/skills/*/SKILL.md",
     ".agents/skills/*/SKILL_detail.md",
+    # T-215: skills bucketed 2 levels deep — keep BOTH so flat+nested resolve
+    ".agents/skills/*/*/SKILL.md",
+    ".agents/skills/*/*/SKILL_detail.md",
     "knowledge/*.md",
     "docs/master_roadmap.md",
 ]
@@ -93,13 +101,17 @@ def scan_file(path):
 
 
 def collect_files():
+    # Engine-owned patterns (.agents/*) resolve against ENGINE; project patterns
+    # against REPO. Both feed the one project INDEX keyed by rel path. Self-hosted
+    # (REPO==ENGINE) -> byte-identical to the old single-base behavior.
     seen, out = set(), []
     for pat in FILE_GLOBS:
-        for p in sorted(glob.glob(os.path.join(REPO, pat))):
-            rel = os.path.relpath(p, REPO)
+        base = ENGINE if pat.startswith(".agents/") else REPO
+        for p in sorted(glob.glob(os.path.join(base, pat))):
+            rel = os.path.relpath(p, base)
             if rel not in seen and os.path.isfile(p):
                 seen.add(rel)
-                out.append(rel)
+                out.append((rel, base))
     return out
 
 
@@ -111,8 +123,8 @@ def main():
 
     files = collect_files()
     results = {}
-    for rel in files:
-        defined, referenced = scan_file(os.path.join(REPO, rel))
+    for rel, base in files:
+        defined, referenced = scan_file(os.path.join(base, rel))
         if defined or referenced:
             results[rel] = {
                 "rules_defined": sorted(defined),
@@ -123,10 +135,10 @@ def main():
     total_ref = sum(len(v["rules_referenced"]) for v in results.values())
 
     if args.dry_run:
-        print(f"[dry-run] scanned {len(files)} files - {len(results)} carry rules")
+        print(f"[dry-run] scanned {len(files)} files · {len(results)} carry rules")
         for rel, v in sorted(results.items()):
             print(f"  {rel}: defined={len(v['rules_defined'])} referenced={len(v['rules_referenced'])}")
-        print(f"[dry-run] totals: defined={total_def} referenced={total_ref} - NOTHING written")
+        print(f"[dry-run] totals: defined={total_def} referenced={total_ref} · NOTHING written")
         return 0
 
     # write into index_files.json (only existing entries — never invent keys)
@@ -150,7 +162,7 @@ def main():
         json.dump(index, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
 
-    print(f"[written] {updated} index entries updated - defined={total_def} referenced={total_ref}")
+    print(f"[written] {updated} index entries updated · defined={total_def} referenced={total_ref}")
     if skipped:
         print(f"[note] {len(skipped)} rule-bearing files not in index (skipped): {', '.join(skipped[:8])}")
     return 0

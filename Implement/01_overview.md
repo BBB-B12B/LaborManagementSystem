@@ -56,10 +56,8 @@ project-root/
 │       │   └── SKILL.md               # Rules for creating new files + Roadmap Protocol
 │       ├── editor/
 │       │   └── SKILL.md               # Rules for editing existing code + Roadmap Protocol
-│       ├── file_manager/
-│       │   └── SKILL.md               # Rules for updating index_files.json
-│       ├── variable_manager/
-│       │   └── SKILL.md               # Rules for updating index_variables.json
+│       ├── index_manager/
+│       │   └── SKILL.md               # Rules for updating index_files.json (mode:file) + index_variables.json (mode:symbol)
 │       ├── agent/
 │       │   └── SKILL.md               # Orchestrator — routes to correct skill + Cycle fan-out: spawns parallel sub-agents per Cycle, reads cycle_N_*.json results, injects context into next Cycle
 │       ├── identity/
