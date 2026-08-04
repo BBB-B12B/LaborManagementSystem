@@ -692,8 +692,37 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       .filter((m: number | null): m is number => m !== null)
       .sort((a: number, b: number) => a - b);
 
+    // Daily Report ยังเป็น draft (ยังไม่ submit) — ต้องคิดเหมือนไม่มี Daily Report เลย
+    // (เดียวกับ backend isDraftReport gating) จึงห้ามเอา job.shiftTimes/row.shiftTimes ที่ยัง
+    // ไม่ยืนยันมาสร้าง "ช่วงเวลาที่ควรจะเป็น" แล้วตัดสิน ปกติ/ขัดแย้ง — แสดงแค่เวลาที่สแกนได้จริง
+    if (row.dailyReportStatus === 'draft') {
+      const pairs: Array<{ in: number | null; out: number | null }> = [];
+      for (let i = 0; i < scanMinsList.length; i += 2) {
+        pairs.push({ in: scanMinsList[i], out: scanMinsList[i + 1] ?? null });
+      }
+      return pairs.map((p, idx) => ({
+        jobKey: '_draft',
+        key: `scan_${idx}`,
+        name: `ช่วงที่ ${idx + 1}`,
+        subLabel: 'ยังไม่มี Daily Report ยืนยัน',
+        color: '#475569',
+        expectedInText: '—',
+        expectedOutText: '—',
+        photoIn: null,
+        photoOut: null,
+        actualIn: p.in,
+        actualOut: p.out,
+        isOriginalIn: true,
+        isOriginalOut: true,
+        inText: fromMins(p.in),
+        outText: fromMins(p.out),
+        statusColor: { bg: '#f1f5f9', text: '#64748b', border: '#cbd5e1' },
+        result: 'รอ Daily Report',
+        remark: '',
+      }));
+    }
+
     // Get photo helper
-    const photoMap = row.dailyReportPhotos;
     const getPhoto = (groupData: any, type: 'in' | 'out' | number): string | null => {
       if (!groupData) return null;
       if (Array.isArray(groupData)) {
@@ -722,10 +751,6 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       if (!url) return null;
       return getFullImageUrl(url);
     };
-
-    const otMorningExpectedStart = toMins(row.shiftTimes?.otMorning?.split('-')[0]) ?? 360; // 06:00
-    const otMorningExpectedEnd = toMins(row.shiftTimes?.otMorning?.split('-')[1]) ?? 480; // 08:00
-    const isOtMorningActive = !!row.shiftTimes?.otMorning;
 
     const leaveEntries = row.leaveEntries || [];
 
@@ -759,35 +784,9 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       return false;
     };
 
-    const dayShiftStart = toMins(row.shiftTimes?.day?.split('-')[0]) ?? 480; // 08:00
-    const dayShiftEnd = toMins(row.shiftTimes?.day?.split('-')[1]) ?? 1020; // 17:00
-
-    const isMorningActive = row.shiftTimes?.day
-      ? dayShiftStart < 13 * 60
-      : (row.dailyReportHours ?? 0) > 0;
-
-    const isAfternoonActive = row.shiftTimes?.day
-      ? dayShiftEnd > 12 * 60
-      : (row.dailyReportHours ?? 0) > 4;
-
-    const morningExpectedEnd = Math.min(dayShiftEnd, 12 * 60);
-    const afternoonExpectedStart = Math.max(dayShiftStart, 13 * 60);
-
-    const showMorningSegment =
-      isMorningActive && !isSegmentCoveredByLeave(dayShiftStart, morningExpectedEnd);
-    const showAfternoonSegment =
-      isAfternoonActive && !isSegmentCoveredByLeave(afternoonExpectedStart, dayShiftEnd);
-
-    const otNoonExpectedStart = toMins(row.shiftTimes?.otNoon?.split('-')[0]) ?? 720; // 12:00
-    const otNoonExpectedEnd = toMins(row.shiftTimes?.otNoon?.split('-')[1]) ?? 780; // 13:00
-    const isOtNoonActive = !!row.shiftTimes?.otNoon;
-
-    const otEveningExpectedStart = toMins(row.shiftTimes?.otEvening?.split('-')[0]) ?? 1020; // 17:00
-    const otEveningExpectedEnd = toMins(row.shiftTimes?.otEvening?.split('-')[1]) ?? 1260; // 21:00
-    const isOtEveningActive = !!row.shiftTimes?.otEvening;
-
-    const baseSegments: {
+    type BaseSegment = {
       key: string;
+      jobKey: string;
       name: string;
       subLabel: string;
       color: string;
@@ -797,80 +796,186 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       photoIn?: string | null;
       photoOut?: string | null;
       isLeaveSegment?: boolean;
-    }[] = [];
+      isGapSegment?: boolean;
+      isStandardBreak?: boolean;
+    };
 
-    if (isOtMorningActive) {
-      baseSegments.push({
-        key: 'otMorning',
-        name: 'OT เช้า',
-        subLabel: `${fromMins(otMorningExpectedStart)}–${fromMins(otMorningExpectedEnd)}`,
-        color: '#166534',
-        bgColor: '#dcfce7',
-        expectedStart: otMorningExpectedStart,
-        expectedEnd: otMorningExpectedEnd,
-        photoIn: getFullUrl(
-          getPhoto(photoMap?.otMorning, 'in') || getPhoto(photoMap?.otMorning, 0)
-        ),
-        photoOut: getFullUrl(
-          getPhoto(photoMap?.otMorning, 'out') || getPhoto(photoMap?.otMorning, 1)
-        ),
-      });
+    // สร้าง segments ของ "1 งาน" (1 ชุด shiftTimes+photos) — เรียกครั้งเดียวเมื่อไม่มี
+    // jobSegments (ใช้ row.shiftTimes ทั้งวันเหมือนเดิม) หรือเรียกซ้ำต่องานเมื่อมี jobSegments
+    // (N งานย่อยต่อวัน, After-Sale 2026-07 format) เพื่อให้แอดมินเห็น breakdown ตรงกับข้อมูลจริง
+    // แทนที่จะยุบเป็น shiftTimes เดียวทั้งวันซึ่งอาจซ่อนช่องว่างจริงระหว่างงาน (ดู shadowMatch)
+    const buildJobBaseSegments = (
+      shiftTimesSrc: any,
+      photoMapSrc: any,
+      dailyReportHoursFallback: number | undefined,
+      jobKey: string,
+      jobLabel: string | null
+    ): BaseSegment[] => {
+      const prefix = (label: string) => (jobLabel ? `${jobLabel} · ${label}` : label);
+
+      const otMorningExpectedStart = toMins(shiftTimesSrc?.otMorning?.split('-')[0]) ?? 360; // 06:00
+      const otMorningExpectedEnd = toMins(shiftTimesSrc?.otMorning?.split('-')[1]) ?? 480; // 08:00
+      const isOtMorningActive = !!shiftTimesSrc?.otMorning;
+
+      const dayShiftStart = toMins(shiftTimesSrc?.day?.split('-')[0]) ?? 480; // 08:00
+      const dayShiftEnd = toMins(shiftTimesSrc?.day?.split('-')[1]) ?? 1020; // 17:00
+
+      const isMorningActive = shiftTimesSrc?.day
+        ? dayShiftStart < 13 * 60
+        : (dailyReportHoursFallback ?? 0) > 0;
+
+      const isAfternoonActive = shiftTimesSrc?.day
+        ? dayShiftEnd > 12 * 60
+        : (dailyReportHoursFallback ?? 0) > 4;
+
+      const morningExpectedEnd = Math.min(dayShiftEnd, 12 * 60);
+      const afternoonExpectedStart = Math.max(dayShiftStart, 13 * 60);
+
+      const showMorningSegment =
+        isMorningActive && !isSegmentCoveredByLeave(dayShiftStart, morningExpectedEnd);
+      const showAfternoonSegment =
+        isAfternoonActive && !isSegmentCoveredByLeave(afternoonExpectedStart, dayShiftEnd);
+
+      const otNoonExpectedStart = toMins(shiftTimesSrc?.otNoon?.split('-')[0]) ?? 720; // 12:00
+      const otNoonExpectedEnd = toMins(shiftTimesSrc?.otNoon?.split('-')[1]) ?? 780; // 13:00
+      const isOtNoonActive = !!shiftTimesSrc?.otNoon;
+
+      const otEveningExpectedStart = toMins(shiftTimesSrc?.otEvening?.split('-')[0]) ?? 1020; // 17:00
+      const otEveningExpectedEnd = toMins(shiftTimesSrc?.otEvening?.split('-')[1]) ?? 1260; // 21:00
+      const isOtEveningActive = !!shiftTimesSrc?.otEvening;
+
+      const jobSegs: BaseSegment[] = [];
+
+      if (isOtMorningActive) {
+        jobSegs.push({
+          key: 'otMorning',
+          jobKey,
+          name: prefix('OT เช้า'),
+          subLabel: `${fromMins(otMorningExpectedStart)}–${fromMins(otMorningExpectedEnd)}`,
+          color: '#166534',
+          bgColor: '#dcfce7',
+          expectedStart: otMorningExpectedStart,
+          expectedEnd: otMorningExpectedEnd,
+          photoIn: getFullUrl(
+            getPhoto(photoMapSrc?.otMorning, 'in') || getPhoto(photoMapSrc?.otMorning, 0)
+          ),
+          photoOut: getFullUrl(
+            getPhoto(photoMapSrc?.otMorning, 'out') || getPhoto(photoMapSrc?.otMorning, 1)
+          ),
+        });
+      }
+
+      // regularPhotoIdx: รูป regular ของ "งานนี้" เรียงตามลำดับที่เกิดขึ้นจริง (IN,OUT ต่อ segment)
+      // ไม่ใช้ slot ตายตัว 0/1/2/3 เพราะเมื่อมี jobSegments แต่ละงานมีรูปเป็นชุดของตัวเอง
+      // (เช่น งานที่ทำเฉพาะช่วงบ่ายจะมีแค่ 2 รูป [IN,OUT] ไม่ใช่ 4 รูปแบบวันเต็ม)
+      let regularPhotoIdx = 0;
+
+      if (showMorningSegment) {
+        const inIdx = regularPhotoIdx;
+        const outIdx = regularPhotoIdx + 1;
+        regularPhotoIdx += 2;
+        jobSegs.push({
+          key: 'morning',
+          jobKey,
+          name: prefix('เช้า'),
+          subLabel: `${fromMins(dayShiftStart)}–${fromMins(morningExpectedEnd)}`,
+          color: '#991b1b',
+          bgColor: '#fee2e2',
+          expectedStart: dayShiftStart,
+          expectedEnd: morningExpectedEnd,
+          photoIn: getFullUrl(getPhoto(photoMapSrc?.regular, inIdx)),
+          photoOut: getFullUrl(getPhoto(photoMapSrc?.regular, outIdx)),
+        });
+      }
+
+      if (isOtNoonActive) {
+        jobSegs.push({
+          key: 'otNoon',
+          jobKey,
+          name: prefix('OT เที่ยง'),
+          subLabel: `${fromMins(otNoonExpectedStart)}–${fromMins(otNoonExpectedEnd)}`,
+          color: '#581c87',
+          bgColor: '#f3e8ff',
+          expectedStart: otNoonExpectedStart,
+          expectedEnd: otNoonExpectedEnd,
+          photoIn: getFullUrl(getPhoto(photoMapSrc?.otNoon, 'in') || getPhoto(photoMapSrc?.otNoon, 0)),
+          photoOut: getFullUrl(getPhoto(photoMapSrc?.otNoon, 'out') || getPhoto(photoMapSrc?.otNoon, 1)),
+        });
+      }
+
+      if (showAfternoonSegment) {
+        const inIdx = regularPhotoIdx;
+        const outIdx = regularPhotoIdx + 1;
+        regularPhotoIdx += 2;
+        jobSegs.push({
+          key: 'afternoon',
+          jobKey,
+          name: prefix('บ่าย'),
+          subLabel: `${fromMins(afternoonExpectedStart)}–${fromMins(dayShiftEnd)}`,
+          color: '#1e3a8a',
+          bgColor: '#dbeafe',
+          expectedStart: afternoonExpectedStart,
+          expectedEnd: dayShiftEnd,
+          photoIn: getFullUrl(getPhoto(photoMapSrc?.regular, inIdx)),
+          photoOut: getFullUrl(getPhoto(photoMapSrc?.regular, outIdx)),
+        });
+      }
+
+      if (isOtEveningActive) {
+        jobSegs.push({
+          key: 'otEvening',
+          jobKey,
+          name: prefix('OT เย็น'),
+          subLabel: `${fromMins(otEveningExpectedStart)}–${fromMins(otEveningExpectedEnd)}`,
+          color: '#854d0e',
+          bgColor: '#fef9c3',
+          expectedStart: otEveningExpectedStart,
+          expectedEnd: otEveningExpectedEnd,
+          photoIn: getFullUrl(
+            getPhoto(photoMapSrc?.otEvening, 'in') || getPhoto(photoMapSrc?.otEvening, 0)
+          ),
+          photoOut: getFullUrl(
+            getPhoto(photoMapSrc?.otEvening, 'out') || getPhoto(photoMapSrc?.otEvening, 1)
+          ),
+        });
+      }
+
+      return jobSegs;
+    };
+
+    const photoMap = row.dailyReportPhotos;
+    const hasJobSegments = row.jobSegments && Object.keys(row.jobSegments).length > 0;
+
+    let baseSegments: BaseSegment[] = [];
+
+    if (hasJobSegments) {
+      const jobs = Object.entries(row.jobSegments as Record<string, any>)
+        .map(([key, job]: [string, any]) => ({ key, ...job }))
+        .sort(
+          (a, b) =>
+            (toMins(a.shiftTimes?.day?.split('-')[0]) ?? 0) -
+            (toMins(b.shiftTimes?.day?.split('-')[0]) ?? 0)
+        );
+
+      for (const job of jobs) {
+        const jobLabel = [job.taskName, job.subtaskName].filter(Boolean).join(' > ') || null;
+        baseSegments.push(
+          ...buildJobBaseSegments(job.shiftTimes, job.photos, undefined, job.key, jobLabel)
+        );
+      }
+    } else {
+      baseSegments.push(
+        ...buildJobBaseSegments(row.shiftTimes, photoMap, row.dailyReportHours, '_day', null)
+      );
     }
 
-    // Photo safety checks: only display task photos if the employee was actually working
-    // during the time the photos were taken by the Foreman
-    const showMorningPhotoIn = dayShiftStart <= 480; // Standard 08:00 check-in
-    const showAfternoonPhotoIn = dayShiftStart <= 780; // Standard 13:00 check-in
-    const showAfternoonPhotoOut = dayShiftEnd >= 1020; // Standard 17:00 check-out
-
-    if (showMorningSegment) {
-      baseSegments.push({
-        key: 'morning',
-        name: 'เช้า',
-        subLabel: `${fromMins(dayShiftStart)}–${fromMins(morningExpectedEnd)}`,
-        color: '#991b1b',
-        bgColor: '#fee2e2',
-        expectedStart: dayShiftStart,
-        expectedEnd: morningExpectedEnd,
-        photoIn: showMorningPhotoIn ? getFullUrl(getPhoto(photoMap?.regular, 0)) : null,
-        photoOut: getFullUrl(getPhoto(photoMap?.regular, 1)),
-      });
-    }
-
-    if (isOtNoonActive) {
-      baseSegments.push({
-        key: 'otNoon',
-        name: 'OT เที่ยง',
-        subLabel: `${fromMins(otNoonExpectedStart)}–${fromMins(otNoonExpectedEnd)}`,
-        color: '#581c87',
-        bgColor: '#f3e8ff',
-        expectedStart: otNoonExpectedStart,
-        expectedEnd: otNoonExpectedEnd,
-        photoIn: getFullUrl(getPhoto(photoMap?.otNoon, 'in') || getPhoto(photoMap?.otNoon, 0)),
-        photoOut: getFullUrl(getPhoto(photoMap?.otNoon, 'out') || getPhoto(photoMap?.otNoon, 1)),
-      });
-    }
-
-    if (showAfternoonSegment) {
-      baseSegments.push({
-        key: 'afternoon',
-        name: 'บ่าย',
-        subLabel: `${fromMins(afternoonExpectedStart)}–${fromMins(dayShiftEnd)}`,
-        color: '#1e3a8a',
-        bgColor: '#dbeafe',
-        expectedStart: afternoonExpectedStart,
-        expectedEnd: dayShiftEnd,
-        photoIn: showAfternoonPhotoIn ? getFullUrl(getPhoto(photoMap?.regular, 2)) : null,
-        photoOut: showAfternoonPhotoOut ? getFullUrl(getPhoto(photoMap?.regular, 3)) : null,
-      });
-    }
-
-    // Add Leave segments dynamically
+    // Add Leave segments dynamically — ระดับวัน ไม่ผูกกับงานใดงานหนึ่ง จึงเพิ่มครั้งเดียวเสมอ
     leaveEntries.forEach((entry: any, index: number) => {
       const range = parseLeaveRange(entry);
       if (range) {
         baseSegments.push({
           key: `leave_${index}`,
+          jobKey: '_leave',
           name: 'ลางาน',
           subLabel: entry.timeRange || `${fromMins(range.start)}–${fromMins(range.end)}`,
           color: '#ea580c',
@@ -884,36 +989,94 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       }
     });
 
-    if (isOtEveningActive) {
-      baseSegments.push({
-        key: 'otEvening',
-        name: 'OT เย็น',
-        subLabel: `${fromMins(otEveningExpectedStart)}–${fromMins(otEveningExpectedEnd)}`,
-        color: '#854d0e',
-        bgColor: '#fef9c3',
-        expectedStart: otEveningExpectedStart,
-        expectedEnd: otEveningExpectedEnd,
-        photoIn: getFullUrl(
-          getPhoto(photoMap?.otEvening, 'in') || getPhoto(photoMap?.otEvening, 0)
-        ),
-        photoOut: getFullUrl(
-          getPhoto(photoMap?.otEvening, 'out') || getPhoto(photoMap?.otEvening, 1)
-        ),
-      });
-    }
-
     // Sort segments chronologically
     baseSegments.sort((a, b) => a.expectedStart - b.expectedStart);
 
-    const usedPunches = new Set<number>();
-    const segments = baseSegments.map((seg) => {
-      if (seg.isLeaveSegment) {
-        return {
-          ...seg,
-          actualIn: null,
-          actualOut: null,
-        };
+    // แทรก segment "ไม่มีข้อมูล" ในช่วงเวลาที่ไม่มีงานใดครอบคลุมเลย (เช่น พัก 10:00-13:00
+    // ระหว่างงาน 2 กับงาน 3) — ให้แอดมินเห็นตรงๆ ว่าช่วงนี้ไม่มีทั้ง Daily Report และสแกนนิ้ว
+    // แทนที่จะไม่แสดงแถวใดๆ เลย (ดูเหมือนไม่มีช่วงเวลานี้อยู่)
+    //
+    // ข้อยกเว้น: มีช่วงพักมาตรฐานที่ถือเป็นเรื่องปกติ ไม่ใช่ "ไม่มีข้อมูล" —
+    // 12:00-13:00 พักเที่ยง (คั่นเช้า/บ่าย) และ 17:00-18:00 พักเย็นก่อนเริ่ม OT เย็น
+    // (คั่นเวลาทำงานปกติที่จบ 17:00 กับ OT เย็นที่เริ่ม 18:00 — ถ้า OT เย็นเริ่มต่อทันที
+    // 17:00 พอดีจะไม่มี gap เกิดขึ้นเลยตั้งแต่แรก ไม่เข้าเงื่อนไขนี้) ตัดส่วนที่ทับกับช่วงพัก
+    // มาตรฐานออกจากช่องว่างเสมอ แม้ช่องว่างจะกว้างกว่าแค่ชั่วโมงพักก็ตาม (เช่น 10:00-13:00
+    // ต้องเหลือ "ไม่มีข้อมูล" จริงแค่ 10:00-12:00 ไม่ใช่ทั้ง 10:00-13:00) ส่วนที่ทับกับช่วงพัก
+    // มาตรฐานพอดีจะโชว์แถวก็ต่อเมื่อมีสแกนหลงเข้ามาจริงในช่วงนั้น (แปลว่าอาจมีการทำงานที่ไม่ได้
+    // แจ้งไว้) สแกนที่ตรงขอบพอดีไม่นับ เพราะเป็น IN/OUT ของ segment ข้างเคียงอยู่แล้ว —
+    // เช็คตรงนี้ (ก่อน Pass 1) แยกไม่ออกว่าสแกนไหน "หลงจริง" กับสแกนไหนที่จะถูก segment
+    // ข้างเคียงจับไปเป็น IN/OUT ของตัวเอง (เช่น 12:01 อาจเป็น OUT ของงานเช้าที่จบ 12:00)
+    // จึงต้องแทรกแถวพักมาตรฐานไว้ก่อนเสมอ (isStandardBreak: true) แล้วให้ Pass 1/Pass 2
+    // ตัดสินสแกนที่หลงจริงตามลำดับที่ถูกต้อง ค่อยกรองแถวที่ไม่มีสแกนหลงออกทีหลัง (ดู filter
+    // หลัง Pass 2 ด้านล่าง)
+    const STANDARD_BREAKS: { start: number; end: number; keySuffix: string }[] = [
+      { start: 12 * 60, end: 13 * 60, keySuffix: 'lunch' },
+      { start: 17 * 60, end: 18 * 60, keySuffix: 'evening' },
+    ];
+    const withGaps: BaseSegment[] = [];
+    baseSegments.forEach((seg, idx) => {
+      withGaps.push(seg);
+      const next = baseSegments[idx + 1];
+      if (!next || next.expectedStart <= seg.expectedEnd) return;
+
+      const gapStart = seg.expectedEnd;
+      const gapEnd = next.expectedStart;
+
+      const pushGapRow = (start: number, end: number, keySuffix: string, isStandardBreak = false) => {
+        withGaps.push({
+          key: `gap_${idx}_${keySuffix}`,
+          jobKey: '_gap',
+          name: 'ไม่มีข้อมูล',
+          subLabel: `${fromMins(start)}–${fromMins(end)}`,
+          color: '#64748b',
+          bgColor: '#f1f5f9',
+          expectedStart: start,
+          expectedEnd: end,
+          photoIn: null,
+          photoOut: null,
+          isGapSegment: true,
+          isStandardBreak,
+        });
+      };
+
+      // เดินจากซ้ายไปขวา ตัดช่วงพักมาตรฐานแต่ละช่วงที่ทับกับ gap นี้ออกทีละช่วง
+      // เหลือส่วนที่ไม่ทับกับช่วงพักใดๆ เลย = "ไม่มีข้อมูล" จริง
+      let cursor = gapStart;
+      let pieceIdx = 0;
+      STANDARD_BREAKS.forEach((brk) => {
+        const overlapStart = Math.max(cursor, brk.start);
+        const overlapEnd = Math.min(gapEnd, brk.end);
+        if (overlapStart >= overlapEnd) return; // ไม่ทับกับช่วงพักนี้
+
+        if (cursor < overlapStart) {
+          pushGapRow(cursor, overlapStart, `p${pieceIdx++}`);
+        }
+        // แทรกไว้ก่อนเสมอ (ไม่เช็ค hasScanDuringBreak ตรงนี้) — ให้ Pass 1/Pass 2 ตัดสิน
+        // สแกนหลงจริงก่อน ค่อยกรองแถวที่ไม่มีสแกนหลงออกทีหลัง
+        pushGapRow(overlapStart, overlapEnd, brk.keySuffix, true);
+        cursor = overlapEnd;
+      });
+      if (cursor < gapEnd) {
+        pushGapRow(cursor, gapEnd, `p${pieceIdx++}`);
       }
+    });
+    baseSegments = withGaps;
+
+    const usedPunches = new Set<number>();
+
+    // Pass 1: จับคู่สแกนกับ segment งานจริงทั้งหมดก่อน (ข้าม gap ไปก่อน) เรียงตามลำดับเวลา
+    // เหตุผล: ถ้าปล่อยให้ gap แย่งจับสแกนระหว่างเดิน loop ปนกับ segment จริง gap ที่อยู่ก่อนหน้า
+    // ในลำดับ array จะแย่งสแกนที่ตรงพอดีกับขอบเขตของ segment จริงตัวถัดไปไปก่อน (เช่น สแกน 13:00
+    // ที่ควรเป็น IN ของงานที่เริ่ม 13:00 ถูก gap ก่อนหน้าเก็บไปเป็น "สแกนหลง" แทน) ทำให้ segment จริง
+    // เห็นว่าไม่มี IN แล้วโดน bypass "ทำงานต่อเนื่องหลังช่วงไม่มีข้อมูล" ทั้งที่จริงมีสแกนยืนยันอยู่
+    // (บั๊กเดียวกับที่เจอในเคส 7 ตอนแรก — จึงต้องแยก pass เหมือนที่ทำกับแถวหัว-ท้ายตาราง)
+    const realResults = new Map<BaseSegment, { actualIn: number | null; actualOut: number | null }>();
+    baseSegments.forEach((seg) => {
+      if (seg.isLeaveSegment) {
+        realResults.set(seg, { actualIn: null, actualOut: null });
+        return;
+      }
+      if (seg.isGapSegment) return; // ทำใน pass 2
 
       const available = scanMinsList.filter((t: number) => !usedPunches.has(t));
       let closestIn = -1;
@@ -945,22 +1108,116 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       // This prevents a far-away punch from being "used" by the wrong segment
       if (hasValidIn) usedPunches.add(closestIn);
       // Mirror backend logic: don't mark OUT as used if it equals the next segment's expectedStart
-      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning)
+      // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning) — only
+      // applies when the next segment is another REAL work segment. A STANDARD_BREAK placeholder
+      // always sits at this same boundary (e.g. เช้า ends 12:00, gap_lunch starts 12:00) but has
+      // no IN of its own to share the punch with — treating it as boundary-shared here left the
+      // real OUT punch unconsumed, so it leaked into the break's own stray-scan check (Pass 2)
+      // and made the "no data" placeholder reappear even though the punch was already accounted for.
       if (closestOut !== -1 && minOutDiff <= 90) {
         const segIdx = baseSegments.indexOf(seg);
         const nextSeg = baseSegments[segIdx + 1];
-        const isBoundaryShared = nextSeg && seg.expectedEnd === nextSeg.expectedStart;
+        const isBoundaryShared =
+          nextSeg && !nextSeg.isGapSegment && seg.expectedEnd === nextSeg.expectedStart;
         if (!isBoundaryShared) {
           usedPunches.add(closestOut);
         }
       }
 
-      return {
-        ...seg,
+      realResults.set(seg, {
         actualIn: hasValidIn ? closestIn : null,
         actualOut: closestOut !== -1 && minOutDiff <= 90 ? closestOut : null,
-      };
+      });
     });
+
+    // Pass 2: ตอนนี้ segment งานจริงทั้งหมดจับคู่สแกนเสร็จแล้ว (usedPunches เป็นค่าสุดท้าย)
+    // ค่อยดูว่า gap แต่ละช่วงเหลือสแกน "หลง" อะไรบ้าง — รับประกันว่า gap จะไม่มีทางแย่งสแกน
+    // ที่ควรเป็นของ segment จริงไปก่อน
+    baseSegments.forEach((seg) => {
+      if (!seg.isGapSegment) return;
+      const stray = scanMinsList.filter(
+        (t: number) => !usedPunches.has(t) && t >= seg.expectedStart - 5 && t <= seg.expectedEnd + 5
+      );
+      stray.forEach((t: number) => usedPunches.add(t));
+      realResults.set(seg, {
+        actualIn: stray.length > 0 ? stray[0] : null,
+        actualOut: stray.length > 1 ? stray[stray.length - 1] : null,
+      });
+    });
+
+    // แถวพักมาตรฐาน (isStandardBreak) ที่ Pass 1/Pass 2 หาสแกนหลงไม่เจอเลย (actualIn/actualOut
+    // เป็น null ทั้งคู่) = ช่วงพักปกติจริงๆ ไม่ต้องโชว์แถว — กรองออกตรงนี้ หลังจากรู้ผลจับคู่
+    // สแกนที่ถูกต้องแล้วเท่านั้น (ก่อนหน้านี้จะเช็คไม่ถูกเพราะยังไม่รู้ว่าสแกนไหนถูก segment
+    // ข้างเคียงจับไปเป็น IN/OUT ของตัวเองแล้ว)
+    const segments = baseSegments
+      .map((seg) => ({
+        ...seg,
+        ...realResults.get(seg)!,
+      }))
+      .filter((seg) => !seg.isStandardBreak || seg.actualIn !== null || seg.actualOut !== null);
+
+    // แทรกแถวเพิ่มถ้ามีสแกนหลุดออกมาก่อน segment แรกเริ่ม หรือหลัง segment สุดท้ายจบ (เช่น
+    // สแกนเลยเวลามาหลังเลิกงานโดยไม่มี OT ประกาศไว้) — กลไก "ไม่มีข้อมูล" ด้านบนจับได้แค่
+    // ช่องว่าง "ระหว่าง" 2 segment เท่านั้น ไม่เคยครอบคลุมหัว-ท้ายตาราง ทำให้แอดมินเห็นสแกนเกิน
+    // พวกนี้ได้แค่ผ่าน banner ข้อความบนสุด ไม่โผล่ในตารางเลย ทำหลังจากจับคู่ segment จริงทั้งหมด
+    // เสร็จแล้วเท่านั้น (ใช้ usedPunches สุดท้าย) เพื่อไม่ให้ไปแย่ง scan ที่ควรเป็นของ segment จริง
+    // ตัวแรก/ตัวสุดท้าย (บทเรียนจากบั๊กแถว gap ตรงกลางที่แก้ไปก่อนหน้านี้)
+    // เกณฑ์ "วันมาตรฐาน" เดียวกับ backend segmentEngine.ts (short-day rule ที่ตัดสิน CONFLICTED
+    // จาก coverageStart/coverageEnd เทียบกับ 08:00-17:00) — ถ้าช่วงที่มีงานจริงไม่ครบวันมาตรฐาน
+    // และไม่มีใบลามาคลุมช่วงที่ขาด ต้องโชว์เป็นแถว "ไม่มีข้อมูล" ในตารางด้วย ไม่ใช่ปล่อยให้เห็นแค่
+    // ผ่าน note ด้านบนอย่างเดียว (เช่น งานประกาศแค่ 08:00-12:00 ไม่มีบ่ายเลย ช่วง 13:00-17:00
+    // ต้องมีแถวโชว์ว่าไม่มีงานและไม่มีสแกน ไม่ใช่หายไปจากตารางเฉยๆ)
+    const NORMAL_DAY_START = 8 * 60; // 08:00
+    const NORMAL_DAY_END = 17 * 60; // 17:00
+
+    if (segments.length > 0) {
+      const leftover = scanMinsList.filter((t: number) => !usedPunches.has(t));
+      const firstExpectedStart = segments[0].expectedStart;
+      const lastExpectedEnd = segments[segments.length - 1].expectedEnd;
+      const leadingStray = leftover.filter((t: number) => t < firstExpectedStart);
+      const trailingStray = leftover.filter((t: number) => t > lastExpectedEnd);
+      const missingLeadingStandard =
+        firstExpectedStart > NORMAL_DAY_START &&
+        !isSegmentCoveredByLeave(NORMAL_DAY_START, firstExpectedStart);
+      const missingTrailingStandard =
+        lastExpectedEnd < NORMAL_DAY_END && !isSegmentCoveredByLeave(lastExpectedEnd, NORMAL_DAY_END);
+
+      if (leadingStray.length > 0 || missingLeadingStandard) {
+        segments.unshift({
+          key: 'gap_leading',
+          jobKey: '_gap',
+          name: 'ไม่มีข้อมูล',
+          subLabel: `ก่อน ${fromMins(firstExpectedStart)}`,
+          color: '#64748b',
+          bgColor: '#f1f5f9',
+          expectedStart: 0,
+          expectedEnd: firstExpectedStart,
+          photoIn: null,
+          photoOut: null,
+          isGapSegment: true,
+          actualIn: leadingStray.length > 0 ? leadingStray[0] : null,
+          actualOut: leadingStray.length > 1 ? leadingStray[leadingStray.length - 1] : null,
+        });
+      }
+
+      if (trailingStray.length > 0 || missingTrailingStandard) {
+        segments.push({
+          key: 'gap_trailing',
+          jobKey: '_gap',
+          name: 'ไม่มีข้อมูล',
+          subLabel: `หลัง ${fromMins(lastExpectedEnd)}`,
+          color: '#64748b',
+          bgColor: '#f1f5f9',
+          expectedStart: lastExpectedEnd,
+          expectedEnd: 24 * 60,
+          photoIn: null,
+          photoOut: null,
+          isGapSegment: true,
+          actualIn: trailingStray.length > 0 ? trailingStray[0] : null,
+          actualOut: trailingStray.length > 1 ? trailingStray[trailingStray.length - 1] : null,
+        });
+      }
+    }
 
     // Clear shared transition punches in the display to avoid admin confusion (showing same punch twice)
     for (let i = 0; i < segments.length - 1; i++) {
@@ -989,13 +1246,16 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       let photoIn = seg.photoIn;
       let photoOut = seg.photoOut;
 
-      // Transition scan bypass rules (OT เช้า ↔ กะปกติ)
-      const otMorningSeg = segments.find((s) => s.key === 'otMorning');
+      // Transition scan bypass rules (OT เช้า ↔ กะปกติ) — scope เฉพาะ segment ในงาน (jobKey)
+      // เดียวกัน ไม่งั้น OT ของงานหนึ่งจะไป bypass กับกะปกติของอีกงานหนึ่งเมื่อมีหลายงานต่อวัน
+      const otMorningSeg = segments.find((s) => s.key === 'otMorning' && s.jobKey === seg.jobKey);
       const isMorningTransition = seg.key === 'morning' && !!otMorningSeg;
-      const isOtMorningTransition = seg.key === 'otMorning' && segments.some((s) => s.key === 'morning');
+      const isOtMorningTransition =
+        seg.key === 'otMorning' &&
+        segments.some((s) => s.key === 'morning' && s.jobKey === seg.jobKey);
 
       // Transition scan bypass rules (OT เที่ยง ↔ กะปกติ)
-      const otNoonSeg = segments.find((s) => s.key === 'otNoon');
+      const otNoonSeg = segments.find((s) => s.key === 'otNoon' && s.jobKey === seg.jobKey);
       const isOtNoonActive = !!otNoonSeg;
 
       let isBypassed = false;
@@ -1013,7 +1273,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
       if (isOtMorningTransition && !hasOut) {
         // Check if there is a valid scan out at 12:00 or 17:00
-        const morningSeg = segments.find((s) => s.key === 'morning');
+        const morningSeg = segments.find((s) => s.key === 'morning' && s.jobKey === seg.jobKey);
         if (morningSeg) {
           const nextHasOut = scanMinsList.some((t: number) => t >= 480 - 90 && t <= morningSeg.expectedEnd + 90);
           if (nextHasOut) {
@@ -1047,7 +1307,43 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         }
       }
 
-      if (isThisSegmentLeave) {
+      // Generic contiguous-boundary bypass — ครอบคลุมกรณีข้ามงาน (jobSegments หลายงานต่อวัน)
+      // เช่น งาน 1 จบ 10:00 ต่องาน 2 เริ่ม 10:00 ทันที: รอยต่อแบบนี้ไม่มีทางมีสแกน เพราะพนักงาน
+      // ไม่สแกนนิ้วตอนเปลี่ยนงานย่อยระหว่างวัน — ถ้ายังไม่ถูก bypass จากเงื่อนไข OT ด้านบน
+      // ให้เช็คทั่วไป: มี segment อื่น (ไม่ใช่ลางาน/ไม่ใช่ gap) ที่ expectedEnd/expectedStart ตรงกันพอดีไหม
+      if (!isBypassed && !isThisSegmentLeave && !seg.isGapSegment) {
+        const contiguousPrev = segments.find(
+          (s) => s !== seg && !s.isLeaveSegment && !s.isGapSegment && s.expectedEnd === seg.expectedStart
+        );
+        const contiguousNext = segments.find(
+          (s) => s !== seg && !s.isLeaveSegment && !s.isGapSegment && s.expectedStart === seg.expectedEnd
+        );
+        if (!hasIn && !hasOut && contiguousPrev && contiguousNext) {
+          isBypassed = true;
+          bypassReason = 'ทำงานต่อเนื่องข้ามงาน (ไม่มีสแกนรอยต่อ)';
+        } else if (hasIn && !hasOut && contiguousNext) {
+          isBypassed = true;
+          bypassReason = 'ทำงานต่อเนื่องข้ามงาน (ไม่มีสแกนรอยต่อ)';
+        } else if (!hasIn && hasOut && contiguousPrev) {
+          isBypassed = true;
+          bypassReason = 'ทำงานต่อเนื่องข้ามงาน (ไม่มีสแกนรอยต่อ)';
+        }
+      }
+
+      if (seg.isGapSegment) {
+        if (hasIn || hasOut) {
+          result = '⚠ พบสแกนไม่ตรงงาน';
+          const foundTimes = [hasIn ? fromMins(seg.actualIn) : null, hasOut ? fromMins(seg.actualOut) : null]
+            .filter(Boolean)
+            .join(', ');
+          remark = `พบสแกนนิ้วเวลา ${foundTimes} แต่ไม่มีการลง Daily Report ในช่วงเวลานี้`;
+          statusColor = { bg: '#fef3c7', text: '#d97706', border: '#fcd34d' };
+        } else {
+          result = '— ไม่มีข้อมูล';
+          remark = 'ไม่มีงานและไม่มีสแกนช่วงนี้';
+          statusColor = { bg: '#f1f5f9', text: '#64748b', border: '#cbd5e1' };
+        }
+      } else if (isThisSegmentLeave) {
         result = '✓ ลางาน';
         remark = 'บันทึกการลางาน (Leave)';
         statusColor = { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };
@@ -1134,8 +1430,12 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         photoOut,
         inText: fromMins(seg.actualIn),
         outText: fromMins(seg.actualOut),
-        expectedInText: fromMins(seg.expectedStart),
-        expectedOutText: fromMins(seg.expectedEnd),
+        // gap_leading/gap_trailing ไม่มี Daily Report จริงเลยทั้งแถว (ตัวเลข expectedStart/
+        // expectedEnd ที่ตั้งไว้เป็นแค่ขอบเขตช่วยคำนวณภายใน ไม่ใช่เวลาที่มีการลง Daily Report
+        // จริง — เช่น 17:00 คือเวลาที่งานก่อนหน้าจบ ไม่ใช่เวลาที่ Daily Report บอกว่าเข้างาน)
+        // ต้องโชว์ "—" ทั้งคู่ ไม่งั้นดูเหมือนมี Daily Report ยืนยันช่วงเวลานั้นอยู่จริง
+        expectedInText: seg.key === 'gap_leading' || seg.key === 'gap_trailing' ? '—' : fromMins(seg.expectedStart),
+        expectedOutText: seg.key === 'gap_leading' || seg.key === 'gap_trailing' ? '—' : fromMins(seg.expectedEnd),
         result,
         remark,
         statusColor,
@@ -1509,13 +1809,24 @@ const WorkHourComparisonTable: React.FC<Props> = ({
           >
             <Box>
               <Typography variant="h6" fontWeight={900} sx={{ color: '#fff', mb: 0.5 }}>
-                {selectedRow?.status === 'MISSING_SCAN'
-                  ? 'ขาดข้อมูลสแกนนิ้ว'
-                  : selectedRow?.status === 'MISSING_DAILY'
-                    ? 'ดูข้อมูลสแกนนิ้ว (ไม่มี Daily Report)'
-                    : selectedRow?.status === 'MATCHED'
-                      ? 'ข้อมูลเวลาทำงาน'
-                      : 'ตรวจสอบข้อมูลขัดแย้ง'}
+                {(() => {
+                  // มี jobSegments → ใช้ shadowStatus (ละเอียดกว่า) เป็นตัวตัดสินหัวข้อที่แอดมินเห็น
+                  // แทน status เดิม (shiftTimes ทั้งวัน) เพื่อไม่ให้หัวข้อขัดกับตาราง breakdown ด้านล่าง
+                  // — ไม่กระทบ status จริงที่ใช้อนุมัติ/คิดเงิน (ยังไม่ cutover)
+                  const hasJobSegments =
+                    !!selectedRow?.jobSegments && Object.keys(selectedRow.jobSegments).length > 0;
+                  const displayStatus =
+                    hasJobSegments && selectedRow?.shadowStatus
+                      ? selectedRow.shadowStatus
+                      : selectedRow?.status;
+                  return displayStatus === 'MISSING_SCAN'
+                    ? 'ขาดข้อมูลสแกนนิ้ว'
+                    : displayStatus === 'MISSING_DAILY'
+                      ? 'ดูข้อมูลสแกนนิ้ว (ไม่มี Daily Report)'
+                      : displayStatus === 'MATCHED'
+                        ? 'ข้อมูลเวลาทำงาน'
+                        : 'ตรวจสอบข้อมูลขัดแย้ง';
+                })()}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
                 {selectedRow?.employeeId} — {selectedRow?.employeeName} &nbsp;|&nbsp; วันที่{' '}
@@ -1585,9 +1896,41 @@ const WorkHourComparisonTable: React.FC<Props> = ({
                   <HistoryIcon sx={{ fontSize: 20 }} />
                 </IconButton>
               )}
-              <Box sx={getStatusStyle(selectedRow?.status || 'ALL')}>
-                {getStatusLabel(selectedRow?.status)}
-              </Box>
+              {(() => {
+                // ป้ายหลัก: มี jobSegments → โชว์ shadowStatus (ละเอียดกว่า, ตรงกับตาราง breakdown
+                // ด้านล่างที่แอดมินกำลังดูอยู่) แทน status เดิม — ไม่งั้นป้ายบนกับตารางล่างขัดกันเอง
+                // ป้ายรอง: ถ้า status จริง (shiftTimes ทั้งวัน — ตัวที่ใช้อนุมัติ/คิดเงินจริง ยังไม่
+                // cutover) ต่างจากป้ายหลัก ให้โชว์ไว้เตือนแอดมินว่าระบบจะยังทำงาน (resolve/confirm)
+                // ตาม status ตัวนี้อยู่ ไม่ใช่ตาม jobSegments
+                const hasJobSegments =
+                  !!selectedRow?.jobSegments && Object.keys(selectedRow.jobSegments).length > 0;
+                const displayStatus =
+                  hasJobSegments && selectedRow?.shadowStatus ? selectedRow.shadowStatus : selectedRow?.status;
+                const legacyDiffers = hasJobSegments && selectedRow?.shadowMatch === false;
+                return (
+                  <>
+                    <Box sx={getStatusStyle(displayStatus || 'ALL')}>{getStatusLabel(displayStatus)}</Box>
+                    {legacyDiffers && (
+                      <Box
+                        title={`สถานะจริงที่ใช้อนุมัติ/คิดเงิน (คำนวณจาก shiftTimes ทั้งวัน — ยังไม่ cutover ไป jobSegments) คือ: ${getStatusLabel(selectedRow?.status)}${selectedRow?.note ? ` — ${selectedRow.note}` : ''}`}
+                        sx={{
+                          px: 1.25,
+                          py: 0.5,
+                          borderRadius: '8px',
+                          backgroundColor: '#e0f2fe',
+                          color: '#075985',
+                          border: '1px solid #7dd3fc',
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          cursor: 'help',
+                        }}
+                      >
+                        ℹ️ ระบบเดิม: {getStatusLabel(selectedRow?.status)}
+                      </Box>
+                    )}
+                  </>
+                );
+              })()}
             </Stack>
           </Box>
 
@@ -1595,28 +1938,36 @@ const WorkHourComparisonTable: React.FC<Props> = ({
             {(() => {
               return (
                 <Box>
-                  {/* System Note Section */}
-                  {selectedRow?.note && (
-                    <Box
-                      sx={{
-                        mb: 2.5,
-                        p: 2,
-                        borderRadius: '8px',
-                        backgroundColor: RECON_COLORS.ORANGE.bg,
-                        border: `1px solid ${RECON_COLORS.ORANGE.border}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{ color: RECON_COLORS.ORANGE.text, fontWeight: 700 }}
+                  {/* System Note Section — เมื่อมี jobSegments ตารางด้านล่างคือ breakdown ตรงตามงานย่อยจริง
+                      อยู่แล้ว หมายเหตุเดิม (คำนวณจาก shiftTimes รวมทั้งวัน) อาจอ้างอิง segment ที่ไม่ตรงกับ
+                      ตารางที่เห็น จึงใช้ shadowNote (คำนวณจาก jobSegments) แทนเมื่อมีข้อมูลนี้ */}
+                  {(() => {
+                    const hasJobSegmentsNote =
+                      selectedRow?.jobSegments && Object.keys(selectedRow.jobSegments).length > 0;
+                    const noteText = hasJobSegmentsNote ? selectedRow?.shadowNote : selectedRow?.note;
+                    if (!noteText) return null;
+                    return (
+                      <Box
+                        sx={{
+                          mb: 2.5,
+                          p: 2,
+                          borderRadius: '8px',
+                          backgroundColor: RECON_COLORS.ORANGE.bg,
+                          border: `1px solid ${RECON_COLORS.ORANGE.border}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                        }}
                       >
-                        💡 หมายเหตุจากระบบ: {selectedRow.note}
-                      </Typography>
-                    </Box>
-                  )}
+                        <Typography
+                          variant="body2"
+                          sx={{ color: RECON_COLORS.ORANGE.text, fontWeight: 700 }}
+                        >
+                          💡 หมายเหตุจากระบบ: {noteText}
+                        </Typography>
+                      </Box>
+                    );
+                  })()}
 
                   {/* Missing Daily Report Alert */}
                   {selectedRow?.status === 'MISSING_DAILY' && (
@@ -1743,7 +2094,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
 
                           return (
                             <TableRow
-                              key={seg.key}
+                              key={`${seg.jobKey}_${seg.key}`}
                               sx={{ '&:hover': { backgroundColor: '#f8fafc' } }}
                             >
                               {/* Segment Name */}

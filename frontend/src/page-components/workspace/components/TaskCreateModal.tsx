@@ -253,10 +253,25 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
           }
 
           setProjects(finalProjects);
-          setFmUsers([
+          const workerList = [
             ...(fmUsersData.users || []),
-            ...(seUsersData.users || [])
-          ]);
+            ...(seUsersData.users || []),
+          ];
+          // AM creates and assigns tasks to themselves — prepend self to list
+          const isAM = user?.roleId === 'AM' || user?.roleCode === 'AM';
+          if (isAM && user?.id && !workerList.find((u) => u.id === user.id)) {
+            workerList.unshift({
+              id: user.id,
+              employeeId: user.employeeId || user.id,
+              name: user.name,
+              roleId: 'AM',
+              username: user.username || '',
+              department: user.department || '',
+              projectLocationIds: user.projectLocationIds || [],
+              isActive: true,
+            } as any);
+          }
+          setFmUsers(workerList);
 
           // --- LOGIC: Default Project Selection ---
           if (!isEdit && user?.projectLocationIds && user.projectLocationIds.length > 0) {
@@ -694,10 +709,10 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
 
   const filteredFms = React.useMemo(() => {
     // ซ่อน Role GOD อย่างเด็ดขาด และกรองเฉพาะ FM หรือ SE ในกรณีที่ Backend ส่งมาเกิน
-    const validFms = fmUsers.filter((u) => 
-      u.roleId !== 'GOD' && 
-      (u.roleId === 'FM' || u.roleId === 'SE') && 
-      (u as any).systemCode !== 'AS' && 
+    const validFms = fmUsers.filter((u) =>
+      u.roleId !== 'GOD' &&
+      (u.roleId === 'FM' || u.roleId === 'SE' || u.roleId === 'AM') &&
+      (u as any).systemCode !== 'AS' &&
       (u as any).SystemCode !== 'AS'
     );
 
@@ -1068,7 +1083,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                               renderOption={(props, option) => (
                                 <li {...props} key={option.code} style={{ padding: '12px 16px' }}>
                                   <Box sx={{ flex: 1 }}>{option.code} - {option.name}</Box>
-                                  {!isEdit && user?.roleCode !== 'LD' && (
+                                  {!isEdit && !['LD', 'AM'].includes(user?.roleCode ?? '') && (
                                     <IconButton 
                                       size="small" 
                                       onClick={(e) => { e.stopPropagation(); setEditWO(option); setOpenWOModal(true); }}
@@ -1098,7 +1113,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({ open, onClose,
                           </Box>
                         )}
                       />
-                      {!isEdit && selectedProjectId && user?.roleCode !== 'LD' && (
+                      {!isEdit && selectedProjectId && !['LD', 'AM'].includes(user?.roleCode ?? '') && (
                         <>
                           {/* Mobile circular plus icon button */}
                           <IconButton

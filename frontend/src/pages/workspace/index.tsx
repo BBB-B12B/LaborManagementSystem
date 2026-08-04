@@ -31,12 +31,11 @@ import {
   Collapse,
   Menu,
   MenuItem,
-  ListItemIcon,
-  ListItemText,
   Popover,
   List,
   ListItem,
   ListItemSecondaryAction,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,12 +50,14 @@ import {
   AccessTime as AccessTimeIcon,
   People as PeopleIcon,
   FilterAltOff as FilterAltOffIcon,
+  FilterAlt as FilterAltIcon,
   CloudUpload as CloudUploadIcon,
+  Download as DownloadIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  CalendarToday as CalendarTodayIcon,
   AccountTree as AccountTreeIcon,
   VisibilityOff as VisibilityOffIcon,
-  RestoreFromTrash as RestoreIcon,
+  Unarchive as UnarchiveIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -70,6 +71,7 @@ import TaskDailyReportModal from '@/page-components/workspace/components/TaskDai
 import { WbsImportModal } from '@/page-components/workspace/components/WbsImportModal';
 import { WorkspaceTree } from '@/page-components/workspace/components/WorkspaceTree';
 import { taskService, type Task, type Subtask, type TaskAssignee, type EditHistoryRecord } from '@/services/taskService';
+import apiClient from '@/services/api/client';
 import { projectConfigService, type WorkOrderConfig } from '@/services/projectConfigService';
 import { projectService } from '@/services/projectService';
 import { DatePicker } from '@/components/forms/DatePicker';
@@ -100,6 +102,12 @@ const getEffectiveSubtaskStatus = (st: any) => {
   let effectiveStatus = st.status;
   const progress = st.dailyProgress || 0;
   if (progress >= 100 && effectiveStatus !== 'completed') {
+    // T-049: a 100% task whose latest site report is still 'draft' stays in "In Progress" —
+    // it only advances to "For Checking" once the report is submitted. Absent status (legacy
+    // tasks not yet re-submitted after this change) is treated as submitted → no gating.
+    if (st.latestSiteReportStatus === 'draft') {
+      return 'in-progress';
+    }
     return 'for-checking';
   } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
     return 'in-progress';
@@ -127,18 +135,27 @@ export default function WorkspacePage() {
   const { showLoading, hideLoading } = useFeedbackStore();
 
   const [activeTab, setActiveTab] = useState('This Month');
+  const [notificationReloadKey, setNotificationReloadKey] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterMenuAnchor, setFilterMenuAnchor] = useState<null | HTMLElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  // Toolbar-level Work Order / Category filters (independent of the left tree · T-048)
+  const [workOrderFilter, setWorkOrderFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  // Consolidated add-menu anchor (Add task / Upload WBS / Download Template · T-048)
+  const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
 
-  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId, user?.id);
+  useRealtimeTasks(user?.projectLocationIds || [], activeTab, user?.employeeId, user?.id, notificationReloadKey);
 
   useEffect(() => {
     setLoading(isCacheLoading);
   }, [isCacheLoading]);
 
   const toast = useToast();
-  const { canEditWorkspace } = usePermissions(user);
+  const { canEditWorkspace: _canEditBase } = usePermissions(user);
+  // AM (admin) can create/manage tasks in workspace — equivalent to LD-level task creation rights
+  const canEditWorkspace = _canEditBase || user?.roleCode === 'AM';
 
   const [projects, setProjects] = useState<any[]>([]);
 
@@ -771,6 +788,26 @@ export default function WorkspacePage() {
   const handleResetFilters = () => {
     setActiveTab('All Tasks');
     setSelectedNode(null);
+    setSearchQuery('');
+    setWorkOrderFilter('');
+    setCategoryFilter('');
+  };
+
+  // Download the WBS Excel template straight from the toolbar add-menu — same endpoint the
+  // WbsImportModal uses, surfaced here so users don't have to open the upload modal first (T-048).
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await apiClient.get('/tasks/import-wbs/template', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'wbs_import_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      toast.show('ไม่สามารถดาวน์โหลด Template ได้', 'error');
+    }
   };
 
   const handleDeleteCategoryOpen = (catId: string, currentName: string) => {
@@ -826,6 +863,7 @@ export default function WorkspacePage() {
           subtaskName: subtask.subtaskName,
           status: subtask.status,
           dailyProgress: subtask.dailyProgress,
+          latestSiteReportStatus: subtask.latestSiteReportStatus, // T-049: gate For-Checking on draft report
           assignees: subtask.assignees,
           createdAt: subtask.createdAt,
           updatedAt: subtask.updatedAt,
@@ -851,6 +889,30 @@ export default function WorkspacePage() {
     return cards;
   }, [tasks]);
 
+  // Distinct Work Order / Category options for the toolbar filters — derived from loaded
+  // tasks using the same fallback ids/names as WorkspaceTree (T-048). Category options are
+  // scoped to the selected Work Order when one is chosen.
+  const workOrderOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tasks.forEach((t) => {
+      const id = t.workOrderId || 'general-wo';
+      const name = t.workOrderName || t.workOrderCode || 'งานทั่วไป';
+      if (!map.has(id)) map.set(id, name);
+    });
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [tasks]);
+
+  const categoryOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tasks.forEach((t) => {
+      if (workOrderFilter && (t.workOrderId || 'general-wo') !== workOrderFilter) return;
+      const id = t.categoryId || 'general-cat';
+      const name = t.categoryName || 'ทั่วไป';
+      if (!map.has(id)) map.set(id, name);
+    });
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [tasks, workOrderFilter]);
+
   // Auto-open Daily Report modal if query params are present (routing from Notification)
   useEffect(() => {
     if (!router.isReady) return;
@@ -862,7 +924,11 @@ export default function WorkspacePage() {
       // ป้องกัน Loop การยิงเปลี่ยนเส้นทางด้วย Router.replace ซ้ำซ้อนก่อนที่การนำทางจะสมบูรณ์
       if (handledSubtaskIdRef.current === querySubtaskId) return;
 
-      const foundCard = subtaskCards.find((card) => card.id === querySubtaskId);
+      // Support both plain subtask doc ID and 4-part composite (woId__catId__taskId__subtaskDocId)
+      const subtaskDocId = querySubtaskId.includes('__')
+        ? querySubtaskId.split('__').pop()
+        : querySubtaskId;
+      const foundCard = subtaskCards.find((card) => card.id === querySubtaskId || card.id === subtaskDocId);
       if (foundCard) {
         handledSubtaskIdRef.current = querySubtaskId; // ล็อก ID นี้เพื่อป้องกันการเข้ามตกรอบวนซ้ำ
         setSelectedTaskForReport(foundCard);
@@ -908,6 +974,18 @@ export default function WorkspacePage() {
     }
   }, [subtaskCards, selectedTaskForReport]);
 
+  // เมื่อมี subtaskId ใน URL (มาจากการคลิก notification) → force reload ข้อมูลจาก Firestore ใหม่
+  // เพื่อให้ card ถูก find() เจอ และ modal แสดงสถานะปัจจุบัน (ไม่ใช่ข้อมูลเก่าใน cache)
+  const routerQuerySubtaskId = router.isReady
+    ? typeof router.query.subtaskId === 'string' ? router.query.subtaskId : null
+    : null;
+  useEffect(() => {
+    if (!routerQuerySubtaskId) return;
+    if (handledSubtaskIdRef.current === routerQuerySubtaskId) return;
+    setNotificationReloadKey((k) => k + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerQuerySubtaskId]);
+
   // Filter subtasks by tab & Structure Tree selection
   const filteredSubtasks = useMemo(() => {
     const today = new Date();
@@ -926,8 +1004,13 @@ export default function WorkspacePage() {
     let filtered = subtaskCards.filter((card) => card.isActive !== false);
 
     // 1. Filter by tabs (Today, This Week, This Month)
+    //    Incomplete work (dailyProgress < 100) is ALWAYS shown regardless of the selected
+    //    date tab — only 100%-complete items are subject to the date cutoff. This keeps
+    //    overdue/backlog tasks from silently falling out of focus (T-048).
     filtered = filtered.filter((card) => {
       if (activeTab === 'All Tasks') return true;
+
+      if ((card.dailyProgress || 0) < 100) return true;
 
       const dueDate = new Date(card.dueDate);
       dueDate.setHours(0, 0, 0, 0);
@@ -960,8 +1043,56 @@ export default function WorkspacePage() {
       }
     }
 
+    // 2.5 Filter by toolbar Work Order / Category selectors — independent of the left
+    //     Structure Tree, so a user can focus on one work-order/category without expanding
+    //     the tree (T-048). Uses the same fallback ids as WorkspaceTree.
+    if (workOrderFilter) {
+      filtered = filtered.filter((card) => (card.workOrderId || 'general-wo') === workOrderFilter);
+    }
+    if (categoryFilter) {
+      filtered = filtered.filter((card) => (card.categoryId || 'general-cat') === categoryFilter);
+    }
+
+    // 3. Filter by search query (taskName OR subtaskName)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(
+        (card) =>
+          (card.taskName || '').toLowerCase().includes(q) ||
+          (card.subtaskName || '').toLowerCase().includes(q)
+      );
+    }
+
     return filtered;
-  }, [subtaskCards, activeTab, selectedNode]);
+  }, [subtaskCards, activeTab, selectedNode, searchQuery, workOrderFilter, categoryFilter]);
+
+  // T-054: single source of truth for per-column bucketing (sort + completed
+  // visible/hidden split), computed once and consumed by BOTH the mobile and
+  // desktop kanban branches so the two views can never drift. Keyed by column.id.
+  const bucketedColumns = useMemo(() => {
+    const uid = user?.id;
+    const eid = user?.employeeId;
+    const isMine = (t: any) =>
+      t.assignees?.some((x: any) => x.employeeId === eid || x.employeeId === uid);
+
+    const result: Record<string, { visible: any[]; hidden: any[] }> = {};
+    for (const column of COLUMNS) {
+      const all = filteredSubtasks
+        .filter((t) => getEffectiveSubtaskStatus(t) === column.id)
+        .sort((a, b) => {
+          const aMe = isMine(a) ? 0 : 1;
+          const bMe = isMine(b) ? 0 : 1;
+          if (aMe !== bMe) return aMe - bMe;
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        });
+      const isCompletedCol = column.id === 'completed';
+      result[column.id] = {
+        visible: isCompletedCol ? all.filter((t) => !hiddenCompletedIds.includes(t.id)) : all,
+        hidden: isCompletedCol ? all.filter((t) => hiddenCompletedIds.includes(t.id)) : [],
+      };
+    }
+    return result;
+  }, [filteredSubtasks, user?.id, user?.employeeId, hiddenCompletedIds]);
 
   // Click card handler (directly launches Daily Report modal)
   const handleSubtaskCardClick = (subtaskCard: Task) => {
@@ -1280,8 +1411,8 @@ export default function WorkspacePage() {
               onSubtaskClick={handleSubtaskClickInTree}
               onQuickCreateSubtask={canEditWorkspace ? handleQuickCreateSubtaskClick : undefined}
               onQuickAssignSubtask={canEditWorkspace ? handleQuickAssignSubtaskClick : undefined}
-              onEditWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleEditWorkOrderOpen : undefined}
-              onDeleteWorkOrder={canEditWorkspace && user?.roleCode !== 'LD' ? handleDeleteWorkOrderOpen : undefined}
+              onEditWorkOrder={canEditWorkspace && !['LD', 'AM'].includes(user?.roleCode ?? '') ? handleEditWorkOrderOpen : undefined}
+              onDeleteWorkOrder={canEditWorkspace && !['LD', 'AM'].includes(user?.roleCode ?? '') ? handleDeleteWorkOrderOpen : undefined}
               onEditCategory={canEditWorkspace ? handleEditCategoryOpen : undefined}
               onDeleteCategory={canEditWorkspace ? handleDeleteCategoryOpen : undefined}
               onEditTask={canEditWorkspace ? handleEditTaskOpen : undefined}
@@ -1344,41 +1475,51 @@ export default function WorkspacePage() {
                   <AccountTreeIcon />
                 </IconButton>
 
-                {/* Filter toggle dropdown */}
-                <Button
-                  onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
-                  startIcon={<CalendarTodayIcon sx={{ fontSize: 15 }} />}
-                  endIcon={
-                    <KeyboardArrowDownIcon
+                {/* Consolidated Filter dropdown — date tab + Work Order + Category + clear
+                    all live inside one popover so the toolbar has room for more controls (T-048) */}
+                {(() => {
+                  const activeFilterCount =
+                    (activeTab !== 'All Tasks' ? 1 : 0) +
+                    (workOrderFilter ? 1 : 0) +
+                    (categoryFilter ? 1 : 0);
+                  const hasActiveFilter = activeFilterCount > 0 || selectedNode !== null || searchQuery !== '';
+                  return (
+                    <Button
+                      onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
+                      startIcon={<FilterAltIcon sx={{ fontSize: 16 }} />}
+                      endIcon={
+                        <KeyboardArrowDownIcon
+                          sx={{
+                            fontSize: 18,
+                            transition: 'transform 0.2s',
+                            transform: Boolean(filterMenuAnchor) ? 'rotate(180deg)' : 'rotate(0deg)',
+                          }}
+                        />
+                      }
                       sx={{
-                        fontSize: 18,
-                        transition: 'transform 0.2s',
-                        transform: Boolean(filterMenuAnchor) ? 'rotate(180deg)' : 'rotate(0deg)',
+                        px: 2,
+                        py: 0.9,
+                        borderRadius: '999px',
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontSize: '0.875rem',
+                        color: hasActiveFilter ? '#ffffff' : '#374151',
+                        bgcolor: hasActiveFilter ? '#FF7F32' : '#f1f3f6',
+                        boxShadow: hasActiveFilter ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
+                        border: '1px solid',
+                        borderColor: hasActiveFilter ? '#FF7F32' : '#e5e7eb',
+                        '&:hover': {
+                          bgcolor: hasActiveFilter ? '#e66a25' : '#e5e7eb',
+                        },
+                        flexShrink: 0,
+                        minWidth: 130,
                       }}
-                    />
-                  }
-                  sx={{
-                    px: 2,
-                    py: 0.9,
-                    borderRadius: '999px',
-                    textTransform: 'none',
-                    fontWeight: 700,
-                    fontSize: '0.875rem',
-                    color: activeTab === 'All Tasks' ? '#374151' : '#ffffff',
-                    bgcolor: activeTab === 'All Tasks' ? '#f1f3f6' : '#FF7F32',
-                    boxShadow: activeTab !== 'All Tasks' ? '0 4px 14px rgba(255, 127, 50, 0.3)' : 'none',
-                    border: '1px solid',
-                    borderColor: activeTab === 'All Tasks' ? '#e5e7eb' : '#FF7F32',
-                    '&:hover': {
-                      bgcolor: activeTab === 'All Tasks' ? '#e5e7eb' : '#e66a25',
-                    },
-                    flexShrink: 0,
-                    minWidth: 140,
-                  }}
-                >
-                  {activeTab}
-                </Button>
-                <Menu
+                    >
+                      ตัวกรอง{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                    </Button>
+                  );
+                })()}
+                <Popover
                   anchorEl={filterMenuAnchor}
                   open={Boolean(filterMenuAnchor)}
                   onClose={() => setFilterMenuAnchor(null)}
@@ -1388,74 +1529,110 @@ export default function WorkspacePage() {
                     sx: {
                       borderRadius: '14px',
                       mt: 0.75,
-                      minWidth: 160,
+                      p: 2,
+                      width: 280,
                       boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
                       border: '1px solid #f0f1f5',
-                      overflow: 'hidden',
                     },
                   }}
                 >
-                  {[
-                    { label: 'All Tasks', icon: '📋' },
-                    { label: 'This Month', icon: '📅' },
-                    { label: 'This Week', icon: '📆' },
-                    { label: 'Today', icon: '🗓️' },
-                  ].map(({ label, icon }) => (
-                    <MenuItem
-                      key={label}
-                      selected={activeTab === label}
-                      onClick={() => { setActiveTab(label); setFilterMenuAnchor(null); }}
+                  <Stack spacing={2}>
+                    {/* Date range */}
+                    <Box>
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', mb: 0.75 }}>
+                        ช่วงเวลา
+                      </Typography>
+                      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                        {[
+                          { label: 'All Tasks', text: 'ทั้งหมด' },
+                          { label: 'This Month', text: 'เดือนนี้' },
+                          { label: 'This Week', text: 'สัปดาห์นี้' },
+                          { label: 'Today', text: 'วันนี้' },
+                        ].map(({ label, text }) => (
+                          <Chip
+                            key={label}
+                            label={text}
+                            size="small"
+                            onClick={() => setActiveTab(label)}
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              color: activeTab === label ? '#ffffff' : '#374151',
+                              bgcolor: activeTab === label ? '#FF7F32' : '#f1f3f6',
+                              '&:hover': { bgcolor: activeTab === label ? '#e66a25' : '#e5e7eb' },
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    </Box>
+
+                    {/* Work Order filter */}
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      label="หมวดงานหลัก"
+                      value={workOrderFilter}
+                      onChange={(e) => { setWorkOrderFilter(e.target.value); setCategoryFilter(''); }}
+                    >
+                      <MenuItem value="">ทั้งหมด</MenuItem>
+                      {workOrderOptions.map((o) => (
+                        <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>
+                      ))}
+                    </TextField>
+
+                    {/* Category filter (scoped to selected Work Order) */}
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      label="หมวดงานย่อย"
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                    >
+                      <MenuItem value="">ทั้งหมด</MenuItem>
+                      {categoryOptions.map((o) => (
+                        <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>
+                      ))}
+                    </TextField>
+
+                    {/* Clear all */}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<FilterAltOffIcon sx={{ fontSize: 16 }} />}
+                      onClick={() => { handleResetFilters(); setFilterMenuAnchor(null); }}
                       sx={{
-                        px: 2,
-                        py: 1.2,
-                        fontWeight: activeTab === label ? 700 : 500,
-                        fontSize: '0.875rem',
-                        color: activeTab === label ? '#FF7F32' : '#374151',
-                        '&.Mui-selected': { bgcolor: '#fff5ee' },
-                        '&.Mui-selected:hover': { bgcolor: '#ffe8d6' },
-                        '&:hover': { bgcolor: '#fafafa' },
-                        gap: 1.2,
+                        borderRadius: '999px',
+                        color: '#ef4444',
+                        borderColor: '#fecaca',
+                        bgcolor: '#fef2f2',
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        '&:hover': { borderColor: '#ef4444', bgcolor: '#fee2e2' },
                       }}
                     >
-                      <ListItemIcon sx={{ minWidth: 'unset', fontSize: '1rem' }}>{icon}</ListItemIcon>
-                      <ListItemText primary={label} primaryTypographyProps={{ fontWeight: activeTab === label ? 700 : 500, fontSize: '0.875rem', color: activeTab === label ? '#FF7F32' : '#374151' }} />
-                    </MenuItem>
-                  ))}
-                </Menu>
+                      ล้างตัวกรองทั้งหมด
+                    </Button>
+                  </Stack>
+                </Popover>
 
-                {/* Reset Filters button next to the tabs */}
-                {(activeTab !== 'All Tasks' || selectedNode !== null) && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<FilterAltOffIcon sx={{ fontSize: 16 }} />}
-                    onClick={handleResetFilters}
-                    sx={{
-                      borderRadius: '999px',
-                      color: '#ef4444',
-                      borderColor: '#fecaca',
-                      bgcolor: '#fef2f2',
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      px: 2.5,
-                      py: 1,
-                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)',
-                      '&:hover': {
-                        borderColor: '#ef4444',
-                        bgcolor: '#fee2e2',
-                      },
-                      flexShrink: 0,
-                    }}
-                  >
-                    ล้างตัวกรอง
-                  </Button>
-                )}
-
+                {/* Consolidated Add menu — Add task / Upload WBS / Download Template (T-048) */}
                 {canEditWorkspace && (
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setIsModalOpen(true)}
+                    endIcon={
+                      <KeyboardArrowDownIcon
+                        sx={{
+                          fontSize: 18,
+                          transition: 'transform 0.2s',
+                          transform: Boolean(addMenuAnchor) ? 'rotate(180deg)' : 'rotate(0deg)',
+                        }}
+                      />
+                    }
+                    onClick={(e) => setAddMenuAnchor(e.currentTarget)}
                     sx={{
                       bgcolor: '#1c1e2b',
                       color: '#fff',
@@ -1471,34 +1648,74 @@ export default function WorkspacePage() {
                       display: { xs: 'none', sm: 'flex' },
                     }}
                   >
-                    Newtasks
-                  </Button>
-                )}
-
-                {canEditWorkspace && (
-                  <Button
-                    variant="contained"
-                    startIcon={<CloudUploadIcon />}
-                    onClick={() => setIsWbsModalOpen(true)}
-                    sx={{
-                      bgcolor: '#22c55e',
-                      color: '#fff',
-                      borderRadius: '50px',
-                      px: 3,
-                      py: 1.2,
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
-                      '&:hover': {
-                        bgcolor: '#16a34a',
-                      },
-                      display: { xs: 'none', sm: 'flex' },
-                    }}
-                  >
-                    Upload
+                    เพิ่มงาน
                   </Button>
                 )}
               </Stack>
+
+              {/* Shared Add menu — opened by both the desktop and mobile "เพิ่มงาน" buttons (T-048) */}
+              <Menu
+                anchorEl={addMenuAnchor}
+                open={Boolean(addMenuAnchor)}
+                onClose={() => setAddMenuAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                PaperProps={{
+                  sx: {
+                    borderRadius: '14px',
+                    mt: 0.75,
+                    minWidth: 220,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
+                    border: '1px solid #f0f1f5',
+                  },
+                }}
+              >
+                <MenuItem
+                  onClick={() => { setIsModalOpen(true); setAddMenuAnchor(null); }}
+                  sx={{ gap: 1.2, py: 1.2, fontWeight: 600, fontSize: '0.875rem' }}
+                >
+                  <AddIcon sx={{ fontSize: 20, color: '#1c1e2b' }} /> เพิ่มงานใหม่
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { setIsWbsModalOpen(true); setAddMenuAnchor(null); }}
+                  sx={{ gap: 1.2, py: 1.2, fontWeight: 600, fontSize: '0.875rem' }}
+                >
+                  <CloudUploadIcon sx={{ fontSize: 20, color: '#22c55e' }} /> อัปโหลด WBS (Excel)
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { handleDownloadTemplate(); setAddMenuAnchor(null); }}
+                  sx={{ gap: 1.2, py: 1.2, fontWeight: 600, fontSize: '0.875rem' }}
+                >
+                  <DownloadIcon sx={{ fontSize: 20, color: '#6b7280' }} /> ดาวน์โหลด Template
+                </MenuItem>
+              </Menu>
+
+              {/* Search box — desktop */}
+              <TextField
+                size="small"
+                placeholder="ค้นหาชื่องาน..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{
+                  display: { xs: 'none', md: 'flex' },
+                  width: 240,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '999px',
+                    bgcolor: '#f8f9fb',
+                    fontSize: '0.875rem',
+                    '& fieldset': { borderColor: '#e5e7eb' },
+                    '&:hover fieldset': { borderColor: '#d1d5db' },
+                    '&.Mui-focused fieldset': { borderColor: '#FF7F32', borderWidth: 1.5 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 18, color: '#9ca3af' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
               {/* Mobile — collapsible action panel */}
               <Box sx={{ display: { xs: 'block', sm: 'none' }, width: '100%' }}>
@@ -1532,7 +1749,8 @@ export default function WorkspacePage() {
                       <Button
                         variant="contained"
                         startIcon={<AddIcon />}
-                        onClick={() => setIsModalOpen(true)}
+                        endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 18 }} />}
+                        onClick={(e) => setAddMenuAnchor(e.currentTarget)}
                         sx={{
                           bgcolor: '#1c1e2b',
                           color: '#fff',
@@ -1546,28 +1764,7 @@ export default function WorkspacePage() {
                           width: '100%',
                         }}
                       >
-                        Newtasks
-                      </Button>
-                    )}
-                    {canEditWorkspace && (
-                      <Button
-                        variant="contained"
-                        startIcon={<CloudUploadIcon />}
-                        onClick={() => setIsWbsModalOpen(true)}
-                        sx={{
-                          bgcolor: '#22c55e',
-                          color: '#fff',
-                          borderRadius: '50px',
-                          px: 3,
-                          py: 1.2,
-                          textTransform: 'none',
-                          fontWeight: 700,
-                          boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
-                          '&:hover': { bgcolor: '#16a34a' },
-                          width: '100%',
-                        }}
-                      >
-                        Upload
+                        เพิ่มงาน
                       </Button>
                     )}
                     <Button
@@ -1638,18 +1835,8 @@ export default function WorkspacePage() {
                 }}
               >
                 {COLUMNS.map((column) => {
-                  const count = filteredSubtasks.filter((t) => {
-                    let effectiveStatus = t.status;
-                    const progress = t.dailyProgress || 0;
-                    if (progress >= 100 && effectiveStatus !== 'completed') effectiveStatus = 'for-checking';
-                    else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
-                    else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
-                    else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
-                    if (effectiveStatus !== column.id) return false;
-                    // Exclude hidden completed cards from tab count
-                    if (column.id === 'completed' && hiddenCompletedIds.includes(t.id)) return false;
-                    return true;
-                  }).length;
+                  // T-054: read visible count from shared bucketedColumns
+                  const count = bucketedColumns[column.id].visible.length;
                   const isActive = mobileActiveColumn === column.id;
                   return (
                     <Box
@@ -1718,34 +1905,18 @@ export default function WorkspacePage() {
               }}
             >
               {COLUMNS.filter((col) => col.id === mobileActiveColumn).map((column) => {
-                const allMobileColTasks = filteredSubtasks
-                  .filter((t) => {
-                    let effectiveStatus = t.status;
-                    const progress = t.dailyProgress || 0;
-                    if (progress >= 100 && effectiveStatus !== 'completed') effectiveStatus = 'for-checking';
-                    else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') effectiveStatus = 'in-progress';
-                    else if (effectiveStatus === 'rework' && progress === 0) effectiveStatus = 'upcoming';
-                    else if (effectiveStatus === 'rework' && progress > 0) effectiveStatus = 'in-progress';
-                    if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
-                    return effectiveStatus === column.id;
-                  })
-                  .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
+                // T-054: read from shared bucketedColumns (single source for both views)
                 const isMobileCompletedCol = column.id === 'completed';
-                const columnTasks = isMobileCompletedCol
-                  ? allMobileColTasks.filter(t => !hiddenCompletedIds.includes(t.id))
-                  : allMobileColTasks;
-                const mobileHiddenTasks = isMobileCompletedCol
-                  ? allMobileColTasks.filter(t => hiddenCompletedIds.includes(t.id))
-                  : [];
+                const columnTasks = bucketedColumns[column.id].visible;
+                const hiddenTasks = bucketedColumns[column.id].hidden;
 
                 return (
                   <Box key={column.id}>
-                    {/* Mobile: "ดูที่ซ่อน" chip for completed column */}
-                    {isMobileCompletedCol && mobileHiddenTasks.length > 0 && (
+                    {/* Mobile: "จัดเก็บ" (archived) chip for completed column */}
+                    {isMobileCompletedCol && hiddenTasks.length > 0 && (
                       <Chip
                         icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
-                        label={`ซ่อนไว้ ${mobileHiddenTasks.length} รายการ — กดดู`}
+                        label={`จัดเก็บ ${hiddenTasks.length} รายการ — กดดู`}
                         size="small"
                         onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
                         sx={{
@@ -1835,34 +2006,10 @@ export default function WorkspacePage() {
             }}
           >
             {COLUMNS.map((column) => {
-              const allColumnTasks = filteredSubtasks
-                .filter((t) => {
-                  let effectiveStatus = t.status;
-                  const progress = t.dailyProgress || 0;
-
-                  if (progress >= 100 && effectiveStatus !== 'completed') {
-                    effectiveStatus = 'for-checking';
-                  } else if (progress > 0 && progress < 100 && effectiveStatus === 'upcoming') {
-                    effectiveStatus = 'in-progress';
-                  } else if (effectiveStatus === 'rework' && progress === 0) {
-                    effectiveStatus = 'upcoming';
-                  } else if (effectiveStatus === 'rework' && progress > 0) {
-                    effectiveStatus = 'in-progress';
-                  }
-
-                  if (column.id === 'in-progress') return effectiveStatus === 'in-progress';
-                  return effectiveStatus === column.id;
-                })
-                .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-              // For completed column: separate visible vs hidden
+              // T-054: read from shared bucketedColumns (single source for both views)
               const isCompletedCol = column.id === 'completed';
-              const columnTasks = isCompletedCol
-                ? allColumnTasks.filter(t => !hiddenCompletedIds.includes(t.id))
-                : allColumnTasks;
-              const hiddenTasks = isCompletedCol
-                ? allColumnTasks.filter(t => hiddenCompletedIds.includes(t.id))
-                : [];
+              const columnTasks = bucketedColumns[column.id].visible;
+              const hiddenTasks = bucketedColumns[column.id].hidden;
 
               return (
                 <Box
@@ -1894,7 +2041,7 @@ export default function WorkspacePage() {
                     {isCompletedCol && hiddenTasks.length > 0 && (
                       <Chip
                         icon={<VisibilityOffIcon style={{ fontSize: 14 }} />}
-                        label={`ซ่อน ${hiddenTasks.length}`}
+                        label={`จัดเก็บ ${hiddenTasks.length}`}
                         size="small"
                         onClick={(e) => setHiddenPopoverAnchor(e.currentTarget)}
                         sx={{
@@ -2587,7 +2734,7 @@ export default function WorkspacePage() {
         <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 1 }}>
           <VisibilityOffIcon sx={{ fontSize: 18, color: '#64748b' }} />
           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b', flex: 1 }}>
-            งานที่ซ่อนไว้
+            รายการที่จัดเก็บ
           </Typography>
           <Typography variant="caption" sx={{ color: '#94a3b8' }}>
             {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length} รายการ
@@ -2621,20 +2768,20 @@ export default function WorkspacePage() {
                     </Typography>
                   )}
                 </Box>
-                <Tooltip title="เอากลับมาแสดง">
+                <Tooltip title="ยกเลิกจัดเก็บ">
                   <IconButton
                     size="small"
                     onClick={() => handleUnhideCard(task.id)}
                     sx={{ color: '#00aa5c', bgcolor: '#dcfce7', '&:hover': { bgcolor: '#bbf7d0' }, flexShrink: 0 }}
                   >
-                    <RestoreIcon fontSize="small" />
+                    <UnarchiveIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
               </ListItem>
             ))}
           {hiddenCompletedIds.filter(id => subtaskCards.some(t => t.id === id)).length === 0 && (
             <Box sx={{ py: 4, textAlign: 'center' }}>
-              <Typography variant="body2" sx={{ color: '#94a3b8' }}>ไม่มีงานที่ซ่อนไว้</Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>ไม่มีรายการที่จัดเก็บ</Typography>
             </Box>
           )}
         </List>

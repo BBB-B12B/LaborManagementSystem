@@ -26,6 +26,10 @@ export const projectSchema = z.object({
     .min(1, errorMessages.minLength(1))
     .max(50, errorMessages.maxLength(50)),
 
+  referenceCode: requiredString('กรุณาระบุรหัสอ้างอิงโครงการ')
+    .min(1, errorMessages.minLength(1))
+    .max(50, errorMessages.maxLength(50)),
+
   department: requiredString('Department is required'),
 
   projectName: requiredString('Project name is required')

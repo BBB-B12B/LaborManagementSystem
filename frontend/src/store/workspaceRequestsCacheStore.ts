@@ -11,6 +11,7 @@ export interface WorkspaceRequestsCacheState {
   dailyReports: any[];
   tasksMeta: Record<string, any>;
   subtasksMeta: Record<string, any>;
+  hiddenWorkOrderIds: string[];
   lastFetchedAt: Date | null;
   isLoading: boolean;
   error: string | null;
@@ -38,6 +39,7 @@ export const useWorkspaceRequestsCacheStore = create<WorkspaceRequestsCacheState
   dailyReports: [],
   tasksMeta: {},
   subtasksMeta: {},
+  hiddenWorkOrderIds: [],
   lastFetchedAt: null,
   isLoading: false,
   error: null,

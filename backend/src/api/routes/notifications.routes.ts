@@ -55,12 +55,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           return n.targetUserId === userUid || n.targetUserId === userId;
         }
 
-        // unlock_requested: any supervisor in the same project can see it
+        // unlock_requested: each supervisor sees only their own targeted doc
         if (n.type === 'unlock_requested') {
-          const SUPERVISOR_ROLES = ['LD', 'OE', 'PE', 'PM'];
-          if (SUPERVISOR_ROLES.includes(userRole as string) && n.projectId && userProjectIds.includes(n.projectId)) {
-            return true;
-          }
           return n.targetUserId === userUid || n.targetUserId === userId;
         }
 

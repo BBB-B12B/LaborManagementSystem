@@ -88,8 +88,12 @@ export const ProjectSelect = React.forwardRef<HTMLDivElement, ProjectSelectProps
 
       return baseProjects
         .filter((project) => {
-          // Admin and GOD roles can see all projects
-          if (user?.roleId === 'AM' || user?.roleCode === 'AM' || user?.roleCode === 'GOD') {
+          // Only MD (FR-A-008) and GOD (system superuser) see every project.
+          // AM is "all management features," not "all projects" - AM (and
+          // every other role) is scoped by their own projectLocationIds,
+          // including here in Member Management: an AM can only assign
+          // users to their own project(s), never to a project they don't manage.
+          if (user?.roleCode === 'MD' || user?.roleCode === 'GOD') {
             return true;
           }
 

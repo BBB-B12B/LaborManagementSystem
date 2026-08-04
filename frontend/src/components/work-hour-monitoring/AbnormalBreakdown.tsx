@@ -8,6 +8,7 @@ import {
   PersonRemove as PersonRemoveIcon,
   PendingActions as PendingActionsIcon,
 } from '@mui/icons-material';
+import { format } from 'date-fns';
 import { RECON_COLORS } from '../../constants/theme';
 import BreakdownCard from './BreakdownCard';
 import { useQuery } from '@tanstack/react-query';
@@ -29,12 +30,17 @@ const AbnormalBreakdown: React.FC<Props> = ({
   endDate,
 }) => {
   const { data: stats } = useQuery({
-    queryKey: ['reconciliation-stats', project, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: [
+      'reconciliation-stats',
+      project,
+      startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+      endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
+    ],
     queryFn: () =>
       reconciliationService.getStats({
         homeProjectId: project !== 'all' ? project : undefined,
-        startDate: startDate ? startDate.toISOString() : undefined,
-        endDate: endDate ? endDate.toISOString() : undefined,
+        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
       }),
     staleTime: 60000,
   });

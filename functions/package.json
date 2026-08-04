@@ -5,6 +5,7 @@
   "description": "Firebase Cloud Functions for Labor Management System",
   "main": "lib/index.js",
   "scripts": {
+    "prebuild": "node ../scripts/sync-segment-engine.js",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",

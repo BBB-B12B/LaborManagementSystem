@@ -48,9 +48,10 @@ CLAUDE.md ควบคุมพฤติกรรมของ Claude ใน Asse
 ---
 
 ## R1 · Token Tracking
-Claude คำนวณ Input+Output tokens ทุก response สะสมใน `SESSION_TOTAL`
-- แสดง `*(Session total: ~NNN tokens)*` ท้ายทุก response
-- เขียนลง `.sessions/session_tokens.md` เฉพาะที่ checkpoint (TOKEN PAUSE / BLOCKED / session close)
+ตัวนับ 2 ตัว: `SESSION_TOTAL` (ต่อ-งาน) · `CHAT_TOTAL` (หน้าต่าง context). **รีเซ็ต SESSION_TOTAL เป็น 0 เฉพาะเมื่อ: (1) ผู้ใช้ยืนยัน /compact ที่ mece compact-checkpoint (PATH B), หรือ (2) งานเสร็จ + ปิด session (PATH A/C). ห้ามรีเซ็ตจาก compact_state.md ค้าง หรือ boot กลางงาน** (CFP-031). CHAT_TOTAL รีเซ็ตเมื่อ /compact เท่านั้น.
+- PostToolUse hook (`scripts/posttool_track.py`) สะสม SESSION_TOTAL + CHAT_TOTAL ให้อัตโนมัติทุก tool call — **agent ไม่เขียนเอง/ไม่แต่งตัวเลข** (เป็น lower bound — นับเฉพาะ tool I/O · ของจริง ≈1.5–2× · เชื่อมิเตอร์ของแอปสำหรับ ceiling/compact)
+- Footer ทุกเทิร์น: `*(Turn: N · Loop_W: N | Session: ~NNNk | Chat: ~NNNk tokens)*` · ใช้ค่า [token-state] ตรง ๆ · ค่าเป็น snapshot ต้น-เทิร์น (ช้า ≤1 เทิร์น) — ต้องการค่าสด → grep `.sessions/session_tokens.md`
+- รายละเอียดเต็ม (สูตร · hook · spike · reset): **Implement/03_config.md §Token Tracking**
 
 ## R2 · Tool Budget
 จำกัด 5 tool calls ต่อ 1 response — retry สูงสุด 2 ครั้ง แล้ว diagnose

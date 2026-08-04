@@ -5,6 +5,7 @@ import { Task, CreateTaskInput, UpdateTaskInput, taskConverter, TaskAssignee, Ta
 import { Notification } from '../models/Notification';
 import { AppError } from '../api/middleware/errorHandler';
 import axios from 'axios';
+import { bangkokDateLabel, bangkokLabelDayBounds, bangkokTodayAsLabel } from '../utils/bangkokTime';
 
 const WORK_ORDERS_COLLECTION = 'workOrders';
 const PROJECTS_COLLECTION = 'Project';
@@ -394,6 +395,7 @@ export class TaskService {
         // A2. Update subtask document (reset progress, bump revision, status → rework, reset support fields)
         transaction.update(subtaskRef, {
           currentRevision: nextRevId,
+          revisionId: nextRevId,
           dailyProgress: 0,
           status: 'rework',
           assignees: newAssignees,
@@ -470,6 +472,7 @@ export class TaskService {
 
           transaction.update(stDoc.ref, {
             currentRevision: nextRevId,
+            revisionId: nextRevId,
             dailyProgress: 0,
             status: 'upcoming',
             updatedAt: now,
@@ -1025,7 +1028,7 @@ export class TaskService {
           assignees: subData.assignees || [],
           dailyProgress: subData.dailyProgress || 0,
           currentRevision: subData.currentRevision || 'rev00',
-          revisionId: subData.revisionId || subData.currentRevision || 'rev00',
+          revisionId: subData.currentRevision || subData.revisionId || 'rev00',
           revisionName: subData.revisionName || '',
           revisionCreatedAt: subData.revisionCreatedAt ? safeDate(subData.revisionCreatedAt) : safeDate(subData.createdAt),
           isSupportRequest: subData.isSupportRequest || false,
@@ -1895,9 +1898,10 @@ export class TaskService {
     const isUpdate = existingReportDoc.exists;
 
     const nowForValidation = new Date();
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    threeDaysAgo.setHours(0, 0, 0, 0);
+    // Bangkok "today" — new Date() truncated via the server's own clock (UTC on
+    // Cloud Run) would read yesterday's date during Thai 00:00-07:00 each day.
+    const threeDaysAgo = bangkokTodayAsLabel();
+    threeDaysAgo.setUTCDate(threeDaysAgo.getUTCDate() - 3);
 
     // Check if the date is explicitly unlocked
     const unlockedDatesField = isSupportReport ? 'supportUnlockedDates' : 'unlockedDates';
@@ -1918,8 +1922,10 @@ export class TaskService {
     if (!isUnlocked) {
       if (dataForRev.revisionCreatedAt && currentRev !== 'rev00') {
         const revisionCreatedAt = dataForRev.revisionCreatedAt.toDate ? dataForRev.revisionCreatedAt.toDate() : new Date(dataForRev.revisionCreatedAt);
-        const boundaryDate = new Date(revisionCreatedAt);
-        boundaryDate.setHours(0, 0, 0, 0); // Start of the day
+        // Bangkok calendar day of revisionCreatedAt, expressed the same way reportDate
+        // is (UTC-midnight-of-label) — plain .setHours(0,0,0,0) reads the server's own
+        // (UTC) clock and can land on the wrong day near the Thai day boundary.
+        const boundaryDate = bangkokLabelDayBounds(revisionCreatedAt).start;
         if (reportDate < boundaryDate) {
           if (isSupportReport) {
             throw new AppError(`ไม่สามารถลงงานย้อนหลังก่อนวันที่ปรับปรุงงานนี้ได้`, 400);
@@ -2207,6 +2213,11 @@ export class TaskService {
             transaction.update(subtaskRef, {
               dailyProgress: progress,
               status: newStatus,
+              // T-049: denormalize the latest site-report status onto the subtask so the
+              // realtime workspace board can keep a 100%-but-still-draft task in "In Progress"
+              // instead of advancing it to "For Checking". null when status is absent → FE treats
+              // as submitted (no gating).
+              latestSiteReportStatus: finalReportData.status ?? null,
               updatedAt: now,
               updatedBy: updatedBy,
               historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
@@ -2243,6 +2254,8 @@ export class TaskService {
             transaction.update(taskRef, {
               dailyProgress: progress,
               status: newStatus,
+              // T-049: denormalize latest site-report status (see subtask branch above)
+              latestSiteReportStatus: finalReportData.status ?? null,
               updatedAt: now,
               updatedBy: updatedBy,
               historicalAssigneeIds: admin.firestore.FieldValue.arrayUnion(updatedBy) as any
@@ -2541,9 +2554,10 @@ export class TaskService {
         const reports = await revDoc.ref.collection('dailyReports').get();
         reports.docs.forEach(d => {
           const data = d.data();
-          if (data.reportDate && !dateMap.has(d.id)) {
+          const revKey = `${revDoc.id}_${d.id}`;
+          if (data.reportDate && !dateMap.has(revKey)) {
             allReports.push({ ...data, _revisionId: revDoc.id });
-            dateMap.set(d.id, true);
+            dateMap.set(revKey, true);
           }
         });
       }
@@ -2556,9 +2570,10 @@ export class TaskService {
         const reports = await hDoc.ref.collection('dailyReports').get();
         reports.docs.forEach(d => {
           const data = d.data();
-          if (data.reportDate && !dateMap.has(d.id)) {
+          const helpKey = `${hDoc.id}_${d.id}`;
+          if (data.reportDate && !dateMap.has(helpKey)) {
             allReports.push({ ...data, _revisionId: hDoc.id });
-            dateMap.set(d.id, true);
+            dateMap.set(helpKey, true);
           }
         });
       }
@@ -2631,26 +2646,21 @@ export class TaskService {
     const { subtaskRef, taskRef } = await this.resolveRefs(id);
     const targetRef = subtaskRef || taskRef;
     const requestDate = new Date(requestData.reportDate);
-    
     const now = new Date();
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
 
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    
-    const requestDateStart = new Date(requestDate);
-    requestDateStart.setHours(0, 0, 0, 0);
+    // Bangkok "today"/"tomorrow" — new Date() truncated via the server's own
+    // clock (UTC on Cloud Run) would read yesterday's date during Thai 00:00-07:00.
+    const today = bangkokTodayAsLabel();
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    const requestDateStart = bangkokLabelDayBounds(requestDate).start;
 
     if (requestDateStart.getTime() !== today.getTime() && requestDateStart.getTime() !== tomorrow.getTime()) {
       throw new AppError('สามารถวางแผนงานล่วงหน้าได้เฉพาะสำหรับวันนี้หรือวันพรุ่งนี้เท่านั้น', 400);
     }
 
-    const year = requestDate.getFullYear();
-    const month = String(requestDate.getMonth() + 1).padStart(2, '0');
-    const day = String(requestDate.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
+    const dateStr = bangkokDateLabel(requestDate);
 
     const docSnap = await targetRef.get();
     if (!docSnap.exists) throw new AppError('Task/Subtask not found', 404);

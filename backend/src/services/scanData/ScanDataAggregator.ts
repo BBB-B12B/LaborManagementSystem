@@ -85,104 +85,13 @@ export class ScanDataAggregator {
       };
 
       // Convert times to fractional minutes from midnight for exact math
-      const scanMins = displayScans.map(
-        (s) => s.getHours() * 60 + s.getMinutes() + s.getSeconds() / 60
-      );
+      const scanMins = displayScans.map((s) => {
+        const { hours, minutes, seconds } = this.getBangkokTimeParts(s);
+        return hours * 60 + minutes + seconds / 60;
+      });
 
-      let normalStatus: 0 | 1 = 0;
-      let regularHours = 0;
-      let lunchStatus: 0 | 1 = 0;
-      let otMorningHours = 0;
-      let otEveningHours = 0;
-      let lateMinutes = 0;
-
-      // 1. Normal Status Calculation (ปกติ)
-      // Conditions for Normal Status:
-      // - Must have at least 2 scans (In and Out)
-      // - First scan duration covers core business hours roughly (e.g. before 12:00 and after 13:00)
-      const firstScan = scanMins.length > 0 ? scanMins[0] : null;
-      const lastScan = scanMins.length > 0 ? scanMins[scanMins.length - 1] : null;
-
-      if (scans.length >= 2 && firstScan !== null && lastScan !== null) {
-        // If they scanned in before noon and out after noon, they are "Normal"
-        // even if they are late (e.g. 08:30) as long as they scanned in and out.
-        if (firstScan < 720 && lastScan >= 1020) {
-          normalStatus = 1;
-        }
-
-        // Calculate actual working hours from scan times
-        // Use the effective start (cap at 08:00 for early arrivals within regular window)
-        const effectiveStart = Math.max(firstScan, 480); // Don't count before 08:00 as regular
-        const effectiveEnd = Math.min(lastScan, 1020); // Don't count after 17:00 as regular
-
-        if (effectiveEnd > effectiveStart) {
-          let workMins = effectiveEnd - effectiveStart;
-
-          // Subtract 1 hour lunch break (12:00-13:00) if work spans across lunch
-          if (effectiveStart < 720 && effectiveEnd > 780) {
-            workMins -= 60; // Subtract lunch hour
-          }
-
-          // Round down to 0.5 hour increments
-          regularHours = Math.floor(workMins / 30) * 0.5;
-          if (isNaN(regularHours)) regularHours = 0;
-        }
-      }
-
-      if (scans.length > 0 && firstScan !== null && lastScan !== null) {
-        // 2. OT Morning (03:00 - 08:00)
-        // Calculate OT in 30-min blocks (round down)
-        const morningScans = scanMins.filter((m) => m <= 480);
-        if (morningScans.length >= 2) {
-          const otIn = morningScans[0];
-          const otOut = morningScans[morningScans.length - 1];
-          const durationMins = otOut - otIn;
-          otMorningHours = Math.floor(durationMins / 30) * 0.5;
-          if (isNaN(otMorningHours)) otMorningHours = 0;
-        }
-
-        // 3. Late Minutes (If first scan > 08:00)
-        // Only count as late if first scan is after 08:00 and before noon
-        if (firstScan !== null && firstScan > 480 && firstScan < 720) {
-          lateMinutes = Math.floor(firstScan - 480);
-          if (isNaN(lateMinutes)) lateMinutes = 0;
-        }
-
-        // 4. OT Noon (Worked through lunch 12:00 - 13:00)
-        // Look for any scans between 11:30 and 13:30.
-        let hasLunchScan = false;
-        for (const m of scanMins) {
-          if (m >= 11.5 * 60 && m <= 13.5 * 60) {
-            hasLunchScan = true;
-            break;
-          }
-        }
-
-        // If they started before 12:00 and ended after 13:00 with no scans during lunch block = Lunch OT
-        if (
-          firstScan !== null &&
-          lastScan !== null &&
-          firstScan < 720 &&
-          lastScan > 780 &&
-          !hasLunchScan
-        ) {
-          lunchStatus = 1; // 1.0 hour for missing lunch
-        }
-        // 5. OT Evening (After 18:00)
-        // 17:00 - 18:00 is treated as a break/regular finish window.
-        // OT starts from 18:00 onwards.
-        if (lastScan !== null && lastScan >= 1110) {
-          // Must stay at least until 18:30 to get 0.5 OT
-          const eveningOTStart = 1080; // 18:00
-
-          // Calculate OT in 30-min blocks (round down)
-          if (lastScan >= eveningOTStart + 30) {
-            const otDuration = lastScan - eveningOTStart;
-            otEveningHours = Math.floor(otDuration / 30) * 0.5;
-            if (isNaN(otEveningHours)) otEveningHours = 0;
-          }
-        }
-      }
+      const { normalStatus, regularHours, lunchStatus, otMorningHours, otEveningHours, lateMinutes } =
+        this.computeMetrics(scanMins);
 
       results.push({
         employeeNumber,
@@ -200,9 +109,8 @@ export class ScanDataAggregator {
 
         punches: displayScans.map((s) => {
           if (isNaN(s.getTime())) return '??:??';
-          const hours = String(s.getHours()).padStart(2, '0');
-          const mins = String(s.getMinutes()).padStart(2, '0');
-          return `${hours}:${mins}`;
+          const { hours, minutes } = this.getBangkokTimeParts(s);
+          return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }),
         firstIn: times.time1 ? times.time1.substring(0, 5) : null, // HH:mm from HH:mm:ss
         lastOut:
@@ -225,6 +133,129 @@ export class ScanDataAggregator {
     return results;
   }
 
+  /**
+   * Derive normalStatus/regularHours/lunchStatus/otMorningHours/otEveningHours/
+   * lateMinutes from a day's scan times (fractional minutes from Bangkok midnight).
+   * Pulled out of `aggregate()` so a backfill script can recompute these from a
+   * doc's already-correct `allScans` (HH:mm:ss) without re-deriving from raw Dates.
+   */
+  public static computeMetrics(scanMins: number[]): {
+    normalStatus: 0 | 1;
+    regularHours: number;
+    lunchStatus: 0 | 1;
+    otMorningHours: number;
+    otEveningHours: number;
+    lateMinutes: number;
+  } {
+    let normalStatus: 0 | 1 = 0;
+    let regularHours = 0;
+    let lunchStatus: 0 | 1 = 0;
+    let otMorningHours = 0;
+    let otEveningHours = 0;
+    let lateMinutes = 0;
+
+    // 1. Normal Status Calculation (ปกติ)
+    // Conditions for Normal Status:
+    // - Must have at least 2 scans (In and Out)
+    // - First scan duration covers core business hours roughly (e.g. before 12:00 and after 13:00)
+    const firstScan = scanMins.length > 0 ? scanMins[0] : null;
+    const lastScan = scanMins.length > 0 ? scanMins[scanMins.length - 1] : null;
+
+    if (scanMins.length >= 2 && firstScan !== null && lastScan !== null) {
+      // If they scanned in before noon and out after noon, they are "Normal"
+      // even if they are late (e.g. 08:30) as long as they scanned in and out.
+      if (firstScan < 720 && lastScan >= 1020) {
+        normalStatus = 1;
+      }
+
+      // Calculate actual working hours from scan times
+      // Use the effective start (cap at 08:00 for early arrivals within regular window)
+      const effectiveStart = Math.max(firstScan, 480); // Don't count before 08:00 as regular
+      const effectiveEnd = Math.min(lastScan, 1020); // Don't count after 17:00 as regular
+
+      if (effectiveEnd > effectiveStart) {
+        let workMins = effectiveEnd - effectiveStart;
+
+        // Subtract 1 hour lunch break (12:00-13:00) if work spans across lunch
+        if (effectiveStart < 720 && effectiveEnd > 780) {
+          workMins -= 60; // Subtract lunch hour
+        }
+
+        // Round down to 0.5 hour increments
+        regularHours = Math.floor(workMins / 30) * 0.5;
+        if (isNaN(regularHours)) regularHours = 0;
+      }
+    }
+
+    if (scanMins.length > 0 && firstScan !== null && lastScan !== null) {
+      // 2. OT Morning (03:00 - 08:00)
+      // Calculate OT in 30-min blocks (round down)
+      const morningScans = scanMins.filter((m) => m <= 480);
+      if (morningScans.length >= 2) {
+        const otIn = morningScans[0];
+        const otOut = morningScans[morningScans.length - 1];
+        const durationMins = otOut - otIn;
+        otMorningHours = Math.floor(durationMins / 30) * 0.5;
+        if (isNaN(otMorningHours)) otMorningHours = 0;
+      }
+
+      // 3. Late Minutes (If first scan > 08:00)
+      // Only count as late if first scan is after 08:00 and before noon
+      if (firstScan !== null && firstScan > 480 && firstScan < 720) {
+        lateMinutes = Math.floor(firstScan - 480);
+        if (isNaN(lateMinutes)) lateMinutes = 0;
+      }
+
+      // 4. OT Noon (Worked through lunch 12:00 - 13:00)
+      // Look for any scans between 11:30 and 13:30.
+      let hasLunchScan = false;
+      for (const m of scanMins) {
+        if (m >= 11.5 * 60 && m <= 13.5 * 60) {
+          hasLunchScan = true;
+          break;
+        }
+      }
+
+      // If they started before 12:00 and ended after 13:00 with no scans during lunch block = Lunch OT
+      if (
+        firstScan !== null &&
+        lastScan !== null &&
+        firstScan < 720 &&
+        lastScan > 780 &&
+        !hasLunchScan
+      ) {
+        lunchStatus = 1; // 1.0 hour for missing lunch
+      }
+      // 5. OT Evening (After 18:00)
+      // 17:00 - 18:00 is treated as a break/regular finish window.
+      // OT starts from 18:00 onwards.
+      if (lastScan !== null && lastScan >= 1110) {
+        // Must stay at least until 18:30 to get 0.5 OT
+        const eveningOTStart = 1080; // 18:00
+
+        // Calculate OT in 30-min blocks (round down)
+        if (lastScan >= eveningOTStart + 30) {
+          const otDuration = lastScan - eveningOTStart;
+          otEveningHours = Math.floor(otDuration / 30) * 0.5;
+          if (isNaN(otEveningHours)) otEveningHours = 0;
+        }
+      }
+    }
+
+    return { normalStatus, regularHours, lunchStatus, otMorningHours, otEveningHours, lateMinutes };
+  }
+
+  /** Parse an "HH:mm:ss" (or "HH:mm") Bangkok-local time string into minutes from midnight. */
+  public static timeStrToMins(t: string): number | null {
+    const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(t.trim());
+    if (!m) return null;
+    const hours = Number(m[1]);
+    const minutes = Number(m[2]);
+    const seconds = m[3] ? Number(m[3]) : 0;
+    if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return null;
+    return hours * 60 + minutes + seconds / 60;
+  }
+
   private static formatDate(d: Date): string {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Bangkok',
@@ -232,6 +263,27 @@ export class ScanDataAggregator {
       month: '2-digit',
       day: '2-digit',
     }).format(d);
+  }
+
+  /**
+   * Extract wall-clock hour/minute/second in Asia/Bangkok, regardless of the
+   * server process's own timezone (Cloud Run runs UTC — plain .getHours() would
+   * read the wrong hour here).
+   */
+  private static getBangkokTimeParts(d: Date): {
+    hours: number;
+    minutes: number;
+    seconds: number;
+  } {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(d);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+    return { hours: get('hour'), minutes: get('minute'), seconds: get('second') };
   }
 
   private static formatTime(d: Date): string {
@@ -278,7 +330,7 @@ export class ScanDataAggregator {
     const result: Date[] = [];
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i];
-      const avgHour = cluster[0].getHours();
+      const avgHour = this.getBangkokTimeParts(cluster[0]).hours;
 
       // IN: ก่อน 12:00 หรือช่วง 13:00 (กลับจากพักเที่ยง) -> ผลประโยชน์สูงสุดคือ "เริ่มเร็ว" (EARLIEST)
       // OUT: เวลา 12:00 (พักเที่ยง) หรือหลัง 14:00 เป็นต้นไป -> ผลประโยชน์สูงสุดคือ "เลิกช้า" (LATEST)

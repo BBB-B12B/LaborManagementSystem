@@ -40,6 +40,33 @@ export interface ScanEditHistoryEntry {
   };
 }
 
+export interface JobSegmentEntry {
+  taskId?: string;
+  taskName?: string;
+  subtaskId?: string;
+  subtaskName?: string;
+  location?: string;
+  shiftTimes?: {
+    day?: string;
+    otEvening?: string;
+    otMorning?: string;
+    otNoon?: string;
+  };
+  hours?: {
+    normal?: number;
+    otMorning?: number;
+    otNoon?: number;
+    otEvening?: number;
+  };
+  photos?: {
+    regular?: string[];
+    otMorning?: { in?: string; out?: string };
+    otNoon?: { in?: string; out?: string };
+    otEvening?: { in?: string; out?: string };
+  };
+  lastUpdated?: string;
+}
+
 export interface ReconciliationRecord {
   id: string;
   employeeId: string;
@@ -66,6 +93,13 @@ export interface ReconciliationRecord {
     otMorning?: string;
     otNoon?: string;
   };
+  // --- jobSegments (N งานย่อยต่อวัน, After-Sale 2026-07 format) ---
+  jobSegments?: Record<string, JobSegmentEntry>;
+  // --- Shadow-mode classification (เทียบผลจาก jobSegments กับ status จริงที่ใช้ shiftTimes) ---
+  // undefined = record นี้ไม่มี jobSegments หรือยังไม่เคยรัน shadow
+  shadowStatus?: ReconciliationStatus;
+  shadowNote?: string | null;
+  shadowMatch?: boolean;
   suggestedHours?: number;
   status: ReconciliationStatus;
   originalStatus?: ReconciliationStatus;

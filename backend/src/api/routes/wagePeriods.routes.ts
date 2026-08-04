@@ -18,6 +18,27 @@ const router = Router();
 router.use(authenticate);
 
 /**
+ * RBAC scope for the caller: only MD (FR-A-008) and GOD (system superuser)
+ * see/act on every project. Every other role — including AM — is scoped to
+ * their own projectLocationIds (see the GET / handler for the full rationale).
+ */
+function getScope(req: Request) {
+  const authReq = req as AuthRequest;
+  const userRole = authReq.user?.roleCode || (authReq.user as any)?.roleId;
+  const isSuperUser = userRole === 'GOD' || userRole === 'MD';
+  const userProjects = authReq.user?.projectLocationIds || [];
+  return { isSuperUser, userProjects };
+}
+
+/** Throws 403 if the caller isn't allowed to act on this projectCode. */
+function assertProjectAccess(req: Request, projectCode: string | undefined) {
+  const { isSuperUser, userProjects } = getScope(req);
+  if (!isSuperUser && !(projectCode && userProjects.includes(projectCode))) {
+    throw new AppError('Access denied for this project', 403);
+  }
+}
+
+/**
  * GET /api/wage-periods
  * ดึงรายการ Wage Periods (with filters)
  */
@@ -29,6 +50,7 @@ router.get(
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 100 }),
   ],
+  authorize(['AM', 'PM', 'PD', 'MD']),
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -37,6 +59,12 @@ router.get(
       }
 
       const { projectCode, status } = req.query;
+      const { isSuperUser, userProjects } = getScope(req);
+
+      if (projectCode) {
+        assertProjectAccess(req, projectCode as string);
+      }
+
       let periodsData;
 
       if (projectCode) {
@@ -48,17 +76,24 @@ router.get(
           pageSize: items.length || 50,
         };
       } else if (status) {
-        const items = await wagePeriodService.getByStatus(status as any);
+        let items = await wagePeriodService.getByStatus(status as any);
+        if (!isSuperUser) {
+          items = items.filter((item) => userProjects.includes(item.projectCode));
+        }
         periodsData = {
           wagePeriods: items,
           total: items.length,
           page: 1,
           pageSize: items.length || 50,
         };
+      } else if (!isSuperUser && userProjects.length === 0) {
+        // No project assignment and not a super user -> nothing to show
+        periodsData = { wagePeriods: [], total: 0, page: 1, pageSize: 50 };
       } else {
         const result = await wagePeriodService.getAll({
           page: parseInt(req.query.page as string) || 1,
           pageSize: parseInt(req.query.pageSize as string) || 50,
+          allowedProjectCodes: isSuperUser ? undefined : userProjects,
         });
         periodsData = {
           wagePeriods: result.items,
@@ -73,7 +108,8 @@ router.get(
         data: periodsData,
       });
     } catch (error: any) {
-      res.status(500).json({
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({
         success: false,
         error: error.message,
       });
@@ -85,11 +121,17 @@ router.get(
  * GET /api/wage-periods/:id
  * ดึงข้อมูล Wage Period ตาม ID
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authorize(['AM', 'PM', 'PD', 'MD']), async (req: Request, res: Response) => {
   try {
     const period = await wagePeriodService.getById(req.params.id);
 
     if (!period) {
+      throw new AppError('Wage period not found', 404);
+    }
+
+    // RBAC: block access to periods outside the caller's assigned projects.
+    const { isSuperUser, userProjects } = getScope(req);
+    if (!isSuperUser && !userProjects.includes(period.projectCode)) {
       throw new AppError('Wage period not found', 404);
     }
 
@@ -131,6 +173,8 @@ router.post(
         throw new AppError('Unauthorized - Missing user context', 401);
       }
 
+      assertProjectAccess(req, req.body.projectCode);
+
       // Convert date strings to Date objects
       const input = {
         projectCode: req.body.projectCode,
@@ -169,6 +213,12 @@ router.post(
         throw new AppError('Unauthorized - Missing user context', 401);
       }
 
+      const existing = await wagePeriodService.getById(req.params.id);
+      if (!existing) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, existing.projectCode);
+
       const period = await wagePeriodService.calculateWages(req.params.id, calculatedBy);
 
       if (!period) {
@@ -203,6 +253,12 @@ router.post(
         throw new AppError('Unauthorized - Missing user context', 401);
       }
 
+      const existing = await wagePeriodService.getById(req.params.id);
+      if (!existing) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, existing.projectCode);
+
       const period = await wagePeriodService.approvePeriod(req.params.id, approvedBy);
 
       if (!period) {
@@ -236,6 +292,12 @@ router.post(
       if (!paidBy) {
         throw new AppError('Unauthorized - Missing user context', 401);
       }
+
+      const existing = await wagePeriodService.getById(req.params.id);
+      if (!existing) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, existing.projectCode);
 
       const period = await wagePeriodService.markAsPaid(req.params.id, paidBy);
 
@@ -282,6 +344,12 @@ router.post(
         throw new AppError('Unauthorized', 401);
       }
 
+      const wagePeriod = await wagePeriodService.getById(req.params.id);
+      if (!wagePeriod) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, wagePeriod.projectCode);
+
       const { additionalIncomeService } =
         await import('../../services/wage/AdditionalIncomeService');
       const item = await additionalIncomeService.create({
@@ -301,7 +369,8 @@ router.post(
         message: 'Additional income added. Please re-calculate wage period.',
       });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ success: false, error: error.message });
     }
   }
 );
@@ -317,6 +386,16 @@ router.delete(
     try {
       const { additionalIncomeService } =
         await import('../../services/wage/AdditionalIncomeService');
+      const item = await additionalIncomeService.getById(req.params.itemId);
+      if (!item) {
+        throw new AppError('Additional income not found', 404);
+      }
+      const wagePeriod = await wagePeriodService.getById(item.wagePeriodId);
+      if (!wagePeriod) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, wagePeriod.projectCode);
+
       await additionalIncomeService.delete(req.params.itemId);
 
       res.json({
@@ -324,7 +403,8 @@ router.delete(
         message: 'Additional income deleted. Please re-calculate wage period.',
       });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ success: false, error: error.message });
     }
   }
 );
@@ -354,6 +434,12 @@ router.post(
         throw new AppError('Unauthorized', 401);
       }
 
+      const wagePeriod = await wagePeriodService.getById(req.params.id);
+      if (!wagePeriod) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, wagePeriod.projectCode);
+
       const { additionalExpenseService } =
         await import('../../services/wage/AdditionalExpenseService');
       const item = await additionalExpenseService.create({
@@ -373,7 +459,8 @@ router.post(
         message: 'Additional expense added. Please re-calculate wage period.',
       });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ success: false, error: error.message });
     }
   }
 );
@@ -389,6 +476,16 @@ router.delete(
     try {
       const { additionalExpenseService } =
         await import('../../services/wage/AdditionalExpenseService');
+      const item = await additionalExpenseService.getById(req.params.itemId);
+      if (!item) {
+        throw new AppError('Additional expense not found', 404);
+      }
+      const wagePeriod = await wagePeriodService.getById(item.wagePeriodId);
+      if (!wagePeriod) {
+        throw new AppError('Wage period not found', 404);
+      }
+      assertProjectAccess(req, wagePeriod.projectCode);
+
       await additionalExpenseService.delete(req.params.itemId);
 
       res.json({
@@ -396,7 +493,8 @@ router.delete(
         message: 'Additional expense deleted. Please re-calculate wage period.',
       });
     } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ success: false, error: error.message });
     }
   }
 );
@@ -406,12 +504,18 @@ router.delete(
  * ลบงวดค่าแรง (Soft Delete)
  * [T-350] แก้ไขปัญหา 404 error เมื่อกดถังขยะ
  */
-router.delete('/:id', async (req: any, res: Response) => {
+router.delete('/:id', authorize(['AM', 'PM', 'PD', 'MD']), async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
       throw new AppError('Unauthorized - Missing user context', 401);
     }
+
+    const existing = await wagePeriodService.getById(req.params.id);
+    if (!existing) {
+      throw new AppError('Wage period not found', 404);
+    }
+    assertProjectAccess(req, existing.projectCode);
 
     const success = await wagePeriodService.softDelete(req.params.id, userId);
 

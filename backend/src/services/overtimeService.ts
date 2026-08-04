@@ -13,6 +13,7 @@
 
 import { db } from '../config/firebase';
 import { storage } from '../config/storage';
+import { bangkokInstantDayBounds } from '../utils/bangkokTime';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export interface OvertimeData {
@@ -280,11 +281,7 @@ export async function getAllOvertimeRecords(filters?: {
   }
 
   if (filters?.date) {
-    const startOfDay = new Date(filters.date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(filters.date);
-    endOfDay.setHours(23, 59, 59, 999);
-
+    const { start: startOfDay, end: endOfDay } = bangkokInstantDayBounds(filters.date);
     query = query.where('reportDate', '>=', startOfDay).where('reportDate', '<=', endOfDay);
   }
 
@@ -293,9 +290,9 @@ export async function getAllOvertimeRecords(filters?: {
   }
 
   if (filters?.startDate && filters?.endDate) {
-    query = query
-      .where('reportDate', '>=', filters.startDate)
-      .where('reportDate', '<=', filters.endDate);
+    const { start } = bangkokInstantDayBounds(filters.startDate);
+    const { end } = bangkokInstantDayBounds(filters.endDate);
+    query = query.where('reportDate', '>=', start).where('reportDate', '<=', end);
   }
 
   if (filters?.otPeriod) {
@@ -336,10 +333,7 @@ export async function checkOTTimeOverlap(
   endTime: string,
   excludeRecordId?: string
 ): Promise<{ hasOverlap: boolean; overlappingRecords: any[] }> {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+  const { start: startOfDay, end: endOfDay } = bangkokInstantDayBounds(date);
 
   // Check overlap with other OT records
   const otRecordsSnapshot = await db

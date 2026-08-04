@@ -72,6 +72,7 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
     status: data.status || 'upcoming',
     assignees: data.assignees || [],
     dailyProgress: data.dailyProgress || 0,
+    latestSiteReportStatus: data.latestSiteReportStatus ?? undefined, // T-049: gate For-Checking on draft
     currentRevision: data.currentRevision || 'rev00',
     revisionId: data.revisionId || data.currentRevision || 'rev00',
     revisionName: data.revisionName || '',
@@ -85,10 +86,14 @@ const mapFirestoreDocToSubtask = (snapshot: any): any => {
     createdBy: data.createdBy || '',
     updatedBy: data.updatedBy || '',
     unapproveRequest: data.unapproveRequest || undefined,
+    unlockRequests: data.unlockRequests || undefined,
+    supportUnlockRequests: data.supportUnlockRequests || undefined,
+    revisionCreatedAt: data.revisionCreatedAt || undefined,
+    supportCreatedAt: data.supportCreatedAt || undefined,
   };
 };
 
-export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string, supportUserId?: string) => {
+export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All Tasks', supportEmployeeId?: string, supportUserId?: string, reloadKey?: number) => {
   const { upsertTask, removeTaskRealtime, upsertSubtask, removeSubtaskRealtime, setLoading: setCacheLoading } = useTaskCacheStore();
 
   useEffect(() => {
@@ -188,8 +193,8 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
       useTaskCacheStore.getState().setError(`[Subtasks Realtime Error]: ${err.message}`);
     };
 
-    // 1. Listen to workOrders to filter out type === 'AfterSale'
-    const woQuery = query(collection(afterSaleDb, 'workOrders'), where('type', '==', 'AfterSale'));
+    // 1. Listen to workOrders to filter out After-Sale system work (type 'AfterSale' or 'PreHandover')
+    const woQuery = query(collection(afterSaleDb, 'workOrders'), where('type', 'in', ['AfterSale', 'PreHandover']));
     const unsubWo = onSnapshot(woQuery, (snapshot) => {
       const hiddenIds: string[] = [];
       snapshot.forEach(doc => {
@@ -233,5 +238,5 @@ export const useRealtimeTasks = (projectIds: string[], activeTab: string = 'All 
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [projectIds.join(','), activeTab, supportEmployeeId, supportUserId]);
+  }, [projectIds.join(','), activeTab, supportEmployeeId, supportUserId, reloadKey]);
 };

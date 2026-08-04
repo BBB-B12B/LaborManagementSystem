@@ -11,6 +11,7 @@
 import * as admin from 'firebase-admin';
 import path from 'path';
 import fs from 'fs';
+import type { JobSegmentEntry } from '../reconciliation/segmentEngine';
 
 // ---------------------------------------------------------------------------
 // Types — matching Project B's Firestore schema
@@ -62,6 +63,9 @@ export interface DailyEmployeeTimesheet {
   expectedShifts: ProjectBExpectedShifts;
   shiftTimes?: ProjectBShiftTimes;
   workLogs?: ProjectBWorkLog[];
+  // N งานย่อยต่อวัน (After-Sale 2026-07 format) — ดู segmentEngine.ts JobSegmentEntry
+  // shadow-mode เท่านั้นตอนนี้ ยังไม่ใช้ตัดสิน status จริง
+  jobSegments?: Record<string, JobSegmentEntry>;
   isActive: boolean;
   // Leave Data
   leave?: { hours: number; attachment?: string }[];
@@ -127,6 +131,7 @@ export interface DailyTimesheetSummary {
     otNoon?: string;
   };
   workLogs?: ProjectBWorkLog[];
+  jobSegments?: Record<string, JobSegmentEntry>;
   dailyReportHistory?: any[];
   // After-Sale submission state. undefined = legacy/mockup (treated as showable).
   dailyReportStatus?: 'draft' | 'submitted';
@@ -264,6 +269,7 @@ export function toTimesheetSummary(doc: DailyEmployeeTimesheet): DailyTimesheetS
     dailyReportPunches,
     shiftTimes: doc.shiftTimes,
     workLogs: doc.workLogs || [],
+    jobSegments: doc.jobSegments,
     dailyReportHistory: doc.editHistory || [],
     dailyReportStatus: doc.status,
   };

@@ -37,6 +37,8 @@ import {
   CalendarRange,
   Info,
   Lock,
+  FileText,
+  Download,
 } from 'lucide-react';
 import {
   Box,
@@ -99,6 +101,18 @@ type ExistingShiftPhotos = {
 };
 
 const INITIAL_SHIFT_PHOTOS: ShiftPhotos = { regular: [], otMorning: [], otNoon: [], otEvening: [] };
+
+// T-054 · single source of truth for shift default times — used by every fallback
+// across this file (data-init blocks, bulk picker, and BOTH the desktop
+// WorkerTableRow + mobile WorkerMobileCard views) so the two views + the data
+// layer can never drift again. OT cells are disabled ONLY by isReadOnly (T-050:
+// OT is independent of the regular shift — do NOT re-add a "requires regular" gate).
+const SHIFT_DEFAULT_TIMES = {
+  regular: '08:00 - 17:00',
+  otMorning: '06:00 - 08:00',
+  otNoon: '12:00 - 13:00',
+  otEvening: '18:00 - 21:00',
+} as const;
 const INITIAL_SHIFT_PREVIEWS: ShiftPhotoPreviews = {
   regular: [],
   otMorning: [],
@@ -134,6 +148,29 @@ const getImageUrl = (url: string) => {
   // Ensure the path starts with /
   const cleanPath = url.startsWith('/') ? url : `/${url}`;
   return `${backendUrl}${cleanPath}`;
+};
+
+// T-047: infer an attachment's display name + kind from a filename or storage URL.
+// Firebase Storage keys preserve the original extension (`<ts>-<name>.<ext>`), so the
+// URL alone is enough for saved files; for freshly-picked files the caller passes the
+// File.name (blob: URLs carry no extension).
+const getFileName = (nameOrUrl: string): string => {
+  if (!nameOrUrl) return 'ไฟล์';
+  try {
+    let s = nameOrUrl.split('?')[0];
+    s = decodeURIComponent(s);
+    const seg = s.split('/').pop() || s;
+    return seg.replace(/^\d{10,}-/, ''); // strip the `Date.now()-` upload prefix
+  } catch {
+    return nameOrUrl.split('/').pop() || nameOrUrl;
+  }
+};
+
+const getFileKind = (nameOrUrl: string): 'image' | 'pdf' | 'other' => {
+  const ext = getFileName(nameOrUrl).split('.').pop()?.toLowerCase() || '';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif'].includes(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  return 'other';
 };
 
 const parseSafeDate = (val: any): Date | null => {
@@ -286,6 +323,7 @@ export default function DailyReportPage() {
   // --- 1. State Management ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const handledNotifSubtaskIdRef = useRef<string | null>(null);
   const [draftDatesByTaskId, setDraftDatesByTaskId] = useState<Record<string, string[]>>({});
   const [pageMode, setPageMode] = useState<'daily-report' | 'requests'>('daily-report');
   const [reportDate, setReportDate] = useState<Date>(new Date());
@@ -494,21 +532,20 @@ export default function DailyReportPage() {
     if (selectedTask?.revisionCreatedAt && selectedTask?.revisionId && selectedTask.revisionId !== 'rev00') {
       addIfValid(selectedTask.revisionCreatedAt);
     } else if (boundaryDate) {
-      // Fallback to original task boundary
+      // Fallback to original task boundary (support tasks: supportCreatedAt)
       if (!isNaN(boundaryDate.getTime())) {
         dates.push(boundaryDate);
       }
+    } else {
+      // rev00 non-support task: allow 30 days back so users can backdate before creation
+      const thirtyDaysAgo = subDays(new Date(), 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+      dates.push(thirtyDaysAgo);
     }
 
     // 2. Earliest Report Date (If reports exist before the creation record)
     if (earliestReportDateStr) {
       addIfValid(earliestReportDateStr);
-    }
-
-    if (dates.length === 0) {
-      const fallback = subDays(new Date(), 30);
-      fallback.setHours(0, 0, 0, 0);
-      return fallback;
     }
 
     // For "แยกการ์ด ใครการ์ดมัน", we use the earliest available date for THIS revision
@@ -861,13 +898,26 @@ export default function DailyReportPage() {
     const activeRegularWorkers = selectedWorkers.filter((w) => w.times?.regular);
     if (activeRegularWorkers.length === 0) return defaultSlots;
     const regTimes = new Set(activeRegularWorkers.map((w) => w.times?.regTime || '08:00 - 17:00'));
-    if (regTimes.size === 1 && regTimes.has('08:00 - 12:00')) {
-      return ['เข้า', 'พักเที่ยง'];
-    }
-    if (regTimes.size === 1 && regTimes.has('13:00 - 17:00')) {
-      return ['เข้าบ่าย', 'ออก'];
-    }
-    return defaultSlots;
+    if (regTimes.size !== 1) return defaultSlots;
+
+    const regTime = Array.from(regTimes)[0];
+    const [startStr, endStr] = regTime.split(' - ');
+    const toHour = (t?: string) => {
+      if (!t) return NaN;
+      const [h, m] = t.split(':').map(Number);
+      if (Number.isNaN(h)) return NaN;
+      return h + (Number.isNaN(m) ? 0 : m) / 60;
+    };
+    const startHour = toHour(startStr);
+    const endHour = toHour(endStr);
+    if (Number.isNaN(startHour) || Number.isNaN(endHour)) return defaultSlots;
+
+    // จบก่อนหรือพอดีเที่ยง = ไม่มีช่วงบ่ายต่อ ไม่ต้องมีรูปพักเที่ยง/เข้าบ่าย
+    if (endHour <= 12) return [`เข้า (${startStr})`, `ออก (${endStr})`];
+    // เริ่มบ่ายเป็นต้นไป = ไม่มีช่วงเช้า ไม่ต้องมีรูปเข้าเช้า/พักเที่ยง
+    if (startHour >= 13) return [`เข้าบ่าย (${startStr})`, `ออก (${endStr})`];
+    // คร่อมพักเที่ยง (เริ่มเช้า จบบ่าย) ต้องมีครบ 4 ช่วง
+    return [`เข้า (${startStr})`, 'พักเที่ยง (12:00)', 'เข้าบ่าย (13:00)', `ออก (${endStr})`];
   }, [selectedWorkers, isActingAsSupport]);
 
   useEffect(() => {
@@ -924,13 +974,13 @@ export default function DailyReportPage() {
               employeeId: l?.employeeId || lv?.employeeId || '',
               times: {
                 regular: l?.shifts?.normal || false,
-                regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+                regTime: l?.shiftTimes?.day || SHIFT_DEFAULT_TIMES.regular,
                 otMorning: l?.shifts?.otMorning || false,
-                otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+                otMorningTime: l?.shiftTimes?.otMorning || SHIFT_DEFAULT_TIMES.otMorning,
                 otNoon: l?.shifts?.otNoon || false,
-                otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+                otNoonTime: l?.shiftTimes?.otNoon || SHIFT_DEFAULT_TIMES.otNoon,
                 otEvening: l?.shifts?.otEvening || false,
-                otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+                otEveningTime: l?.shiftTimes?.otEvening || SHIFT_DEFAULT_TIMES.otEvening,
               },
               leave: {
                 active: lv?.leaveShifts?.custom || false,
@@ -963,13 +1013,13 @@ export default function DailyReportPage() {
               employeeId: l?.employeeId || '',
               times: {
                 regular: l?.shifts?.normal || false,
-                regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+                regTime: l?.shiftTimes?.day || SHIFT_DEFAULT_TIMES.regular,
                 otMorning: l?.shifts?.otMorning || false,
-                otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+                otMorningTime: l?.shiftTimes?.otMorning || SHIFT_DEFAULT_TIMES.otMorning,
                 otNoon: l?.shifts?.otNoon || false,
-                otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+                otNoonTime: l?.shiftTimes?.otNoon || SHIFT_DEFAULT_TIMES.otNoon,
                 otEvening: l?.shifts?.otEvening || false,
-                otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+                otEveningTime: l?.shiftTimes?.otEvening || SHIFT_DEFAULT_TIMES.otEvening,
               },
               leave: {
                 active: false,
@@ -1045,13 +1095,13 @@ export default function DailyReportPage() {
         employeeId: l?.employeeId || lv?.employeeId || '',
         times: {
           regular: l?.shifts?.normal || false,
-          regTime: l?.shiftTimes?.day || '08:00 - 17:00',
+          regTime: l?.shiftTimes?.day || SHIFT_DEFAULT_TIMES.regular,
           otMorning: l?.shifts?.otMorning || false,
-          otMorningTime: l?.shiftTimes?.otMorning || '06:00 - 08:00',
+          otMorningTime: l?.shiftTimes?.otMorning || SHIFT_DEFAULT_TIMES.otMorning,
           otNoon: l?.shifts?.otNoon || false,
-          otNoonTime: l?.shiftTimes?.otNoon || '12:00 - 13:00',
+          otNoonTime: l?.shiftTimes?.otNoon || SHIFT_DEFAULT_TIMES.otNoon,
           otEvening: l?.shifts?.otEvening || false,
-          otEveningTime: l?.shiftTimes?.otEvening || '18:00 - 21:00',
+          otEveningTime: l?.shiftTimes?.otEvening || SHIFT_DEFAULT_TIMES.otEvening,
         },
         leave: {
           active: lv?.leaveShifts?.custom || false,
@@ -1074,6 +1124,13 @@ export default function DailyReportPage() {
   const [sitePhotoPreviews, setSitePhotoPreviews] = useState<string[]>([]);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
+  // T-047: non-image attachment preview (PDF inline / other download-only). Kept separate
+  // from previewImages so the existing image lightbox behavior is untouched.
+  const [previewFile, setPreviewFile] = useState<{
+    url: string;
+    kind: 'pdf' | 'other';
+    name: string;
+  } | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(false);
 
   // Preload all preview images to cache in background for instant viewing
@@ -1226,13 +1283,13 @@ export default function DailyReportPage() {
   // Bulk Time State for Popup (T-903)
   const [bulkTime, setBulkTime] = useState({
     regular: true,
-    regTime: '08:00 - 17:00',
+    regTime: SHIFT_DEFAULT_TIMES.regular,
     otMorning: false,
-    otMorningTime: '06:00 - 08:00',
+    otMorningTime: SHIFT_DEFAULT_TIMES.otMorning,
     otNoon: false,
-    otNoonTime: '12:00 - 13:00',
+    otNoonTime: SHIFT_DEFAULT_TIMES.otNoon,
     otEvening: false,
-    otEveningTime: '18:00 - 21:00',
+    otEveningTime: SHIFT_DEFAULT_TIMES.otEvening,
   });
 
   // --- 2. Data Fetching ---
@@ -1258,9 +1315,10 @@ export default function DailyReportPage() {
           const isActive = t.isActive !== false;
 
           const role = String(currentUser.roleCode || currentUser.roleId || '').toUpperCase();
-          const isAdmin = ['AM', 'GOD', 'ADMIN'].includes(role);
 
-          if (isAdmin) return isActive;
+          // GOD/ADMIN (system-level) sees all tasks
+          // AM (project admin) falls through to assignee-based filtering — they only see tasks they own
+          if (role === 'GOD' || role === 'ADMIN') return isActive;
 
           const assignees = Array.isArray(t.assignees) ? t.assignees : [];
           const supportAssignees = Array.isArray(t.supportAssignees) ? t.supportAssignees : [];
@@ -1397,11 +1455,20 @@ export default function DailyReportPage() {
       // 1. If FM or Support FM (SFM): Fetch by department
       // 2. If Admin or others: Fetch by current project
       const isGOD = user?.roleCode === 'GOD';
+      const isAM = user?.roleCode === 'AM' || user?.roleId === 'AM';
       let workers: any[] = [];
 
       if (isGOD) {
         // GOD sees every DC in the system
         workers = await dcService.getAllDCs({}).then(res => res.dailyContractors);
+      } else if (isAM) {
+        // AM (project admin) has projectLocationIds — fetch workers per project location
+        const locId = user?.projectLocationIds?.[0];
+        if (!locId) {
+          console.warn('[DailyReport] AM user has no projectLocationIds:', user?.name);
+          return [];
+        }
+        workers = await dcService.getAllDCs({ projectLocationId: locId }).then(res => res.dailyContractors);
       } else {
         // Every role that can reach this page (FM/SE/LD/...) filters by department (สังกัด).
         // Many work-units (projectLocationId) sit under one department, so filtering by
@@ -1590,6 +1657,32 @@ export default function DailyReportPage() {
     setLaborPhotoPreviews(INITIAL_SHIFT_PREVIEWS);
   };
 
+  // Auto-select task from notification click (query params: subtaskId + optional date)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (processedTasks.length === 0) return;
+
+    const { subtaskId: querySubtaskId, date: queryDate } = router.query;
+    if (!querySubtaskId || typeof querySubtaskId !== 'string') return;
+    if (handledNotifSubtaskIdRef.current === querySubtaskId) return;
+
+    const found = processedTasks.find((t) => t.id === querySubtaskId);
+    if (!found) return;
+
+    handledNotifSubtaskIdRef.current = querySubtaskId;
+    handleSelectTask(found);
+
+    if (queryDate && typeof queryDate === 'string') {
+      const parsed = new Date(queryDate);
+      if (!isNaN(parsed.getTime())) {
+        setReportDate(parsed);
+      }
+    }
+
+    router.replace('/daily-reports', undefined, { shallow: true });
+  }, [router.isReady, router.query, processedTasks]);
+
   const handleRequestUnlockSubmit = async () => {
     if (!selectedTask || !unlockRequestDate) return;
     const dateStr = format(unlockRequestDate, 'yyyy-MM-dd');
@@ -1723,14 +1816,8 @@ export default function DailyReportPage() {
       prev.map((w) => {
         if (w.id === workerId) {
           let updatedTimes = { ...w.times, [field]: value };
-          if (field === 'regular' && value === false) {
-            updatedTimes.otMorning = false;
-            updatedTimes.otNoon = false;
-            updatedTimes.otEvening = false;
-            updatedTimes.otMorningTime = '';
-            updatedTimes.otNoonTime = '';
-            updatedTimes.otEveningTime = '';
-          }
+          // T-050: regular and OT are independent per job — unticking regular must NOT wipe OT.
+          // (The full-day-leave OT-wipe in updateWorkerLeave is a separate, correct rule and stays.)
 
           // Validation: If setting regular to true or changing regTime
           if ((field === 'regular' && value === true) || field === 'regTime') {
@@ -1878,6 +1965,47 @@ export default function DailyReportPage() {
     }
   };
 
+  // T-047: route a clicked attachment to the right preview. Images use the existing
+  // lightbox (carousel restricted to image items so a PDF never becomes a broken frame);
+  // PDFs and other docs open the dedicated file-preview dialog.
+  const openAttachmentPreview = (
+    items: Array<{ url: string; kind: 'image' | 'pdf' | 'other'; name: string }>,
+    index: number
+  ) => {
+    const clicked = items[index];
+    if (!clicked) return;
+    if (clicked.kind === 'image') {
+      const imageItems = items.filter((it) => it.kind === 'image');
+      const imgIndex = imageItems.findIndex((it) => it.url === clicked.url);
+      setPreviewImages(imageItems.map((it) => it.url));
+      setPreviewIndex(imgIndex < 0 ? 0 : imgIndex);
+    } else {
+      setPreviewFile({ url: clicked.url, kind: clicked.kind, name: clicked.name });
+    }
+  };
+
+  // T-047: force-save an attachment. Firebase Storage URLs are cross-origin, so a plain
+  // <a download> is ignored by the browser (it just navigates). Fetching to a blob and
+  // saving the object URL forces a real download. If the fetch is blocked (e.g. the bucket
+  // has no CORS config), fall back to opening the URL so the user can still save it.
+  const handleDownload = async (url: string, name: string) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`download failed: ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = name || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const renderPhotoGrid = (
     photos: File[],
     existingUrls: string[],
@@ -1891,12 +2019,18 @@ export default function DailyReportPage() {
       ...existingUrls.map((url, i) => ({
         id: `ex-${i}`,
         url: getImageUrl(url),
+        // T-047: saved files carry their extension in the URL → infer kind/name from it.
+        kind: getFileKind(url),
+        name: getFileName(url),
         isExisting: true,
         originalIndex: i,
       })),
       ...photos.map((file, i) => ({
         id: `new-${i}`,
         url: previews[i],
+        // T-047: freshly-picked files use a blob: URL (no extension) → read the File.name.
+        kind: getFileKind(file.name),
+        name: file.name,
         isExisting: false,
         originalIndex: i,
       })),
@@ -1917,15 +2051,47 @@ export default function DailyReportPage() {
               bgcolor: '#ffffff',
             }}
           >
-            <img
-              src={item.url}
-              alt="Site"
-              onClick={() => {
-                setPreviewImages(allPhotoItems.map((p) => p.url));
-                setPreviewIndex(i);
-              }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
-            />
+            {/* T-047: images render as before; PDF/other docs render as a file card (no broken <img>). */}
+            {item.kind === 'image' ? (
+              <img
+                src={item.url}
+                alt="Site"
+                onClick={() => openAttachmentPreview(allPhotoItems, i)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
+              />
+            ) : (
+              <Box
+                onClick={() => openAttachmentPreview(allPhotoItems, i)}
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                  p: 1.5,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  bgcolor: '#f8fafc',
+                }}
+              >
+                <FileText size={40} color={item.kind === 'pdf' ? '#ef4444' : '#64748b'} />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: '#475569',
+                    wordBreak: 'break-word',
+                    lineHeight: 1.2,
+                    maxHeight: 48,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {item.name}
+                </Typography>
+              </Box>
+            )}
             <IconButton
               size="small"
               onClick={() => onRemove(item.originalIndex, item.isExisting)}
@@ -1947,6 +2113,12 @@ export default function DailyReportPage() {
         {!disabled && allPhotoItems.length < 10 && (
           <PhotoSourcePicker
             multiple
+            enableGeoStamp
+            // T-047: allow attaching general documents (PDF/Office/text) under "รูปถ่ายหน้างาน",
+            // not just images. This surfaces the "แนบไฟล์" option in the picker. Camera/gallery
+            // stay image-only; the file option accepts the broad document set below.
+            fileAccept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+            fileLabel="แนบไฟล์/เอกสาร"
             onSelect={(files) => onUpload(files)}
             sx={{
               width: 140,
@@ -2080,6 +2252,7 @@ export default function DailyReportPage() {
               ) : !isActingAsSupport ? (
                 <PhotoSourcePicker
                   disabled={isGridDisabled}
+                  enableGeoStamp
                   onSelect={(files) => handleLaborShiftPhotoUpload(files, shiftKey)}
                   sx={{
                     width: 140,
@@ -2500,7 +2673,7 @@ export default function DailyReportPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD']}>
+    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD', 'AM']}>
       <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box
@@ -2768,6 +2941,25 @@ export default function DailyReportPage() {
                               task={task}
                               active={selectedTask?.id === task.id}
                               onClick={() => handleSelectTask(task)}
+                              onDraftDateClick={(dateStr) => {
+                                const draftDate = new Date(dateStr);
+                                handleSelectTask(task);
+                                setReportDate(draftDate);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const isLocked = isBefore(draftDate, subDays(today, 3));
+                                const unlockedDatesField = isActingAsSupport ? 'supportUnlockedDates' : 'unlockedDates';
+                                const unlockedDates = task?.[unlockedDatesField];
+                                let hasValidUnlock = false;
+                                if (unlockedDates && unlockedDates[dateStr]) {
+                                  const unlockUntil = parseSafeDate(unlockedDates[dateStr].unlockedUntil) || new Date(0);
+                                  hasValidUnlock = unlockUntil > new Date();
+                                }
+                                if (isLocked && !hasValidUnlock) {
+                                  setUnlockRequestDate(draftDate);
+                                  setIsUnlockRequestDialogOpen(true);
+                                }
+                              }}
                               draftDates={draftDatesByTaskId[task.id]}
                             />
                           ))}
@@ -3191,8 +3383,10 @@ export default function DailyReportPage() {
                                 <Box
                                   sx={{
                                     display: 'flex',
+                                    flexDirection: { xs: 'column', md: 'row' },
                                     justifyContent: 'space-between',
-                                    alignItems: 'center',
+                                    alignItems: { xs: 'stretch', md: 'center' },
+                                    gap: { xs: 1.5, md: 0 },
                                     mb: 2,
                                   }}
                                 >
@@ -3203,7 +3397,15 @@ export default function DailyReportPage() {
                                   >
                                     <Users size={20} color="#3b82f6" /> การจัดการแรงงาน DC
                                   </Typography>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      flexDirection: { xs: 'column', md: 'row' },
+                                      alignItems: { xs: 'stretch', md: 'center' },
+                                      gap: 1,
+                                      width: { xs: '100%', md: 'auto' },
+                                    }}
+                                  >
                                     <Button
                                       variant="contained"
                                       startIcon={<Users size={16} />}
@@ -3212,6 +3414,7 @@ export default function DailyReportPage() {
                                         borderRadius: '10px',
                                         textTransform: 'none',
                                         bgcolor: '#3b82f6',
+                                        width: { xs: '100%', md: 'auto' },
                                       }}
                                       disabled={isDateLockedByWagePeriod || isAfterCompletion || requestLocked || fmSelfPerformed}
                                     >
@@ -4006,7 +4209,7 @@ export default function DailyReportPage() {
                   />
                   {bulkTime.otMorning ? (
                     <TimeRangePicker
-                      value={bulkTime.otMorningTime || '08:00 - 12:00'}
+                      value={bulkTime.otMorningTime || SHIFT_DEFAULT_TIMES.otMorning}
                       onChange={(val) => handleBulkTimeChange('otMorningTime', val)}
                     />
                   ) : (
@@ -4099,7 +4302,7 @@ export default function DailyReportPage() {
                   />
                   {bulkTime.otEvening ? (
                     <TimeRangePicker
-                      value={bulkTime.otEveningTime || '18:00 - 21:00'}
+                      value={bulkTime.otEveningTime || SHIFT_DEFAULT_TIMES.otEvening}
                       onChange={(val) => handleBulkTimeChange('otEveningTime', val)}
                     />
                   ) : (
@@ -4332,6 +4535,83 @@ export default function DailyReportPage() {
               )}
             </Box>
           </Dialog>
+
+          {/* T-047: PDF / document preview popup — PDF renders inline via <iframe>; any other
+              type shows a download-only card. Both always expose a Download button. */}
+          <Dialog
+            open={!!previewFile}
+            onClose={() => setPreviewFile(null)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+                fontWeight: 800,
+                pr: 1,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                <FileText size={20} color={previewFile?.kind === 'pdf' ? '#ef4444' : '#64748b'} />
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {previewFile?.name}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setPreviewFile(null)} size="small">
+                <X size={20} />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers sx={{ p: previewFile?.kind === 'pdf' ? 0 : 3 }}>
+              {previewFile?.kind === 'pdf' ? (
+                <Box sx={{ width: '100%', height: '75vh' }}>
+                  <iframe
+                    src={previewFile.url}
+                    title={previewFile.name}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 2,
+                    py: 4,
+                  }}
+                >
+                  <FileText size={64} color="#64748b" />
+                  <Typography
+                    sx={{ fontWeight: 700, color: '#475569', textAlign: 'center', wordBreak: 'break-word' }}
+                  >
+                    {previewFile?.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#94a3b8', textAlign: 'center' }}>
+                    ไฟล์นี้แสดงตัวอย่างในหน้าไม่ได้ กดดาวน์โหลดเพื่อเปิดดูครับ
+                  </Typography>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<Download size={18} />}
+                onClick={() => previewFile && handleDownload(previewFile.url, previewFile.name)}
+              >
+                ดาวน์โหลด
+              </Button>
+            </DialogActions>
+          </Dialog>
           {/* Global Loading Overlay is handled by Layout/GlobalFeedback */}
         </Layout>
       </LocalizationProvider>
@@ -4343,11 +4623,13 @@ function TaskSidebarCard({
   task,
   active,
   onClick,
+  onDraftDateClick,
   draftDates,
 }: {
   task: any;
   active: boolean;
   onClick: () => void;
+  onDraftDateClick?: (dateStr: string) => void;
   draftDates?: string[];
 }) {
   const hasDrafts = Array.isArray(draftDates) && draftDates.length > 0;
@@ -4619,7 +4901,7 @@ function TaskSidebarCard({
                 return (
                   <Box
                     key={dateStr}
-                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                    onClick={(e) => { e.stopPropagation(); onDraftDateClick ? onDraftDateClick(dateStr) : onClick(); }}
                     sx={{
                       display: 'flex', alignItems: 'center', gap: 0.75,
                       px: 1, py: 0.5, borderRadius: '8px',
@@ -4922,7 +5204,7 @@ function WorkerTableRow({
           />
           {worker.times.regular ? (
             <TimeRangePicker
-              value={worker.times.regTime || '08:00 - 17:00'}
+              value={worker.times.regTime || SHIFT_DEFAULT_TIMES.regular}
               onChange={(val) => onUpdate('regTime', val)}
               disabled={isReadOnly}
             />
@@ -4940,11 +5222,11 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otMorning}
             onChange={(e) => onUpdate('otMorning', e.target.checked)}
-            disabled={isReadOnly || !worker.times.regular}
+            disabled={isReadOnly}
           />
           {worker.times.otMorning ? (
             <TimeRangePicker
-              value={worker.times.otMorningTime || '08:00 - 12:00'}
+              value={worker.times.otMorningTime || SHIFT_DEFAULT_TIMES.otMorning}
               onChange={(val) => onUpdate('otMorningTime', val)}
               disabled={isReadOnly}
             />
@@ -4962,7 +5244,7 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otNoon}
             onChange={(e) => onUpdate('otNoon', e.target.checked)}
-            disabled={isReadOnly || !worker.times.regular}
+            disabled={isReadOnly}
           />
           {worker.times.otNoon ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -5016,11 +5298,11 @@ function WorkerTableRow({
             sx={{ p: 0 }}
             checked={worker.times.otEvening}
             onChange={(e) => onUpdate('otEvening', e.target.checked)}
-            disabled={isReadOnly || !worker.times.regular}
+            disabled={isReadOnly}
           />
           {worker.times.otEvening ? (
             <TimeRangePicker
-              value={worker.times.otEveningTime || '18:00 - 21:00'}
+              value={worker.times.otEveningTime || SHIFT_DEFAULT_TIMES.otEvening}
               onChange={(val) => onUpdate('otEveningTime', val)}
               disabled={isReadOnly}
             />
@@ -5267,10 +5549,10 @@ function WorkerMobileCard({ worker, onUpdate, onUpdateLeave, onUploadCert, onRem
       {/* Expanded body */}
       {expanded && (
         <Box sx={{ px: 2, pb: 1.5, pt: 0.5, borderTop: '1px solid #f1f5f9' }}>
-          {timeRow('ปกติ', worker.times?.regular, (v) => onUpdate('regular', v), !!isReadOnly, worker.times?.regTime || '08:00 - 17:00', (v) => onUpdate('regTime', v))}
-          {timeRow('OT เช้า', worker.times?.otMorning, (v) => onUpdate('otMorning', v), !!isReadOnly || !worker.times?.regular, worker.times?.otMorningTime || '06:00 - 08:00', (v) => onUpdate('otMorningTime', v))}
-          {timeRow('OT เที่ยง', worker.times?.otNoon, (v) => onUpdate('otNoon', v), !!isReadOnly || !worker.times?.regular, undefined, undefined, '12:00 - 13:00')}
-          {timeRow('OT เย็น', worker.times?.otEvening, (v) => onUpdate('otEvening', v), !!isReadOnly || !worker.times?.regular, worker.times?.otEveningTime || '18:00 - 21:00', (v) => onUpdate('otEveningTime', v))}
+          {timeRow('ปกติ', worker.times?.regular, (v) => onUpdate('regular', v), !!isReadOnly, worker.times?.regTime || SHIFT_DEFAULT_TIMES.regular, (v) => onUpdate('regTime', v))}
+          {timeRow('OT เช้า', worker.times?.otMorning, (v) => onUpdate('otMorning', v), !!isReadOnly, worker.times?.otMorningTime || SHIFT_DEFAULT_TIMES.otMorning, (v) => onUpdate('otMorningTime', v))}
+          {timeRow('OT เที่ยง', worker.times?.otNoon, (v) => onUpdate('otNoon', v), !!isReadOnly, undefined, undefined, SHIFT_DEFAULT_TIMES.otNoon)}
+          {timeRow('OT เย็น', worker.times?.otEvening, (v) => onUpdate('otEvening', v), !!isReadOnly, worker.times?.otEveningTime || SHIFT_DEFAULT_TIMES.otEvening, (v) => onUpdate('otEveningTime', v))}
           {!isReadOnly && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75 }}>
               <Checkbox size="small" sx={{ p: 0 }} checked={!!worker.leave?.active} onChange={(e) => onUpdateLeave('active', e.target.checked)} />

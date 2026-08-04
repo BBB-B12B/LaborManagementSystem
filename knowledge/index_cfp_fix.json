@@ -125,12 +125,12 @@
     "description": "Skipping MECE Plan for Bug Fixes and Follow-up Tasks",
     "fixes": [],
     "topic": "phase-gate-skip",
-    "recurrences": [],
-    "count": 0,
+    "recurrences": ["2026-07-10: reindex task (knowledge/index_files.json + index_variables.json full reindex) — agent classified the task as 'mechanical' and presented an ad-hoc table plan in chat instead of writing gather_complete.md + mece_plan.md before spawning the sub-agent. Caught by user: 'ทำไมไม่เห็นวางแผนลง mece_plan.md เลยตามขั้นตอน'. Root: 'mechanical/scripted work' was treated as an implicit MECE exemption — CLAUDE.md has no such exemption; Phase 2 applies to any src/knowledge edit regardless of how mechanical the edit logic is.", "2026-07-10: T-052 camera shutter bug — after /compact the agent skipped Boot (B1-B3) + Per-Turn Routing (C0-C3) and rewrote src/components/camera/GeotaggedCamera.tsx with no fresh Phase 1/2. PreToolUse phase-gate stayed silent because T-052 plan files were still dated today (stale-but-same-day blind spot). Caught by user: 'ได้ดำเนินการตาม Skill ไหมครับ'. Root: treated an in-flight re-opened bug as exempt from re-Boot after /compact."],
+    "count": 2,
     "approved_proposal": "",
-    "last_seen": null,
-    "window_count": 0,
-    "stale": true
+    "last_seen": "2026-07-10",
+    "window_count": 2,
+    "stale": false
   },
   "CFP-013": {
     "status": "active",
@@ -571,6 +571,18 @@
     "recurred_after_fix": [],
     "last_seen": "2026-06-07",
     "window_count": 2,
+    "stale": false
+  },
+  "CFP-048": {
+    "status": "active",
+    "description": "Answered a Question About a Skill's Trigger/Tools From Memory Instead of Re-Grepping skill-manifest.json + tool-manifest.json Fresh",
+    "fixes": [],
+    "topic": "boot-routing",
+    "recurrences": ["2026-07-10: answered whether a situation warranted harness_doctor from earlier-in-session recall instead of re-grepping skill-manifest.json fresh — recalled answer was directionally right (CFP count threshold) but missed the manifest's precise trigger text and its bucket:'draft' status. Caught by user: 'ทำไมคุณไม่ดู skill_manifest กับ Tool list'."],
+    "count": 1,
+    "approved_proposal": "",
+    "last_seen": "2026-07-10",
+    "window_count": 1,
     "stale": false
   }
 }

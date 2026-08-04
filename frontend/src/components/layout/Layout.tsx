@@ -81,8 +81,23 @@ const Topbar: React.FC = () => {
         router.push('/workspace');
       }
     } else if (noti.type === 'unlock_granted' || FM_ROLES.includes(userRole)) {
-      // FM/SE: navigate to Daily Report list page
-      router.push('/daily-reports');
+      // FM/SE: navigate to Daily Report page and auto-select the task
+      const compositeSubtaskId = noti.subtaskId?.includes('__')
+        ? noti.subtaskId
+        : noti.subtaskId && noti.workOrderId && noti.categoryId && noti.taskId
+          ? `${noti.workOrderId}__${noti.categoryId}__${noti.taskId}__${noti.subtaskId}`
+          : null;
+      if (compositeSubtaskId) {
+        router.push({
+          pathname: '/daily-reports',
+          query: {
+            subtaskId: compositeSubtaskId,
+            ...(noti.reportDate ? { date: noti.reportDate } : {}),
+          },
+        });
+      } else {
+        router.push('/daily-reports');
+      }
     } else {
       // Others (daily_report_submit, task_assigned, etc.): navigate to Workspace
       if (noti.workOrderId && noti.categoryId && noti.taskId) {

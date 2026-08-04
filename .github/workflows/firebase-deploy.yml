@@ -30,7 +30,13 @@ jobs:
           npm --prefix frontend run build
 
       # 3. Deploy ไปยัง Firebase (Hosting จาก frontend/out/, Functions, Rules)
+      # NOTE: deploy functions BY NAME (the 6 defined in functions/src) so a full
+      # `deploy` does not try to prune project-only functions that have no source
+      # in this repo (e.g. dailyContractorSync, projectSync) — those are left
+      # untouched. When adding a new function, add its name to this --only list.
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy
+        run: >
+          npx firebase-tools deploy --only
+          "hosting,firestore,functions:onScanDataChanged,functions:onEmployeeChanged,functions:scheduledAbsenceCheck,functions:onWagePeriodApproved,functions:webhookTimesheetChanged,functions:onReconciliationChanged"
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

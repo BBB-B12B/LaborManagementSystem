@@ -67,7 +67,14 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       });
 
       // Filter active records
-      const activeItems = items.filter((item) => item.isDeleted !== true);
+      let activeItems = items.filter((item) => item.isDeleted !== true);
+
+      // RBAC: restrict to the caller's assigned projects unless they are a
+      // super user (route layer passes undefined for AM/GOD/MD)
+      if (options?.allowedProjectCodes) {
+        const allowed = new Set(options.allowedProjectCodes as string[]);
+        activeItems = activeItems.filter((item) => allowed.has(item.projectCode));
+      }
 
       // Manual pagination
       const total = activeItems.length;
@@ -120,7 +127,7 @@ class WagePeriodService extends BaseCrudService<WagePeriod> {
       );
       if (overlapping) {
         throw new AppError(
-          `งวดที่สร้างมีวันที่ซ้อนทับกับงวด ${overlapping.periodCode} (${overlapping.startDate.toLocaleDateString('th-TH')} - ${overlapping.endDate.toLocaleDateString('th-TH')}) ของโครงการนี้`,
+          `งวดที่สร้างมีวันที่ซ้อนทับกับงวด ${overlapping.periodCode} (${overlapping.startDate.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' })} - ${overlapping.endDate.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' })}) ของโครงการนี้`,
           409
         );
       }

@@ -309,7 +309,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onCl
               <ListItemIcon>
                 <VisibilityOffIcon fontSize="small" sx={{ color: '#64748b' }} />
               </ListItemIcon>
-              <Typography variant="body2" sx={{ color: '#64748b' }}>ซ่อน</Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>จัดเก็บ</Typography>
             </MenuItem>
           )}
           {onDelete && task.isDeletable !== false && (

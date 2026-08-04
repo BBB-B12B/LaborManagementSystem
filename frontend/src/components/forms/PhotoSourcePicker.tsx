@@ -3,6 +3,7 @@ import { Box, Divider, Typography, Button } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import type { SxProps, Theme } from '@mui/material';
 import { Camera, Image as ImageIcon, Paperclip } from 'lucide-react';
+import GeotaggedCamera from '@/components/camera/GeotaggedCamera';
 
 export interface PhotoSourcePickerProps {
   onSelect: (files: FileList | null) => void;
@@ -17,6 +18,12 @@ export interface PhotoSourcePickerProps {
   galleryLabel?: string;
   fileLabel?: string;
   children?: React.ReactNode;
+  /**
+   * When true, "Take Photo" opens a custom in-app camera that burns a live GPS +
+   * timestamp watermark into the captured photo, instead of handing off to the
+   * native OS camera app. Default false — every existing caller is unaffected.
+   */
+  enableGeoStamp?: boolean;
 }
 
 /**
@@ -53,6 +60,7 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
   galleryLabel = 'เลือกรูป',
   fileLabel = 'แนบไฟล์',
   children,
+  enableGeoStamp = false,
 }) => {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -60,6 +68,7 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 
   const [isOpen, setIsOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [geoCameraOpen, setGeoCameraOpen] = useState(false);
 
   // Desktop = md breakpoint and up (≥768px)
   const isDesktop = useMediaQuery('(min-width:768px)');
@@ -81,9 +90,24 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 
   // Each handler: close sheet first (queues re-render), then .click() synchronously.
   // The .click() is still in the same call stack as the user tap → trusted gesture.
-  const handleCamera = () => { setIsOpen(false); cameraRef.current?.click(); };
+  const handleCamera = () => {
+    setIsOpen(false);
+    if (enableGeoStamp) {
+      setGeoCameraOpen(true);
+    } else {
+      cameraRef.current?.click();
+    }
+  };
   const handleGallery = () => { setIsOpen(false); galleryRef.current?.click(); };
   const handleFile = () => { setIsOpen(false); fileRef.current?.click(); };
+
+  // Bridges a single captured File into the FileList shape onSelect expects —
+  // FileList has no public constructor, so DataTransfer is the standard bridge.
+  const handleGeoCapture = (file: File) => {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    onSelect(dt.files);
+  };
 
   const Trigger = (component || Box) as React.ElementType;
 
@@ -112,6 +136,14 @@ const PhotoSourcePicker: React.FC<PhotoSourcePickerProps> = ({
 
   return (
     <>
+      {enableGeoStamp && (
+        <GeotaggedCamera
+          open={geoCameraOpen}
+          onClose={() => setGeoCameraOpen(false)}
+          onCapture={handleGeoCapture}
+        />
+      )}
+
       {/* ─── Always-mounted hidden inputs — never inside isOpen block ──────── */}
       <input
         ref={cameraRef}
