@@ -2943,6 +2943,7 @@ export class TaskService {
         const taskDataToSet: Omit<Task, 'id'> = {
           taskId: taskId,
           taskName: taskName,
+          taskType: task.taskType,
           description: task.description || '',
           projectId: projectId,
           projectCode: projectCode,
@@ -2994,7 +2995,7 @@ export class TaskService {
             assignees: st.assignees,
             dailyProgress: 0,
             currentRevision: 'rev00',
-            isSupportRequest: false,
+            isSupportRequest: st.isSupportRequest || false,
             dueDate: st.dueDate ? new Date(st.dueDate) : null,
             editHistory: [],
             createdAt: now,
