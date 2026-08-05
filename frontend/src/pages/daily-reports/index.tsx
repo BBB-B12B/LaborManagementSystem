@@ -462,7 +462,10 @@ export default function DailyReportPage() {
       .filter(Boolean) as string[];
   }, [taskReportsData, selectedTask, isActingAsSupport]);
 
-
+  const selectedDateHasReport = useMemo(() => {
+    if (!reportDate) return false;
+    return reportDates.includes(format(reportDate, 'yyyy-MM-dd'));
+  }, [reportDate, reportDates]);
 
   const { data: allSiteReportsData } = useQuery({
     queryKey: ['task-reports-site', selectedTask?.id],
@@ -3282,7 +3285,33 @@ export default function DailyReportPage() {
                         </Box>
 
                         <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                          {isTaskApproved ? (
+                          {selectedTask?.isPastRevision && !selectedDateHasReport ? (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '100%',
+                                minHeight: 400,
+                                bgcolor: '#fffbeb',
+                                borderRadius: '12px',
+                                border: '2px dashed #fde68a',
+                                p: 4,
+                                gap: 2,
+                              }}
+                            >
+                              <Typography variant="h5" fontWeight={900} color="#92400e" align="center">
+                                งานรอบนี้ถูกปฏิเสธแล้ว
+                              </Typography>
+                              <Typography variant="body2" color="#b45309" align="center">
+                                Daily Report รอบ {selectedTask.revisionId} นี้ปิดแล้ว ไม่สามารถแก้ไขได้อีก
+                                {selectedTask.currentRevision && selectedTask.currentRevision !== selectedTask.revisionId
+                                  ? ` — ระบบสร้างรอบทำงานใหม่ (${selectedTask.currentRevision}) ให้แล้ว กรุณาไปที่งานปัจจุบันเพื่อดำเนินการต่อ`
+                                  : ''}
+                              </Typography>
+                            </Box>
+                          ) : isTaskApproved && !selectedDateHasReport ? (
                             <Box
                               sx={{
                                 display: 'flex',
@@ -3351,6 +3380,75 @@ export default function DailyReportPage() {
                           ) : (
                             <>
 
+                              {selectedTask?.isPastRevision && (
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    mb: 3,
+                                    borderRadius: '12px',
+                                    bgcolor: '#fffbeb',
+                                    border: '1px solid #fde68a',
+                                    color: '#92400e',
+                                  }}
+                                >
+                                  <Typography variant="subtitle2" fontWeight={800}>
+                                    กำลังดูข้อมูลของรอบที่ถูกปฏิเสธแล้ว ({selectedTask.revisionId}) — อ่านอย่างเดียว
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                    {selectedTask.currentRevision && selectedTask.currentRevision !== selectedTask.revisionId
+                                      ? `ระบบสร้างรอบทำงานใหม่ (${selectedTask.currentRevision}) ให้แล้ว กรุณาไปที่งานปัจจุบันเพื่อดำเนินการต่อ`
+                                      : 'ไม่สามารถแก้ไขข้อมูลรอบนี้ได้อีก'}
+                                  </Typography>
+                                </Box>
+                              )}
+
+                              {!selectedTask?.isPastRevision && isTaskApproved && (
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    mb: 3,
+                                    borderRadius: '12px',
+                                    bgcolor: '#f0fdf4',
+                                    border: '1px solid #86efac',
+                                    color: '#166534',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 1.5,
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  <Box>
+                                    <Typography variant="subtitle2" fontWeight={800}>
+                                      งานถูกอนุมัติแล้ว — กำลังดูข้อมูลย้อนหลัง (อ่านอย่างเดียว)
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                      ไม่สามารถแก้ไข Daily Report ได้ ต้องขอให้ LD ยกเลิก Approve ก่อน
+                                    </Typography>
+                                  </Box>
+                                  {isUnapproveRequested ? (
+                                    <Box
+                                      sx={{
+                                        px: 3, py: 1, bgcolor: '#fef9c3', border: '1px solid #fde047',
+                                        borderRadius: '999px', color: '#854d0e', fontWeight: 700, fontSize: '0.8rem',
+                                      }}
+                                    >
+                                      รอ LD ยกเลิก Approve อยู่...
+                                    </Box>
+                                  ) : (
+                                    <Button
+                                      variant="contained"
+                                      color="warning"
+                                      size="small"
+                                      disabled={isSubmittingUnapproveRequest}
+                                      onClick={handleRequestUnapprove}
+                                      sx={{ borderRadius: '999px', fontWeight: 700, px: 3, boxShadow: 'none' }}
+                                    >
+                                      {isSubmittingUnapproveRequest ? 'กำลังส่งคำขอ...' : 'ขอแก้ไข'}
+                                    </Button>
+                                  )}
+                                </Box>
+                              )}
 
                               {requestLocked && (
                                 <Box
