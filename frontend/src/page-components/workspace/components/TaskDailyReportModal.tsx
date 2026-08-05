@@ -156,9 +156,14 @@ export default function TaskDailyReportModal({ open, onClose, task, onTaskUpdate
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const queryClient = useQueryClient();
 
-  // Roles that can approve/grant unlock requests
-  const UNLOCK_APPROVER_ROLES = ['LD', 'OE', 'PE', 'PM'];
-  const canApproveUnlock = UNLOCK_APPROVER_ROLES.includes(String(user?.roleCode || user?.roleId || '').toUpperCase());
+  // Roles that can approve/grant unlock requests — AM is further restricted to the
+  // Warehouse & Service project only (matches backend checkApproveAccess in tasks.routes.ts).
+  const UNLOCK_APPROVER_ROLES = ['LD', 'OE', 'PE', 'PM', 'PD', 'MD'];
+  const WAREHOUSE_PROJECT_ID = 'P002';
+  const userRoleUpper = String(user?.roleCode || user?.roleId || '').toUpperCase();
+  const canApproveUnlock =
+    UNLOCK_APPROVER_ROLES.includes(userRoleUpper) ||
+    (userRoleUpper === 'AM' && task?.projectId === WAREHOUSE_PROJECT_ID);
   const canApprove = canApproveUnlock;
 
   const fetchReports = useCallback(async (forceRefresh = false) => {
