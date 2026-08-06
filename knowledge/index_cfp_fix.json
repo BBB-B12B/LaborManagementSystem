@@ -188,12 +188,16 @@
       {
         "date": "2026-06-05",
         "note": "B1 not run after /compact — LOOP_WEIGHT not reset (stayed 74→82) — user had to call harness_doctor"
+      },
+      {
+        "date": "2026-08-05",
+        "note": "No [Boot] trace at session start — agent went straight to reading pm.html and editing without B1-B3 or C0-C3. User caught it: 'ทำไมคุณไม่ทำงานตามกระบวนกลาง harness กลางของเรา'. Backfilled B1 mid-session."
       }
     ],
-    "count": 1,
+    "count": 2,
     "approved_proposal": "",
-    "last_seen": "2026-06-05",
-    "window_count": 1,
+    "last_seen": "2026-08-05",
+    "window_count": 2,
     "stale": false
   },
   "CFP-017": {

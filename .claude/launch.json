@@ -9,6 +9,20 @@
       "autoPort": false
     },
     {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "frontend"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "backend"],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
       "name": "manual-doc",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "-p", "5500", "frontend/public/doc/manual"],

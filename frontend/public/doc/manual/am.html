@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>คู่มือ AM — ผู้ดูแลระบบ</title>
 <link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
 </head>
 <body>
 
@@ -13,15 +14,30 @@
   <div class="subtitle">บทบาท: AM — ผู้ดูแลระบบ (Admin · Level 8)</div>
   <nav class="nav">
     <a href="index.html">หน้าแรก</a>
-    <a href="god.html">GOD</a>
-    <a href="am.html" class="active">AM</a>
-    <a href="pm.html">PM</a>
-    <a href="se_fm.html">SE / FM</a>
-    <a href="md.html">MD</a>
-    <a href="pd.html">PD</a>
-    <a href="pe.html">PE</a>
-    <a href="oe.html">OE</a>
-    <a href="ld.html">LD</a>
+    <div class="role-dd">
+      <button class="role-dd-btn" type="button" aria-haspopup="true" aria-expanded="false">บทบาท: AM <span class="care">▾</span></button>
+      <div class="role-dd-menu">
+        <a href="god.html">GOD</a>
+        <a href="am.html" class="active">AM</a>
+        <a href="pm.html">PM</a>
+        <a href="se_fm.html">SE / FM</a>
+        <a href="md.html">MD</a>
+        <a href="pd.html">PD</a>
+        <a href="pe.html">PE</a>
+        <a href="oe.html">OE</a>
+        <a href="ld.html">LD</a>
+      </div>
+    </div>
+    <a href="workspace_guide.html">Implement Site</a>
+  </nav>
+  <nav class="subnav">
+    <a href="#member-management">👤 สมาชิก</a>
+    <a href="#dc-management">🪪 แรงงานรายวัน</a>
+    <a href="#wage-calculation">💰 คำนวณค่าแรง</a>
+    <a href="#scan-data">🖐️ ข้อมูลสแกน</a>
+    <a href="#work-hour">⏱️ ชั่วโมงงาน</a>
+    <a href="#sso-rules">🛡️ ประกันสังคม</a>
+    <a href="#holidays">📅 วันหยุด</a>
   </nav>
 </header>
 
@@ -29,23 +45,22 @@
   <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › AM ผู้ดูแลระบบ</div>
 
   <h2>AM ทำอะไรได้บ้าง</h2>
-  <p><strong>AM (ผู้ดูแลระบบ)</strong> เป็นเจ้าของหลักของงานหลังบ้านทั้งหมด ได้แก่ จัดการสมาชิก, แรงงานรายวัน (DC),
-     คำนวณค่าแรง, ข้อมูลสแกนเข้า-ออก, สรุปชั่วโมงงาน, กฎประกันสังคม และวันหยุดบริษัท</p>
+  <div class="acc-grid">
+    <a class="acc-card" href="#member-management"><span class="ic">👤</span><span class="ttl">จัดการสมาชิก</span><span class="desc">เพิ่ม/แก้ไข/ลบ/นำเข้าผู้ใช้ระบบ</span></a>
+    <a class="acc-card" href="#dc-management"><span class="ic">🪪</span><span class="ttl">แรงงานรายวัน (DC)</span><span class="desc">ทะเบียนแรงงานรายวัน + ค่าจ้าง</span></a>
+    <a class="acc-card" href="#wage-calculation"><span class="ic">💰</span><span class="ttl">คำนวณค่าแรง</span><span class="desc">คำนวณ อนุมัติ และ Export ค่าแรง</span></a>
+    <a class="acc-card" href="#scan-data"><span class="ic">🖐️</span><span class="ttl">ข้อมูลสแกน</span><span class="desc">นำเข้า/ตรวจสอบข้อมูลสแกนนิ้ว</span></a>
+    <a class="acc-card" href="#work-hour"><span class="ic">⏱️</span><span class="ttl">ชั่วโมงงาน</span><span class="desc">ภาพรวมชั่วโมงทำงานทุกโครงการ</span></a>
+    <a class="acc-card" href="#sso-rules"><span class="ic">🛡️</span><span class="ttl">ประกันสังคม</span><span class="desc">เพดานและอัตราหักประกันสังคม</span></a>
+    <a class="acc-card" href="#holidays"><span class="ic">📅</span><span class="ttl">วันหยุดบริษัท</span><span class="desc">กำหนดวันหยุดใช้คำนวณค่าแรง</span></a>
+  </div>
   <div class="note">ข้อควรรู้: AM เปิดหน้า <strong>Workspace</strong> ได้เพื่อ <em>ดูอย่างเดียว</em> — สร้าง/แก้ไขงานหรือใบสั่งงานไม่ได้
      (ดูรายละเอียด Workspace ที่ <a href="pm.html#workspace">หน้า PM</a>)</div>
 
-  <p><strong>ทางลัดไปแต่ละหัวข้อ:</strong>
-     <a href="#member-management">สมาชิก</a> ·
-     <a href="#dc-management">แรงงานรายวัน</a> ·
-     <a href="#wage-calculation">คำนวณค่าแรง</a> ·
-     <a href="#scan-data">ข้อมูลสแกน</a> ·
-     <a href="#work-hour">ชั่วโมงงาน</a> ·
-     <a href="#sso-rules">ประกันสังคม</a> ·
-     <a href="#holidays">วันหยุด</a>
-  </p>
-
   <!-- ============ 1. MEMBER MANAGEMENT ============ -->
-  <h2 id="member-management">1 · จัดการสมาชิก (Member Management)</h2>
+  <details class="acc" id="member-management" open>
+  <summary><span class="ic">👤</span> 1 · จัดการสมาชิก (Member Management) <span class="acc-teaser">เพิ่ม/แก้ไข/ลบ/นำเข้า</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/member-management</code> — เพิ่ม/แก้ไข/ลบ และนำเข้าผู้ใช้ระบบ พร้อมกำหนดบทบาทและโครงการที่รับผิดชอบ</p>
 
   <h3>1.1 ดูรายชื่อสมาชิก</h3>
@@ -85,8 +100,13 @@
     <li>กด <strong>"ยืนยันนำเข้า"</strong></li>
   </ol>
 
+  </div>
+  </details>
+
   <!-- ============ 2. DC MANAGEMENT ============ -->
-  <h2 id="dc-management">2 · จัดการแรงงานรายวัน (DC Management)</h2>
+  <details class="acc" id="dc-management">
+  <summary><span class="ic">🪪</span> 2 · จัดการแรงงานรายวัน (DC Management) <span class="acc-teaser">ทะเบียนแรงงานรายวัน + ค่าจ้าง</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/dc-management</code> — ทะเบียนแรงงานรายวัน (Daily Contractor) พร้อมข้อมูลค่าจ้างและสวัสดิการ</p>
 
   <h3>2.1 ดูรายชื่อแรงงานรายวัน</h3>
@@ -122,8 +142,13 @@
     <li>อัปโหลดไฟล์ → ตรวจสอบตัวอย่าง → กด <strong>"ยืนยันนำเข้า"</strong></li>
   </ol>
 
+  </div>
+  </details>
+
   <!-- ============ 3. WAGE CALCULATION ============ -->
-  <h2 id="wage-calculation">3 · คำนวณค่าแรง (Wage Calculation)</h2>
+  <details class="acc" id="wage-calculation">
+  <summary><span class="ic">💰</span> 3 · คำนวณค่าแรง (Wage Calculation) <span class="acc-teaser">คำนวณ/อนุมัติ/Export</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/wage-calculation</code> — คำนวณ ตรวจสอบ อนุมัติ และส่งออกข้อมูลค่าแรงของแต่ละโครงการ</p>
 
   <h3>3.1 เลือกโครงการ</h3>
@@ -153,8 +178,13 @@
     <li>กดปุ่ม <strong>"Export Attendance"</strong> — ระบบดาวน์โหลดไฟล์ Excel สรุปการลงเวลา/ค่าแรง</li>
   </ol>
 
+  </div>
+  </details>
+
   <!-- ============ 4. SCAN DATA ============ -->
-  <h2 id="scan-data">4 · ข้อมูลสแกนเข้า-ออก (Scan Data Monitoring)</h2>
+  <details class="acc" id="scan-data">
+  <summary><span class="ic">🖐️</span> 4 · ข้อมูลสแกนเข้า-ออก (Scan Data Monitoring) <span class="acc-teaser">นำเข้า/ตรวจสอบข้อมูลสแกน</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/scan-data-monitoring</code> — นำเข้าและตรวจสอบข้อมูลสแกนนิ้ว/บัตรของพนักงาน</p>
 
   <h3>4.1 ดูรายการสแกน + กรอง</h3>
@@ -181,8 +211,13 @@
     <li>คลิกชื่อพนักงานเพื่อดูรายละเอียดรายบุคคล (<code>/scan-data-monitoring/[id]</code>)</li>
   </ol>
 
+  </div>
+  </details>
+
   <!-- ============ 5. WORK HOUR ============ -->
-  <h2 id="work-hour">5 · สรุปชั่วโมงทำงาน (Work Hour Monitoring)</h2>
+  <details class="acc" id="work-hour">
+  <summary><span class="ic">⏱️</span> 5 · สรุปชั่วโมงทำงาน (Work Hour Monitoring) <span class="acc-teaser">ภาพรวมชั่วโมงทำงานทุกโครงการ</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/work-hour-monitoring</code> — ดูภาพรวมชั่วโมงทำงานของพนักงานทุกโครงการ</p>
   <ol class="steps">
     <li>คลิกเมนู <strong>"ชั่วโมงงาน"</strong> — ระบบแสดงภาพรวมชั่วโมงทำงานรวม</li>
@@ -191,8 +226,13 @@
   </ol>
   <figure><img src="assets/am/work_hour_overview.png" alt="ภาพรวมชั่วโมงงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: work_hour_overview.png]&lt;/span&gt;'"><figcaption>ภาพรวมชั่วโมงทำงาน</figcaption></figure>
 
+  </div>
+  </details>
+
   <!-- ============ 6. SSO RULES ============ -->
-  <h2 id="sso-rules">6 · กฎประกันสังคม (SSO Rules)</h2>
+  <details class="acc" id="sso-rules">
+  <summary><span class="ic">🛡️</span> 6 · กฎประกันสังคม (SSO Rules) <span class="acc-teaser">เพดาน + อัตราหักประกันสังคม</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/management/social-security-rules</code> — กำหนดเพดานและอัตราการหักประกันสังคมที่ใช้คำนวณค่าแรง</p>
   <ol class="steps">
     <li>คลิกเมนู <strong>"จัดการ"</strong> › <strong>"กฎประกันสังคม"</strong></li>
@@ -202,8 +242,13 @@
   </ol>
   <figure><img src="assets/am/sso_rules_list.png" alt="กฎประกันสังคม" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: sso_rules_list.png]&lt;/span&gt;'"><figcaption>รายการกฎประกันสังคม</figcaption></figure>
 
+  </div>
+  </details>
+
   <!-- ============ 7. HOLIDAYS ============ -->
-  <h2 id="holidays">7 · วันหยุดบริษัท (Company Holidays)</h2>
+  <details class="acc" id="holidays">
+  <summary><span class="ic">📅</span> 7 · วันหยุดบริษัท (Company Holidays) <span class="acc-teaser">กำหนดวันหยุดใช้คำนวณค่าแรง</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/management/company-holidays</code> — กำหนดวันหยุดที่ระบบใช้ประกอบการคำนวณค่าแรง/ชั่วโมงงาน</p>
   <ol class="steps">
     <li>คลิกเมนู <strong>"จัดการ"</strong> › <strong>"วันหยุดบริษัท"</strong></li>
@@ -214,15 +259,30 @@
   <figure><img src="assets/am/holidays_list.png" alt="รายการวันหยุด" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: holidays_list.png]&lt;/span&gt;'"><figcaption>รายการวันหยุดบริษัท</figcaption></figure>
   <figure><img src="assets/am/holidays_create.png" alt="ฟอร์มเพิ่มวันหยุด" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: holidays_create.png]&lt;/span&gt;'"><figcaption>ฟอร์มเพิ่มวันหยุด</figcaption></figure>
 
+  </div>
+  </details>
+
   <!-- ============ 8. WORKSPACE NOTE ============ -->
-  <h2>8 · Workspace (ดูได้อย่างเดียว)</h2>
-  <div class="crosslink">AM เปิด Workspace ได้เพื่อ <strong>ดู</strong> งานและใบสั่งงาน แต่ <strong>แก้ไขไม่ได้</strong>
+  <div class="crosslink">🗂️ <strong>Workspace (ดูได้อย่างเดียว):</strong> AM เปิด Workspace ได้เพื่อ <strong>ดู</strong> งานและใบสั่งงาน แต่ <strong>แก้ไขไม่ได้</strong>
      วิธีใช้งาน Workspace แบบเต็มอยู่ที่ → <a href="pm.html#workspace">หน้า PM › Workspace</a></div>
 
   <footer class="site-footer">
     <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
-    <p>คู่มือ AM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
+    <p>คู่มือ AM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-08-05 · <em>ตัวอย่าง UI ใหม่ (accordion + การ์ดสรุป)</em></p>
   </footer>
+
+<script>
+(function () {
+  function openTarget() {
+    var h = location.hash.slice(1);
+    if (!h) return;
+    var el = document.getElementById(h);
+    if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView({ block: 'start' }); }
+  }
+  window.addEventListener('hashchange', openTarget);
+  window.addEventListener('DOMContentLoaded', openTarget);
+})();
+</script>
 </div>
 
 </body>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Implement Site — คู่มือเริ่มต้นสำหรับทีมหน้างาน</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+
+<header class="site-header">
+  <h1>📘 คู่มือการใช้งานระบบบริหารจัดการแรงงาน</h1>
+  <div class="subtitle">Implement Site 🏗️ — ทุกอย่างที่ทีมหน้างานต้องรู้ก่อนเริ่มใช้ระบบ</div>
+  <nav class="nav">
+    <a href="index.html">หน้าแรก</a>
+    <div class="role-dd">
+      <button class="role-dd-btn" type="button" aria-haspopup="true" aria-expanded="false">เลือกบทบาท <span class="care">▾</span></button>
+      <div class="role-dd-menu">
+        <a href="god.html">GOD</a>
+        <a href="am.html">AM</a>
+        <a href="pm.html">PM</a>
+        <a href="se_fm.html">SE / FM</a>
+        <a href="md.html">MD</a>
+        <a href="pd.html">PD</a>
+        <a href="pe.html">PE</a>
+        <a href="oe.html">OE</a>
+        <a href="ld.html">LD</a>
+      </div>
+    </div>
+    <a href="workspace_guide.html" class="active">Implement Site</a>
+  </nav>
+  <nav class="subnav">
+    <a href="#features">🧩 ฟีเจอร์ทั้งหมด</a>
+    <a href="#create-task">🏗️ สร้างใบงาน</a>
+    <a href="#site-data">🗂️ ข้อมูลที่ต้องเตรียม</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › Implement Site</div>
+
+  <h2>เริ่มต้นยังไงดี?</h2>
+  <p>หน้านี้ไม่ใช่คู่มือของ role ใดๆ — เป็น <strong>จุดเริ่มต้นสำหรับทีมหน้างาน (Site)</strong> ก่อนเปิดใช้ระบบจริงในโครงการใหม่ 🚀 สามคำถามหลักที่ต้องรู้:</p>
+
+  <div class="acc-grid">
+    <a class="acc-card" href="#features"><span class="ic">🧩</span><span class="ttl">1 · มีฟีเจอร์อะไรบ้าง</span><span class="desc">ระบบทำอะไรได้บ้าง แล้วใครเป็นคนกรอกข้อมูล</span></a>
+    <a class="acc-card" href="#create-task"><span class="ic">🏗️</span><span class="ttl">2 · สร้างใบงานยังไง</span><span class="desc">Work Order → Category → Task → Subtask พร้อมภาพจริง</span></a>
+    <a class="acc-card" href="#site-data"><span class="ic">🗂️</span><span class="ttl">3 · ต้องเตรียมข้อมูลอะไร</span><span class="desc">แรงงานรายวัน vs พนักงานประจำ ผูกกับโครงการยังไง</span></a>
+  </div>
+
+  <!-- ============ 1. FEATURES ============ -->
+  <h2 id="features">1 · ระบบมีฟีเจอร์อะไรบ้าง ใครลงข้อมูล 🧩</h2>
+  <p>ไล่ดูทีละกล่อง — แต่ละใบบอก "ใครกรอก" แบบสั้น ๆ ไม่ต้องเดา</p>
+
+  <div class="acc-grid">
+    <div class="acc-card"><span class="ic">🗂️</span><span class="ttl">Workspace</span><span class="desc">PM/PD/MD/GOD สร้าง Work Order · ทุก role (ยกเว้น SE/FM) ลงงาน/งานย่อยได้</span></div>
+    <div class="acc-card"><span class="ic">📸</span><span class="ttl">Daily Reports</span><span class="desc">SE/LD ลงข้อมูลหน้างานจริง + รูปถ่าย · PM/PE/OE/LD ตรวจอนุมัติ</span></div>
+    <div class="acc-card"><span class="ic">⏰</span><span class="ttl">Overtime</span><span class="desc">เกือบทุก role ลงได้ (ยกเว้น MD/FM)</span></div>
+    <div class="acc-card"><span class="ic">🪪</span><span class="ttl">DC Management</span><span class="desc">AM ลงทะเบียนแรงงานรายวัน + ค่าจ้าง</span></div>
+    <div class="acc-card"><span class="ic">👤</span><span class="ttl">Member Management</span><span class="desc">AM ลงทะเบียนพนักงานประจำ</span></div>
+    <div class="acc-card"><span class="ic">💰</span><span class="ttl">Wage Calculation</span><span class="desc">AM คำนวณ / อนุมัติ / Export ค่าแรง</span></div>
+    <div class="acc-card"><span class="ic">🖐️</span><span class="ttl">Scan Data</span><span class="desc">เฉพาะ GOD/AM นำเข้าข้อมูลสแกนนิ้ว</span></div>
+    <div class="acc-card"><span class="ic">⏱️</span><span class="ttl">Work Hour</span><span class="desc">GOD/MD/PD/PM/AM ดูสรุปชั่วโมงงาน</span></div>
+    <div class="acc-card"><span class="ic">🛡️</span><span class="ttl">SSO Rules</span><span class="desc">GOD/MD/AM ตั้งค่ากฎประกันสังคม</span></div>
+    <div class="acc-card"><span class="ic">📅</span><span class="ttl">Company Holidays</span><span class="desc">เกือบทุก role ตั้งวันหยุดได้ (ยกเว้น SE/LD)</span></div>
+    <div class="acc-card"><span class="ic">🏗️</span><span class="ttl">Project Management</span><span class="desc">PM สร้าง/แก้โครงการ · FM/AM/GOD เข้าถึงได้</span></div>
+    <div class="acc-card"><span class="ic">👀</span><span class="ttl">Activity Monitor</span><span class="desc">ดูอย่างเดียวทุก role ที่ล็อกอิน (ไม่ใช่ log แก้ไขข้อมูล)</span></div>
+  </div>
+
+  <div class="tip">อยากดูวิธีใช้แบบละเอียดของฟีเจอร์ไหน กดที่แท็บ <strong>บทบาท ▾</strong> บนแถบเมนู แล้วเปิดหน้าของ role ที่ดูแลฟีเจอร์นั้น</div>
+
+  <!-- ============ 2. CREATE TASK WALKTHROUGH ============ -->
+  <h2 id="create-task">2 · Solution: สร้างใบงานจาก Work Order ถึง Subtask 🏗️</h2>
+  <p>4 ขั้นตอน ไล่จากใหญ่ไปเล็ก — <strong>หมวดหมู่งานหลัก → หมวดหมู่งานย่อย → งานหลัก → งานย่อย</strong> กรอกครบได้ในฟอร์มเดียว ภาพด้านล่างคือของจริงจากระบบ (ตัวอย่างชุด "โครงสร้าง")</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="text-align:left">ขั้น</th><th style="text-align:left">ระดับ</th><th style="text-align:left">ใครทำได้</th><th style="text-align:left">ตัวอย่าง</th></tr></thead>
+      <tbody>
+        <tr><td class="feat">①</td><td style="text-align:left">หมวดหมู่งานหลัก (Work Order)</td><td style="text-align:left">PM/PD/MD/GOD เท่านั้น</td><td style="text-align:left">โครงสร้าง</td></tr>
+        <tr><td class="feat">②</td><td style="text-align:left">หมวดหมู่งานย่อย (Category)</td><td style="text-align:left">ทุก role ที่เข้าฟอร์มสร้างงานได้</td><td style="text-align:left">โครงสร้างเสา</td></tr>
+        <tr><td class="feat">③</td><td style="text-align:left">งานหลัก (Task)</td><td style="text-align:left">ทุก role ที่เข้าฟอร์มสร้างงานได้</td><td style="text-align:left">เสาชั้น 1</td></tr>
+        <tr><td class="feat">④</td><td style="text-align:left">งานย่อย (Subtask)</td><td style="text-align:left">ทุก role ที่เข้าฟอร์มสร้างงานได้</td><td style="text-align:left">เข้าแบบเสา</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure><img src="assets/implement_site/implement_workorder_to_subtask_filled.png" alt="ฟอร์มสร้างงาน กรอกครบ Work Order → Category → Task → Subtask ตัวอย่างชุดโครงสร้าง" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: implement_workorder_to_subtask_filled.png — รอถ่ายภาพจริงจากระบบ]&lt;/span&gt;'"><figcaption>①→④ กรอกฟอร์มสร้างงานครบทุกระดับในหน้าเดียว — Work Order "งานโครงสร้าง" → Category "โครงสร้างเสา" → Task "โครงสร้างเสาชั้น 1" → Subtask "เข้าแบบเสา"</figcaption></figure>
+
+  <h3>2.1 แนวทางตั้งชื่อ — เลือกได้ 2 แบบ</h3>
+  <p>ตั้งชื่องานย่อยได้ 2 สไตล์ ระบบไม่บังคับ แต่ควรเลือกให้ตรงกันทั้งโครงการ 👇</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left">ระดับ</th>
+          <th style="text-align:left">แบบที่ 1 🧱 ชื่อต่างกัน</th>
+          <th style="text-align:left">แบบที่ 2 🔁 ชื่อซ้ำกัน</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="feat">Work Order</td><td style="text-align:left">โครงสร้าง</td><td style="text-align:left">งานโครงสร้าง</td></tr>
+        <tr><td class="feat">Category</td><td style="text-align:left">โครงสร้างเสา</td><td style="text-align:left">งานโครงสร้างชั้น 1</td></tr>
+        <tr><td class="feat">Task</td><td style="text-align:left">เสาชั้น 1</td><td style="text-align:left">งานเขาแบบพื้น</td></tr>
+        <tr><td class="feat">Subtask</td><td style="text-align:left">เข้าแบบเสา <em>(ต่างจาก Task)</em></td><td style="text-align:left">งานเขาแบบพื้น <em>(เหมือน Task เป๊ะ)</em></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tip">🧱 <strong>แบบที่ 1 เหมาะกับ:</strong> งานที่มีหลายขั้นตอนย่อย (เข้าแบบ/ผูกเหล็ก/เทคอนกรีต) — ชื่อไม่ซ้ำกันเลยในการ์ดงาน, หัวรายงาน, dropdown, ตารางค่าแรง<br>
+     🔁 <strong>แบบที่ 2 เหมาะกับ:</strong> งานที่จบในขั้นตอนเดียว — ตรงกับฟีเจอร์ "งานเดี่ยว" ที่ระบบสร้างงานย่อยชื่อซ้ำให้อัตโนมัติอยู่แล้ว แต่ระวังชื่อซ้ำโผล่ในการ์ด/รายงานหลายจุด</div>
+  <div class="note">ไม่มีถูกผิด — แค่เลือกแบบเดียวแล้วใช้ให้เหมือนกันทั้งโครงการ จะได้ไม่งงว่าทำไมบางงานชื่อซ้ำ บางงานไม่ซ้ำ</div>
+
+  <figure><img src="assets/implement_site/implement_single_task_auto_subtask_name.png" alt="ฟอร์มสร้างงานเดี่ยว ไม่เปิด Subtasks ตัวอย่างงานทาสีผนังชั้น 5" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: implement_single_task_auto_subtask_name.png — รอถ่ายภาพจริงจากระบบ]&lt;/span&gt;'"><figcaption>🔁 ไม่เปิด "เพิ่มงานย่อย (Subtasks)" เลย = <strong>งานเดี่ยว</strong> — ระบบเอาชื่อ Task ("งานทาสีผนังชั้น 5") ไปตั้งเป็นชื่อ Subtask ให้อัตโนมัติ แค่กรอกวันที่ครบกำหนด + ผู้รับผิดชอบ</figcaption></figure>
+
+  <!-- ============ 3. SITE DATA ============ -->
+  <h2 id="site-data">3 · ข้อมูลที่ต้องเตรียมภายใต้ Site 🗂️</h2>
+  <p>ก่อนเปิดโครงการใหม่ ต้องรู้ว่าข้อมูลคนแบบไหนผูกกับโครงการยังไง — 2 ฐานข้อมูลหลักที่เกี่ยวกับ "คน" ในระบบ</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left"></th>
+          <th style="text-align:left">🪪 แรงงานรายวัน (DC)</th>
+          <th style="text-align:left">👤 พนักงานประจำ (Member)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="feat">ผูกกับโครงการ</td><td style="text-align:left">ได้ทีละ <strong>1 โครงการ</strong></td><td style="text-align:left">ได้ <strong>หลายโครงการพร้อมกัน</strong></td></tr>
+        <tr><td class="feat">ใครลงทะเบียน</td><td style="text-align:left">AM</td><td style="text-align:left">AM</td></tr>
+        <tr><td class="feat">เก็บที่ไหน</td><td style="text-align:left">ฐานข้อมูลกลางของบริษัท (กรองด้วยรหัสโครงการตอนเรียกดู)</td><td style="text-align:left">ฐานข้อมูลกลางของบริษัท (กรองด้วยรหัสโครงการตอนเรียกดู)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tip">💡 ความหมายจริง: ย้ายแรงงานรายวันไปโครงการใหม่ ต้องปลดออกจากโครงการเดิมก่อน (ผูกได้ทีละที่เดียว)
+     ส่วนพนักงานประจำสลับ/อยู่หลายโครงการพร้อมกันได้เลยไม่ต้องปลด</div>
+  <div class="note">ทั้งสองฐานข้อมูลไม่ได้แยกเก็บต่อโครงการจริง ๆ — อยู่ตารางเดียวกันทั้งบริษัท แค่มีฟิลด์บอกว่า "อยู่โครงการไหน" เท่านั้น</div>
+
+  <div class="crosslink">วิธีสร้าง Work Order / Category / Task / Subtask แบบละเอียดทีละสเต็ป ดูที่ <a href="pm.html#workspace">PM › Workspace</a></div>
+
+  <footer class="site-footer">
+    <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
+    <p>คู่มือ Implement Site · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-08-06</p>
+  </footer>
+</div>
+
+</body>
+</html>

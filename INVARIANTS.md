@@ -132,3 +132,18 @@ On merge: orchestrator verifies each placeholder was filled. Missing fill = sub-
 If sub-agent logs beyond its assigned range → orchestrator renumbers on merge and updates CODING_FAILURE_PATTERNS.md.
 
 **Missing this step = duplicate CFP numbers when ≥2 agents both call `grep -c` simultaneously (V6 vulnerability)**
+
+---
+
+## I9 · Fail-Open Must Be Loud (T-355)
+
+Every gate hook (`danger_gate` · `skill_gate` · `phase_gate` · `spawn_gate` · `cfp_fix_plan_gate` · `init_gate` · `git_guard`) fails **open** — an unexpected exception in the gate allows the action rather than bricking the loop. That safety valve stays. What is **forbidden** is a *silent* fail-open: a gate that dies on an exception must never be indistinguishable from a gate that passed (scrutinize #1 — a dead gate could go unnoticed for weeks).
+
+Rule: a gate's outermost `except` MUST call `gatelib.report_fail_open("<gate>", exc)` **before** it allows the action. That helper (1) appends a durable event to `.sessions/gate_health.jsonl` and (2) emits a visible `[gate-error]` line; `boot_init.sh` surfaces the day's events as `[gate-health]`.
+
+- Preserve fail-open (still allow) — never convert a gate to fail-closed to make it loud.
+- Re-raise `SystemExit` first, so intentional block(2)/allow(0) exit codes are untouched — only genuine unexpected crashes are reported.
+- Guard the `import gatelib` (F1): a missing/broken helper must fall back to a plain `[gate-error]` stderr line, never crash the live gate.
+- `report_fail_open` is best-effort and never raises into the caller; the log is bounded (rotated) and boot shows only **today's** events so the notice can never decay into permanent noise (F3).
+
+**A new gate added without a loud outermost fail-open = this invariant violated.**

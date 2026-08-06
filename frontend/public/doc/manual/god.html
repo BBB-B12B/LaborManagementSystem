@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>คู่มือ GOD — ผู้ดูแลสูงสุด</title>
 <link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
 </head>
 <body>
 
@@ -13,15 +14,25 @@
   <div class="subtitle">บทบาท: GOD — ผู้ดูแลสูงสุด (Superuser · Level 0)</div>
   <nav class="nav">
     <a href="index.html">หน้าแรก</a>
-    <a href="god.html" class="active">GOD</a>
-    <a href="am.html">AM</a>
-    <a href="pm.html">PM</a>
-    <a href="se_fm.html">SE / FM</a>
-    <a href="md.html">MD</a>
-    <a href="pd.html">PD</a>
-    <a href="pe.html">PE</a>
-    <a href="oe.html">OE</a>
-    <a href="ld.html">LD</a>
+    <div class="role-dd">
+      <button class="role-dd-btn" type="button" aria-haspopup="true" aria-expanded="false">บทบาท: GOD <span class="care">▾</span></button>
+      <div class="role-dd-menu">
+        <a href="god.html" class="active">GOD</a>
+        <a href="am.html">AM</a>
+        <a href="pm.html">PM</a>
+        <a href="se_fm.html">SE / FM</a>
+        <a href="md.html">MD</a>
+        <a href="pd.html">PD</a>
+        <a href="pe.html">PE</a>
+        <a href="oe.html">OE</a>
+        <a href="ld.html">LD</a>
+      </div>
+    </div>
+    <a href="workspace_guide.html">Implement Site</a>
+  </nav>
+  <nav class="subnav">
+    <a href="#activity-monitor">👀 Activity Monitor</a>
+    <a href="#other-features">🔗 ฟีเจอร์อื่นทั้งหมด</a>
   </nav>
 </header>
 
@@ -29,14 +40,17 @@
   <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › GOD</div>
 
   <h2>GOD ทำอะไรได้บ้าง</h2>
-  <p><strong>GOD คือบทบาทสูงสุดของระบบ — เข้าถึงและทำได้ทุกอย่าง</strong> ทุกเมนูที่บทบาทอื่นทำได้ GOD ทำได้หมด
-     และมีเมนูพิเศษที่ <em>มีเฉพาะ GOD เท่านั้น</em> คือ <strong>Activity Monitor</strong> (ตรวจสอบกิจกรรมการใช้งานของผู้ใช้ทุกคน)</p>
-
-  <div class="tip">เพื่อไม่ให้เนื้อหาซ้ำซ้อน วิธีใช้แต่ละฟีเจอร์ถูกเขียนไว้ที่หน้าของบทบาทที่ดูแลฟีเจอร์นั้นเป็นหลัก
-     GOD ใช้ตามขั้นตอนเดียวกันได้ทุกประการ — กดลิงก์ในตารางด้านล่างเพื่อเปิดอ่าน</div>
+  <div class="acc-grid">
+    <a class="acc-card" href="#activity-monitor"><span class="ic">👀</span><span class="ttl">Activity Monitor</span><span class="desc">เมนูพิเศษเฉพาะ GOD — ดูใครออนไลน์ + ประวัติ login/logout</span></a>
+    <a class="acc-card" href="#other-features"><span class="ic">🔗</span><span class="ttl">ฟีเจอร์อื่นทั้งหมด</span><span class="desc">GOD เข้าได้ทุกเมนู — ลิงก์ไปหน้าเจ้าของฟีเจอร์</span></a>
+  </div>
+  <div class="tip"><strong>GOD คือบทบาทสูงสุดของระบบ — เข้าถึงและทำได้ทุกอย่าง</strong> ทุกเมนูที่บทบาทอื่นทำได้ GOD ทำได้หมด เพื่อไม่ให้เนื้อหาซ้ำซ้อน
+     วิธีใช้แต่ละฟีเจอร์ถูกเขียนไว้ที่หน้าของบทบาทที่ดูแลฟีเจอร์นั้นเป็นหลัก — GOD ใช้ตามขั้นตอนเดียวกันได้ทุกประการ</div>
 
   <!-- ============ UNIQUE FEATURE: ACTIVITY MONITOR ============ -->
-  <h2 id="activity-monitor">เมนูเฉพาะ GOD · Activity Monitor</h2>
+  <details class="acc" id="activity-monitor" open>
+  <summary><span class="ic">👀</span> เมนูเฉพาะ GOD · Activity Monitor <span class="acc-teaser">ใครออนไลน์ + ประวัติ login/logout</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>หน้า <code>/activity-monitor</code> ใช้ <strong>ตรวจสอบการใช้งานของผู้ใช้ในระบบ</strong> — ดูว่าตอนนี้ใครออนไลน์อยู่บ้าง
      และดูประวัติการเข้าสู่ระบบ/ออกจากระบบ (login/logout) ของผู้ใช้แต่ละคน</p>
 
@@ -69,9 +83,13 @@
   </figure>
   <div class="note">หน้า Activity Monitor นี้เน้นกิจกรรม <strong>เข้า/ออกระบบทั้งระบบ</strong> ต่างจาก "Activity Log" ในหน้า Workspace
      ที่บันทึกการเปลี่ยนแปลงงานภายในเวิร์กสเปซ (ดูที่ <a href="pm.html#activity-log">หน้า PM › Activity Log</a>)</div>
+  </div>
+  </details>
 
   <!-- ============ ALL OTHER FEATURES (SSoT links) ============ -->
-  <h2>ฟีเจอร์อื่นทั้งหมด (GOD เข้าได้หมด)</h2>
+  <details class="acc" id="other-features">
+  <summary><span class="ic">🔗</span> ฟีเจอร์อื่นทั้งหมด (GOD เข้าได้หมด) <span class="acc-teaser">ลิงก์ไปหน้าเจ้าของฟีเจอร์</span> <span class="chev">▾</span></summary>
+  <div class="acc-body">
   <p>กดลิงก์เพื่อเปิดวิธีใช้แบบทีละขั้นตอนในหน้าของบทบาทเจ้าของฟีเจอร์:</p>
   <div class="table-wrap">
     <table>
@@ -92,11 +110,26 @@
       </tbody>
     </table>
   </div>
+  </div>
+  </details>
 
   <footer class="site-footer">
     <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
-    <p>คู่มือ GOD · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
+    <p>คู่มือ GOD · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-08-05 · <em>ตัวอย่าง UI ใหม่ (accordion + การ์ดสรุป)</em></p>
   </footer>
+
+<script>
+(function () {
+  function openTarget() {
+    var h = location.hash.slice(1);
+    if (!h) return;
+    var el = document.getElementById(h);
+    if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView({ block: 'start' }); }
+  }
+  window.addEventListener('hashchange', openTarget);
+  window.addEventListener('DOMContentLoaded', openTarget);
+})();
+</script>
 </div>
 
 </body>

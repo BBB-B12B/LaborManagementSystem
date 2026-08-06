@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>คู่มือ PM — ผู้จัดการโครงการ</title>
 <link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
 </head>
 <body>
 
@@ -13,15 +14,27 @@
   <div class="subtitle">บทบาท: PM — ผู้จัดการโครงการ (Project Manager · Level 3)</div>
   <nav class="nav">
     <a href="index.html">หน้าแรก</a>
-    <a href="god.html">GOD</a>
-    <a href="am.html">AM</a>
-    <a href="pm.html" class="active">PM</a>
-    <a href="se_fm.html">SE / FM</a>
-    <a href="md.html">MD</a>
-    <a href="pd.html">PD</a>
-    <a href="pe.html">PE</a>
-    <a href="oe.html">OE</a>
-    <a href="ld.html">LD</a>
+    <div class="role-dd">
+      <button class="role-dd-btn" type="button" aria-haspopup="true" aria-expanded="false">บทบาท: PM <span class="care">▾</span></button>
+      <div class="role-dd-menu">
+        <a href="god.html">GOD</a>
+        <a href="am.html">AM</a>
+        <a href="pm.html" class="active">PM</a>
+        <a href="se_fm.html">SE / FM</a>
+        <a href="md.html">MD</a>
+        <a href="pd.html">PD</a>
+        <a href="pe.html">PE</a>
+        <a href="oe.html">OE</a>
+        <a href="ld.html">LD</a>
+      </div>
+    </div>
+    <a href="workspace_guide.html">Implement Site</a>
+  </nav>
+  <nav class="subnav">
+    <a href="#workspace">🗂️ Workspace</a>
+    <a href="#activity-log">👀 Activity Monitor</a>
+    <a href="#requests">📋 Requests</a>
+    <a href="#project-management">🏗️ Project Management</a>
   </nav>
 </header>
 
@@ -29,35 +42,58 @@
   <div class="breadcrumb"><a href="index.html">หน้าแรก</a> › PM ผู้จัดการโครงการ</div>
 
   <h2>PM ทำอะไรได้บ้าง</h2>
-  <p><strong>PM (ผู้จัดการโครงการ)</strong> เป็นเจ้าของหลักของ <strong>Workspace</strong> (กระดานงาน), <strong>Activity Log</strong> (บันทึกกิจกรรม),
-     <strong>Workspace · Requests</strong> (ตารางแรงงาน) และ <strong>Project Management</strong> (จัดการโครงการ)</p>
-  <p><strong>ทางลัด:</strong>
-     <a href="#workspace">Workspace</a> ·
-     <a href="#activity-log">Activity Log</a> ·
-     <a href="#requests">Requests</a> ·
-     <a href="#project-management">Project Management</a>
-  </p>
+  <div class="acc-grid">
+    <a class="acc-card" href="#workspace">
+      <span class="ic">🗂️</span>
+      <span class="ttl">Workspace</span>
+      <span class="desc">มอบหมาย/ติดตามงาน — Work Order → Category → Task → Subtask</span>
+    </a>
+    <a class="acc-card" href="#activity-log">
+      <span class="ic">👀</span>
+      <span class="ttl">Activity Monitor</span>
+      <span class="desc">ดูใครออนไลน์ + ประวัติ login/logout (ทุก role เข้าดูได้)</span>
+    </a>
+    <a class="acc-card" href="#requests">
+      <span class="ic">📋</span>
+      <span class="ttl">Workspace · Requests</span>
+      <span class="desc">ตารางแรงงานเทียบแผนงาน — สิทธิ์เหมือนหน้า Workspace</span>
+    </a>
+    <a class="acc-card" href="#project-management">
+      <span class="ic">🏗️</span>
+      <span class="ttl">Project Management</span>
+      <span class="desc">สร้าง/แก้ไขโครงการ และกำหนดผู้จัดการโครงการ</span>
+    </a>
+  </div>
+  <div class="crosslink">ต้องการแนวทางตั้งชื่อ Work Order / Category / Task / Subtask จากมุมมองไซต์งาน (ใช้คุยตกลงร่วมกับทีมพัฒนา)
+     ดูได้ที่แท็บ <a href="workspace_guide.html">Implement Site</a> บนแถบเมนูด้านบน</div>
 
   <!-- ============ WORKSPACE ============ -->
-  <h2 id="workspace">1 · Workspace (กระดานงาน)</h2>
+  <details class="acc" id="workspace" open>
+  <summary>
+    <span class="ic">🗂️</span> 1 · Workspace (กระดานงาน)
+    <span class="acc-teaser">มอบหมาย/ติดตามงาน 4 ระดับ</span>
+    <span class="chev">▾</span>
+  </summary>
+  <div class="acc-body">
   <p>หน้า <code>/workspace</code> — ใจกลางของการมอบหมายและติดตามงาน จัดเป็นลำดับชั้น:
-     <strong>หมวดหมู่งานหลัก → หมวดหมู่ย่อย → งานหลัก (Task) → งานย่อย (Subtask)</strong> และมี <strong>ใบสั่งงาน (Work Order)</strong></p>
+     <strong>หมวดหมู่งานหลัก (Work Order) → หมวดหมู่ย่อย (Category) → งานหลัก (Task) → งานย่อย (Subtask)</strong></p>
+  <div class="tip">"หมวดหมู่งานหลัก" และ "Work Order" คือชื่อเรียกสิ่งเดียวกัน — ระบบไม่มี "ใบสั่งงาน" แยกเป็นอีกสิ่งต่างหาก</div>
 
   <h3>1.1 เปิด Workspace และสลับมุมมอง</h3>
   <ol class="steps">
     <li>คลิกเมนู <strong>"Workspace"</strong></li>
-    <li>สลับแท็บมุมมองงานได้: <strong>งานทั้งหมด</strong> / <strong>วันนี้</strong> / <strong>สัปดาห์นี้</strong> / <strong>เดือนนี้</strong></li>
-    <li>ใช้ตัวกรองด้านบนเพื่อกรองงาน · กด <strong>"รีเซ็ตตัวกรอง"</strong> เพื่อล้าง</li>
+    <li>กดปุ่ม <strong>"ตัวกรอง"</strong> เพื่อเปิดกล่องตัวเลือก — ในนั้นมีตัวเลือกช่วงเวลา: <strong>ทั้งหมด</strong> / <strong>วันนี้</strong> / <strong>สัปดาห์นี้</strong> / <strong>เดือนนี้</strong></li>
+    <li>ตัวกรอง Work Order/Category และปุ่มล้างตัวกรอง อยู่ในกล่องเดียวกันนี้</li>
   </ol>
   <figure><img src="assets/pm/workspace_board.png" alt="กระดานงาน Workspace" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_board.png]&lt;/span&gt;'"><figcaption>กระดานงาน Workspace + แท็บมุมมอง</figcaption></figure>
 
   <h3>1.2 สร้างหมวดหมู่งาน</h3>
+  <p>สร้างจากปุ่มที่อยู่ <strong>ในฟอร์มสร้างงาน</strong> (ไม่ใช่ปุ่มแยกบนแถบเครื่องมือ) — Work Order และ Category เป็น <strong>ฟอร์มแยกกัน 2 ฟอร์ม</strong>:</p>
   <ol class="steps">
-    <li>กดปุ่ม <strong>"เพิ่มหมวดหมู่งานหลัก"</strong></li>
-    <li>กรอก <strong>"ชื่อหมวดหมู่งานหลัก *"</strong> และ <strong>"รหัสหมวดหมู่งานหลัก (Code) *"</strong></li>
-    <li>ต้องการหมวดย่อย: กด <strong>"เพิ่มหมวดหมู่ย่อย"</strong> → กรอก <strong>"ชื่อหมวดหมู่ย่อย *"</strong></li>
-    <li>กด <strong>"บันทึก"</strong></li>
+    <li>เปิดฟอร์มสร้างงาน (1.3) แล้วกดปุ่ม <strong>"สร้างหมวดหมู่หลัก"</strong> (สร้าง Work Order) → กรอก <strong>"รหัสหมวดหมู่งานหลัก (Code) *"</strong>, <strong>"ชื่อหมวดหมู่งานหลัก *"</strong>, เลือก <strong>"หัวหน้ากลุ่มงาน (Leader)"</strong> (ไม่บังคับ) → กด <strong>"บันทึกข้อมูล"</strong></li>
+    <li>ต้องการหมวดย่อย: กดปุ่ม <strong>"สร้างหมวดหมู่ย่อย"</strong> (คนละฟอร์ม, ต้องเลือก Work Order ไว้ก่อน) → กรอก <strong>"ชื่อหมวดหมู่ย่อย *"</strong> → กด <strong>"บันทึกข้อมูล"</strong></li>
   </ol>
+  <div class="note">ปุ่ม <strong>"สร้างหมวดหมู่หลัก"</strong> จะไม่แสดงให้ <strong>LD และ AM</strong> — ปุ่ม "สร้างหมวดหมู่ย่อย" ใช้ได้ทุก role ที่เข้าฟอร์มสร้างงานได้</div>
 
   <h3>1.3 สร้างงาน (Task) และงานย่อย (Subtask)</h3>
   <ol class="steps">
@@ -68,36 +104,48 @@
   </ol>
   <figure><img src="assets/pm/workspace_create_task.png" alt="ฟอร์มสร้างงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_create_task.png]&lt;/span&gt;'"><figcaption>ฟอร์มสร้างงาน / งานย่อย</figcaption></figure>
 
-  <h3>1.4 ใบสั่งงาน (Work Order)</h3>
+  <h3>1.4 แก้ไข / ลบ Work Order</h3>
   <ol class="steps">
-    <li>เปิดงานที่ต้องการ → ไปที่ส่วน <strong>"ใบสั่งงาน (Work Order)"</strong></li>
-    <li>กรอก <strong>"ผู้รับผิดชอบ *"</strong> และ <strong>"หัวหน้ากลุ่มงาน (Leader)"</strong></li>
-    <li>กด <strong>"บันทึก"</strong> เพื่อแก้ไข หรือไอคอน <strong>ลบ</strong> แล้วยืนยันเพื่อลบใบสั่งงาน</li>
+    <li>ที่ตัวเลือก Work Order (ในฟอร์มสร้างงาน หรือรายการหมวดหมู่) กดไอคอน <strong>แก้ไข (ดินสอ)</strong></li>
+    <li>แก้ <strong>"ชื่อหมวดหมู่งานหลัก"</strong> หรือ <strong>"หัวหน้ากลุ่มงาน (Leader)"</strong> (ไม่บังคับ) — <strong>"รหัส (Code)" แก้ไม่ได้หลังสร้างแล้ว</strong></li>
+    <li>กด <strong>"บันทึกข้อมูล"</strong> เพื่อแก้ไข หรือกดไอคอน <strong>ลบ</strong> แล้วยืนยันเพื่อลบ Work Order (ลบไม่ได้ถ้ามีงานที่เริ่มทำไปแล้วอยู่ในหมวดนี้)</li>
   </ol>
-  <figure><img src="assets/pm/workspace_work_order_edit.png" alt="แก้ไขใบสั่งงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_work_order_edit.png]&lt;/span&gt;'"><figcaption>แก้ไขใบสั่งงาน (Work Order)</figcaption></figure>
-  <div class="note"><strong>LD (หัวหน้าคนงาน)</strong> เปิด Workspace และจัดการงานย่อยได้ แต่ <strong>แก้/ลบใบสั่งงานไม่ได้</strong> ·
-     <strong>AM</strong> เปิดดูได้อย่างเดียว</div>
+  <figure><img src="assets/pm/workspace_work_order_edit.png" alt="แก้ไข Work Order" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_work_order_edit.png]&lt;/span&gt;'"><figcaption>แก้ไข Work Order</figcaption></figure>
+  <div class="note"><strong>LD และ AM แก้/ลบ Work Order ไม่ได้</strong> — ปุ่มจะไม่แสดงให้ทั้งสอง role นี้ (แต่ทั้งคู่ยังสร้าง/แก้ไขงานและงานย่อยใน Workspace ได้ตามปกติ)
+     · <strong>AM ไม่ใช่ read-only</strong> — แก้ไขงานได้เท่า LD ยกเว้นจุดนี้เท่านั้น</div>
 
   <h3>1.5 ดูประวัติงาน (History)</h3>
   <ol class="steps">
-    <li>ที่งานหรือใบสั่งงาน กด <strong>"ดูประวัติ"</strong></li>
-    <li>สลับแท็บได้ระหว่าง <strong>"รายงาน (report)"</strong> และ <strong>"การตั้งค่า (settings)"</strong> เพื่อดูการเปลี่ยนแปลงย้อนหลัง</li>
+    <li>ที่งานย่อย เปิดเมนู (จุดสามจุด) แล้วเลือก <strong>"History"</strong></li>
+    <li>สลับดูได้ระหว่าง <strong>"ประวัติรายงานความคืบหน้า"</strong> และ <strong>"ประวัติการแก้ไขตั้งค่า"</strong></li>
   </ol>
+  <div class="note">History มีเฉพาะระดับ <strong>งานย่อย</strong> เท่านั้น — Work Order ไม่มีหน้าประวัติ</div>
+  </div>
+  </details>
 
   <!-- ============ ACTIVITY LOG ============ -->
-  <h2 id="activity-log">2 · Activity Log (บันทึกกิจกรรมใน Workspace)</h2>
-  <p>Activity Log อยู่ภายในหน้า Workspace — บันทึกว่า <strong>ใครทำอะไร เมื่อไหร่</strong> ภายในเวิร์กสเปซ
-     (เช่น สร้างงาน, แก้ใบสั่งงาน, ลบหมวดหมู่)</p>
-  <ol class="steps">
-    <li>ในหน้า Workspace เปิดแผง <strong>"Activity / กิจกรรม"</strong></li>
-    <li>ไล่ดูรายการกิจกรรมเรียงตามเวลา — เห็นชื่อผู้ทำและการกระทำ</li>
-  </ol>
-  <figure><img src="assets/pm/workspace_activity_log.png" alt="บันทึกกิจกรรม" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_activity_log.png]&lt;/span&gt;'"><figcaption>แผง Activity Log ใน Workspace</figcaption></figure>
-  <div class="tip"><strong>ทุกคนที่เข้าถึง Workspace ดู Activity Log ได้</strong> (PM, PD, PE, OE, MD, LD และ AM แบบอ่าน) ·
-     ต่างจาก <a href="god.html#activity-monitor">Activity Monitor (GOD)</a> ที่ดูการเข้า/ออกระบบทั้งระบบ</div>
+  <details class="acc" id="activity-log">
+  <summary>
+    <span class="ic">👀</span> 2 · Activity Monitor (ผู้ใช้ออนไลน์ / Login-Logout)
+    <span class="acc-teaser">ใครออนไลน์ + ประวัติ login/logout</span>
+    <span class="chev">▾</span>
+  </summary>
+  <div class="acc-body">
+  <p>หน้า <code>/activity-monitor</code> — ดูว่าใครออนไลน์อยู่ตอนนี้ และประวัติ login/logout ของผู้ใช้ในระบบ
+     <strong>ไม่ใช่</strong>การบันทึกว่าใครสร้าง/แก้ไขงานหรือ Work Order (เอกสารรุ่นก่อนหน้าเข้าใจผิดเรื่องนี้)</p>
+  <div class="tip">วิธีใช้แบบละเอียดอยู่ที่ <a href="god.html#activity-monitor">GOD › Activity Monitor</a> (Single Source of Truth) — และหน้านี้
+     <strong>ไม่ได้จำกัดเฉพาะ GOD</strong> ตามที่เอกสารเดิมเข้าใจ ผู้ใช้ทุก role ที่ล็อกอินเข้ามาเปิดดูได้เหมือนกัน</div>
+  </div>
+  </details>
 
   <!-- ============ REQUESTS ============ -->
-  <h2 id="requests">3 · Workspace · Requests (ตารางแรงงานและแผนงาน)</h2>
+  <details class="acc" id="requests">
+  <summary>
+    <span class="ic">📋</span> 3 · Workspace · Requests (ตารางแรงงานและแผนงาน)
+    <span class="acc-teaser">ตารางแรงงานเทียบแผนงาน</span>
+    <span class="chev">▾</span>
+  </summary>
+  <div class="acc-body">
   <p>หน้า <code>/workspace/requests</code> — ตารางแรงงานและแผนงาน (Labor &amp; Plans Table)
      <strong>สิทธิ์การเข้าถึงเหมือนหน้า Workspace ทุกประการ</strong></p>
   <ol class="steps">
@@ -106,9 +154,17 @@
     <li>ปรับ/บันทึกแผนแรงงานตามสิทธิ์ของบทบาท</li>
   </ol>
   <figure><img src="assets/pm/workspace_requests_table.png" alt="ตารางแรงงาน" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: workspace_requests_table.png]&lt;/span&gt;'"><figcaption>ตารางแรงงานและแผนงาน</figcaption></figure>
+  </div>
+  </details>
 
   <!-- ============ PROJECT MANAGEMENT ============ -->
-  <h2 id="project-management">4 · Project Management (จัดการโครงการ)</h2>
+  <details class="acc" id="project-management">
+  <summary>
+    <span class="ic">🏗️</span> 4 · Project Management (จัดการโครงการ)
+    <span class="acc-teaser">สร้าง/แก้ไขโครงการ</span>
+    <span class="chev">▾</span>
+  </summary>
+  <div class="acc-body">
   <p>หน้า <code>/project-management</code> — สร้างและแก้ไขโครงการ พร้อมกำหนดผู้จัดการโครงการ</p>
 
   <h3>4.1 ดูรายการโครงการ</h3>
@@ -119,20 +175,39 @@
 
   <h3>4.2 สร้าง / แก้ไขโครงการ</h3>
   <ol class="steps">
-    <li>กดปุ่ม <strong>"เพิ่มโครงการ"</strong></li>
-    <li>กรอก <strong>"ชื่อโครงการ"</strong>, <strong>"รหัสโครงการ"</strong>, เลือก <strong>"สังกัด"</strong> และ <strong>"สถานะ"</strong></li>
-    <li>กำหนด <strong>"ผู้จัดการโครงการ (PM)"</strong> และ <strong>"รักษาการผู้จัดการโครงการ (PM)"</strong> (ถ้ามี)</li>
-    <li><strong>"ลำดับโครงการ"</strong> ระบบกำหนดให้อัตโนมัติ (Auto) หรือกรอกเองได้</li>
-    <li>กด <strong>"บันทึก"</strong> · แก้ไขภายหลังได้จากไอคอนแก้ไขในแต่ละแถว</li>
+    <li>กดปุ่ม <strong>"สร้างโครงการใหม่"</strong></li>
+    <li>กรอก <strong>"ชื่อโครงการ"</strong>, <strong>"รหัสโครงการ"</strong>, เลือก <strong>"สังกัด"</strong> — ตอนสร้างใหม่ยังเลือก "สถานะ" ไม่ได้ (ระบบตั้งเป็น Active ให้อัตโนมัติ แก้ทีหลังได้ตอนกดแก้ไข)</li>
+    <li>กำหนด <strong>"ผู้จัดการโครงการ (PM)"</strong> — มีฟิลด์เดียวในระบบ (ตอนเปิดแก้ไขทีหลัง ช่องเดิมนี้จะเปลี่ยนไปแสดงชื่อว่า "รักษาการผู้จัดการโครงการ (PM)" ซึ่งเป็นแค่ label สับสน ไม่ใช่ 2 ฟิลด์จริง)</li>
+    <li><strong>"ลำดับโครงการ (Auto)"</strong> — ตอนสร้างใหม่ระบบล็อกให้อัตโนมัติ กดแก้ไม่ได้ · จะแก้ได้ก็เฉพาะตอนเปิดแก้ไขโครงการทีหลังเท่านั้น</li>
+    <li>กด <strong>"บันทึกข้อมูล"</strong> · แก้ไขภายหลังได้จากไอคอนแก้ไขในแต่ละแถว</li>
   </ol>
   <figure><img src="assets/pm/project_create_form.png" alt="ฟอร์มสร้างโครงการ" onerror="this.outerHTML='&lt;span class=&quot;shot-missing&quot;&gt;[ภาพ: project_create_form.png]&lt;/span&gt;'"><figcaption>ฟอร์มสร้าง/แก้ไขโครงการ</figcaption></figure>
-  <div class="crosslink">ผู้ที่เข้า Project Management ได้ด้วย: <a href="se_fm.html">FM</a>, AM และ <a href="god.html">GOD</a></div>
+  <div class="crosslink">ผู้ที่เข้า Project Management ได้ด้วย: <a href="se_fm.html">FM</a>, AM และ <a href="god.html">GOD</a>
+     — <strong>หมายเหตุ:</strong> เมนู "การจัดการ" ไม่แสดงตัวเลือกนี้ให้ FM เห็น ต้องเข้าผ่าน URL <code>/project-management</code> ตรง ๆ</div>
+  </div>
+  </details>
 
   <footer class="site-footer">
     <button class="pdf-btn" onclick="window.print()">🖨️ บันทึกเป็น PDF</button>
-    <p>คู่มือ PM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-06-15</p>
+    <p>คู่มือ PM · ระบบบริหารจัดการแรงงาน · อัปเดต 2026-08-05 · <em>ตัวอย่าง UI ใหม่ (accordion + การ์ดสรุป)</em></p>
   </footer>
 </div>
+
+<script>
+(function () {
+  function openTarget() {
+    var h = location.hash.slice(1);
+    if (!h) return;
+    var el = document.getElementById(h);
+    if (el && el.tagName === 'DETAILS') {
+      el.open = true;
+      el.scrollIntoView({ block: 'start' });
+    }
+  }
+  window.addEventListener('hashchange', openTarget);
+  window.addEventListener('DOMContentLoaded', openTarget);
+})();
+</script>
 
 </body>
 </html>
