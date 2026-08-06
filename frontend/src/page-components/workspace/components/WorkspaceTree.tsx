@@ -222,9 +222,13 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
   const [mainExpanded, setMainExpanded] = useState<boolean>(true);
   const [supportExpanded, setSupportExpanded] = useState<boolean>(true);
 
-  // Helper to check if a due date matches the active tab's criteria
-  const checkDateMatch = (dueDateVal: string | Date | undefined | null) => {
+  // Helper to check if a due date matches the active tab's criteria.
+  // Incomplete work (progress < 100) always bypasses the date tab, mirroring the
+  // board's filteredSubtasks rule in pages/workspace/index.tsx (T-048) — otherwise
+  // the tree and the board disagree on what's visible for the same task list.
+  const checkDateMatch = (dueDateVal: string | Date | undefined | null, progress?: number) => {
     if (activeTab === 'All Tasks') return true;
+    if ((progress || 0) < 100) return true;
     if (!dueDateVal) return false;
 
     const today = new Date();
@@ -277,10 +281,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
         
         let subtasks: Subtask[] = [];
         if (hasActiveSubtasks) {
-          subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
+          subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate, sub.dailyProgress));
           if (subtasks.length === 0) return;
         } else {
-          if (!checkTask(task) || !checkDateMatch(task.dueDate)) return;
+          if (!checkTask(task) || !checkDateMatch(task.dueDate, task.supportDailyProgress !== undefined ? task.supportDailyProgress : task.dailyProgress)) return;
         }
 
         const projId = task.projectId || 'general-project';
@@ -371,10 +375,10 @@ export const WorkspaceTree: React.FC<WorkspaceTreeProps> = ({
         
         let subtasks: Subtask[] = [];
         if (hasActiveSubtasks) {
-          subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate));
+          subtasks = activeSubtasks.filter(sub => subtaskFilter(sub) && checkDateMatch(sub.dueDate, sub.dailyProgress));
           if (subtasks.length === 0) return;
         } else {
-          if (!checkTask(task) || !checkDateMatch(task.dueDate)) return;
+          if (!checkTask(task) || !checkDateMatch(task.dueDate, task.supportDailyProgress !== undefined ? task.supportDailyProgress : task.dailyProgress)) return;
         }
 
         const woId = task.workOrderId || 'general-wo';
