@@ -9,6 +9,13 @@ const router = Router({ mergeParams: true });
 // Require authentication for all config routes
 router.use(authenticate);
 
+// AM acts as a Leader (like LD) only within the Warehouse & Service project — everywhere
+// else AM is project-scoped with no Leader restriction (see workspace visibility rules).
+const WAREHOUSE_PROJECT_ID = 'P002';
+function actsAsLeader(userRole: string | undefined, projectId: string): boolean {
+  return userRole === 'LD' || (userRole === 'AM' && projectId === WAREHOUSE_PROJECT_ID);
+}
+
 async function validateLeaderAccess(userId: string, projectId: string, workOrderCode: string): Promise<boolean> {
   if (!projectId || !workOrderCode) return false;
   const doc = await db
@@ -56,7 +63,7 @@ router.get('/work-orders', async (req: Request, res: Response, next: NextFunctio
     const userRole = authReq.user?.roleCode;
     let data = await projectConfigService.getWorkOrders(projectId);
 
-    if (['LD', 'AM'].includes(userRole ?? '') && authReq.user) {
+    if (actsAsLeader(userRole, projectId) && authReq.user) {
       data = data.filter(wo =>
         wo.leaderId === authReq.user!.id ||
         (wo.leaderIds && Array.isArray(wo.leaderIds) && wo.leaderIds.includes(authReq.user!.id)) ||
@@ -135,7 +142,7 @@ router.get('/categories', async (req: Request, res: Response, next: NextFunction
     const authReq = req as AuthRequest;
     const userRole = authReq.user?.roleCode;
 
-    if (userRole === 'LD' && authReq.user) {
+    if (actsAsLeader(userRole, projectId) && authReq.user) {
       // Leader can only see categories under their assigned work orders
       const workOrders = await projectConfigService.getWorkOrders(projectId);
       const leaderWoCodes = workOrders
@@ -174,7 +181,7 @@ router.post('/categories', async (req: Request, res: Response, next: NextFunctio
     const authReq = req as AuthRequest;
     const userRole = authReq.user?.roleCode;
 
-    if (userRole === 'LD' && authReq.user) {
+    if (actsAsLeader(userRole, projectId) && authReq.user) {
       const { workOrderCode } = req.body;
       if (!workOrderCode) throw new AppError('workOrderCode is required', 400);
       const isAssigned = await validateLeaderAccess(authReq.user.id, projectId, workOrderCode);
@@ -198,7 +205,7 @@ router.put('/categories/:id', async (req: Request, res: Response, next: NextFunc
     const authReq = req as AuthRequest;
     const userRole = authReq.user?.roleCode;
 
-    if (userRole === 'LD' && authReq.user) {
+    if (actsAsLeader(userRole, projectId) && authReq.user) {
       await checkCategoryLeaderAccess(authReq.user.id, projectId, id);
     }
 
@@ -217,7 +224,7 @@ router.delete('/categories/:id', async (req: Request, res: Response, next: NextF
     const authReq = req as AuthRequest;
     const userRole = authReq.user?.roleCode;
 
-    if (userRole === 'LD' && authReq.user) {
+    if (actsAsLeader(userRole, projectId) && authReq.user) {
       await checkCategoryLeaderAccess(authReq.user.id, projectId, id);
     }
 

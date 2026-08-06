@@ -28,6 +28,7 @@ export interface GroupedWbsTask {
   taskName: string;
   description?: string;
   dueDate?: Date | null;
+  taskType: 'standalone' | 'pending' | 'hasSubtasks';
   subtasks: {
     subtaskName: string;
     dueDate: Date;
@@ -45,7 +46,10 @@ const HEADER_MAPS: Record<string, string[]> = {
   taskDescription: ['task description', 'รายละเอียดงานหลัก', 'รายละเอียด', 'description', 'taskdescription', 'หมายเหตุ'],
   taskDueDate: ['task due date', 'วันส่งมอบงานหลัก', 'due date งานหลัก', 'กำหนดส่งงานหลัก', 'taskduedate', 'วันครบกำหนด (งาน)', 'วันครบกำหนดงาน'],
   subtaskName: ['subtask name', 'ชื่องานย่อย', 'subtask', 'subtaskname'],
-  subtaskDueDate: ['subtask due date', 'วันส่งมอบงานย่อย', 'due date งานย่อย', 'กำหนดส่งงานย่อย', 'subtaskduedate', 'วันครบกำหนด (งานย่อย)', 'วันครบกำหนดงานย่อย'],
+  // 'วันครบกำหนด' (bare, no qualifier) is the CURRENT template's column — one column serves as
+  // both the subtask's due date (row has a subtask name) and the task's own due date (row has
+  // none). The older '(งานย่อย)'-qualified aliases stay recognized for already-downloaded files.
+  subtaskDueDate: ['subtask due date', 'วันส่งมอบงานย่อย', 'due date งานย่อย', 'กำหนดส่งงานย่อย', 'subtaskduedate', 'วันครบกำหนด (งานย่อย)', 'วันครบกำหนดงานย่อย', 'วันครบกำหนด', 'due date', 'duedate'],
   subtaskAssignees: ['subtask assignee ids', 'รหัสผู้รับผิดชอบงานย่อย', 'ผู้รับผิดชอบ', 'assignees', 'assignee', 'subtaskassignees', 'รหัสผู้รับผิดชอบ (งานย่อย)', 'รหัสผู้รับผิดชอบ', 'รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย)', 'รหัสพนักงานผู้รับผิดชอบ'],
 };
 
@@ -179,9 +183,13 @@ export function parseWbsExcel(fileBuffer: Buffer, usersMap: Map<string, { name: 
     const taskDescription = mappedRow.taskDescription ? String(mappedRow.taskDescription).trim() : '';
     const subtaskName = mappedRow.subtaskName ? String(mappedRow.subtaskName).trim() : '';
     
-    // Parse Dates
-    const taskDueDate = parseExcelDate(mappedRow.taskDueDate);
-    const subtaskDueDate = parseExcelDate(mappedRow.subtaskDueDate);
+    // Parse Dates — ONE "วันครบกำหนด" column serves double duty: it's the SUBTASK's due date
+    // when the row has a subtask name, or the TASK's own due date when the row has none (the
+    // mirror-subtask / standalone case) — no separate "task due date" column required.
+    const rawDueDateCell = mappedRow.subtaskDueDate ?? mappedRow.taskDueDate;
+    const rowDueDate = parseExcelDate(rawDueDateCell);
+    const subtaskDueDate = subtaskName ? rowDueDate : null;
+    const taskDueDate = !subtaskName ? rowDueDate : null;
 
     // Parse Assignees
     let assigneeIds: string[] = [];
@@ -201,12 +209,18 @@ export function parseWbsExcel(fileBuffer: Buffer, usersMap: Map<string, { name: 
     // Conditional Subtask validation
     if (subtaskName) {
       if (!subtaskDueDate) {
-        errors.push('งานย่อยจำเป็นต้องระบุ "วันครบกำหนด (งานย่อย)" (Subtask Due Date)');
+        errors.push('งานย่อยจำเป็นต้องระบุ "วันครบกำหนด" (Due Date)');
       }
     } else {
-      // If no subtask, check if task due date is specified
-      if (mappedRow.taskDueDate && !taskDueDate) {
-        errors.push('รูปแบบ "วันครบกำหนด (งาน)" (Task Due Date) ไม่ถูกต้อง');
+      // If no subtask, check if the (same) due-date column was filled but failed to parse
+      if (rawDueDateCell && !taskDueDate) {
+        errors.push('รูปแบบ "วันครบกำหนด" (Due Date) ไม่ถูกต้อง');
+      }
+      // No subtask row, but assignees were given for this task-level row: this becomes a
+      // standalone task (mirror subtask carries the assignees) and MUST have a due date,
+      // same requirement as the manual "งานเดี่ยว" flow (T-040 — due date always mandatory).
+      if (mappedRow.subtaskAssignees && !taskDueDate) {
+        errors.push('ระบุผู้รับผิดชอบไว้แล้ว กรุณาระบุ "วันครบกำหนด" (Due Date) ด้วย สำหรับงานที่ไม่มีงานย่อย');
       }
     }
 
@@ -262,6 +276,8 @@ export function parseWbsExcel(fileBuffer: Buffer, usersMap: Map<string, { name: 
     taskName: string;
     description?: string;
     dueDate?: Date | null;
+    taskType: 'standalone' | 'pending' | 'hasSubtasks';
+    taskLevelAssigneeIds: string[];
     subtasks: {
       subtaskName: string;
       dueDate: Date;
@@ -269,6 +285,17 @@ export function parseWbsExcel(fileBuffer: Buffer, usersMap: Map<string, { name: 
       rawAssigneeIds: string[];
     }[];
   }> = {};
+
+  const resolveAssignees = (ids: string[]): TaskAssignee[] => {
+    const resolved: TaskAssignee[] = [];
+    ids.forEach(id => {
+      const match = usersMap.get(id);
+      if (match) {
+        resolved.push({ employeeId: id, name: match.name, roleId: match.roleId });
+      }
+    });
+    return resolved;
+  };
 
   validRows.forEach(vr => {
     const d = vr.data;
@@ -282,35 +309,39 @@ export function parseWbsExcel(fileBuffer: Buffer, usersMap: Map<string, { name: 
         taskName: d.taskName,
         description: d.taskDescription,
         dueDate: d.taskDueDate,
+        taskType: 'pending',
+        taskLevelAssigneeIds: [],
         subtasks: [],
       };
     }
 
     if (d.subtaskName && d.subtaskDueDate) {
-      const resolvedAssignees: TaskAssignee[] = [];
-      if (d.assigneeIds) {
-        d.assigneeIds.forEach(id => {
-          const match = usersMap.get(id);
-          if (match) {
-            resolvedAssignees.push({
-              employeeId: id,
-              name: match.name,
-              roleId: match.roleId,
-            });
-          }
-        });
-      }
-
       groups[key].subtasks.push({
         subtaskName: d.subtaskName,
         dueDate: d.subtaskDueDate,
-        assignees: resolvedAssignees,
+        assignees: resolveAssignees(d.assigneeIds || []),
         rawAssigneeIds: d.assigneeIds || [],
       });
+    } else {
+      // No subtask on this row (allowed — "ปล่อยว่างได้ หากไม่ต้องการสร้างงานย่อย"). Carry
+      // forward whatever task-level due date / assignees it gave us so the finalize step below
+      // can turn this into a standalone task instead of silently dropping the data (T-048 fix —
+      // previously these rows produced a task with zero subtasks and zero assignees).
+      if (d.taskDueDate) {
+        groups[key].dueDate = d.taskDueDate;
+      }
+      if (d.assigneeIds) {
+        const seen = new Set(groups[key].taskLevelAssigneeIds);
+        d.assigneeIds.forEach(id => seen.add(id));
+        groups[key].taskLevelAssigneeIds = Array.from(seen);
+      }
     }
   });
 
-  // Convert groups object to array and calculate overall task due date if subtasks exist
+  // Convert groups object to array, resolve dueDate/taskType, and — for a task that never got a
+  // real subtask row — synthesize a single mirror subtask (mirrors the manual "งานเดี่ยว" create
+  // flow's behavior) so the task stays assignable/reportable instead of landing with nobody
+  // responsible and no subtask to log progress against.
   Object.values(groups).forEach(group => {
     if (group.subtasks.length > 0) {
       // Find max subtask dueDate
@@ -321,6 +352,17 @@ export function parseWbsExcel(fileBuffer: Buffer, usersMap: Map<string, { name: 
         }
       });
       group.dueDate = maxDate;
+      group.taskType = 'hasSubtasks';
+    } else if (group.dueDate || group.taskLevelAssigneeIds.length > 0) {
+      group.subtasks.push({
+        subtaskName: group.taskName,
+        dueDate: group.dueDate as Date,
+        assignees: resolveAssignees(group.taskLevelAssigneeIds),
+        rawAssigneeIds: group.taskLevelAssigneeIds,
+      });
+      group.taskType = 'standalone';
+    } else {
+      group.taskType = 'pending';
     }
     groupedTasks.push(group);
   });

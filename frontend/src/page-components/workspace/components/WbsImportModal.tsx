@@ -202,7 +202,7 @@ export const WbsImportModal: React.FC<WbsImportModalProps> = ({ open, onClose, o
     },
     {
       field: 'dueDate',
-      headerName: 'วันครบกำหนด (งานย่อย)',
+      headerName: 'วันครบกำหนด',
       description: 'วันส่งมอบของงานย่อย หรือวันส่งมอบงานหลัก (ในกรณีที่ไม่มีงานย่อย) รูปแบบ: YYYY-MM-DD',
       width: 90,
       align: 'center',

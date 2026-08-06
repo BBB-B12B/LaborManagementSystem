@@ -31,6 +31,13 @@ export async function getAfterSaleWorkOrderIds(): Promise<Set<string>> {
 // Apply authentication to all routes
 router.use(authenticate);
 
+// AM acts as a Leader (like LD) only within the Warehouse & Service project — everywhere
+// else AM is project-scoped with no Leader restriction (see workspace visibility rules).
+const WAREHOUSE_PROJECT_ID = 'P002';
+function actsAsLeader(userRole: string | undefined, projectId: string): boolean {
+  return userRole === 'LD' || (userRole === 'AM' && projectId === WAREHOUSE_PROJECT_ID);
+}
+
 async function validateLeaderAccess(userId: string, projectId: string, workOrderCode: string): Promise<boolean> {
   if (!projectId || !workOrderCode) return false;
   const doc = await db
@@ -51,7 +58,7 @@ async function validateLeaderAccess(userId: string, projectId: string, workOrder
 async function checkTaskLeaderAccess(req: Request, taskId: string): Promise<void> {
   const authReq = req as AuthRequest;
   const userRole = authReq.user?.roleCode;
-  if (userRole !== 'LD') return;
+  if (userRole !== 'LD' && userRole !== 'AM') return;
 
   let taskDoc;
   const parts = taskId.split('__');
@@ -73,9 +80,58 @@ async function checkTaskLeaderAccess(req: Request, taskId: string): Promise<void
   const projectId = taskData.projectId;
   const workOrderCode = taskData.workOrderCode;
 
+  if (!actsAsLeader(userRole, projectId)) return;
+
   const isAssigned = await validateLeaderAccess(authReq.user!.id, projectId, workOrderCode);
   if (!isAssigned) {
     throw new AppError('คุณไม่มีสิทธิ์เข้าถึงหรือจัดการงานในหมวดงานนี้ (Access denied for this Work Order)', 403);
+  }
+}
+
+// Roles allowed to approve/unapprove a daily report — AM is further restricted to the
+// Warehouse & Service project only (matches actsAsLeader's AM scoping elsewhere in this file).
+const APPROVER_ROLES = ['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'];
+
+async function getProjectIdForCompositeId(id: string): Promise<string | null> {
+  const parts = id.split('__');
+  let docSnap: FirebaseFirestore.DocumentSnapshot | undefined;
+
+  if (parts.length >= 4) {
+    const [woId, catId, taskId, subtaskId] = parts;
+    docSnap = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId).collection('subtasks').doc(subtaskId).get();
+    if (!docSnap.exists) {
+      docSnap = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId).get();
+    }
+  } else if (parts.length === 3) {
+    const [woId, catId, taskId] = parts;
+    docSnap = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId).get();
+  } else {
+    const subtaskQuery = await afterSaleDb.collectionGroup('subtasks').where('subtaskId', '==', id).limit(1).get();
+    if (!subtaskQuery.empty) {
+      docSnap = subtaskQuery.docs[0];
+    } else {
+      const taskQuery = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
+      if (!taskQuery.empty) docSnap = taskQuery.docs[0];
+    }
+  }
+
+  if (!docSnap || !docSnap.exists) return null;
+  return (docSnap.data() as any)?.projectId || null;
+}
+
+async function checkApproveAccess(req: Request, id: string): Promise<void> {
+  const authReq = req as AuthRequest;
+  const userRole = authReq.user?.roleCode;
+
+  if (!userRole || !APPROVER_ROLES.includes(userRole)) {
+    throw new AppError('คุณไม่มีสิทธิ์อนุมัติ/ยกเลิกอนุมัติงานนี้ (Access denied to approve/unapprove this task)', 403);
+  }
+
+  if (userRole === 'AM') {
+    const projectId = await getProjectIdForCompositeId(id);
+    if (projectId !== WAREHOUSE_PROJECT_ID) {
+      throw new AppError('AM สามารถอนุมัติงานได้เฉพาะโครงการคลังสินค้าและบริการเท่านั้น (AM can only approve tasks in the Warehouse & Service project)', 403);
+    }
   }
 }
 
@@ -1399,7 +1455,7 @@ router.get('/import-wbs/template', async (_req: Request, res: Response, next: Ne
       { header: 'ชื่อหมวดหมู่งานย่อย', key: 'categoryName', width: 22 },
       { header: 'ชื่องาน', key: 'taskName', width: 25 },
       { header: 'ชื่องานย่อย', key: 'subtaskName', width: 28 },
-      { header: 'วันครบกำหนด (งานย่อย)', key: 'subtaskDueDate', width: 22 },
+      { header: 'วันครบกำหนด', key: 'subtaskDueDate', width: 22 },
       { header: 'รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย)', key: 'subtaskAssignees', width: 35 }
     ];
 
@@ -1421,6 +1477,15 @@ router.get('/import-wbs/template', async (_req: Request, res: Response, next: Ne
         taskName: 'งานขุดดินฐานราก',
         subtaskName: 'ขุดดินหลุมเสาเข็มต้นที่ 2',
         subtaskDueDate: '2026-06-16',
+        subtaskAssignees: '123456'
+      },
+      {
+        workOrderCode: 'ARC',
+        workOrderName: 'งานสถาปัตยกรรม',
+        categoryName: 'งานก่อผนัง',
+        taskName: 'งานทาสีรั้วรอบโครงการ',
+        subtaskName: '',
+        subtaskDueDate: '2026-07-01',
         subtaskAssignees: '123456'
       },
       {
@@ -1511,19 +1576,20 @@ router.get('/import-wbs/template', async (_req: Request, res: Response, next: Ne
       ['ชื่อหมวดหมู่งานหลัก (ชื่อเต็ม)', 'ชื่อเต็มของหมวดหมู่งานหลัก เช่น งานโครงสร้าง, งานสถาปัตยกรรม, งานระบบ', 'จำเป็น (Required)', 'งานโครงสร้าง'],
       ['ชื่อหมวดหมู่งานย่อย', 'ชื่อของหมวดหมู่ย่อยภายใต้หมวดหลัก เช่น งานตอกเสาเข็ม, งานก่อผนัง', 'จำเป็น (Required)', 'งานตอกเสาเข็ม'],
       ['ชื่องาน', 'ชื่องานหลัก (Task) ที่ต้องการสร้าง', 'จำเป็น (Required)', 'งานขุดดินฐานราก'],
-      ['ชื่องานย่อย', 'ชื่องานย่อย (Subtask) ภายใต้งานหลัก (เว้นว่างได้หากไม่มีงานย่อย)', 'ไม่จำเป็น (Optional)', 'ขุดดินหลุมเสาเข็มต้นที่ 1'],
-      ['วันครบกำหนด (งานย่อย)', 'วันครบกำหนดส่งมอบของงานย่อย รูปแบบ: ปี-เดือน-วัน (ค.ศ.)', 'จำเป็นเมื่อระบุงานย่อย', '2026-06-15'],
-      ['รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย)', 'รหัสพนักงาน FM ที่รับผิดชอบงานย่อยนี้ คั่นด้วยจุลภาค (,) ตัวอย่างการกรอกรหัสพนักงาน 6 หลัก เช่น 123456, 123457', 'ไม่จำเป็น (Optional)', '123456, 123457']
+      ['ชื่องานย่อย', 'ชื่องานย่อย (Subtask) ภายใต้งานหลัก (เว้นว่างได้หากไม่มีงานย่อย — งานจะกลายเป็น "งานเดี่ยว" หรือ "รอแตกงาน" แทน ดูคำแนะนำด้านล่าง)', 'ไม่จำเป็น (Optional)', 'ขุดดินหลุมเสาเข็มต้นที่ 1'],
+      ['วันครบกำหนด', 'ถ้ามี "ชื่องานย่อย" = วันครบกำหนดของงานย่อยนั้น | ถ้าไม่มี "ชื่องานย่อย" = วันครบกำหนดของงานหลักเอง (ใช้คอลัมน์เดียวกัน) รูปแบบ: ปี-เดือน-วัน (ค.ศ.)', 'จำเป็นเมื่อระบุงานย่อย หรือระบุผู้รับผิดชอบ', '2026-06-15'],
+      ['รหัสพนักงานผู้รับผิดชอบ FM (งานย่อย)', 'รหัสพนักงาน FM ที่รับผิดชอบ คั่นด้วยจุลภาค (,) ตัวอย่างการกรอกรหัสพนักงาน 6 หลัก เช่น 123456, 123457 — ถ้าไม่มี "ชื่องานย่อย" ผู้รับผิดชอบนี้จะผูกกับงานหลักโดยตรง', 'ไม่จำเป็น (Optional)', '123456, 123457']
     ];
 
     instructions.forEach(inst => wsInstructions.addRow(inst));
-    
+
     wsInstructions.addRow([]);
     wsInstructions.addRow(['ข้อแนะนำเพิ่มเติม:']);
     wsInstructions.addRow(['- กรุณากรอกข้อมูลในชีท "WBS Template" เพื่อทำการอัปโหลด']);
     wsInstructions.addRow(['- ระบบรันเลข ID งานหลักและงานย่อยให้อัตโนมัติโดยที่ผู้ใช้ไม่ต้องกรอกข้อมูลช่อง ID ใดๆ ทั้งสิ้น']);
     wsInstructions.addRow(['- วันที่ต้องกรอกในรูปแบบ ค.ศ. เท่านั้น เช่น 2026-06-30 (ปี-เดือน-วัน)']);
     wsInstructions.addRow(['- รหัสผู้รับผิดชอบต้องตรงกับรหัสพนักงานในระบบ (ตัวอย่างเช่น 123456, 123457) หากกรอกรหัสพนักงานที่ไม่มีในระบบ ระบบจะแสดงคำเตือนแต่ยังสามารถกดนำเข้าได้']);
+    wsInstructions.addRow(['- แถวที่ไม่กรอก "ชื่องานย่อย": ถ้ามีการกรอก "วันครบกำหนด" หรือ "ผู้รับผิดชอบ" ระบบจะสร้างงานนั้นเป็น "งานเดี่ยว" (สามารถมอบหมาย/รายงานความคืบหน้าได้ทันที) — ถ้าไม่กรอกอะไรเลย ระบบจะสร้างเป็น "รอแตกงาน" (ยังไม่ระบุรายละเอียด รอเพิ่มงานย่อยทีหลัง)']);
 
     // Style the title of Guide
     wsInstructions.mergeCells('A1:D1');
@@ -1674,7 +1740,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new AppError('Unauthorized', 401);
     }
     const userRole = authReq.user.roleCode;
-    if (userRole === 'LD') {
+    if (actsAsLeader(userRole, projectId)) {
       const isAssigned = await validateLeaderAccess(authReq.user.id, projectId, workOrderCode);
       if (!isAssigned) {
         throw new AppError('คุณไม่มีสิทธิ์สร้างงานในหมวดงานนี้ (Access denied to create tasks for this Work Order)', 403);
@@ -2165,10 +2231,12 @@ router.post('/:id/approve', async (req: Request, res: Response, next: NextFuncti
   try {
     const { id } = req.params;
     const userId = req.user?.uid;
-    
+
     if (!userId) {
       throw new AppError('Unauthorized', 401);
     }
+
+    await checkApproveAccess(req, id);
 
     await taskService.approveTask(id, userId);
 
@@ -2277,6 +2345,8 @@ router.post('/:id/unapprove', async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
+
+    await checkApproveAccess(req, id);
 
     await taskService.unapproveTask(id, userId);
 
