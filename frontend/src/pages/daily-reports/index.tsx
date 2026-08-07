@@ -2676,7 +2676,12 @@ export default function DailyReportPage() {
   };
 
   return (
-    <ProtectedRoute requiredRoles={['SE', 'FM', 'LD', 'AM']}>
+    <ProtectedRoute
+      requiredRoles={['SE', 'FM', 'LD']}
+      // AM only belongs on this page for the Warehouse & Service project (P002) — AM in
+      // any other project has no daily-report role there (matches workspace/tasks.routes.ts).
+      allowedCondition={(u) => u?.roleCode === 'AM' && (u?.projectLocationIds || []).includes('P002')}
+    >
       <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={thLocale}>
         <Layout disablePadding disableTopGap maxWidth={false}>
           <Box

@@ -23,6 +23,9 @@ interface NavMenuItem {
   path: string;
   icon: React.ReactNode;
   roles: UserRole[];
+  // Extra per-item check beyond the role list (e.g. project scoping) — item is
+  // hidden unless this also passes, when provided.
+  isVisible?: (user: { roleCode?: string; projectLocationIds?: string[] }) => boolean;
 }
 
 export const GRADIENT_BG = 'linear-gradient(180deg, #2c2437 0%, #201b2b 100%)';
@@ -56,6 +59,10 @@ export const Navbar: React.FC = () => {
       path: '/daily-reports',
       icon: <DescriptionIcon />,
       roles: ['SE', 'FM', 'LD', 'AM'],
+      // AM only has a daily-report role in the Warehouse & Service project (P002) —
+      // AM elsewhere never gets a valid page behind this link (matches ProtectedRoute
+      // in pages/daily-reports/index.tsx).
+      isVisible: (u) => u.roleCode !== 'AM' || (u.projectLocationIds || []).includes('P002'),
     },
     {
       label: t('nav.management', 'การจัดการ'),
@@ -95,7 +102,7 @@ export const Navbar: React.FC = () => {
       if (!user) return false;
       if (!user.roleCode) return true;
       if (user.roleCode === 'GOD') return true;
-      return item.roles.includes(user.roleCode as UserRole);
+      return item.roles.includes(user.roleCode as UserRole) && (!item.isVisible || item.isVisible(user));
     });
 
   const handleNavigate = (path: string) => {
