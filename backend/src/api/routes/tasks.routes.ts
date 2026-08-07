@@ -31,11 +31,10 @@ export async function getAfterSaleWorkOrderIds(): Promise<Set<string>> {
 // Apply authentication to all routes
 router.use(authenticate);
 
-// AM acts as a Leader (like LD) only within the Warehouse & Service project — everywhere
-// else AM is project-scoped with no Leader restriction (see workspace visibility rules).
-const WAREHOUSE_PROJECT_ID = 'P002';
-function actsAsLeader(userRole: string | undefined, projectId: string): boolean {
-  return userRole === 'LD' || (userRole === 'AM' && projectId === WAREHOUSE_PROJECT_ID);
+// AM acts as a Leader (like LD) in every project — admin is the one who logs daily
+// work/reports for cleaning staff (พนักงานทำความสะอาด), not just in the Warehouse project.
+function actsAsLeader(userRole: string | undefined, _projectId: string): boolean {
+  return userRole === 'LD' || userRole === 'AM';
 }
 
 async function validateLeaderAccess(userId: string, projectId: string, workOrderCode: string): Promise<boolean> {
@@ -88,50 +87,15 @@ async function checkTaskLeaderAccess(req: Request, taskId: string): Promise<void
   }
 }
 
-// Roles allowed to approve/unapprove a daily report — AM is further restricted to the
-// Warehouse & Service project only (matches actsAsLeader's AM scoping elsewhere in this file).
+// Roles allowed to approve/unapprove a daily report.
 const APPROVER_ROLES = ['AM', 'OE', 'PE', 'PM', 'PD', 'MD', 'LD'];
 
-async function getProjectIdForCompositeId(id: string): Promise<string | null> {
-  const parts = id.split('__');
-  let docSnap: FirebaseFirestore.DocumentSnapshot | undefined;
-
-  if (parts.length >= 4) {
-    const [woId, catId, taskId, subtaskId] = parts;
-    docSnap = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId).collection('subtasks').doc(subtaskId).get();
-    if (!docSnap.exists) {
-      docSnap = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId).get();
-    }
-  } else if (parts.length === 3) {
-    const [woId, catId, taskId] = parts;
-    docSnap = await afterSaleDb.collection('workOrders').doc(woId).collection('categories').doc(catId).collection('tasks').doc(taskId).get();
-  } else {
-    const subtaskQuery = await afterSaleDb.collectionGroup('subtasks').where('subtaskId', '==', id).limit(1).get();
-    if (!subtaskQuery.empty) {
-      docSnap = subtaskQuery.docs[0];
-    } else {
-      const taskQuery = await afterSaleDb.collectionGroup('tasks').where('taskId', '==', id).limit(1).get();
-      if (!taskQuery.empty) docSnap = taskQuery.docs[0];
-    }
-  }
-
-  if (!docSnap || !docSnap.exists) return null;
-  return (docSnap.data() as any)?.projectId || null;
-}
-
-async function checkApproveAccess(req: Request, id: string): Promise<void> {
+async function checkApproveAccess(req: Request): Promise<void> {
   const authReq = req as AuthRequest;
   const userRole = authReq.user?.roleCode;
 
   if (!userRole || !APPROVER_ROLES.includes(userRole)) {
     throw new AppError('คุณไม่มีสิทธิ์อนุมัติ/ยกเลิกอนุมัติงานนี้ (Access denied to approve/unapprove this task)', 403);
-  }
-
-  if (userRole === 'AM') {
-    const projectId = await getProjectIdForCompositeId(id);
-    if (projectId !== WAREHOUSE_PROJECT_ID) {
-      throw new AppError('AM สามารถอนุมัติงานได้เฉพาะโครงการคลังสินค้าและบริการเท่านั้น (AM can only approve tasks in the Warehouse & Service project)', 403);
-    }
   }
 }
 
@@ -2236,7 +2200,7 @@ router.post('/:id/approve', async (req: Request, res: Response, next: NextFuncti
       throw new AppError('Unauthorized', 401);
     }
 
-    await checkApproveAccess(req, id);
+    await checkApproveAccess(req);
 
     await taskService.approveTask(id, userId);
 
@@ -2346,7 +2310,7 @@ router.post('/:id/unapprove', async (req: Request, res: Response, next: NextFunc
     const userId = req.user?.uid;
     if (!userId) throw new AppError('Unauthorized', 401);
 
-    await checkApproveAccess(req, id);
+    await checkApproveAccess(req);
 
     await taskService.unapproveTask(id, userId);
 

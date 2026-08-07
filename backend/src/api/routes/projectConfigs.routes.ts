@@ -9,11 +9,10 @@ const router = Router({ mergeParams: true });
 // Require authentication for all config routes
 router.use(authenticate);
 
-// AM acts as a Leader (like LD) only within the Warehouse & Service project — everywhere
-// else AM is project-scoped with no Leader restriction (see workspace visibility rules).
-const WAREHOUSE_PROJECT_ID = 'P002';
-function actsAsLeader(userRole: string | undefined, projectId: string): boolean {
-  return userRole === 'LD' || (userRole === 'AM' && projectId === WAREHOUSE_PROJECT_ID);
+// AM acts as a Leader (like LD) in every project — admin is the one who logs daily
+// work/reports for cleaning staff (พนักงานทำความสะอาด), not just in the Warehouse project.
+function actsAsLeader(userRole: string | undefined, _projectId: string): boolean {
+  return userRole === 'LD' || userRole === 'AM';
 }
 
 async function validateLeaderAccess(userId: string, projectId: string, workOrderCode: string): Promise<boolean> {

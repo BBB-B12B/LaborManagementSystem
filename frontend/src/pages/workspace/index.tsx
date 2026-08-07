@@ -154,12 +154,9 @@ export default function WorkspacePage() {
 
   const toast = useToast();
   const { canEditWorkspace: _canEditBase } = usePermissions(user);
-  // AM acts as a Leader (like LD) only within the Warehouse & Service project (P002) —
-  // AM in any other project stays read-only, matching backend enforcement in tasks.routes.ts.
-  const WAREHOUSE_PROJECT_ID = 'P002';
-  const canEditWorkspace =
-    _canEditBase ||
-    (user?.roleCode === 'AM' && (user?.projectLocationIds || []).includes(WAREHOUSE_PROJECT_ID));
+  // AM (admin) can create/manage tasks in workspace in every project — admin is the one
+  // who logs daily work/reports for cleaning staff, equivalent to LD-level task rights.
+  const canEditWorkspace = _canEditBase || user?.roleCode === 'AM';
 
   const [projects, setProjects] = useState<any[]>([]);
 
