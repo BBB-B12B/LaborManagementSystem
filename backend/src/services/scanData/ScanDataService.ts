@@ -817,6 +817,18 @@ class ScanDataService extends BaseCrudService<ScanData> {
         const dateKey = workDate.toISOString().split('T')[0];
         const dayReports: any[] = reportMap.get(`${projectLocationId}_${dateKey}`) || [];
 
+        // TimeN fields are a legacy display projection capped at whatever slot count
+        // existed when the doc was written; allScans/punches are always the full,
+        // authoritative punch list, so fall back to them by index when TimeN is short.
+        const scanAny = scan as any;
+        const timeSlot = (n: number): string => {
+          const direct = scanAny[`Time${n}`];
+          if (direct) return direct;
+          const fromAllScans = scanAny.allScans?.[n - 1];
+          if (fromAllScans) return fromAllScans;
+          return scanAny.punches?.[n - 1] || '-';
+        };
+
         const reportData = {
           regular: dayReports.some((r: any) => r.workType === 'regular') ? 1 : 0,
           otMorning: dayReports
@@ -835,16 +847,16 @@ class ScanDataService extends BaseCrudService<ScanData> {
             status: scan.hasDiscrepancy ? 'pending' : 'verified',
             employeeNumber: scan.employeeNumber,
             date: workDate,
-            time1: (scan as any).Time1 || '-',
-            time2: (scan as any).Time2 || '-',
-            time3: (scan as any).Time3 || '-',
-            time4: (scan as any).Time4 || '-',
-            time5: (scan as any).Time5 || '-',
-            time6: (scan as any).Time6 || '-',
-            time7: (scan as any).Time7 || '-',
-            time8: (scan as any).Time8 || '-',
-            time9: (scan as any).Time9 || '-',
-            time10: (scan as any).Time10 || '-',
+            time1: timeSlot(1),
+            time2: timeSlot(2),
+            time3: timeSlot(3),
+            time4: timeSlot(4),
+            time5: timeSlot(5),
+            time6: timeSlot(6),
+            time7: timeSlot(7),
+            time8: timeSlot(8),
+            time9: timeSlot(9),
+            time10: timeSlot(10),
             scanNormalStatus: (scan as any).normalStatus === 1 ? 'ปกติ' : 'ไม่ครบ',
             scanRegularHours: (scan as any).regularHours || 0,
             regularHours: (scan as any).regularHours || 0,

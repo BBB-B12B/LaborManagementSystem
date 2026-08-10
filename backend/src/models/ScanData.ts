@@ -70,6 +70,10 @@ export interface ScanData {
   Time4?: string | null;
   Time5?: string | null;
   Time6?: string | null;
+  Time7?: string | null;
+  Time8?: string | null;
+  Time9?: string | null;
+  Time10?: string | null;
   allScans?: string[]; // Array of HH:mm:ss strings
   punches?: string[]; // Array of HH:mm strings
   devicePunches?: string[]; // Array of original HH:mm strings from finger scan device
@@ -219,6 +223,10 @@ export const scanDataConverter = {
       Time4: scan.Time4,
       Time5: scan.Time5,
       Time6: scan.Time6,
+      Time7: scan.Time7,
+      Time8: scan.Time8,
+      Time9: scan.Time9,
+      Time10: scan.Time10,
       allScans: scan.allScans,
       punches: scan.punches,
       devicePunches: scan.devicePunches,
@@ -307,6 +315,10 @@ export const scanDataConverter = {
       Time4: data.Time4,
       Time5: data.Time5,
       Time6: data.Time6,
+      Time7: data.Time7,
+      Time8: data.Time8,
+      Time9: data.Time9,
+      Time10: data.Time10,
       allScans: data.allScans,
       punches: data.punches || [],
       devicePunches: data.devicePunches || data.punches || [],
