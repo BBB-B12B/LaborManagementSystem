@@ -23,6 +23,8 @@ import {
 export { projectSync } from './labor-projectSync';
 // dailyContractorSync: one-way sync Labor WH workers -> After Sale `dailyContractors`.
 export { dailyContractorSync } from './labor-dailyContractorSync';
+// dailyContractorReconcile: daily self-heal backstop for dailyContractorSync.
+export { dailyContractorReconcile } from './labor-dailyContractorReconcile';
 
 // ─── Initialize Firebase Admin — Labor Management (default) ─────────────────
 if (!admin.apps.length) {

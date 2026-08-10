@@ -27,6 +27,14 @@
 //         firebase deploy --only functions:dailyContractorSync
 //
 //  Region note: Labor DB = Singapore (asia-southeast1). The trigger runs there.
+//
+//  RELIABILITY: a failed write to After Sale throws (does not swallow the
+//  error) so Cloud Functions marks the execution failed and retries it —
+//  enable "Retry on failure" for this function in the GCP Console (or
+//  `gcloud functions deploy dailyContractorSync --retry`) for that to take
+//  effect; the firebase-tools CLI has no flag for it. Retry only covers a
+//  bounded window though — `dailyContractorReconcile` (scheduled, runs
+//  daily) is the actual backstop that heals any gap this leaves behind.
 // ============================================================================
 
 import * as functions from 'firebase-functions/v1';
@@ -75,6 +83,7 @@ export const dailyContractorSync = functions
           console.log(`[dailyContractorSync] ✅ Deleted worker ${contractorId} in After Sale (Labor delete).`);
         } catch (err) {
           console.error(`[dailyContractorSync] ❌ Delete failed for ${contractorId}:`, err);
+          throw err; // rethrow so Cloud Functions marks this execution failed and retries it
         }
       }
       return;
@@ -88,6 +97,7 @@ export const dailyContractorSync = functions
           console.log(`[dailyContractorSync] ✅ Removed ${contractorId} from After Sale (department changed ${before.department} -> ${after.department}).`);
         } catch (err) {
           console.error(`[dailyContractorSync] ❌ Cleanup delete failed for ${contractorId}:`, err);
+          throw err;
         }
       }
       return;
@@ -111,5 +121,6 @@ export const dailyContractorSync = functions
       console.log(`[dailyContractorSync] ✅ Synced worker ${contractorId} (${payload.name}) Labor -> After Sale.`);
     } catch (err) {
       console.error(`[dailyContractorSync] ❌ Sync failed for ${contractorId}:`, err);
+      throw err; // rethrow so Cloud Functions marks this execution failed and retries it
     }
   });
