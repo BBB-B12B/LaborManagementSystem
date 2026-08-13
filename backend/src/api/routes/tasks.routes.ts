@@ -10,6 +10,7 @@ import { afterSaleDb } from '../../config/firebaseProjectB';
 import multer from 'multer';
 import { parseWbsExcel } from '../../utils/wbsParser';
 import * as ExcelJS from 'exceljs';
+import { renderDailyReportPdf } from '../../services/pdf/dailyReportPdf';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -1106,6 +1107,8 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
               id: doc.id,
               taskId,
               taskName: taskData.taskName,
+              categoryId: taskData.categoryId || parts[3] || null,
+              categoryName: taskData.categoryName || null,
               projectId: taskData.projectId,
               projectName: taskData.projectName,
               workOrderCode: taskData.workOrderCode,
@@ -1206,6 +1209,8 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
         taskId: `${parts[1]}__${parts[3]}__${parts[5]}`,
         subtaskId,
         taskName,
+        categoryId: taskMeta.categoryId,
+        categoryName: taskMeta.categoryName,
         dueDate,
         createdBy: reporterName,
         projectId: taskMeta.projectId,
@@ -1219,6 +1224,197 @@ router.get('/reports-all', async (req: Request, res: Response, next: NextFunctio
       success: true,
       data: allReports,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// [T-058] Shared builder for the PDF-ready daily report (consumed by the GET doc
+// endpoint + the POST pdf endpoint). Units reported on the target date (draft +
+// submitted), grouped by categoryName, each with %วันนี้ (diff vs the previous report),
+// %สะสม (stored progress), note, and photos[] carrying an auto-caption (taskName + progress).
+async function buildDailyReportDoc(
+  projectId: string,
+  date: string
+): Promise<{ projectId: string; date: string; groups: any[] }> {
+    const targetDateStr = String(date); // 'YYYY-MM-DD' — matches dailyReports doc id
+    const endOfTarget = new Date(targetDateStr);
+    endOfTarget.setHours(23, 59, 59, 999);
+
+    const afterSaleWoIds = await getAfterSaleWorkOrderIds();
+
+    // All reports for this project up to & including the target date
+    // (prior reports are needed to diff %วันนี้). Reuses the (projectId, reportDate)
+    // composite index that reports-all already relies on.
+    const snapshot = await afterSaleDb.collectionGroup('dailyReports')
+      .where('projectId', '==', String(projectId))
+      .where('reportDate', '<=', endOfTarget)
+      .get();
+
+    // Group every report by its reporting unit (task, or subtask when present),
+    // and collect unique parent-task refs for the categoryName join.
+    const repsByUnit = new Map<string, any[]>();
+    const uniqueTaskPaths = new Set<string>();
+    const taskRefs: FirebaseFirestore.DocumentReference[] = [];
+
+    snapshot.docs.forEach((doc: any) => {
+      const parts = doc.ref.path.split('/');
+      let taskId = '';
+      let subtaskId = '';
+      if (parts.length === 10) {
+        taskId = parts[5];
+      } else if (parts.length === 12) {
+        taskId = parts[5];
+        subtaskId = parts[7];
+      } else {
+        return;
+      }
+      if (afterSaleWoIds.has(parts[1])) return; // exclude After-Sale-owned work
+
+      const taskPath = `workOrders/${parts[1]}/categories/${parts[3]}/tasks/${taskId}`;
+      if (!uniqueTaskPaths.has(taskPath)) {
+        uniqueTaskPaths.add(taskPath);
+        taskRefs.push(afterSaleDb.doc(taskPath));
+      }
+      const unitKey = subtaskId ? `${taskPath}/subtasks/${subtaskId}` : taskPath;
+      if (!repsByUnit.has(unitKey)) repsByUnit.set(unitKey, []);
+      repsByUnit.get(unitKey)!.push({ dateStr: doc.id, data: doc.data(), taskId, subtaskId });
+    });
+
+    // Join parent tasks → taskName + categoryName
+    const tasksMap = new Map<string, any>();
+    if (taskRefs.length > 0) {
+      const docs = await afterSaleDb.getAll(...taskRefs);
+      docs.forEach((doc: any) => {
+        if (!doc.exists) return;
+        const parts = doc.ref.path.split('/');
+        const d = doc.data() || {};
+        tasksMap.set(parts[5], {
+          taskName: d.taskName,
+          categoryId: d.categoryId || parts[3] || null,
+          categoryName: d.categoryName || null,
+        });
+      });
+    }
+
+    // Join subtasks → subtaskName
+    const subtaskRefs: FirebaseFirestore.DocumentReference[] = [];
+    repsByUnit.forEach((_reps, key) => {
+      if (key.includes('/subtasks/')) subtaskRefs.push(afterSaleDb.doc(key));
+    });
+    const subtasksMap = new Map<string, any>();
+    if (subtaskRefs.length > 0) {
+      const docs = await afterSaleDb.getAll(...subtaskRefs);
+      docs.forEach((doc: any) => { if (doc.exists) subtasksMap.set(doc.id, doc.data() || {}); });
+    }
+
+    // Flatten the doc's photos object (site[] + labor[] + laborByShift.*[]) → URL list
+    const flattenPhotos = (photos: any): string[] => {
+      if (!photos) return [];
+      const out: string[] = [];
+      const pushArr = (a: any) => { if (Array.isArray(a)) a.forEach((u) => { if (typeof u === 'string') out.push(u); }); };
+      pushArr(photos.site);
+      pushArr(photos.labor);
+      if (photos.laborByShift && typeof photos.laborByShift === 'object') {
+        Object.values(photos.laborByShift).forEach(pushArr);
+      }
+      return out;
+    };
+
+    // Build the entries reported ON the target date, computing %วันนี้ from the prior report.
+    const entries: any[] = [];
+    repsByUnit.forEach((reps, unitKey) => {
+      reps.sort((a, b) => (a.dateStr < b.dateStr ? -1 : a.dateStr > b.dateStr ? 1 : 0));
+      const idx = reps.findIndex((r) => r.dateStr === targetDateStr);
+      if (idx === -1) return; // nothing reported that day for this unit
+      const cur = reps[idx];
+      const prevProgress = idx > 0 ? Number(reps[idx - 1].data.progress || 0) : 0;
+      const cumulative = Number(cur.data.progress || 0);
+      const today = Math.max(0, cumulative - prevProgress);
+
+      const meta = tasksMap.get(cur.taskId) || {};
+      let taskName = meta.taskName || 'ไม่ระบุ';
+      if (cur.subtaskId) {
+        const s = subtasksMap.get(cur.subtaskId);
+        if (s?.subtaskName) taskName = `${meta.taskName} > ${s.subtaskName}`;
+      }
+      const caption = `${taskName} — ${cumulative}%`;
+      const photoUrls = flattenPhotos(cur.data.photos);
+
+      entries.push({
+        categoryId: meta.categoryId || null,
+        categoryName: meta.categoryName || 'ไม่ระบุหมวดงาน',
+        taskName,
+        todayProgress: today,          // %วันนี้
+        cumulativeProgress: cumulative, // %สะสม
+        note: cur.data.notes || '',
+        status: cur.data.status || null, // draft | submitted | ...
+        photos: photoUrls.map((url, i) => ({ id: `${unitKey}#${i}`, url, caption })),
+      });
+    });
+
+    // Group by categoryName (stable Thai sort) for both the table and the photo pages.
+    const groupsMap = new Map<string, any>();
+    entries.forEach((e) => {
+      if (!groupsMap.has(e.categoryName)) {
+        groupsMap.set(e.categoryName, { categoryName: e.categoryName, categoryId: e.categoryId, entries: [] });
+      }
+      groupsMap.get(e.categoryName).entries.push(e);
+    });
+    const groups = Array.from(groupsMap.values())
+      .sort((a, b) => String(a.categoryName).localeCompare(String(b.categoryName), 'th'));
+
+    return { projectId: String(projectId), date: targetDateStr, groups };
+}
+
+// GET /api/tasks/daily-report-doc?projectId=&date=YYYY-MM-DD
+// Feeds the "ออกเอกสาร" photo-select UI.
+router.get('/daily-report-doc', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.query;
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const data = await buildDailyReportDoc(String(projectId), String(date));
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/daily-report-pdf   body: { projectId, date, selectedPhotoIds? }
+// [T-058] Self-contained PDF (option B — no dependency on the old qc system).
+// Rebuilds the report server-side, filters photos to the user's selection when
+// provided (the work-details table stays complete), renders via puppeteer, streams PDF.
+router.post('/daily-report-pdf', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date, selectedPhotoIds } = req.body || {};
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const data = await buildDailyReportDoc(String(projectId), String(date));
+
+    // Filter photos to the selection (when provided); keep all entries so the
+    // work-details table still lists every task reported that day.
+    let groups = data.groups;
+    if (Array.isArray(selectedPhotoIds)) {
+      const keep = new Set(selectedPhotoIds.map((x: any) => String(x)));
+      groups = data.groups.map((g: any) => ({
+        ...g,
+        entries: g.entries.map((e: any) => ({
+          ...e,
+          photos: e.photos.filter((p: any) => keep.has(p.id)),
+        })),
+      }));
+    }
+
+    const pdf = await renderDailyReportPdf({ projectId: data.projectId, date: data.date, groups });
+    const fileName = `daily-report_${data.projectId}_${data.date}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.status(200).send(pdf);
   } catch (error) {
     next(error);
   }

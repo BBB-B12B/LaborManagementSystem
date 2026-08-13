@@ -11,6 +11,7 @@ import {
   ViewKanban as ViewKanbanIcon,
   MoreHoriz as MoreHorizIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
+  PictureAsPdf as PictureAsPdfIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
@@ -56,6 +57,12 @@ export const Navbar: React.FC = () => {
       path: '/daily-reports',
       icon: <DescriptionIcon />,
       roles: ['SE', 'FM', 'LD', 'AM'],
+    },
+    {
+      label: 'ออกเอกสาร',
+      path: '/export-documents',
+      icon: <PictureAsPdfIcon />,
+      roles: ['AM', 'LD'],
     },
     {
       label: t('nav.management', 'การจัดการ'),

@@ -9,13 +9,24 @@ FROM node:20-alpine AS development
 # Set working directory
 WORKDIR /app
 
-# Install dependencies for building native modules and utilities
+# Install build deps + Chromium for puppeteer PDF generation (T-058).
+# Alpine (musl) can't run puppeteer's downloaded (glibc) Chromium, so use the apk
+# one and skip the download. font-noto-thai gives correct Thai rendering in the PDF.
 RUN apk add --no-cache \
     python3 \
     make \
     g++ \
     libc6-compat \
-    curl
+    curl \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-thai
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Copy package files
 COPY package*.json ./
@@ -52,6 +63,9 @@ RUN apk add --no-cache \
     make \
     g++ \
     libc6-compat
+# Skip puppeteer's Chromium download in the builder (musl can't run it; the
+# production stage installs apk chromium). T-058.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 
 # Copy package files
 COPY package*.json ./
@@ -75,11 +89,20 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install runtime dependencies only
+# Install runtime deps + Chromium for puppeteer PDF generation (T-058).
 RUN apk add --no-cache \
     libc6-compat \
     curl \
-    tini
+    tini \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-thai
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
