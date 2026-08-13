@@ -11,6 +11,12 @@ import multer from 'multer';
 import { parseWbsExcel } from '../../utils/wbsParser';
 import * as ExcelJS from 'exceljs';
 import { renderDailyReportPdf } from '../../services/pdf/dailyReportPdf';
+import {
+  uploadDailyReportPdf,
+  upsertDailyReportRecord,
+  getSavedDailyReport,
+  getStoredPdf,
+} from '../../services/pdf/dailyReportStore';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -1412,9 +1418,71 @@ router.post('/daily-report-pdf', async (req: Request, res: Response, next: NextF
 
     const pdf = await renderDailyReportPdf({ projectId: data.projectId, date: data.date, groups });
     const fileName = `daily-report_${data.projectId}_${data.date}.pdf`;
+
+    // [T-060] Best-effort persist: store the file in LMS Storage + upsert the
+    // Firestore record so this day can be reopened later (preselect the saved
+    // photos + download the original without regenerating). A storage/db hiccup
+    // must NEVER block the user's download, so this is wrapped and swallowed.
+    try {
+      const authReq = req as AuthRequest;
+      const createdBy = authReq.user?.uid || authReq.user?.id || 'unknown';
+      const createdByName = authReq.user?.name || null;
+      const pdfPath = await uploadDailyReportPdf(pdf, data.projectId, data.date);
+      await upsertDailyReportRecord({
+        projectId: data.projectId,
+        date: data.date,
+        selectedPhotoIds: Array.isArray(selectedPhotoIds) ? selectedPhotoIds.map(String) : [],
+        pdfPath,
+        createdBy,
+        createdByName,
+      });
+    } catch (persistErr) {
+      console.error('[T-060] daily-report persist failed (non-fatal):', persistErr);
+    }
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.status(200).send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/daily-report-saved?projectId&date
+// [T-060] Returns the saved record for a project+date (or null) so the UI can
+// preselect the previously-chosen photos + show the "download original" button.
+router.get('/daily-report-saved', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.query;
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const record = await getSavedDailyReport(String(projectId), String(date));
+    res.status(200).json({ success: true, data: record });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/daily-report-file?projectId&date
+// [T-060] Streams the exact stored PDF (no regeneration) — the "download original"
+// action. 404 when nothing was saved for that date.
+router.get('/daily-report-file', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.query;
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const stored = await getStoredPdf(String(projectId), String(date));
+    if (!stored) {
+      res.status(404).json({ success: false, error: 'No saved file for this date' });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${stored.fileName}"`);
+    res.status(200).send(stored.buffer);
   } catch (error) {
     next(error);
   }

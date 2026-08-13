@@ -16,9 +16,18 @@ import {
   Chip,
   Divider,
   Alert,
+  Dialog,
+  DialogContent,
+  DialogActions,
+  IconButton,
 } from '@mui/material';
-import { PictureAsPdf as PictureAsPdfIcon } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import {
+  PictureAsPdf as PictureAsPdfIcon,
+  Download as DownloadIcon,
+  CheckCircle as CheckCircleIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toZonedTime } from 'date-fns-tz';
 import { format } from 'date-fns';
 
@@ -32,6 +41,7 @@ import {
   exportDocumentService,
   type ExportDailyReportDoc,
   type ExportPhoto,
+  type SavedDailyReport,
 } from '@/services/exportDocumentService';
 
 const BANGKOK_TZ = 'Asia/Bangkok';
@@ -45,6 +55,7 @@ function toDateKey(d: Date | null): string {
 function ExportDocumentsContent() {
   const { user } = useAuthStore();
   const { success: showSuccess, error: showError } = useToast();
+  const queryClient = useQueryClient();
 
   const projectCodes = useMemo(() => user?.projectLocationIds ?? [], [user]);
   const lockedProject = projectCodes.length === 1 ? projectCodes[0] : '';
@@ -52,7 +63,10 @@ function ExportDocumentsContent() {
   const [projectId, setProjectId] = useState<string>(lockedProject);
   const [date, setDate] = useState<Date | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Keep the locked project applied once the user record resolves.
   useEffect(() => {
@@ -72,16 +86,37 @@ function ExportDocumentsContent() {
     enabled: canQuery,
   });
 
+  // [T-060] The previously-saved record for this project+date (or null). Drives
+  // the preselect (remember which photos were chosen) + the "download original".
+  const { data: saved, isLoading: isSavedLoading } = useQuery<SavedDailyReport | null>({
+    queryKey: ['daily-report-saved', projectId, dateKey],
+    queryFn: () => exportDocumentService.getSaved(projectId, dateKey),
+    enabled: canQuery,
+  });
+
   // Flat list of every photo in the doc (grouping is kept for display below).
   const allPhotoIds = useMemo(() => {
     if (!doc) return [];
     return doc.groups.flatMap((g) => g.entries.flatMap((e) => e.photos.map((p) => p.id)));
   }, [doc]);
 
-  // Default: select every photo when a new day loads.
+  // [T-060] Preselect: if this day was saved before, restore that selection
+  // (dropping any photo ids that no longer exist in the doc); otherwise fall
+  // back to selecting every photo. Wait for the saved record to settle first so
+  // the checkboxes don't flash all-selected → saved-selection.
   useEffect(() => {
-    setSelectedIds(new Set(allPhotoIds));
-  }, [allPhotoIds]);
+    if (isSavedLoading) return;
+    if (allPhotoIds.length === 0) {
+      setSelectedIds(new Set());
+      return;
+    }
+    if (saved && Array.isArray(saved.selectedPhotoIds)) {
+      const available = new Set(allPhotoIds);
+      setSelectedIds(new Set(saved.selectedPhotoIds.filter((id) => available.has(id))));
+    } else {
+      setSelectedIds(new Set(allPhotoIds));
+    }
+  }, [allPhotoIds, saved, isSavedLoading]);
 
   const togglePhoto = (id: string) => {
     setSelectedIds((prev) => {
@@ -104,6 +139,48 @@ function ExportDocumentsContent() {
         dateKey,
         Array.from(selectedIds)
       );
+      // Show the freshly generated PDF in a preview dialog instead of
+      // downloading straight away — the user reviews it, then downloads from
+      // there. Revoke any previous preview blob first to avoid a memory leak.
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setPreviewOpen(true);
+      showSuccess('สร้าง PDF สำเร็จ');
+      // The generate call also persisted the record → refresh it so the
+      // "ดาวน์โหลดไฟล์เดิม" button appears without needing a page reload.
+      queryClient.invalidateQueries({ queryKey: ['daily-report-saved', projectId, dateKey] });
+    } catch (err: any) {
+      showError(err?.message || 'สร้าง PDF ไม่สำเร็จ');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Download the PDF shown in the preview dialog — reuses the already-generated
+  // blob (no second server call, no re-generate).
+  const handleDownloadFromPreview = () => {
+    if (!previewUrl) return;
+    const a = document.createElement('a');
+    a.href = previewUrl;
+    a.download = `daily-report_${projectId}_${dateKey}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const handleClosePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewOpen(false);
+  };
+
+  // [T-060] Download the exact file saved earlier — no regeneration.
+  const handleDownloadOriginal = async () => {
+    if (!canQuery) return;
+    setIsDownloading(true);
+    try {
+      const blob = await exportDocumentService.downloadOriginal(projectId, dateKey);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -112,11 +189,11 @@ function ExportDocumentsContent() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showSuccess('สร้าง PDF สำเร็จ');
+      showSuccess('ดาวน์โหลดไฟล์เดิมสำเร็จ');
     } catch (err: any) {
-      showError(err?.message || 'สร้าง PDF ไม่สำเร็จ');
+      showError(err?.message || 'ไม่พบไฟล์เดิม');
     } finally {
-      setIsGenerating(false);
+      setIsDownloading(false);
     }
   };
 
@@ -161,7 +238,18 @@ function ExportDocumentsContent() {
             <DatePicker label="เลือกวันที่ (ย้อนหลัง)" value={date} onChange={setDate} disableFuture />
           </Box>
 
-          <Box sx={{ flex: '0 0 auto' }}>
+          <Box sx={{ flex: '0 0 auto', display: 'flex', gap: 1.5 }}>
+            {saved?.hasFile && (
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                disabled={!canQuery || isDownloading}
+                onClick={handleDownloadOriginal}
+                sx={{ height: 42, px: 3, borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+              >
+                {isDownloading ? 'กำลังโหลด...' : 'ดาวน์โหลดไฟล์เดิม'}
+              </Button>
+            )}
             <Button
               variant="contained"
               startIcon={<PictureAsPdfIcon />}
@@ -228,15 +316,31 @@ function ExportDocumentsContent() {
                         key={p.id}
                         onClick={() => togglePhoto(p.id)}
                         sx={{
+                          position: 'relative',
                           cursor: 'pointer',
                           borderRadius: 2,
                           overflow: 'hidden',
-                          border: isSelected ? '3px solid #FF7F32' : '3px solid transparent',
+                          border: isSelected ? '3px solid #1976d2' : '3px solid transparent',
                           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                           opacity: isSelected ? 1 : 0.55,
                           transition: 'all 0.15s ease',
                         }}
                       >
+                        {isSelected && (
+                          <CheckCircleIcon
+                            sx={{
+                              position: 'absolute',
+                              top: 6,
+                              right: 6,
+                              zIndex: 1,
+                              fontSize: 24,
+                              color: '#1976d2',
+                              bgcolor: 'white',
+                              borderRadius: '50%',
+                              boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+                            }}
+                          />
+                        )}
                         <Box
                           sx={{
                             width: '100%',
@@ -270,6 +374,49 @@ function ExportDocumentsContent() {
           })}
         </Paper>
       )}
+      {/* [S2] Preview the generated PDF before downloading */}
+      <Dialog open={previewOpen} onClose={handleClosePreview} fullScreen>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            py: 1,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            ตัวอย่างเอกสาร
+          </Typography>
+          <IconButton onClick={handleClosePreview} size="small" aria-label="ปิด">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <Divider />
+        <DialogContent sx={{ p: 0, flex: 1 }}>
+          {previewUrl && (
+            <iframe
+              src={previewUrl}
+              title="ตัวอย่าง PDF"
+              style={{ width: '100%', height: '100%', border: 'none' }}
+            />
+          )}
+        </DialogContent>
+        <Divider />
+        <DialogActions sx={{ px: 2, py: 1.5 }}>
+          <Button onClick={handleClosePreview} sx={{ textTransform: 'none' }}>
+            ปิด
+          </Button>
+          <Button
+            onClick={handleDownloadFromPreview}
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            ดาวน์โหลด
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

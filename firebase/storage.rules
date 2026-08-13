@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// LMS Firebase Storage rules.
+// [T-060] The backend writes/reads daily-report PDFs via the Admin SDK, which
+// BYPASSES these rules entirely. Rules here only govern direct client access
+// (and the local Storage emulator). Daily-report PDFs are served back through
+// the authenticated backend endpoint (GET /api/tasks/daily-report-file), so we
+// do not need public read here — keep everything behind auth.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Daily-report PDFs: only signed-in users; the backend (Admin SDK) is exempt.
+    match /daily-reports/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false; // writes go through the backend Admin SDK only
+    }
+
+    // Everything else: authenticated read, no client writes by default.
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

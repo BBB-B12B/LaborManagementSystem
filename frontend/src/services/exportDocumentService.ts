@@ -42,6 +42,22 @@ export interface ExportDailyReportDoc {
   groups: ExportGroup[];
 }
 
+/**
+ * A previously-saved Daily Report (T-060). Returned by GET /daily-report-saved;
+ * null when the date has never been generated + saved.
+ */
+export interface SavedDailyReport {
+  projectId: string;
+  date: string; // YYYY-MM-DD
+  selectedPhotoIds: string[];
+  pdfPath: string;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  hasFile: boolean; // true when a stored PDF is available to download
+}
+
 export const exportDocumentService = {
   /**
    * Fetch the grouped daily-report document for a project + past date.
@@ -64,6 +80,26 @@ export const exportDocumentService = {
       { projectId, date, selectedPhotoIds },
       { responseType: 'blob' }
     );
+    return response.data as Blob;
+  },
+
+  /**
+   * Fetch the saved record for a project+date, or null when nothing is saved.
+   * Used to preselect the previously-chosen photos + decide whether to show the
+   * "ดาวน์โหลดไฟล์เดิม" button.
+   */
+  getSaved: (projectId: string, date: string): Promise<SavedDailyReport | null> =>
+    api.get<SavedDailyReport | null>('/tasks/daily-report-saved', { projectId, date }),
+
+  /**
+   * Download the exact stored PDF for a saved date — no regeneration.
+   * Uses the raw apiClient with responseType:'blob' (same reason as generatePdf).
+   */
+  downloadOriginal: async (projectId: string, date: string): Promise<Blob> => {
+    const response = await apiClient.get('/tasks/daily-report-file', {
+      params: { projectId, date },
+      responseType: 'blob',
+    });
     return response.data as Blob;
   },
 };

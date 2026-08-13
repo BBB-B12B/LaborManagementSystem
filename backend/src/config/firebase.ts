@@ -9,13 +9,18 @@ if (!admin.apps.length) {
   if (config.firebase.useEmulator) {
     process.env.FIRESTORE_EMULATOR_HOST = config.firebase.firestoreEmulatorHost;
     process.env.FIREBASE_AUTH_EMULATOR_HOST = config.firebase.authEmulatorHost;
+    // [T-060] route Storage to the emulator too so the backend can write the
+    // daily-report PDFs locally (dev has no LMS service-account credentials).
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = config.firebase.storageEmulatorHost;
 
     console.log('[firebase-admin] Setting up emulators:');
     console.log(`[firebase-admin] Firestore: ${config.firebase.firestoreEmulatorHost}`);
     console.log(`[firebase-admin] Auth: ${config.firebase.authEmulatorHost}`);
+    console.log(`[firebase-admin] Storage: ${config.firebase.storageEmulatorHost}`);
 
     admin.initializeApp({
       projectId: config.firebase.projectId,
+      storageBucket: config.firebase.storageBucket,
     });
   } else {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
@@ -27,6 +32,7 @@ if (!admin.apps.length) {
         ? admin.credential.cert(serviceAccount)
         : admin.credential.applicationDefault(),
       projectId: config.firebase.projectId,
+      storageBucket: config.firebase.storageBucket,
     });
 
     console.log('[firebase-admin] Initialized with production credentials');

@@ -51,6 +51,12 @@ export const config = {
     authDomain: process.env.FIREBASE_AUTH_DOMAIN,
     firestoreEmulatorHost: process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080',
     authEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099',
+    // [T-060] LMS Firebase Storage — where the daily-report PDFs live (LMS's own
+    // bucket, not After-Sale). storageEmulatorHost gives dev parity with the
+    // auth/firestore emulators so the backend can read/write files locally.
+    storageBucket:
+      process.env.FIREBASE_STORAGE_BUCKET || 'labor-management-system-33b06.firebasestorage.app',
+    storageEmulatorHost: process.env.FIREBASE_STORAGE_EMULATOR_HOST || 'localhost:9199',
     useEmulator: toBooleanFlag(
       process.env.FIREBASE_EMULATOR_ENABLED,
       nodeEnv === 'development' // เปิดใช้เมื่อ NODE_ENV = development
@@ -71,6 +77,7 @@ if (!config.firebase.useEmulator) {
   delete process.env.FIRESTORE_EMULATOR_HOST;
   delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
   delete process.env.FIREBASE_EMULATOR_HOST;
+  delete process.env.FIREBASE_STORAGE_EMULATOR_HOST; // [T-060] use real LMS Storage in prod
 }
 
 // Validate required environment variables
