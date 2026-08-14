@@ -11,6 +11,13 @@ import multer from 'multer';
 import { parseWbsExcel } from '../../utils/wbsParser';
 import * as ExcelJS from 'exceljs';
 import { renderDailyReportPdf } from '../../services/pdf/dailyReportPdf';
+import { renderDailyRequestPdf } from '../../services/pdf/dailyRequestPdf';
+import {
+  uploadDailyRequestPdf,
+  appendDailyRequestVersion,
+  getSavedDailyRequest,
+  getStoredDailyRequestPdf,
+} from '../../services/pdf/dailyRequestStore';
 import {
   uploadDailyReportPdf,
   upsertDailyReportRecord,
@@ -1443,6 +1450,259 @@ router.post('/daily-report-pdf', async (req: Request, res: Response, next: NextF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.status(200).send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ===========================================================================
+// [T-062] Daily Request document export — table-only PDF (no photos).
+// Source = the After-Sale `requests` collectionGroup (the daily-request data
+// users already log). Mirrors buildDailyReportDoc's task/subtask name-join, but
+// output is a FLAT numbered row list (not category-grouped) and carries no photos.
+// ===========================================================================
+
+// (shiftLabel removed in T-063 — the เวลา cell now shows a single period's range,
+//  built inline per period in buildDailyRequestDoc's period expansion below.)
+
+async function buildDailyRequestDoc(
+  projectId: string,
+  date: string
+): Promise<{ projectId: string; date: string; rows: any[] }> {
+  const targetDateStr = String(date); // 'YYYY-MM-DD' — matches requests doc id
+
+  const afterSaleWoIds = await getAfterSaleWorkOrderIds();
+
+  // requests are filtered by projectId; the day is the doc id (same convention as
+  // the workspace requests query) — no reportDate field to range on.
+  const snapshot = await afterSaleDb.collectionGroup('requests')
+    .where('projectId', '==', String(projectId))
+    .get();
+
+  // Collect the requests logged ON the target date + unique task refs for names.
+  const units: Array<{ taskId: string; subtaskId: string; data: any }> = [];
+  const uniqueTaskPaths = new Set<string>();
+  const taskRefs: FirebaseFirestore.DocumentReference[] = [];
+  const subtaskKeys = new Set<string>();
+
+  snapshot.docs.forEach((doc: any) => {
+    if (doc.id !== targetDateStr) return; // only the requested day
+    const parts = doc.ref.path.split('/');
+    let taskId = '';
+    let subtaskId = '';
+    if (parts.length === 10) {
+      taskId = parts[5];
+    } else if (parts.length === 12) {
+      taskId = parts[5];
+      subtaskId = parts[7];
+    } else {
+      return;
+    }
+    if (afterSaleWoIds.has(parts[1])) return; // exclude After-Sale-owned work
+
+    const taskPath = `workOrders/${parts[1]}/categories/${parts[3]}/tasks/${taskId}`;
+    if (!uniqueTaskPaths.has(taskPath)) {
+      uniqueTaskPaths.add(taskPath);
+      taskRefs.push(afterSaleDb.doc(taskPath));
+    }
+    if (subtaskId) subtaskKeys.add(`${taskPath}/subtasks/${subtaskId}`);
+    units.push({ taskId, subtaskId, data: doc.data() });
+  });
+
+  // Join parent tasks → taskName
+  const tasksMap = new Map<string, any>();
+  if (taskRefs.length > 0) {
+    const docs = await afterSaleDb.getAll(...taskRefs);
+    docs.forEach((doc: any) => {
+      if (!doc.exists) return;
+      const parts = doc.ref.path.split('/');
+      const d = doc.data() || {};
+      tasksMap.set(parts[5], { taskName: d.taskName });
+    });
+  }
+
+  // Join subtasks → subtaskName
+  const subtasksMap = new Map<string, any>();
+  if (subtaskKeys.size > 0) {
+    const refs = Array.from(subtaskKeys).map((k) => afterSaleDb.doc(k));
+    const docs = await afterSaleDb.getAll(...refs);
+    docs.forEach((doc: any) => { if (doc.exists) subtasksMap.set(doc.id, doc.data() || {}); });
+  }
+
+  // Split-by-period layout (T-063). Period display order: OT เช้า -> ปกติ ->
+  // OT เที่ยง -> OT เย็น. A period is "active" for a request when ANY worker has a
+  // time range for it (union across labor[]); the เวลา cell shows the first such
+  // worker's range. A request with no shiftTimes at all -> one "ไม่ระบุเวลา" row.
+  const PERIODS: Array<{ key: string; label: string; order: number }> = [
+    { key: 'otMorning', label: 'OT เช้า', order: 0 },
+    { key: 'day', label: 'งานปกติ', order: 1 },
+    { key: 'otNoon', label: 'OT เที่ยง', order: 2 },
+    { key: 'otEvening', label: 'OT เย็น', order: 3 },
+  ];
+
+  const rows: Array<{
+    detail: string;
+    area: string;
+    date: string;
+    time: string;
+    period: string;
+    periodLabel: string;
+    periodOrder: number;
+  }> = [];
+
+  units.forEach((u) => {
+    const meta = tasksMap.get(u.taskId) || {};
+    let detail = meta.taskName || 'ไม่ระบุ';
+    if (u.subtaskId) {
+      const s = subtasksMap.get(u.subtaskId);
+      if (s?.subtaskName) detail = `${meta.taskName} > ${s.subtaskName}`;
+    }
+    const workers = Array.isArray(u.data.labor) ? u.data.labor : [];
+    let added = 0;
+    for (const p of PERIODS) {
+      let range = '';
+      for (const w of workers) {
+        const r = w?.shiftTimes?.[p.key];
+        if (r) {
+          range = String(r);
+          break;
+        }
+      }
+      if (!range) continue;
+      rows.push({
+        detail,
+        area: '', // พื้นที่ — blank for now (no source field yet)
+        date: targetDateStr,
+        time: range,
+        period: p.key,
+        periodLabel: p.label,
+        periodOrder: p.order,
+      });
+      added += 1;
+    }
+    if (added === 0) {
+      rows.push({
+        detail,
+        area: '',
+        date: targetDateStr,
+        time: '-',
+        period: 'none',
+        periodLabel: 'ไม่ระบุเวลา',
+        periodOrder: 99,
+      });
+    }
+  });
+
+  // Group by period order, then Thai-sort by work detail within each period.
+  rows.sort(
+    (a, b) =>
+      a.periodOrder - b.periodOrder ||
+      String(a.detail).localeCompare(String(b.detail), 'th')
+  );
+
+  return { projectId: String(projectId), date: targetDateStr, rows };
+}
+
+// GET /api/tasks/daily-request-doc?projectId=&date=YYYY-MM-DD
+// Feeds the "ออกเอกสาร" Daily Request tab (preview + generate).
+router.get('/daily-request-doc', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.query;
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const data = await buildDailyRequestDoc(String(projectId), String(date));
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/tasks/daily-request-pdf   body: { projectId, date }
+// Rebuilds the request table server-side and streams a table-only PDF (no photos,
+// no persistence). Returns raw binary — NOT the {success,data} envelope.
+router.post('/daily-request-pdf', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.body || {};
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const data = await buildDailyRequestDoc(String(projectId), String(date));
+    const pdf = await renderDailyRequestPdf({ projectId: data.projectId, date: data.date, rows: data.rows });
+    const fileName = `daily-request_${data.projectId}_${data.date}.pdf`;
+
+    // [T-064] Best-effort persist AS A NEW VERSION (never overwrite): store the
+    // file under a versioned key + append it to the Firestore record. This keeps
+    // an immutable snapshot of every printed request even if the source data is
+    // later edited. A storage/db hiccup must NEVER block the download, so it is
+    // wrapped and swallowed (same policy as the Daily Report, T-060).
+    try {
+      const authReq = req as AuthRequest;
+      const createdBy = authReq.user?.uid || authReq.user?.id || 'unknown';
+      const createdByName = authReq.user?.name || null;
+      const { pdfPath, versionId } = await uploadDailyRequestPdf(pdf, data.projectId, data.date);
+      await appendDailyRequestVersion({
+        projectId: data.projectId,
+        date: data.date,
+        pdfPath,
+        versionId,
+        createdBy,
+        createdByName,
+      });
+    } catch (persistErr) {
+      console.error('[T-064] daily-request persist failed (non-fatal):', persistErr);
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.status(200).send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/daily-request-saved?projectId&date
+// [T-064] Returns the saved Daily Request record for a project+date (or null) so
+// the UI can show the "ดาวน์โหลดไฟล์เดิม" button + how many versions exist.
+router.get('/daily-request-saved', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.query;
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const record = await getSavedDailyRequest(String(projectId), String(date));
+    res.status(200).json({ success: true, data: record });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/daily-request-file?projectId&date[&versionId]
+// [T-064] Streams a stored Daily Request PDF (no regeneration) — the "download
+// original" action. Defaults to the LATEST version; pass versionId for an older
+// one. 404 when nothing was saved for that date.
+router.get('/daily-request-file', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date, versionId } = req.query;
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const stored = await getStoredDailyRequestPdf(
+      String(projectId),
+      String(date),
+      versionId ? String(versionId) : undefined
+    );
+    if (!stored) {
+      res.status(404).json({ success: false, error: 'No saved file for this date' });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${stored.fileName}"`);
+    res.status(200).send(stored.buffer);
   } catch (error) {
     next(error);
   }

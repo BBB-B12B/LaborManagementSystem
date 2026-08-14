@@ -20,6 +20,8 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   PictureAsPdf as PictureAsPdfIcon,
@@ -40,8 +42,10 @@ import { useAuthStore } from '@/store/authStore';
 import {
   exportDocumentService,
   type ExportDailyReportDoc,
+  type ExportDailyRequestDoc,
   type ExportPhoto,
   type SavedDailyReport,
+  type SavedDailyRequest,
 } from '@/services/exportDocumentService';
 
 const BANGKOK_TZ = 'Asia/Bangkok';
@@ -52,7 +56,7 @@ function toDateKey(d: Date | null): string {
   return format(toZonedTime(d, BANGKOK_TZ), 'yyyy-MM-dd');
 }
 
-function ExportDocumentsContent() {
+function DailyReportTab() {
   const { user } = useAuthStore();
   const { success: showSuccess, error: showError } = useToast();
   const queryClient = useQueryClient();
@@ -157,18 +161,6 @@ function ExportDocumentsContent() {
     }
   };
 
-  // Download the PDF shown in the preview dialog — reuses the already-generated
-  // blob (no second server call, no re-generate).
-  const handleDownloadFromPreview = () => {
-    if (!previewUrl) return;
-    const a = document.createElement('a');
-    a.href = previewUrl;
-    a.download = `daily-report_${projectId}_${dateKey}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
   const handleClosePreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
@@ -200,17 +192,7 @@ function ExportDocumentsContent() {
   const hasPhotos = allPhotoIds.length > 0;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: '#1a333c', mb: 0.5 }}>
-          ออกเอกสาร
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          สร้างรายงานประจำวัน (PDF) จากรูปและความคืบหน้าที่บันทึกไว้ในวันที่เลือก
-        </Typography>
-      </Box>
-
+    <Box>
       {/* Controls */}
       <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, border: '1px solid rgba(0,0,0,0.06)' }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: { xs: 'wrap', md: 'nowrap' }, alignItems: 'flex-end' }}>
@@ -402,21 +384,315 @@ function ExportDocumentsContent() {
             />
           )}
         </DialogContent>
-        <Divider />
-        <DialogActions sx={{ px: 2, py: 1.5 }}>
-          <Button onClick={handleClosePreview} sx={{ textTransform: 'none' }}>
-            ปิด
-          </Button>
-          <Button
-            onClick={handleDownloadFromPreview}
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            sx={{ textTransform: 'none', fontWeight: 700 }}
-          >
-            ดาวน์โหลด
-          </Button>
-        </DialogActions>
       </Dialog>
+    </Box>
+  );
+}
+
+/**
+ * Daily Request (T-062) — a table-only document (no photos). Data comes from the
+ * daily-request entries users already log. Mirrors DailyReportTab's project+date
+ * controls and PDF-preview flow, minus the photo selection + saved-file features.
+ */
+function DailyRequestTab() {
+  const { user } = useAuthStore();
+  const { success: showSuccess, error: showError } = useToast();
+
+  const projectCodes = useMemo(() => user?.projectLocationIds ?? [], [user]);
+  const lockedProject = projectCodes.length === 1 ? projectCodes[0] : '';
+
+  const [projectId, setProjectId] = useState<string>(lockedProject);
+  const [date, setDate] = useState<Date | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (lockedProject && !projectId) setProjectId(lockedProject);
+  }, [lockedProject, projectId]);
+
+  const dateKey = toDateKey(date);
+  const canQuery = Boolean(projectId && dateKey);
+
+  const { data: doc, isLoading, isError } = useQuery<ExportDailyRequestDoc>({
+    queryKey: ['daily-request-doc', projectId, dateKey],
+    queryFn: () => exportDocumentService.getDailyRequestDoc(projectId, dateKey),
+    enabled: canQuery,
+  });
+
+  // [T-064] The previously-saved record for this project+date (or null). Every
+  // generate keeps a new version; this drives the "ดาวน์โหลดไฟล์เดิม" button.
+  const { data: saved } = useQuery<SavedDailyRequest | null>({
+    queryKey: ['daily-request-saved', projectId, dateKey],
+    queryFn: () => exportDocumentService.getSavedRequest(projectId, dateKey),
+    enabled: canQuery,
+  });
+
+  const rows = doc?.rows ?? [];
+  const hasRows = rows.length > 0;
+
+  const handleGenerate = async () => {
+    if (!canQuery) return;
+    setIsGenerating(true);
+    try {
+      const blob = await exportDocumentService.generateRequestPdf(projectId, dateKey);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setPreviewOpen(true);
+      showSuccess('สร้าง PDF สำเร็จ');
+      // The generate call also persisted a new version → refresh the saved query
+      // so the "ดาวน์โหลดไฟล์เดิม" button appears without a page reload.
+      queryClient.invalidateQueries({ queryKey: ['daily-request-saved', projectId, dateKey] });
+    } catch (err: any) {
+      showError(err?.message || 'สร้าง PDF ไม่สำเร็จ');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // [T-064] Download the exact latest file saved earlier — no regeneration.
+  const handleDownloadOriginal = async () => {
+    if (!canQuery) return;
+    setIsDownloading(true);
+    try {
+      const blob = await exportDocumentService.downloadOriginalRequest(projectId, dateKey);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `daily-request_${projectId}_${dateKey}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showSuccess('ดาวน์โหลดไฟล์เดิมสำเร็จ');
+    } catch (err: any) {
+      showError(err?.message || 'ไม่พบไฟล์เดิม');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewOpen(false);
+  };
+
+  return (
+    <Box>
+      {/* Controls */}
+      <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, border: '1px solid rgba(0,0,0,0.06)' }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: { xs: 'wrap', md: 'nowrap' }, alignItems: 'flex-end' }}>
+          <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 260 } }}>
+            {lockedProject ? (
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  โครงการ
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                  {lockedProject}
+                </Typography>
+              </Box>
+            ) : (
+              <ProjectSelect
+                label="เลือกโครงการ"
+                value={projectId}
+                onChange={(v) => setProjectId(Array.isArray(v) ? (v[0] ?? '') : (v ?? ''))}
+                fullWidth
+              />
+            )}
+          </Box>
+
+          <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 220 } }}>
+            <DatePicker label="เลือกวันที่ (ย้อนหลัง)" value={date} onChange={setDate} disableFuture />
+          </Box>
+
+          <Box sx={{ flex: '0 0 auto', display: 'flex', gap: 1.5 }}>
+            {saved?.hasFile && (
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                disabled={!canQuery || isDownloading}
+                onClick={handleDownloadOriginal}
+                sx={{ height: 42, px: 3, borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+              >
+                {isDownloading ? 'กำลังโหลด...' : 'ดาวน์โหลดไฟล์เดิม'}
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<PictureAsPdfIcon />}
+              disabled={!canQuery || isGenerating || isLoading || !hasRows}
+              onClick={handleGenerate}
+              sx={{ height: 42, px: 3, borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+            >
+              {isGenerating ? 'กำลังสร้าง...' : 'สร้าง PDF'}
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* States */}
+      {!canQuery && <Alert severity="info">เลือกโครงการและวันที่เพื่อดูรายการแจ้งงาน</Alert>}
+      {canQuery && isLoading && <LoadingSpinner />}
+      {canQuery && isError && <Alert severity="error">โหลดข้อมูลไม่สำเร็จ</Alert>}
+      {canQuery && !isLoading && !isError && !hasRows && (
+        <Alert severity="info">ไม่มีข้อมูลการแจ้งงานในวันนี้</Alert>
+      )}
+
+      {/* Row preview (what the PDF will contain) */}
+      {hasRows && (
+        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: '1px solid rgba(0,0,0,0.06)' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+            รายการแจ้งงาน ({rows.length} รายการ)
+          </Typography>
+          <Box
+            component="table"
+            sx={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              '& th, & td': {
+                border: '1px solid rgba(0,0,0,0.12)',
+                p: 1,
+                fontSize: 14,
+                textAlign: 'left',
+                verticalAlign: 'top',
+              },
+              '& th': { bgcolor: 'rgba(0,0,0,0.04)', fontWeight: 700 },
+            }}
+          >
+            <Box component="thead">
+              <Box component="tr">
+                <Box component="th" sx={{ width: '8%' }}>รายการที่</Box>
+                <Box component="th" sx={{ width: '48%' }}>รายละเอียดงาน</Box>
+                <Box component="th" sx={{ width: '16%' }}>พื้นที่</Box>
+                <Box component="th" sx={{ width: '28%' }}>เวลา</Box>
+              </Box>
+            </Box>
+            <Box component="tbody">
+              {(() => {
+                // Mirror the PDF's split-by-period grouping (T-063): a section
+                // header row appears whenever the period label changes. Rows are
+                // pre-sorted by periodOrder then detail on the backend.
+                let lastLabel: string | null = null;
+                const out: JSX.Element[] = [];
+                rows.forEach((r, i) => {
+                  if (r.periodLabel && r.periodLabel !== lastLabel) {
+                    lastLabel = r.periodLabel;
+                    out.push(
+                      <Box component="tr" key={`h-${i}`}>
+                        <Box
+                          component="td"
+                          colSpan={4}
+                          sx={{ bgcolor: 'rgba(0,0,0,0.08)', fontWeight: 700 }}
+                        >
+                          {r.periodLabel}
+                        </Box>
+                      </Box>
+                    );
+                  }
+                  out.push(
+                    <Box component="tr" key={i}>
+                      <Box component="td">{i + 1}</Box>
+                      <Box component="td">{r.detail}</Box>
+                      <Box component="td">{r.area || ''}</Box>
+                      <Box component="td">{r.time}</Box>
+                    </Box>
+                  );
+                });
+                return out;
+              })()}
+            </Box>
+          </Box>
+        </Paper>
+      )}
+
+      {/* Preview the generated PDF before downloading */}
+      <Dialog open={previewOpen} onClose={handleClosePreview} fullScreen>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            py: 1,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            ตัวอย่างเอกสาร
+          </Typography>
+          <IconButton onClick={handleClosePreview} size="small" aria-label="ปิด">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <Divider />
+        <DialogContent sx={{ p: 0, flex: 1 }}>
+          {previewUrl && (
+            <iframe
+              src={previewUrl}
+              title="ตัวอย่าง PDF"
+              style={{ width: '100%', height: '100%', border: 'none' }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </Box>
+  );
+}
+
+/** Placeholder for document types that are scaffolded but not built yet. */
+function ComingSoonTab({ title }: { title: string }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 6,
+        borderRadius: 3,
+        border: '1px dashed rgba(0,0,0,0.15)',
+        textAlign: 'center',
+      }}
+    >
+      <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary', mb: 1 }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        อยู่ระหว่างพัฒนา — เร็ว ๆ นี้
+      </Typography>
+    </Paper>
+  );
+}
+
+function ExportDocumentsContent() {
+  const [tab, setTab] = useState(0);
+  return (
+    <Container maxWidth="lg" sx={{ py: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: '#1a333c', mb: 0.5 }}>
+          ออกเอกสาร
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          เลือกประเภทเอกสารที่ต้องการออก
+        </Typography>
+      </Box>
+
+      {/* Document-type tabs */}
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        sx={{ mb: 3, borderBottom: '1px solid rgba(0,0,0,0.08)' }}
+      >
+        <Tab label="Daily Report" sx={{ textTransform: 'none', fontWeight: 700 }} />
+        <Tab label="Daily Request" sx={{ textTransform: 'none', fontWeight: 700 }} />
+        <Tab label="Inspect" sx={{ textTransform: 'none', fontWeight: 700 }} />
+      </Tabs>
+
+      {tab === 0 && <DailyReportTab />}
+      {tab === 1 && <DailyRequestTab />}
+      {tab === 2 && <ComingSoonTab title="Inspect" />}
     </Container>
   );
 }
