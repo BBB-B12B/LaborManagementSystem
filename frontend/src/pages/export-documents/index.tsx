@@ -22,6 +22,9 @@ import {
   IconButton,
   Tabs,
   Tab,
+  TextField,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   PictureAsPdf as PictureAsPdfIcon,
@@ -46,6 +49,7 @@ import {
   type ExportPhoto,
   type SavedDailyReport,
   type SavedDailyRequest,
+  type DailyRequestHeaderConfig,
 } from '@/services/exportDocumentService';
 
 const BANGKOK_TZ = 'Asia/Bangkok';
@@ -416,6 +420,16 @@ function DailyRequestTab() {
   const dateKey = toDateKey(date);
   const canQuery = Boolean(projectId && dateKey);
 
+  // Daily Request is prepared 1 day in advance ("what we will do tomorrow"),
+  // so the calendar allows selecting up to tomorrow — and no further. Past days
+  // stay selectable. (Bangkok users → browser-local day, same basis disableFuture used.)
+  const maxRequestDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }, []);
+
   const { data: doc, isLoading, isError } = useQuery<ExportDailyRequestDoc>({
     queryKey: ['daily-request-doc', projectId, dateKey],
     queryFn: () => exportDocumentService.getDailyRequestDoc(projectId, dateKey),
@@ -507,7 +521,7 @@ function DailyRequestTab() {
           </Box>
 
           <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 220 } }}>
-            <DatePicker label="เลือกวันที่ (ย้อนหลัง)" value={date} onChange={setDate} disableFuture />
+            <DatePicker label="เลือกวันที่" value={date} onChange={setDate} maxDate={maxRequestDate} />
           </Box>
 
           <Box sx={{ flex: '0 0 auto', display: 'flex', gap: 1.5 }}>
@@ -643,6 +657,215 @@ function DailyRequestTab() {
   );
 }
 
+/**
+ * "ตั้งค่าเอกสาร" (T-069) — per-project Daily Request letterhead config.
+ * Select a project → edit logo / contractor / doc-number prefix → save. The
+ * project NAME is not entered here; it is read from the project record at render.
+ */
+function DocSettingsTab() {
+  const { user } = useAuthStore();
+  const { success: showSuccess, error: showError } = useToast();
+
+  const projectCodes = useMemo(() => user?.projectLocationIds ?? [], [user]);
+  const lockedProject = projectCodes.length === 1 ? projectCodes[0] : '';
+  const [projectId, setProjectId] = useState<string>(lockedProject);
+
+  useEffect(() => {
+    if (lockedProject && !projectId) setProjectId(lockedProject);
+  }, [lockedProject, projectId]);
+
+  const [contractorName, setContractorName] = useState('');
+  const [showContractor, setShowContractor] = useState(false);
+  const [docNumberPrefix, setDocNumberPrefix] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const {
+    data: config,
+    isLoading,
+    refetch,
+  } = useQuery<DailyRequestHeaderConfig>({
+    queryKey: ['daily-request-header-config', projectId],
+    queryFn: () => exportDocumentService.getHeaderConfig(projectId),
+    enabled: Boolean(projectId),
+  });
+
+  // Sync the form fields whenever a fresh config loads (project switch / refetch).
+  useEffect(() => {
+    if (config) {
+      setContractorName(config.contractorName ?? '');
+      setShowContractor(Boolean(config.showContractor));
+      setDocNumberPrefix(config.docNumberPrefix ?? '');
+    }
+  }, [config]);
+
+  const handleSave = async () => {
+    if (!projectId) return;
+    setIsSaving(true);
+    try {
+      await exportDocumentService.saveHeaderConfig(projectId, {
+        contractorName: contractorName.trim() || null,
+        showContractor,
+        docNumberPrefix: docNumberPrefix.trim() || null,
+      });
+      showSuccess('บันทึกการตั้งค่าเอกสารแล้ว');
+      refetch();
+    } catch {
+      showError('บันทึกไม่สำเร็จ');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLogoPick = () => fileInputRef.current?.click();
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file name
+    if (!file || !projectId) return;
+    setIsUploading(true);
+    try {
+      await exportDocumentService.uploadLogo(projectId, file);
+      showSuccess('อัปโหลดโลโก้แล้ว');
+      refetch();
+    } catch {
+      showError('อัปโหลดโลโก้ไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid rgba(0,0,0,0.08)' }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+        ตั้งค่าหัวเอกสาร Daily Request
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+        โลโก้ · ผู้รับจ้าง · เลขที่เอกสาร ของแต่ละโครงการ (ชื่อโครงการดึงจากข้อมูลโครงการอัตโนมัติ)
+      </Typography>
+
+      <Box sx={{ maxWidth: 420, mb: 3 }}>
+        {lockedProject ? (
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              โครงการ
+            </Typography>
+            <Typography variant="body1" sx={{ fontWeight: 700 }}>
+              {lockedProject}
+            </Typography>
+          </Box>
+        ) : (
+          <ProjectSelect
+            label="เลือกโครงการ"
+            value={projectId}
+            onChange={(v) => setProjectId(Array.isArray(v) ? (v[0] ?? '') : (v ?? ''))}
+            fullWidth
+          />
+        )}
+      </Box>
+
+      {!projectId ? (
+        <Alert severity="info">เลือกโครงการเพื่อตั้งค่าเอกสาร</Alert>
+      ) : isLoading ? (
+        <LoadingSpinner />
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 560 }}>
+          {/* Logo */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+              โลโก้โครงการ
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box
+                sx={{
+                  width: 120,
+                  height: 90,
+                  border: '1px solid rgba(0,0,0,0.15)',
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  bgcolor: '#fafafa',
+                }}
+              >
+                {config?.logoUrl ? (
+                  <img
+                    src={config.logoUrl}
+                    alt="logo"
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  />
+                ) : (
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    ยังไม่มีโลโก้
+                  </Typography>
+                )}
+              </Box>
+              <Button
+                variant="outlined"
+                onClick={handleLogoPick}
+                disabled={isUploading}
+                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+              >
+                {isUploading ? 'กำลังอัปโหลด...' : 'อัปโหลดโลโก้'}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={handleLogoChange}
+              />
+            </Box>
+          </Box>
+
+          {/* Contractor */}
+          <Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showContractor}
+                  onChange={(e) => setShowContractor(e.target.checked)}
+                />
+              }
+              label="แสดงบรรทัด ผู้รับจ้าง ในเอกสาร"
+            />
+            <TextField
+              label="ชื่อผู้รับจ้าง"
+              value={contractorName}
+              onChange={(e) => setContractorName(e.target.value)}
+              fullWidth
+              disabled={!showContractor}
+              sx={{ mt: 1 }}
+            />
+          </Box>
+
+          {/* Doc-number prefix */}
+          <TextField
+            label="เลขที่เอกสาร (คำนำหน้า)"
+            value={docNumberPrefix}
+            onChange={(e) => setDocNumberPrefix(e.target.value)}
+            fullWidth
+            helperText="ระบบพิมพ์เป็น <คำนำหน้า>/……… — เติมเลขที่วิ่งเองในเอกสาร"
+          />
+
+          <Box>
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={isSaving}
+              sx={{ height: 42, px: 4, borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+            >
+              {isSaving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+            </Button>
+          </Box>
+        </Box>
+      )}
+    </Paper>
+  );
+}
+
 /** Placeholder for document types that are scaffolded but not built yet. */
 function ComingSoonTab({ title }: { title: string }) {
   return (
@@ -688,11 +911,13 @@ function ExportDocumentsContent() {
         <Tab label="Daily Report" sx={{ textTransform: 'none', fontWeight: 700 }} />
         <Tab label="Daily Request" sx={{ textTransform: 'none', fontWeight: 700 }} />
         <Tab label="Inspect" sx={{ textTransform: 'none', fontWeight: 700 }} />
+        <Tab label="ตั้งค่าเอกสาร" sx={{ textTransform: 'none', fontWeight: 700 }} />
       </Tabs>
 
       {tab === 0 && <DailyReportTab />}
       {tab === 1 && <DailyRequestTab />}
       {tab === 2 && <ComingSoonTab title="Inspect" />}
+      {tab === 3 && <DocSettingsTab />}
     </Container>
   );
 }
