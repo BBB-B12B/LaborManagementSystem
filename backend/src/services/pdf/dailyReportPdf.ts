@@ -42,14 +42,21 @@ export interface DailyReportGroup {
   entries: DailyReportEntry[];
 }
 
+export interface DailyReportHeader {
+  logoDataUri?: string | null; // base64 data URI, embedded server-side (no network fetch)
+  projectTitle?: string | null; // falls back to projectName / projectId
+  docNumberPrefix?: string | null; // Daily REPORT running-number prefix ("เลขที่ <prefix>/…")
+  contractorName?: string | null;
+  showContractor?: boolean;
+}
+
 export interface DailyReportDoc {
   projectId: string;
   projectName?: string;
   date: string; // YYYY-MM-DD
   groups: DailyReportGroup[];
+  header?: DailyReportHeader;
 }
-
-const PHOTOS_PER_PAGE = 6; // 2 cols x 3 rows
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -102,28 +109,45 @@ async function toDataUri(url: string): Promise<string | null> {
 function inlineCSS(): string {
   return `
     <style>
-      @page { size: A4; margin: 10mm; }
+      @page { size: A4; margin: 7.5mm; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
         font-family: 'Sarabun', 'TH Sarabun New', 'Tahoma', sans-serif;
         font-size: 12px; line-height: 1.3; color: #000; background: white;
       }
       .page {
-        width: 210mm; min-height: 277mm; margin: 0 auto; background: white;
+        /* @page reserves 7.5mm margins on A4 (210×297) → printable area is
+           195×282mm, and the box is exactly that (no padding → content is a
+           full 195mm wide). The old 210mm width was the FULL sheet width, so
+           with 10mm margins the right 20mm of every page spilled onto an extra
+           sheet. Matches dailyRequestPdf's geometry. */
+        width: 195mm; min-height: 282mm; margin: 0 auto; background: white;
         display: flex; flex-direction: column; position: relative;
       }
       .page-break { page-break-after: always; }
 
-      /* Report header */
-      .doc-title { text-align: center; margin-bottom: 10px; }
-      .doc-title h1 { font-size: 18px; font-weight: bold; }
-      .doc-title .sub { font-size: 13px; margin-top: 2px; }
+      /* Report header (letterhead) — logo left, centered โครงการ + title, and
+         เลขที่/วันที่/Duration on the right (matches the ESCENT HATYAI paper form).
+         No logo → the row collapses and the title rises. */
+      /* No rule under the letterhead (user call, 2026-08-18): the document reads
+         cleaner with whitespace doing the separating. Spacing kept so the header
+         does not crowd the table. */
+      .doc-header { padding-bottom: 8px; margin-bottom: 10px; }
+      .dh-logo img { max-width: 200px; max-height: 60px; object-fit: contain; display: block; }
+      .dh-title { text-align: center; padding: 0 10px; margin-top: 4px; }
+      .dh-title .project { font-size: 16px; font-weight: bold; }
+      .dh-title .subtitle { font-size: 15px; font-weight: bold; margin-top: 6px; }
+      .dh-bottom { display: flex; align-items: flex-start; margin-top: 8px; }
+      .dh-contractor { font-size: 13px; }
+      .dh-meta { margin-left: auto; text-align: right; font-size: 13px; }
+      .dh-meta div { margin-bottom: 2px; }
 
       /* Work-details table */
       .work-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
       .work-table th, .work-table td {
         border: 1px solid #000; padding: 4px 6px; font-size: 12px; vertical-align: top;
       }
+
       .work-table th { background: #e8e8e8; text-align: center; font-weight: bold; }
       .work-table td.center { text-align: center; }
       .work-table tr.cat-row td {
@@ -136,18 +160,91 @@ function inlineCSS(): string {
       .col-cumu  { width: 10%; text-align: center; }
       .col-note  { width: 22%; }
 
-      /* Photo pages (ported qc 2x3 grid) */
-      .photo-page-title { font-size: 14px; font-weight: bold; margin-bottom: 6px; }
-      .photo-page-sub { font-size: 12px; margin-bottom: 8px; color: #333; }
-      .photos-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        grid-template-rows: repeat(3, 1fr);
-        gap: 10px 12px; margin-top: 6px; flex-grow: 1; min-height: 0;
+      /* Signature footer (ช่องเซ็นท้ายตารางงาน) — static blank fields to sign by
+         hand, no data source. margin-top:auto sinks the block to the bottom of
+         the flex .page when the work table is short; on a table that overflows
+         the sheet the block simply follows the table (break-inside keeps it
+         whole instead of splitting across the page edge). */
+      .rsign-table {
+        width: 100%; border-collapse: collapse; margin-top: auto;
+        page-break-inside: avoid; break-inside: avoid;
+      }
+      .rsign-table th, .rsign-table td { border: 1px solid #000; }
+      /* Thicker rule separating the block from the work table above. Declared
+         after the shared border rule (same specificity) so it wins without
+         !important. */
+      .rsign-table th { border-top-width: 2px; }
+      .rsign-head { text-align: center; font-weight: bold; font-size: 13px; padding: 4px 6px; }
+      .rsign-cell {
+        width: 33.33%; padding: 16px 16px 8px; text-align: center; vertical-align: top;
+      }
+      /* Dotted line to sign on, then the printed-name parens centered under it. */
+      .rsign-sign { border-bottom: 1px dotted #000; height: 24px; margin: 0 14px; }
+      .rsign-paren { display: flex; justify-content: center; align-items: center; margin: 5px 14px 0; }
+      .rsign-paren .rsign-pdots {
+        flex: 0 1 150px; border-bottom: 1px dotted #000; height: 1em; margin: 0 2px;
+      }
+      .rsign-role { margin-top: 10px; }
+      /* "วันที่ ……" — the label must never wrap ("วัน"/"ที่" on two lines), so it
+         is a nowrap span and the dotted tail is what shrinks. */
+      .rsign-date { display: flex; justify-content: center; align-items: flex-end; margin-top: 10px; }
+      .rsign-date .rsign-dlbl { white-space: nowrap; }
+      .rsign-date .rsign-ddots {
+        flex: 0 1 110px; min-width: 60px; border-bottom: 1px dotted #000;
+        height: 1em; margin-left: 5px;
+      }
+
+      /* Photo pages — continuous flow across categories (save paper).
+         A divider line precedes each category; categories share pages but a
+         new category always starts on a new row. Fixed-height rows let @page
+         paginate naturally (~3 rows / 6 photos per A4 page). */
+      /* Same 195mm inner width as .page (the photo pages are body-level blocks,
+         not .page boxes — without this they stretch to the viewport on screen
+         and only happen to collapse to the printable width on paper). */
+      .photo-section { width: 195mm; margin: 0 auto; border-collapse: collapse; }
+      /* Repeating identifying header (T-075). The whole photo flow is ONE table,
+         and Chrome re-prints a <thead> at the top of every page the table spans —
+         so a photo page separated from the rest still names its project, date and
+         document number. Styled like the old one-off sub-line, not like a table
+         heading (left, normal weight, small grey). */
+      /* Deliberately NO bottom rule: a category that happens to start at the top
+         of a page would then print two horizontal lines a few px apart (this rule
+         plus .cat-divider's own border-top), and CSS cannot know that a row landed
+         at the top of a printed page. Spacing alone separates the header. */
+      .photo-head {
+        font-size: 12px; color: #333; text-align: left; font-weight: normal;
+        padding: 0 0 10px;
+      }
+      /* Small top pad = breathing room under the repeated header on EVERY page
+         (a first-child-only rule would leave pages 2+ touching the header rule). */
+      .photo-cell { padding: 6px 0 0; }
+      /* Break control belongs on the ROWS: inside a table Chrome applies
+         break-after/inside avoidance at row level, so the break-after declared
+         on .cat-divider itself would no longer stop a category header from being
+         orphaned at the foot of a page once the divider lives inside a cell. */
+      .photo-section tbody tr { break-inside: avoid; page-break-inside: avoid; }
+      .photo-section tbody tr.cat-row { break-after: avoid; page-break-after: avoid; }
+      /* No separator rule (user call, 2026-08-18) — the bold category name plus the
+         gap above it is enough, and a rule here could land right under the repeated
+         page header. break-after keeps the name from being orphaned at a page foot. */
+      .cat-divider {
+        font-size: 14px; font-weight: bold;
+        margin-top: 14px; margin-bottom: 6px;
+        break-inside: avoid; page-break-inside: avoid;
+        break-after: avoid; page-break-after: avoid;
+      }
+      /* First category in the flow needs no gap above it — it already sits below
+         the repeated header. Row-scoped: dividers live in table cells now. */
+      .photo-section tbody tr:first-child .cat-divider { margin-top: 0; }
+      .photo-row {
+        display: flex; gap: 10px 12px; margin-bottom: 10px;
+        break-inside: avoid; page-break-inside: avoid;
       }
       .photo-item {
+        flex: 0 0 calc(50% - 6px); max-width: calc(50% - 6px);
+        height: 76mm;
+        display: flex; flex-direction: column; overflow: hidden;
         break-inside: avoid; page-break-inside: avoid;
-        display: flex; flex-direction: column; min-height: 0; overflow: hidden;
       }
       .photo-wrapper {
         width: 100%; background: #f5f5f5; display: flex; align-items: center;
@@ -168,6 +265,66 @@ function inlineCSS(): string {
 }
 
 // ---- HTML builders ---------------------------------------------------------
+
+// Letterhead ported from the Daily Request PDF, adapted for the report: same logo/
+// project/เลขที่/วันที่ shape plus a Duration fill-in line. Degrades gracefully when
+// no header/config is supplied (no logo, title from projectName/projectId, blank เลขที่).
+function buildReportHeader(doc: DailyReportDoc): string {
+  const h = doc.header || {};
+  const projectTitle = h.projectTitle || doc.projectName || doc.projectId;
+  const logo = h.logoDataUri ? `<img src="${esc(h.logoDataUri)}" alt="logo" />` : '';
+  const docNo = `${esc(h.docNumberPrefix || '')}/……………`;
+  const contractorLine =
+    h.showContractor && h.contractorName
+      ? `<div class="dh-contractor">ผู้รับจ้าง : ${esc(h.contractorName)}</div>`
+      : '';
+  return `
+      <div class="doc-header">
+        <div class="dh-top">
+          <div class="dh-logo">${logo}</div>
+          <div class="dh-title">
+            <div class="project">โครงการ ${esc(projectTitle)}</div>
+            <div class="subtitle">รายงานประจำวัน (DAILY REPORT)</div>
+          </div>
+        </div>
+        <div class="dh-bottom">
+          ${contractorLine}
+          <div class="dh-meta">
+            <div>เลขที่ ${docNo}</div>
+            <div>วันที่ ${esc(fmtThaiDate(doc.date))}</div>
+            <div>Duration ………/………</div>
+          </div>
+        </div>
+      </div>`;
+}
+
+// Static signature block for the bottom of the work-table page — mirrors the
+// paper form: two ผู้บันทึก/รายงาน/ผู้รับจ้าง columns (Site Engineer then
+// Project Engineer) plus a รับทราบ/ผู้ควบคุมงาน column for the supervising
+// company. Blank fields only — nothing here is data-bound.
+function buildSignatureFooter(): string {
+  const cell = (role: string) => `
+          <td class="rsign-cell">
+            <div class="rsign-sign"></div>
+            <div class="rsign-paren">(<span class="rsign-pdots"></span>)</div>
+            <div class="rsign-role">${role}</div>
+            <div class="rsign-date"><span class="rsign-dlbl">วันที่</span><span class="rsign-ddots"></span></div>
+          </td>`;
+  return `
+      <table class="rsign-table">
+        <thead>
+          <tr>
+            <th class="rsign-head">ผู้บันทึก/รายงาน/ผู้รับจ้าง</th>
+            <th class="rsign-head">ผู้บันทึก/รายงาน/ผู้รับจ้าง</th>
+            <th class="rsign-head">รับทราบ / ผู้ควบคุมงาน</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>${cell('Site Engineer')}${cell('Project Engineer')}${cell('บริษัท')}
+          </tr>
+        </tbody>
+      </table>`;
+}
 
 function buildWorkTable(doc: DailyReportDoc): string {
   let rowNo = 0;
@@ -197,27 +354,26 @@ function buildWorkTable(doc: DailyReportDoc): string {
 
   return `
     <div class="page">
-      <div class="doc-title">
-        <h1>รายงานประจำวัน (Daily Report)</h1>
-        <div class="sub">${esc(doc.projectName || doc.projectId)} · วันที่ ${esc(
-    fmtThaiDate(doc.date)
-  )}</div>
-      </div>
+      ${buildReportHeader(doc)}
       <table class="work-table">
         <thead>
           <tr>
-            <th class="col-no">ลำดับ</th>
-            <th class="col-task">รายละเอียดงาน</th>
-            <th class="col-area">พื้นที่</th>
-            <th class="col-today">%วันนี้</th>
-            <th class="col-cumu">%สะสม</th>
-            <th class="col-note">หมายเหตุ</th>
+            <th class="col-no" rowspan="2">ลำดับ</th>
+            <th class="col-task" rowspan="2">รายละเอียดงาน</th>
+            <th class="col-area" rowspan="2">พื้นที่</th>
+            <th colspan="2">ดำเนินการได้</th>
+            <th class="col-note" rowspan="2">หมายเหตุ</th>
+          </tr>
+          <tr>
+            <th class="col-today">วันนี้</th>
+            <th class="col-cumu">สะสม</th>
           </tr>
         </thead>
         <tbody>
           ${bodyRows || '<tr><td colspan="6" class="center">ไม่มีข้อมูลงานในวันนี้</td></tr>'}
         </tbody>
       </table>
+      ${buildSignatureFooter()}
     </div>`;
 }
 
@@ -227,18 +383,39 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-// Photo pages, grouped by category (each category's photos paginate 6/page).
+// Photo section — photos flow continuously across categories to save paper.
+// A divider line precedes each category; categories share pages (vertical
+// continuation) but a new category always starts on a new row, so a photo is
+// never mixed with another category's photos in the same row. Fixed-height
+// rows let @page paginate the flow naturally instead of one page per category.
+//
+// The flow is a one-column TABLE (T-075) purely so its <thead> can carry the
+// identifying line (project · date · doc number): Chrome re-prints a thead at
+// the top of every page a table spans, so a photo page that gets separated from
+// the rest still says which day and document it belongs to. Each block is its
+// own <tr> — rows are where Chrome paginates a table, so the visual flow and the
+// 6-photos-per-page rhythm are unchanged.
 function buildPhotoPages(
   doc: DailyReportDoc,
   photoSrc: Map<string, string | null>
 ): string {
-  const pages: string[] = [];
+  const rows: string[] = [];
+  // Every block becomes its own <tr> (not one giant cell) — row boundaries are
+  // where Chrome paginates a table, so the flow keeps breaking exactly where the
+  // old sibling divs did.
+  const asRow = (inner: string, cls = '') =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td class="photo-cell">${inner}</td></tr>`;
   for (const g of doc.groups) {
     const photos = g.entries.flatMap((e) => e.photos);
     if (photos.length === 0) continue;
-    const pageChunks = chunk(photos, PHOTOS_PER_PAGE);
-    pageChunks.forEach((pagePhotos, pageIdx) => {
-      const cells = pagePhotos
+    rows.push(
+      asRow(
+        `<div class="cat-divider">หมวดงาน: ${esc(g.categoryName)}</div>`,
+        'cat-row'
+      )
+    );
+    for (const rowPhotos of chunk(photos, 2)) {
+      const cells = rowPhotos
         .map((p) => {
           const data = photoSrc.get(p.id);
           const img = data
@@ -251,19 +428,30 @@ function buildPhotoPages(
             </div>`;
         })
         .join('');
-      const suffix =
-        pageChunks.length > 1 ? ` (${pageIdx + 1}/${pageChunks.length})` : '';
-      pages.push(`
-        <div class="page">
-          <div class="photo-page-title">หมวดงาน: ${esc(g.categoryName)}${suffix}</div>
-          <div class="photo-page-sub">${esc(doc.projectName || doc.projectId)} · ${esc(
-        fmtThaiDate(doc.date)
-      )}</div>
-          <div class="photos-grid">${cells}</div>
-        </div>`);
-    });
+      rows.push(asRow(`<div class="photo-row">${cells}</div>`));
+    }
   }
-  return pages.join('\n<div class="page-break"></div>\n');
+  if (rows.length === 0) return '';
+  // Identifying one-liner, repeated on every photo page by the <thead> (T-075).
+  // Same three values the letterhead prints, nothing new plumbed in. The doc
+  // number is optional, so the whole segment drops rather than leaving a
+  // dangling "เลขที่ /……".
+  const h = doc.header || {};
+  const parts = [
+    `โครงการ ${esc(h.projectTitle || doc.projectName || doc.projectId)}`,
+    `วันที่ ${esc(fmtThaiDate(doc.date))}`,
+  ];
+  if (h.docNumberPrefix) {
+    parts.push(`เลขที่ ${esc(h.docNumberPrefix)}/……………`);
+  }
+  return `<table class="photo-section">
+      <thead>
+        <tr><th class="photo-head">${parts.join(' · ')}</th></tr>
+      </thead>
+      <tbody>
+${rows.join('\n')}
+      </tbody>
+    </table>`;
 }
 
 // ---- public API ------------------------------------------------------------

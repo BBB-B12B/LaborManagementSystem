@@ -26,11 +26,25 @@ export interface DailyRequestRow {
   periodOrder?: number; // display order within the doc (0..3, 99 = fallback)
 }
 
+/**
+ * Per-project letterhead values for the document header (T-069). All optional so
+ * the header degrades gracefully when a project has no saved config: no logo,
+ * projectName falls back to the id, no contractor line, blank เลขที่.
+ */
+export interface DailyRequestHeader {
+  logoDataUri?: string | null; // base64 data URI, embedded server-side (no network fetch)
+  projectTitle?: string | null; // "โครงการ <projectTitle>" — usually the Project doc name
+  contractorName?: string | null; // "ผู้รับจ้าง : <contractorName>"
+  showContractor?: boolean; // hide the contractor line entirely when false
+  docNumberPrefix?: string | null; // "เลขที่ <prefix>/………" — running number filled by hand
+}
+
 export interface DailyRequestDoc {
   projectId: string;
   projectName?: string;
   date: string; // YYYY-MM-DD — the report date
   rows: DailyRequestRow[];
+  header?: DailyRequestHeader;
 }
 
 // ---- helpers ---------------------------------------------------------------
@@ -62,26 +76,47 @@ function fmtThaiDate(isoDate: string): string {
 function inlineCSS(): string {
   return `
     <style>
-      @page { size: A4; margin: 10mm; }
+      @page { size: A4; margin: 7.5mm; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
         font-family: 'Sarabun', 'TH Sarabun New', 'Tahoma', sans-serif;
         font-size: 16px; line-height: 1.35; color: #000; background: white;
       }
       .page {
-        width: 210mm; min-height: 277mm; margin: 0 auto; background: white;
-        display: flex; flex-direction: column; position: relative;
+        /* @page reserves 7.5mm margins on A4 (210×297) → printable area is
+           195×282mm. Box fills that width, but 4mm side padding insets the
+           content so the outer table border isn't flush with the printable
+           edge (a flush 1.5px border gets clipped ~half → looks thinner than
+           the inner borders). box-sizing:border-box → content = 187mm. */
+        width: 195mm; min-height: 282mm; margin: 0 auto; padding: 0 4mm;
+        background: white; display: flex; flex-direction: column; position: relative;
       }
 
-      /* Document header */
-      .doc-title { text-align: center; margin-bottom: 10px; }
-      .doc-title h1 { font-size: 18px; font-weight: bold; }
-      .doc-title .sub { font-size: 15px; margin-top: 2px; }
+      /* Document header (letterhead) — matches the ESCENT HATYAI reference:
+         TOP band  = large logo (left, absolute) + centered project + subtitle
+         BOTTOM band = ผู้รับจ้าง (left) ↔ เลขที่/วันที่ (right) */
+      /* No rule under the letterhead (user call, 2026-08-18 — same change made to
+         the Daily Report so the two documents stay visually consistent): spacing
+         alone separates the header from the table. */
+      .doc-header {
+        padding-bottom: 8px; margin-bottom: 10px;
+      }
+      /* Logo on its own row (top, left-aligned); the title centres full-width
+         in the row BELOW it. No horizontal overlap, and the title stays
+         page-centred. No logo → the empty row collapses and the title rises. */
+      .dh-logo img { max-width: 240px; max-height: 66px; object-fit: contain; display: block; }
+      .dh-title { text-align: center; padding: 0 10px; margin-top: 6px; }
+      .dh-title .project { font-size: 18px; font-weight: bold; }
+      .dh-title .subtitle { font-size: 16px; font-weight: bold; margin-top: 8px; }
+      .dh-bottom { display: flex; align-items: flex-start; margin-top: 10px; }
+      .dh-contractor { font-size: 15px; }
+      .dh-meta { margin-left: auto; text-align: right; font-size: 15px; }
+      .dh-meta div { margin-bottom: 2px; }
 
       /* Request table */
       .req-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
       .req-table th, .req-table td {
-        border: 1px solid #000; padding: 6px 8px; font-size: 16px; vertical-align: top;
+        border: 1.5px solid #000; padding: 6px 8px; font-size: 16px; vertical-align: top;
       }
       .req-table th { background: #e8e8e8; text-align: center; font-weight: bold; }
       .req-table td.center { text-align: center; }
@@ -97,14 +132,27 @@ function inlineCSS(): string {
       /* Signature footer (approval block) — static form fields, no data source */
       .sign-table { width: 100%; border-collapse: collapse; margin-top: auto; }
       .sign-table td {
-        border: 1px solid #000; padding: 8px 12px; vertical-align: top; font-size: 16px;
+        border: 1.5px solid #000; padding: 8px 12px; vertical-align: top; font-size: 16px;
       }
       .sign-left  { width: 50%; height: 90px; }
       .sign-right { width: 50%; }
       .s-line { display: flex; align-items: flex-end; }
       .s-line .fill { flex: 1; border-bottom: 1px solid #000; margin-left: 6px; height: 1.1em; }
-      .s-paren   { text-align: center; padding-right: 40px; margin-top: 1px; }
-      .s-paren-c { text-align: center; padding-left: 40px; margin-top: 1px; }
+      /* Printed-name parens sit centered UNDER the signature line: reserve the
+         label's width (invisible) so the parens balance over the blank line, not
+         the whole cell. */
+      .s-paren   { display: flex; margin-top: 1px; }
+      .s-paren .s-lbl { visibility: hidden; white-space: nowrap; }
+      /* Parens span the full width of the signature line above: "(" sits at the
+         line start, ")" at the line end, matching the paper template. */
+      .s-paren .s-pc  { flex: 1; display: flex; align-items: center; margin-left: 6px; }
+      .s-paren .s-pc .p-gap { flex: 1; }
+      /* Right-side signature parens span the full width of the ลงชื่อ line
+         above — same technique as the left block, dotted to match this side. */
+      .s-paren-c { display: flex; margin-top: 1px; }
+      .s-paren-c .s-lbl { visibility: hidden; white-space: nowrap; }
+      .s-paren-c .s-pc  { flex: 1; display: flex; align-items: center; margin-left: 6px; }
+      .s-paren-c .s-pc .p-dot { flex: 1; border-bottom: 1px dotted #000; margin: 0 3px; height: 1em; }
       .s-pos     { margin-top: 5px; }
       .s-company { margin-top: 4px; }
       .s-date-l  { margin-top: 6px; }
@@ -115,7 +163,8 @@ function inlineCSS(): string {
         border: 1px solid #000; vertical-align: middle; margin-right: 6px;
       }
       .s-approve .chk2 { margin-left: 30px; }
-      .s-sign { margin-top: 6px; }
+      .s-sign { display: flex; align-items: flex-end; margin-top: 6px; }
+      .s-sign .d-fill { flex: 1; border-bottom: 1px dotted #000; margin-left: 6px; height: 1.1em; }
       .s-date { margin-top: 8px; }
     </style>
   `;
@@ -132,7 +181,7 @@ function buildSignatureFooter(): string {
         <tr>
           <td class="sign-left">
             <div class="s-line"><span>ผู้เสนอ :</span><span class="fill"></span></div>
-            <div class="s-paren">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+            <div class="s-paren"><span class="s-lbl">ผู้เสนอ :</span><span class="s-pc">(<span class="p-gap"></span>)</span></div>
             <div class="s-pos">ตำแหน่ง : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Site Engineer</div>
           </td>
           <td class="sign-right" rowspan="2">
@@ -141,8 +190,8 @@ function buildSignatureFooter(): string {
               <span class="chk"></span> เสนออนุมัติ
               <span class="chk chk2"></span> ไม่อนุมัติ
             </div>
-            <div class="s-sign">ลงชื่อ ................................................................</div>
-            <div class="s-paren-c">(................................................)</div>
+            <div class="s-sign"><span>ลงชื่อ</span><span class="d-fill"></span></div>
+            <div class="s-paren-c"><span class="s-lbl">ลงชื่อ</span><span class="s-pc">(<span class="p-dot"></span>)</span></div>
             <div class="s-company">บริษัท</div>
             <div class="s-date">วันที่__________________ &nbsp;&nbsp; เวลา__________________</div>
           </td>
@@ -150,13 +199,43 @@ function buildSignatureFooter(): string {
         <tr>
           <td class="sign-left">
             <div class="s-line"><span>ตรวจสอบ :</span><span class="fill"></span></div>
-            <div class="s-paren">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+            <div class="s-paren"><span class="s-lbl">ตรวจสอบ :</span><span class="s-pc">(<span class="p-gap"></span>)</span></div>
             <div class="s-pos">ตำแหน่ง : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Project Engineer</div>
             <div class="s-company">บริษัท</div>
             <div class="s-date-l">วันที่.........................................................</div>
           </td>
         </tr>
       </table>`;
+}
+
+function buildDocHeader(doc: DailyRequestDoc): string {
+  const h = doc.header || {};
+  const projectTitle = h.projectTitle || doc.projectName || doc.projectId;
+  const logo = h.logoDataUri
+    ? `<img src="${esc(h.logoDataUri)}" alt="logo" />`
+    : '';
+  const docNo = `${esc(h.docNumberPrefix || '')}/……………`;
+  const contractorLine =
+    h.showContractor && h.contractorName
+      ? `<div class="dh-contractor">ผู้รับจ้าง : ${esc(h.contractorName)}</div>`
+      : '';
+  return `
+      <div class="doc-header">
+        <div class="dh-top">
+          <div class="dh-logo">${logo}</div>
+          <div class="dh-title">
+            <div class="project">โครงการ ${esc(projectTitle)}</div>
+            <div class="subtitle">ใบแจ้งการดำเนินงานประจำวัน (Daily Request)</div>
+          </div>
+        </div>
+        <div class="dh-bottom">
+          ${contractorLine}
+          <div class="dh-meta">
+            <div>เลขที่ ${docNo}</div>
+            <div>วันที่ ${esc(fmtThaiDate(doc.date))}</div>
+          </div>
+        </div>
+      </div>`;
 }
 
 function buildRequestTable(doc: DailyRequestDoc): string {
@@ -186,12 +265,7 @@ function buildRequestTable(doc: DailyRequestDoc): string {
 
   return `
     <div class="page">
-      <div class="doc-title">
-        <h1>ใบแจ้งการดำเนินงานประจำวัน (Daily Request)</h1>
-        <div class="sub">${esc(doc.projectName || doc.projectId)} · วันที่ ${esc(
-    fmtThaiDate(doc.date)
-  )}</div>
-      </div>
+      ${buildDocHeader(doc)}
       <table class="req-table">
         <thead>
           <tr>
