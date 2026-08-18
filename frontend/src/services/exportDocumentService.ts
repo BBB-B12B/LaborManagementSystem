@@ -135,6 +135,54 @@ export type DailyRequestHeaderConfigPatch = {
   docNumberPrefixReport?: string | null;
 };
 
+// ---- Inspection topic config (T-076) ---------------------------------------
+// Ported from the qc-report-new inspection-report app's 3-level topic tree
+// (หมวดหลัก → หมวดย่อย → หัวข้อการตรวจ), stored one config document per project.
+// Same shape as the backend's InspectionTopicConfig
+// (backend/src/services/inspection/inspectionTopicConfig.ts) — kept identical
+// here so the settings UI can pass values straight through.
+
+/**
+ * A single dynamic field, attached to a SUB-CATEGORY only — asked once when a
+ * sub-category is picked (a form header's blanks, e.g. 'เสาเบอร์'), not per topic.
+ * The source app's dead `Topic.dynamicFields` is intentionally not ported; see the
+ * backend service's comment for the evidence.
+ */
+export interface InspectionFieldConfig {
+  label: string;
+  type?: 'text' | 'dropdown';
+  options?: string[];
+}
+
+/** หัวข้อการตรวจ — the leaf inspection topic (a checklist row; no fields of its own). */
+export interface InspectionTopic {
+  id: string;
+  name: string;
+}
+
+/** หมวดย่อย — a sub-category: holds the shared fields plus one or more topics. */
+export interface InspectionSubCategory {
+  id: string;
+  name: string;
+  fields: InspectionFieldConfig[];
+  topics: InspectionTopic[];
+}
+
+/** หมวดหลัก — the top-level category holding one or more sub-categories. */
+export interface InspectionMainCategory {
+  id: string;
+  name: string;
+  subCategories: InspectionSubCategory[];
+}
+
+/** The full per-project inspection-topic config. */
+export interface InspectionTopicConfig {
+  projectId: string;
+  mainCategories: InspectionMainCategory[];
+  updatedAt?: string; // ISO
+  updatedBy?: string | null;
+}
+
 export const exportDocumentService = {
   /**
    * Fetch the grouped daily-report document for a project + past date.
@@ -311,6 +359,29 @@ export const exportDocumentService = {
     formData.append('file', file);
     return api.upload<DailyRequestHeaderConfig>('/tasks/daily-request-logo', formData);
   },
+
+  // ---- Inspection topic config (T-076) ---------------------------------------
+
+  /**
+   * Fetch a project's inspection-topic config (the 3-level หมวดหลัก/หมวดย่อย/
+   * หัวข้อ tree). The backend always returns a config (empty tree when none is
+   * saved), same convention as getHeaderConfig.
+   */
+  getInspectionTopicConfig: (projectId: string): Promise<InspectionTopicConfig> =>
+    api.get<InspectionTopicConfig>('/tasks/inspection-topic-config', { projectId }),
+
+  /**
+   * Save (merge-upsert) a project's inspection-topic tree. The whole tree is
+   * sent — the settings UI edits it as a whole. Returns the updated config.
+   */
+  saveInspectionTopicConfig: (
+    projectId: string,
+    mainCategories: InspectionMainCategory[]
+  ): Promise<InspectionTopicConfig> =>
+    api.put<InspectionTopicConfig>('/tasks/inspection-topic-config', {
+      projectId,
+      mainCategories,
+    }),
 };
 
 export default exportDocumentService;

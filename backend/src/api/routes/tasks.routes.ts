@@ -35,6 +35,11 @@ import {
   getLogoDataUri,
 } from '../../services/pdf/documentHeaderConfig';
 import {
+  getInspectionTopicConfig,
+  saveInspectionTopicConfig,
+} from '../../services/inspection/inspectionTopicConfig';
+import type { InspectionMainCategory } from '../../services/inspection/inspectionTopicConfig';
+import {
   uploadDailyReportPdf,
   upsertDailyReportRecord,
   getSavedDailyReport,
@@ -1853,6 +1858,68 @@ router.put(
               ? undefined
               : String(body.docNumberPrefixReport || '').trim() || null,
         },
+        authReq.user?.uid || authReq.user?.id || 'unknown'
+      );
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ── T-076 · Per-project inspection-topic config ─────────────────────────────
+// The 3-level inspection tree (หมวดหลัก → หมวดย่อย → หัวข้อการตรวจ) ported from the
+// qc-report-new inspection app. Stored in the `inspectionTopicConfigs` collection,
+// edited from the Inspect tab → "ตั้งค่าหัวข้อการตรวจ" sub-tab. Same single-doc-
+// per-project merge-upsert shape as the header config above.
+
+// GET /api/tasks/inspection-topic-config?projectId  → { success, data: config }
+// Always returns a config (blank default when none saved), so the tree editor can
+// render from scratch without a special "not found" path.
+router.get(
+  '/inspection-topic-config',
+  checkRole(['MD', 'AM', 'LD']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { projectId } = req.query;
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      const config = await getInspectionTopicConfig(String(projectId));
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PUT /api/tasks/inspection-topic-config
+//   body: { projectId, mainCategories: InspectionMainCategory[] }
+// Replaces the whole tree in one save (the UI edits it as a whole, then saves once).
+// mainCategories MUST be an array: the service does no shape validation of its own,
+// so a wrong type would otherwise be written straight into Firestore.
+router.put(
+  '/inspection-topic-config',
+  checkRole(['MD', 'AM', 'LD']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authReq = req as AuthRequest;
+      const body = req.body || {};
+      const projectId = String(body.projectId || '').trim();
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      if (!Array.isArray(body.mainCategories)) {
+        res
+          .status(400)
+          .json({ success: false, error: 'mainCategories must be an array' });
+        return;
+      }
+      const config = await saveInspectionTopicConfig(
+        projectId,
+        body.mainCategories as InspectionMainCategory[],
         authReq.user?.uid || authReq.user?.id || 'unknown'
       );
       res.status(200).json({ success: true, data: config });

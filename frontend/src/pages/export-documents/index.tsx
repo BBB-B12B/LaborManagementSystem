@@ -42,6 +42,7 @@ import { DatePicker } from '@/components/forms/DatePicker';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { useToast } from '@/components/common/Toast';
 import { useAuthStore } from '@/store/authStore';
+import { InspectionTopicSettings } from '@/components/export-documents/InspectionTopicSettings';
 import {
   exportDocumentService,
   type ExportDailyReportDoc,
@@ -900,6 +901,36 @@ function ComingSoonTab({ title }: { title: string }) {
   );
 }
 
+/**
+ * Inspect tab (T-076). This page started out as document-issuing only, so the
+ * Inspect tab splits into two sub-menus: the inspection-topic config editor, and
+ * the document-generation flow (not built yet — that is the next slice).
+ */
+function InspectTab() {
+  const [subTab, setSubTab] = useState(0);
+  return (
+    <Box>
+      <Tabs
+        value={subTab}
+        onChange={(_, v) => setSubTab(v)}
+        sx={{ mb: 2.5, borderBottom: '1px solid rgba(0,0,0,0.06)', minHeight: 40 }}
+      >
+        <Tab
+          label="ตั้งค่าหัวข้อการตรวจ"
+          sx={{ textTransform: 'none', fontWeight: 700, minHeight: 40, fontSize: '0.9rem' }}
+        />
+        <Tab
+          label="สร้างเอกสาร"
+          sx={{ textTransform: 'none', fontWeight: 700, minHeight: 40, fontSize: '0.9rem' }}
+        />
+      </Tabs>
+
+      {subTab === 0 && <InspectionTopicSettings />}
+      {subTab === 1 && <ComingSoonTab title="สร้างเอกสาร (Inspect)" />}
+    </Box>
+  );
+}
+
 function ExportDocumentsContent() {
   const [tab, setTab] = useState(0);
   return (
@@ -928,7 +959,7 @@ function ExportDocumentsContent() {
 
       {tab === 0 && <DailyReportTab />}
       {tab === 1 && <DailyRequestTab />}
-      {tab === 2 && <ComingSoonTab title="Inspect" />}
+      {tab === 2 && <InspectTab />}
       {tab === 3 && <DocSettingsTab />}
     </Container>
   );
