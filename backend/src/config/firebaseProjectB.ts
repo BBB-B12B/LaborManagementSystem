@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import fs from 'fs';
 import path from 'path';
+import { config } from './index';
 
 const STORAGE_BUCKET = 'after-sale-system.firebasestorage.app';
 
@@ -40,17 +41,43 @@ function loadAfterSaleServiceAccount(): admin.ServiceAccount {
   );
 }
 
-const serviceAccount = loadAfterSaleServiceAccount();
+// [T-062] In emulator mode, connect afterSaleDb to the SAME project namespace as
+// LMS (config.firebase.projectId) with NO credential — so all dev data lands in one
+// emulator project and shows in the existing Emulator UI. The emulator-host env vars
+// are set here too for import-order safety: the Admin SDK must see them BEFORE
+// initializeApp, otherwise it would contact real Google with no credential.
+// In production (else) the credential-based After-Sale init is unchanged.
+let afterSaleApp: admin.app.App;
+if (config.firebase.useEmulator) {
+  process.env.FIRESTORE_EMULATOR_HOST = config.firebase.firestoreEmulatorHost;
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = config.firebase.authEmulatorHost;
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = config.firebase.storageEmulatorHost;
 
-// ตั้งชื่อ App ที่ 2 ป้องกันการชนกับ App หลัก
-const afterSaleApp: admin.app.App = admin.initializeApp(
-  {
-    credential: admin.credential.cert(serviceAccount),
-    storageBucket: STORAGE_BUCKET,
-  },
-  'afterSaleDb'
-);
+  afterSaleApp = admin.initializeApp(
+    {
+      projectId: config.firebase.projectId,
+      storageBucket: config.firebase.storageBucket,
+    },
+    'afterSaleDb'
+  );
+  console.log(
+    `[firebaseProjectB] Emulator mode — afterSaleDb unified to LMS project ` +
+      `'${config.firebase.projectId}' (no credential)`
+  );
+} else {
+  const serviceAccount = loadAfterSaleServiceAccount();
+
+  // ตั้งชื่อ App ที่ 2 ป้องกันการชนกับ App หลัก
+  afterSaleApp = admin.initializeApp(
+    {
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: STORAGE_BUCKET,
+    },
+    'afterSaleDb'
+  );
+  console.log('[firebaseProjectB] Initialized After-Sale Firebase connection');
+}
+
 const afterSaleDb: admin.firestore.Firestore = afterSaleApp.firestore();
-console.log('[firebaseProjectB] Initialized After-Sale Firebase connection');
 
 export { afterSaleDb, afterSaleApp };

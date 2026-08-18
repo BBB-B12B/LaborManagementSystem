@@ -3,7 +3,7 @@ import admin from 'firebase-admin';
 import { taskService } from '../../services/TaskService';
 import { taskConverter } from '../../models/Task';
 import { AppError } from '../middleware/errorHandler';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, checkRole, AuthRequest } from '../middleware/auth';
 import { db } from '../../config/firebase';
 import { afterSaleDb } from '../../config/firebaseProjectB';
 
@@ -12,12 +12,28 @@ import { parseWbsExcel } from '../../utils/wbsParser';
 import * as ExcelJS from 'exceljs';
 import { renderDailyReportPdf } from '../../services/pdf/dailyReportPdf';
 import { renderDailyRequestPdf } from '../../services/pdf/dailyRequestPdf';
+import type { DailyRequestHeader } from '../../services/pdf/dailyRequestPdf';
+import { getProjectById } from '../../services/projectService';
 import {
   uploadDailyRequestPdf,
   appendDailyRequestVersion,
   getSavedDailyRequest,
   getStoredDailyRequestPdf,
 } from '../../services/pdf/dailyRequestStore';
+import {
+  uploadDailyRequestTemplate,
+  getDailyRequestTemplateMeta,
+  getDailyRequestTemplateBuffer,
+  fillDailyRequestTemplate,
+  buildSampleDailyRequestTemplate,
+  getDailyRequestTemplatePreview,
+} from '../../services/pdf/dailyRequestTemplate';
+import {
+  getHeaderConfig,
+  saveHeaderConfig,
+  uploadLogo,
+  getLogoDataUri,
+} from '../../services/pdf/documentHeaderConfig';
 import {
   uploadDailyReportPdf,
   upsertDailyReportRecord,
@@ -1423,7 +1439,32 @@ router.post('/daily-report-pdf', async (req: Request, res: Response, next: NextF
       }));
     }
 
-    const pdf = await renderDailyReportPdf({ projectId: data.projectId, date: data.date, groups });
+    // T-071 — attach the same letterhead the Daily Request PDF uses (logo left,
+    // โครงการ + title, เลขที่/วันที่/Duration). projectName from the Project doc;
+    // logo base64-embedded on the render path only (getLogoDataUri). Report uses its
+    // OWN doc-number prefix (docNumberPrefixReport), distinct from the request one.
+    let reportProjectName: string | undefined;
+    try {
+      const project = await getProjectById(data.projectId);
+      reportProjectName = project?.projectName || undefined;
+    } catch {
+      reportProjectName = undefined;
+    }
+    const reportCfg = await getHeaderConfig(data.projectId);
+    const reportLogo = await getLogoDataUri(reportCfg.logoPath);
+    const pdf = await renderDailyReportPdf({
+      projectId: data.projectId,
+      projectName: reportProjectName,
+      date: data.date,
+      groups,
+      header: {
+        logoDataUri: reportLogo,
+        projectTitle: reportProjectName ?? null,
+        docNumberPrefix: reportCfg.docNumberPrefixReport,
+        contractorName: reportCfg.contractorName,
+        showContractor: reportCfg.showContractor,
+      },
+    });
     const fileName = `daily-report_${data.projectId}_${data.date}.pdf`;
 
     // [T-060] Best-effort persist: store the file in LMS Storage + upsert the
@@ -1468,7 +1509,14 @@ router.post('/daily-report-pdf', async (req: Request, res: Response, next: NextF
 async function buildDailyRequestDoc(
   projectId: string,
   date: string
-): Promise<{ projectId: string; date: string; rows: any[] }> {
+): Promise<{
+  projectId: string;
+  projectName?: string;
+  date: string;
+  rows: any[];
+  header?: DailyRequestHeader;
+  logoPath?: string | null; // carried for the PDF path's base64 download (not drawn directly)
+}> {
   const targetDateStr = String(date); // 'YYYY-MM-DD' — matches requests doc id
 
   const afterSaleWoIds = await getAfterSaleWorkOrderIds();
@@ -1600,7 +1648,35 @@ async function buildDailyRequestDoc(
       String(a.detail).localeCompare(String(b.detail), 'th')
   );
 
-  return { projectId: String(projectId), date: targetDateStr, rows };
+  // T-069 — attach the letterhead header META. Deliberately CHEAP: the project
+  // name (from the Project doc, 5-min cached) + the saved header config. NO logo
+  // download here, so the preview GET stays fast; the logo bytes are base64-
+  // embedded only on the PDF render path (POST /daily-request-pdf) via logoPath.
+  const pid = String(projectId);
+  let projectName: string | undefined;
+  try {
+    const project = await getProjectById(pid);
+    projectName = project?.projectName || undefined;
+  } catch {
+    // Missing/unreadable Project doc → header degrades to the projectId fallback.
+    projectName = undefined;
+  }
+  const cfg = await getHeaderConfig(pid);
+  const header: DailyRequestHeader = {
+    projectTitle: projectName || null,
+    contractorName: cfg.contractorName,
+    showContractor: cfg.showContractor,
+    docNumberPrefix: cfg.docNumberPrefix,
+  };
+
+  return {
+    projectId: pid,
+    projectName,
+    date: targetDateStr,
+    rows,
+    header,
+    logoPath: cfg.logoPath,
+  };
 }
 
 // GET /api/tasks/daily-request-doc?projectId=&date=YYYY-MM-DD
@@ -1630,7 +1706,16 @@ router.post('/daily-request-pdf', async (req: Request, res: Response, next: Next
       return;
     }
     const data = await buildDailyRequestDoc(String(projectId), String(date));
-    const pdf = await renderDailyRequestPdf({ projectId: data.projectId, date: data.date, rows: data.rows });
+    // PDF render path ONLY: embed the logo as base64 (the preview GET never pays
+    // for this Storage download). getLogoDataUri returns null → header shows no logo.
+    const logoDataUri = await getLogoDataUri(data.logoPath);
+    const pdf = await renderDailyRequestPdf({
+      projectId: data.projectId,
+      projectName: data.projectName,
+      date: data.date,
+      rows: data.rows,
+      header: { ...(data.header || {}), logoDataUri },
+    });
     const fileName = `daily-request_${data.projectId}_${data.date}.pdf`;
 
     // [T-064] Best-effort persist AS A NEW VERSION (never overwrite): store the
@@ -1703,6 +1788,233 @@ router.get('/daily-request-file', async (req: Request, res: Response, next: Next
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${stored.fileName}"`);
     res.status(200).send(stored.buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── T-069 · Per-project Daily Request header config ─────────────────────────
+// The configurable letterhead (logo · contractor · doc-number prefix). Stored in
+// the `documentHeaderConfigs` collection, edited from the "ตั้งค่าเอกสาร" tab.
+// projectName is NOT stored here — it is read from the Project doc at render time.
+
+// GET /api/tasks/daily-request-header-config?projectId  → { success, data: config }
+// Always returns a config (blank default when none saved), so the settings form
+// can render without a special "not found" path.
+router.get(
+  '/daily-request-header-config',
+  checkRole(['MD', 'AM', 'LD']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { projectId } = req.query;
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      const config = await getHeaderConfig(String(projectId));
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PUT /api/tasks/daily-request-header-config
+//   body: { projectId, contractorName?, showContractor?, docNumberPrefix? }
+// Merge-upsert the text/toggle fields. The logo is handled by its own upload route
+// (POST /daily-request-logo, S2) so it is intentionally NOT accepted here.
+router.put(
+  '/daily-request-header-config',
+  checkRole(['MD', 'AM', 'LD']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authReq = req as AuthRequest;
+      const body = req.body || {};
+      const projectId = String(body.projectId || '').trim();
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      const config = await saveHeaderConfig(
+        projectId,
+        {
+          contractorName:
+            body.contractorName === undefined
+              ? undefined
+              : String(body.contractorName || '').trim() || null,
+          showContractor:
+            body.showContractor === undefined ? undefined : Boolean(body.showContractor),
+          docNumberPrefix:
+            body.docNumberPrefix === undefined
+              ? undefined
+              : String(body.docNumberPrefix || '').trim() || null,
+          docNumberPrefixReport:
+            body.docNumberPrefixReport === undefined
+              ? undefined
+              : String(body.docNumberPrefixReport || '').trim() || null,
+        },
+        authReq.user?.uid || authReq.user?.id || 'unknown'
+      );
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/tasks/daily-request-logo   multipart: file=<image>, body { projectId }
+// Uploads a project logo to Storage and saves {logoUrl, logoPath} on the header
+// config. Returns the updated config. Role-gated MD/AM/LD, same as the template.
+router.post(
+  '/daily-request-logo',
+  checkRole(['MD', 'AM', 'LD']),
+  upload.single('file'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authReq = req as AuthRequest;
+      const projectId = String(req.body?.projectId || '').trim();
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      if (!req.file?.buffer) {
+        res.status(400).json({ success: false, error: 'file is required' });
+        return;
+      }
+      const config = await uploadLogo(
+        projectId,
+        req.file.buffer,
+        req.file.mimetype || 'image/png',
+        authReq.user?.uid || authReq.user?.id || 'unknown'
+      );
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ── T-065 · Per-project Excel-template routes (Daily Request pilot) ──────────
+// An admin uploads one .xlsx form per project; the system fills its placeholders
+// and expands the data rows into a filled .xlsx. When no template exists the
+// existing PDF flow is untouched — these routes are purely additive.
+
+// POST /api/tasks/daily-request-template   multipart: file=<.xlsx>, body { projectId }
+// Template managers (GOD auto-passes + MD/AM/LD via checkRole — server-side gate,
+// never trust the UI). Saves or overwrites a project's Daily Request template.
+router.post(
+  '/daily-request-template',
+  checkRole(['MD', 'AM', 'LD']),
+  upload.single('file'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authReq = req as AuthRequest;
+      const projectId = String(req.body?.projectId || '').trim();
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      if (!req.file?.buffer) {
+        res.status(400).json({ success: false, error: 'file is required' });
+        return;
+      }
+      const meta = await uploadDailyRequestTemplate(
+        req.file.buffer,
+        projectId,
+        authReq.user?.uid || authReq.user?.id || 'unknown',
+        authReq.user?.name || null,
+        req.file.originalname
+      );
+      res.status(200).json({ success: true, data: meta });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/tasks/daily-request-template?projectId   → { success, data: meta|null }
+router.get('/daily-request-template', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId } = req.query;
+    if (!projectId) {
+      res.status(400).json({ success: false, error: 'projectId is required' });
+      return;
+    }
+    const meta = await getDailyRequestTemplateMeta(String(projectId));
+    res.status(200).json({ success: true, data: meta });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/tasks/daily-request-template/preview?projectId
+//   → { success, data: { sheetName, rows } | null }. Template managers only.
+// Reads the stored template's first sheet as a string grid for an in-browser
+// HTML-table preview ({{tokens}} shown verbatim). null when no template.
+router.get(
+  '/daily-request-template/preview',
+  checkRole(['MD', 'AM', 'LD']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { projectId } = req.query;
+      if (!projectId) {
+        res.status(400).json({ success: false, error: 'projectId is required' });
+        return;
+      }
+      const data = await getDailyRequestTemplatePreview(String(projectId));
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/tasks/daily-request-template/sample   → a sample .xlsx demonstrating the
+// {{token}} + data-marker-row convention. Raw binary.
+router.get(
+  '/daily-request-template/sample',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const buffer = await buildSampleDailyRequestTemplate();
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="daily-request_template_sample.xlsx"'
+      );
+      res.status(200).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/tasks/daily-request-xlsx   body: { projectId, date }
+// Builds the request table server-side, fills the project's uploaded template, and
+// streams the filled .xlsx. 400 when the project has no template uploaded yet.
+router.post('/daily-request-xlsx', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectId, date } = req.body || {};
+    if (!projectId || !date) {
+      res.status(400).json({ success: false, error: 'projectId and date are required' });
+      return;
+    }
+    const templateBuffer = await getDailyRequestTemplateBuffer(String(projectId));
+    if (!templateBuffer) {
+      res.status(400).json({ success: false, error: 'no template uploaded for this project' });
+      return;
+    }
+    const doc = await buildDailyRequestDoc(String(projectId), String(date));
+    const filled = await fillDailyRequestTemplate(templateBuffer, doc);
+    const fileName = `daily-request_${doc.projectId}_${doc.date}.xlsx`;
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.status(200).send(filled);
   } catch (error) {
     next(error);
   }

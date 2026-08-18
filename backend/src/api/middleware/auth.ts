@@ -122,6 +122,12 @@ export async function authenticate(
           const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
           const jsonPayload = Buffer.from(base64, 'base64').toString('utf-8');
           decoded = JSON.parse(jsonPayload);
+          // A raw Firebase JWT has no `uid` claim — the uid lives in `sub`/`user_id`
+          // and verifyIdToken() normally maps it onto `.uid`. This emulator bypass parses
+          // the raw token, so backfill `.uid` here; otherwise `req.user.uid` ends up
+          // undefined downstream and endpoints like GET /tasks/draft-dates throw a
+          // spurious 401 (→ client logout + redirect to /login).
+          if (!decoded.uid) decoded.uid = decoded.user_id || decoded.sub;
           logger.debug(
             `[Auth] Emulator Mode: Signature verification bypassed for UID: ${decoded.uid}`
           );

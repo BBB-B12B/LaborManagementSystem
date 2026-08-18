@@ -677,6 +677,7 @@ function DocSettingsTab() {
   const [contractorName, setContractorName] = useState('');
   const [showContractor, setShowContractor] = useState(false);
   const [docNumberPrefix, setDocNumberPrefix] = useState('');
+  const [docNumberPrefixReport, setDocNumberPrefixReport] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -697,6 +698,7 @@ function DocSettingsTab() {
       setContractorName(config.contractorName ?? '');
       setShowContractor(Boolean(config.showContractor));
       setDocNumberPrefix(config.docNumberPrefix ?? '');
+      setDocNumberPrefixReport(config.docNumberPrefixReport ?? '');
     }
   }, [config]);
 
@@ -708,6 +710,7 @@ function DocSettingsTab() {
         contractorName: contractorName.trim() || null,
         showContractor,
         docNumberPrefix: docNumberPrefix.trim() || null,
+        docNumberPrefixReport: docNumberPrefixReport.trim() || null,
       });
       showSuccess('บันทึกการตั้งค่าเอกสารแล้ว');
       refetch();
@@ -739,10 +742,10 @@ function DocSettingsTab() {
   return (
     <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid rgba(0,0,0,0.08)' }}>
       <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-        ตั้งค่าหัวเอกสาร Daily Request
+        ตั้งค่าหัวเอกสาร
       </Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-        โลโก้ · ผู้รับจ้าง · เลขที่เอกสาร ของแต่ละโครงการ (ชื่อโครงการดึงจากข้อมูลโครงการอัตโนมัติ)
+        โลโก้ · ผู้รับจ้าง · เลขที่เอกสาร (Daily Request / Daily Report) ของแต่ละโครงการ — โลโก้และผู้รับจ้างใช้ร่วมกัน เลขที่แยกกัน (ชื่อโครงการดึงจากข้อมูลโครงการอัตโนมัติ)
       </Typography>
 
       <Box sx={{ maxWidth: 420, mb: 3 }}>
@@ -841,13 +844,22 @@ function DocSettingsTab() {
             />
           </Box>
 
-          {/* Doc-number prefix */}
+          {/* Doc-number prefix — Daily Request */}
           <TextField
-            label="เลขที่เอกสาร (คำนำหน้า)"
+            label="เลขที่เอกสาร Daily Request (คำนำหน้า)"
             value={docNumberPrefix}
             onChange={(e) => setDocNumberPrefix(e.target.value)}
             fullWidth
             helperText="ระบบพิมพ์เป็น <คำนำหน้า>/……… — เติมเลขที่วิ่งเองในเอกสาร"
+          />
+
+          {/* Doc-number prefix — Daily Report (distinct from request) */}
+          <TextField
+            label="เลขที่เอกสาร Daily Report (คำนำหน้า)"
+            value={docNumberPrefixReport}
+            onChange={(e) => setDocNumberPrefixReport(e.target.value)}
+            fullWidth
+            helperText="ใช้กับเอกสารรายงานประจำวัน — เช่น HYI2-TTS-TCM-DRP"
           />
 
           <Box>

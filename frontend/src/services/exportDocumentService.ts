@@ -92,6 +92,49 @@ export interface SavedDailyRequest {
   hasFile: boolean; // true when a stored PDF is available to download
 }
 
+/**
+ * A project's uploaded Daily Request Excel template (T-065). Returned by
+ * GET /daily-request-template; null when the project has never uploaded one.
+ * uploadedAt is a serialized Firestore Timestamp — kept as unknown (same as the
+ * saved-record timestamps above); the UI only needs fileName + who/when.
+ */
+export interface DailyRequestTemplateMeta {
+  projectId: string;
+  kind: string;
+  storageKey: string;
+  fileName: string;
+  uploadedBy: string;
+  uploadedByName: string | null;
+  uploadedAt?: unknown;
+}
+
+/** First-sheet grid of an uploaded template, for an in-browser HTML-table preview. */
+export interface DailyRequestTemplatePreview {
+  sheetName: string;
+  rows: string[][];
+}
+
+/** Per-project Daily Request letterhead config (T-069) — edited in "ตั้งค่าเอกสาร". */
+export interface DailyRequestHeaderConfig {
+  projectId: string;
+  logoUrl?: string | null;
+  logoPath?: string | null;
+  contractorName?: string | null;
+  showContractor: boolean;
+  docNumberPrefix?: string | null; // Daily Request doc-number prefix
+  docNumberPrefixReport?: string | null; // Daily Report doc-number prefix (distinct)
+  updatedAt?: unknown;
+  updatedBy?: string | null;
+}
+
+/** The editable text/toggle slice the settings form sends on save. */
+export type DailyRequestHeaderConfigPatch = {
+  contractorName?: string | null;
+  showContractor?: boolean;
+  docNumberPrefix?: string | null;
+  docNumberPrefixReport?: string | null;
+};
+
 export const exportDocumentService = {
   /**
    * Fetch the grouped daily-report document for a project + past date.
@@ -138,6 +181,66 @@ export const exportDocumentService = {
     return response.data as Blob;
   },
 
+  // ---- Daily Request Excel template (T-065) ----------------------------------
+
+  /**
+   * Fetch the project's uploaded Daily Request template metadata, or null when
+   * none has been uploaded. Drives the admin panel status + the "ออกด้วย
+   * Template (Excel)" button (shown only when a template exists).
+   */
+  getRequestTemplate: (projectId: string): Promise<DailyRequestTemplateMeta | null> =>
+    api.get<DailyRequestTemplateMeta | null>('/tasks/daily-request-template', { projectId }),
+
+  /**
+   * Upload (overwrite) the project's Daily Request .xlsx template. Admin only —
+   * the backend guards this with checkRole(['MD']) (GOD auto-passes). Returns
+   * the stored meta.
+   */
+  uploadRequestTemplate: (projectId: string, file: File): Promise<DailyRequestTemplateMeta> => {
+    const formData = new FormData();
+    formData.append('projectId', projectId);
+    formData.append('file', file);
+    return api.upload<DailyRequestTemplateMeta>('/tasks/daily-request-template', formData);
+  },
+
+  /**
+   * Fetch the uploaded template's first sheet as a string grid ({{tokens}} shown
+   * verbatim) for an in-browser HTML-table preview, or null when no template.
+   * Managers only — the backend guards it with checkRole(['MD','AM','LD']).
+   */
+  getRequestTemplatePreview: (
+    projectId: string
+  ): Promise<DailyRequestTemplatePreview | null> =>
+    api.get<DailyRequestTemplatePreview | null>('/tasks/daily-request-template/preview', {
+      projectId,
+    }),
+
+  /**
+   * Fill the project's uploaded template with the day's request rows and return
+   * the filled .xlsx as a Blob. Raw apiClient + responseType:'blob' (same reason
+   * as generateRequestPdf). 400 when the project has no template uploaded yet.
+   */
+  generateRequestXlsx: async (projectId: string, date: string): Promise<Blob> => {
+    const response = await apiClient.post(
+      '/tasks/daily-request-xlsx',
+      { projectId, date },
+      { responseType: 'blob' }
+    );
+    return response.data as Blob;
+  },
+
+  /**
+   * Download the sample template (demonstrates the {{token}} + data-marker-row
+   * convention). The route is behind authenticate, so we must fetch it as a blob
+   * with the auth header — a bare <a href> would 401. Returns a Blob.
+   */
+  downloadSampleTemplate: async (): Promise<Blob> => {
+    const response = await apiClient.get('/tasks/daily-request-template/sample', {
+      responseType: 'blob',
+    });
+    return response.data as Blob;
+  },
+
   /**
    * Render the Daily Report PDF. Returns a Blob the caller can download.
    * selectedPhotoIds: undefined = all photos; [] = table only (no photo pages).
@@ -173,6 +276,40 @@ export const exportDocumentService = {
       responseType: 'blob',
     });
     return response.data as Blob;
+  },
+
+  // ---- Daily Request header config (T-069) -----------------------------------
+
+  /**
+   * Fetch a project's Daily Request letterhead config. The backend always returns
+   * a config (blank defaults when none is saved), so the settings form can render
+   * without a "not found" branch. Managers only (checkRole MD/AM/LD).
+   */
+  getHeaderConfig: (projectId: string): Promise<DailyRequestHeaderConfig> =>
+    api.get<DailyRequestHeaderConfig>('/tasks/daily-request-header-config', { projectId }),
+
+  /**
+   * Save the text/toggle fields of a project's header config (merge-upsert). The
+   * logo is uploaded separately via uploadLogo. Returns the updated config.
+   */
+  saveHeaderConfig: (
+    projectId: string,
+    cfg: DailyRequestHeaderConfigPatch
+  ): Promise<DailyRequestHeaderConfig> =>
+    api.put<DailyRequestHeaderConfig>('/tasks/daily-request-header-config', {
+      projectId,
+      ...cfg,
+    }),
+
+  /**
+   * Upload a project logo (image) to Storage and persist it onto the header
+   * config. Returns the updated config (with logoUrl for preview). Managers only.
+   */
+  uploadLogo: (projectId: string, file: File): Promise<DailyRequestHeaderConfig> => {
+    const formData = new FormData();
+    formData.append('projectId', projectId);
+    formData.append('file', file);
+    return api.upload<DailyRequestHeaderConfig>('/tasks/daily-request-logo', formData);
   },
 };
 
