@@ -1,50 +1,95 @@
-# Gather Complete — T-054
-
-date: 2026-07-13
-task: T-054 · Eliminate mobile/PC logic-drift in daily-reports + workspace — single-source logic, CSS-only responsive difference
-skill: editor (frontend multi-file targeted edits)
+# Gather Complete — T-081 Subcontractor management + daily-report integration
+date: 2026-08-19
+skill: coder
+task: Add subcontractor (ผู้รับเหมา) management page + per-worker skill assessment storage + subcontractor headcount tab in the daily-report labor modal
 
 ## Objective
-User principle: mobile and PC must SHARE ONE logic set; only CSS/responsive layout may differ. Never two logic copies that can drift. Audit (3 parallel Explore agents, 314 files) located live drift + dead parallel implementations. Fix to the single-source principle.
+LMS currently records only DC labor (individual daily contractors) on a daily report.
+Real projects also employ subcontractor companies. Add:
+1. A `/subcontractor-management` page reachable from `/management` — CRUD companies, their workers,
+   worker position, and a per-worker skill assessment (score 0/1/2 per skill topic).
+2. Excel import for the initial bulk load (template: `Book2.xlsx`), plus manual add for the
+   1-2-people-at-a-time case that follows.
+3. Daily report: rename the labor button to "เลือกแรงงาน DC/ผู้รับเหมา"; split the labor modal into
+   two tabs (DC | ผู้รับเหมา). Subcontractor entry = company + HEADCOUNT + work times (Day/OT), NOT
+   named individuals.
 
-## Findings (audit — read-only, file:line verified)
-### LIVE drift (affects users now)
-1. daily-reports/index.tsx — WorkerTableRow (desktop, :5103) vs WorkerMobileCard (mobile, :5394). Share handler updateWorkerTime (:1789) but each hard-codes its own checkbox disabled rules:
-   - OT disabled: desktop `isReadOnly` (:5189/5211/5265) vs mobile `isReadOnly || !worker.times?.regular` (:5517/5518/5519). T-050 removed the "OT requires regular" constraint on desktop only → mobile still blocks OT until ปกติ ticked. (User-reported bug.)
-   - otMorningTime default drift: canonical `06:00 - 08:00` (:1263/:954, mobile :5517) vs desktop fallback `08:00 - 12:00` (:5193).
-2. workspace/index.tsx — kanban board: CSS toggle (mobile :1799-1986 / desktop :1988-2145) fine, but bucketing+sort+hidden-split logic copy-pasted per branch: bucket filter (mobile count :1810-1817, mobile list :1886-1892, desktop list :2008-2014), sort (mobile :1893-1902, desktop :2015-2024), hidden split (mobileHiddenTasks :1908 vs hiddenTasks :2032). Shared OK: filteredSubtasks (:990), getEffectiveSubtaskStatus (:100).
-### DEAD parallel implementation (no route/link/redirect reaches — verified via grep)
-3. pages/daily-reports/mobile/create.tsx (MobileDailyReportPage) + page-components/daily-reports/mobile/DailyReportEntryModal.tsx + page-components/daily-reports/components/DailyReportDashboard.tsx (@unused). Own model (WorkSectionState/workerIds), still enforces pre-T-050 OT-requires-regular (DailyReportEntryModal :292-296/:216-232), omits leave/med-cert entirely. DailyReportDashboard already drifted from create.tsx.
-### CLEAN (checked, no action): requests table/cards, workspace toolbar/tree, Navbar, PhotoSourcePicker, Login, Layout, useResponsive (unused). Share logic; differ only in CSS.
+## Confirmed requirements (from user, this session)
+- Code naming: `subcontractor` / `subcontractors`. UI wording stays "ผู้รับเหมา".
+- Company data + workers + skills persist to the AFTER-SALE Firestore, collection `contractors`.
+- One company may supply workers to several projects — `location` lives on the WORKER row, not the company.
+- No company-level skill aggregate. Skills are stored per worker only.
+- Skill-assessment UI is OUT of scope for now; the DATA MODEL and the Excel import path are IN scope.
+- Skill topic list is NOT a settings page. Same pattern as the existing DC `SkillSelect`:
+  free-typed autocomplete whose options are derived from skill keys already present in stored data.
+- `location` must resolve to a real LMS Project record (user will pre-align the Excel names).
+- Both import AND manual add must work.
+- 1 daily report may include several subcontractor companies; each carries its own headcount + times.
 
-## Folds in the 2 originally-reported issues
-- OT-เย็น-requires-normal bug on mobile → S1
-- DC button row unbalanced on mobile → S2
+## Key findings (evidence)
+| Finding | Evidence |
+|---|---|
+| After-sale DB handle already exists and is env-aware | `backend/src/config/firebaseProjectB.ts:83` exports `afterSaleDb`; emulator branch unifies to the LMS project (T-062), prod branch uses the after-sale service account |
+| Destination DB must be chosen explicitly per collection | usage pattern e.g. `afterSaleDb.collection('lms_notifications')` in `notifications.routes.ts:25` |
+| The daily report in scope is the AFTER-SALE task report | `frontend/src/services/dailyReportService.ts:427` → `workOrders/{woId}/categories/{catId}/tasks/{taskId}/dailyReports/{dateStr}`; saved via `POST /tasks/{taskId}/reports` |
+| A SEPARATE LMS-side `dailyReports` collection exists (Excel/wage import only) — do not confuse | `backend/src/services/dailyReport/DailyReportService.ts:24` uses `collections.dailyReports` on the LMS `db` |
+| There is NO `skills` collection in use | `COLLECTIONS.SKILLS = 'skills'` declared in `backend/src/config/collections.ts:34` but zero references; DC `skillId` is free text sourced from `positionName` (`dailyContractors.routes.ts:481`) |
+| DC position dropdown is derived, not a table | `frontend/src/components/forms/SkillSelect.tsx` — `useQuery(getActiveDCs)` → `Set` of unique `dc.skillId`, `freeSolo` Autocomplete |
+| `/management` is a card grid keyed by `href` | `frontend/src/pages/management/index.tsx:33-69` (`/project-management`, `/member-management`, `/dc-management`, `/management/company-holidays`) |
+| Labor modal is inline in a 5,685-line page | `frontend/src/pages/daily-reports/index.tsx` — state `selectedWorkers`:894, `isWorkerModalOpen`:1123, button+label:3510/3519, validation:2432, payload build:2549 (`laborPayload`) / 2569 (`leavePayload`), Dialog:4166 |
+
+## Excel template decoded (`C:\Users\101622\Downloads\Book2.xlsx`, Sheet1)
+- Header row = row 3; data starts row 4. Sample rows 4-7 present.
+- Columns to keep: B `Location`, C `สังกัดผู้รับเหมา`, D `รหัส`, E `ชื่อ-สกุลผู้ปฏิบัติงาน`,
+  F `หมายเหตุ / ตำแหน่งงาน`, G `วันที่ประเมิน`, H `ผู้ประเมิน`, I..BD skill scores.
+- Columns to drop: A `ลำดับ`, BE..BK summary columns.
+- I..BD = 16 skill groups x 3 columns. Verified across all 4 sample rows:
+  col1 = the score 0/1/2; col2 (`...ระดับ1`) = 1 iff score==1; col3 (`...ระดับ2`) = 1 iff score==2.
+  => Store only col1 of each group (16 values). col2/col3 are derived and MUST NOT be stored.
+- The 16 group names (col1 headers): งานปูน (ก่อ / ฉาบ) · งานสี (สกิม / ทาสี) · งานกระเบื้องและผนัง ·
+  งานฝ้า / เพดาน · งานไม้ · งานโครงสร้างคอนกรีตเสริมเหล็ก (Precast) · งานโครงสร้างเหล็กรูปพรรณ (งานเชื่อม) ·
+  งานติดตั้งสุขภัณฑ์ · งานติดตั้ง Protection · งานระบบไฟฟ้า · งานระบบประปา · งานระบบระบายอากาศ ·
+  งานเหล็ก · งานมุงหลังคา · งานอลูมิเนียม คอมโพสิต · งานติดตั้งรั้ว
+- Scoring legend (B2): 0 = ทำไม่ได้ | 1 = ทำได้บางส่วน | 2 = ทำได้ดีผ่านมาตรฐาน
+- `วันที่ประเมิน` is an Excel serial number (e.g. 46224) — convert on import.
+- The workbook's own summary columns BE..BJ are STALE/incorrect (row 6 reports ทักษะระดับ2=0 while
+  งานไม้2=1; row 4 sums to 18 across 16 groups). Recompute in-app; never trust those cells.
 
 ## Constraints
-- Single-source: extract shared RULES (not JSX layout). Layouts stay separate (card vs table); rules identical via one helper/constant.
-- Desktop behavior (post-T-050) is the correct target. Mobile matches desktop.
-- Frontend only. No data-model / backend change.
-- Deletions (S4) = R14 gate; user pre-authorized full scope incl. delete, still emit [gate].
+- `daily-reports/index.tsx` is 5,685 lines — surgical edits only, no refactor.
+- Do not modify the existing DC `SkillSelect` component; add a sibling for multi-value sub skills.
+- Do not touch the parked IN/OUT work (`segmentEngine.ts`, its characterization test,
+  `WorkHourComparisonTable.tsx`, `functions/lib/*`).
+- Skill-score storage must be an open key/value map, not 16 fixed fields (future topic 17+).
+- English only in `.sessions/`, `knowledge/`, code comments and commits.
 
-## Affected files
-- frontend/src/pages/daily-reports/index.tsx (S1 shift-cell rules + S2 DC buttons)
-- frontend/src/pages/workspace/index.tsx (S3 bucketedColumns)
-- DELETE (S4): frontend/src/pages/daily-reports/mobile/create.tsx · frontend/src/page-components/daily-reports/mobile/DailyReportEntryModal.tsx · frontend/src/page-components/daily-reports/components/DailyReportDashboard.tsx
+## Affected files (planned)
+backend/src/models/Subcontractor.ts (new)
+backend/src/services/subcontractor/SubcontractorService.ts (new)
+backend/src/api/routes/subcontractors.routes.ts (new)
+backend/src/api/routes/index.ts
+backend/src/utils/subcontractorExcel.ts (new)
+backend/src/api/routes/tasks.routes.ts
+frontend/src/services/subcontractorService.ts (new)
+frontend/src/components/forms/SubSkillSelect.tsx (new)
+frontend/src/pages/subcontractor-management/index.tsx (new)
+frontend/src/page-components/subcontractor-management/components/* (new)
+frontend/src/pages/management/index.tsx
+frontend/src/pages/daily-reports/index.tsx
 
 ## Acceptance criteria
-- Mobile OT เช้า/เที่ยง/เย็น enabled without ปกติ ticked (matches desktop); otMorning default identical both.
-- One shared shift-cell rule helper used by BOTH cards (grep proves single source).
-- DC header stacks vertical + full-width button on xs; unchanged md+.
-- Workspace board: one memoized bucketedColumns consumed by both branches; no duplicated bucket/sort/hidden expressions remain.
-- 3 dead files deleted; no dangling imports; index_files.json updated.
-- frontend npx tsc --noEmit EXIT=0; browser mobile-viewport verified.
+1. `/management` shows a "จัดการผู้รับเหมา" card linking to `/subcontractor-management`.
+2. On that page a user can create a company, add workers manually (name, position, location→Project,
+   code), and import `Book2.xlsx` to bulk-create companies + workers + skill scores.
+3. Re-importing the same file updates the existing workers (matched by `รหัส`) instead of duplicating.
+4. Stored worker docs contain exactly 16 skill entries as a key/value map, no `...ระดับ1/2` fields.
+5. Company/worker data is written through `afterSaleDb` to collection `contractors`.
+6. `/daily-reports` labor button reads "เลือกแรงงาน DC/ผู้รับเหมา".
+7. The labor modal has two tabs; the ผู้รับเหมา tab takes company + headcount + Day/OT times and
+   allows several companies in one report.
+8. A submitted report persists the subcontractor entries alongside the existing DC labor payload.
+9. `npx tsc --noEmit` clean in both `backend/` and `frontend/`.
 
-### Files Read — Phase 1 (audit via 3 Explore subagents + direct reads)
-| File | Why | Lines |
-|---|---|---|
-| daily-reports/index.tsx | WorkerMobileCard/TableRow rules + DC buttons | 1789-1864, 3358-3419, 5103-5551 |
-| workspace/index.tsx | board branches bucket/sort/hidden | 1799-2145 (agent) |
-| daily-reports/mobile/create.tsx + mobile/DailyReportEntryModal.tsx | dead parallel flow | full (agent) |
-| page-components/daily-reports/components/DailyReportDashboard.tsx | dead clone | full (agent) |
-| hooks/useResponsive.ts, PhotoSourcePicker, login, Navbar, Layout | confirm CSS-only | agent |
+## Open items deferred by the user
+- Skill-assessment UI (scoring screen) — later task.
+- Evaluator stored as a system user id rather than a free-text name — later task.
