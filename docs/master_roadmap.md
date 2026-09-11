@@ -478,3 +478,483 @@
                   S3 bucketedColumns useMemo shared by both kanban branches. S4 git rm mobile/create.tsx +
                   DailyReportEntryModal.tsx + DailyReportDashboard.tsx.
     Relate File:  frontend/src/pages/daily-reports/index.tsx · frontend/src/pages/workspace/index.tsx
+
+- [X] T-055 · P1 · depends_on: none · done 2026-07-31 · attempts:1 · tool_calls:~45
+    Title:        Upgrade Codeing_harness_killer install to 2026-07-10 (was 2026-06-16), install real hooks
+    ContextTask:  New harness source downloaded to Downloads/Codeing_harness_killer-main (3). Prior install had only
+                  markdown framework files (CLAUDE.md/AGENTS.md/INVARIANTS.md/Implement/) — .claude/settings.json was
+                  `{}` (no hooks ever wired), .agents/skills/ and scripts/ (the harness's own automation) were missing
+                  entirely, .agents/platform/detected.md was mid-migration (only a stale .bak present). This matches the
+                  CHANGELOG's "the LMS boot failure" note.
+    Goal:         Bring CLAUDE.md/AGENTS.md/Implement/*/.agents/skills+tools+router/scripts up to 2026-07-10, wire real
+                  hooks (SessionStart/UserPromptSubmit/PreToolUse/PostToolUse/Stop), keep it working on this Windows box.
+    How-Check:    settings.json valid JSON, python3 occurrences=0, all 5 hook events present. Every wired hook script
+                  smoke-tested standalone with sample stdin → exit 0, no crash. index_reconcile.py Stop-hook chain
+                  (rule_indexer/backlink_analyzer/code_graph/symbol_indexer/gen_doc_labels) all → ok. repo_map_check.py
+                  --sync ran clean (282 folders mapped). index_files.json/index_variables.json/index_cfp_fix.json all
+                  valid JSON.
+    Fix:          Overwrote CLAUDE.md, AGENTS.md, Implement/00-10, .agents/skills+tools+skill-patches+router.md (fresh
+                  install — previously absent). Appended INVARIANTS.md §I9 (only real diff). Copied 87 harness scripts
+                  into scripts/ (no name collisions with project's own scripts). Force-redetected .agents/platform/
+                  detected.md for claude-code/anthropic/Sonnet-5/Windows. Found + fixed 2 real platform bugs: (1)
+                  `python3` isn't aliased on this machine (only `python`/`py`) — every hook command + every internal
+                  subprocess call inside the harness scripts uses literal `python3`, so created a `python3.exe` shim
+                  (copy of python.exe) next to it in the Python312 install dir; (2) the harness's scripts open()
+                  project files without `encoding="utf-8"`, which crashes with UnicodeDecodeError on this Thai-locale
+                  Windows codepage — fixed by prefixing every hook's python invocation with `PYTHONUTF8=1`, which
+                  propagates through nested subprocess calls too. Deliberately did NOT wire the shipped PreToolUse
+                  phase-gate (scripts/phase_gate.py / the inline never-full-load+gather+mece check) — user chose to
+                  skip it because, as shipped, it blocks every Edit/Write/Bash-write repo-wide unless
+                  .sessions/gather_complete.md + .sessions/mece_plan.md are both dated same-day, with no override.
+                  VERSION stamped to harness_version: 2026-07-10.
+    Relate File:  CLAUDE.md · AGENTS.md · INVARIANTS.md · Implement/ · .agents/skills/ · .agents/tools/ ·
+                  .agents/router.md · .agents/skill-patches/ · scripts/ · .agents/platform/detected.md ·
+                  .claude/settings.json · VERSION
+
+- [ ] T-056 · P2 · depends_on: none
+    Title:        machine_install.sh has no Windows fallback when rsync is missing — Layer-1 install is a dead end
+    ContextTask:  Ran `/harness-agent:harness_setup` on this project (2026-08-04). Detector correctly reported
+                  `noop · self-hosted (project is the engine)` — this repo already carries its own local engine copy.
+                  User wants to share the engine machine-wide (Layer 1) so other projects on this Windows box can use
+                  it too. Following the skill's guided flow, `bash scripts/machine_install.sh --dry-run` failed
+                  immediately: `rsync: command not found` (exit 127) — this machine's Git Bash ships without rsync
+                  (Git for Windows dropped it years ago) and has no MSYS2/pacman/choco/scoop installed. Tried the
+                  skill's fallback suggestion, `winget search rsync --source winget` — returns no real rsync package,
+                  only unrelated tools incidentally tagged "rsync" (Rclone, win-sshpass, etc.); the `msstore` source
+                  requires an interactive terms-of-transaction prompt that a non-interactive `winget search` cannot
+                  answer (errors `0x8a150042`). WSL is also not installed, and `wsl --install` is a system-level
+                  feature toggle correctly out of scope for the agent to run unprompted. Net result: on a bare
+                  Windows machine with no MSYS2/WSL, Layer-1 machine-wide install is a hard dead end — the script
+                  dies on a raw shell error and the skill's own remediation path (winget) doesn't actually work.
+    Goal:         `machine_install.sh` should never die on a bare "command not found". Either (a) add a pre-flight
+                  rsync availability check that exits with a clear, Windows-specific remediation message (point to
+                  MSYS2 `pacman -S rsync`, since neither Git for Windows nor winget reliably provide rsync), or
+                  (b) add a non-rsync copy fallback (e.g. a small Python routine driven by the same
+                  `scripts/engine_manifest.txt` single-source list, preserving the existing idempotent / no-delete
+                  copy guarantees) so Windows users without MSYS2 aren't blocked. Also fix the `harness_setup` skill's
+                  Step 5 guidance, which currently proposes `winget search rsync` as a live option — it isn't.
+    How-Check:    On a Windows machine with no rsync/MSYS2/WSL: `bash scripts/machine_install.sh --dry-run` either
+                  (a) exits non-zero with a one-line human-readable remediation pointing to MSYS2 (no raw
+                  "command not found" traceback), or (b) completes successfully via the fallback copy path and
+                  produces the same file set rsync would have. `.agents/skills/harness/harness_setup/SKILL.md`
+                  Step 5 no longer proposes `winget search rsync`.
+    Out-of-Scope: Actually installing rsync/MSYS2/WSL for the user — that stays user-run under the existing R14 gate
+                  (the skill correctly refused to self-confirm a `~/.claude` write or a system-level feature install
+                  on the user's behalf).
+    Relate File:  scripts/machine_install.sh · .agents/skills/harness/harness_setup/SKILL.md ·
+                  Implement/10_machine_install.md
+
+- [X] T-057 · P2 · depends_on: T-055 · done 2026-08-11 · attempts:1 · tool_calls:~40 · build+verify done (tsc clean · prod export ran 5190 records); live 4-process UI run is user-side (needs Java+firebase-tools)
+    Title:        Firebase-emulator verify workflow — SEE the T-055 fix on real prod data in the real UI, no deploy
+    ContextTask:  T-055 (extra-punch classifier) is code-complete + script-validated (13 CONFLICTED→MATCHED on prod
+                  read-only) but the user cannot decide whether to deploy without SEEING the change in the UI. Deploy
+                  is the only way to show real users — but the emulator can show the new calc in a real UI with ZERO
+                  production impact. App is 3-tier (frontend :3000 → backend API :4000 → Firestore); reconciliation
+                  data flows through the backend API, so the emulator run needs backend pointed at the emulator too.
+    Goal:         Tooling to dump real prod reconciliationRecords (2026-07-01..2026-08-08, read-only) into the
+                  Firestore emulator, seed a test MD admin (bcrypt) so the real username/password login works, recalc
+                  in-emulator with the T-055 code so status flips are visible, and a run-book. Emulator scope only —
+                  no frontend display-layer change, no deploy, no prod writes.
+    How-Check:    exportProdForEmulator.ts (prod read-only) + importSeedToEmulator.ts + recalcInEmulator.ts all tsc-
+                  clean; emulator UI shows seeded CONFLICTED (before) → MATCHED after recalc; docs/emulator-verify.md
+                  reproduces the flow end-to-end.
+    Out-of-Scope: frontend display-layer warning (WorkHourComparisonTable "⚠ พบสแกนไม่ตรงงาน"); deploy; any PROD
+                  reconciliation re-run/write.
+    Relate File:  backend/scripts/exportProdForEmulator.ts · backend/scripts/importSeedToEmulator.ts ·
+                  backend/scripts/recalcInEmulator.ts · docs/emulator-verify.md
+
+- [X] T-058 · P1 · depends_on: none · done 2026-08-13 · attempts:1 · tool_calls:~60 (v1 ACCEPTED — PDF 14pp from real P002 data; grouping by category confirmed. Template visual polish → T-061; persistence → T-060; พื้นที่/area field → T-059)
+    Title:        ระบบออกเอกสาร Daily Report เป็น PDF (จากรูป+progress ที่บันทึกไว้ในระบบ)
+    ContextTask:  LMS บันทึก daily report ทุกวันอยู่แล้ว (รูปหน้างาน + ชื่องาน + progress) ทีมงานต้องนำ
+                  ข้อมูลนี้มาจัดเป็นเอกสาร PDF ส่งให้โครงการ ปัจจุบันทำมือ/นอกระบบ มีแอปต้นแบบที่สร้าง
+                  PDF ได้แล้วที่ D:\qc-report-new (React+Firebase แยก · Reports.tsx = ตัวสร้าง PDF) →
+                  งานนี้คือ port/integrate เข้ามาใน LMS ไม่ใช่เขียนใหม่หมด. daily report มี 2 สถานะ
+                  draft/submit — ฟีเจอร์นี้ใช้เฉพาะรูปหน้างาน จึงดึงได้ทั้ง 2 สถานะ.
+    Goal:         เพิ่มเมนู sidebar ใหม่ "ออกเอกสาร" ที่:
+                  - เห็น/กดได้เฉพาะ role AM, LD · ล็อกตามโครงการที่สังกัด (ถ้าเข้าถึงหลายโครงการ → มี
+                    dropdown เลือกโครงการก่อน)
+                  - เลือกวันที่จากปฏิทิน โดยเป็นวันในอดีตเสมอ (ออกรายงานของเมื่อวาน/วันก่อนหน้า)
+                  - หน้า "รายละเอียดงาน": ตารางงานของวันนั้น (ลำดับ · รายละเอียดงาน · พื้นที่ · %วันนี้ ·
+                    %สะสม · หมายเหตุ) จัดเรียง/จัดกลุ่มตามหมวดงาน (categoryName) งานกลุ่มเดียวกันอยู่ด้วยกัน
+                  - หน้า "รูปภาพ": ดึงรูปที่ลง daily report ของวันนั้น (ทั้งสถานะ draft + submit) มาให้เลือก
+                    → 6 รูป/หน้า · ใต้รูปมี caption = ชื่องาน + progress · เรียงกลุ่มตาม category เหมือนตาราง
+                  - ออกเป็นไฟล์ PDF ตาม template ที่โครงการกำหนด (อ้างอิงฟอร์ม ESCENT HATYAI)
+    How-Check:    AM/LD login → เปิดเมนู "ออกเอกสาร" → เลือกโครงการ (ถ้ามีหลาย) + วันที่ย้อนหลัง → เห็น
+                  รายการงาน + รูปของวันนั้น → เลือกรูป → กดออกเอกสาร → ได้ไฟล์ PDF ที่: หน้ารายละเอียดงาน
+                  จัดกลุ่มตามหมวดงานถูกต้อง · หน้ารูป 6 รูป/หน้า พร้อม caption "ชื่องาน + progress" ตรงกับข้อมูล
+                  daily report ของวันที่เลือก.
+    Out-of-Scope: - หน้า 1 "ทรัพยากรที่ใช้" (สภาพอากาศ + นับเครื่องจักร/เครื่องมือ/แรงงาน) = เฟสถัดไป
+                  - เอกสาร Inspection = ticket แยก (รอ approve) — อยู่เมนูเดียวกันแต่คนละงาน
+                  - ระบบตั้งค่า/แก้ template เองในแอป = ยังไม่รวม (ใช้ template โครงการที่กำหนดไว้)
+    Relate File:  D:\qc-report-new (Reports.tsx = PDF generator ต้นแบบ · watermark.ts · columnData.ts) ·
+                  frontend sidebar/Layout · backend daily report data (controllers/dailyReportController.ts) ·
+                  backend/src/models/Task.ts (categoryName สำหรับจัดกลุ่ม)
+
+- [ ] T-059 · P2 · depends_on: none
+    Title:        เพิ่มฟิลด์ "พื้นที่" (area) ตอนสร้างงาน + แสดงในคอลัมน์พื้นที่ของเอกสาร Daily Report
+    ContextTask:  เอกสาร Daily Report (T-058) มีคอลัมน์ "พื้นที่" แต่ v1 เว้นว่างไว้ เพราะระบบยังไม่เก็บ
+                  ข้อมูลพื้นที่งาน ต้องเพิ่มการเก็บที่ต้นทาง (ตอนสร้าง/แก้งาน) ก่อน แล้วเอกสารจึงเติมคอลัมน์นี้ได้.
+    Goal:         - เพิ่มฟิลด์ area ใน Task model + ฟอร์มสร้าง/แก้งาน (frontend)
+                  - buildDailyReportDoc ส่ง area ต่อเข้า entry → dailyReportPdf.ts เติมคอลัมน์ "พื้นที่"
+                  - ค่าว่าง = ตั๋วแยก (คงพฤติกรรมเดิมได้)
+    How-Check:    สร้างงานพร้อมกรอกพื้นที่ → ออกเอกสาร Daily Report ของวันนั้น → คอลัมน์ "พื้นที่" ในตาราง
+                  แสดงค่าที่กรอกไว้ตรงกับงาน.
+    Relate File:  backend/src/models/Task.ts · backend/src/api/routes/tasks.routes.ts (buildDailyReportDoc) ·
+                  backend/src/services/pdf/dailyReportPdf.ts · frontend งานสร้าง/แก้งาน
+
+- [X] T-060 · P1 · depends_on: T-058 · done 2026-08-13 · attempts:1 · tool_calls:~45 (persist Daily Report: LMS Storage + Firestore dailyReportDocs record per project+date, overwrite-latest; reopen→preselect saved photos + download-original via backend stream. Enabled LMS Storage bucket + Storage emulator for dev. Best-effort persist never blocks download.)
+    Title:        บันทึก (persist) เอกสาร Daily Report ที่สร้าง — ไฟล์ PDF + รูปที่เลือก ต่อโครงการ+วันที่
+    ContextTask:  T-058 ออก PDF แบบ stateless (สร้างแล้วดาวน์โหลด ไม่บันทึกที่ใด) ผู้ใช้ต้องการให้ระบบจำไว้:
+                  (1) ถ้าไฟล์ที่ดาวน์โหลดหาย ให้โหลดซ้ำจากระบบได้ (2) ไม่ใช่ทุกรูปที่ถูกเลือกใส่รายงาน ระบบ
+                  ต้องจำว่าเลือกรูปไหนไปบ้าง. Design ล็อกแล้ว: เก็บไฟล์ PDF ลง LMS Storage + Firestore record
+                  ต่อ project+date {selectedPhotoIds, pdfPath/url, createdBy, createdAt}; overwrite-latest;
+                  เก็บใน LMS project เอง (db) ไม่ใช่ After-Sale.
+    Goal:         - POST /daily-report-pdf เขียนไฟล์ PDF ลง LMS Storage + upsert Firestore record (overwrite ล่าสุด)
+                  - เปิดวันเดิมซ้ำ → preselect รูปที่บันทึกไว้ + ปุ่ม "ดาวน์โหลดไฟล์เดิม"
+    How-Check:    สร้างรายงาน → ปิดหน้า → กลับมาวันเดิม → รูปที่เคยเลือกถูกติ๊กไว้ + ดาวน์โหลดไฟล์เดิมได้
+                  โดยไม่ต้อง gen ใหม่.
+    Relate File:  backend/src/api/routes/tasks.routes.ts (daily-report-pdf endpoint) · LMS Storage · Firestore (db) ·
+                  frontend/src/pages/export-documents/index.tsx · exportDocumentService.ts
+
+- [X] T-064 · P1 · depends_on: T-060 · done 2026-08-14 · attempts:1 · tool_calls:~40 (persist Daily Request PDFs with AUTO-VERSIONING — unlike T-060 overwrite-latest, every generate writes a NEW versioned Storage object daily-requests/{proj}/{date}/{versionId}.pdf (versionId=Date.now()_rand, collision-proof) + appends to Firestore dailyRequestDocs/{proj}__{date}.versions[]; latestPath tracks newest. "ดาวน์โหลดไฟล์เดิม" streams latest without regenerating. Best-effort persist never blocks download. Immutable snapshot per printed doc = integrity guard vs retroactively-editable After-Sale source. Committed bf721db on inspection; user-tested.)
+    Title:        บันทึก (persist) เอกสาร Daily Request แบบเก็บทุกเวอร์ชัน (auto-versioning · ไม่ทับของเดิม)
+    ContextTask:  T-062/T-063 ออก Daily Request PDF แบบ stateless — gen ใหม่ทุกครั้ง ไม่บันทึกไฟล์. ปัญหา integrity:
+                  ถ้า print/ส่งเอกสารไปแล้ว แล้วข้อมูลต้นทาง (After-Sale requests) ถูกแก้ย้อนหลัง → gen ซ้ำได้เอกสาร
+                  คนละฉบับ. ผู้ใช้เลือก "แบบ 3" = auto-versioning (เก็บทุกเวอร์ชัน ไม่ทับ) แทน overwrite/prompt.
+    Goal:         - POST /daily-request-pdf เขียนไฟล์ PDF เวอร์ชันใหม่ทุกครั้ง + append Firestore record (best-effort)
+                  - GET /daily-request-saved (record|null) + GET /daily-request-file (stream latest หรือ versionId ที่ระบุ)
+                  - ปุ่ม "ดาวน์โหลดไฟล์เดิม" แสดงเมื่อ saved.hasFile → โหลดเวอร์ชันล่าสุดโดยไม่ gen ใหม่
+    How-Check:    gen เอกสารเดิม 2 ครั้ง → มี 2 objects ใน Storage + versionCount=2 + ดาวน์โหลดไฟล์เดิม = bytes ล่าสุด.
+    Relate File:  backend/src/services/pdf/dailyRequestStore.ts (NEW) · backend/src/api/routes/tasks.routes.ts ·
+                  frontend/src/services/exportDocumentService.ts · frontend/src/pages/export-documents/index.tsx
+
+- [X] T-065 · P1 · depends_on: T-064 · done 2026-08-14 · attempts:1 · tool_calls:~55 (per-project Excel-template fill engine — pilot: Daily Request, .xlsx output. Admin (GOD/MD) uploads one .xlsx per project holding {{token}} placeholders + a single data-marker row; system fills header tokens + expands the marker row into one styled row per work entry via ExcelJS duplicateRow, streams the filled .xlsx. Project with NO template → existing PDF flow untouched (additive, reversible). checkRole(['MD','AM','LD']) guards upload (GOD auto-passes); frontend canManageTemplate mirrors the same roleId set. PDF-via-LibreOffice deferred to phase 2. ⚠️ exceljs ^4.4.0 declared but needs npm install before runtime e2e. Not yet committed — on branch inspection.)
+    Title:        เทมเพลต Excel ต่อโครงการ — อัปโหลด .xlsx ที่มี {{token}} แล้วระบบเติมค่า + ขยายแถวข้อมูลอัตโนมัติ (นำร่อง Daily Request)
+    ContextTask:  T-058..T-064 ออกเอกสารเป็น PDF จาก template ที่ hardcode. ผู้ใช้อยากให้แต่ละโครงการอัปโหลด
+                  ฟอร์ม Excel ของตัวเองได้ แล้วระบบกรอกข้อมูลลงฟอร์มนั้น (คงรูปแบบ/สไตล์เดิมในไฟล์).
+    Goal:         - service เติม template: หา marker row ({{detail}}) → duplicateRow ตามจำนวนงาน → เติม {{token}} หัวเอกสาร+แต่ละแถว
+                  - 4 endpoints: POST/GET daily-request-template (อัปโหลด/ดูสถานะ · admin) · GET .../sample · POST daily-request-xlsx (ออกไฟล์)
+                  - UI DailyRequestTab: panel จัดการเทมเพลต (เฉพาะ GOD/MD) + ปุ่ม "ออกด้วย Template (Excel)" เมื่อมีเทมเพลต · ปุ่ม PDF เดิมไม่เปลี่ยน
+    How-Check:    อัปโหลด .xlsx ให้โครงการ → กดออกด้วย Template → ได้ไฟล์ .xlsx ที่เติมค่าครบ + จำนวนแถว = จำนวนงาน. โครงการที่ไม่มีเทมเพลต → เห็นเฉพาะปุ่ม PDF เดิม.
+    Relate File:  backend/src/services/pdf/dailyRequestTemplate.ts (NEW) · backend/src/api/routes/tasks.routes.ts ·
+                  frontend/src/services/exportDocumentService.ts · frontend/src/pages/export-documents/index.tsx
+
+- [X] T-066 · P1 · depends_on: T-065 · done 2026-08-14 · attempts:1 · tool_calls:~45
+    Title:        เมนู "จัดการ Template" แยกออกมา + preview หลังอัปโหลด (นำร่อง Daily Request)
+    ContextTask:  T-065 ฝังแผงจัดการเทมเพลตไว้ในแท็บออกเอกสาร (ซ่อนตามสิทธิ์). ผู้ใช้อยากให้เป็นเมนูแยกในแถบซ้าย
+                  จัดการเทมเพลตทั้ง Daily Report + Daily Request ในที่เดียว + มี preview ให้ดูหลังอัปโหลด.
+    Goal:         - หน้าใหม่ /template-management (เมนู "จัดการ Template" ในแถบซ้าย · GOD/MD/AM/LD)
+                  - ย้ายแผงจัดการ Daily Request (อัปโหลด/สถานะ/ตัวอย่าง) จากแท็บออกเอกสารมาที่หน้าใหม่ · คงปุ่ม "ออกด้วย Template (Excel)" ไว้ที่เดิม
+                  - preview: backend อ่าน .xlsx → {sheetName,rows} · frontend เรนเดอร์เป็นตาราง HTML (โชว์ {{token}})
+                  - Daily Report template = เลื่อนไปทีหลัง (ทับกับ T-061)
+    How-Check:    เปิดเมนู "จัดการ Template" → เลือกโครงการ → อัปโหลด .xlsx → เห็นตาราง preview + สถานะไฟล์. แท็บออกเอกสารยังกดออกไฟล์ได้เหมือนเดิม.
+    Out-of-Scope: Daily Report template (T-061) · merged-cell rendering แบบเป๊ะ (โชว์เนื้อหาพอ)
+    Relate File:  backend/src/services/pdf/dailyRequestTemplate.ts · backend/src/api/routes/tasks.routes.ts ·
+                  frontend/src/services/exportDocumentService.ts · frontend/src/pages/template-management/index.tsx (NEW) ·
+                  frontend/src/components/layout/Navbar.tsx · frontend/src/pages/export-documents/index.tsx
+
+- [X] T-067 · P1 · depends_on: T-066 · done 2026-08-17 · RE-SCOPED (PDF-only pivot)
+    Re-scoped:    2026-08-17 — ผู้ใช้เปลี่ยนแนวทาง: ไม่ซ่อม path Excel (approach B ด้านล่าง) แต่ "ถอด" ออกจาก UI แทน.
+                  เอกสารใบแจ้งงาน = PDF อย่างเดียว (1 ปุ่ม). บั๊กฟอร์มเปล่าหายเพราะไม่มีปุ่ม Excel ให้กดแล้ว.
+                  ทำจริง: ลบปุ่ม "ออกด้วย Template (Excel)" + wiring ในหน้า export-documents · ซ่อนเมนู "จัดการ Template".
+                  backend (engine เติม Excel · dailyRequestTemplate.ts · routes · Firestore documentTemplates · Storage
+                  document-templates/) ปล่อย DORMANT ไว้ (ไม่ลบ) — แนวทางชั้น 2 (T-068) จะ reuse ประตู upload + PDF engine.
+                  แผน + งานลง .sessions/mece_plan.md (S1 export page · S2 navbar · S3 roadmap). Frontend-only · branch inspection.
+    Title:        แก้บั๊ก "ออกด้วย Template" ได้ฟอร์มเปล่า — เติมข้อมูลฟอร์มที่ไม่มี {{token}} (approach B)
+    ContextTask:  ฟอร์ม ESCENT (P002) จริงไม่มี {{token}} เลย → fillDailyRequestTemplate หา marker {{detail}} ไม่เจอ →
+                  คืนฟอร์มเปล่า. POC เทียบ 2 แบบบนฟอร์มจริง → ผู้ใช้เลือกแบบ B (token-free) เพราะคง merge/เส้น/เลย์เอาต์.
+    Goal:         - เพิ่ม path token-free ใน fillDailyRequestTemplate: ตรวจจับตาราง (หัวตารางไทย) → เขียนข้อมูลลงช่องว่างที่ตีเส้นไว้แล้ว
+                  - คง merge (B:D รายละเอียด · E:G พื้นที่) + ตำแหน่งท้ายฟอร์ม · overflow → แทรกแถวก่อน footer
+                  - path เดิม (มี token) ต้องทำงานเหมือนเดิมเป๊ะ (additive · backward-compatible)
+    How-Check:    อัปฟอร์ม ESCENT เดิม (ไม่มี token) → กด "ออกด้วย Template" → ไฟล์ที่ได้มีข้อมูลในตาราง + merge/เส้นครบ + ท้ายฟอร์มอยู่ที่เดิม.
+    Out-of-Scope: header/วันที่ substitution บนฟอร์ม token-free (คนละเรื่อง) · preview fidelity (เลื่อน) · IN/OUT scan (park)
+    Relate File:  backend/src/services/pdf/dailyRequestTemplate.ts
+
+- [ ] T-068 · P2 · depends_on: T-067
+    Title:        Tier-2 self-service form onboarding — upload Excel → ปรับใน canvas → render PDF
+    ContextTask:  T-067 ถอด path "เติม Excel" ออกจาก UI (PDF อย่างเดียว). ขั้นต่อไปที่ผู้ใช้อยากได้คือให้แต่ละโครงการ
+                  ทำฟอร์มใบแจ้งงานของตัวเองได้ โดยไม่ต้องสร้างจากศูนย์ — อัปโหลด Excel ที่มีอยู่เป็นจุดตั้งต้น.
+    Goal:         - reuse ประตู upload เดิม (documentTemplates · Storage document-templates/) เป็นทางเข้า
+                  - Excel READER (parse โครงสร้าง 1 ครั้ง → JSON layout → seed canvas) — ไม่ใช้ engine "เติม Excel" เดิม (dormant)
+                  - หน้า canvas ให้ผู้ใช้ลาก/แก้ช่อง/หัวตาราง → บันทึก layout ผูกกับโครงการ
+                  - render ออกเป็น PDF ผ่าน engine เดิม (dailyRequestPdf.ts) — output คง PDF-only ตาม T-067
+    How-Check:    โครงการอัปโหลด Excel → เห็น layout ใน canvas → แก้ → บันทึก → กด "สร้าง PDF" → PDF สะท้อน layout ที่ปรับ.
+    Out-of-Scope: การรื้อ engine เติม Excel เดิม (ปล่อย dormant) · pixel-perfect fidelity รอบแรก · IN/OUT scan (park)
+    Relate File:  frontend (canvas ใหม่) · frontend/src/pages/template-management · backend upload routes + Storage
+
+- [X] T-069 · P1 · depends_on: T-067 · done 2026-08-17 · attempts:1
+    Title:        Configurable Daily Request PDF header + แท็บ "ตั้งค่าเอกสาร" (per-project header config)
+    ContextTask:  T-067 ทำ PDF Daily Request จาก engine กลาง (dailyRequestPdf.ts) แต่หัวเอกสารยังขาด logo · "โครงการ
+                  <name>" · "ผู้รับจ้าง" · เลขที่เอกสาร ตามฟอร์มจริง (ESCENT HATYAI II). ค่าที่ต่างกันรายโครงการ
+                  (Tier 2) ต้องอ่านจาก config ต่อโครงการ ไม่ hard-code.
+    Goal:         - collection ใหม่ documentHeaderConfigs (doc id = projectId) เก็บ logo · contractor · docNumberPrefix
+                  - dailyRequestPdf.ts วาดหัวเต็ม: logo · โครงการ+ชื่อ (จาก Project doc) · ผู้รับจ้าง · เลขที่ prefix+/..... · วันที่
+                  - logo อัป Storage (project-assets/) → ฝัง base64 ตอน render (โหลด bytes เฉพาะ PDF-render path)
+                  - แท็บใหม่ "ตั้งค่าเอกสาร" ในหน้าออกเอกสาร (เลือกโครงการ → กรอก → บันทึก) · role AM/LD/MD
+    How-Check:    ตั้งค่า header ของโครงการ → สร้าง PDF Daily Request → หัวเอกสารแสดง logo/โครงการ/ผู้รับจ้าง/เลขที่ครบ ·
+                  config ว่าง → หัว degrade สวย (ไม่มี logo, projectName จาก Project doc, ไม่มีบรรทัดผู้รับจ้าง, เลขที่ว่าง).
+    Out-of-Scope: ตัวนับเลขเอกสารอัตโนมัติ (เว้น /..... เติมมือ) · Tier-2 canvas (T-068) · IN/OUT scan (park)
+    Relate File:  backend/src/services/pdf/dailyRequestPdf.ts · backend/src/services/pdf/documentHeaderConfig.ts (new) ·
+                  backend/src/api/routes/tasks.routes.ts · frontend/src/services/exportDocumentService.ts ·
+                  frontend/src/pages/export-documents/index.tsx
+
+- [X] T-071 · P1 · depends_on: T-069 · done 2026-08-17 · attempts:1 · tool_calls:~35
+    Title:        Daily Report PDF letterhead + nested table header + report doc-number config (partial of T-061)
+    ContextTask:  T-058 Daily Report PDF ยังไม่มีหัวเอกสาร (มีแค่ <h1> กลางหน้า) · หัวตารางแถวเดียว. ต้องตรงฟอร์ม
+                  ESCENT HATYAI: logo มุมซ้าย · โครงการ+ชื่อ · เลขที่/วันที่/Duration มุมขวา · หัวตาราง % ซ้อนชั้น.
+    Goal:         - ยืม letterhead จาก dailyRequestPdf.ts มาที่ dailyReportPdf.ts (logo · โครงการ · (DAILY REPORT) ·
+                    เลขที่ prefix+/… · วันที่ · Duration ………/………)
+                  - หัวตารางซ้อนชั้น: "ดำเนินการได้" (colspan 2) › วันนี้ / สะสม
+                  - config: field docNumberPrefixReport แยกจาก docNumberPrefix (request) · logo+ผู้รับจ้างใช้ร่วม
+                  - route daily-report-pdf ดึง projectName+config+logo ส่งเข้า render · PUT config รับ field ใหม่
+                  - DocSettingsTab เพิ่มช่อง "เลขที่ Daily Report" + relabel ช่องเดิมเป็น "Daily Request"
+    How-Check:    render HTML mock → หัวเอกสาร+เลขที่ DRP+Duration+หัวตารางซ้อนชั้นครบ (verified via browser preview) ·
+                  tsc backend+frontend 0 error · config ว่าง → degrade (ไม่มี logo, เลขที่ว่าง).
+    Out-of-Scope: ตัวนับเลขอัตโนมัติ (เติมมือ) · หน้า template-config เต็ม (ยังเปิดใน T-061) · IN/OUT scan (park)
+    Relate File:  backend/src/services/pdf/dailyReportPdf.ts · backend/src/services/pdf/documentHeaderConfig.ts ·
+                  backend/src/api/routes/tasks.routes.ts · frontend/src/services/exportDocumentService.ts ·
+                  frontend/src/pages/export-documents/index.tsx
+
+- [X] T-072 · P2 · depends_on: T-058 · done 2026-08-17 · attempts:1 · tool_calls:~20
+    Title:        Daily Report PDF: flow-fill photo pages + category dividers (save paper)
+    ContextTask:  buildPhotoPages rendered 1 page per category (hard page-break between หมวด) → a หมวด with
+                  <6 photos still burned a full A4 sheet. User: เปลืองกระดาษ — ไหลต่อเนื่องได้ + เส้นคั่นก่อนหมวดใหม่.
+    Goal:         - drop per-category .page + hard page-break → one continuous .photo-section
+                  - .cat-divider (border-top = เส้นคั่น + "หมวดงาน: X") before each category (first: no top border)
+                  - photos in .photo-row of 2, .photo-item FIXED height 76mm → @page paginates naturally (~6/page)
+                  - categories share PAGES but a new category always starts a new row (no cross-category row mixing)
+    How-Check:    grep confirms .photo-section/.cat-divider/.photo-row + .photos-grid removed · tsc 0 error ·
+                  render mock PDF 12 photos/3 หมวด = 4 pages (old = 5) → flow + paper-saving confirmed.
+    Out-of-Scope: per-page running header · divider styling variants · IN/OUT scan (park)
+    Relate File:  backend/src/services/pdf/dailyReportPdf.ts
+
+- [X] T-073 · P2 · depends_on: T-058 · done 2026-08-18 · attempts:1 · tool_calls:22
+    Note (as-built): the user supplied the paper template image — col1/col2 headers are BOTH
+                  "ผู้บันทึก/รายงาน/ผู้รับจ้าง" (differing only by role line: Site Engineer vs Project
+                  Engineer), col3 = "รับทราบ / ผู้ควบคุมงาน" with a blank "บริษัท" line (NOT the
+                  hard-coded TEAM-CM company name the Goal below guessed — the paper leaves it to sign).
+    Follow-up fix (same day, same file): the report PDF page box was 210mm wide (FULL A4 sheet)
+                  under 10mm @page margins → the right 20mm of every page spilled onto an extra
+                  sheet ("ตกขอบ"). Now @page margin 7.5mm + .page width 195mm / min-height 282mm
+                  (mirrors dailyRequestPdf), and `.photo-section` — a body-level block with no width
+                  at all — pinned to the same 195mm. Verified: every block 195mm, doc scroll width
+                  195mm, zero horizontal overflow, signature block still flush at the sheet bottom.
+    Title:        Daily Report PDF: signature footer block (ช่องเซ็นท้ายตาราง)
+    ContextTask:  Paper form has a 3-column signature block under the work table. User confirmed
+                  wants "ช่องให้เซ็นเหมือนเดิม". Mirror the dailyRequestPdf buildSignatureFooter pattern
+                  (dotted line + (name) parens + role + วันที่), adapted to 3 columns for the report.
+    Goal:         - buildSignatureFooter(): 3 equal columns — (1) ผู้บันทึก/รายงาน · ผู้รับจ้าง TTS · Site Engineer
+                    (2) ผู้บันทึก/รายงาน · ผู้รับจ้าง TTS · Project Engineer (3) รับทราบ · ผู้ควบคุมงาน (TEAM-CM) ·
+                    บริษัท ทีม คอนสตรัคชั่น แมเนจเมนท์ จำกัด — each: dotted sign line + (….) + role + วันที่
+                  - CSS .rsign-* (own namespace, static form fields, no data source)
+                  - insert inside buildWorkTable .page AFTER </table>, margin-top:auto pushes it to the sheet bottom
+    How-Check:    grep confirms buildSignatureFooter emits 3 columns + inserted into .page · tsc 0 error ·
+                  render mock HTML → 3 signature columns with dotted lines at the bottom of the table page.
+    Out-of-Scope: auto-filling signer names from data · เวลาปกติ/OT split (→ T-074) · IN/OUT scan (park)
+    Relate File:  backend/src/services/pdf/dailyReportPdf.ts
+
+- [X] T-076 · P1 · depends_on: none · done 2026-08-18 · attempts:1 · tool_calls:~95 · commit 258b503 (branch inspection, not pushed)
+    Title:        Inspect: port the inspection-topic CONFIG mechanism from D:\qc-report-new into LMS
+    ContextTask:  D:\qc-report-new is the existing standalone React+Firebase app that already
+                  generates inspect documents. LMS is absorbing it (see the QC-report memory).
+                  This ticket is the FIRST, deliberately small slice: only the CONFIG /
+                  settings side — how inspection topics (หัวข้อการตรวจ) are defined and stored —
+                  NOT document generation, NOT photo handling.
+    Goal:         - read how qc-report-new defines/stores/edits its inspection-topic config
+                  - port that mechanism into LMS (adapt to LMS's Firebase + backend, do not
+                    copy blindly; LMS already has a documentHeaderConfig pattern to match)
+                  - surface it inside the EXISTING /export-documents page, on the "inspect" tab
+                  - that tab therefore gains TWO sub-menus: "ตั้งค่าหัวข้อการตรวจ" and "สร้างเอกสาร"
+                    (the page was originally issue-documents only, so the inspect tab needs the split)
+    Out-of-Scope: document generation / PDF for inspect · photo upload · anything on the AM/LD
+                  daily-report tabs · a separate sidebar menu (user rejected that — everything
+                  lives inside /export-documents; the old template-management page was deleted
+                  for exactly this reason on 2026-08-18)
+    How-Check:    open /export-documents → inspect tab shows the two sub-menus; the settings
+                  sub-menu can create/edit/list inspection topics and they persist (reload shows
+                  them); "สร้างเอกสาร" sub-menu exists and still reaches the existing flow
+    Relate File:  frontend/src/pages/export-documents/index.tsx · frontend/src/services/exportDocumentService.ts ·
+                  backend/src/api/routes/tasks.routes.ts · backend/src/services/pdf/documentHeaderConfig.ts (pattern to mirror)
+
+- [ ] T-077 · P2 · depends_on: T-076
+    Title:        Enforce project scoping on the /export-documents config endpoints (both pairs)
+    ContextTask:  Found while scrutinizing T-076 S2. The config routes trust the caller's
+                  `projectId` outright: GET/PUT /tasks/daily-request-header-config and
+                  GET/PUT /tasks/inspection-topic-config are gated by checkRole(['MD','AM','LD'])
+                  only, with no check that the projectId belongs to the caller. The /export-documents
+                  UI already limits the picker to the user's projectLocationIds, so normal use is
+                  safe — the gap only opens to a crafted API call by an already-authenticated
+                  MD/AM/LD user. LOW severity, not externally reachable. User reviewed and agreed
+                  to queue rather than widen T-076's scope (2026-08-18).
+
+- [ ] T-078 · P1 · depends_on: T-076 · PARKED 2026-08-19 (awaiting team meeting + user decision)
+    Title:        Task creation: add workspace (floor + subworkspace) and an optional inspect link
+    Status:       PARKED 2026-08-19 by the user: "มันยากมาก มันจะต้องผ่านการประชุมก่อน ฉันขอเวลาคิดก่อน".
+                  Phase 1 + Phase 2 are DONE — .sessions/gather_complete.md and .sessions/mece_plan.md
+                  are fully written (7 sections, all serial, stripped-plan-hash 01b49b29) and the
+                  skeptical review passed (.sessions/.skeptical_ok verdict: go). Phase 3 NOT started:
+                  ZERO lines of T-078 code exist. Resume = re-confirm the plan with the user (M3 user
+                  confirm is still unchecked), then run S1. Do not start without that confirm.
+    ContextTask:  Inspection topics now exist per project (T-076) but nothing connects them to actual
+                  work. The user wants the task-creation dialog to place each job in space and to
+                  optionally mark it as needing inspection, so a later slice can produce the
+                  inspection document for that job.
+    Goal:         In TaskCreateModal, at the task (ชื่องาน) level add: ชั้น/floor (REQUIRED) and
+                  subworkspace (optional, e.g. "G/L A-1"), both as autocomplete — values already used
+                  in THAT project are offered, and a new value can be typed in (guards against the
+                  same floor being spelled three ways). Plus a toggle "ตรวจ inspect?" which, when on,
+                  lets the user pick exactly ONE inspection sub-category (หมวดย่อย) from the T-076
+                  tree, unfiltered (the user rejected auto-filtering by work order because the names
+                  will not match exactly). Shape confirmed by the user as OPTION A (2026-08-18):
+                  floor/subworkspace live on the TASK, subtasks are the steps inside it
+                  (เข้าแบบ, เทคอนกรีต) and inherit the task's floor; a different floor = a new task.
+    Out-of-Scope: the inspection screen/flow itself (next slice) · document generation · changing the
+                  subtask shape · backfilling old tasks
+    How-Check:    create a task in a non-warehouse project -> ชั้น is required, autocomplete offers
+                  previously used floors, subworkspace optional, inspect toggle stores exactly one
+                  sub-category id · create a task in โครงการคลังสินค้าและบริการ -> the form is
+                  IDENTICAL to today (no floor, no inspect) · an existing task with no floor still
+                  opens and saves
+    Relate File:  frontend/src/page-components/workspace/components/TaskCreateModal.tsx (zod schema
+                  L44, task-level fields) · backend/src/models/Task.ts · backend/src/services/
+                  TaskService.ts · backend/src/api/routes/tasks.routes.ts
+    Special:      WAREHOUSE EXEMPTION — workspace applies to every project EXCEPT those whose
+                  ProjectLocation.department === 'WH', which keep task creation exactly as today.
+                  DECIDED BY DEPARTMENT, NOT BY NAME (user, 2026-08-19: "เรากรองที่ department ดีไหม
+                  เพราะทั้ง 2 โครงการมี department เหมือนกัน department = WH"). This SUPERSEDES the
+                  earlier name-matching plan (pages/workspace/index.tsx:1364
+                  projectName.includes('คลังสินค้าและบริการ')) and covers both คลังสินค้าและบริการ and
+                  บริการลูกค้า. department is verified real and round-trips: ProjectLocation.ts L9/L29/L45
+                  + converter L63/L95, frontend projectService.ts:24. Centralise the test in ONE helper.
+    Must-Pair:    MOVING THE FLOOR OUT OF THE TASK NAME AND FIXING TASK IDENTITY MUST SHIP TOGETHER.
+                  Today the floor is typed INTO the task name ("งานเสาชั้น 12" vs "งานเสาชั้น 13"), so
+                  TaskService.createTask deciding new-vs-existing by taskName alone
+                  (TaskService.ts:104 where('taskName','==',...).limit(1)) is CORRECT today — there is
+                  no bug in production. The moment the floor becomes its own field the names collapse to
+                  "งานเสา" for every floor, and that same query would match the other floor's task and
+                  append into it (subtasks at L269-272, and the merge write at L252 would overwrite the
+                  existing doc's floor). So identity must widen to (taskName + floor + subWorkspace) in
+                  the SAME release. Do it in CODE after fetching the by-name candidates — NOT as extra
+                  .where() equality filters: legacy docs have no `floor` field at all, so
+                  where('floor','==',null) would never match them and every append to a legacy task
+                  would create a duplicate. The frontend live duplicate warning
+                  (TaskCreateModal taskNameDuplicate L354-363) must widen the same way.
+    Also-Decided: (2026-08-19) inspect link is EDITABLE later in the task edit dialog · floor and
+                  subWorkspace are DISPLAYED on the task card · legacy tasks are NOT forced to fill
+                  floor when edited (required on create only) · the copy-task button
+                  (handleDuplicateTask L446-466) must CARRY the source task's inspect sub-category but
+                  leave floor/subWorkspace BLANK — copying งานเสา exists precisely to place it on a
+                  new floor (user: "combobox จะไม่ใช่การ clone ชั้นมา แต่มันต้อง clone หัวข้อ inspect").
+    Storage:      new collection taskWorkspaceConfigs, one doc per project
+                  { projectId, floors: string[], subWorkspaces: string[], updatedAt, updatedBy }.
+                  The BACKEND appends new values on task create; the client never writes the list.
+                  Rejected: deriving DISTINCT floors from tasks (Firestore has no DISTINCT → full
+                  per-project scan on every dialog open) · storing the arrays on the ProjectLocation
+                  doc (the project edit form could overwrite and wipe them).
+
+- [ ] T-079 · P2 · depends_on: none
+    Title:        spawn_gate/execution_schedule only recognise "main context" — plans saying "MAIN" are
+                  wrongly treated as delegated
+    ContextTask:  Hit live while closing T-076: marking S5 [X] was BLOCKED with "no MAIN marker" even
+                  though both the section header ([Cycle 4 · serial · MAIN]) and the Model: line
+                  ("model_medium + MAIN marker") declared main context. Root cause:
+                  scripts/execution_schedule.py MAIN_MARKERS = ("main context",) — one exact phrase,
+                  while the plan template and schema examples use "MAIN" and "MAIN marker".
+    Goal:         Make the marker vocabulary agree in ONE place: either widen MAIN_MARKERS to accept
+                  the forms the template actually produces (bare "main", "main marker", "· main]") or
+                  fix the template/schema to emit only "main context" — and add a self-test case for
+                  whichever form is chosen, since the current self-test only covers "MAIN context".
+    Out-of-Scope: changing the T-328 tier-binding rule itself
+    How-Check:    a plan section written with "[Cycle N · serial · MAIN]" + "Model: model_medium +
+                  MAIN marker" can be marked [X] without a spawn proof and without an env override ·
+                  `python scripts/spawn_gate.py --self-test` passes
+    Relate File:  scripts/execution_schedule.py (MAIN_MARKERS L45, is_delegated L99) ·
+                  scripts/spawn_gate.py (decide L127) · docs/session_templates/mece_plan_schema.md
+                  Note the AM rule: AM is project-scoped, NOT a superuser — only MD/GOD bypass
+                  scoping (see the am-role-not-superuser memory). So AM must be scoped here too.
+    Goal:         - decide the scope source (req.user projectLocationIds vs a project-membership read)
+                  - reject a projectId outside the caller's scope on all FOUR handlers, MD/GOD exempt
+                  - keep the existing { success, error } 4xx envelope; no behaviour change for the UI
+    Out-of-Scope: any other /tasks route · role-model changes · frontend changes (the picker
+                  already scopes correctly)
+    How-Check:    as an AM of project A, a direct PUT with project B's projectId returns 403;
+                  the same AM saving project A's config still succeeds from the UI; MD unaffected
+    Relate File:  backend/src/api/routes/tasks.routes.ts (L1804-1863 header config · L1880-1940
+                  inspection topic config) · backend/src/api/middleware/auth.ts
+- [ ] T-074 · P2 · depends_on: T-073 · PARKED (needs design decision)
+    Title:        Daily Report PDF: split work rows into เวลาปกติ / ล่วงเวลา(โอที) sections
+    ContextTask:  Paper form divides work rows into normal-time vs OT sections. BLOCKER: the Daily Report
+                  source (dailyReports collectionGroup) logs one cumulative %progress per task/day with NO
+                  time/period field — unlike Daily Request, which reads per-worker shiftTimes (otMorning/day/
+                  otNoon/otEvening) from the After-Sale `requests` collectionGroup. Progress can't be split by time.
+    Goal:         DECIDE first (with user): (A) cross-reference each report task's request shiftTimes on that date
+                  → tag task ล่วงเวลา if any OT slot, else เวลาปกติ (data-driven; needs a rule for tasks worked in
+                  BOTH normal+OT) · OR (B) static section headers เวลาปกติ (real rows) + ล่วงเวลา (blank hand-fill).
+    How-Check:    (pending design decision — do not start until resolved)
+    Out-of-Scope: adding an OT flag to the task/subtask data model (separate task if chosen)
+    Relate File:  backend/src/services/pdf/dailyReportPdf.ts · backend/src/api/routes/tasks.routes.ts (buildDailyReportDoc)
+
+- [X] T-075 · P2 · depends_on: T-072 · done 2026-08-18 · attempts:1 · tool_calls:19
+    As-built: mechanism A (thead repeat). `buildPhotoPages` now returns a one-column
+    `<table class="photo-section">` — thead = "โครงการ … · วันที่ … · เลขที่ <prefix>/……"
+    (segment dropped when no prefix), each divider/photo-row = its own `<tr>` (divider row
+    gets `class="cat-row"`). New CSS `.photo-head` / `.photo-cell`; break-avoidance moved
+    to the rows (`tbody tr` + `tr.cat-row`) because inside a table Chrome applies it at row
+    level; first-divider selector re-pointed from `>` child to `tbody tr:first-child`; dead
+    `.photo-section-sub` removed. Verified at PDF level (screen DOM cannot prove thead
+    repeat): 20 photos → 5 pages, pages 2-5 all start with the same glyph run, 6 photos/page
+    unchanged, doc-number 1 hit/page with prefix and 0 without.
+    Title:        Daily Report PDF: repeat an identifying header on EVERY photo page
+    ContextTask:  User (2026-08-18): if the printed report gets separated, a loose photo page has no
+                  way to tell which project/date it belongs to. Today the identifying line
+                  (`.photo-section-sub`, e.g. "P002 · 11 ส.ค. 2569") is emitted ONCE at the top of the
+                  photo section; T-072 made photos flow continuously so the browser decides where the
+                  page breaks land — meaning no per-page header exists on photo pages 2..N.
+    Goal:         - every printed photo page carries project + date (+ title) at its top
+                  - keep T-072's continuous photo flow (do NOT go back to one page per category)
+    How-Check:    render a mock with enough photos to span ≥3 photo pages → each photo page shows the
+                  project + date line at its top; photo count per page unchanged vs before (no paper lost
+                  beyond the header height).
+    Out-of-Scope: re-designing the letterhead · per-page footers/page numbers (separate ask if wanted)
+    Relate File:  backend/src/services/pdf/dailyReportPdf.ts
+    DECIDED (user, 2026-08-18): scope = PHOTO PAGES ONLY (the work-table page already has the full
+                  letterhead). Header content = the compact one-liner PLUS the document number —
+                  i.e. project + date + "เลขที่ HYI2-TTS-TCM-DRP/……" on one short line, styled like the
+                  existing `.photo-section-sub`, not the full letterhead (photo space matters more).
+    Options (decide before Phase 2):
+                  A) `<thead>` repeat — wrap the photo flow in a table whose `<thead>` holds the header;
+                     Chrome repeats a thead on every printed page automatically. Keeps all layout in the
+                     existing HTML/CSS (Thai fonts already embedded). Cost: photo rows become table rows.
+                  B) puppeteer `displayHeaderFooter` + `headerTemplate` in page.pdf() — header on EVERY
+                     page (work table page too), drawn in the page margin box. Least HTML change, but the
+                     margin box needs reserved top margin and renders outside the embedded-font context.
+
+- [ ] T-061 · P2 · depends_on: T-058
+    Title:        หน้ากำหนด/ปรับ template เอกสาร Daily Report + จูน visual ให้ตรง ESCENT HATYAI
+    ContextTask:  T-058 v1 ออก PDF ได้ แต่ template ยังไม่ pixel-perfect ตามฟอร์ม ESCENT HATYAI ผู้ใช้อยากมี
+                  หน้าเฉพาะสำหรับกำหนด/แก้ template เอง แทน hardcode ใน dailyReportPdf.ts.
+    Goal:         - จูน HTML/CSS ใน dailyReportPdf.ts ให้ตรง ESCENT HATYAI (spacing/หัวตาราง/ฟอนต์/โลโก้)
+                  - หน้าตั้งค่า template (เลือก/แก้ header, โลโก้, คอลัมน์, จำนวนรูป/หน้า) ที่ผูกกับโครงการ
+    How-Check:    เปิดหน้าตั้งค่า template → แก้ค่า → ออกเอกสาร → PDF สะท้อนค่าที่ตั้ง + หน้าตาตรงฟอร์มอ้างอิง.
+    Relate File:  backend/src/services/pdf/dailyReportPdf.ts · frontend (หน้า template config ใหม่) ·
+                  ESCENT HATYAI DAILY REPORT.pdf (ฟอร์มอ้างอิง)
+
+- [ ] T-080 · P1 · depends_on: none
+    Title:        Settle who may open /export-documents — role matrix + route guard (PRE-PUSH BLOCKER)
+    ContextTask:  Found while closing T-076. The PAGE is gated `<ProtectedRoute requiredRoles={['AM','LD']}>`
+                  but the four config API endpoints allow MD/AM/LD, so MD is blocked at the door while the
+                  backend would accept them. User (2026-08-19): "หน้า export เราให้สิทธิ์ AM LD MD เข้าได้ไม่ใช่หรอ
+                  (อันนี้ต้องปรับอีก เพราะว่ายังไม่แน่ชัดว่าใครจะสามารถเข้าได้บ้าง)" — i.e. the intended list is
+                  AM/LD/MD, but the FULL list is not decided yet.
+    Goal:         - decide the final role list for the page AND per sub-tab (settings vs create-document
+                    may differ) with the user
+                  - make the page guard and the API checkRole lists agree — one source, no drift
+                  - cover every /export-documents endpoint, not just the inspection pair
+    How-Check:    log in as each role in the agreed list → page opens AND save works; log in as a role
+                  outside the list → cannot open the page AND the API rejects a direct call.
+    Out-of-Scope: project-level scoping of the config endpoints (that is T-077) · any document-generation
+                  behaviour.
+    Relate File:  frontend/src/pages/export-documents/index.tsx (ProtectedRoute requiredRoles) ·
+                  backend/src/api/routes/tasks.routes.ts (checkRole on the config endpoints)
+    PUSH GATE:    USER INSTRUCTION 2026-08-19 — this MUST be verified BEFORE any push of the `inspection`
+                  work to `main`. main = production deploy. Do not push with the role matrix unresolved.

@@ -1104,9 +1104,7 @@ const WorkHourComparisonTable: React.FC<Props> = ({
         }
       }
 
-      // Only consume a punch if it's within the 90-minute threshold (same as backend)
-      // This prevents a far-away punch from being "used" by the wrong segment
-      if (hasValidIn) usedPunches.add(closestIn);
+      const hasValidOut = closestOut !== -1 && minOutDiff <= 90;
       // Mirror backend logic: don't mark OUT as used if it equals the next segment's expectedStart
       // (boundary-shared punch: e.g. 08:00 is both OUT of otMorning and IN of morning) — only
       // applies when the next segment is another REAL work segment. A STANDARD_BREAK placeholder
@@ -1114,19 +1112,40 @@ const WorkHourComparisonTable: React.FC<Props> = ({
       // no IN of its own to share the punch with — treating it as boundary-shared here left the
       // real OUT punch unconsumed, so it leaked into the break's own stray-scan check (Pass 2)
       // and made the "no data" placeholder reappear even though the punch was already accounted for.
-      if (closestOut !== -1 && minOutDiff <= 90) {
-        const segIdx = baseSegments.indexOf(seg);
-        const nextSeg = baseSegments[segIdx + 1];
-        const isBoundaryShared =
-          nextSeg && !nextSeg.isGapSegment && seg.expectedEnd === nextSeg.expectedStart;
-        if (!isBoundaryShared) {
-          usedPunches.add(closestOut);
+      const segIdx = baseSegments.indexOf(seg);
+      const nextSeg = baseSegments[segIdx + 1];
+      const isBoundaryShared =
+        nextSeg && !nextSeg.isGapSegment && seg.expectedEnd === nextSeg.expectedStart;
+
+      // Employee-favorable widening (spec R1/R2 · T-058) — mirror of backend selectFavorablePunch:
+      // after the nearest-to-boundary anchor, expand IN to the EARLIEST and OUT to the LATEST scan
+      // within FAVORABLE_RADIUS_MIN of that anchor, so a benign double-tap straddling the boundary
+      // is not marked late/early. Consume the WHOLE cluster so a leftover tap doesn't resurface as
+      // a Pass-2 stray scan ("⚠ พบสแกนไม่ตรงงาน"). Only consume within the 90-min validity (same
+      // as backend) so a far-away punch is never used by the wrong segment.
+      const FAVORABLE_RADIUS_MIN = 15; // = backend ADJACENCY_THRESHOLD_MIN
+      let selectedIn: number | null = null;
+      if (hasValidIn) {
+        const inCluster = available.filter((t: number) => Math.abs(t - closestIn) <= FAVORABLE_RADIUS_MIN);
+        selectedIn = Math.min(...inCluster);
+        inCluster.forEach((t: number) => usedPunches.add(t));
+      }
+
+      let selectedOut: number | null = null;
+      if (hasValidOut) {
+        if (isBoundaryShared) {
+          // don't widen/consume across a shared boundary punch — it stays reusable as next IN
+          selectedOut = closestOut;
+        } else {
+          const outCluster = available.filter((t: number) => Math.abs(t - closestOut) <= FAVORABLE_RADIUS_MIN);
+          selectedOut = Math.max(...outCluster);
+          outCluster.forEach((t: number) => usedPunches.add(t));
         }
       }
 
       realResults.set(seg, {
-        actualIn: hasValidIn ? closestIn : null,
-        actualOut: closestOut !== -1 && minOutDiff <= 90 ? closestOut : null,
+        actualIn: selectedIn,
+        actualOut: selectedOut,
       });
     });
 

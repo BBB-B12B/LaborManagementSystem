@@ -28,6 +28,14 @@
 //         firebase deploy --only functions:dailyContractorSync
 //
 //  Region note: Labor DB = Singapore (asia-southeast1). The trigger runs there.
+//
+//  RELIABILITY: a failed write to After Sale throws (does not swallow the
+//  error) so Cloud Functions marks the execution failed and retries it —
+//  enable "Retry on failure" for this function in the GCP Console (or
+//  `gcloud functions deploy dailyContractorSync --retry`) for that to take
+//  effect; the firebase-tools CLI has no flag for it. Retry only covers a
+//  bounded window though — `dailyContractorReconcile` (scheduled, runs
+//  daily) is the actual backstop that heals any gap this leaves behind.
 // ============================================================================
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -103,6 +111,7 @@ exports.dailyContractorSync = functions
             }
             catch (err) {
                 console.error(`[dailyContractorSync] ❌ Delete failed for ${contractorId}:`, err);
+                throw err; // rethrow so Cloud Functions marks this execution failed and retries it
             }
         }
         return;
@@ -116,6 +125,7 @@ exports.dailyContractorSync = functions
             }
             catch (err) {
                 console.error(`[dailyContractorSync] ❌ Cleanup delete failed for ${contractorId}:`, err);
+                throw err;
             }
         }
         return;
@@ -138,6 +148,7 @@ exports.dailyContractorSync = functions
     }
     catch (err) {
         console.error(`[dailyContractorSync] ❌ Sync failed for ${contractorId}:`, err);
+        throw err; // rethrow so Cloud Functions marks this execution failed and retries it
     }
 });
 //# sourceMappingURL=labor-dailyContractorSync.js.map

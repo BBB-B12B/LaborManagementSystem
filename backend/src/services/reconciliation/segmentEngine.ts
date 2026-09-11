@@ -309,6 +309,52 @@ export interface SegmentMatchOutcome {
   extraPunches: number[];
 }
 
+// ระยะห่าง (นาที) ที่ถือว่าสแกน "ส่วนเกิน" เป็นการแตะซ้ำ (double-tap) ของ punch ที่ถูกใช้ไปแล้ว
+// ไม่ใช่สัญญาณเวลาทำงานที่หายไป — double-tap จริงที่พบอยู่ที่ 10-13 นาที, 15 ให้เผื่อเล็กน้อย
+const ADJACENCY_THRESHOLD_MIN = 15;
+
+/**
+ * แยกสแกนส่วนเกิน (extraPunches) ออกเป็น 2 กลุ่ม โดยดูจากระยะห่างถึง punch ที่ถูกใช้ไปแล้ว:
+ *  - benign   = มี consumed punch อยู่ใกล้ภายใน thresholdMin นาที → เป็นการแตะซ้ำ (double-tap) → ไม่เตือน
+ *  - isolated = ไม่มี consumed punch ใดอยู่ใกล้ภายใน threshold → เป็นสัญญาณเวลาทำงานจริงที่หาย → ต้องเตือน
+ * ไม่ลบ ไม่รวมสแกนใดๆ — แค่จัดกลุ่มเพื่อตัดสินว่าจะยก CONFLICTED หรือไม่
+ */
+export function classifyExtraPunches(
+  extraMinutes: number[],
+  consumedMinutes: number[],
+  thresholdMin: number
+): { benign: number[]; isolated: number[] } {
+  const benign: number[] = [];
+  const isolated: number[] = [];
+  for (const extra of extraMinutes) {
+    const nearest = consumedMinutes.reduce((min, c) => Math.min(min, Math.abs(extra - c)), Infinity);
+    if (nearest <= thresholdMin) benign.push(extra);
+    else isolated.push(extra);
+  }
+  return { benign, isolated };
+}
+
+/**
+ * เลือก IN/OUT แบบเข้าข้างพนักงานภายในกลุ่มแตะซ้ำ (spec R1/R2 · T-058).
+ * เมื่อได้ "สแกนที่ใกล้ขอบงานที่สุด" (anchor) แล้ว → ขยายเป็นสแกนที่น้อยสุด (IN) หรือมากสุด (OUT)
+ * ที่อยู่ในระยะ radiusMin นาทีจาก anchor เพื่อไม่ให้การแตะซ้ำคร่อมเวลาเริ่ม/เลิกงาน
+ * (เช่น 07:50 กับ 08:02 ตอนเริ่ม 08:00) ถูกตัดสินว่าสาย/เลิกก่อนอย่างไม่เป็นธรรม
+ * คืน clusterMembers ทั้งหมดกลับไปด้วย เพื่อให้ผู้เรียก "กิน" (consume) ทั้งกลุ่ม
+ * ไม่ให้สแกนที่เหลือถูกจับคู่ซ้ำกับ segment ถัดไปหรือโผล่เป็นสแกนหลง.
+ * หมายเหตุ: การขยายนี้ทำให้ late/early "น้อยลง" เท่านั้น ไม่มีทางทำให้ MATCHED กลายเป็น CONFLICTED.
+ */
+export function selectFavorablePunch(
+  available: number[],
+  anchor: number,
+  side: 'in' | 'out',
+  radiusMin: number
+): { selected: number; clusterMembers: number[] } {
+  const clusterMembers = available.filter((t) => Math.abs(t - anchor) <= radiusMin);
+  // anchor อยู่ในกลุ่มเสมอ (|anchor-anchor| = 0) → cluster ไม่ว่าง
+  const selected = side === 'in' ? Math.min(...clusterMembers) : Math.max(...clusterMembers);
+  return { selected, clusterMembers };
+}
+
 /**
  * จับคู่ scanPunches กับ segments ทีละตัว (เรียงตามลำดับที่ส่งมาใน `segments`).
  * แต่ละ punch ถูกใช้ได้ครั้งเดียว (usedPunches) ยกเว้น punch ที่ตรงกับรอยต่อพอดี
@@ -369,12 +415,28 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
       }
     }
 
-    if (effectiveIn !== -1) usedPunches.add(effectiveIn);
-    // Allow boundary-shared punches to be reused as IN of the next segment
+    // ── Employee-favorable widening (spec R1/R2 · T-058) ──
+    // หลังได้ anchor (สแกนใกล้ขอบงานที่สุด) แล้ว → ขยาย IN เป็นตัวน้อยสุด / OUT เป็นตัวมากสุด
+    // ในรัศมี ADJACENCY_THRESHOLD_MIN รอบ anchor แล้วกินทั้งกลุ่ม ป้องกันสแกนแตะซ้ำที่เหลือ
+    // ไปโผล่เป็น extra/สแกนหลง หรือถูกจับคู่ผิด segment. late/early คิดใหม่จากค่าที่ขยายแล้ว.
+    const isBoundaryShared = !!nextSeg && seg.end === nextSeg.start;
+
+    let selectedIn = effectiveIn;
+    if (effectiveIn !== -1) {
+      const inSel = selectFavorablePunch(available, closestIn, 'in', ADJACENCY_THRESHOLD_MIN);
+      selectedIn = inSel.selected;
+      inSel.clusterMembers.forEach((t) => usedPunches.add(t));
+    }
+
+    let selectedOut = closestOut;
     if (closestOut !== -1) {
-      const isBoundaryShared = nextSeg && seg.end === nextSeg.start;
-      if (!isBoundaryShared) {
-        usedPunches.add(closestOut);
+      if (isBoundaryShared) {
+        // อย่าขยาย/กินข้ามรอยต่อที่ใช้ร่วมกัน — punch นั้นต้องเหลือไว้ให้ segment ถัดไปใช้เป็น IN
+        selectedOut = closestOut;
+      } else {
+        const outSel = selectFavorablePunch(available, closestOut, 'out', ADJACENCY_THRESHOLD_MIN);
+        selectedOut = outSel.selected;
+        outSel.clusterMembers.forEach((t) => usedPunches.add(t));
       }
     }
 
@@ -406,7 +468,7 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
         continue;
       }
     } else {
-      const rawLate = closestIn - seg.start;
+      const rawLate = selectedIn - seg.start;
       if (isMorningTransition && rawLate <= 5) {
         late = 0;
       } else {
@@ -423,7 +485,7 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
         conflictNotes.push(reason);
         perSegment.push({
           segment: seg,
-          matchedInMinutes: closestIn !== -1 ? closestIn : null,
+          matchedInMinutes: effectiveIn !== -1 ? selectedIn : null,
           matchedOutMinutes: null,
           lateMinutes: late,
           earlyLeaveMinutes: 0,
@@ -433,7 +495,7 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
         continue;
       }
     } else {
-      early = Math.max(0, seg.end - closestOut);
+      early = Math.max(0, seg.end - selectedOut);
     }
 
     let segConflicted = false;
@@ -467,8 +529,8 @@ export function matchSegmentsToPunches(segments: Segment[], scanPunches: string[
 
     perSegment.push({
       segment: seg,
-      matchedInMinutes: closestIn !== -1 ? closestIn : null,
-      matchedOutMinutes: closestOut !== -1 ? closestOut : null,
+      matchedInMinutes: effectiveIn !== -1 ? selectedIn : null,
+      matchedOutMinutes: closestOut !== -1 ? selectedOut : null,
       lateMinutes: late,
       earlyLeaveMinutes: early,
       conflicted: segConflicted,
@@ -620,12 +682,25 @@ export function classifyBySegments(params: ClassifyBySegmentsParams): ClassifyRe
 
   const outcome = matchSegmentsToPunches(segments, scanPunches);
 
-  // สแกนที่เหลือไม่ตรงกับ segment ไหนเลย (เช่น สแกนหลังเวลาที่ Daily Report บอกว่าเลิกงาน) —
-  // เป็นสัญญาณว่ามีเวลาทำงานที่ยังไม่ถูกบันทึกไว้ ต้องบังคับ CONFLICTED เสมอ ไม่ว่า segment
-  // ที่ประกาศไว้จะตรงครบแค่ไหนก็ตาม ไม่งั้นสแกนส่วนเกินนี้จะถูกมองข้ามไปเงียบๆ (พบจากรีวิวจริงกับผู้ใช้)
+  // สแกนที่เหลือไม่ตรงกับ segment ไหนเลย — แยกเป็น 2 กลุ่มก่อนตัดสิน:
+  //   benign   = แตะซ้ำ (double-tap) อยู่ติดกับ punch ที่ถูกใช้แล้วภายใน ADJACENCY_THRESHOLD_MIN → ไม่เตือน
+  //   isolated = สแกนโดดที่ไม่มี punch ใกล้ๆ → เป็นสัญญาณเวลาทำงานที่ยังไม่ถูกบันทึก → บังคับ CONFLICTED
+  // เฉพาะ isolated เท่านั้นที่ยก extraNote — วันที่มี Daily Report รองรับแล้วมีแค่ double-tap ไม่ใช่
+  // ความผิดปกติ (เดิมบังคับ CONFLICTED ทุกกรณี = false alarm พบจากรีวิวจริงกับผู้ใช้). ไม่ลบ/ไม่รวมสแกน —
+  // outcome.extraPunches ยังเก็บครบไว้แสดงผลตามเดิม เปลี่ยนแค่เงื่อนไขการเตือน
+  const consumedForExtra: number[] = [];
+  outcome.perSegment.forEach((m) => {
+    if (m.matchedInMinutes != null) consumedForExtra.push(m.matchedInMinutes);
+    if (m.matchedOutMinutes != null) consumedForExtra.push(m.matchedOutMinutes);
+  });
+  const { isolated: isolatedExtras } = classifyExtraPunches(
+    outcome.extraPunches,
+    consumedForExtra,
+    ADJACENCY_THRESHOLD_MIN
+  );
   const extraNote =
-    outcome.extraPunches.length > 0
-      ? `พบสแกน ${outcome.extraPunches.map(formatTime).join(', ')} ที่ไม่ตรงช่วงเวลาใด`
+    isolatedExtras.length > 0
+      ? `พบสแกน ${isolatedExtras.map(formatTime).join(', ')} ที่ไม่ตรงช่วงเวลาใด`
       : null;
 
   // Daily Report ที่ประกาศช่วงเวลาทำงาน "ปกติ" (ไม่นับ otMorning/otEvening ซึ่งเป็นส่วนเสริม)

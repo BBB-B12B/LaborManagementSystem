@@ -24,6 +24,7 @@ import {
   buildDisplaySegments,
   buildSegmentSnapshots,
   classifyBySegments,
+  classifyExtraPunches,
   mergeContiguousSegments,
 } from './segmentEngine';
 
@@ -362,6 +363,57 @@ describe('matchSegmentsToPunches — per-segment detail (used by ReconciliationR
     expect(outcome.perSegment[0].conflicted).toBe(false); // morning matched fine
     expect(outcome.perSegment[1].conflicted).toBe(true); // afternoon missing punches
     expect(outcome.perSegment[1].matchedInMinutes).toBeNull();
+  });
+});
+
+describe('matchSegmentsToPunches — employee-favorable IN/OUT selection (T-058)', () => {
+  // day 08:00-17:00 → morning 480-720, afternoon 780-1020. Minutes: 07:00=420
+  // 07:50=470, 08:00=480, 08:02=482, 08:38=518, 08:40=520, 12:00=720, 12:42=762,
+  // 12:50=770, 13:00=780, 16:58=1018, 17:00=1020, 17:03=1023.
+  const daySegments = () => buildSegmentsFromShiftTimes({ day: '08:00 - 17:00' })!;
+
+  it('straddle IN — double-tap 07:50 & 08:02 at an 08:00 start picks the EARLIEST (07:50), not late', () => {
+    const outcome = matchSegmentsToPunches(daySegments(), ['07:50', '08:02', '12:00', '13:00', '17:00']);
+    expect(outcome.perSegment[0].matchedInMinutes).toBe(470); // 07:50, not 08:02
+    expect(outcome.perSegment[0].lateMinutes).toBe(0);
+    expect(outcome.perSegment[0].conflicted).toBe(false);
+  });
+
+  it('straddle OUT — double-tap 16:58 & 17:03 at a 17:00 end picks the LATEST (17:03), not early-leave', () => {
+    const outcome = matchSegmentsToPunches(daySegments(), ['08:00', '12:00', '13:00', '16:58', '17:03']);
+    expect(outcome.perSegment[1].matchedOutMinutes).toBe(1023); // 17:03, not 16:58
+    expect(outcome.perSegment[1].earlyLeaveMinutes).toBe(0);
+  });
+
+  it('late double-tap — 08:38 & 08:40 (genuinely late) still picks the earlier 08:38, late stays 38 min', () => {
+    const outcome = matchSegmentsToPunches(daySegments(), ['08:38', '08:40', '12:00', '13:00', '17:00']);
+    expect(outcome.perSegment[0].matchedInMinutes).toBe(518); // 08:38, not 08:40
+    expect(outcome.perSegment[0].lateMinutes).toBe(38); // real lateness preserved (not hidden)
+  });
+
+  it('afternoon double-tap — 12:42 & 12:50 before a 13:00 start → IN=12:42, no late, both taps absorbed (user case)', () => {
+    const outcome = matchSegmentsToPunches(daySegments(), ['08:00', '12:00', '12:42', '12:50', '17:00']);
+    expect(outcome.perSegment[1].matchedInMinutes).toBe(762); // 12:42
+    expect(outcome.perSegment[1].lateMinutes).toBe(0);
+    expect(outcome.isConflicted).toBe(false);
+    // leftover tap 12:50 (770) is benign — within 15 min of the matched 12:42 → NOT an isolated warning
+    const consumed = [480, 720, 762, 1020];
+    const { isolated } = classifyExtraPunches(outcome.extraPunches, consumed, 15);
+    expect(isolated).not.toContain(770);
+  });
+
+  it('isolated unchanged — a genuine stray 07:00 (>15 min from every matched punch) stays isolated', () => {
+    const outcome = matchSegmentsToPunches(
+      daySegments(),
+      ['07:00', '07:50', '08:02', '12:00', '13:00', '17:00']
+    );
+    const consumed: number[] = [];
+    outcome.perSegment.forEach((m) => {
+      if (m.matchedInMinutes != null) consumed.push(m.matchedInMinutes);
+      if (m.matchedOutMinutes != null) consumed.push(m.matchedOutMinutes);
+    });
+    const { isolated } = classifyExtraPunches(outcome.extraPunches, consumed, 15);
+    expect(isolated).toContain(420); // 07:00 still flagged for admin
   });
 });
 
